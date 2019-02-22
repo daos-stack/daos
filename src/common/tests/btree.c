@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,13 +35,26 @@
 #include <getopt.h>
 
 #include <daos/btree.h>
+#include <daos/dtx.h>
 #include <daos/tests_lib.h>
+#include "utest_common.h"
 
 /**
  * An example for integer key btree.
  */
 
 TMMID_DECLARE(struct ik_rec, 0);
+
+#define IK_ORDER_DEF	16
+
+static int ik_order = IK_ORDER_DEF;
+
+struct utest_context		*ik_utx;
+struct umem_attr		*ik_uma;
+static TMMID(struct btr_root)	ik_root_mmid;
+static struct btr_root		*ik_root;
+static daos_handle_t		ik_toh;
+
 
 /** integer key record */
 struct ik_rec {
@@ -54,8 +67,6 @@ struct ik_rec {
 #define IK_TREE_CLASS	100
 #define POOL_NAME "/mnt/daos/btree-test"
 #define POOL_SIZE ((1024 * 1024  * 1024ULL))
-
-struct umem_attr ik_uma;
 
 /** customized functions for btree */
 static int
@@ -118,8 +129,8 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		rec->rec_mmid	= UMMID_NULL;
 		return 0;
 	}
-	umem_free(umm, irec->ir_val_mmid);
-	umem_free_typed(umm, irec_mmid);
+	utest_free(ik_utx, irec->ir_val_mmid);
+	utest_free_typed(ik_utx, irec_mmid);
 
 	return 0;
 }
@@ -245,14 +256,6 @@ static btr_ops_t ik_ops = {
 	.to_rec_stat	= ik_rec_stat,
 };
 
-#define IK_ORDER_DEF	16
-
-static int ik_order = IK_ORDER_DEF;
-
-static TMMID(struct btr_root)	ik_root_mmid;
-static struct btr_root		ik_root;
-static daos_handle_t		ik_toh;
-
 #define IK_SEP		','
 #define IK_SEP_VAL	':'
 
@@ -293,7 +296,7 @@ ik_btr_open_create(bool create, char *args)
 			return -1;
 		}
 	} else if (!create) {
-		inplace = (ik_root.tr_class != 0);
+		inplace = (ik_root->tr_class != 0);
 		if (TMMID_IS_NULL(ik_root_mmid) && !inplace) {
 			D_ERROR("Please create tree first\n");
 			return -1;
@@ -305,18 +308,20 @@ ik_btr_open_create(bool create, char *args)
 			ik_order, inplace ? " inplace" : "", feats);
 		if (inplace) {
 			rc = dbtree_create_inplace(IK_TREE_CLASS, feats,
-						   ik_order, &ik_uma, &ik_root,
+						   ik_order, ik_uma, ik_root,
 						   &ik_toh);
 		} else {
 			rc = dbtree_create(IK_TREE_CLASS, feats, ik_order,
-					   &ik_uma, &ik_root_mmid, &ik_toh);
+					   ik_uma, &ik_root_mmid, &ik_toh);
 		}
 	} else {
 		D_PRINT("Open btree%s\n", inplace ? " inplace" : "");
 		if (inplace) {
-			rc = dbtree_open_inplace(&ik_root, &ik_uma, &ik_toh);
+			rc = dbtree_open_inplace(ik_root,
+						 ik_uma,
+						 &ik_toh);
 		} else {
-			rc = dbtree_open(ik_root_mmid, &ik_uma, &ik_toh);
+			rc = dbtree_open(ik_root_mmid, ik_uma, &ik_toh);
 		}
 	}
 	if (rc != 0) {
@@ -357,18 +362,13 @@ static int
 btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 {
 	TMMID(struct ik_rec)	irec_mmid;
-	struct umem_instance	umm;
+	struct umem_instance	*umm;
 	struct ik_rec		*irec;
-	int			rc;
 
-	rc = umem_class_init(&ik_uma, &umm);
-	if (rc != 0) {
-		D_ERROR("Failed to instantiate umem while vefify: %d\n", rc);
-		return -1;
-	}
+	umm = utest_utx2umm(ik_utx);
 
 	irec_mmid = umem_id_u2t(*rec, struct ik_rec);
-	irec	  = umem_id2ptr_typed(&umm, irec_mmid);
+	irec	  = umem_id2ptr_typed(umm, irec_mmid);
 
 	if ((sizeof(irec->ir_key) != key->iov_len) ||
 	    (irec->ir_key != *((uint64_t *)key->iov_buf))) {
@@ -376,8 +376,8 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 		return -1;
 	}
 
-	umem_free(&umm, irec->ir_val_mmid);
-	umem_free_typed(&umm, irec_mmid);
+	utest_free(ik_utx, irec->ir_val_mmid);
+	utest_free_typed(ik_utx, irec_mmid);
 
 	return 0;
 }
@@ -575,7 +575,8 @@ ik_btr_iterate(char *args)
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
+					       NULL, NULL);
 			if (rc == -DER_NONEXIST)
 				break;
 
@@ -644,12 +645,8 @@ ik_btr_iterate(char *args)
 void
 ik_btr_gen_keys(unsigned int *arr, unsigned int key_nr)
 {
-	struct timeval	tv;
 	int		nr;
 	int		i;
-
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
 
 	for (i = 0; i < key_nr; i++)
 		arr[i] = i + 1;
@@ -833,11 +830,15 @@ static struct option btr_ops[] = {
 int
 main(int argc, char **argv)
 {
-	int	rc;
+	struct timeval	tv;
+	int		rc = 0;
+	int		opt;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
 
 	ik_toh = DAOS_HDL_INVAL;
 	ik_root_mmid = TMMID_NULL(struct btr_root);
-	ik_root.tr_class = 0;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -847,10 +848,34 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	ik_uma.uma_id = UMEM_CLASS_VMEM;
-	while ((rc = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:",
-				 btr_ops, NULL)) != -1) {
-		switch (rc) {
+
+	/* Check for -m option first */
+	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
+				  NULL)) != -1) {
+		if (opt == 'm') {
+			D_PRINT("Using pmem\n");
+			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
+					       sizeof(*ik_root), &ik_utx);
+			D_ASSERT(rc == 0);
+			break;
+		}
+	}
+
+	if (ik_utx == NULL) {
+		D_PRINT("Using vmem\n");
+		rc = utest_vmem_create(sizeof(*ik_root), &ik_utx);
+		D_ASSERT(rc == 0);
+	}
+
+	ik_root = utest_utx2root(ik_utx);
+	ik_uma = utest_utx2uma(ik_utx);
+
+	/* start over */
+	optind = 0;
+
+	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
+				  NULL)) != -1) {
+		switch (opt) {
 		case 'C':
 			rc = ik_btr_open_create(true, optarg);
 			break;
@@ -888,25 +913,20 @@ main(int argc, char **argv)
 		case 'p':
 			rc = ik_btr_perf(atoi(optarg));
 			break;
-		case 'm':
-			ik_uma.uma_id = UMEM_CLASS_PMEM;
-			ik_uma.uma_pool = pmemobj_create(POOL_NAME,
-						"btree-perf-test", POOL_SIZE,
-						0666);
-			if (ik_uma.uma_pool == NULL) {
-				perror("Btree test pool creation failed");
-				return 1;
-			}
-			break;
 		default:
-			D_PRINT("Unsupported command %c\n", rc);
+			D_PRINT("Unsupported command %c\n", opt);
+		case 'm':
+			/* handled previously */
+			rc = 0;
 			break;
 		}
+		if (rc != 0)
+			break;
 	}
 	daos_debug_fini();
-	if (ik_uma.uma_id == UMEM_CLASS_PMEM) {
-		pmemobj_close(ik_uma.uma_pool);
-		remove(POOL_NAME);
-	}
-	return 0;
+	rc += utest_utx_destroy(ik_utx);
+	if (rc != 0)
+		printf("Error: %d\n", rc);
+
+	return rc;
 }

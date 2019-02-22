@@ -77,6 +77,28 @@ Then:
 
 ## Protobuf Compiler
 
-The DAOS control plane infrastructure uses protobuf as the data serialization format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is not supported by the platform protobuf compiler in all cases. Not all developers will need to build the proto files into the various source files. However if changes are made to the proto files they will need to be regenerated with a protobuf 3.* or higher compiler. To setup support for compiling protobuf files download the following precompiled package for Linux and install it somewhere accessible by your PATH variable.
+The DAOS control plane infrastructure uses [Protocol Buffers](https://github.com/protocolbuffers/protobuf) as the data serialization format for its RPC requests. Not all developers will need to compile the *.proto files, but if Protobuf changes are needed, the developer must regenerate the corresponding C and Go source files using a Protobuf compiler compatible with proto3 syntax.
 
-    https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
+### Recommended Versions
+
+The recommended installation method is to clone the git repositories, check out the tagged releases noted below, and install from source. Later versions may work, but are not guaranteed.
+
+- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.5.1. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
+- [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.1. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.2.0. **Must match the proto version in src/control/Gopkg.toml.** Install the specific version using GIT_TAG instructions [here](https://github.com/golang/protobuf/blob/master/README.md).
+
+### Compiling Protobuf Files
+
+Generate the Go file using the gRPC plugin. You can designate the directory location:
+
+```
+	protoc myfile.proto --go_out=plugins=grpc:<go_file_dir>
+```
+
+Generate the C files using Protobuf-C. As the header and source files in DAOS are typically kept in separate locations, you will need to move them manually to their destination directories:
+
+```
+	protoc-c myfile.proto --c_out=.
+	mv myfile.pb-c.h <c_file_include_dir>
+	mv myfile.pb-c.c <c_file_src_dir>
+```

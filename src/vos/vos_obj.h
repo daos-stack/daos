@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,12 +59,13 @@ struct vos_container;
  * \param oid	[IN]	VOS object ID.
  * \param no_create [IN]
  *			Do not allocate object if it's not there yet.
+ * \param intent [IN]	The request intent.
  * \param obj_p [OUT]	Returned object cache reference.
  */
 int
 vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
-	     bool no_create, struct vos_object **obj_p);
+	     bool no_create, uint32_t intent, struct vos_object **obj_p);
 
 /**
  * Release the object cache reference.
@@ -142,6 +143,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  *
  * \param coh	[IN]	Container handle
  * \param oid	[IN]	DAOS object ID
+ * \param intent [IN]	The request intent
  * \param obj	[OUT]	Direct pointer to VOS object
  *
  * \return		0 on success and negative on
@@ -149,7 +151,8 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, struct vos_obj_df **obj);
+		  daos_epoch_t epoch, uint32_t intent,
+		  struct vos_obj_df **obj);
 
 /**
  * Find an enty in the obj_index by @oid
@@ -158,6 +161,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  *
  * \param coh	[IN]	Container handle
  * \param oid	[IN]	DAOS object ID
+ * \param intent [IN]	The operation intent
  * \param obj	[OUT]	Direct pointer to VOS object
  *
  * \return		0 on success and negative on
@@ -165,7 +169,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    daos_epoch_t epoch, struct vos_obj_df **obj);
+	    daos_epoch_t epoch, uint32_t intent, struct vos_obj_df **obj);
 
 /**
  * Punch an object from the OI table

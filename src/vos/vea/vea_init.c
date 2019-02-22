@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include "vea_internal.h"
 
 void
@@ -206,14 +207,14 @@ load_space_info(struct vea_space_info *vsi)
 		goto error;
 
 	/* Build up in-memory compound free extent index */
-	rc = dbtree_iterate(vsi->vsi_md_free_btr, false, load_free_entry,
-			    (void *)vsi);
+	rc = dbtree_iterate(vsi->vsi_md_free_btr, DAOS_INTENT_DEFAULT, false,
+			    load_free_entry, (void *)vsi);
 	if (rc != 0)
 		goto error;
 
 	/* Build up in-memory extent vector tree */
-	rc = dbtree_iterate(vsi->vsi_md_vec_btr, false, load_vec_entry,
-			    (void *)vsi);
+	rc = dbtree_iterate(vsi->vsi_md_vec_btr, DAOS_INTENT_DEFAULT, false,
+			    load_vec_entry, (void *)vsi);
 	if (rc != 0)
 		goto error;
 

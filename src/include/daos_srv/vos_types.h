@@ -122,6 +122,10 @@ enum {
 	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
 	VOS_IT_RECX_REVERSE	= (1 << 3),
+	/** The iterator is for purge operation */
+	VOS_IT_FOR_PURGE	= (1 << 4),
+	/** The iterator is for rebuild scan */
+	VOS_IT_FOR_REBUILD	= (1 << 5),
 };
 
 /**
@@ -146,8 +150,8 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
-	/** extent visibility flags for for iterator */
-	uint32_t		ip_recx_flags;
+	/** flags for for iterator */
+	uint32_t		ip_flags;
 } vos_iter_param_t;
 
 enum {

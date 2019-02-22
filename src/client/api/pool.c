@@ -92,6 +92,12 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_QUERY);
+
+	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, false)) {
+		D_ERROR("invalid pool_prop parameter.\n");
+		return -DER_INVAL;
+	}
+
 	rc = dc_task_create(dc_pool_query, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -100,6 +106,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 	args->poh	= poh;
 	args->tgts	= tgts;
 	args->info	= info;
+	args->prop	= pool_prop;
 
 	return dc_task_schedule(task, true);
 }

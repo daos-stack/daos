@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ type NVME interface {
 	// Discover NVMe controllers and namespaces
 	Discover() ([]Controller, []Namespace, error)
 	// Update NVMe controller firmware
-	Update(ctrlrID int32, path string, slot int32) (
+	Update(ctrlrPciAddr string, path string, slot int32) (
 		[]Controller, []Namespace, error)
 	// Cleanup NVMe object references
 	Cleanup()
@@ -76,9 +76,9 @@ type Controller struct {
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ns_t
 type Namespace struct {
-	ID      int32
-	Size    int32
-	CtrlrID int32
+	ID           int32
+	Size         int32
+	CtrlrPciAddr string
 }
 
 // Discover calls C.nvme_discover which returns
@@ -97,15 +97,18 @@ func (n *Nvme) Discover() ([]Controller, []Namespace, error) {
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
 // Retrieves image from path and updates given firmware slot/register.
-func (n *Nvme) Update(ctrlrID int32, path string, slot int32) (
+func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) (
 	[]Controller, []Namespace, error) {
 
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
+	csPci := C.CString(ctrlrPciAddr)
+	defer C.free(unsafe.Pointer(csPci))
+
 	failLocation := "NVMe Update(): C.nvme_fwupdate"
 
-	retPtr := C.nvme_fwupdate(C.uint(ctrlrID), csPath, C.uint(slot))
+	retPtr := C.nvme_fwupdate(csPci, csPath, C.uint(slot))
 	if retPtr != nil {
 		return processReturn(retPtr, failLocation)
 	}
@@ -133,9 +136,9 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 // c2GoNamespace is a private translation function
 func c2GoNamespace(ns *C.struct_ns_t) Namespace {
 	return Namespace{
-		ID:      int32(ns.id),
-		Size:    int32(ns.size),
-		CtrlrID: int32(ns.ctrlr_id),
+		ID:           int32(ns.id),
+		Size:         int32(ns.size),
+		CtrlrPciAddr: C.GoString(&ns.ctrlr_pci_addr[0]),
 	}
 }
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,12 @@ struct umem_tx_stage_item {
 };
 
 /** persistent memory operations (depends on pmdk) */
+
+static umem_id_t
+pmem_id(struct umem_instance *umm, void *addr)
+{
+	return pmemobj_oid(addr);
+}
 
 static void *
 pmem_addr(struct umem_instance *umm, umem_id_t ummid)
@@ -290,6 +296,7 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 }
 
 static umem_ops_t	pmem_ops = {
+	.mo_id			= pmem_id,
 	.mo_addr		= pmem_addr,
 	.mo_equal		= pmem_equal,
 	.mo_tx_free		= pmem_tx_free,
@@ -330,6 +337,15 @@ umem_tx_errno(int err)
 }
 
 /* volatile memroy operations */
+
+static umem_id_t
+vmem_id(struct umem_instance *umm, void *addr)
+{
+	umem_id_t	ummid = UMMID_NULL;
+
+	ummid.off = (uint64_t)addr;
+	return ummid;
+}
 
 static void *
 vmem_addr(struct umem_instance *umm, umem_id_t ummid)
@@ -384,6 +400,7 @@ vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 }
 
 static umem_ops_t	vmem_ops = {
+	.mo_id		= vmem_id,
 	.mo_addr	= vmem_addr,
 	.mo_equal	= vmem_equal,
 	.mo_tx_free	= vmem_free,

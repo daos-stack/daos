@@ -223,7 +223,7 @@ update_or_fetch_internal(char *dkey, char *akey, daos_epoch_t *epoch,
 		iod->iod_type = DAOS_IOD_ARRAY;
 		iod->iod_size = 1;
 		recx->rx_nr  = vsize;
-		recx->rx_idx = ts_overwrite ? 0 : indices[idx];
+		recx->rx_idx = ts_overwrite ? 0 : indices[idx] * vsize;
 	}
 
 	iod->iod_nr    = 1;
@@ -682,11 +682,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	if (ts_rebuild_only_iteration)
 		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_REBUILD | DAOS_FAIL_VALUE,
+				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
 		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_UPDATE | DAOS_FAIL_VALUE,
+				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
 	rc = ts_exclude_server(RANK_ZERO);
@@ -852,7 +852,10 @@ The options are as follows:\n\
 	enable.  This can only run in vos mode.\n\
 \n\
 -f pathname\n\
-	Full path name of the VOS file.\n");
+	Full path name of the VOS file.\n\
+\n\
+-w	Pause after initialization for attaching debugger or analysis\n\
+	tool.\n");
 }
 
 static struct option ts_ops[] = {
@@ -872,6 +875,7 @@ static struct option ts_ops[] = {
 	{ "file",	required_argument,	NULL,	'f' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ "verify",	no_argument,		NULL,	'v' },
+	{ "wait",	no_argument,		NULL,	'w' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -962,6 +966,7 @@ char	*perf_tests_name[] = {
 int
 main(int argc, char **argv)
 {
+	struct timeval	tv;
 	daos_size_t	scm_size = (2ULL << 30); /* default pool SCM size */
 	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
@@ -971,14 +976,18 @@ main(int argc, char **argv)
 	double		now;
 	int		rc;
 	int		i;
+	bool		pause = false;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
+
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiu",
+				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -986,6 +995,9 @@ main(int argc, char **argv)
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			return -1;
+		case 'w':
+			pause = true;
+			break;
 		case 'T':
 			if (!strcasecmp(optarg, "echo")) {
 				/* just network, no storage */
@@ -1212,8 +1224,15 @@ main(int argc, char **argv)
 	if (rc)
 		return -1;
 
-	if (ts_ctx.tsc_mpi_rank == 0)
+	if (ts_ctx.tsc_mpi_rank == 0) {
+		if (pause) {
+			fprintf(stdout, "Ready to start...If you wish to"
+				" attach a tool, do so now and then hit"
+				" enter.\n");
+			getc(stdin);
+		}
 		fprintf(stdout, "Started...\n");
+	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

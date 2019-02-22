@@ -209,15 +209,21 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 {
 	daos_iov_t		*iovs = arg->sgl->sg_iovs;
 	struct obj_enum_rec	*rec;
-	daos_size_t		 data_size;
+	daos_size_t		 data_size, iod_size;
 	daos_size_t		 size = sizeof(*rec);
 	bool			 inline_data = false, bump_kds_len = false;
 	int			 rc = 0;
 
 	D_ASSERT(type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
+	/* Client needs zero iod_size to tell a punched record */
+	if (bio_addr_is_hole(&key_ent->ie_biov.bi_addr))
+		iod_size = 0;
+	else
+		iod_size = key_ent->ie_rsize;
+
 	/* Inline the data? A 0 threshold disables this completely. */
-	data_size = key_ent->ie_rsize * key_ent->ie_recx.rx_nr;
+	data_size = iod_size * key_ent->ie_recx.rx_nr;
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
 	    data_size > 0) {
 		inline_data = true;
@@ -256,7 +262,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		 iovs[arg->sgl_idx].iov_buf_len);
 	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len;
 	rec->rec_recx = key_ent->ie_recx;
-	rec->rec_size = key_ent->ie_rsize;
+	rec->rec_size = iod_size;
 	rec->rec_epr.epr_lo = key_ent->ie_epoch;
 	rec->rec_epr.epr_hi = DAOS_EPOCH_MAX;
 	rec->rec_version = key_ent->ie_ver;
@@ -393,6 +399,11 @@ grow_array(void **arrayp, size_t elem_size, int old_len, int new_len)
 	return 0;
 }
 
+enum {
+	UNPACK_COMPLETE_IO = 1,	/* Only finish current I/O */
+	UNPACK_COMPLETE_IOD = 2,	/* Only finish current IOD */
+};
+
 /* Parse recxs in <*data, len> and append them to iod and sgl. */
 static int
 unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
@@ -433,17 +444,15 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		} else if (*version != rec->rec_version) {
 			D_DEBUG(DB_REBUILD, "different version %u != %u\n",
 				*version, rec->rec_version);
-			rc = 1;
+			rc = UNPACK_COMPLETE_IO;
 			break;
 		}
 
-		/* Note: there can only be one IOD type per IOD, so
-		 * either it would be single or array, and once it
-		 * is changed, it has to return 1 to finish this IOD.
-		 */
 		if (iod->iod_nr > 0 &&
-		    (iod->iod_type != type || rec->rec_size == 0)) {
-			rc = 1;
+		    (iod->iod_type == DAOS_IOD_SINGLE ||
+		     iod->iod_type != type || rec->rec_size == 0 ||
+		     iod->iod_size == 0)) {
+			rc = UNPACK_COMPLETE_IOD;
 			break;
 		}
 
@@ -495,38 +504,29 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		len -= sizeof(*rec);
 
 		/* Append the data, if inline. */
-		if (sgl != NULL) {
+		if (sgl != NULL && rec->rec_size > 0) {
 			daos_iov_t *iov = &sgl->sg_iovs[sgl->sg_nr];
 
 			if (rec->rec_flags & RECX_INLINE) {
-				daos_iov_set(iov, *data,
-					     rec->rec_size *
-					     rec->rec_recx.rx_nr);
-				D_DEBUG(DB_TRACE, "set data iov %p len %d\n",
-					iov, (int)iov->iov_len);
+				daos_iov_set(iov, *data, rec->rec_size *
+							 rec->rec_recx.rx_nr);
 			} else {
 				daos_iov_set(iov, NULL, 0);
 			}
+
 			sgl->sg_nr++;
-			D_ASSERTF(sgl->sg_nr == iod->iod_nr, "%u == %u\n",
+			D_ASSERTF(sgl->sg_nr <= iod->iod_nr, "%u == %u\n",
 				  sgl->sg_nr, iod->iod_nr);
 			*data += iov->iov_len;
 			len -= iov->iov_len;
 		}
 
 		D_DEBUG(DB_REBUILD, "unpack %p idx/nr "DF_U64"/"DF_U64 "ver %u"
-			" epr lo/hi "DF_U64"/"DF_U64" size %zd inline %zu\n",
+			" epr lo/hi "DF_U64"/"DF_U64" size %zd\n",
 			*data, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
 			iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
 			iod->iod_eprs[iod->iod_nr - 1].epr_lo,
-			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size,
-			sgl != NULL ? sgl->sg_iovs[sgl->sg_nr - 1].iov_len : 0);
-
-		/* Only allow one SINGLE record per IOD, let's close this one */
-		if (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size == 0) {
-			rc = 1;
-			break;
-		}
+			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size);
 	}
 
 	D_DEBUG(DB_REBUILD, "pack nr %d version/type /%u/%d rc %d\n",
@@ -860,10 +860,13 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				if (rc == 0)
 					break;
 
-				/* Otherwise let's complete current io, and go
-				 * next round.
-				 */
+				D_ASSERT(rc == UNPACK_COMPLETE_IOD ||
+					 rc == UNPACK_COMPLETE_IO);
+				/* Close current IOD or even current I/O.*/
 				close_iod(&io);
+				if (rc == UNPACK_COMPLETE_IOD)
+					continue;
+
 				rc = complete_io(&io, cb, cb_arg);
 				if (rc < 0)
 					goto out;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include "vea_internal.h"
 
 enum vea_free_type {
@@ -63,7 +64,8 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 repeat:
 	daos_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(btr_hdl, opc, &key, &key_out, &val);
+	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_PUNCH, &key, &key_out,
+			  &val);
 	if (rc == -DER_NONEXIST && opc == BTR_PROBE_LE) {
 		opc = BTR_PROBE_GE;
 		goto repeat;
@@ -183,7 +185,8 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		     sizeof(dummy.ve_ext.vfe_blk_off));
 	daos_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, &key, NULL, &val);
+	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
+			  &key, NULL, &val);
 	D_ASSERT(rc != -DER_NONEXIST);
 	if (rc)
 		return rc;
@@ -288,7 +291,8 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		     sizeof(dummy.ve_ext.vfe_blk_off));
 	daos_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, &key, NULL, &val);
+	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PURGE, &key, NULL,
+			  &val);
 	D_ASSERT(rc != -DER_NONEXIST);
 	if (rc)
 		return rc;

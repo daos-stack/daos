@@ -499,10 +499,12 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	int			i;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tgt/xs %d/%d eph "
+		DF_U64".\n", opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tgt_id, orw->orw_epoch);
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id,
+		orw->orw_epoch);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		rc = ds_obj_update_sizes_in_reply(rpc);
@@ -731,10 +733,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
 	tag = dss_get_module_info()->dmi_tgt_id;
 
-	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag %d eph "
+	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64".\n", rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		tag, orw->orw_epoch);
+		tag, dss_get_module_info()->dmi_xs_id, orw->orw_epoch);
 	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
 				&cont_hdl, &cont);
 	if (rc)
@@ -886,8 +888,7 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 
 		param.ip_epc_expr = VOS_IT_EPC_RE;
 		/** Only show visible records and skip punches */
-		param.ip_recx_flags = VOS_IT_RECX_VISIBLE |
-			VOS_IT_RECX_SKIP_HOLES;
+		param.ip_flags = VOS_IT_RECX_VISIBLE | VOS_IT_RECX_SKIP_HOLES;
 		enum_arg->fill_recxs = true;
 	} else if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_DKEY;
@@ -1265,6 +1266,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_query_key_out	*okqo;
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont			*cont = NULL;
+	daos_key_t			*dkey;
+	daos_key_t			*akey;
 	uint32_t			map_version = 0;
 	int				rc;
 
@@ -1284,28 +1287,17 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 
-	okqo->okqo_dkey.iov_buf = NULL;
-	okqo->okqo_akey.iov_buf = NULL;
-	/* MSC - remove, just temp set before server side implementation */
-	if (okqi->okqi_flags & DAOS_GET_DKEY) {
-		uint64_t key_val = (rand()%1000)+1;
+	dkey = &okqi->okqi_dkey;
+	akey = &okqi->okqi_akey;
+	d_iov_set(&okqo->okqo_akey, NULL, 0);
+	d_iov_set(&okqo->okqo_dkey, NULL, 0);
+	if (okqi->okqi_flags & DAOS_GET_DKEY)
+		dkey = &okqo->okqo_dkey;
+	if (okqi->okqi_flags & DAOS_GET_AKEY)
+		akey = &okqo->okqo_akey;
 
-		printf("DKEY returned = %d\n", (int)key_val);
-		D_ALLOC((okqo->okqo_dkey.iov_buf), sizeof(uint64_t));
-		daos_iov_set(&okqo->okqo_dkey, &key_val, sizeof(uint64_t));
-	}
-	if (okqi->okqi_flags & DAOS_GET_AKEY) {
-		uint64_t key_val = (rand()%1000)+1;
-
-		printf("AKEY returned = %d\n", (int)key_val);
-		D_ALLOC((okqo->okqo_akey.iov_buf), sizeof(uint64_t));
-		daos_iov_set(&okqo->okqo_akey, &key_val, sizeof(uint64_t));
-	}
-	if (okqi->okqi_flags & DAOS_GET_RECX) {
-		okqo->okqo_recx.rx_idx = (rand()%1000)+1;
-		printf("RECX returned = %d\n", (int)okqo->okqo_recx.rx_idx);
-		okqo->okqo_recx.rx_nr = 1048576;
-	}
+	rc = vos_obj_query_key(cont->sc_hdl, okqi->okqi_oid, okqi->okqi_flags,
+			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx);
 out:
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)

@@ -267,6 +267,7 @@ daos_crt_network_error(int err)
 enum {
 	DSS_KEY_FAIL_LOC = 0,
 	DSS_KEY_FAIL_VALUE,
+	DSS_KEY_FAIL_NUM,
 	DSS_REBUILD_RES_PERCENTAGE,
 	DSS_KEY_NUM,
 };
@@ -275,6 +276,8 @@ void
 daos_fail_loc_set(uint64_t id);
 void
 daos_fail_value_set(uint64_t val);
+void
+daos_fail_num_set(uint64_t num);
 
 int
 daos_fail_check(uint64_t id);
@@ -282,61 +285,70 @@ daos_fail_check(uint64_t id);
 uint64_t
 daos_fail_value_get(void);
 
+int
+daos_fail_init(void);
+void
+daos_fail_fini();
+
 /**
  * DAOS FAIL Mask
  *
  * fail loc 0-24
- *      [0-7] fail id
- *      [8-16] module id
- *      [16-24] unused
+ *      [0-16] fail id
+ *      [16-24] fail group id used to index in cart injection array.
  * fail mode 24-32
  * unused 32-64
  **/
 
-#define DAOS_FAIL_MASK_LOC	(DAOS_FAIL_MASK_MOD | 0x000000ff)
+#define DAOS_FAIL_MASK_LOC	(0x000000ffff)
 
 /* fail mode */
 #define DAOS_FAIL_ONCE		0x1000000
 #define DAOS_FAIL_SOME		0x2000000
-#define DAOS_FAIL_VALUE		0x4000000
+#define DAOS_FAIL_ALWAYS	0x4000000
 
-/* module mask */
-#define DAOS_FAIL_MASK_MOD	0x0000ff00
+#define DAOS_FAIL_GROUP_MASK 0xff0000
+#define DAOS_FAIL_GROUP_SHIFT 16
 
-#define DAOS_OBJ_FAIL_MOD	0x00000000
-#define DAOS_REBUILD_FAIL_MOD	0x00000100
-#define DAOS_RDB_FAIL_MOD	0x00000200
+enum {
+	DAOS_FAIL_UNIT_TEST_GROUP = 1,
+	DAOS_FAIL_MAX_GROUP
+};
 
-/* failure for DAOS_OBJ_MODULE */
-#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT	(DAOS_OBJ_FAIL_MOD | 0x01)
-#define DAOS_SHARD_OBJ_FETCH_TIMEOUT	(DAOS_OBJ_FAIL_MOD | 0x02)
-#define DAOS_SHARD_OBJ_FAIL		(DAOS_OBJ_FAIL_MOD | 0x03)
-#define DAOS_OBJ_UPDATE_NOSPACE		(DAOS_OBJ_FAIL_MOD | 0x04)
-#define DAOS_SHARD_OBJ_RW_CRT_ERROR	(DAOS_OBJ_FAIL_MOD | 0x05)
-#define DAOS_OBJ_REQ_CREATE_TIMEOUT	(DAOS_OBJ_FAIL_MOD | 0x06)
-#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE	(DAOS_OBJ_FAIL_MOD | 0x07)
-#define DAOS_OBJ_SPECIAL_SHARD		(DAOS_OBJ_FAIL_MOD | 0x08)
-#define DAOS_OBJ_TGT_IDX_CHANGE		(DAOS_OBJ_FAIL_MOD | 0x09)
+#define DAOS_FAIL_UNIT_TEST_GROUP_LOC	\
+		(DAOS_FAIL_UNIT_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
 
-/* failure for DAOS_REBUILD_MODULE */
-#define DAOS_REBUILD_DROP_SCAN	(DAOS_REBUILD_FAIL_MOD | 0x001)
-#define DAOS_REBUILD_NO_HDL	(DAOS_REBUILD_FAIL_MOD | 0x002)
-#define DAOS_REBUILD_DROP_OBJ	(DAOS_REBUILD_FAIL_MOD | 0x003)
-#define DAOS_REBUILD_UPDATE_FAIL (DAOS_REBUILD_FAIL_MOD | 0x004)
-#define DAOS_REBUILD_STALE_POOL (DAOS_REBUILD_FAIL_MOD | 0x005)
-#define DAOS_REBUILD_TGT_IV_UPDATE_FAIL (DAOS_REBUILD_FAIL_MOD | 0x006)
-#define DAOS_REBUILD_TGT_START_FAIL (DAOS_REBUILD_FAIL_MOD | 0x007)
-#define DAOS_REBUILD_DISABLE	(DAOS_REBUILD_FAIL_MOD | 0x008)
-#define DAOS_REBUILD_TGT_SCAN_HANG (DAOS_REBUILD_FAIL_MOD | 0x009)
-#define DAOS_REBUILD_TGT_REBUILD_HANG (DAOS_REBUILD_FAIL_MOD | 0x00a)
-#define DAOS_REBUILD_HANG (DAOS_REBUILD_FAIL_MOD | 0x00b)
-#define DAOS_REBUILD_TGT_SEND_OBJS_FAIL (DAOS_REBUILD_FAIL_MOD | 0x00c)
-#define DAOS_REBUILD_NO_REBUILD (DAOS_REBUILD_FAIL_MOD | 0x00d)
-#define DAOS_REBUILD_NO_UPDATE (DAOS_REBUILD_FAIL_MOD | 0x00e)
-#define DAOS_REBUILD_TGT_NOSPACE (DAOS_REBUILD_FAIL_MOD | 0x00f)
+#define DAOS_FAIL_GROUP_GET(fail_loc)	\
+		((fail_loc & DAOS_FAIL_GROUP_MASK) >> DAOS_FAIL_GROUP_SHIFT)
 
-/* failure for DAOS_RDB_MODULE */
-#define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_RDB_FAIL_MOD | 0x001)
+#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x01)
+#define DAOS_SHARD_OBJ_FETCH_TIMEOUT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x02)
+#define DAOS_SHARD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x03)
+#define DAOS_OBJ_UPDATE_NOSPACE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x04)
+#define DAOS_SHARD_OBJ_RW_CRT_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x05)
+#define DAOS_OBJ_REQ_CREATE_TIMEOUT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x06)
+#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE	\
+					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x07)
+#define DAOS_OBJ_SPECIAL_SHARD		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x08)
+#define DAOS_OBJ_TGT_IDX_CHANGE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x09)
+
+#define DAOS_REBUILD_DROP_SCAN	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x0a)
+#define DAOS_REBUILD_NO_HDL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x0b)
+#define DAOS_REBUILD_DROP_OBJ	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x0c)
+#define DAOS_REBUILD_UPDATE_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x0d)
+#define DAOS_REBUILD_STALE_POOL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x0e)
+#define DAOS_REBUILD_TGT_IV_UPDATE_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x0f)
+#define DAOS_REBUILD_TGT_START_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x10)
+#define DAOS_REBUILD_DISABLE	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x11)
+#define DAOS_REBUILD_TGT_SCAN_HANG (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x12)
+#define DAOS_REBUILD_TGT_REBUILD_HANG (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x13)
+#define DAOS_REBUILD_HANG (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x14)
+#define DAOS_REBUILD_TGT_SEND_OBJS_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x15)
+#define DAOS_REBUILD_NO_REBUILD (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x16)
+#define DAOS_REBUILD_NO_UPDATE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x17)
+#define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
+
+#define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -380,5 +392,30 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define DAOS_NVME_SHMID_NONE	-1
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
+
+int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
+
+static inline
+bool daos_prop_label_valid(d_string_t label)
+{
+	size_t len;
+
+	if (label == NULL) {
+		D_ERROR("invalid NULL label.\n");
+		return false;
+	}
+	len = strlen(label);
+	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN) {
+		D_ERROR("invali label (len %zu cannot be zero or exceed %d).\n",
+			len, DAOS_PROP_LABEL_MAX_LEN);
+		return false;
+	}
+	return true;
+}
+
+bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
+daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
+struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
+int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 
 #endif /* __DAOS_COMMON_H__ */

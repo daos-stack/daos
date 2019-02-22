@@ -28,11 +28,32 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/utils/log"
-	. "github.com/daos-stack/daos/src/control/utils/test"
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/go-spdk/spdk"
 )
+
+// MockController is a mock NVMe SSD controller of type exported from go-spdk.
+func MockController(fwrev string) Controller {
+	c := MockControllerPB(fwrev)
+	return Controller{
+		ID:      c.Id,
+		Model:   c.Model,
+		Serial:  c.Serial,
+		PCIAddr: c.Pciaddr,
+		FWRev:   fwrev,
+	}
+}
+
+// MockNamespace is a mock NVMe SSD namespace of type exported from go-spdk.
+func MockNamespace(ctrlr *Controller) Namespace {
+	n := MockNamespacePB()
+	return Namespace{
+		ID:           n.Id,
+		Size:         n.Capacity,
+		CtrlrPciAddr: ctrlr.PCIAddr,
+	}
+}
 
 // mock external interface implementations for go-spdk/spdk package
 type mockSpdkEnv struct{}
@@ -42,18 +63,33 @@ func (m *mockSpdkEnv) InitSPDKEnv(int) error { return nil }
 type mockSpdkNvme struct {
 	fwRevBefore string
 	fwRevAfter  string
+	initCtrlrs  []Controller
+	initNss     []Namespace
 }
 
 func (m *mockSpdkNvme) Discover() ([]Controller, []Namespace, error) {
-	c := MockController(m.fwRevBefore)
-	return []Controller{c}, []Namespace{MockNamespace(&c)}, nil
+	return m.initCtrlrs, m.initNss, nil
 }
-func (m *mockSpdkNvme) Update(ctrlrID int32, path string, slot int32) (
+func (m *mockSpdkNvme) Update(pciAddr string, path string, slot int32) (
 	[]Controller, []Namespace, error) {
 	c := MockController(m.fwRevAfter)
 	return []Controller{c}, []Namespace{MockNamespace(&c)}, nil
 }
 func (m *mockSpdkNvme) Cleanup() { return }
+
+func newMockSpdkNvme(
+	fwBefore string, fwAfter string, ctrlrs []Controller, nss []Namespace) NVME {
+	return &mockSpdkNvme{fwBefore, fwAfter, ctrlrs, nss}
+}
+
+func defaultMockSpdkNvme() NVME {
+	c := MockController("1.0.0")
+	return newMockSpdkNvme(
+		"1.0.0",
+		"1.0.1",
+		[]Controller{c},
+		[]Namespace{MockNamespace(&c)})
+}
 
 // mock external interface implementations for spdk setup script
 type mockSpdkSetup struct{}
@@ -62,18 +98,26 @@ func (m *mockSpdkSetup) prep() error  { return nil }
 func (m *mockSpdkSetup) reset() error { return nil }
 
 // mockNvmeStorage factory
-func newMockNvmeStorage(
-	fwRevBefore string, fwRevAfter string, inited bool) *nvmeStorage {
+func newMockNvmeStorage(spdkNvme NVME, inited bool) *nvmeStorage {
 	return &nvmeStorage{
-		logger:      log.NewLogger(),
 		env:         &mockSpdkEnv{},
-		nvme:        &mockSpdkNvme{fwRevBefore, fwRevAfter},
+		nvme:        spdkNvme,
 		spdk:        &mockSpdkSetup{},
 		initialized: inited,
 	}
 }
 
-func TestDiscoveryNvme(t *testing.T) {
+// defaultMockNvmeStorage factory
+func defaultMockNvmeStorage() *nvmeStorage {
+	return &nvmeStorage{
+		env:         &mockSpdkEnv{},
+		nvme:        defaultMockSpdkNvme(),
+		spdk:        &mockSpdkSetup{},
+		initialized: false,
+	}
+}
+
+func TestDiscoveryNvmeSingle(t *testing.T) {
 	tests := []struct {
 		inited bool
 	}{
@@ -85,13 +129,13 @@ func TestDiscoveryNvme(t *testing.T) {
 		},
 	}
 
-	c := MockControllerPB("")
+	c := MockControllerPB("1.0.0")
 
 	for _, tt := range tests {
-		sn := newMockNvmeStorage("", "", tt.inited)
+		sn := newMockNvmeStorage(defaultMockSpdkNvme(), tt.inited)
 
 		if err := sn.Discover(); err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		if tt.inited {
@@ -104,6 +148,90 @@ func TestDiscoveryNvme(t *testing.T) {
 		AssertEqual(
 			t, sn.controllers, []*pb.NvmeController{c},
 			"unexpected list of protobuf format controllers")
+	}
+}
+
+// Verify correct mapping of namespaces to multiple controllers
+func TestDiscoveryNvmeMulti(t *testing.T) {
+	tests := []struct {
+		ctrlrs []Controller
+		nss    []Namespace
+	}{
+		{
+			[]Controller{
+				{0, "", "", "1.2.3.4.5", "1.0.0"},
+				{0, "", "", "1.2.3.4.6", "1.0.0"},
+			},
+			[]Namespace{
+				{0, 100, "1.2.3.4.5"},
+				{1, 200, "1.2.3.4.6"},
+			},
+		},
+		{
+			[]Controller{
+				{0, "", "", "1.2.3.4.5", "1.0.0"},
+				{0, "", "", "1.2.3.4.6", "1.0.0"},
+			},
+			[]Namespace{},
+		},
+		{
+			[]Controller{
+				{0, "", "", "1.2.3.4.5", "1.0.0"},
+				{0, "", "", "1.2.3.4.6", "1.0.0"},
+			},
+			[]Namespace{
+				{0, 100, "1.2.3.4.5"},
+				{1, 100, "1.2.3.4.5"},
+				{2, 100, "1.2.3.4.5"},
+				{0, 200, "1.2.3.4.6"},
+				{1, 200, "1.2.3.4.6"},
+				{2, 200, "1.2.3.4.6"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		sn := newMockNvmeStorage(
+			newMockSpdkNvme(
+				"1.0.0", "1.0.1", tt.ctrlrs, tt.nss),
+			false)
+
+		if err := sn.Discover(); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(tt.ctrlrs) != len(sn.controllers) {
+			t.Fatalf(
+				"unexpected number of controllers found, wanted %d, found %d",
+				len(tt.ctrlrs), len(sn.controllers))
+		}
+		// verify we have the expected number of namespaces reported
+		discovered := 0
+		for _, pbC := range sn.controllers {
+			discovered += len(pbC.Namespace)
+		}
+		if len(tt.nss) != discovered {
+			t.Fatalf(
+				"unexpected number of namespaces found, wanted %d, found %d",
+				len(tt.nss), discovered)
+		}
+
+		// verify protobuf Controller has ns for each one expected
+		for _, n := range tt.nss {
+			foundNs := false // find namespace
+			for i, pbC := range sn.controllers {
+				if n.CtrlrPciAddr == pbC.Pciaddr {
+					for _, pbNs := range sn.controllers[i].Namespace {
+						if pbNs.Capacity == n.Size && pbNs.Id == n.ID {
+							foundNs = true
+						}
+					}
+				}
+			}
+			if !foundNs {
+				t.Fatalf("namespace not found: %v", n)
+			}
+		}
 	}
 }
 
@@ -122,22 +250,24 @@ func TestUpdateNvme(t *testing.T) {
 		},
 	}
 
+	// expected Controller protobuf representation should have updated
+	// firmware revision
 	c := MockControllerPB("1.0.1")
 
 	for _, tt := range tests {
-		sn := newMockNvmeStorage("1.0.0", "1.0.1", false)
+		sn := defaultMockNvmeStorage()
 		if tt.inited {
 			if err := sn.Discover(); err != nil {
-				t.Fatal(err.Error())
+				t.Fatal(err)
 			}
 		}
 
-		if err := sn.Update(0, "", 0); err != nil {
+		if err := sn.Update(c.Pciaddr, "", 0); err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
 			}
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		AssertEqual(
@@ -178,10 +308,10 @@ func TestBurnInNvme(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		sn := newMockNvmeStorage("", "", false)
+		sn := defaultMockNvmeStorage()
 		if tt.inited {
 			if err := sn.Discover(); err != nil {
-				t.Fatal(err.Error())
+				t.Fatal(err)
 			}
 		}
 
@@ -191,7 +321,7 @@ func TestBurnInNvme(t *testing.T) {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
 			}
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
 		AssertTrue(t, strings.HasSuffix(cmdName, "bin/fio"), "unexpected fio executable path")

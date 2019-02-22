@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -955,6 +955,7 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = ph;
+	param.ip_flags = VOS_IT_FOR_REBUILD;
 
 	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &iter_h);
 	if (rc != 0) {

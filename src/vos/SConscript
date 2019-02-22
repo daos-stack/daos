@@ -2,40 +2,53 @@
 import os
 import daos_build
 
+FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_obj.c",
+         "vos_pool.c", "vos_aggregate.c", "vos_container.c", "vos_io.c",
+         "vos_obj_cache.c", "vos_obj_index.c", "vos_tree.c", "evtree.c",
+         "vos_dtx.c", "vos_dtx_cos.c", "vos_query.c"]
+
+def build_vos(env, standalone):
+    """build vos"""
+    denv = env.Clone()
+    install = 'lib/daos_srv'
+    libname = 'vos_srv'
+
+    if standalone:
+        denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
+        denv.Append(OBJPREFIX="s_")
+        install = 'lib'
+        libname = 'vos'
+
+    files = FILES
+    if GetOption("preprocess"):
+        #For profileing performance, it can sometimes be useful to preprocess
+        #the files first.   This uses the new scons_local feature to do this
+        #so profiling tools will point at preprocessed file lines.
+        files = denv.Preprocess(FILES)
+
+    vos = daos_build.library(denv, libname, files, LIBS=['vea'])
+    denv.Install('$PREFIX/' + install, vos)
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    build_dir = Dir('.')
-    lib = os.path.basename(build_dir.abspath)
-    env.AppendUnique(LIBPATH=[build_dir])
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
     prereqs.require(env, 'pmdk')
     denv = env.Clone()
 
     # Compiler options
-    denv.Append(CPPPATH=[Dir('../vos').srcnode()])
-
-    if lib == "vos":
-        # generate standalone library
-        denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
-        install = 'lib'
-    else:
-        # generate DAOS server module
-        install = 'lib/daos_srv'
-
-    Export('install')
+    denv.Append(CPPPATH=[Dir('.').srcnode()])
 
     # VEA
     SConscript('vea/SConscript')
     denv.AppendUnique(LIBPATH=['vea'])
 
-    vos = daos_build.library(denv, lib, Glob('*.c'), LIBS=['vea'])
-    denv.Install('$PREFIX/' + install, vos)
+    build_vos(denv, False)
+    build_vos(denv, True)
 
-    # Tests
-    if lib == "vos":
-        SConscript('tests/SConscript', exports='denv')
+    SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

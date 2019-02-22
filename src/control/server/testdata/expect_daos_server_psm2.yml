@@ -1,6 +1,6 @@
 name: daos_server
 servers:
-- rank: ""
+- rank: null
   cpus:
   - 0-7
   fabric_iface: ib0
@@ -23,8 +23,6 @@ servers:
   cliopts: []
 provider: ofi+psm2
 socket_dir: /tmp/daos_psm2
-auto: true
-format: safe
 access_points:
 - localhost
 port: 10001
@@ -39,6 +37,8 @@ bdev_include: []
 bdev_exclude: []
 hyperthreads: false
 nr_hugepages: 4096
+control_log_mask: DEBUG
+control_log_file: /tmp/daos_control.log
 modules: ""
 attach: ""
 systemmap: ""

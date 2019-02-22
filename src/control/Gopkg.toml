@@ -66,4 +66,4 @@
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-spdk"
-  revision = "af9a447000e00716eeb0d7595dad1d768a700a16"
+  revision = "32e5aa799715ce8743a796daaf91a2f396254054"

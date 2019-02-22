@@ -35,7 +35,7 @@ const char *server_group;
 unsigned int svc_nreplicas = 1;
 
 static int
-test_setup_pool_create(void **state, struct test_pool *pool)
+test_setup_pool_create(void **state, struct test_pool *pool, daos_prop_t *prop)
 {
 	test_arg_t *arg = *state;
 	int rc;
@@ -85,7 +85,7 @@ test_setup_pool_create(void **state, struct test_pool *pool)
 			      (arg->pool.pool_size >> 30), nvme_size >> 30);
 		rc = daos_pool_create(arg->mode, arg->uid, arg->gid, arg->group,
 				      NULL, "pmem", arg->pool.pool_size,
-				      nvme_size, NULL, &arg->pool.svc,
+				      nvme_size, prop, &arg->pool.svc,
 				      arg->pool.pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
@@ -222,7 +222,7 @@ test_setup_cont_open(void **state)
 }
 
 int
-test_setup_next_step(void **state, struct test_pool *pool)
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop)
 {
 	test_arg_t *arg = *state;
 
@@ -232,7 +232,7 @@ test_setup_next_step(void **state, struct test_pool *pool)
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool);
+		return test_setup_pool_create(state, pool, prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
@@ -292,7 +292,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool);
+		rc = test_setup_next_step(state, pool, NULL);
 
 	 if (rc) {
 		D_FREE(arg);

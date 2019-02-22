@@ -31,6 +31,7 @@
 
 #include <daos_errno.h>
 #include <daos/btree.h>
+#include <daos/dtx.h>
 
 /**
  * Tree node types.
@@ -733,7 +734,7 @@ btr_root_free(struct btr_context *tcx)
 }
 
 static int
-btr_root_init(struct btr_context *tcx, struct btr_root *root)
+btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 {
 	struct btr_instance *tins = &tcx->tc_tins;
 	int		     rc;
@@ -746,6 +747,8 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root)
 			return rc;
 	}
 
+	if (in_place)
+		memset(root, 0, sizeof(*root));
 	root->tr_class	= tcx->tc_class;
 	root->tr_feats	= tcx->tc_feats;
 	root->tr_order	= tcx->tc_order;
@@ -776,7 +779,7 @@ btr_root_alloc(struct btr_context *tcx)
 	}
 
 	root = btr_mmid2ptr(tcx, tins->ti_root_mmid);
-	return btr_root_init(tcx, root);
+	return btr_root_init(tcx, root, false);
 }
 
 static int
@@ -1070,6 +1073,9 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 {
 	int	rc = 0;
 
+	if (btr_has_tx(tcx))
+		btr_node_tx_add(tcx, trace->tr_node);
+
 	if (btr_node_is_full(tcx, trace->tr_node))
 		rc = btr_node_split_and_insert(tcx, trace, rec);
 	else
@@ -1135,7 +1141,7 @@ btr_probe_valid(dbtree_probe_opc_t opc)
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	  daos_iov_t *key, char hkey[DAOS_HKEY_MAX])
+	  uint32_t intent, daos_iov_t *key, char hkey[DAOS_HKEY_MAX])
 {
 	int			 start;
 	int			 end;
@@ -1338,12 +1344,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 static enum btr_probe_rc
 btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	       daos_iov_t *key)
+	      uint32_t intent, daos_iov_t *key)
 {
 	char hkey[DAOS_HKEY_MAX];
 
 	btr_hkey_gen(tcx, key, hkey);
-	return btr_probe(tcx, probe_opc, key, hkey);
+	return btr_probe(tcx, probe_opc, intent, key, hkey);
 }
 
 static bool
@@ -1473,6 +1479,7 @@ btr_probe_prev(struct btr_context *tcx)
  * \param toh	[IN]		Tree open handle.
  * \param opc	[IN]		Probe opcode, see dbtree_probe_opc_t for the
  *				details.
+ * \param intent [IN]		The operation intent.
  * \param key	[IN]		Key to search
  * \param key_out [OUT]		Return the actual matched key if \a opc is
  *				not BTR_PROBE_EQ.
@@ -1483,8 +1490,8 @@ btr_probe_prev(struct btr_context *tcx)
  *			-ve	error code
  */
 int
-dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
-	     daos_iov_t *key_out, daos_iov_t *val_out)
+dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
+	     daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out)
 {
 	struct btr_record  *rec;
 	struct btr_context *tcx;
@@ -1494,7 +1501,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, opc, key);
+	rc = btr_probe_key(tcx, opc, intent, key);
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -1521,7 +1528,8 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 int
 dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out)
 {
-	return dbtree_fetch(toh, BTR_PROBE_EQ, key, NULL, val_out);
+	return dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, key, NULL,
+			    val_out);
 }
 
 static int
@@ -1585,9 +1593,6 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		btr_trace_debug(tcx, trace, "try to insert\n");
 
-		if (btr_has_tx(tcx))
-			btr_node_tx_add(tcx, trace->tr_node);
-
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE,
@@ -1613,14 +1618,14 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 static int
 btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	   daos_iov_t *key, daos_iov_t *val)
+	   uint32_t intent, daos_iov_t *key, daos_iov_t *val)
 {
 	int	rc;
 
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
 	else
-		rc = btr_probe_key(tcx, probe_opc, key);
+		rc = btr_probe_key(tcx, probe_opc, intent, key);
 
 	switch (rc) {
 	default:
@@ -1697,7 +1702,7 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
 	if (rc != 0)
 		return rc;
 
-	rc = btr_upsert(tcx, BTR_PROBE_EQ, key, val);
+	rc = btr_upsert(tcx, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key, val);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -1717,7 +1722,7 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
  *			-ve	error code
  */
 int
-dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
+dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	      daos_iov_t *key, daos_iov_t *val)
 {
 	struct btr_context *tcx;
@@ -1730,7 +1735,7 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
-	rc = btr_upsert(tcx, opc, key, val);
+	rc = btr_upsert(tcx, opc, intent, key, val);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -2446,7 +2451,7 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, BTR_PROBE_EQ, key);
+	rc = btr_probe_key(tcx, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key);
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -2642,8 +2647,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 static int
 btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
-	memset(root, 0, sizeof(*root));
-	return btr_root_init(tcx, root);
+	return btr_root_init(tcx, root, true);
 }
 
 static int
@@ -2967,7 +2971,9 @@ dbtree_iter_finish(daos_handle_t ih)
  * This function must be called after dbtree_iter_prepare, it can be called
  * for arbitrary times for the same iterator.
  *
+ * \param ih	[IN]	The iterator handle.
  * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param intent [IN]	The operation intent.
  * \param key	[IN]	The key to probe, it will be ignored if opc is
  *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
  * \param anchor [IN]	the anchor point to probe, it will be ignored if
@@ -2976,7 +2982,7 @@ dbtree_iter_finish(daos_handle_t ih)
  *			key or anchor is required.
  */
 int
-dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
+dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		  daos_iov_t *key, daos_anchor_t *anchor)
 {
 	struct btr_iterator *itr;
@@ -2994,16 +3000,16 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		return -DER_NO_HDL;
 
 	if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST)
-		rc = btr_probe(tcx, opc, NULL, NULL);
+		rc = btr_probe(tcx, opc, intent, NULL, NULL);
 	else if (btr_is_direct_key(tcx)) {
 		D_ASSERT(key != NULL || anchor != NULL);
 		if (key)
-			rc = btr_probe(tcx, opc, key, NULL);
+			rc = btr_probe(tcx, opc, intent, key, NULL);
 		else {
 			daos_iov_t direct_key;
 
 			btr_key_decode(tcx, &direct_key, anchor);
-			rc = btr_probe(tcx, opc, &direct_key, NULL);
+			rc = btr_probe(tcx, opc, intent, &direct_key, NULL);
 		}
 	} else {
 		D_ASSERT(key != NULL || anchor != NULL);
@@ -3013,7 +3019,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 			btr_hkey_gen(tcx, key, hkey);
 		else
 			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0]);
-		rc = btr_probe(tcx, opc, key, hkey);
+		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
@@ -3197,13 +3203,14 @@ dbtree_iter_empty(daos_handle_t ih)
  * dbtree_iterate_cb_t.
  *
  * \param toh		[IN]	Tree open handle
+ * \param intent	[IN]	The operation intent
  * \param backward	[IN]	If true, iterate from last to first
  * \param cb		[IN]	Callback function (see dbtree_iterate_cb_t)
  * \param arg		[IN]	Callback argument
  */
 int
-dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
-	       void *arg)
+dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
+	       dbtree_iterate_cb_t cb, void *arg)
 {
 	daos_handle_t	ih;
 	int		niterated = 0;
@@ -3216,7 +3223,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 	}
 
 	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST,
-			       NULL /* key */, NULL /* anchor */);
+			       intent, NULL /* key */, NULL /* anchor */);
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {

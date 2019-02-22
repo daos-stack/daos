@@ -26,11 +26,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/daos-stack/daos/src/control/utils/log"
-
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // ScmmMap is a type alias for info on Storage Class Memory Modules
@@ -42,7 +40,6 @@ type ScmmMap map[int32]*pb.ScmModule
 // IpmCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
-	logger      *log.Logger
 	ipmCtl      ipmctl.IpmCtl // ipmctl NVM API interface
 	modules     ScmmMap
 	initialized bool
@@ -51,6 +48,9 @@ type scmStorage struct {
 func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
 	pbMms := make(ScmmMap)
 	for _, c := range mms {
+		// can cast Physical_id to int32 (as is required to be a map
+		// index) because originally is uint16 so no possibility of
+		// sign bit corruption.
 		pbMms[int32(c.Physical_id)] = &pb.ScmModule{
 			Physicalid: uint32(c.Physical_id),
 			Channel:    uint32(c.Channel_id),
@@ -102,10 +102,8 @@ func (s *scmStorage) Teardown() error {
 }
 
 // newScmStorage creates a new instance of ScmStorage struct.
-func newScmStorage(logger *log.Logger) *scmStorage {
-	return &scmStorage{
-		logger: logger,
-		// NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
-		ipmCtl: &ipmctl.NvmMgmt{},
-	}
+//
+// NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
+func newScmStorage() *scmStorage {
+	return &scmStorage{ipmCtl: &ipmctl.NvmMgmt{}}
 }

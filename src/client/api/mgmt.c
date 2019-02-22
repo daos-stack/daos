@@ -107,6 +107,10 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		D_ERROR("Invalid pool creation mode (%o).\n", mode);
 		return -DER_INVAL;
 	}
+	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, true)) {
+		D_ERROR("Invalid pool properties.\n");
+		return -DER_INVAL;
+	}
 
 	rc = dc_task_create(dc_pool_create, NULL, ev, &task);
 	if (rc)
@@ -121,6 +125,7 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	args->dev	= dev;
 	args->scm_size	= scm_size;
 	args->nvme_size	= nvme_size;
+	args->prop	= pool_prop;
 	args->svc	= svc;
 	args->uuid	= uuid;
 

@@ -206,6 +206,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	PMEMobjpool		*ph;
 	struct umem_attr	 uma;
 	struct umem_instance	 umem;
+	struct vos_pool_df	*pool_df;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct bio_blob_hdr	 blob_hdr;
 	int			 rc = 0, enabled = 1;
@@ -247,10 +248,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		scm_sz = lstat.st_size;
 	}
 
+	pool_df = vos_pool_pop2df(ph);
 	TX_BEGIN(ph) {
-		struct vos_pool_df	*pool_df;
-
-		pool_df = vos_pool_pop2df(ph);
 		pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
 		memset(pool_df, 0, sizeof(*pool_df));
 

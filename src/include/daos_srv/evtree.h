@@ -63,6 +63,8 @@ struct evt_desc {
 	uint32_t			dc_ver;
 	/** Magic number for validation */
 	uint32_t			dc_magic;
+	/** The DTX entry in SCM. */
+	umem_id_t			dc_dtx;
 };
 
 struct evt_extent {
@@ -328,23 +330,23 @@ struct evt_context;
  */
 struct evt_policy_ops {
 	/**
-	 * Add an entry \a entry to a tree node \a nd_mmid.
+	 * Add an entry \a entry to a tree node \a node.
 	 */
 	int	(*po_insert)(struct evt_context *tcx,
-			     uint64_t nd_off,
+			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry);
 	/**
-	 * move half entries of the current node \a src_mmid to the new
-	 * node \a dst_mmid.
+	 * move half entries of the current node \a nd_src to the new
+	 * node \a nd_dst.
 	 */
 	int	(*po_split)(struct evt_context *tcx, bool leaf,
-			    uint64_t src_off, uint64_t dst_off);
+			    struct evt_node *nd_src, struct evt_node *nd_dst);
 	/** Move adjusted \a entry within a node after mbr update.
 	 * Returns the offset from at to where the entry was moved
 	 */
 	int	(*po_adjust)(struct evt_context *tcx,
-			     uint64_t nd_off,
+			     struct evt_node *node,
 			     struct evt_node_entry *ne, int at);
 	/**
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
@@ -464,19 +466,6 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 int evt_find(daos_handle_t toh, const struct evt_rect *rect,
 	     struct evt_entry_array *ent_array);
 
-/** Scan the tree for the non-punched visible rectangle with the highest
- *  end offset and return the offset + 1 as the size.  Size is set to 0
- *  if no entries exist.   Size is undefined if an error is returned.
- *
- *  \param toh		[IN]	The tree open handle
- *  \param epoch	[IN]	The epoch at which to scan
- *  \param size		[OUT]	The size of the evtree
- *
- *  \return		0		Size is valid
- *			-rc		Other error code
- */
-int evt_get_size(daos_handle_t toh, daos_epoch_t epoch, daos_size_t *size);
-
 /**
  * Debug function, it outputs status of tree nodes at level \a debug_level,
  * or all levels if \a debug_level is negative.
@@ -509,6 +498,11 @@ enum {
 	 * If neither flag is set, all rectangles in tree that intersect the
 	 * search rectangle, including punched extents, are returned.
 	 */
+
+	/** The iterator is for purge operation */
+	EVT_ITER_FOR_PURGE	= (1 << 5),
+	/** The iterator is for rebuild scan */
+	EVT_ITER_FOR_REBUILD	= (1 << 6),
 };
 
 /**

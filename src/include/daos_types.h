@@ -616,15 +616,11 @@ typedef struct {
 	 * value. The idx is ignored and the rx_nr is also required to be 1.
 	 */
 	daos_iod_type_t		iod_type;
-	/* DAOS_IOD_SINGLE:	Size of the value
-	 * DAOS_IOD_ARRAY:	iod_nr > 0:  Record size
-	 *			iod_nr == 0: Array size
-	 */
+	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
 	/*
 	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
-	 * arrays, should be 1 if single value,
-	 * 0 for array size query
+	 * arrays, should be 1 if single value.
 	 */
 	unsigned int		iod_nr;
 	/*
@@ -828,6 +824,10 @@ enum {
 	DAOS_RECLAIM_TIME,
 };
 
+/** self headling strategy bits */
+#define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
+#define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+
 /** bits of ae_tag entry in struct daos_acl_entry */
 enum {
 	/** access rights for the pool/container/obj's owner */
@@ -893,7 +893,7 @@ enum daos_cont_prop_type {
 	 * Checksum on/off + checksum type (CRC16, CRC32, SHA-1 & SHA-2).
 	 * default = DAOS_PROP_CO_CSUM_OFF
 	 */
-	DAOS_PROP_CO_CHECKSUM,
+	DAOS_PROP_CO_CSUM,
 	/**
 	 * Redundancy factor:
 	 * RF1: no data protection. scratched data.
@@ -974,9 +974,18 @@ struct daos_prop_entry {
 	};
 };
 
+/** Allowed max number of property entries in daos_prop_t */
+#define DAOS_PROP_ENTRIES_MAX_NR	(128)
+/** max length for pool/container label */
+#define DAOS_PROP_LABEL_MAX_LEN		(256)
+
 /** daos properties, for pool or container */
 typedef struct {
+	/** number of entries */
 	uint32_t		 dpp_nr;
+	/** reserved for future usage (for 64 bits alignment now) */
+	uint32_t		 dpp_reserv;
+	/** property entries array */
 	struct daos_prop_entry	*dpp_entries;
 } daos_prop_t;
 

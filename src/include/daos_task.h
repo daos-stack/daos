@@ -148,6 +148,7 @@ typedef struct {
 	const char		*dev;
 	daos_size_t		scm_size;
 	daos_size_t		nvme_size;
+	daos_prop_t		*prop;
 	d_rank_list_t		*svc;
 	unsigned char		*uuid;
 } daos_pool_create_t;
@@ -195,6 +196,7 @@ typedef struct {
 	daos_handle_t		poh;
 	d_rank_list_t		*tgts;
 	daos_pool_info_t	*info;
+	daos_prop_t		*prop;
 } daos_pool_query_t;
 
 typedef struct {

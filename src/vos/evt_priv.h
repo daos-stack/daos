@@ -308,6 +308,7 @@ int evt_ent_array_sort(struct evt_context *tcx,
 /** Scan the tree and select all rectangles that match
  * \param[IN]		tcx		The evtree context
  * \param[IN]		opc		The opcode for the scan
+ * \param[IN]		intent		The operation intent
  *					EVT_FIND_FIRST: First record only
  *					EVT_FIND_SAME:  Same record only
  *					EVT_FIND_ALL:   All records
@@ -319,7 +320,7 @@ int evt_ent_array_sort(struct evt_context *tcx,
  * scanned record.
  */
 int evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
-		       const struct evt_filter *filter,
+		       uint32_t intent, const struct evt_filter *filter,
 		       const struct evt_rect *rect,
 		       struct evt_entry_array *ent_array);
 
@@ -351,29 +352,48 @@ struct evt_context *evt_hdl2tcx(daos_handle_t toh);
 
 /** Move the trace forward.
  * \param[IN]	tcx	The evtree context
+ * \param IN]	intent	The operation intent
  */
-bool evt_move_trace(struct evt_context *tcx);
+bool evt_move_trace(struct evt_context *tcx, uint32_t intent);
 
 /** Get a pointer to the rectangle corresponding to an index in a tree node
  * \param[IN]	tcx	The evtree context
- * \param[IN]	nd_mmid	The tree node
- * \param[IN]	at	The index in the node
+ * \param[IN]	node	The tree node
+ * \param[IN]	at	The index in the node entry
  *
  * Returns the rectangle at the index
  */
 struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
-				  uint64_t nd_off, unsigned int at);
+				  struct evt_node *node, unsigned int at);
+
+/** Get a pointer to the rectangle corresponding to an index in a tree node
+ * \param[IN]	tcx	The evtree context
+ * \param[IN]	nd_off	The offset of the tree node
+ * \param[IN]	at	The index in the node entry
+ *
+ * Returns the rectangle at the index
+ */
+static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
+						  uint64_t nd_off,
+						  unsigned int at)
+{
+	struct evt_node	*node;
+
+	node = evt_off2node(tcx, nd_off);
+
+	return evt_node_rect_at(tcx, node, at);
+}
 
 /** Fill an evt_entry from the record at an index in a tree node
  * \param[IN]	tcx		The evtree context
- * \param[IN]	nd_mmid		The tree node
+ * \param[IN]	node		The tree node
  * \param[IN]	at		The index in the node
  * \param[IN]	rect_srch	The original rectangle used for the search
  * \param[OUT]	entry		The entry to fill
  *
  * The selected extent will be trimmed by the search rectangle used.
  */
-void evt_entry_fill(struct evt_context *tcx, uint64_t nd_off,
+void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 		    unsigned int at, const struct evt_rect *rect_srch,
 		    struct evt_entry *entry);
 #endif /* __EVT_PRIV_H__ */

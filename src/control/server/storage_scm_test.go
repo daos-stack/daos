@@ -26,11 +26,22 @@ package main
 import (
 	"testing"
 
+	. "github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
-
-	"github.com/daos-stack/daos/src/control/utils/log"
-	. "github.com/daos-stack/daos/src/control/utils/test"
 )
+
+// MockModule returns a mock SCM module of type exported from go-ipmctl.
+func MockModule() DeviceDiscovery {
+	m := MockModulePB()
+	dd := DeviceDiscovery{}
+	dd.Physical_id = uint16(m.Physicalid)
+	dd.Channel_id = uint16(m.Channel)
+	dd.Channel_pos = uint16(m.Channelpos)
+	dd.Memory_controller_id = uint16(m.Memctrlr)
+	dd.Socket_id = uint16(m.Socket)
+	dd.Capacity = m.Capacity
+	return dd
+}
 
 type mockIpmCtl struct {
 	modules []DeviceDiscovery
@@ -43,7 +54,6 @@ func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 // mockScmStorage factory
 func newMockScmStorage(mms []DeviceDiscovery, inited bool) *scmStorage {
 	return &scmStorage{
-		logger:      log.NewLogger(),
 		ipmCtl:      &mockIpmCtl{modules: mms},
 		initialized: inited,
 	}
@@ -64,19 +74,21 @@ func TestDiscoveryScm(t *testing.T) {
 		},
 	}
 
-	m := MockModulePB()
+	mPB := MockModulePB()
+	m := MockModule()
 
 	for _, tt := range tests {
-		ss := newMockScmStorage([]DeviceDiscovery{MockModule()}, tt.inited)
+		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited)
 
 		if err := ss.Discover(); err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
 			}
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 
-		AssertEqual(t, ss.modules, ScmmMap{0: m}, "unexpected list of modules")
+		AssertEqual(t, len(ss.modules), 1, "unexpected number of modules")
+		AssertEqual(t, ss.modules[int32(mPB.Physicalid)], mPB, "unexpected module values")
 	}
 }

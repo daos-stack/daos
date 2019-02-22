@@ -307,7 +307,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 	int		i;
 	int		punch_idx = 1;
 
-	arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_VALUE;
+	arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD;
 	/* Validate data for each shard */
 	for (i = 0; i < OBJ_REPLICAS; i++) {
 		int j;
@@ -937,16 +937,14 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 static void
 rebuild_destroy_pool_during_scan(void ** state)
 {
-	return rebuild_destroy_pool_internal(state, DAOS_REBUILD_TGT_SCAN_HANG |
-						    DAOS_FAIL_VALUE);
+	return rebuild_destroy_pool_internal(state, DAOS_REBUILD_TGT_SCAN_HANG);
 }
 
 static void
 rebuild_destroy_pool_during_rebuild(void ** state)
 {
 	return rebuild_destroy_pool_internal(state,
-					     DAOS_REBUILD_TGT_REBUILD_HANG |
-					     DAOS_FAIL_VALUE);
+					     DAOS_REBUILD_TGT_REBUILD_HANG);
 }
 
 static void
@@ -1025,8 +1023,7 @@ rebuild_send_objects_fail(void **state)
 	/* Skip object send on all of the targets */
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_TGT_SEND_OBJS_FAIL |
-				     DAOS_FAIL_VALUE, 0, NULL);
+				     DAOS_REBUILD_TGT_SEND_OBJS_FAIL, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	/* Even do not sending the objects, the rebuild should still be
 	 * able to finish.
@@ -1159,16 +1156,14 @@ static void
 rebuild_tgt_pool_disconnect_in_scan(void **state)
 {
 	rebuild_tgt_pool_disconnect_internal(state,
-					     DAOS_REBUILD_TGT_SCAN_HANG |
-					     DAOS_FAIL_VALUE);
+					     DAOS_REBUILD_TGT_SCAN_HANG);
 }
 
 static void
 rebuild_tgt_pool_disconnect_in_rebuild(void **state)
 {
 	rebuild_tgt_pool_disconnect_internal(state,
-					     DAOS_REBUILD_TGT_REBUILD_HANG |
-					     DAOS_FAIL_VALUE);
+					     DAOS_REBUILD_TGT_REBUILD_HANG);
 }
 
 static int
@@ -1223,16 +1218,14 @@ static void
 rebuild_offline_pool_connect_in_scan(void **state)
 {
 	rebuild_offline_pool_connect_internal(state,
-					      DAOS_REBUILD_TGT_SCAN_HANG |
-					      DAOS_FAIL_VALUE);
+					      DAOS_REBUILD_TGT_SCAN_HANG);
 }
 
 static void
 rebuild_offline_pool_connect_in_rebuild(void **state)
 {
 	rebuild_offline_pool_connect_internal(state,
-					      DAOS_REBUILD_TGT_REBUILD_HANG |
-					      DAOS_FAIL_VALUE);
+					      DAOS_REBUILD_TGT_REBUILD_HANG);
 }
 
 static void
@@ -1273,8 +1266,7 @@ rebuild_change_leader_cb(void *arg)
 	/* Skip appendentry to re-elect the leader */
 	if (test_arg->myrank == 0) {
 		daos_mgmt_set_params(test_arg->group, leader, DSS_KEY_FAIL_LOC,
-				     DAOS_RDB_SKIP_APPENDENTRIES_FAIL |
-				     DAOS_FAIL_VALUE, 0, NULL);
+				     DAOS_RDB_SKIP_APPENDENTRIES_FAIL, 0, NULL);
 		print_message("sleep 15 seconds for re-election leader\n");
 		/* Sleep 15 seconds to make sure the leader is changed */
 		sleep(15);
@@ -1306,8 +1298,7 @@ rebuild_master_change_during_scan(void **state)
 	/* All ranks should wait before rebuild */
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-				 DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_VALUE,
-				 0, NULL);
+				     DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	arg->rebuild_cb = rebuild_change_leader_cb;
 
@@ -1338,8 +1329,7 @@ rebuild_master_change_during_rebuild(void **state)
 
 	/* All ranks should wait before rebuild */
 	daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_VALUE,
-			     0, NULL);
+			     DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
 
 	arg->rebuild_cb = rebuild_change_leader_cb;
 
@@ -1395,8 +1385,7 @@ rebuild_nospace(void **state)
 
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_TGT_NOSPACE | DAOS_FAIL_VALUE,
-				     0, NULL);
+				     DAOS_REBUILD_TGT_NOSPACE, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1433,8 +1422,7 @@ rebuild_multiple_tgts(void **state)
 
 		/* All ranks should wait before rebuild */
 		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-				     DAOS_REBUILD_HANG | DAOS_FAIL_VALUE,
-				     0, NULL);
+				     DAOS_REBUILD_HANG, 0, NULL);
 		/* kill 2 ranks at the same time */
 		D_ASSERT(layout->ol_shards[0]->os_replica_nr > 2);
 		for (i = 0; i < 3; i++) {
@@ -1606,8 +1594,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 
 	/* HOLD rebuild ULT */
 	daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
-			     DAOS_REBUILD_HANG | DAOS_FAIL_VALUE,
-			     0, NULL);
+			     DAOS_REBUILD_HANG, 0, NULL);
 
 	/* Kill one replica and start rebuild */
 	shard = layout->ol_shards[0];

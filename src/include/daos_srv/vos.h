@@ -33,7 +33,53 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+
+/**
+ * Search the specified DTX is in the CoS cache or not.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return	0 if the DTX exists in the CoS cache.
+ * \return	-DER_NONEXIST if not in the CoS cache.
+ * \return	Other negative values on error.
+ */
+int
+vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		   struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
+/**
+ * Fetch the list of the DTXs to be committed because of (potential) share.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	The target object (shard) ID.
+ * \param dkey		[IN]	The target dkey to be modified.
+ * \param types		[IN]	The DTX types to be listed.
+ * \param dtis		[OUT]	The DTX IDs array to be committed for share.
+ *
+ * \return			The count of DTXs to be committed for share
+ *				on success, negative value if error.
+ */
+int
+vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		 daos_key_t *dkey, uint32_t types, struct daos_tx_id **dtis);
+
+/**
+ * Fetch the list of the DTXs that can be committed.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dtes	[OUT]	The array for DTX entries can be committed.
+ *
+ * \return		The count of DTXs can be committed on success,
+ *			negative value if error.
+ */
+int
+vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
 
 /**
  * Initialize the environment for a VOS instance
@@ -660,4 +706,55 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t *attr);
+
+/**
+ * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
+ * object. If object does not have an array value, 0 is returned in extent. User
+ * has to specify what is being queried (dkey, akey, and/or recx) along with the
+ * query type (max or min) in flags. If one of those is not provided the
+ * function will fail. If the dkey or akey are not being queried, there value
+ * must be provided by the user.
+ *
+ * If searching in a particular dkey for the max akey and max offset in that
+ * akey, user would supply the dkey value and a flag of: DAOS_GET_MAX |
+ * DAOS_GET_AKEY | DAOS_GET_RECX.
+ *
+ * If more than one entity is being queried, the innermost entry must exist.
+ * For example, if a user requests DAOS_GET_DKEY and DAOS_GET_RECX and no
+ * recx exists for a matched dkey, the search will try the next dkey until
+ * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
+ * returned.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object id
+ * \param[in]	flags	mask with the following options:
+ *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
+ *			DAOS_GET_MAX, DAOS_GET_MIN
+ *			User has to indicate whether to query the MAX or MIN, in
+ *			addition to what needs to be queried. Providing
+ *			(MAX | MIN) in any combination will return an error.
+ *			i.e. user can only query MAX or MIN in one call.
+ * \param[in,out]
+ *		dkey	[in]: allocated integer dkey. User can provide the dkey
+ *			if not querying the max or min dkey.
+ *			[out]: max or min dkey (if flag includes dkey query).
+ * \param[in,out]
+ *		akey	[in]: allocated integer akey. User can provide the akey
+ *			if not querying the max or min akey.
+ *			[out]: max or min akey (if flag includes akey query).
+ * \param[out]	recx	max or min offset in dkey/akey, and the size of the
+ *			extent at the offset. If there are no visible array
+ *			records, the size in the recx returned will be 0.
+ *
+ * \return
+ *			0		Success
+ *			-DER_NO_HDL	Invalid handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	No suitable key/recx found
+ */
+int
+vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
+		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
+		  daos_recx_t *recx);
+
 #endif /* __VOS_API_H */

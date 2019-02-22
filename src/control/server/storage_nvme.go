@@ -33,12 +33,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/utils/handlers"
-	"github.com/daos-stack/daos/src/control/utils/log"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 
 	"github.com/daos-stack/go-spdk/spdk"
 
-	pb "github.com/daos-stack/daos/src/control/proto/mgmt"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 var (
@@ -66,7 +66,6 @@ type spdkSetup struct {
 // for accessing Nvme devices (API) as well as storing device
 // details.
 type nvmeStorage struct {
-	logger      *log.Logger
 	env         spdk.ENV  // SPDK ENV interface
 	nvme        spdk.NVME // SPDK NVMe interface
 	spdk        SpdkSetup // SPDK shell configuration interface
@@ -128,6 +127,9 @@ func (n *nvmeStorage) Setup() (err error) {
 	if err = n.spdk.prep(); err != nil {
 		return
 	}
+	if err = n.Discover(); err != nil {
+		return
+	}
 	return
 }
 
@@ -175,9 +177,9 @@ func (n *nvmeStorage) Discover() error {
 }
 
 // Update method implementation for nvmeStorage
-func (n *nvmeStorage) Update(ctrlrID int32, path string, slot int32) error {
+func (n *nvmeStorage) Update(pciAddr string, path string, slot int32) error {
 	if n.initialized {
-		cs, ns, err := n.nvme.Update(ctrlrID, path, slot)
+		cs, ns, err := n.nvme.Update(pciAddr, path, slot)
 		if err != nil {
 			return err
 		}
@@ -193,11 +195,11 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
 	if n.initialized {
 		pluginDir := ""
-		pluginDir, err = handlers.GetAbsInstallPath(spdkFioPluginDir)
+		pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
 		if err != nil {
 			return
 		}
-		fioPath, err = handlers.GetAbsInstallPath(fioExecPath)
+		fioPath, err = common.GetAbsInstallPath(fioExecPath)
 		if err != nil {
 			return
 		}
@@ -218,7 +220,7 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 			"--eta-newline=10",
 			configPath,
 		}
-		n.logger.Debugf(
+		log.Debugf(
 			"BurnIn command string: %s %s %v", env, fioPath, cmds)
 		return
 	}
@@ -240,7 +242,7 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 				Pciaddr: c.PCIAddr,
 				Fwrev:   c.FWRev,
 				// repeated pb field
-				Namespace: loadNamespaces(c.ID, nss),
+				Namespace: loadNamespaces(c.PCIAddr, nss),
 			})
 	}
 	return pbCtrlrs
@@ -248,9 +250,11 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespace) {
+func loadNamespaces(
+	ctrlrPciAddr string, nss []spdk.Namespace) (_nss []*pb.NvmeNamespace) {
+
 	for _, ns := range nss {
-		if ns.CtrlrID == ctrlrID {
+		if ns.CtrlrPciAddr == ctrlrPciAddr {
 			_nss = append(
 				_nss,
 				&pb.NvmeNamespace{
@@ -263,18 +267,16 @@ func loadNamespaces(ctrlrID int32, nss []spdk.Namespace) (_nss []*pb.NvmeNamespa
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(
-	logger *log.Logger, shmID int, nrHugePages int) (*nvmeStorage, error) {
+func newNvmeStorage(shmID int, nrHugePages int) (*nvmeStorage, error) {
 
-	scriptPath, err := handlers.GetAbsInstallPath(spdkSetupPath)
+	scriptPath, err := common.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}
 	return &nvmeStorage{
-		logger: logger,
-		env:    &spdk.Env{},
-		nvme:   &spdk.Nvme{},
-		spdk:   &spdkSetup{scriptPath, nrHugePages},
-		shmID:  shmID, // required to enable SPDK multi-process mode
+		env:   &spdk.Env{},
+		nvme:  &spdk.Nvme{},
+		spdk:  &spdkSetup{scriptPath, nrHugePages},
+		shmID: shmID, // required to enable SPDK multi-process mode
 	}, nil
 }

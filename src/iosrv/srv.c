@@ -1523,6 +1523,8 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 	case DSS_KEY_FAIL_VALUE:
 		daos_fail_value_set(value);
 		break;
+	case DSS_KEY_FAIL_NUM:
+		daos_fail_num_set(value);
 	case DSS_REBUILD_RES_PERCENTAGE:
 		if (value >= 100) {
 			D_ERROR("invalid value "DF_U64"\n", value);

@@ -2,8 +2,6 @@ name: daos_server
 servers: []
 provider: ""
 socket_dir: /var/run/daos_server
-auto: true
-format: safe
 access_points:
 - localhost
 port: 10000
@@ -18,6 +16,8 @@ bdev_include: []
 bdev_exclude: []
 hyperthreads: false
 nr_hugepages: 1024
+control_log_mask: DEBUG
+control_log_file: ""
 modules: ""
 attach: ""
 systemmap: ""

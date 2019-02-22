@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 
 #include <daos/common.h>
 #include <daos/btree_class.h>
+#include <daos/dtx.h>
 #include "vea_internal.h"
 
 #define VEA_BLK_SZ	(4 * 1024)	/* 4K */
@@ -425,7 +426,8 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 			goto error;
 	}
 
-	rc = publish ? hint_tx_publish(hint, off_p, seq_min, seq_max) :
+	rc = publish ? hint_tx_publish(vsi->vsi_umem, hint, off_p, seq_min,
+				       seq_max) :
 		       hint_cancel(hint, off_c, seq_min, seq_max);
 error:
 	d_list_for_each_entry_safe(resrvd, tmp, resrvd_list, vre_link) {
@@ -670,15 +672,15 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		int			 i, rc;
 
 		stat->vs_free_persistent = 0;
-		rc = dbtree_iterate(vsi->vsi_md_free_btr, false,
-				    count_free_persistent,
+		rc = dbtree_iterate(vsi->vsi_md_free_btr, DAOS_INTENT_DEFAULT,
+				    false, count_free_persistent,
 				    (void *)&stat->vs_free_persistent);
 		if (rc != 0)
 			return rc;
 
 		stat->vs_free_transient = 0;
-		rc = dbtree_iterate(vsi->vsi_free_btr, false,
-				    count_free_transient,
+		rc = dbtree_iterate(vsi->vsi_free_btr, DAOS_INTENT_DEFAULT,
+				    false, count_free_transient,
 				    (void *)&stat->vs_free_transient);
 		if (rc != 0)
 			return rc;

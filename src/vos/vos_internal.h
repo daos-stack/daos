@@ -102,8 +102,20 @@ struct vos_container {
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* The handle for active DTX table */
+	daos_handle_t		vc_dtx_active_hdl;
+	/* The handle for committed DTX table */
+	daos_handle_t		vc_dtx_committed_hdl;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
+	/* The objects with committable DTXs in DRAM. */
+	daos_handle_t		vc_dtx_cos_hdl;
+	/* The DTX COS-btree. */
+	struct btr_root		vc_dtx_cos_btr;
+	/* The global list for commiitable DTXs. */
+	d_list_t		vc_dtx_committable;
+	/* The count of commiitable DTXs. */
+	uint32_t		vc_dtx_committable_count;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -383,6 +395,75 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 int
 vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
+/**
+ * DTX table create
+ * Called from cont_df_rec_alloc.
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * DTX table destroy
+ * Called from vos_cont_destroy
+ *
+ * \param pool		[IN]	vos pool
+ * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+
+/**
+ * Register dbtree class for DTX table, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure
+ */
+int
+vos_dtx_table_register(void);
+
+/**
+ * Register dbtree class for DTX CoS, it is called within vos_init().
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_cos_register(void);
+
+/**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+
+/**
+ * Remove the DTX from the CoS cache.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ * \param oid	[IN]	Pointer to the object ID.
+ * \param xid	[IN]	Pointer to the DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ */
+void
+vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct daos_tx_id *xid, uint64_t dkey, bool punch);
+
 enum vos_tree_class {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
@@ -396,6 +477,10 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
+	/** DAOS two-phase commit transation table */
+	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
+	/** The objects with committable DTXs in DRAM */
+	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -529,14 +614,21 @@ static inline void vos_irec_init_csum(struct vos_irec_df *irec,
 	}
 }
 
+/** Size of metadata without user payload */
 static inline uint64_t
-vos_irec_size(struct vos_rec_bundle *rbund)
+vos_irec_msize(struct vos_rec_bundle *rbund)
 {
 	uint64_t size = 0;
 
 	if (rbund->rb_csum != NULL)
 		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec_df) + rbund->rb_rsize;
+	return size + sizeof(struct vos_irec_df);
+}
+
+static inline uint64_t
+vos_irec_size(struct vos_rec_bundle *rbund)
+{
+	return vos_irec_msize(rbund) + rbund->rb_rsize;
 }
 
 static inline bool
@@ -668,8 +760,10 @@ struct vos_iterator {
 	struct vos_iterator	*it_parent; /* parent iterator */
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
-	bool			 it_from_parent;
 	uint32_t		 it_ref_cnt;
+	uint32_t		 it_from_parent:1,
+				 it_for_purge:1,
+				 it_for_rebuild:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -696,8 +790,8 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
-	/** recx visibility flags */
-	uint32_t		 ii_recx_flags;
+	/** iterator flags */
+	uint32_t		 ii_flags;
 
 };
 
@@ -788,8 +882,8 @@ enum {
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, struct vos_krec_df **krec,
-		 daos_handle_t *sub_toh);
+		 daos_key_t *key, int flags, uint32_t intent,
+		 struct vos_krec_df **krec, daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
@@ -845,6 +939,32 @@ vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
 		*earliest_df = epr->epr_lo;
 out:
 	return rc;
+}
+
+static inline int
+vos_tx_begin(struct vos_pool *vpool)
+{
+	return umem_tx_begin(&vpool->vp_umm, NULL);
+}
+
+static inline int
+vos_tx_end(struct vos_pool *vpool, int rc)
+{
+	if (rc != 0)
+		return umem_tx_abort(&vpool->vp_umm, rc);
+
+	return umem_tx_commit(&vpool->vp_umm);
+
+}
+
+static inline uint32_t
+vos_iter_intent(struct vos_iterator *iter)
+{
+	if (iter->it_for_purge)
+		return DAOS_INTENT_PURGE;
+	if (iter->it_for_rebuild)
+		return DAOS_INTENT_REBUILD;
+	return DAOS_INTENT_DEFAULT;
 }
 
 #endif /* __VOS_INTERNAL_H__ */

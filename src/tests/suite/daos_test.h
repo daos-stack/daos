@@ -124,6 +124,7 @@ typedef struct {
 	bool			async;
 	bool			hdl_share;
 	uint64_t		fail_loc;
+	uint64_t		fail_num;
 	uint64_t		fail_value;
 	bool			overlap;
 	int			expect_result;
@@ -188,6 +189,8 @@ test_teardown(void **state);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool);
+int
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop);
 
 static inline int
 async_enable(void **state)

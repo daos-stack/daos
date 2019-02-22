@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -59,6 +59,12 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
 
         # first make sure there are no existing servers running
         killServer(servers)
+
+        # clean the tmpfs on the servers
+        for server in servers:
+            subprocess.check_call(['ssh', server,
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf"])
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
