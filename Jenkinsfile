@@ -195,19 +195,27 @@ pipeline {
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'SUCCESS'
                         }
+                        */
                         unstable {
+                            sh 'mv config${arch}.log config.log-centos7-gcc'
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-centos7-gcc'
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on CentOS 7 with Clang') {
@@ -249,20 +257,26 @@ pipeline {
                             */
                             sh "rm -rf _build.external${arch}"
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            sh 'mv config${arch}.log config.log-centos7-clang'
+                            archiveArtifacts artifacts: 'config.log-centos7-clang'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-centos7-clang'
+                            archiveArtifacts artifacts: 'config.log-centos7-clang'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on Ubuntu 18.04') {
@@ -304,20 +318,26 @@ pipeline {
                             */
                             sh "rm -rf _build.external${arch}"
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            sh 'mv config${arch}.log config.log-ubuntu18.04-gcc'
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-ubuntu18.04-gcc'
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on Ubuntu 18.04 with Clang') {
@@ -358,20 +378,26 @@ pipeline {
                             */
                             sh "rm -rf _build.external${arch}"
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            sh 'mv config${arch}.log config.log-ubuntu18.04-clang'
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-ubuntu18.04-clang'
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on Leap 15') {
@@ -413,20 +439,26 @@ pipeline {
                             */
                             sh "rm -rf _build.external${arch}"
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            sh 'mv config${arch}.log config.log-leap15-gcc'
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-leap15-gcc'
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on Leap 15 with Clang') {
@@ -468,20 +500,26 @@ pipeline {
                             */
                             sh "rm -rf _build.external${arch}"
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            sh 'mv config${arch}.log config.log-leap15-clang'
+                            archiveArtifacts artifacts: 'config.log-leap15-clang'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-leap15-clang'
+                            archiveArtifacts artifacts: 'config.log-leap15-clang'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
                 stage('Build on Leap 15 with Intel-C') {
@@ -523,20 +561,26 @@ pipeline {
                             */
                             sh "rm -rf _build.external${arch}"
                         }
-                        /* temporarily moved into stepResult due to JENKINS-39203
                         unstable {
+                            sh 'mv config${arch}.log config.log-leap15-intelc'
+                            archiveArtifacts artifacts: 'config.log-leap15-intelc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'FAILURE'
+                            */
                         }
                         failure {
+                            sh 'mv config${arch}.log config.log-leap15-intelc'
+                            archiveArtifacts artifacts: 'config.log-leap15-intelc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
                                          context: 'build/' + env.STAGE_NAME,
                                          status: 'ERROR'
+                            */
                         }
-                        */
                     }
                 }
             }
