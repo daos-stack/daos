@@ -88,3 +88,50 @@ class MpioUtils():
 
         except (IOError, OSError, paramiko.SSHException, socket.error) as e:
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}".format(str(e)))
+
+    def run_ior(self, basepath, pool_uuid, svcl, np, hostfile, ior_flags, iteration,
+                transfer_size, block_size, display_output=True):
+        """
+            Running IOR over mpich
+            basepath       --Daos basepath
+            pool_uuid      --Daos Pool UUID
+            svcl           --Daos Pool SVCL
+            np             --number of client processes
+            hostfile       --client file holding client hostname and slots
+            ior_flags      --all ior specific flags
+            iteration      --number of iterations for ior run
+            block_size     --contiguous bytes to write per task
+            transfer_size  --size of transfer in bytes
+            display_output --print IOR output on console.
+        """
+        try:
+            # environment variables only to be set on client node
+            env_variables = ["export CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
+                             "export DAOS_POOL={}".format(pool_uuid), "export MPI_LIB=''",
+                             "export DAOS_SVCL={}".format(svcl), "export DAOS_SINGLETON_CLI=1",
+                             "export FI_PSM2_DISCONNECT=1"]
+
+            run_cmd = env_variables[0] + ";" + env_variables[1] + ";" + env_variables[2] + \
+                      ";" + env_variables[3] + ";" + env_variables[4] + ";" + env_variables[5] + \
+                      ";" + self.mpichinstall + "/mpirun -np {0} --hostfile {1} \
+                      /home/standan/mpiio/ior/build/src/ior -a MPIIO {2} -i {3} -t {4} -b {5} \
+                      -o daos:testFile".format(np, hostfile, ior_flags, iteration,
+                                               transfer_size, block_size)
+
+            if display_output:
+                print ("run_cmd: {}".format(run_cmd))
+
+            process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE, shell=True)
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output and display_output:
+                    print output.strip()
+            if process.poll() != 0:
+                raise MpioFailed("IOR Run process Failed with non zero exit code:{}"
+                                 .format(process.poll()))
+
+        except (OSError, ValueError) as e:
+            print "<IorRunFailed> Exception occurred: {0}".format(str(e))
+            raise MpioFailed("IOR Run process Failed")
