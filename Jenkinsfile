@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,9 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@debug") _
 
+def arch="-Linux"
+def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+
 def singleNodeTest() {
     provisionNodes NODELIST: env.NODELIST,
                    node_count: 1,
@@ -68,9 +71,6 @@ def singleNodeTest() {
                        exit \$rc""",
           junit_files: null
 }
-
-def arch="-Linux"
-def sanitized_JOB_NAME = JOB_NAME.replaceAll('/', '-').toLowerCase()
 
 pipeline {
     agent { label 'lightweight' }
