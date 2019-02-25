@@ -56,7 +56,7 @@ pipeline {
   }
 
   environment {
-    GITHUB_CREDS = 'aa4ae90b-b992-4fb6-b33b-236a53a26f77'
+    GITHUB_CREDS = 'daos-jenkins-review-posting'
     BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
     BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
     UID=sh(script: "id -u", returnStdout: true)
