@@ -90,6 +90,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	iter->it_forward = true;
 	if (evt_iter_is_sorted(iter))
 		iter->it_forward = (options & EVT_ITER_REVERSE) == 0;
+	iter->it_skip_move = 0;
 	iter->it_filter.fr_ex.ex_hi = ~(0ULL);
 	iter->it_filter.fr_ex.ex_lo = 0;
 	iter->it_filter.fr_epr.epr_lo = 0;
@@ -406,6 +407,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rc = -DER_NONEXIST;
 	} else {
 		iter->it_state = EVT_ITER_READY;
+		iter->it_skip_move = 0;
 	}
  out:
 	return rc;
@@ -430,6 +432,12 @@ evt_iter_next(daos_handle_t ih)
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
 		return rc;
+
+	if (iter->it_skip_move) {
+		D_ASSERT(!evt_iter_is_sorted(iter));
+		iter->it_skip_move = 0;
+		return 0;
+	}
 
 	return evt_iter_move(tcx, iter);
 }
@@ -504,6 +512,7 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 		goto out;
 	}
 
+	iter->it_skip_move = 1;
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 	if (!evt_filter_rect(&iter->it_filter, rect, true))

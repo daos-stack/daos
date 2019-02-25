@@ -287,6 +287,11 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		if (rc != 0)
 			return rc;
 
+		D_ASSERTF(ent_array->ea_ent_nr < ent_array->ea_size,
+			  "%u >= %u, depth:%u, order:%u\n",
+			  ent_array->ea_ent_nr, ent_array->ea_size,
+			  tcx->tc_depth, tcx->tc_order);
+
 		if (notify_realloc)
 			return -DER_AGAIN; /* Invalidate any cached state */
 	}
