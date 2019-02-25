@@ -34,7 +34,7 @@ import (
 )
 
 // Module id for the Server security module
-const securityModuleID int32 = 1
+const securityModuleID int32 = 2
 
 const (
 	methodValidateCredentials int32 = 101

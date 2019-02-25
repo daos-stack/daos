@@ -44,7 +44,7 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
-func drpcSetup(sockDir string) error {
+func drpcSetup(sockDir string, iosrv *iosrv) error {
 	// Create our socket directory if it doesn't exist
 	_, err := os.Stat(sockDir)
 	if err != nil && os.IsPermission(err) {
@@ -66,6 +66,8 @@ func drpcSetup(sockDir string) error {
 	}
 
 	// Create and add our modules
+	srvmodule := &srvModule{iosrv}
+	drpcServer.RegisterRPCModule(srvmodule)
 	secmodule := &SecurityModule{}
 	drpcServer.RegisterRPCModule(secmodule)
 
@@ -76,4 +78,37 @@ func drpcSetup(sockDir string) error {
 	}
 
 	return nil
+}
+
+// srvModule represents the daos_server dRPC module. It handles dRPCs sent by
+// the daos_io_server iosrv module (src/iosrv).
+type srvModule struct {
+	iosrv *iosrv
+}
+
+const srvModuleID = 1
+
+// These are srvModule dRPC methods.
+const (
+	notifyReady int32 = iota
+)
+
+func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+	switch method {
+	case notifyReady:
+		mod.handleNotifyReady()
+		return nil, nil
+	default:
+		return nil, errors.Errorf("unknown dRPC %d", method)
+	}
+}
+
+func (mod *srvModule) InitModule(state drpc.ModuleState) {}
+
+func (mod *srvModule) ID() int32 {
+	return srvModuleID
+}
+
+func (mod *srvModule) handleNotifyReady() {
+	mod.iosrv.ready <- struct{}{}
 }

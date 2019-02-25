@@ -167,12 +167,6 @@ func main() {
 		return
 	}
 
-	// Init socket and start drpc server to communicate with DAOS I/O servers.
-	if err = drpcSetup(config.SocketDir); err != nil {
-		log.Errorf("Failed to set up dRPC: %s", err)
-		return
-	}
-
 	// Create a channel to retrieve signals.
 	sigchan := make(chan os.Signal, 2)
 	signal.Notify(sigchan,
@@ -192,6 +186,10 @@ func main() {
 	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
 		log.Errorf("Failed to load server: %s", err)
+		return
+	}
+	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
+		log.Errorf("Failed to set up dRPC: %s", err)
 		return
 	}
 	if err = iosrv.start(); err != nil {

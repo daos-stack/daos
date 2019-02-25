@@ -35,6 +35,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/drpc_modules.h>
 #include "srv_internal.h"
 
 #include <daos.h> /* for daos_init() */
@@ -65,6 +66,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
+
+/** dRPC context */
+struct drpc	       *dss_drpc_ctx;
 
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
@@ -232,6 +236,66 @@ dss_topo_init()
 	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
 }
 
+/* daos_server dRPC method notifyReady (see also notifyReady) */
+#define SRV_NOTIFY_READY 0
+
+/* Notify daos_server that we are ready (e.g., to receive dRPC requests). */
+static int
+notify_ready(void)
+{
+	Drpc__Call	req = DRPC__CALL__INIT;
+	Drpc__Response *resp;
+	int		rc;
+
+	req.module = DRPC_MODULE_SRV;
+	req.method = SRV_NOTIFY_READY;
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, &req, &resp);
+	if (rc != 0)
+		return rc;
+
+	drpc__response__free_unpacked(resp, NULL);
+	return rc;
+}
+
+static int
+drpc_init(void)
+{
+	char   *path;
+	int	rc;
+
+	rc = asprintf(&path, "%s/%s", dss_socket_dir, "daos_server.sock");
+	if (rc < 0) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	dss_drpc_ctx = drpc_connect(path);
+	if (dss_drpc_ctx == NULL) {
+		rc = -DER_NOMEM;
+		goto out_path;
+	}
+
+	rc = notify_ready();
+	if (rc != 0)
+		drpc_close(dss_drpc_ctx);
+
+out_path:
+	D_FREE(path);
+out:
+	return rc;
+}
+
+static void
+drpc_fini(void)
+{
+	int rc;
+
+	D_ASSERT(dss_drpc_ctx != NULL);
+	rc = drpc_close(dss_drpc_ctx);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+}
+
 static int
 server_init()
 {
@@ -347,9 +411,15 @@ server_init()
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
+	rc = drpc_init();
+	if (rc != 0) {
+		D_ERROR("Failed to initialize dRPC: %d\n", rc);
+		goto exit_daos_fini;
+	}
+
 	rc = dss_module_setup_all();
 	if (rc != 0)
-		D_GOTO(exit_daos_fini, rc);
+		D_GOTO(exit_drpc_fini, rc);
 	D_INFO("Modules successfully set up\n");
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
@@ -358,6 +428,8 @@ server_init()
 
 	return 0;
 
+exit_drpc_fini:
+	drpc_fini();
 exit_daos_fini:
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();

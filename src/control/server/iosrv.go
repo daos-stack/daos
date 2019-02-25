@@ -29,6 +29,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"syscall"
 
@@ -37,6 +38,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 )
 
@@ -155,10 +157,13 @@ func writeIosrvSuper(path string, super *iosrvSuper) error {
 //
 // NOTE: The superblock supercedes the format-time configuration in config.
 type iosrv struct {
-	super  *iosrvSuper
-	config *configuration
-	index  int
-	cmd    *exec.Cmd
+	super   *iosrvSuper
+	config  *configuration
+	index   int
+	cmd     *exec.Cmd
+	sigchld chan os.Signal
+	ready   chan struct{}
+	conn    *drpc.ClientConnection
 }
 
 func newIosrv(config *configuration, i int) (*iosrv, error) {
@@ -168,9 +173,12 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 	}
 
 	srv := &iosrv{
-		super:  super,
-		config: config,
-		index:  i,
+		super:   super,
+		config:  config,
+		index:   i,
+		sigchld: make(chan os.Signal, 1),
+		ready:   make(chan struct{}),
+		conn:    getDrpcClientConnection(config.SocketDir),
 	}
 
 	return srv, nil
@@ -188,6 +196,22 @@ func (srv *iosrv) start() (err error) {
 		}
 	}()
 
+	// Wait for the notifyReady request or the SIGCHLD from the I/O server.
+	// If the I/O server is ready, make a dRPC connection to it.
+	select {
+	case <-srv.ready:
+	case <-srv.sigchld:
+		return errors.New("received SIGCHLD")
+	}
+	if err = srv.conn.Connect(); err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			srv.conn.Close()
+		}
+	}()
+
 	// TODO:
 	//   1 Get the rank and send a SetRank request to the I/O server.
 	//   2 If CreateMs, send a CreateMs request to the I/O server.
@@ -201,6 +225,7 @@ func (srv *iosrv) wait() error {
 	if err := srv.cmd.Wait(); err != nil {
 		return errors.Wrapf(err, "wait server %s", srv.config.Servers[srv.index].ScmMount)
 	}
+	srv.conn.Close()
 	return nil
 }
 
@@ -218,6 +243,8 @@ func (srv *iosrv) startCmd() error {
 	srv.cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL,
 	}
+
+	signal.Notify(srv.sigchld, syscall.SIGCHLD)
 
 	// Start the DAOS I/O server.
 	err := srv.cmd.Start()
