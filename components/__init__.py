@@ -242,7 +242,7 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    retriever = GitRepoRetriever("https://github.com/daos-stack/iof",
+    retriever = GitRepoRetriever("https://review.hpdd.intel.com/daos/iof",
                                  True)
     reqs.define('iof',
                 retriever=retriever,
