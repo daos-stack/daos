@@ -466,19 +466,6 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 int evt_find(daos_handle_t toh, const struct evt_rect *rect,
 	     struct evt_entry_array *ent_array);
 
-/** Scan the tree for the non-punched visible rectangle with the highest
- *  end offset and return the offset + 1 as the size.  Size is set to 0
- *  if no entries exist.   Size is undefined if an error is returned.
- *
- *  \param toh		[IN]	The tree open handle
- *  \param epoch	[IN]	The epoch at which to scan
- *  \param size		[OUT]	The size of the evtree
- *
- *  \return		0		Size is valid
- *			-rc		Other error code
- */
-int evt_get_size(daos_handle_t toh, daos_epoch_t epoch, daos_size_t *size);
-
 /**
  * Debug function, it outputs status of tree nodes at level \a debug_level,
  * or all levels if \a debug_level is negative.
