@@ -52,13 +52,6 @@ extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern bool	srv_io_dispatch;
 
-/**
- * Bypass bulk transfer on server side, instead data will be copy from/to
- * dummy buffer.
- * this mode is for performance evaluation on low bandwidth network.
- */
-extern bool	srv_bypass_bulk;
-
 /** client object shard */
 struct dc_obj_shard {
 	/* Metadata for this shard */

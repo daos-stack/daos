@@ -54,8 +54,6 @@ enum {
 	BDEV_CLASS_UNKNOWN
 };
 
-/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
-bool nvme_io_bypass;
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -197,15 +195,6 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
-
-	env = getenv("IO_BYPASS_ENV");
-	if (env && !strcasecmp(env, "nvme_io")) {
-		D_WARN("All NVMe I/O will be bypassed!\n");
-		nvme_io_bypass = true;
-	} else {
-		nvme_io_bypass = false;
-	}
-
 	return 0;
 
 free_cond:
