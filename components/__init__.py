@@ -242,21 +242,7 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    retriever = GitRepoRetriever("https://review.hpdd.intel.com/coral/cppr",
-                                 True)
-    reqs.define('cppr',
-                retriever=retriever,
-                commands=["scons $JOBS_OPT "
-                          "OMPI_PREBUILT=$OMPI_PREFIX "
-                          "CART_PREBUILT=$CART_PREFIX "
-                          "FUSE_PREBUILT=$FUSE_PREFIX "
-                          "IOF_PREBUILT=$IOF_PREFIX "
-                          "PREFIX=$CPPR_PREFIX install"],
-                headers=["cppr.h"],
-                libs=["cppr"],
-                requires=['iof', 'cart', 'ompi', 'fuse'])
-
-    retriever = GitRepoRetriever("https://review.hppd.intel.com/daos/iof",
+    retriever = GitRepoRetriever("https://github.com/daos-stack/iof",
                                  True)
     reqs.define('iof',
                 retriever=retriever,
@@ -268,7 +254,7 @@ def define_components(reqs):
                 headers=['cnss_plugin.h'],
                 requires=['cart', 'fuse', 'ompi'])
 
-    retriever = GitRepoRetriever("https://review.hpdd.intel.com/daos/daos_m",
+    retriever = GitRepoRetriever("https://github.com/daos-stack/daos",
                                  True)
     reqs.define('daos',
                 retriever=retriever,
@@ -294,7 +280,7 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'],
                 out_of_src_build=True)
 
-    retriever = GitRepoRetriever("https://review.hpdd.intel.com/daos/cart",
+    retriever = GitRepoRetriever("https://github.com/daos-stack/cart",
                                  True)
     reqs.define('cart',
                 retriever=retriever,
