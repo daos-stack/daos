@@ -46,21 +46,6 @@ extern "C" {
 
 # include <pmix.h>
 
-int __wrap_PMIx_Init(pmix_proc_t *proc, pmix_info_t info[], size_t ninfo);
-int __wrap_PMIx_Get(const pmix_proc_t *proc, const char key[],
-		    const pmix_info_t info[], size_t ninfo, pmix_value_t **val);
-int __wrap_PMIx_Publish(const pmix_info_t info[], size_t ninfo);
-int __wrap_PMIx_Lookup(pmix_pdata_t data[], size_t ndata,
-		       const pmix_info_t info[], size_t ninfo);
-int __wrap_PMIx_Fence(const pmix_proc_t procs[], size_t nprocs,
-		      const pmix_info_t info[], size_t ninfo);
-int __wrap_PMIx_Unpublish(char **keys, const pmix_info_t info[], size_t ninfo);
-void __wrap_PMIx_Register_event_handler(pmix_status_t codes[], size_t ncodes,
-					pmix_info_t info[], size_t ninfo,
-					pmix_notification_fn_t evhdlr,
-					pmix_evhdlr_reg_cbfunc_t cbfunc,
-					void *cbdata);
-
 #define expect_pmix_get(type, value)                        \
 	do {                                                \
 		will_return(__wrap_PMIx_Get, type);         \
