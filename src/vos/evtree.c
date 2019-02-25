@@ -1624,6 +1624,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
+	evt_desc_csum_set(tcx, dst_desc, &ent->ei_csum);
 
 	return 0;
 }
@@ -1704,7 +1705,8 @@ out:
  * full and requested extent are already filled
  */
 void
-evt_entry_csum_fill(struct evt_entry *entry, struct evt_desc *desc)
+evt_entry_csum_fill(struct evt_context *tcx, struct evt_entry *entry,
+	struct evt_desc *desc)
 {
 	if (desc->pt_csum_count > 0) {
 		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
@@ -1723,13 +1725,14 @@ evt_entry_csum_fill(struct evt_entry *entry, struct evt_desc *desc)
 
 		uint64_t csum_start = lo_offset / chunk_len;
 
-		entry->en_csum.cs_type = desc->pt_csum_type;
+		entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
 		entry->en_csum.cs_nr = csum_nr;
-		entry->en_csum.cs_buf_len = csum_nr * desc->pt_csum_len;
-		entry->en_csum.cs_len = desc->pt_csum_len;
+		entry->en_csum.cs_buf_len = csum_nr * tcx->tc_root->tr_csum_len;
+		entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
 		entry->en_csum.cs_chunksize = chunk_len;
 		entry->en_csum.cs_csum =
-			&desc->pt_csum[0] + csum_start * desc->pt_csum_len;
+			&desc->pt_csum[0] + csum_start *
+					    tcx->tc_root->tr_csum_len;
 	}
 }
 
@@ -1774,7 +1777,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	evt_entry_csum_fill(entry, desc);
+	evt_entry_csum_fill(tcx, entry, desc);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2572,7 +2575,7 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		desc = evt_tmmid2ptr(tcx, desc_mmid);
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		evt_desc_csum_set(desc, &ent->ei_csum);
+		evt_desc_csum_set(tcx, desc, &ent->ei_csum);
 		desc->dc_ver = ent->ei_ver;
 	} else {
 		ne->ne_child = in_off;

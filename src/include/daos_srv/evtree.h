@@ -66,11 +66,8 @@ struct evt_desc {
 	umem_id_t			dc_dtx;
 	/** number of csums stored in pt_csum array */
 	uint32_t			pt_csum_count;
-	/** type of the csum */
-	uint16_t			pt_csum_type;
-	/** length of each csum. csum_count * csum_len is length of csum buf */
-	uint16_t			pt_csum_len;
 	/** placeholder for csum array buffer */
+	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
 };
 
@@ -126,28 +123,6 @@ struct evt_filter {
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
 	(filter)->fr_epr.epr_hi
-
-static inline daos_size_t
-evt_desc_csum_buf_len(struct evt_desc *desc)
-{
-	return desc->pt_csum_len * desc->pt_csum_count;
-}
-
-/*
- * Copy the csum into the evt_desc. It is expected that enough memory was
- * allocated for the evt_desc to account for the csums. Place csums right after
- * the defined structure.
- */
-static inline void
-evt_desc_csum_set(struct evt_desc *desc,
-	const daos_csum_buf_t *csum)
-{
-	desc->pt_csum_len	= csum->cs_len;
-	desc->pt_csum_type	= csum->cs_type;
-	desc->pt_csum_count	= csum->cs_nr;
-	D_ASSERT(csum->cs_buf_len >= evt_desc_csum_buf_len(desc));
-	memcpy(desc->pt_csum, csum->cs_csum, evt_desc_csum_buf_len(desc));
-}
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -215,6 +190,10 @@ struct evt_root {
 	uint32_t			tr_inob;
 	/** see \a evt_feats */
 	uint64_t			tr_feats;
+	/** type of the csum used in tree*/
+	uint16_t			tr_csum_type;
+	/** length of each csum. */
+	uint16_t			tr_csum_len;
 };
 
 enum evt_feats {

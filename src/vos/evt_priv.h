@@ -191,6 +191,28 @@ evt_tx_end(struct evt_context *tcx, int rc)
 	return umem_tx_commit(evt_umm(tcx));
 }
 
+static inline daos_size_t
+evt_desc_csum_buf_len(struct evt_context *tcx, struct evt_desc *desc)
+{
+	return tcx->tc_root->tr_csum_len * desc->pt_csum_count;
+}
+
+/*
+ * Copy the csum into the evt_desc. It is expected that enough memory was
+ * allocated for the evt_desc to account for the csums. Place csums right after
+ * the defined structure.
+ */
+static inline void
+evt_desc_csum_set(struct evt_context *tcx, struct evt_desc *desc,
+	const daos_csum_buf_t *csum)
+{
+	tcx->tc_root->tr_csum_len	= csum->cs_len;
+	tcx->tc_root->tr_csum_type	= csum->cs_type;
+	desc->pt_csum_count	= csum->cs_nr;
+	D_ASSERT(csum->cs_buf_len >= evt_desc_csum_buf_len(tcx, desc));
+	memcpy(desc->pt_csum, csum->cs_csum, evt_desc_csum_buf_len(tcx, desc));
+}
+
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
  * rectangles intersect at a given epoch
