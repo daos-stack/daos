@@ -12,7 +12,7 @@
 
 ## dRPC Server
 
-The I/O server includes a dRPC server that listens for activity a given Unix Domain Socket. See the [dRPC documentation](src/control/drpc/README.md) for more details on the basics of dRPC, and the low-level APIs in Golang and C.
+The I/O server includes a dRPC server that listens for activity on a given Unix Domain Socket. See the [dRPC documentation](src/control/drpc/README.md) for more details on the basics of dRPC, and the low-level APIs in Golang and C.
 
 The dRPC server polls periodically for incoming client connections and requests. It can handle multiple simultaneous client connections via the `struct drpc_progress_context` object, which manages the `struct drpc` objects for the listening socket as well as any active client connections.
 
