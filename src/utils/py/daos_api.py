@@ -664,7 +664,8 @@ class IORequest(object):
         ctypes.memset(ctypes.byref(self.iod.iod_kcsum), 0, 16)
 
         # epoch range still in IOD for some reason
-        self.epoch_range = EpochRange()
+        # Commenting epoch_range because it was creating issue DAOS-2028.
+        # self.epoch_range = EpochRange()
         self.tx = 0
 
         cs = CheckSum()
@@ -698,8 +699,8 @@ class IORequest(object):
         self.sgl.sg_nr = len(c_data)
         self.sgl.sg_nr_out = len(c_data)
 
-        self.epoch_range.epr_lo = 0
-        self.epoch_range.epr_hi = ~0
+        #self.epoch_range.epr_lo = 0
+        #self.epoch_range.epr_hi = ~0
 
         self.tx = tx
         c_tx = ctypes.c_uint64(tx)
@@ -716,8 +717,8 @@ class IORequest(object):
         self.iod.iod_size = c_data[0][1]
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
-        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                        ctypes.c_void_p)
+        # Commenting epoch_range because it was creating issue DAOS-2028.
+        #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range), ctypes.c_void_p)
 
         # now do it
         func = self.context.get_function('update-obj')
@@ -816,8 +817,8 @@ class IORequest(object):
         self.sgl.sg_nr = 1
         self.sgl.sg_nr_out = 1
 
-        self.epoch_range.epr_lo = 0
-        self.epoch_range.epr_hi = ~0
+        #self.epoch_range.epr_lo = 0
+        #self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
         if akey is not None:
@@ -827,8 +828,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = size
             self.iod.iod_nr = 1
-            self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                            ctypes.c_void_p)
+            #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range), ctypes.c_void_p)
             iod_ptr = ctypes.pointer(self.iod)
         else:
             iod_ptr = None
@@ -879,8 +879,8 @@ class IORequest(object):
 
             sgl_ptr = ctypes.pointer(self.sgl)
 
-        self.epoch_range.epr_lo = 0
-        self.epoch_range.epr_hi = ~0
+        #self.epoch_range.epr_lo = 0
+        #self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
 
@@ -893,8 +893,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = ctypes.c_size_t(size)
             self.iod.iod_nr = 1
-            self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                            ctypes.c_void_p)
+            #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range), ctypes.c_void_p)
             iod_ptr = ctypes.pointer(self.iod)
 
         if dkey is not None:
