@@ -30,6 +30,8 @@ This document contains the following sections:
     - <a href="#781">Discussions on Transaction Model</a>
 - <a href="#79">VOS Checksum Management</a>
 - <a href="#80">Metadata Overhead</a>
+- <a href="#81">Replicas Consistency</a>
+    - <a href="#82">DTX Leader Election</a>
 
 <a id="58"></a>
 ## Persistent Memory based Storage
@@ -571,3 +573,43 @@ While using document KV we would have additional cost involved in creating one r
 </ol></li>
 </ol>
 
+<a id="81"></a>
+
+## Replicas Consistency
+
+DAOS supports multiple replicas for data high availablity. When an application updates an object with multiple replicas, it is possible that some replica(s) may have been updated successfully, but others failed. Then there is inconsistency among these replicas. On the other hand, several applciations may concurrently update the same target with multiple replicas. The different orders of updating related replicas also may cause inconsistency among the replicas.
+
+There are some possible solutions for above inconsistency trouble. The most intuitive idea is distributed lock (DLM) that is well used by some famous distributed system, such as Lustre. But consider that DAOS is user-space system with super-powerful hardware, maintaining distributed locks (especially handling locks share/conflcit) among multiple independent application spaces will introduce a lot of overhead and complexity. So DAOS does not use DLM, instead, some kind of optimized two-phase commit transaction is introduced to guarantee the consistency among replicas. The basic idea is as following:
+
+When an application wants to modify (update or punch) an object with multiple replicas, the client sends the modification RPC to the leader repica (elected via some algorithm as below <a href="#8a">DTX Leader Election</a> discussed). Then the leader dispatches the RPC to the other non-leader replicas. And then all the replicas will make each own modification locally in parallel. Please note that if the modification contains bulk data, then it will be transferred from the client to related replicas independently, not forwarded by the leader, that is  helpful for system load-balance, also reduces the latency and full uses of the client-server network bandwidth.
+
+For each replica, before the local modification, it will start a server local transaction (called as 'DTX') with the client given DTX identifier that is unique for current RPC within the container. Then related modifications will be registered to such DTX that also back-references related records (in SCM or NVMe) being modified. For non-leader replica, after the local modification done, it will mark its DTX state as 'prepared', then reply the leader replica. For leader replica, if all replicas have done related modification, it will mark its DTX state as 'committable' (locally on the leader), and then reply the client with modification done. But if some replica(s) failed to execute related modification, it will reply the leader with failure, then the leader will ask all the replcias to 'abort' related DTX, and then reply the client with modification failure.
+
+For the client, as long as it receives the leader reply with modificaction done, it will regard it as succeed in spite of whether the modification (and related DTX) is really committed or not. It is the leader duty to commit the 'committable' DTXs asynchronously some time later, or when 'committable' DTXs count exceeds some threshold, or piggybacked via dispatched RPCs because of potential conflict with some subsequent modifications.
+
+When an application wants to read something from an object with multiple replicas, the client can send the RPC to any replica. On the server side, if related DTX corresponding to the target record has been committed (valid for every replica) or is committable (only valid for leader), then such record can be returned to the client. Otherwise, if related DTX is 'prepared', and if the current replica is not the leader, it will notify the client to retry the RPC with the leader replica. For leader replica, the 'prepared' DTX is regared as non-ready, then the old version corresponding to the latest committed or committable DTX will be returned to the client.
+
+The DTX model is built inside DAOS container. Each container maintains its own DTX table that is organized as two B+tree in SCM: one is for active DTXs, the other is for committed DTXs. The following diagram is for the modification of multiple replicated object under DTX model.
+
+<a id="8a"></a>
+<b>Modify multiple replicated object under DTX model</b>
+
+![../../doc/graph/Fig_066.png](../../doc/graph/Fig_066.png ">Modify multiple replicated object under DTX model")
+
+<a id="8b"></a>
+
+### DTX Leader Election
+
+In the DTX model, leader is a special replica that takes more work than non-leaders, including:
+
+1. All modification RPCs will be sent to the leader that will make some necessary sanity check, then dispatch the modification requests to other replicas.
+
+2. If some non-leader replica hits 'prepared' DTX, it will notify the client to retry related read-only RPC with leader replcia. So the leader replica will handle the read-only RPCs that touch uncommitted DTXs.
+
+So genearally, the server on which the leader replica resides will have more load that non-leaders. To avoid or reduce the unbalaced load caused by DTX leader, we need multiple leaders on different servers for modifying different objects or different dkeys in the same object. Some rules for the leader election:
+
+R1: If multiple objects share the same redundancy group, then the leaders for different objects should be on different servers.
+
+R2: If a multiple replicated object has multiple redundancy groups, then the leaders in different redundancy groups should be on different servers.
+
+R3: In each redundancy group, elect the replica which server has the lowest failure sequence as the leader to avoid leader switch as much as possible.
