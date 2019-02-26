@@ -1060,35 +1060,39 @@ iter_fini:
 	return rc;
 }
 
-struct obj_iter_arg {
+struct cont_rebuild_iter_arg {
 	cont_iter_cb_t	callback;
 	void		*arg;
+	uint32_t	 type;
 };
 
 static int
-cont_obj_iter_cb(uuid_t cont_uuid, daos_unit_oid_t oid, daos_epoch_t eph,
-		 void *data)
+cont_rebuild_iter_cb(uuid_t cont_uuid, vos_iter_entry_t *ent, void *data)
 {
-	struct obj_iter_arg *arg = data;
+	struct cont_rebuild_iter_arg *arg = data;
 
-	return arg->callback(cont_uuid, oid, eph, arg->arg);
+	return arg->callback(cont_uuid, ent, arg->arg);
 }
 
 static int
-pool_obj_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
+pool_rebuild_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
 {
-	return ds_cont_obj_iter(ph, co_uuid, cont_obj_iter_cb, data);
+	struct cont_rebuild_iter_arg *arg = data;
+
+	return ds_cont_rebuild_iter(ph, co_uuid, cont_rebuild_iter_cb, data,
+				    arg->type);
 }
 
 /**
- * Iterate all of the objects in the pool.
+ * Iterate all of the objects or DTXs in the pool.
  **/
 int
-ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
+ds_pool_rebuild_iter(uuid_t pool_uuid, rebuild_iter_cb_t callback,
+		     void *data, uint32_t type)
 {
-	struct obj_iter_arg	arg;
-	struct ds_pool_child	*child;
-	int			rc;
+	struct cont_rebuild_iter_arg	 arg;
+	struct ds_pool_child		*child;
+	int				 rc;
 
 	child = ds_pool_child_lookup(pool_uuid);
 	if (child == NULL)
@@ -1096,7 +1100,8 @@ ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
 
 	arg.callback = callback;
 	arg.arg = data;
-	rc = ds_pool_cont_iter(child->spc_hdl, pool_obj_iter_cb, &arg);
+	arg.type = type;
+	rc = ds_pool_cont_iter(child->spc_hdl, pool_rebuild_iter_cb, &arg);
 
 	ds_pool_child_put(child);
 

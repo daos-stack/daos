@@ -464,7 +464,7 @@ ds_cont_put(struct ds_cont *cont)
 
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   uint64_t capas, struct ds_cont_hdl **cont_hdl)
+		   uint64_t capas, struct ds_cont_hdl **cont_hdl, bool resync)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_hdl	*hdl;
@@ -524,6 +524,17 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		*cont_hdl = hdl;
 	}
 
+	if (resync) {
+		/* Sync-up the DTXs status. */
+		rc = dtx_resync(hdl->sch_pool->spc_hdl, pool_uuid, cont_uuid,
+				hdl->sch_pool->spc_map_version, false);
+		if (rc != 0)
+			/* Just warning, not fail out. */
+			D_WARN("Fail to resync some DTX(s) status, that may "
+			       "cause some potential unexpected IO result in "
+			       "subsequent operations: rc = %d\n", rc);
+	}
+
 	return 0;
 
 err_cont:
@@ -553,7 +564,7 @@ cont_open_one(void *vin)
 	struct cont_tgt_open_in	       *in = vin;
 
 	return ds_cont_local_open(in->toi_pool_uuid, in->toi_hdl,
-				  in->toi_uuid, in->toi_capas, NULL);
+				  in->toi_uuid, in->toi_capas, NULL, true);
 }
 
 void
@@ -1035,10 +1046,10 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
-/* iterate all of objects of the container. */
+/* iterate all of objects or uncommitted DTXs of the container. */
 int
-ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
-		 cont_iter_cb_t callback, void *arg)
+ds_cont_rebuild_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
+		     void *arg, uint32_t type)
 {
 	vos_iter_param_t param;
 	daos_handle_t	 iter_h;
@@ -1058,7 +1069,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 
-	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
+	rc = vos_iter_prepare(type, &param, &iter_h);
 	if (rc != 0) {
 		D_ERROR("prepare obj iterator failed %d\n", rc);
 		D_GOTO(close, rc);
@@ -1079,17 +1090,22 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 		rc = vos_iter_fetch(iter_h, &ent, NULL);
 		if (rc != 0) {
 			/* reach to the end of the container */
-			if (rc == -DER_NONEXIST)
+			if (rc == -DER_NONEXIST) {
 				rc = 0;
-			else
+				/* To notify the sponsor that it is the end
+				 * of the iteration for current container.
+				 */
+				callback(co_uuid, NULL, arg);
+			} else {
 				D_ERROR("Fetch obj failed: %d\n", rc);
+			}
 			break;
 		}
 
 		D_DEBUG(DB_ANY, "iter "DF_UOID"/"DF_UUID"\n",
 			DP_UOID(ent.ie_oid), DP_UUID(co_uuid));
 
-		rc = callback(co_uuid, ent.ie_oid, ent.ie_epoch, arg);
+		rc = callback(co_uuid, &ent, arg);
 		if (rc) {
 			D_DEBUG(DB_ANY, "iter "DF_UOID" rc %d\n",
 				DP_UOID(ent.ie_oid), rc);

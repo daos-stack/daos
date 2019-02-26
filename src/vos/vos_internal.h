@@ -202,6 +202,7 @@ struct vos_object {
 extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
+extern struct vos_iter_ops vos_dtx_iter_ops;
 
 /** VOS thread local storage structure */
 struct vos_tls {
