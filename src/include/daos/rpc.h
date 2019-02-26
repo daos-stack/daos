@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,7 @@ enum daos_module_id {
 	DAOS_RDB_MODULE		= 7, /** rdb */
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_SEC_MODULE		= 9, /** security framework */
+	DAOS_DTX_MODULE		= 10, /** DTX */
 	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
 };
 
@@ -100,6 +101,7 @@ enum daos_rpc_type {
 	DAOS_REQ_IV,
 	DAOS_REQ_BCAST,
 	DAOS_REQ_SWIM,
+	DAOS_REQ_DTX,
 };
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
@@ -124,6 +126,7 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	switch (req_type) {
 	/* for normal IO request, send to the main service thread/context */
 	case DAOS_REQ_IO:
+	case DAOS_REQ_DTX:
 		return DAOS_IO_CTX_ID(tgt_idx);
 	/* target tag 0 is to handle below requests */
 	case DAOS_REQ_MGMT:

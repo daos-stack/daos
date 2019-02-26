@@ -1,0 +1,17 @@
+"""Build dtx library"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    denv = env.Clone()
+
+    # dtx
+    dtx = daos_build.library(denv, 'dtx',
+                             ['dtx_srv.c', 'dtx_rpc.c'])
+    denv.Install('$PREFIX/lib/daos_srv', dtx)
+
+if __name__ == "SCons.Script":
+    scons()

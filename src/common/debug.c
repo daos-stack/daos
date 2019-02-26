@@ -50,6 +50,7 @@ DECLARE_FAC(rdb);
 DECLARE_FAC(rsvc);
 DECLARE_FAC(pool);
 DECLARE_FAC(container);
+DECLARE_FAC(dtx);
 DECLARE_FAC(object);
 DECLARE_FAC(placement);
 DECLARE_FAC(rebuild);
@@ -106,6 +107,7 @@ static struct d_debug_bit daos_bit_dict[] = {
 	ACTION("rsvc", d_rsvc_logfac)			\
 	ACTION("pool", d_pool_logfac)			\
 	ACTION("container", d_container_logfac)		\
+	ACTION("dtx", d_dtx_logfac)			\
 	ACTION("object", d_object_logfac)		\
 	ACTION("placement", d_placement_logfac)		\
 	ACTION("rebuild", d_rebuild_logfac)		\
