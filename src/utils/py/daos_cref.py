@@ -29,6 +29,12 @@ class RankList(ctypes.Structure):
     _fields_ = [("rl_ranks", ctypes.POINTER(ctypes.c_uint32)),
                 ("rl_nr", ctypes.c_uint)]
 
+class DTgtList(ctypes.Structure):
+    """ Structure to represent rank/target list for target """
+    _fields_ = [("tl_ranks", ctypes.POINTER(ctypes.c_uint32)),
+                ("tl_tgts", ctypes.POINTER(ctypes.c_int32)),
+                ("tl_nr", ctypes.c_uint32)]
+
 class IOV(ctypes.Structure):
     _fields_ = [("iov_buf", ctypes.c_void_p),
                 ("iov_buf_len", ctypes.c_size_t),
