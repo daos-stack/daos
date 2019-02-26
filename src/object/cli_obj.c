@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,6 +260,7 @@ obj_layout_create(struct dc_object *obj)
 		obj_shard = &obj->cob_shards[i];
 		obj_shard->do_shard = i;
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
+		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
 		obj_shard->do_rebuilding = layout->ol_shards[i].po_rebuilding;
 	}
 out:
@@ -378,28 +379,125 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 }
 
 static int
-obj_grp_shard_get(struct dc_object *obj, uint32_t grp_idx,
-		  uint64_t hash, unsigned int map_ver, uint32_t op)
+obj_select_leader_shard(struct dc_object *obj, uint32_t idx,
+			uint32_t *shard_idx)
 {
-	int	grp_size;
-	int	idx;
+	struct dc_obj_shard		*shard;
+	struct daos_oclass_attr		*oc_attr;
+	uint32_t			 replicas;
+	int				 preferred;
+	int				 rdg_idx;
+	int				 start;
+	int				 pos;
+	int				 off;
+	int				 i;
 
-	grp_size = obj_get_grp_size(obj);
-	idx = hash % grp_size + grp_idx * grp_size;
-	return obj_grp_valid_shard_get(obj, idx, map_ver, op);
+	if (obj->cob_shards_nr <= idx)
+		return -DER_INVAL;
+
+	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
+
+	/* For non-replicated object, elect current shard as leader. */
+	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		*shard_idx = idx;
+		return 0;
+	}
+
+	replicas = oc_attr->u.repl.r_num;
+	if (replicas == DAOS_OBJ_REPL_MAX)
+		replicas = obj->cob_shards_nr;
+
+	if (replicas < 1)
+		return -DER_INVAL;
+
+	if (replicas == 1) {
+		D_ASSERT(idx == 0);
+
+		shard = &obj->cob_shards[idx];
+		if (shard->do_target_id == -1)
+			return -DER_NONEXIST;
+
+		/* Single replicated object will not rebuild. */
+		D_ASSERT(!shard->do_rebuilding);
+		D_ASSERT(shard->do_shard == idx);
+
+		*shard_idx = shard->do_shard;
+		return 0;
+	}
+
+	/* XXX: The shards within [start, start + replicas) will search from
+	 *	the same @preferred position, then they will have the same
+	 *	leader. The shards (belonging to the same object) in
+	 *	other redundancy group may get different leader node.
+	 *
+	 *	The one with the lowest f_seq will be elected as the leader to
+	 *	avoid leader switch.
+	 */
+	rdg_idx = idx / replicas;
+	start = rdg_idx * replicas;
+	preferred = start + (obj->cob_md.omd_id.lo + rdg_idx) % replicas;
+	for (i = 0, off = preferred, pos = -1; i < replicas;
+	     i++, off = (off + 1) % replicas + start) {
+		shard = &obj->cob_shards[off];
+		if (shard->do_target_id == -1 || shard->do_rebuilding)
+			continue;
+
+		if (pos == -1 ||
+		    obj->cob_shards[pos].do_fseq > shard->do_fseq)
+			pos = off;
+	}
+
+	if (pos != -1) {
+		D_ASSERT(obj->cob_shards[pos].do_shard == pos);
+
+		*shard_idx = pos;
+		return 0;
+	}
+
+	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */
+	return -DER_NONEXIST;
+}
+
+static int
+obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
+{
+	uint32_t	shard;
+	int		rc;
+
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj->cob_version != map_ver) {
+		/* Sigh, someone else changed the pool map */
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		return -DER_STALE;
+	}
+
+	rc = obj_select_leader_shard(obj, idx, &shard);
+	if (rc == 0)
+		rc = shard;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return rc;
 }
 
 static int
 obj_dkeyhash2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
-		   uint32_t op)
+		   uint32_t op, bool to_leader)
 {
-	int	 grp_idx;
+	int	grp_idx;
+	int	grp_size;
+	int	idx;
 
 	grp_idx = obj_dkey2grp(obj, hash, map_ver);
 	if (grp_idx < 0)
 		return grp_idx;
 
-	return obj_grp_shard_get(obj, grp_idx, hash, map_ver, op);
+	grp_size = obj_get_grp_size(obj);
+	idx = hash % grp_size + grp_idx * grp_size;
+
+	if (to_leader)
+		return obj_grp_leader_get(obj, idx, map_ver);
+
+	return obj_grp_valid_shard_get(obj, idx, map_ver, op);
 }
 
 static int
@@ -468,8 +566,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver,
 		return 0;
 
 	/* select one leader shard and generate the fw_shard_tgts array */
-	rc = obj_grp_valid_shard_get(obj, *start_shard, map_ver,
-				     DAOS_OBJ_RPC_UPDATE);
+	rc = obj_grp_leader_get(obj, *start_shard, map_ver);
 	if (rc < 0) {
 		D_ERROR(DF_OID" no valid shard, rc %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
@@ -901,7 +998,9 @@ struct obj_auxi_args {
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
 	uint32_t			 io_retry:1,
-					 shard_task_scheded:1;
+					 shard_task_scheded:1,
+					 retry_with_leader:1;
+	uint32_t			 flags;
 	int				 result;
 	d_list_t			 shard_task_head;
 	tse_task_t			*obj_task;
@@ -930,6 +1029,7 @@ struct obj_list_arg {
 struct shard_update_args {
 	struct shard_auxi_args	 auxi;
 	daos_epoch_t		 epoch;
+	struct daos_tx_id	 dti;
 	daos_key_t		*dkey;
 	uint64_t		 dkey_hash;
 	unsigned int		 nr;
@@ -957,6 +1057,8 @@ shard_result_process(tse_task_t *task, void *arg)
 	} else if (obj_retry_error(ret)) {
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
 		obj_auxi->io_retry = 1;
+		if (task->dt_result == -DER_INPROGRESS)
+			obj_auxi->retry_with_leader = 1;
 	} else {
 		/* for un-retryable failure, set the err to whole obj IO */
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
@@ -1073,6 +1175,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 		pm_stale = true;
 	if (obj_retry_error(task->dt_result) || obj_auxi->io_retry)
 		io_retry = true;
+
+	if (io_retry && task->dt_result == -DER_INPROGRESS)
+		obj_auxi->retry_with_leader = 1;
 
 	if (pm_stale || io_retry)
 		obj_retry_cb(task, obj, io_retry);
@@ -1236,7 +1341,8 @@ dc_obj_fetch(tse_task_t *task)
 
 	dkey_hash = obj_dkey2hash(args->dkey);
 	shard = obj_dkeyhash2shard(obj, dkey_hash, map_ver,
-				   DAOS_OPC_OBJ_UPDATE);
+				   DAOS_OPC_OBJ_UPDATE,
+				   obj_auxi->retry_with_leader);
 	if (shard < 0)
 		D_GOTO(out_task, rc = shard);
 
@@ -1310,7 +1416,8 @@ shard_update_task(tse_task_t *task)
 	rc = dc_obj_shard_update(obj_shard, args->epoch, args->dkey, args->nr,
 				 args->iods, args->sgls, &args->auxi.map_ver,
 				 args->auxi.obj_auxi->fw_shard_tgts,
-				 args->auxi.obj_auxi->fw_cnt, task);
+				 args->auxi.obj_auxi->fw_cnt, task,
+				 &args->dti, args->auxi.obj_auxi->flags);
 
 	obj_shard_close(obj_shard);
 	return rc;
@@ -1473,8 +1580,20 @@ dc_obj_update(tse_task_t *task)
 
 	head = &obj_auxi->shard_task_head;
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
-	if (obj_auxi->io_retry)
+	if (obj_auxi->io_retry) {
+		/* We mark the RPC as RESEND although @io_retry does not
+		 * guarantee that the RPC has ever been sent. It may cause
+		 * some overhead on server side, but no correctness issues.
+		 *
+		 * On the other hand, the client may resend the RPC to new
+		 * shard if leader switched. That is why the resend logic
+		 * is handled at object layer rather than shard layer.
+		 */
+		obj_auxi->flags = ORF_RESEND;
 		goto task_sched;
+	}
+
+	obj_auxi->flags = 0;
 	for (i = 0; i < shards_cnt; i++, shard++) {
 		tse_task_t			*shard_task;
 		struct shard_update_args	*shard_arg;
@@ -1487,6 +1606,7 @@ dc_obj_update(tse_task_t *task)
 		shard_arg = tse_task_buf_embedded(shard_task,
 						  sizeof(*shard_arg));
 		shard_arg->epoch		= epoch;
+		daos_generate_dti(&shard_arg->dti);
 		shard_arg->dkey			= args->dkey;
 		shard_arg->dkey_hash		= dkey_hash;
 		shard_arg->nr			= args->nr;
@@ -1574,21 +1694,34 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_handle_t th,
 		D_GOTO(out_task, rc);
 
 	if (dkey == NULL) {
+		bool	to_leader = false;
+
 		if (op != DAOS_OBJ_DKEY_RPC_ENUMERATE &&
 		    op != DAOS_OBJ_RPC_ENUMERATE) {
 			D_ERROR("No dkey for opc %x\n", op);
 			D_GOTO(out_task, rc = -DER_INVAL);
 		}
 
+		if (obj_auxi->retry_with_leader)
+			to_leader = true;
+		else if (daos_anchor_get_flags(dkey_anchor) &
+			 DAOS_ANCHOR_FLAGS_TO_LEADER)
+			to_leader = true;
+
 		shard = dc_obj_anchor2shard(dkey_anchor);
-		shard = obj_grp_valid_shard_get(obj, shard, map_ver, op);
+		if (to_leader)
+			shard = obj_grp_leader_get(obj, shard, map_ver);
+		else
+			shard = obj_grp_valid_shard_get(obj, shard,
+							map_ver, op);
 		if (shard < 0)
 			D_GOTO(out_task, rc = shard);
 
 		dc_obj_shard2anchor(dkey_anchor, shard);
 	} else {
 		dkey_hash = obj_dkey2hash(dkey);
-		shard = obj_dkeyhash2shard(obj, dkey_hash, map_ver, op);
+		shard = obj_dkeyhash2shard(obj, dkey_hash, map_ver, op,
+					   obj_auxi->retry_with_leader);
 		if (shard < 0)
 			D_GOTO(out_task, rc = shard);
 	}
@@ -1685,6 +1818,7 @@ struct shard_punch_args {
 	daos_obj_punch_t	*pa_api_args;
 	uint64_t		 pa_dkey_hash;
 	daos_epoch_t		 pa_epoch;
+	struct daos_tx_id	 pa_dti;
 	uint32_t		 pa_opc;
 };
 
@@ -1719,7 +1853,8 @@ shard_punch_task(tse_task_t *task)
 				api_args->akey_nr, args->pa_coh_uuid,
 				args->pa_cont_uuid, &args->pa_auxi.map_ver,
 				args->pa_auxi.obj_auxi->fw_shard_tgts,
-				args->pa_auxi.obj_auxi->fw_cnt, task);
+				args->pa_auxi.obj_auxi->fw_cnt, task,
+				&args->pa_dti, args->pa_auxi.obj_auxi->flags);
 
 	obj_shard_close(obj_shard);
 	return rc;
@@ -1806,8 +1941,12 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	obj_auxi->obj_task = api_task;
 	head = &obj_auxi->shard_task_head;
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
-	if (obj_auxi->io_retry)
+	if (obj_auxi->io_retry) {
+		obj_auxi->flags = ORF_RESEND;
 		goto task_sched;
+	}
+
+	obj_auxi->flags = 0;
 	for (i = 0; i < shard_nr; i++) {
 		tse_task_t		*task;
 		struct shard_punch_args	*args;
@@ -1821,6 +1960,7 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 		shard			= shard_first + i;
 		args->pa_api_args	= api_args;
 		args->pa_epoch		= epoch;
+		daos_generate_dti(&args->pa_dti);
 		args->pa_auxi.shard	= shard;
 		args->pa_auxi.target	= obj_shard2tgtid(obj, shard);
 		args->pa_auxi.map_ver	= map_ver;
