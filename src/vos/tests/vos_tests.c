@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ run_all_tests(int keys, bool nest_iterators)
 	failed += run_co_test();
 	for (i = 0; i != DAOS_OF_MASK; i++)
 		failed += run_io_test(i, keys, nest_iterators);
-	failed += run_discard_tests(keys);
+	failed += run_discard_tests();
 	failed += run_aggregate_tests();
 	return failed;
 }
@@ -128,7 +128,7 @@ main(int argc, char **argv)
 				nr_failed += run_aggregate_tests();
 				break;
 			case 'd':
-				nr_failed += run_discard_tests(0);
+				nr_failed += run_discard_tests();
 				break;
 			case 'A':
 				keys = atoi(optarg);

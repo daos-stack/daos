@@ -350,6 +350,8 @@ enum {
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
 
+#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
+
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
 static inline int __is_po2(unsigned long long val)
