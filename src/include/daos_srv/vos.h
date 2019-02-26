@@ -37,6 +37,24 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Check whether the given @dti belongs to a resent RPC or not.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The DTX identifier.
+ *
+ * \return		Zero if related DTX is there ('prepared'),
+ *			but not committed yet.
+ * \return		-DER_ALREADY if related DTX has been committed.
+ * \return		-DER_NONEXIST if no modification has been done before.
+ * \return		-DER_INPROGRESS if some new DTX ('init') is there.
+ * \return		-DER_TIMEDOUT if the DTX is too old as to we are not
+ *			sure about whether it has ever been processed or not.
+ * \return		Other negative value if error.
+ */
+int
+vos_dtx_handle_resend(daos_handle_t coh, struct daos_tx_id *dti);
+
+/**
  * Prepare the DTX handle in DRAM.
  *
  * XXX: Currently, we only support to prepare the DTX against single DAOS
