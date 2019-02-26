@@ -95,4 +95,16 @@ enum dtx_status {
 	DTX_ST_COMMITTED	= 3,
 };
 
+/**
+ * Some actions to be done for DTX control.
+ */
+enum dtx_actions {
+	/** Need to aggregate some old DTXs. */
+	DTX_ACT_AGGREGATE	= 1,
+	/** Need to commit some old DTXs asychronously. */
+	DTX_ACT_COMMIT_ASYNC	= 2,
+	/** Commit current DTX sychronously. */
+	DTX_ACT_COMMIT_SYNC	= 3,
+};
+
 #endif /* __DAOS_DTX_SRV_H__ */
