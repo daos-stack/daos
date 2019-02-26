@@ -273,7 +273,8 @@ evt_debug_print_visibility(const struct evt_entry *ent)
 
 	switch (ent->en_visibility & flags) {
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "Unexpected visibility flags %x\n",
+			  ent->en_visibility);
 	case 0:
 		break;
 	case EVT_PARTIAL:

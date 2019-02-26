@@ -217,10 +217,13 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 	struct evt_entry	*entry;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
+	struct evt_node		*nd;
+	struct evt_desc		*desc;
 	uint32_t		 intent;
 	int			 rc = 0;
 	bool			 found;
 
+	intent = evt_iter_intent(iter);
 	if (evt_iter_is_sorted(iter)) {
 		for (;;) {
 			iter->it_index +=
@@ -230,6 +233,20 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 				iter->it_state = EVT_ITER_FINI;
 				D_GOTO(out, rc = -DER_NONEXIST);
 			}
+
+			trace = &tcx->tc_trace[tcx->tc_depth - 1];
+			nd = evt_off2node(tcx, trace->tr_node);
+			if (evt_node_is_leaf(tcx, nd)) {
+				desc = evt_node_desc_at(tcx, nd, trace->tr_at);
+				rc = evt_dtx_check_visibility(tcx, desc,
+							      intent);
+				if (rc < 0)
+					return rc;
+
+				if (rc == DTX_VBT_INVISIBLE)
+					continue;
+			}
+
 			if (iter->it_options & EVT_ITER_SKIP_HOLES) {
 				entry = evt_ent_array_get(&iter->it_entries,
 							  iter->it_index);
@@ -241,11 +258,20 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		goto ready;
 	}
 
-	intent = evt_iter_intent(iter);
-	while ((found = evt_move_trace(tcx, intent))) {
+	while ((found = evt_move_trace(tcx))) {
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
-		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
+		nd = evt_off2node(tcx, trace->tr_node);
+		if (evt_node_is_leaf(tcx, nd)) {
+			desc = evt_node_desc_at(tcx, nd, trace->tr_at);
+			rc = evt_dtx_check_visibility(tcx, desc, intent);
+			if (rc < 0)
+				return rc;
 
+			if (rc == DTX_VBT_INVISIBLE)
+				continue;
+		}
+
+		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 		if (evt_filter_rect(&iter->it_filter, rect, true))
 			continue;
 		break;

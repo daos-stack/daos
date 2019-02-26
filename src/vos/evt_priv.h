@@ -352,9 +352,8 @@ struct evt_context *evt_hdl2tcx(daos_handle_t toh);
 
 /** Move the trace forward.
  * \param[IN]	tcx	The evtree context
- * \param IN]	intent	The operation intent
  */
-bool evt_move_trace(struct evt_context *tcx, uint32_t intent);
+bool evt_move_trace(struct evt_context *tcx);
 
 /** Get a pointer to the rectangle corresponding to an index in a tree node
  * \param[IN]	tcx	The evtree context
@@ -396,4 +395,64 @@ static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
 void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 		    unsigned int at, const struct evt_rect *rect_srch,
 		    struct evt_entry *entry);
+
+/**
+ * Check whether the EVT record is visible or not.
+ * \param[IN]	tcx		The evtree context
+ * \param[IN]	desc		The tree node
+ * \param[IN]	intent		The operation intent
+ *
+ * \return	DTX_VBT_VISIBLE_DIRTY	The target is visible but with
+ *					some uncommitted modification
+ *					or garbage, need cleanup.
+ *		DTX_VBT_VISIBLE_CLEAN	The target is visible,
+ *					no pending modification.
+ *		DTX_VBT_INVISIBLE	The target is invisible.
+ *		-DER_INPROGRESS		If the target record is in some
+ *					uncommitted DTX, the caller needs
+ *					to retry related operation some
+ *					time later.
+ *		Other negative values on error.
+ */
+int evt_dtx_check_visibility(struct evt_context *tcx, struct evt_desc *desc,
+			     uint32_t intent);
+
+static inline bool
+evt_node_is_set(struct evt_context *tcx, struct evt_node *node,
+		unsigned int bits)
+{
+	return node->tn_flags & bits;
+}
+
+static inline bool
+evt_node_is_leaf(struct evt_context *tcx, struct evt_node *node)
+{
+	return evt_node_is_set(tcx, node, EVT_NODE_LEAF);
+}
+
+static inline bool
+evt_node_is_root(struct evt_context *tcx, struct evt_node *node)
+{
+	return evt_node_is_set(tcx, node, EVT_NODE_ROOT);
+}
+
+/** Return the rectangle at the offset of @at */
+static inline struct evt_node_entry *
+evt_node_entry_at(struct evt_context *tcx, struct evt_node *node,
+		  unsigned int at)
+{
+	return &node->tn_rec[at];
+}
+
+/** Return the data pointer at the offset of @at */
+static inline struct evt_desc *
+evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
+		 unsigned int at)
+{
+	struct evt_node_entry	*ne = evt_node_entry_at(tcx, node, at);
+
+	D_ASSERT(evt_node_is_leaf(tcx, node));
+
+	return evt_off2desc(tcx, ne->ne_child);
+}
 #endif /* __EVT_PRIV_H__ */

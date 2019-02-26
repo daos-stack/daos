@@ -420,7 +420,8 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 
 		case IT_OPC_NEXT:
 			/* move to the next tree record */
-			rc = dbtree_iter_next(oiter->it_hdl);
+			rc = dbtree_iter_next_with_intent(oiter->it_hdl,
+					vos_iter_intent(&oiter->it_iter));
 			if (rc)
 				goto out;
 			break;
@@ -454,7 +455,8 @@ key_iter_next(struct vos_obj_iter *oiter)
 {
 	int	rc;
 
-	rc = dbtree_iter_next(oiter->it_hdl);
+	rc = dbtree_iter_next_with_intent(oiter->it_hdl,
+					  vos_iter_intent(&oiter->it_iter));
 	if (rc)
 		D_GOTO(out, rc);
 

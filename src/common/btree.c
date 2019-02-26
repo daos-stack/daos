@@ -47,6 +47,7 @@ enum btr_probe_rc {
 	PROBE_RC_NONE,
 	PROBE_RC_OK,
 	PROBE_RC_ERR,
+	PROBE_RC_INPROGRESS,
 };
 
 /**
@@ -905,6 +906,61 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	return 0;
 }
 
+struct btr_check_vbt {
+	TMMID(struct btr_node)	nd_mmid;
+	int			at;
+	uint32_t		intent;
+};
+
+static int
+btr_check_visibility(struct btr_context *tcx, struct btr_check_vbt *vbt)
+{
+	struct btr_record	*rec;
+	int			 rc;
+
+	if (btr_ops(tcx)->to_check_visibility == NULL)
+		return PROBE_RC_OK;
+
+	if (TMMID_IS_NULL(vbt->nd_mmid)) { /* compare the leaf trace */
+		struct btr_trace *trace = &tcx->tc_traces[BTR_TRACE_MAX - 1];
+
+		vbt->nd_mmid = trace->tr_node;
+		vbt->at = trace->tr_at;
+	}
+
+	if (!btr_node_is_leaf(tcx, vbt->nd_mmid))
+		return PROBE_RC_OK;
+
+	rec = btr_node_rec_at(tcx, vbt->nd_mmid, vbt->at);
+	rc = btr_ops(tcx)->to_check_visibility(&tcx->tc_tins, rec, vbt->intent);
+	if (rc == -DER_INPROGRESS) /* Unceration */
+		return PROBE_RC_INPROGRESS;
+
+	if (rc < 0) /* Failure */
+		return PROBE_RC_ERR;
+
+	switch (rc) {
+	case DTX_VBT_VISIBLE_DIRTY:
+		/* XXX: This case is mainly used for purge operation.
+		 *	There are some uncommitted modifications that
+		 *	may belong to some old crashed operations. We
+		 *	hope that the caller can make further check
+		 *	whether can remove them from the system or not.
+		 *
+		 *	Currently, the main caller with purge intent
+		 *	is the aggregation. We needs to more handling
+		 *	for this case in the new aggregation logic.
+		 *	But before that, just make it fall through.
+		 */
+	case DTX_VBT_VISIBLE_CLEAN:
+		return PROBE_RC_OK;
+	case DTX_VBT_INVISIBLE:
+	default:
+		/* Invisibile */
+		return 0;
+	}
+}
+
 static void
 btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			 struct btr_record *rec)
@@ -913,6 +969,7 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	struct btr_record *rec_b;
 	struct btr_node   *nd;
 	bool		   leaf;
+	bool		   reuse = false;
 	char		   sbuf[BTR_PRINT_BUF];
 
 	/* NB: assume trace->tr_node has been added to TX */
@@ -927,11 +984,28 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	rec_b = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at + 1);
 
 	nd = btr_mmid2ptr(tcx, trace->tr_node);
-	if (trace->tr_at != nd->tn_keyn)
-		btr_rec_move(tcx, rec_b, rec_a, nd->tn_keyn - trace->tr_at);
+	if (trace->tr_at != nd->tn_keyn) {
+		struct btr_check_vbt	vbt;
+		int			rc;
+
+		vbt.nd_mmid = trace->tr_node;
+		vbt.at = trace->tr_at;
+		vbt.intent = DAOS_INTENT_CHECK;
+		rc = btr_check_visibility(tcx, &vbt);
+		if (rc == 0)
+			reuse = true;
+	}
+
+	if (reuse) {
+		btr_rec_free(tcx, rec_a, NULL);
+	} else {
+		if (trace->tr_at != nd->tn_keyn)
+			btr_rec_move(tcx, rec_b, rec_a,
+				     nd->tn_keyn - trace->tr_at);
+		nd->tn_keyn++;
+	}
 
 	btr_rec_copy(tcx, rec_a, rec, 1);
-	nd->tn_keyn++;
 }
 
 /**
@@ -1157,7 +1231,9 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	int			 rc;
 	int			 cmp;
 	int			 level;
+	int			 saved = -1;
 	bool			 next_level;
+	struct btr_check_vbt	 vbt;
 	struct btr_trace	 traces[BTR_TRACE_MAX];
 	struct btr_trace	*trace = NULL;
 	TMMID(struct btr_node)	 nd_mmid;
@@ -1257,60 +1333,115 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		D_ASSERTF(cmp == BTR_CMP_EQ, "Hash collision is unsupported\n");
 	}
 
+	vbt.nd_mmid = nd_mmid;
+	vbt.at = at;
+	vbt.intent = intent;
+
+again:
 	switch (probe_opc & ~BTR_PROBE_MATCHED) {
 	default:
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
+		do {
+			vbt.nd_mmid = tcx->tc_trace[level].tr_node;
+			vbt.at = tcx->tc_trace[level].tr_at;
+			rc = btr_check_visibility(tcx, &vbt);
+		} while (rc == 0 && btr_probe_next(tcx));
+
+		if (rc <= 0)
+			rc = PROBE_RC_NONE;
+		goto out;
+
 	case BTR_PROBE_LAST:
-		rc = PROBE_RC_OK;
+		do {
+			vbt.nd_mmid = tcx->tc_trace[level].tr_node;
+			vbt.at = tcx->tc_trace[level].tr_at;
+			rc = btr_check_visibility(tcx, &vbt);
+		} while (rc == 0 && btr_probe_prev(tcx));
+
+		if (rc <= 0)
+			rc = PROBE_RC_NONE;
 		goto out;
 
 	case BTR_PROBE_EQ:
 		if (cmp == BTR_CMP_EQ) {
-			rc = PROBE_RC_OK;
-			goto out;
+			rc = btr_check_visibility(tcx, &vbt);
+			if (rc > 0)
+				goto out;
+
+			/* Current pos is invisible, it can be used for the
+			 * follow-on insert if applicable.
+			 */
+		} else {
+			/* Point at the first key which is larger than the
+			 * probed one, this if for the follow-on insert if
+			 * applicable.
+			 */
+			btr_trace_set(tcx, level, nd_mmid,
+				      at + !(cmp & BTR_CMP_GT));
 		}
-		/* point at the first key which is larger than the probed one,
-		 * this if for follow-on insert if applicable.
-		 */
-		btr_trace_set(tcx, level, nd_mmid, at + !(cmp & BTR_CMP_GT));
+
 		rc = PROBE_RC_NONE;
 		goto out;
 
 	case BTR_PROBE_GE:
 		if (cmp == BTR_CMP_EQ) {
-			rc = PROBE_RC_OK;
-			goto out;
+			rc = btr_check_visibility(tcx, &vbt);
+			if (rc > 0)
+				goto out;
+
+			/* Current pos is invisible, it can be used for the
+			 * follow-on insert if applicable.
+			 */
+			if (saved == -1)
+				saved = at;
 		}
 		/* fall through */
 	case BTR_PROBE_GT:
-		if (cmp & BTR_CMP_GT)
-			break;
+		if (cmp & BTR_CMP_GT) {
+			rc = btr_check_visibility(tcx, &vbt);
+			if (rc > 0)
+				break;
 
-		/* point at the next position in the current leaf node, this is
-		 * for follow-on insert if applicable.
-		 */
-		at += 1;
+			/* Current pos is invisible, it can be used for the
+			 * follow-on insert if applicable.
+			 */
+			if (saved == -1)
+				saved = at;
+		} else {
+			/* Point at the next position in the current leaf node,
+			 * this is for the follow-on insert if applicable.
+			 */
+			if (saved == -1)
+				saved = at + 1;
+		}
+
 		/* backup the probe trace because probe_next will change it */
-		memcpy(traces, tcx->tc_trace, sizeof(*trace) * tcx->tc_depth);
+		if (trace == NULL)
+			memcpy(traces, tcx->tc_trace,
+			       sizeof(*trace) * tcx->tc_depth);
 		if (btr_probe_next(tcx)) {
 			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
-		btr_trace_set(tcx, level, nd_mmid, at);
+		btr_trace_set(tcx, level, nd_mmid, saved);
 		rc = PROBE_RC_NONE;
 		goto out;
 
 	case BTR_PROBE_LE:
 		if (cmp == BTR_CMP_EQ) {
-			rc = PROBE_RC_OK;
-			goto out;
+			rc = btr_check_visibility(tcx, &vbt);
+			if (rc > 0)
+				goto out;
 		}
 		/* fall through */
 	case BTR_PROBE_LT:
-		if (cmp & BTR_CMP_LT)
-			break;
+		if (cmp & BTR_CMP_LT) {
+			rc = btr_check_visibility(tcx, &vbt);
+			if (rc > 0)
+				break;
+		}
 
 		if (btr_probe_prev(tcx)) {
 			cmp = BTR_CMP_UNKNOWN;
@@ -1320,8 +1451,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		goto out;
 	}
 
-	if (cmp == BTR_CMP_UNKNOWN) /* position changed, compare again */
+	if (cmp == BTR_CMP_UNKNOWN) {/* position changed, compare again */
 		cmp = btr_cmp(tcx, BTR_NODE_NULL, -1, hkey, key);
+		vbt.nd_mmid = BTR_NODE_NULL;
+		vbt.at = -1;
+		goto again;
+	}
 
 	D_ASSERT(cmp != BTR_CMP_EQ);
 	if (cmp & BTR_CMP_MATCHED) {
@@ -1331,9 +1466,11 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			rc = PROBE_RC_NONE;
 			/* restore the probe trace for follow-on insert. */
 			if (trace) {
+				D_ASSERT(saved != -1);
+
 				memcpy(tcx->tc_trace, trace,
 				       tcx->tc_depth * sizeof(*trace));
-				btr_trace_set(tcx, level, nd_mmid, at);
+				btr_trace_set(tcx, level, nd_mmid, saved);
 			}
 		} else {
 			/* GT/GE/LT/LE without MATCHED */
@@ -1510,6 +1647,10 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		return -DER_NO_HDL;
 
 	rc = btr_probe_key(tcx, opc, intent, key);
+	if (rc == PROBE_RC_INPROGRESS) {
+		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
+		return -DER_INPROGRESS;
+	}
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -1658,6 +1799,9 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			"operation.\n");
 		rc = -DER_INVAL;
 		break;
+	case PROBE_RC_INPROGRESS:
+		D_DEBUG(DB_TRACE, "The target is in some uncommitted DTX.");
+		return -DER_INPROGRESS;
 	}
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
@@ -2460,6 +2604,11 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 		return -DER_NO_HDL;
 
 	rc = btr_probe_key(tcx, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key);
+	if (rc == PROBE_RC_INPROGRESS) {
+		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
+		return -DER_INPROGRESS;
+	}
+
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -3030,6 +3179,11 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
+	if (rc == PROBE_RC_INPROGRESS) {
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_INPROGRESS;
+	}
+
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
@@ -3094,6 +3248,54 @@ int
 dbtree_iter_prev(daos_handle_t ih)
 {
 	return btr_iter_move(ih, false);
+}
+
+static int
+btr_iter_move_with_intent(daos_handle_t ih, uint32_t intent, bool forward)
+{
+	struct btr_context	*tcx;
+	struct btr_trace	*trace;
+	struct btr_check_vbt	 vbt;
+	int			 rc;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+again:
+	rc = btr_iter_move(ih, forward);
+	if (rc != 0)
+		return rc;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	vbt.intent = intent;
+	vbt.nd_mmid = trace->tr_node;
+	vbt.at = trace->tr_at;
+	rc = btr_check_visibility(tcx, &vbt);
+	if (rc == 0)
+		goto again;
+
+	switch (rc) {
+	case PROBE_RC_INPROGRESS:
+		return -DER_INPROGRESS;
+	case PROBE_RC_OK:
+		return 0;
+	case PROBE_RC_ERR:
+	default:
+		return -DER_INVAL;
+	}
+}
+
+int
+dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent)
+{
+	return btr_iter_move_with_intent(ih, intent, true);
+}
+
+int
+dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
+{
+	return btr_iter_move_with_intent(ih, intent, false);
 }
 
 /**

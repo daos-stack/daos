@@ -63,7 +63,16 @@ enum daos_ops_intent {
 	DAOS_INTENT_UPDATE	= 2,	/* write/insert */
 	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
 	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
-	DAOS_INTENT_PROBE	= 5,	/* check aborted or not */
+	DAOS_INTENT_CHECK	= 5,	/* check aborted or not */
+};
+
+enum daos_dtx_vbt {
+	/* invisible case */
+	DTX_VBT_INVISIBLE		= 0,
+	/* visible, no (or not care) pending modification */
+	DTX_VBT_VISIBLE_CLEAN		= 1,
+	/* visible but with dirty modification or garbage */
+	DTX_VBT_VISIBLE_DIRTY		= 2,
 };
 
 #endif /* __DAOS_DTX_H__ */

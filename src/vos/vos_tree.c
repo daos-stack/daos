@@ -518,6 +518,14 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+ktr_check_visibility(struct btr_instance *tins, struct btr_record *rec,
+		     uint32_t intent)
+{
+	return vos_dtx_check_visibility(&tins->ti_umm, tins->ti_coh,
+					rec->rec_mmid, intent, DTX_RT_KEY);
+}
+
 static btr_ops_t key_btr_ops = {
 	.to_hkey_size		= ktr_hkey_size,
 	.to_hkey_gen		= ktr_hkey_gen,
@@ -529,6 +537,7 @@ static btr_ops_t key_btr_ops = {
 	.to_rec_free		= ktr_rec_free,
 	.to_rec_fetch		= ktr_rec_fetch,
 	.to_rec_update		= ktr_rec_update,
+	.to_check_visibility	= ktr_check_visibility,
 };
 
 /**
@@ -783,6 +792,14 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return svt_rec_store(tins, rec, kbund, rbund);
 }
 
+static int
+svt_check_visibility(struct btr_instance *tins, struct btr_record *rec,
+		     uint32_t intent)
+{
+	return vos_dtx_check_visibility(&tins->ti_umm, tins->ti_coh,
+					rec->rec_mmid, intent, DTX_RT_SVT);
+}
+
 static btr_ops_t singv_btr_ops = {
 	.to_hkey_size		= svt_hkey_size,
 	.to_hkey_gen		= svt_hkey_gen,
@@ -791,6 +808,7 @@ static btr_ops_t singv_btr_ops = {
 	.to_rec_free		= svt_rec_free,
 	.to_rec_fetch		= svt_rec_fetch,
 	.to_rec_update		= svt_rec_update,
+	.to_check_visibility	= svt_check_visibility,
 };
 
 /**

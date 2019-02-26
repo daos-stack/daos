@@ -108,9 +108,11 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 			break;
 
 		if (query->qt_flags & DAOS_GET_MAX)
-			rc = dbtree_iter_prev(ih);
+			rc = dbtree_iter_prev_with_intent(ih,
+						DAOS_INTENT_DEFAULT);
 		else
-			rc = dbtree_iter_next(ih);
+			rc = dbtree_iter_next_with_intent(ih,
+						DAOS_INTENT_DEFAULT);
 	} while (rc == 0);
 out:
 	fini_rc = dbtree_iter_finish(ih);
