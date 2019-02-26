@@ -61,6 +61,8 @@ struct pool_iv_entry {
 /*
  * srv_pool.c
  */
+void ds_pool_destroy_pl_map(struct ds_pool *pool);
+int ds_pool_create_pl_map(struct ds_pool *pool, struct pool_map *map);
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
 int ds_pool_svc_start(uuid_t uuid, bool create, uuid_t db_uuid, size_t size,
