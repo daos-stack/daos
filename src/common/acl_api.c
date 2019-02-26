@@ -145,7 +145,7 @@ get_flattened_ace_size(struct daos_ace *aces[], uint16_t num_aces)
  * ace_len is the length of the ACE list tacked onto the daos_acl struct
  */
 static size_t
-get_daos_acl_size(uint32_t ace_len)
+get_total_acl_size(uint32_t ace_len)
 {
 	return sizeof(struct daos_acl) + ace_len;
 }
@@ -168,7 +168,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces)
 		return NULL;
 	}
 
-	D_ALLOC(acl, get_daos_acl_size(ace_len));
+	D_ALLOC(acl, get_total_acl_size(ace_len));
 	if (acl == NULL) {
 		free_ace_array(sorted_aces, num_aces);
 		return NULL;
@@ -194,8 +194,8 @@ daos_acl_copy(struct daos_acl *acl)
 		return NULL;
 	}
 
-	acl_len = get_daos_acl_size(acl->dal_len);
-	D_ALLOC(acl_copy, get_daos_acl_size(acl_len));
+	acl_len = daos_acl_get_size(acl);
+	D_ALLOC(acl_copy, acl_len);
 	if (acl_copy == NULL) {
 		return NULL;
 	}
@@ -210,6 +210,16 @@ daos_acl_free(struct daos_acl *acl)
 {
 	/* The ACL is one contiguous data blob - nothing special to do */
 	D_FREE(acl);
+}
+
+ssize_t
+daos_acl_get_size(struct daos_acl *acl)
+{
+	if (acl == NULL) {
+		return -DER_INVAL;
+	}
+
+	return get_total_acl_size(acl->dal_len);
 }
 
 static bool
@@ -349,7 +359,7 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace)
 
 	new_len = (*acl)->dal_len + new_ace_len;
 
-	D_ALLOC(new_acl, get_daos_acl_size(new_len));
+	D_ALLOC(new_acl, get_total_acl_size(new_len));
 	if (new_acl == NULL) {
 		return -DER_NOMEM;
 	}
@@ -436,7 +446,7 @@ daos_acl_remove_ace(struct daos_acl **acl,
 
 	new_len = (*acl)->dal_len - daos_ace_get_size(ace_to_remove);
 
-	D_ALLOC(new_acl, get_daos_acl_size(new_len));
+	D_ALLOC(new_acl, get_total_acl_size(new_len));
 	if (new_acl == NULL) {
 		return -DER_NOMEM;
 	}

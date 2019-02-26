@@ -437,6 +437,43 @@ test_acl_copy_with_aces(void **state)
 }
 
 static void
+test_acl_get_size_null(void **state)
+{
+	assert_int_equal(daos_acl_get_size(NULL), -DER_INVAL);
+}
+
+static void
+test_acl_get_size_empty(void **state)
+{
+	struct daos_acl	*acl;
+
+	acl = daos_acl_create(NULL, 0);
+
+	assert_int_equal(daos_acl_get_size(acl), sizeof(struct daos_acl));
+
+	daos_acl_free(acl);
+}
+
+static void
+test_acl_get_size_with_aces(void **state)
+{
+	struct daos_acl	*acl;
+	size_t		num_aces = 3;
+	struct daos_ace	*ace[num_aces];
+	size_t		expected_ace_len;
+
+	fill_ace_list_with_users(ace, num_aces);
+	expected_ace_len = get_total_ace_list_size(ace, num_aces);
+	acl = daos_acl_create(ace, num_aces);
+
+	assert_int_equal(daos_acl_get_size(acl),
+			sizeof(struct daos_acl) + expected_ace_len);
+
+	daos_acl_free(acl);
+	free_all_aces(ace, num_aces);
+}
+
+static void
 test_acl_get_first_ace_empty_list(void **state)
 {
 	struct daos_acl *acl = daos_acl_create(NULL, 0);
@@ -2034,6 +2071,9 @@ main(void)
 		cmocka_unit_test(test_acl_copy_null_acl),
 		cmocka_unit_test(test_acl_copy_empty_acl),
 		cmocka_unit_test(test_acl_copy_with_aces),
+		cmocka_unit_test(test_acl_get_size_null),
+		cmocka_unit_test(test_acl_get_size_empty),
+		cmocka_unit_test(test_acl_get_size_with_aces),
 		cmocka_unit_test(test_acl_get_first_ace_empty_list),
 		cmocka_unit_test(test_acl_get_first_ace_multiple),
 		cmocka_unit_test(test_acl_get_next_ace_null_acl),

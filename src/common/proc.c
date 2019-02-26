@@ -28,6 +28,7 @@
 
 #include <daos/common.h>
 #include <daos_api.h>
+#include <daos_security.h>
 
 static int
 crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
@@ -35,6 +36,8 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 	struct daos_prop_entry	*entry;
 	int			 i;
 	int			 rc = 0;
+	struct daos_acl		*acl;
+	d_iov_t			 iov;
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
@@ -47,6 +50,21 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 		if (entry->dpe_type == DAOS_PROP_PO_LABEL ||
 		    entry->dpe_type == DAOS_PROP_CO_LABEL)
 			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
+		else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
+			 entry->dpe_type == DAOS_PROP_CO_ACL) {
+			if (entry->dpe_val_ptr == NULL) {
+				memset(&iov, 0, sizeof(iov));
+			} else {
+				acl = (struct daos_acl *)entry->dpe_val_ptr;
+				d_iov_set(&iov, entry->dpe_val_ptr,
+					daos_acl_get_size(acl));
+			}
+
+			rc = crt_proc_d_iov_t(proc, &iov);
+			if (rc == 0 && entry->dpe_val_ptr == NULL) {
+				entry->dpe_val_ptr = iov.iov_buf;
+			}
+		}
 		else
 			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
 		if (rc)

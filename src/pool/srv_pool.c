@@ -36,6 +36,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <daos_api.h> /* for daos_prop_alloc/_free() */
+#include <daos_security.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
@@ -325,6 +326,27 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
+static void
+pool_prop_copy_ptr(struct daos_prop_entry *entry_def,
+		struct daos_prop_entry *entry, size_t len)
+{
+	D_ALLOC(entry_def->dpe_val_ptr, len);
+	if (entry_def->dpe_val_ptr != NULL) {
+		memcpy(entry_def->dpe_val_ptr, entry->dpe_val_ptr, len);
+	}
+}
+
+static uint32_t
+pool_prop_acl_get_length(struct daos_prop_entry *entry)
+{
+	if (entry->dpe_val_ptr == NULL) {
+		D_WARN("ACL pool property was NULL\n");
+		return 0;
+	}
+
+	return daos_acl_get_size((struct daos_acl *)entry->dpe_val_ptr);
+}
+
 /* copy \a prop to \a prop_def (duplicated default prop) */
 static int
 pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
@@ -355,6 +377,13 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
+			if (entry->dpe_val_ptr != NULL) {
+				pool_prop_copy_ptr(entry_def, entry,
+					pool_prop_acl_get_length(entry));
+				if (entry_def->dpe_val_ptr == NULL) {
+					return -DER_NOMEM;
+				}
+			}
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -388,6 +417,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_PO_ACL:
+			if (entry->dpe_val_ptr != NULL) {
+				daos_iov_set(&value, entry->dpe_val_ptr,
+					     pool_prop_acl_get_length(entry));
+				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
+						   &value);
+				if (rc)
+					return rc;
+			}
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
 			daos_iov_set(&value, &entry->dpe_val,
@@ -1348,6 +1385,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_RECLAIM)
 		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_ACL)
+		nr++;
 	if (nr == 0)
 		return 0;
 
@@ -1405,6 +1444,22 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
 		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_ACL) {
+		daos_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_acl,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
+		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+			return -DER_NOMEM;
+		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
+				value.iov_buf_len);
+		idx++;
 	}
 	return 0;
 }
@@ -1474,6 +1529,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	/* duplicate the default properties, overwrite it with pool create
 	 * parameter and then write to pool meta data.
 	 */
+	lazy_init_default_pool_props();
 	prop_dup = daos_prop_dup(&pool_prop_default, true);
 	if (prop_dup == NULL) {
 		D_ERROR("daos_prop_dup failed.\n");

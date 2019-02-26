@@ -165,6 +165,18 @@ void
 daos_acl_free(struct daos_acl *acl);
 
 /**
+ * Get the total size of the DAOS Access Control List in bytes.
+ * This includes the size of the header as well as the ACE list.
+ *
+ * \param[in]	acl	ACL to get the size of
+ *
+ * \return	Size of ACL in bytes
+ *		-DER_INVAL		Invalid input
+ */
+ssize_t
+daos_acl_get_size(struct daos_acl *acl);
+
+/**
  * Get the next Access Control Entry in the Access Control List, for iterating
  * over the list.
  *
@@ -291,8 +303,8 @@ daos_ace_free(struct daos_ace *ace);
  *
  * \param[in]	ace	ACE to get the size of
  *
- * \return	Success		Size of ACE in bytes
- *		-DER_INVAL	Invalid input
+ * \return	Size of ACE in bytes
+ *		-DER_INVAL		Invalid input
  */
 ssize_t
 daos_ace_get_size(struct daos_ace *ace);
