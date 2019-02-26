@@ -565,6 +565,7 @@ int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
+struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
 /******* iterator API ******************************************************/
 
