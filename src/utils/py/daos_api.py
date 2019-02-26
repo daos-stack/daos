@@ -1616,6 +1616,116 @@ class DaosContainer(object):
 
         return results
 
+class DaosSnapshot(object):
+    """ A python object that can represent a DAOS snapshot. We do not save the
+    coh in the snapshot since it is different each time the container is opened.
+    """
+    def __init__(self, context, name=None):
+        """The epoch is represented as a Python integer so when sending it to
+        libdaos we know to always convert it to a ctype.
+        """
+        self.context = context
+        self.name = name # currently unused
+        self.epoch = 0
+
+    def to_ctype(self, val, the_type):
+        """ Take a Python value and convert it to the necessary ctype. The
+        current types implemented are c_uint8, c_uint16, c_uint32, c_uint64.
+        If it is already ctype, return it unchanged.
+        val         --The existing value it its existing type
+        the_type    --One of the cytpes described above
+        """
+        if "ctypes" in str(type(val)):
+            return val
+        if the_type == "c_uint64":
+            return ctypes.c_uint64(val)
+        if the_type == "c_uint32":
+            return ctypes.c_uint32(val)
+        if the_type == "c_uint16":
+            return ctypes.c_uint16(val)
+        if the_type == "c_uint8":
+            return ctypes.c_uint8(val)
+
+    def create(self, coh, epoch):
+        """ Send a snapshot creation request and store the info in the
+        DaosSnapshot object.
+        coh     --handle on an open container
+        epoch   --the epoch number of the obj to be snapshotted
+        """
+        func = self.context.get_function('create-snap')
+        coh = self.to_ctype(coh, 'c_uint64')
+        epoch = self.to_ctype(epoch, 'c_uint64')
+        rc = func(coh, ctypes.byref(epoch), None, None)
+        self.epoch = epoch.value
+        if rc != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                    .format(rc))
+
+    def list(self, coh):
+        """ List this snapshot and check that its epoch is the same as the once
+        originally created.
+        coh --handle on an open container
+        Returns the value of the epoch for this DaosSnapshot object.
+        """
+        func = self.context.get_function('list-snap')
+        coh = self.to_ctype(coh, 'c_uint64')
+        nr =  self.to_ctype(1, 'c_uint64')
+        epoch = self.to_ctype(self.epoch, 'c_uint64')
+        # daos_cont_list_snap in libdaos requires a parameter that is a pointer
+        # to an anchor_t struct. See src/include/daos_types.h.
+        class Anchor(ctypes.Structure):
+            _fields_ = [('da_type', ctypes.c_uint16),
+                        ('da_shard', ctypes.c_uint16),
+                        ('da_padding', ctypes.c_uint32),
+                        ('da_buff', ctypes.c_uint8*128)]
+        anchor = Anchor()
+
+        rc = func(coh, ctypes.byref(nr), ctypes.byref(epoch), None,
+                ctypes.byref(anchor), None)
+        if rc != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                                 .format(rc))
+        return epoch.value
+
+    def handle(self, coh):
+        """ Get a tx handle into the snapshot and return the object found.
+        coh --handle on an open container
+        returns a handle on the snapshot represented by this DaosSnapshot
+        object.
+        """
+        func = self.context.get_function('open-snap')
+        coh = self.to_ctype(coh, 'c_uint64')
+        epoch = self.to_ctype(self.epoch, 'c_uint64')
+        th = self.to_ctype(0, 'c_uint64')
+        rc = func(coh, epoch, ctypes.byref(th), None)
+        if rc != 0:
+            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}"
+                                 .format(rc))
+        return th
+
+    def destroy(self, coh, ev=None):
+        """ Destroy the snapshot. The "epoch range" is a struct with the lowest
+        epoch and the highest epoch to destroy. We have only one epoch for this
+        single snapshot object.
+        coh     --open container handle
+        ev      --event (may be None)
+        # need container handle coh, and the epoch range
+        """
+        # daos_epoch_t is a C struct, need Python equivalent
+        class EpochRange(ctypes.Structure):
+            _fields_ = [('epr_lo', ctypes.c_uint64),
+                        ('epr_hi', ctypes.c_uint64)]
+        func = self.context.get_function('destroy-snap')
+        coh = self.to_ctype(coh, 'c_uint64')
+        epoch = self.to_ctype(self.epoch, 'c_uint64')
+        epr = EpochRange()
+        epr.epr_lo = epoch
+        epr.epr_hi = epoch
+        rc = func(coh, epr, ev)
+        if rc != 0:
+            raise Exception("Failed to destroy the snapshot. RC: {0}"
+                    .format(rc))
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -1697,7 +1807,11 @@ class DaosContext(object):
             'set-attr'       : self.libdaos.daos_cont_set_attr,
             'stop-service'   : self.libdaos.daos_pool_stop_svc,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update}
+            'update-obj'     : self.libdaos.daos_obj_update,
+            'create-snap'    : self.libdaos.daos_cont_create_snap,
+            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
+            'list-snap'      : self.libdaos.daos_cont_list_snap,
+            'open-snap'      : self.libdaos.daos_tx_open_snap}
 
     def __del__(self):
         """ cleanup the DAOS API """
