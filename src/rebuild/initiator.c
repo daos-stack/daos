@@ -170,7 +170,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      &rdone->ro_dkey, rdone->ro_iod_num,
-			      rdone->ro_iods, &ioh);
+			      rdone->ro_iods, &ioh, NULL, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -223,7 +223,8 @@ post:
 	}
 
 end:
-	vos_update_end(ioh, rdone->ro_version, &rdone->ro_dkey, rc);
+	vos_update_end(ioh, rdone->ro_version, &rdone->ro_dkey, NULL, rc,
+		       0, NULL);
 	return rc;
 }
 
@@ -244,7 +245,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 			(char *)rdone->ro_dkey.iov_buf, rdone->ro_max_eph);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
 				   rdone->ro_max_eph, rpt->rt_rebuild_ver,
-				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL);
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL,
+				   NULL, 0, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -268,7 +270,7 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
 				   rdone->ro_ephs[i], rpt->rt_rebuild_ver,
 				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 1,
-				   &rdone->ro_ephs_keys[i]);
+				   &rdone->ro_ephs_keys[i], NULL, 0, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -735,7 +737,8 @@ rebuild_obj_punch_one(void *data)
 	D_ASSERT(rc == 0);
 
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
-			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL);
+			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL, NULL,
+			   0, NULL);
 	ds_cont_put(cont);
 	if (rc)
 		D_ERROR(DF_UOID" rebuild punch failed rc %d\n",

@@ -111,7 +111,7 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		if (update_or_fetch == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh);
+					      &ioh, NULL, NULL, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
@@ -141,7 +141,8 @@ ts_vos_update_or_fetch(struct dts_io_credit *cred, daos_epoch_t epoch,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (update_or_fetch == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, NULL, rc,
+					    0, NULL);
 		else
 			rc = vos_fetch_end(ioh, rc);
 	}

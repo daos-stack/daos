@@ -1178,7 +1178,9 @@ update_cancel(struct vos_io_context *ioc)
 }
 
 int
-vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err)
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey,
+	       struct daos_tx_handle *dth, int err, int dti_cos_count,
+	       struct daos_tx_id *dti_cos)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 	struct umem_instance *umem;
@@ -1189,15 +1191,22 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err)
 	if (err != 0)
 		goto out;
 
-	err = vos_obj_revalidate(vos_obj_cache_current(), ioc->ic_epoch,
-				 &ioc->ic_obj);
-	if (err)
-		goto out;
-
 	umem = vos_obj2umm(ioc->ic_obj);
 	err = umem_tx_begin(umem, vos_txd_get());
 	if (err)
 		goto out;
+
+	vos_dth_set(dth);
+	if (dti_cos_count > 0)
+		/* Commit the CoS DTXs via the IO PMDK transaction. */
+		vos_dtx_commit_internal(ioc->ic_obj->obj_cont, dti_cos,
+					dti_cos_count);
+
+again:
+	err = vos_obj_revalidate(vos_obj_cache_current(), ioc->ic_epoch,
+				 &ioc->ic_obj);
+	if (err != 0)
+		goto abort;
 
 	/* Publish SCM reservations */
 	if (ioc->ic_actv_at != 0) {
@@ -1220,26 +1229,66 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err)
 	err = process_blocks(ioc, true);
 
 abort:
-	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
+	if (err == -DER_INPROGRESS && dth != NULL &&
+	    (dth->dth_flags & DTX_F_AOC) && dth->dth_conflict.dti_sec != 0) {
+		int	rc;
+
+		/* Abort the conflict DTX by force, then try again. */
+		rc = vos_dtx_abort_internal(ioc->ic_obj->obj_cont,
+					    &dth->dth_conflict, 1, true);
+		if (rc == 0) {
+			memset(&dth->dth_conflict, 0,
+			       sizeof(struct daos_tx_id));
+			goto again;
+		}
+	}
+
+	if (err == 0 && dth != NULL)
+		err = vos_dtx_prepared(dth);
+
+	if (err == 0)
+		umem_tx_commit(umem);
+	else
+		umem_tx_abort(umem, err);
+
 out:
 	if (err != 0)
 		update_cancel(ioc);
 	vos_ioc_destroy(ioc);
-
+	vos_dth_set(NULL);
 	return err;
 }
 
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		 daos_handle_t *ioh)
+		 daos_handle_t *ioh, struct daos_tx_handle *dth,
+		 int *dti_cos_count, struct daos_tx_id *dti_cos)
 {
 	struct vos_io_context *ioc;
 	int rc;
 
+	vos_dth_set(dth);
+
+again:
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, false, &ioc);
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		if (rc == -DER_INPROGRESS && *dti_cos_count > 0) {
+			/* Only commit the DTXs when we are not sure about the
+			 * target object's visibility. Because committing DTXs
+			 * will cause additional PMDK transaction, if possible
+			 * we prefer to commit them when vos_update_end().
+			 */
+			rc = vos_dtx_commit(coh, dti_cos, *dti_cos_count);
+			if (rc < 0)
+				D_GOTO(reset, rc);
+
+			*dti_cos_count = 0;
+			goto again;
+		}
+
+		D_GOTO(reset, rc);
+	}
 
 	if (ioc->ic_actv_cnt != 0) {
 		rc = dkey_update_begin(ioc, dkey);
@@ -1264,9 +1313,12 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	D_DEBUG(DB_IO, "Prepared io context for updating %d iods\n", iod_nr);
 	*ioh = vos_ioc2ioh(ioc);
-	return 0;
+	D_GOTO(reset, rc = 0);
+
 error:
-	vos_update_end(vos_ioc2ioh(ioc), 0, dkey, rc);
+	vos_update_end(vos_ioc2ioh(ioc), 0, dkey, dth, rc, 0, NULL);
+reset:
+	vos_dth_set(NULL);
 	return rc;
 }
 
@@ -1332,7 +1384,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh);
+	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh,
+			      NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed %d\n", DP_UOID(oid), rc);
 		return rc;
@@ -1344,7 +1397,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
 	}
 
-	rc = vos_update_end(ioh, pm_ver, dkey, rc);
+	rc = vos_update_end(ioh, pm_ver, dkey, NULL, rc, 0, NULL);
 	return rc;
 }
 

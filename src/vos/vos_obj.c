@@ -161,36 +161,74 @@ failed:
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys)
+	      unsigned int akey_nr, daos_key_t *akeys,
+	      struct daos_tx_handle *dth, int dti_cos_count,
+	      struct daos_tx_id *dti_cos)
 {
-	PMEMobjpool	  *pop;
-	struct vos_object *obj;
-	int		   rc;
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	struct vos_object	*obj;
+	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epoch);
 
+	vos_dth_set(dth);
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
 			  false, DAOS_INTENT_PUNCH, &obj);
 	if (rc != 0)
-		return rc;
+		D_GOTO(reset, rc);
 
-	pop = vos_obj2pop(obj);
-	TX_BEGIN(pop) {
-		if (dkey) { /* key punch */
-			rc = key_punch(obj, epoch, pm_ver, dkey,
-				       akey_nr, akeys, flags);
-		} else { /* object punch */
-			rc = obj_punch(coh, obj, epoch, flags);
+	cont = vos_hdl2cont(coh);
+	umm = &cont->vc_pool->vp_umm;
+
+	rc = umem_tx_begin(umm, vos_txd_get());
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	if (dti_cos_count > 0)
+		vos_dtx_commit_internal(cont, dti_cos, dti_cos_count);
+
+
+again:
+	if (dkey) { /* key punch */
+		rc = key_punch(obj, epoch, pm_ver, dkey,
+			       akey_nr, akeys, flags);
+	} else { /* object punch */
+		rc = obj_punch(coh, obj, epoch, flags);
+	}
+
+	if (rc == 0) {
+		if (dth != NULL)
+			vos_dtx_prepared(dth);
+
+		umem_tx_commit(umm);
+	} else {
+		if (rc == -DER_INPROGRESS && dth != NULL &&
+		    (dth->dth_flags & DTX_F_AOC) &&
+		    dth->dth_conflict.dti_sec != 0) {
+			int	err;
+
+			/* Abort the conflict DTX by force, then again. */
+			err = vos_dtx_abort_internal(cont, &dth->dth_conflict,
+						     1, true);
+			if (err == 0) {
+				memset(&dth->dth_conflict, 0,
+				       sizeof(struct daos_tx_id));
+				goto again;
+			}
 		}
 
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
-	} TX_END
+		umem_tx_abort(umm, rc);
+	}
 
+out:
 	vos_obj_release(vos_obj_cache_current(), obj);
+	if (rc != 0)
+		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
+reset:
+	vos_dth_set(NULL);
 	return rc;
 }
 

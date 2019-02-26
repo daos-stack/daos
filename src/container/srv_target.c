@@ -462,6 +462,12 @@ ds_cont_put(struct ds_cont *cont)
 	cont_put(tls->dt_cont_cache, cont);
 }
 
+void
+ds_cont_get(struct ds_cont *cont)
+{
+	cont->sc_list.ll_ref++;
+}
+
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl, bool resync)
