@@ -76,6 +76,8 @@ bool			 ts_overwrite;
 bool			 ts_zero_copy;
 /* verify the output of fetch */
 bool			 ts_verify_fetch;
+/* shuffle the offsets of the array */
+bool			 ts_shuffle	= false;
 
 daos_handle_t		 ts_oh;			/* object open handle */
 daos_obj_id_t		 ts_oid;		/* object ID */
@@ -279,7 +281,7 @@ ts_key_update_or_fetch(enum ts_op_type_t update_or_fetch, daos_epoch_t *epoch,
 	int		 j;
 	int		 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 
 	dts_key_gen(dkey_buf, DTS_KEY_LEN, "blade");
@@ -358,7 +360,7 @@ ts_verify_recx_p_akey(char *dkey, daos_epoch_t *epoch)
 	char	 akey[DTS_KEY_LEN];
 	int	 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
@@ -987,7 +989,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiuw",
+				 "P:N:T:C:c:o:d:a:r:nASs:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1059,6 +1061,9 @@ main(int argc, char **argv)
 		case 'A':
 			ts_single = false;
 			break;
+		case 'S':
+			ts_shuffle = true;
+			break;
 		case 's':
 			vsize = strtoul(optarg, &endp, 0);
 			vsize = ts_val_factor(vsize, *endp);
@@ -1108,6 +1113,12 @@ main(int argc, char **argv)
 				ts_print_usage();
 			return 0;
 		}
+	}
+
+	if (ts_verify_fetch && ts_shuffle) {
+		fprintf(stderr, "data verification (-v) incompatible with"
+			" shuffled offsets (-S).\n");
+		return -1;
 	}
 
 	if (ts_level == TS_LVL_ECHO) {

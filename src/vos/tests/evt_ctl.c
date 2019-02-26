@@ -621,7 +621,7 @@ ts_many_add(char *args)
 	if (!buf)
 		return -1;
 
-	seq = dts_rand_iarr_alloc(nr, 0);
+	seq = dts_rand_iarr_alloc(nr, 0, true);
 	if (!seq) {
 		D_FREE(buf);
 		return -1;
