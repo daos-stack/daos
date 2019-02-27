@@ -886,6 +886,7 @@ class PreReqComponent(object):
                   default='error',
                   help='Treatment for a compiler warning.  ' \
                        '(warning|error} [error]')
+        SetOption("implicit_cache", True)
 
     def setup_patch_prefix(self):
         """Discovers the location of the patches directory and adds it to
