@@ -23,6 +23,7 @@
 
 #include <daos_types.h>
 #include <gurt/common.h>
+#include <evt_priv.h>
 #include "csum_extent_tests.h"
 #include "vts_io.h"
 
@@ -43,7 +44,8 @@ struct extent_key {
 /*
  * Initialize the extent key from the io_test_args
  */
-void extent_key_from_test_args(struct extent_key *k,
+void
+extent_key_from_test_args(struct extent_key *k,
 			       struct io_test_args *args)
 {
 	/* Set up dkey and akey */
@@ -257,7 +259,7 @@ iod_csum_calculate(struct csum_test *test, uint32_t extent_nr, daos_iod_t *iod)
 /*
  * Send the test's update buffer and csum to VOS to update the object.
  */
-int
+static int
 update(struct csum_test *test, const uint32_t extent_nr,
 	uint32_t epoch)
 {
@@ -271,7 +273,7 @@ update(struct csum_test *test, const uint32_t extent_nr,
 	iod_csum_calculate(test, extent_nr, &iod);
 
 	int rc = vos_obj_update(test->extent_key.container_hdl,
-		test->extent_key.object_id, epoch,
+				test->extent_key.object_id, epoch,
 				0, &test->extent_key.dkey,
 				1, &iod, &sgl);
 	iod_free(&iod);
@@ -283,7 +285,7 @@ update(struct csum_test *test, const uint32_t extent_nr,
  * Fetch the extent and csum into the test's fetch buffers. Count the total
  * number of csums that were fetched and return to be verified.
  */
-int
+static int
 fetch(struct csum_test *test, int extent_nr,
 	uint32_t *csum_count_per_extent, uint32_t *csum_len,
 	uint32_t *csum_count_total, uint32_t epoch)
@@ -469,13 +471,18 @@ void csum_test_csum_buffer_of_0_during_fetch(void **state)
  * Tests with estents that don't span the entire block of memory
  */
 
-uint32_t csum_needed_for_extent(uint32_t chunk_size, daos_recx_t extent,
-				uint32_t record_size)
+static uint32_t
+csum_needed_for_extent(uint32_t chunk_size, daos_recx_t extent,
+		       uint32_t record_size)
 {
-	return (uint32_t)(extent.rx_nr * record_size) / chunk_size;
+	return (uint32_t) csum_chunk_count(chunk_size,
+					   extent.rx_idx,
+					   extent.rx_idx + extent.rx_nr - 1,
+					   record_size);
 }
 
-void csum_helper_functions_tests(void **state)
+void
+csum_helper_functions_tests(void **state)
 {
 	daos_csum_buf_t csum;
 
@@ -507,12 +514,122 @@ void csum_helper_functions_tests(void **state)
 	assert_int_equal(1, daos_csum_idx_from_off(&csum, 1024 * 16));
 	assert_int_equal(1024, daos_csum_idx_from_off(&csum, 1024 * 1024 * 16));
 
-
 	free(csum.cs_csum);
 }
 
+struct evt_csum_test_args {
+	uint32_t lo;
+	uint32_t hi;
+	uint32_t inob;
+	uint32_t chunksize;
+	uint16_t csum_size;
+};
 
-void write_to_extent(struct extent_key *extent_key, daos_recx_t *extent,
+struct evt_csum_test_structures {
+	struct evt_root		root;
+	struct evt_context	tcx;
+	struct evt_extent	extent;
+};
+
+
+static void
+evt_csum_test_setup(struct evt_csum_test_structures *structs,
+	struct evt_csum_test_args *args)
+{
+	memset(structs, 0, sizeof(*structs));
+	structs->tcx.tc_root = &structs->root;
+	structs->extent.ex_lo = args->lo;
+	structs->extent.ex_hi = args->hi;
+	structs->root.tr_inob = args->inob;
+	structs->root.tr_csum_chunk_size = args->chunksize;
+	structs->root.tr_csum_len = args->csum_size;
+}
+
+#define layout_is_csum_count(expected, ...)\
+	evt_csum_count_test(expected, (struct evt_csum_test_args)__VA_ARGS__)
+
+static void
+evt_csum_count_test(uint32_t expected, struct evt_csum_test_args args)
+{
+	struct evt_csum_test_structures test;
+
+	evt_csum_test_setup(&test, &args);
+	daos_size_t csum_count = evt_csum_count(&test.tcx, &test.extent);
+
+	if (expected != csum_count) {
+		fail_msg("expected (%d) != csum_count (%"PRIu64")\n\tFrom "
+			"lo: %d, hi: %d, inob: %d, chunk size: %d",
+			 expected,
+			 csum_count,
+			 args.lo,
+			 args.hi,
+			 args.inob,
+			 args.chunksize
+		);
+	}
+}
+
+#define layout_has_csum_buf_len(expected, ...)\
+	evt_csum_buf_len_test(expected, (struct evt_csum_test_args)__VA_ARGS__)
+
+static void
+evt_csum_buf_len_test(uint32_t expected, struct evt_csum_test_args args)
+{
+	struct evt_csum_test_structures test;
+
+	evt_csum_test_setup(&test, &args);
+
+	daos_size_t csum_buf_len = evt_csum_buf_len(&test.tcx, &test.extent);
+
+	if (expected != csum_buf_len) {
+		fail_msg("expected (%d) != csum_buf_len (%"PRIu64")\n\tFrom "
+			"lo: %d, hi: %d, inob: %d, chunk size: %d",
+			 expected,
+			 csum_buf_len,
+			 args.lo,
+			 args.hi,
+			 args.inob,
+			 args.chunksize
+		);
+	}
+}
+
+void
+evt_csum_helper_functions_tests(void **state)
+{
+	layout_is_csum_count(0, {.lo = 0, .hi = 0, .inob = 0, .chunksize = 0});
+	layout_is_csum_count(1, {.lo = 0, .hi = 3, .inob = 1, .chunksize = 4});
+	layout_is_csum_count(2, {.lo = 0, .hi = 3, .inob = 2, .chunksize = 4});
+	layout_is_csum_count(2, {.lo = 0, .hi = 3, .inob = 1, .chunksize = 2});
+
+	/** Cross chunk size alignment */
+	layout_is_csum_count(2, {.lo = 1, .hi = 7, .inob = 1, .chunksize = 4});
+	layout_is_csum_count(2, {.lo = 1, .hi = 5, .inob = 1, .chunksize = 4});
+	layout_is_csum_count(3, {.lo = 1, .hi = 9, .inob = 1, .chunksize = 4});
+
+	/** Some larger ... more realistic values */
+	const uint32_t val64K = 1024 * 64;
+	const uint32_t val256K = 1024 * 256;
+	const uint64_t val1G = 1024 * 1024 * 1024;
+
+	layout_is_csum_count(val256K, {.lo = 0, .hi = val1G - 1, .inob = 16,
+		.chunksize = val64K});
+
+	layout_has_csum_buf_len(0, {.lo = 0, .hi = 0, .inob = 0, .chunksize = 0,
+		.csum_size = 8});
+	layout_has_csum_buf_len(8, {.lo = 0, .hi = 3, .inob = 1, .chunksize = 4,
+		.csum_size = 8});
+	layout_has_csum_buf_len(16, {.lo = 0, .hi = 3, .inob = 2,
+		.chunksize = 4, .csum_size = 8});
+	layout_has_csum_buf_len(16, {.lo = 0, .hi = 3, .inob = 1,
+		.chunksize = 2, .csum_size = 8});
+
+	layout_has_csum_buf_len(val256K * 64, {.lo = 0, .hi = val1G - 1,
+		.inob = 16, .chunksize = val64K, .csum_size = 64});
+}
+
+static void
+write_to_extent(struct extent_key *extent_key, daos_recx_t *extent,
 		     uint8_t *data_buf, const uint64_t buf_len,
 		     daos_csum_buf_t *csum)
 {
@@ -542,7 +659,7 @@ void write_to_extent(struct extent_key *extent_key, daos_recx_t *extent,
 		fail_msg("Failed to update");
 }
 
-uint8_t *
+static uint8_t *
 allocate_random(size_t len)
 {
 	uint8_t *result = (uint8_t *)malloc(len);
@@ -552,7 +669,7 @@ allocate_random(size_t len)
 	return result;
 }
 
-void
+static void
 read_from_extent(struct extent_key *extent_key, daos_recx_t *extent,
 		 uint8_t *buf, uint64_t buf_len, daos_csum_buf_t *csum)
 {
@@ -587,7 +704,8 @@ read_from_extent(struct extent_key *extent_key, daos_recx_t *extent,
 /*
  * This test verifies that csums aren't copied for holes
  */
-void csum_test_holes(void **state)
+void
+csum_test_holes(void **state)
 {
 	const uint64_t		 data_size = 1024 * 64; /** 64K */
 	const uint64_t		 chunk_size = 1024 * 16; /** 16K */
@@ -663,7 +781,8 @@ void csum_test_holes(void **state)
 /*
  * Verifies can handle not starting at 0
  */
-void csum_extent_not_starting_at_0(void **state)
+void
+csum_extent_not_starting_at_0(void **state)
 {
 	const uint64_t		 data_size = 1024 * 64; /** 64K */
 	const uint64_t		 chunk_size = 1024 * 16; /** 16K */
@@ -715,7 +834,8 @@ void csum_extent_not_starting_at_0(void **state)
 /*
  * Verifies can handle non-chunk aligned extents
  */
-void csum_extent_not_chunk_aligned(void **state)
+void
+csum_extent_not_chunk_aligned(void **state)
 {
 	const uint64_t		data_size = 20;
 	const uint64_t		chunk_size = 8;

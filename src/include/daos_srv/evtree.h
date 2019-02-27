@@ -64,8 +64,6 @@ struct evt_desc {
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
 	umem_id_t			dc_dtx;
-	/** number of csums stored in pt_csum array */
-	uint32_t			pt_csum_count;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
@@ -190,9 +188,11 @@ struct evt_root {
 	uint32_t			tr_inob;
 	/** see \a evt_feats */
 	uint64_t			tr_feats;
-	/** type of the csum used in tree*/
+	/** number of bytes used to generate each csum */
+	uint32_t			tr_csum_chunk_size;
+	/** type of the csum used in tree */
 	uint16_t			tr_csum_type;
-	/** length of each csum. */
+	/** length of each csum in bytes */
 	uint16_t			tr_csum_len;
 };
 

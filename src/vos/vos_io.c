@@ -366,20 +366,25 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			holes = 0;
 		}
 
-		if (csum &&
-		    csum_copied < csum->cs_buf_len &&
-		    csum->cs_buf_len - csum_copied >= ent->en_csum.cs_buf_len) {
+		if (rsize == 0)
+			rsize = ent_array.ea_inob;
+		D_ASSERT(rsize == ent_array.ea_inob);
+
+		if (csum && csum_copied < csum->cs_buf_len) {
 			D_ASSERT(csum->cs_chunksize > 0);
 			D_ASSERT(lo >= recx->rx_idx);
+			daos_size_t csum_nr = csum_chunk_count(
+				csum->cs_chunksize,
+				lo, hi, rsize);
 
 			void *csum_ptr = daos_csum_from_offset(csum,
 				(uint32_t) ((lo - recx->rx_idx) * rsize));
 
 			memcpy(csum_ptr, ent->en_csum.cs_csum,
-			       ent->en_csum.cs_buf_len);
-			csum_copied += ent->en_csum.cs_buf_len;
+			       csum_nr * ent->en_csum.cs_len);
+			csum_copied += csum_nr * ent->en_csum.cs_len;
 
-			csum->cs_nr += ent->en_csum.cs_nr;
+			csum->cs_nr += csum_nr;
 
 			/** These should all be the same for each entry,
 			 * so it's okay to copy over previously written
@@ -389,9 +394,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			csum->cs_type = ent->en_csum.cs_type;
 		}
 
-		if (rsize == 0)
-			rsize = ent_array.ea_inob;
-		D_ASSERT(rsize == ent_array.ea_inob);
+
 
 		biov.bi_data_len = nr * ent_array.ea_inob;
 		biov.bi_addr = ent->en_addr;

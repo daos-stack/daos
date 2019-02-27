@@ -2378,10 +2378,12 @@ static const struct CMUnitTest io_tests[] = {
 		csum_test_holes, NULL, NULL},
 	{ "VOS303: Test some checksum helper functions",
 		csum_helper_functions_tests, NULL, NULL},
-	{ "VOS303: Test checksums when extent index doesn't start at 0",
+	{ "VOS304: Test checksums when extent index doesn't start at 0",
 		csum_extent_not_starting_at_0, NULL, NULL},
-	{ "VOS303: Test checksums with chunk-unaligned extents",
+	{ "VOS305: Test checksums with chunk-unaligned extents",
 		csum_extent_not_chunk_aligned, NULL, NULL},
+	{ "VOS306: Some EVT Checksum Helper Functions",
+		evt_csum_helper_functions_tests, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
