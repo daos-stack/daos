@@ -555,7 +555,7 @@ unreach:
 }
 
 static inline int
-crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
+crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 {
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(base_uri != NULL);
@@ -667,9 +667,9 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_req_get_tgt_uri(rpc_priv, uri);
+	rc = crt_req_fill_tgt_uri(rpc_priv, uri);
 	if (rc != 0) {
-		D_ERROR("crt_req_get_tgt_uri failed, opc: %#x.\n",
+		D_ERROR("crt_req_fill_tgt_uri failed, opc: %#x.\n",
 			rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -776,15 +776,14 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	return rc;
 }
 
-/* look in the local cache to find the NA address of the target */
+/* Fill rpc_priv->crp_hg_addr field based on local cache contents */
 static int
-crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
+crt_lc_hg_addr_fill(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_grp_priv	*grp_priv;
 	crt_rpc_t		*req;
 	crt_endpoint_t		*tgt_ep;
 	struct crt_context	*ctx;
-	crt_phy_addr_t		 uri = NULL;
 	int			 rc = 0;
 
 	req = &rpc_priv->crp_pub;
@@ -794,7 +793,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 
 	rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
-			       tgt_ep->ep_rank, tgt_ep->ep_tag, base_addr,
+			       tgt_ep->ep_rank, tgt_ep->ep_tag, NULL,
 			       &rpc_priv->crp_hg_addr);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: %#x.\n",
@@ -802,11 +801,47 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 		D_GOTO(out, rc);
 	}
 
-	if (base_addr != NULL && *base_addr != NULL &&
-	    rpc_priv->crp_hg_addr == NULL) {
-		rc = crt_req_get_tgt_uri(rpc_priv, *base_addr);
+out:
+	return rc;
+}
+
+/* look in the local cache to find the NA address of the target */
+static int
+crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
+{
+	struct crt_grp_priv	*grp_priv;
+	crt_rpc_t		*req;
+	crt_endpoint_t		*tgt_ep;
+	struct crt_context	*ctx;
+	crt_phy_addr_t		 uri = NULL;
+	int			 rc = 0;
+	crt_phy_addr_t		 base_addr = NULL;
+
+	req = &rpc_priv->crp_pub;
+	ctx = req->cr_ctx;
+	tgt_ep = &req->cr_ep;
+
+	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
+
+	rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
+			       tgt_ep->ep_rank, tgt_ep->ep_tag, &base_addr,
+			       &rpc_priv->crp_hg_addr);
+	if (rc != 0) {
+		D_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: %#x.\n",
+			rc, rpc_priv->crp_pub.cr_opc);
+		D_GOTO(out, rc);
+	}
+
+	if (base_addr == NULL) {
+		*uri_exists = false;
+		D_GOTO(out, rc);
+	}
+	*uri_exists = true;
+
+	if (rpc_priv->crp_hg_addr == NULL) {
+		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
-			D_ERROR("crt_req_get_tgt_uri failed, "
+			D_ERROR("crt_req_fill_tgt_uri failed, "
 				"opc: %#x.\n", req->cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -817,13 +852,12 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 	 * Did it in crt_grp_attach(), in the case that this context created
 	 * later can insert it here.
 	 */
-	if (base_addr != NULL && *base_addr == NULL && !grp_priv->gp_local) {
+	if (!grp_priv->gp_local) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank &&
 		    tgt_ep->ep_tag == 0) {
 			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
 				  CRT_ADDR_STR_MAX_LEN);
-			*base_addr = uri;
 			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 			if (uri == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -836,9 +870,9 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 				D_GOTO(out, rc);
 			}
 
-			rc = crt_req_get_tgt_uri(rpc_priv, uri);
+			rc = crt_req_fill_tgt_uri(rpc_priv, uri);
 			if (rc != 0) {
-				D_ERROR("crt_req_get_tgt_uri failed, "
+				D_ERROR("crt_req_fill_tgt_uri failed, "
 					"opc: %#x.\n", req->cr_opc);
 				D_GOTO(out, rc);
 			}
@@ -964,9 +998,9 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_req_get_tgt_uri(rpc_priv, uri);
+	rc = crt_req_fill_tgt_uri(rpc_priv, uri);
 	if (rc != 0) {
-		D_ERROR("crt_req_get_tgt_uri failed, opc: %#x.\n",
+		D_ERROR("crt_req_fill_tgt_uri failed, opc: %#x.\n",
 			rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -1046,9 +1080,9 @@ out:
 int
 crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 {
-	crt_rpc_t			*req;
-	crt_phy_addr_t			 base_addr = NULL;
-	int				 rc = 0;
+	crt_rpc_t	*req;
+	bool		uri_exists = false;
+	int		rc = 0;
 
 	req = &rpc_priv->crp_pub;
 	switch (rpc_priv->crp_state) {
@@ -1057,7 +1091,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 	case RPC_STATE_INITED:
 		/* lookup local cache  */
 		rpc_priv->crp_hg_addr = NULL;
-		rc = crt_req_ep_lc_lookup(rpc_priv, &base_addr);
+		rc = crt_req_ep_lc_lookup(rpc_priv, &uri_exists);
 		if (rc != 0) {
 			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
 				"opc: %#x.\n", rc, req->cr_opc);
@@ -1066,7 +1100,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		if (rpc_priv->crp_hg_addr != NULL) {
 			/* send the RPC if the local cache has the HG_Addr */
 			rc = crt_req_send_immediately(rpc_priv);
-		} else if (base_addr != NULL) {
+		} else if (uri_exists == true) {
 			/* send addr lookup req */
 			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
@@ -1083,9 +1117,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:
-		rc = crt_req_ep_lc_lookup(rpc_priv, NULL);
+		rc = crt_lc_hg_addr_fill(rpc_priv);
 		if (rc != 0) {
-			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
+			D_ERROR("crt_lc_hg_addr_fill() failed, rc %d, "
 				"opc: %#x\n", rc, req->cr_opc);
 			D_GOTO(out, rc);
 		}
