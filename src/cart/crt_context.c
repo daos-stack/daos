@@ -901,6 +901,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 			RPC_DECREF(rpc_priv);
 		}
 	}
+
+	rpc_priv->crp_ctx_tracked = 1;
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* reference taken by d_hash_rec_find or "epi->epi_ref = 1" above */
@@ -952,7 +954,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	/* Prevent simultaneous untrack from progress thread and
 	 * main rpc execution thread.
 	 */
-	if (rpc_priv->crp_in_binheap == 0) {
+	if (rpc_priv->crp_ctx_tracked == 0) {
 		RPC_TRACE(DB_NET, rpc_priv,
 			"rpc is not tracked already.\n");
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
@@ -1010,6 +1012,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &submit_list);
 		credits--;
 	}
+
+	rpc_priv->crp_ctx_tracked = 0;
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */

@@ -189,6 +189,8 @@ struct crt_rpc_priv {
 				crp_reply_pending:1,
 				/* set to 1 if target ep is set */
 				crp_have_ep:1,
+				/* RPC is tracked by the context */
+				crp_ctx_tracked:1,
 				/* 1 if RPC is succesfully put on the wire */
 				crp_on_wire:1;
 	uint32_t		crp_refcount;
