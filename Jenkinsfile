@@ -41,7 +41,7 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def arch=""
-def sanitized_JOB_NAME = JOB_NAME.replaceAll('/', '-').toLowerCase()
+def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 pipeline {
     agent { label 'lightweight' }
