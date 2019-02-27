@@ -934,6 +934,7 @@ static void
 proto_query_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req = cb_info->cci_rpc;
+	struct crt_proto_query_in	*rpc_req_input;
 	struct crt_proto_query_out	*rpc_req_output;
 	struct proto_query_t		*proto_query = cb_info->cci_arg;
 	struct crt_proto_query_cb_info	 user_cb_info;
@@ -943,6 +944,9 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 			cb_info->cci_rc);
 		D_GOTO(out, user_cb_info.pq_rc = cb_info->cci_rc);
 	}
+
+	rpc_req_input = crt_req_get(rpc_req);
+	D_FREE(rpc_req_input->pq_ver.iov_buf);
 
 	rpc_req_output = crt_reply_get(rpc_req);
 	user_cb_info.pq_rc = rpc_req_output->pq_rc;
@@ -964,6 +968,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 	crt_context_t			 crt_ctx;
 	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
+	uint32_t			*tmp_array;
 	int				 rc = DER_SUCCESS;
 
 	if (ver == NULL) {
@@ -988,8 +993,13 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	rpc_req_input = crt_req_get(rpc_req);
 
+	D_ALLOC(tmp_array, sizeof(*tmp_array)*count);
+	if (tmp_array == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	memcpy(tmp_array, ver, sizeof(tmp_array[0])*count);
+
 	/* set input */
-	d_iov_set(&rpc_req_input->pq_ver, ver, sizeof(*ver) * count);
+	d_iov_set_safe(&rpc_req_input->pq_ver, tmp_array, sizeof(*ver) * count);
 	rpc_req_input->pq_ver_count = count;
 	rpc_req_input->pq_base_opc = base_opc;
 

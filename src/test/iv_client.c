@@ -324,28 +324,31 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	struct RPC_TEST_UPDATE_IV_in	*input;
 	struct RPC_TEST_UPDATE_IV_out	*output;
 	crt_rpc_t			*rpc_req;
-	crt_iv_sync_t			 sync = {0, 0, 0};
+	crt_iv_sync_t			*sync;
 	size_t				 len;
 	int				 rc;
 
+	D_ALLOC_PTR(sync);
+	assert(sync != NULL);
+
 	if (arg_sync == NULL) {
-		sync.ivs_mode = 0;
-		sync.ivs_event = 0;
+		sync->ivs_mode = 0;
+		sync->ivs_event = 0;
 	} else if (strcmp(arg_sync, "none") == 0) {
-		sync.ivs_mode = 0;
-		sync.ivs_event = 0;
+		sync->ivs_mode = 0;
+		sync->ivs_event = 0;
 	} else if (strcmp(arg_sync, "eager_update") == 0) {
-		sync.ivs_mode = CRT_IV_SYNC_EAGER;
-		sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
+		sync->ivs_mode = CRT_IV_SYNC_EAGER;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	} else if (strcmp(arg_sync, "lazy_update") == 0) {
-		sync.ivs_mode = CRT_IV_SYNC_LAZY;
-		sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
+		sync->ivs_mode = CRT_IV_SYNC_LAZY;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	} else if (strcmp(arg_sync, "eager_notify") == 0) {
-		sync.ivs_mode = CRT_IV_SYNC_EAGER;
-		sync.ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
+		sync->ivs_mode = CRT_IV_SYNC_EAGER;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
 	} else if (strcmp(arg_sync, "eager_update") == 0) {
-		sync.ivs_mode = CRT_IV_SYNC_EAGER;
-		sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
+		sync->ivs_mode = CRT_IV_SYNC_EAGER;
+		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	} else {
 		print_usage("Unknown sync option specified");
 		return -1;
@@ -354,7 +357,7 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	prepare_rpc_request(g_crt_ctx, RPC_TEST_UPDATE_IV, &g_server_ep,
 			    (void **)&input, &rpc_req);
 	d_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
-	d_iov_set(&input->iov_sync, &sync, sizeof(crt_iv_sync_t));
+	d_iov_set_safe(&input->iov_sync, sync, sizeof(crt_iv_sync_t));
 
 	if (value_is_hex) {
 		rc = unpack_hex_string_inplace(str_value, &len);
@@ -368,6 +371,8 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	}
 
 	send_rpc_request(g_crt_ctx, rpc_req, (void **)&output);
+
+	D_FREE(sync);
 
 	if (output->rc == 0)
 		DBG_PRINT("Update PASSED\n");
