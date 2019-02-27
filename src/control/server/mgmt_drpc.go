@@ -66,10 +66,10 @@ func drpcSetup(sockDir string, iosrv *iosrv) error {
 	}
 
 	// Create and add our modules
-	srvmodule := &srvModule{iosrv}
-	drpcServer.RegisterRPCModule(srvmodule)
 	secmodule := &SecurityModule{}
 	drpcServer.RegisterRPCModule(secmodule)
+	srvmodule := &srvModule{iosrv}
+	drpcServer.RegisterRPCModule(srvmodule)
 
 	err = drpcServer.Start()
 	if err != nil {
@@ -86,11 +86,11 @@ type srvModule struct {
 	iosrv *iosrv
 }
 
-const srvModuleID = 1
+const srvModuleID = 2
 
 // These are srvModule dRPC methods.
 const (
-	notifyReady int32 = iota
+	notifyReady = iota
 )
 
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {

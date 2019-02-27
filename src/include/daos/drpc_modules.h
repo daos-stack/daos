@@ -35,10 +35,15 @@
 
 enum drpc_module {
 	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
-	DRPC_MODULE_SRV			= 1,	/* daos_server */
-	DRPC_MODULE_SECURITY_AGENT	= 2,
+	DRPC_MODULE_SECURITY_AGENT	= 1,
+	DRPC_MODULE_SRV			= 2,	/* daos_server */
 
 	NUM_DRPC_MODULES			/* Must be last */
+};
+
+/** Methods of DRPC_MODULE_SRV */
+enum drpc_srv_method {
+	DRPC_SRV_NOTIFY_READY = 0
 };
 
 #endif /* __DAOS_DRPC_MODULES_H__ */

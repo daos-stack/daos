@@ -236,9 +236,6 @@ dss_topo_init()
 	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
 }
 
-/* daos_server dRPC method notifyReady (see also notifyReady) */
-#define SRV_NOTIFY_READY 0
-
 /* Notify daos_server that we are ready (e.g., to receive dRPC requests). */
 static int
 notify_ready(void)
@@ -248,7 +245,7 @@ notify_ready(void)
 	int		rc;
 
 	req.module = DRPC_MODULE_SRV;
-	req.method = SRV_NOTIFY_READY;
+	req.method = DRPC_SRV_NOTIFY_READY;
 
 	rc = drpc_call(dss_drpc_ctx, R_SYNC, &req, &resp);
 	if (rc != 0)
@@ -270,6 +267,7 @@ drpc_init(void)
 		goto out;
 	}
 
+	D_ASSERT(dss_drpc_ctx == NULL);
 	dss_drpc_ctx = drpc_connect(path);
 	if (dss_drpc_ctx == NULL) {
 		rc = -DER_NOMEM;
@@ -277,8 +275,10 @@ drpc_init(void)
 	}
 
 	rc = notify_ready();
-	if (rc != 0)
+	if (rc != 0) {
 		drpc_close(dss_drpc_ctx);
+		dss_drpc_ctx = NULL;
+	}
 
 out_path:
 	D_FREE(path);
@@ -294,6 +294,7 @@ drpc_fini(void)
 	D_ASSERT(dss_drpc_ctx != NULL);
 	rc = drpc_close(dss_drpc_ctx);
 	D_ASSERTF(rc == 0, "%d\n", rc);
+	dss_drpc_ctx = NULL;
 }
 
 static int
