@@ -1,6 +1,6 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-# Trying to debug this in CI Env.
+# Trying to debug this in CI.
 hosts:
   test_machines:
     - boro-A
