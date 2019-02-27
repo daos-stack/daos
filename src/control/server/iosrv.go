@@ -185,7 +185,9 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 }
 
 func (srv *iosrv) start() (err error) {
-	defer func() { err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount) }()
+	defer func() {
+		err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount)
+	}()
 
 	if err = srv.startCmd(); err != nil {
 		return
