@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <daos/rpc.h>
 #include <daos/common.h>
 #include <daos_srv/daos_server.h>
+
 #include "rpc.h"
 
 /** srv.c */
@@ -52,4 +53,5 @@ void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
+
 #endif /* __SRV_MGMT_INTERNAL_H__ */
