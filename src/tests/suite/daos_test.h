@@ -63,6 +63,7 @@
 	} while  (0)
 
 #include <mpi.h>
+#include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>

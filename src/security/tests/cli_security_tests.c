@@ -37,7 +37,6 @@
 #include <daos/drpc.pb-c.h>
 #include <daos/agent.h>
 #include <daos/security.h>
-#include <gurt/common.h>
 #include <string.h>
 #include <linux/limits.h>
 #include "../security.pb-c.h"
