@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,10 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
-#include "srv_internal.h"
 #include <signal.h>
+#include <daos/drpc_modules.h>
+
+#include "srv_internal.h"
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
@@ -56,6 +58,23 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 };
 
 #undef X
+
+static void
+mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
+{
+	D_DEBUG(DB_MGMT, "call received by mgmt drpc handler\n");
+}
+
+static struct dss_drpc_handler mgmt_drpc_handlers[] = {
+	{
+		.module_id = DRPC_MODULE_MGMT_SERVER,
+		.handler = mgmt_drpc_handler
+	},
+	{
+		.module_id = 0,
+		.handler = NULL
+	}
+};
 
 /**
  * Set parameter on a single target.
@@ -202,12 +221,13 @@ ds_mgmt_fini()
 }
 
 struct dss_module mgmt_module = {
-	.sm_name	= "mgmt",
-	.sm_mod_id	= DAOS_MGMT_MODULE,
-	.sm_ver		= DAOS_MGMT_VERSION,
-	.sm_init	= ds_mgmt_init,
-	.sm_fini	= ds_mgmt_fini,
-	.sm_proto_fmt	= &mgmt_proto_fmt,
-	.sm_cli_count	= MGMT_PROTO_CLI_COUNT,
-	.sm_handlers	= mgmt_handlers,
+	.sm_name		= "mgmt",
+	.sm_mod_id		= DAOS_MGMT_MODULE,
+	.sm_ver			= DAOS_MGMT_VERSION,
+	.sm_init		= ds_mgmt_init,
+	.sm_fini		= ds_mgmt_fini,
+	.sm_proto_fmt		= &mgmt_proto_fmt,
+	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,
+	.sm_handlers		= mgmt_handlers,
+	.sm_drpc_handlers	= mgmt_drpc_handlers,
 };

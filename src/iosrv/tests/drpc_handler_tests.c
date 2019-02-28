@@ -182,11 +182,15 @@ drpc_hdlr_register_multiple(void **state)
 			dummy_drpc_handler1), DER_SUCCESS);
 	assert_int_equal(drpc_hdlr_register(DRPC_MODULE_SECURITY_AGENT,
 			dummy_drpc_handler2), DER_SUCCESS);
+	assert_int_equal(drpc_hdlr_register(DRPC_MODULE_MGMT_SERVER,
+			dummy_drpc_handler3), DER_SUCCESS);
 
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST),
 			dummy_drpc_handler1);
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_SECURITY_AGENT),
 			dummy_drpc_handler2);
+	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_MGMT_SERVER),
+			dummy_drpc_handler3);
 }
 
 static void
