@@ -40,40 +40,9 @@ Additionally, a set of high-level abstractions are provided to test developers i
 * [AgentUtils](../../tests/ftest/util/AgentUtils.py) contains functionality to launch/shutdown the DAOS security agent
 * [IorUtils](../../tests/ftest/util/IorUtils.py) is a high level driver for running IOR tests over DAOS
 
-### Ctypes
+### DaosContext
 
-The Python API is built as a pass-through to the DAOS C API utilizing a Python module called ctypes. Ctypes is a built-in module for interfacing Python with existing libraries written in C/C++. The Python API leverages ctypes to act as a middle ground between a traditional transparent shim and a Pythonic object-oriented wrapper around the C API.
-
-### Error Handling
-
-The API was designed using the EAFP (<b>E</b>asier to <b>A</b>sk <b>F</b>orgiveness than get <b>P</b>ermission) idiom. A given function will raise a custom exception on error state, `DaosApiError`. A user of the API is expected to catch and handle this exception as needed:
-
-```python
-# catch and log
-try:
-    daos_some_action()
-except DaosApiError as e:
-    self.d_log.ERROR("My DAOS action encountered an error!")
-```
-
-
-
-
-
-
-<!-- Extend this section:
-basic c-types concepts?
-how c-types concepts are applied in our api code?
-python API object-oriented design?
-python API location in source code tree and how split across files?
-Also stop using "The Python API" as a sentence opener
--->
-
-## Usage
-
-### Initializing DAOS C API
-
-In the Python API, DAOS shared objects are loaded within a Python object called a `DaosContext`. This describes the environmental context in which to run. A simplified version of this object is shown below:
+In the Python API, DAOS shared objects are loaded within a Python object called a `DaosContext`. This describes the environmental context in which to run, defining the build's directory structure. A simplified version of this object is shown below:
 
 ```python
 import ctypes
@@ -94,7 +63,66 @@ class DaosContext(object):
         libdaos.daos_init()
 ```
 
+### Ctypes
+
+The Python API is built as a pass-through to the DAOS C API utilizing a Python module called ctypes. Ctypes is a built-in module for interfacing Python with existing libraries written in C/C++. The Python API leverages ctypes to act as a middle ground between a traditional transparent shim and a Pythonic object-oriented wrapper around the C API.
+
+Ctypes documentation can be found here https://docs.python.org/3/library/ctypes.html
+
+
+### Error Handling
+
+The API was designed using the EAFP (<b>E</b>asier to <b>A</b>sk <b>F</b>orgiveness than get <b>P</b>ermission) idiom. A given function will raise a custom exception on error state, `DaosApiError`. A user of the API is expected to catch and handle this exception as needed:
+
+```python
+# catch and log
+try:
+    daos_some_action()
+except DaosApiError as e:
+    self.d_log.ERROR("My DAOS action encountered an error!")
+```
+
+## Usage
+
+### Initializing DAOS C API
+
+A file, `.build_vars.json`, is generated in the top level DAOS directory during build time. This file contains environmental information about the directory structure for DAOS and its dependencies. This information is used by `DaosContext` to describe the environment in which the test case is to run. In each test case, generally in a given test's `setUp()` function, an instance of `DaosContext` object must be created.
+
+```python
+import json
+from daos_api import DaosContext, DaosLog
+
+class MyTest(Test):
+    def setUp(self):
+        with open('/path/to/.build_vars.json') as f:
+            build_paths = json.load(f)
+
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+```
+
+### Launching a DAOS server
+
+Once a given test case has initialized a `DaosContext`, the context is then used to launch an instance of a DAOS server:
+
+```python
+import ServerUtils, WriteHostFile
+
+# top level DAOS directory, read from .build_vars.json
+basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+
+# list of test hosts is read from test's configuration *.yaml file
+hostlist = self.params.get("test_machines", '/run/hosts/*')
+# self.workdir is an Avocado construct, writeable directory that only exists for the duration of the test
+hostfile = WriteHostFile.WriteHostFile(hostlist, self.workdir)
+
+# server group descriptor is also read from test's configuration *.yaml file
+server_group = self.params.get("server_group", '/server/', 'daos_server')
+ServerUtils.runServer(hostfile, server_group, basepath)
+```
+
 ### Python API Usage in Tests
+
+
 
 The following code snippet is an example of how to create a DAOS pool using the DAOS Python API:
 
@@ -132,8 +160,6 @@ class MyTest(Test):
 
 #### Extending DAOS Python API
 
-<!--Extend this section: Change in C API parameters or function name-->
-
 Once a function has been added to the DAOS C API, it must be represented in the Python API. In the following example, the function table is extended to reference a new C API function `hello_world()`, and a corresponding Python function is created:
 
 ```c
@@ -157,11 +183,7 @@ def get_function(self, function):
 
 # a corresponding hello_world Python API function is added
 def hello_world(self):
-    # paths relative to build directory to set up the environmental context
-    with open('/path/to/.build_vars.json') as f:
-        build_paths = json.load(f)
-    self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
+    
     # retrieve new function from function table
     func = self.context.get_function('hello-world')
 
@@ -171,6 +193,8 @@ def hello_world(self):
 
     # call it
     rc = func(a, b)
+    if rc != 0:
+        raise DaosApiError("function hello_world encountered an error!")
 ```
 
 #### C API Modifications
@@ -186,12 +210,8 @@ If an existing C API is removed, the corresponding Python function must also be 
 The Python DAOS API exposes functionality to log messages to the DAOS client log. Messages can be logged as `INFO`, `DEBUG`, `WARN`, or `ERR` log levels. A test must initialize the DAOS log object with the environmental context in which to run:
 
 ```python
-from daos_api import DaosContext, DaosLog
+from daos_api import DaosLog
 
-with open('/path/to/.build_vars.json') as f:
-    build_paths = json.load(f)
-
-self.context = DaosContext(build_paths['PREFIX'] + '/lib/')\
 self.d_log = DaosLog(self.context)
 
 self.d_log.INFO("FYI")
