@@ -30,6 +30,24 @@ from SCons.Script import Dir
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 
+def supports_custom_format(clang_exe):
+    """Get the version of clang-format"""
+    import subprocess
+    import re
+
+    try:
+        output = subprocess.check_output([clang_exe, "-version"])
+    except subprocess.CalledProcessError:
+        print "Unsupported clang-format for custom style.  Using Mozilla style."
+        return False
+
+    match = re.search(r"version (\d+)\.", output)
+    if match and int(match.group(1)) >= 7:
+        return True
+
+    print "Custom .clang-format wants version 7+. Using Mozilla style."
+    return False
+
 def find_indent():
     """find clang-format"""
     indent = find_executable("clang-format")
@@ -38,6 +56,8 @@ def find_indent():
         root = Dir("#").abspath
         while root != "/":
             if os.path.exists(os.path.join(root, ".clang-format")):
+                if not supports_custom_format(indent):
+                    break
                 style = "file"
             root = os.path.dirname(root)
         return "%s --style=%s" % (indent, style)
