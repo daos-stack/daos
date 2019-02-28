@@ -975,7 +975,7 @@ enum daos_cont_prop_type {
 	/** Compression on/off + compression type */
 	DAOS_PROP_CO_COMPRESS,
 	/** Encryption on/off + encryption type */
-	DAOS_PROP_CO_ENCRYP,
+	DAOS_PROP_CO_ENCRYPT,
 	/** User who owns the container */
 	DAOS_PROP_CO_OWNER,
 	/** Container's assigned group */
@@ -1008,7 +1008,7 @@ enum {
 
 /** container encryption type */
 enum {
-	DAOS_PROP_CO_ENCRYP_OFF,
+	DAOS_PROP_CO_ENCRYPT_OFF,
 };
 
 /** container redundancy factor */

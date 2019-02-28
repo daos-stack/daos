@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,39 +26,60 @@
 
 #include <stdio.h>
 
+#define DD_FAC(name)	daos_##name##_logfac
+#ifndef D_LOGFAC
+#define D_LOGFAC DD_FAC(daos)
+#endif /* !D_LOGFAC */
+
+#include <gurt/debug_setup.h>
+
 /**
  * predefined debug facilities (subsystems/modules), they have to be declared
  * before including any libgurt headers
  */
-extern int d_addons_logfac;
-extern int d_common_logfac;
-extern int d_tree_logfac;
-extern int d_vos_logfac;
-extern int d_client_logfac;
-extern int d_server_logfac;
-extern int d_rdb_logfac;
-extern int d_rsvc_logfac;
-extern int d_pool_logfac;
-extern int d_container_logfac;
-extern int d_object_logfac;
-extern int d_placement_logfac;
-extern int d_rebuild_logfac;
-extern int d_mgmt_logfac;
-extern int d_bio_logfac;
-extern int d_tests_logfac;
-extern int d_dfs_logfac;
-extern int d_drpc_logfac;
-extern int d_security_logfac;
+#define DAOS_FOREACH_LOG_FAC(ACTION, arg)	\
+	ACTION(daos,      daos,      arg)	\
+	ACTION(addons,    addons,    arg)	\
+	ACTION(common,    common,    arg)	\
+	ACTION(tree,      tree,      arg)	\
+	ACTION(vos,       vos,       arg)	\
+	ACTION(client,    client,    arg)	\
+	ACTION(server,    server,    arg)	\
+	ACTION(rdb,       rdb,       arg)	\
+	ACTION(rsvc,      rsvc,      arg)	\
+	ACTION(pool,      pool,      arg)	\
+	ACTION(container, container, arg)	\
+	ACTION(object,    object,    arg)	\
+	ACTION(placement, placement, arg)	\
+	ACTION(rebuild,   rebuild,   arg)	\
+	ACTION(mgmt,      mgmt,      arg)	\
+	ACTION(bio,       bio,       arg)	\
+	ACTION(tests,     tests,     arg)	\
+	ACTION(dfs,       dfs,       arg)	\
+	ACTION(drpc,      drpc,      arg)	\
+	ACTION(security,  security,  arg)
+
+#define DAOS_FOREACH_DB(ACTION, arg)				\
+	/** metadata operation */				\
+	ACTION(DB_MD,	   md,	    metadata,       0, arg)	\
+	/** placement operation */				\
+	ACTION(DB_PL,	   pl,	    placement,      0, arg)	\
+	/** pool operation */					\
+	ACTION(DB_MGMT,	   mgmt,    management,	    0, arg)	\
+	/** epoch operation */					\
+	ACTION(DB_EPC,	   epc,	    epoch,          0, arg)	\
+	/** durable format operation */				\
+	ACTION(DB_DF,	   df,	    durable_format, 0, arg)	\
+	/** rebuild operation */				\
+	ACTION(DB_REBUILD, rebuild, rebuild,	    0, arg)	\
+	/** security check */					\
+	ACTION(DB_SEC,	   sec,	    security,       0, arg)
+
+DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
+DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 
 #include <gurt/debug.h>
-
-extern uint64_t DB_MD; /* metadata operation */
-extern uint64_t DB_PL; /* placement */
-extern uint64_t DB_MGMT; /* pool management */
-extern uint64_t DB_EPC; /* epoch system */
-extern uint64_t DB_DF; /* durable format */
-extern uint64_t DB_REBUILD; /* rebuild process */
-extern uint64_t DB_SEC; /* Security checks */
+#include <gurt/common.h>
 
 #define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0

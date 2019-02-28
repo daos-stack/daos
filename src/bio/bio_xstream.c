@@ -470,9 +470,9 @@ load_blobstore(struct bio_xs_context *ctxt, struct spdk_bdev *bdev,
 	xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 
 	if (cp_arg.cca_rc != 0) {
-		D_DEBUG(bs_uuid == NULL ? DB_IO : DLOG_ERR,
-			"%s blobstore failed %d\n", create ? "init" : "load",
-			cp_arg.cca_rc);
+		D_CDEBUG(bs_uuid == NULL, DB_IO, DLOG_ERR,
+			 "%s blobstore failed %d\n", create ? "init" : "load",
+			 cp_arg.cca_rc);
 		return NULL;
 	}
 

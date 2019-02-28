@@ -719,7 +719,6 @@ func TestPopulateEnv(t *testing.T) {
 		outEnvs   []string
 		getParams bool
 		desc      string
-		errMsg    string
 	}{
 		{
 			newDefaultMockConfig(),
@@ -728,7 +727,6 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{},
 			false,
 			"empty config (no envs) and getenv returns empty",
-			"",
 		},
 		{
 			newDefaultMockConfig(),
@@ -737,7 +735,6 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			false,
 			"empty config (no envs) and getenv returns empty",
-			"",
 		},
 		{
 			populateMockConfig(t, newDefaultMockConfig(), socketsExample),
@@ -760,7 +757,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			true,
 			"sockets populated config (with envs) and getenv returns empty",
-			"",
 		},
 		{
 			populateMockConfig(t, envExistsConfig(), socketsExample),
@@ -795,7 +791,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			true,
 			"sockets populated config (with envs) and getenv returns with 'somevalue'",
-			"",
 		},
 		{
 			populateMockConfig(t, newDefaultMockConfig(), psm2Example),
@@ -817,7 +812,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			true,
 			"psm2 populated config (with envs) and getenv returns empty",
-			"",
 		},
 		{
 			populateMockConfig(t, envExistsConfig(), psm2Example),
@@ -853,7 +847,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			true,
 			"psm2 populated config (with envs) and getenv returns with 'somevalue'",
-			"",
 		},
 	}
 
@@ -873,14 +866,7 @@ func TestPopulateEnv(t *testing.T) {
 			}
 		}
 		// pass in env and verify output envs is as expected
-		err := config.populateEnv(tt.ioIdx, &inEnvs)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.desc)
-			continue
-		}
-		if err != nil {
-			t.Fatalf("Envs could not be populated (%s: %s)", tt.desc, err)
-		}
+		config.populateEnv(tt.ioIdx, &inEnvs)
 		AssertEqual(t, inEnvs, tt.outEnvs, tt.desc)
 	}
 }

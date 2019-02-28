@@ -33,6 +33,7 @@
 
 #include <daos_srv/container.h>
 
+#include <daos_api.h>	/* for daos_prop_alloc/_free() */
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
@@ -68,7 +69,7 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_conts);
 	if (rc != 0)
 		D_GOTO(err_root, rc);
-	rc = rdb_path_push(&svc->cs_conts, &ds_cont_attr_conts);
+	rc = rdb_path_push(&svc->cs_conts, &ds_cont_prop_conts);
 	if (rc != 0)
 		D_GOTO(err_conts, rc);
 
@@ -76,7 +77,7 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_hdls);
 	if (rc != 0)
 		D_GOTO(err_conts, rc);
-	rc = rdb_path_push(&svc->cs_hdls, &ds_cont_attr_cont_handles);
+	rc = rdb_path_push(&svc->cs_hdls, &ds_cont_prop_cont_handles);
 	if (rc != 0)
 		D_GOTO(err_hdls, rc);
 
@@ -210,7 +211,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_attr_conts, &attr);
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_conts, &attr);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create container KVS: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -219,11 +220,152 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_attr_cont_handles, &attr);
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create container handle KVS: %d\n",
 			DP_UUID(pool_uuid), rc);
 		return rc;
+	}
+
+	return rc;
+}
+
+/* copy \a prop to \a prop_def (duplicated default prop) */
+static int
+cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
+{
+	int			 i;
+
+	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
+		return 0;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_prop_entry	*entry;
+		struct daos_prop_entry	*entry_def;
+
+		entry = &prop->dpp_entries[i];
+		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
+		D_ASSERTF(entry_def != NULL, "type %d not found in "
+			  "default prop.\n", entry->dpe_type);
+		switch (entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			D_FREE(entry_def->dpe_str);
+			entry_def->dpe_str = strndup(entry->dpe_str,
+						     DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+		case DAOS_PROP_CO_LAYOUT_VER:
+		case DAOS_PROP_CO_CSUM:
+		case DAOS_PROP_CO_REDUN_FAC:
+		case DAOS_PROP_CO_REDUN_LVL:
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+		case DAOS_PROP_CO_COMPRESS:
+		case DAOS_PROP_CO_ENCRYPT:
+			entry_def->dpe_val = entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_ACL:
+			break;
+		default:
+			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+	return 0;
+}
+
+static int
+cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
+{
+	struct daos_prop_entry	*entry;
+	daos_iov_t		 value;
+	int			 i;
+	int			 rc = 0;
+
+	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
+		return 0;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			daos_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_label,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_layout_type,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_LAYOUT_VER:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_layout_ver,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_CSUM:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_csum, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_redun_fac,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_REDUN_LVL:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_redun_lvl,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_snapshot_max,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_COMPRESS:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_compress,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_ENCRYPT:
+			daos_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_encrypt,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_ACL:
+			break;
+		default:
+			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
+			return -DER_INVAL;
+		}
 	}
 
 	return rc;
@@ -234,6 +376,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	    struct cont_svc *svc, crt_rpc_t *rpc)
 {
 	struct cont_create_in  *in = crt_req_get(rpc);
+	daos_prop_t	       *prop_dup = NULL;
 	daos_iov_t		key;
 	daos_iov_t		value;
 	struct rdb_kvs_attr	attr;
@@ -288,34 +431,49 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
-	/* Create the GHCE and GHPCE attributes. */
+	/* Create the GHCE and GHPCE properties. */
 	daos_iov_set(&value, &ghce, sizeof(ghce));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_ghce, &value);
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 	daos_iov_set(&value, &ghpce, sizeof(ghpce));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_ghpce, &value);
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghpce, &value);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 	daos_iov_set(&value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_max_oid, &value);
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_max_oid, &value);
+	if (rc != 0)
+		D_GOTO(out_kvs, rc);
+
+	/* duplicate the default properties, overwrite it with cont create
+	 * parameter and then write to rdb.
+	 */
+	prop_dup = daos_prop_dup(&cont_prop_default, false);
+	if (prop_dup == NULL) {
+		D_ERROR("daos_prop_dup failed.\n");
+		D_GOTO(out_kvs, rc = -DER_NOMEM);
+	}
+	rc = cont_prop_default_copy(prop_dup, in->cci_prop);
+	if (rc != 0)
+		D_GOTO(out_kvs, rc);
+	rc = cont_prop_write(tx, &kvs, prop_dup);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
 	/* Create the LRE and LHE KVSs. */
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_lres, &attr);
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_lres, &attr);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_lhes, &attr);
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_lhes, &attr);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
 	/* Create the snapshot KVS. */
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_snapshots, &attr);
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_snapshots, &attr);
 
 	/* Create the user attribute KVS. */
 	attr.dsa_class = RDB_KVS_GENERIC;
@@ -323,6 +481,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_user, &attr);
 
 out_kvs:
+	daos_prop_free(prop_dup);
 	rdb_path_fini(&kvs);
 out:
 	return rc;
@@ -415,15 +574,15 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_kvs, rc);
 
 	/* Destroy the snapshot KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_snapshots);
+	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
 	/* Destroy the LHE and LRE KVSs. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_lhes);
+	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_lhes);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_lres);
+	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_lres);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
@@ -463,41 +622,41 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	uuid_copy(p->c_uuid, uuid);
 	p->c_svc = (struct cont_svc *)svc;
 
-	/* c_attrs */
-	rc = rdb_path_clone(&svc->cs_conts, &p->c_attrs);
+	/* c_prop */
+	rc = rdb_path_clone(&svc->cs_conts, &p->c_prop);
 	if (rc != 0)
 		D_GOTO(err_p, rc);
 
-	rc = rdb_path_push(&p->c_attrs, &key);
+	rc = rdb_path_push(&p->c_prop, &key);
 	if (rc != 0)
 		D_GOTO(err_attrs, rc);
 
 	/* c_lres */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_lres);
+	rc = rdb_path_clone(&p->c_prop, &p->c_lres);
 	if (rc != 0)
 		D_GOTO(err_attrs, rc);
-	rc = rdb_path_push(&p->c_lres, &ds_cont_attr_lres);
+	rc = rdb_path_push(&p->c_lres, &ds_cont_prop_lres);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
 
 	/* c_lhes */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_lhes);
+	rc = rdb_path_clone(&p->c_prop, &p->c_lhes);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
-	rc = rdb_path_push(&p->c_lhes, &ds_cont_attr_lhes);
+	rc = rdb_path_push(&p->c_lhes, &ds_cont_prop_lhes);
 	if (rc != 0)
 		D_GOTO(err_lhes, rc);
 
 	/* c_snaps */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_snaps);
+	rc = rdb_path_clone(&p->c_prop, &p->c_snaps);
 	if (rc != 0)
 		D_GOTO(err_lhes, rc);
-	rc = rdb_path_push(&p->c_snaps, &ds_cont_attr_snapshots);
+	rc = rdb_path_push(&p->c_snaps, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		D_GOTO(err_snaps, rc);
 
 	/* c_user */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_user);
+	rc = rdb_path_clone(&p->c_prop, &p->c_user);
 	if (rc != 0)
 		D_GOTO(err_snaps, rc);
 	rc = rdb_path_push(&p->c_user, &ds_cont_attr_user);
@@ -516,7 +675,7 @@ err_lhes:
 err_lres:
 	rdb_path_fini(&p->c_lres);
 err_attrs:
-	rdb_path_fini(&p->c_attrs);
+	rdb_path_fini(&p->c_prop);
 err_p:
 	D_FREE(p);
 err:
@@ -528,7 +687,7 @@ cont_put(struct cont *cont)
 {
 	rdb_path_fini(&cont->c_lhes);
 	rdb_path_fini(&cont->c_lres);
-	rdb_path_fini(&cont->c_attrs);
+	rdb_path_fini(&cont->c_prop);
 	rdb_path_fini(&cont->c_snaps);
 	rdb_path_fini(&cont->c_user);
 	D_FREE(cont);
@@ -859,18 +1018,171 @@ out:
 }
 
 static int
+cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
+	       daos_prop_t **prop_out)
+{
+	daos_prop_t	*prop = NULL;
+	daos_iov_t	 value;
+	uint64_t	 val, bitmap;
+	uint32_t	 idx = 0, nr = 0;
+	int		 rc;
+
+	bitmap = bits & DAOS_CO_QUERY_PROP_ALL;
+	while (idx < DAOS_CO_QUERY_PROP_BITS_NR) {
+		if (bitmap & 0x1)
+			nr++;
+		idx++;
+		bitmap = bitmap >> 1;
+	};
+
+	if (nr == 0)
+		return 0;
+	D_ASSERT(nr <= DAOS_CO_QUERY_PROP_BITS_NR);
+	prop = daos_prop_alloc(nr);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	idx = 0;
+	if (bits & DAOS_CO_QUERY_PROP_LABEL) {
+		daos_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_label,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
+				DAOS_PROP_LABEL_MAX_LEN);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
+		prop->dpp_entries[idx].dpe_str =
+			strndup(value.iov_buf, value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_TYPE) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_layout_type,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_VER) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_layout_ver,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_CSUM) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_csum,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_CSUM;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_REDUN_FAC) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_redun_fac,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_REDUN_LVL) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_redun_lvl,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SNAPSHOT_MAX) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop,
+				   &ds_cont_prop_snapshot_max, &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_COMPRESS) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_compress,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_COMPRESS;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ENCRYPT) {
+		daos_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_encrypt,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ENCRYPT;
+		prop->dpp_entries[idx].dpe_val = val;
+	}
+
+out:
+	if (rc)
+		daos_prop_free(prop);
+	else
+		*prop_out = prop;
+	return rc;
+}
+
+static int
 cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	   struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_query_in   *in  = crt_req_get(rpc);
 	struct cont_query_out  *out = crt_reply_get(rpc);
+	daos_prop_t	       *prop = NULL;
+	int			rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
 		DP_UUID(in->cqi_op.ci_hdl));
 
-	return cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
-				in->cqi_op.ci_hdl, out);
+	rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
+			      in->cqi_op.ci_hdl, out);
+	if (rc)
+		return rc;
+
+	/* the allocated prop will be freed after rpc replied in
+	 * ds_cont_op_handler.
+	 */
+	rc = cont_prop_read(tx, cont, in->cqi_bits, &prop);
+	out->cqo_prop = prop;
+
+	return rc;
 }
 
 static int
@@ -1515,6 +1827,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	struct cont_op_out     *out = crt_reply_get(rpc);
 	struct ds_pool_hdl     *pool_hdl;
 	crt_opcode_t		opc = opc_get(rpc->cr_opc);
+	daos_prop_t	       *prop = NULL;
 	struct cont_svc	       *svc;
 	int			rc;
 
@@ -1547,8 +1860,15 @@ out_pool_hdl:
 		DP_UUID(in->ci_hdl), opc, rc);
 	ds_pool_hdl_put(pool_hdl);
 out:
+	/* cleanup the properties for cont_query */
+	if (opc == CONT_QUERY) {
+		struct cont_query_out  *cqo = crt_reply_get(rpc);
+
+		prop = cqo->cqo_prop;
+	}
 	out->co_rc = rc;
 	crt_reply_send(rpc);
+	daos_prop_free(prop);
 
 	return;
 }
@@ -1602,7 +1922,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 
 	/* Read the max OID from the container metadata */
 	daos_iov_set(&value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_attrs, &ds_cont_attr_max_oid, &value);
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_max_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup max_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -1615,7 +1935,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	max_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_attrs, &ds_cont_attr_max_oid, &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_max_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to update max_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
