@@ -8,8 +8,6 @@ The <b>D</b>istributed <b>A</b>synchronous <b>O</b>bject <b>S</b>torage (DAOS) i
 
 The Python API for DAOS is intended to be used for testing purposes. While the majority of unit testing is written in C, functional testing is written primarily using the Python API. Interfaces are provided for accessing DAOS management and DAOS API functionality from Python. This higher level interface allows a faster turnaround time on implementing test cases for DAOS.
 
-<!--Extend this section - typical use cases, e.g. want to programmatically create a pool from a python test case.-->
-
 ## Architecture
 
 ### Layout
@@ -69,7 +67,6 @@ The Python API is built as a pass-through to the DAOS C API utilizing a Python m
 
 Ctypes documentation can be found here https://docs.python.org/3/library/ctypes.html
 
-
 ### Error Handling
 
 The API was designed using the EAFP (<b>E</b>asier to <b>A</b>sk <b>F</b>orgiveness than get <b>P</b>ermission) idiom. A given function will raise a custom exception on error state, `DaosApiError`. A user of the API is expected to catch and handle this exception as needed:
@@ -122,14 +119,10 @@ ServerUtils.runServer(hostfile, server_group, basepath)
 
 ### Python API Usage in Tests
 
-
-
-The following code snippet is an example of how to create a DAOS pool using the DAOS Python API:
-
-<!--Need some better intro sentence/paragraph here, this is rough-->
+The following example demonstrates a test case creating a DAOS pool using the Python API:
 
 ```python
-import os
+import os, json
 from daos_api import DaosContext, DaosLog
 
 class MyTest(Test):
@@ -218,11 +211,4 @@ self.d_log.INFO("FYI")
 self.d_log.DEBUG("Debugging code")
 self.d_log.WARNING("Be aware, may be issues")
 self.d_log.ERROR("Something went very wrong")
-```
-
-### Teardown
-
-```python
-# fini must be called to de-init when completed
-libdaos.daos_fini()
 ```
