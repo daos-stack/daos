@@ -57,7 +57,8 @@
 	ACTION(tests,     tests,     arg)	\
 	ACTION(dfs,       dfs,       arg)	\
 	ACTION(drpc,      drpc,      arg)	\
-	ACTION(security,  security,  arg)
+	ACTION(security,  security,  arg)	\
+	ACTION(dtx,       dtx,  arg)
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\
