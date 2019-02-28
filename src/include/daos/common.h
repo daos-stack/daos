@@ -44,6 +44,7 @@
 #include <daos/debug.h>
 #include <daos_types.h>
 #include <gurt/hash.h>
+#include <gurt/common.h>
 #include <cart/api.h>
 #include <daos/checksum.h>
 
