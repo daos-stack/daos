@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ static struct pl_map_dict pl_maps[] = {
 };
 
 
-static int
+int
 pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		    struct pl_map **pl_mapp)
 {
@@ -275,8 +275,8 @@ struct d_hash_table	pl_htable = {
 
 #define DSR_RING_DOMAIN		PO_COMP_TP_RACK
 
-static void
-pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
+void
+pl_map_attr_init(const struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
 	memset(mia, 0, sizeof(*mia));

@@ -34,6 +34,7 @@
 #include <daos/lru.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos/placement.h>
 
 /*
  * Pool object
@@ -45,6 +46,7 @@ struct ds_pool {
 	uuid_t			sp_uuid;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
+	struct pl_map	       *sp_pl_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
 	struct ds_iv_ns		*sp_iv_ns;
@@ -166,5 +168,8 @@ int ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
 			 d_iov_t *iv_iov, unsigned int iv_ns_id);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
+
+int ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
+			 uint32_t version, struct pl_obj_layout **plo);
 
 #endif /* __DAOS_SRV_POOL_H__ */
