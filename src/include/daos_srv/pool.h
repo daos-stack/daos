@@ -35,6 +35,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/placement.h>
+#include <daos_srv/vos_types.h>
 
 /*
  * Pool object
@@ -155,9 +156,10 @@ int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
  */
 int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
-typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid,
-			     daos_epoch_t eph, void *arg);
-int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
+typedef int (*rebuild_iter_cb_t)(uuid_t cont_uuid, vos_iter_entry_t *ent,
+				 void *arg);
+int ds_pool_rebuild_iter(uuid_t pool_uuid, rebuild_iter_cb_t callback,
+			 void *arg, uint32_t type);
 
 struct cont_svc;
 struct rsvc_hint;

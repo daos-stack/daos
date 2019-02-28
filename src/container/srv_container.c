@@ -37,6 +37,7 @@
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/dtx_srv.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
