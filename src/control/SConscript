@@ -59,11 +59,9 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
     mod_src = join(gosrc, name, "main.go") # Module src
     install_src = get_install_src_dir(repopath, name)
     install_bin = get_install_bin_path(denv, install_name)
+    src = [mod_src]
     if libs is not None:
-        src = [mod_src]
         src.extend(libs)
-    else:
-        src = [mod_src]
     denv.Command(bin_path, src,
                  cmd_build(path, gosrc,
                            "go install %s" % install_src))
