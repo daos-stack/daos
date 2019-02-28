@@ -176,8 +176,12 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_discard)
 		goto delete;
 
-	/* Aggregate: preserve the first recx which has highest epoch */
-	if (agg_param->ap_max_epoch == 0) {
+	/*
+	 * Aggregate: preserve the first recx which has highest epoch, because
+	 * of re-probe, the highest epoch could be iterated multiple times.
+	 */
+	if (agg_param->ap_max_epoch == 0 ||
+	    agg_param->ap_max_epoch == entry->ie_epoch) {
 		agg_param->ap_max_epoch = entry->ie_epoch;
 		return 0;
 	}
@@ -256,7 +260,8 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	else
 		agg_param->ap_credits++;
 
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+	if (agg_param->ap_credits > agg_param->ap_credits_max ||
+	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
 		bio_yield();

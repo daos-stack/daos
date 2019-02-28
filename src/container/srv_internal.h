@@ -78,7 +78,7 @@ struct cont_svc {
 struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
-	rdb_path_t		c_attrs;	/* container attribute KVS */
+	rdb_path_t		c_prop;		/* container properties KVS */
 	rdb_path_t		c_lres;		/* LRE KVS */
 	rdb_path_t		c_lhes;		/* LHE KVS */
 	rdb_path_t		c_snaps;	/* Snapshots KVS */

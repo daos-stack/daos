@@ -38,7 +38,6 @@
 #include <daos/btree.h>
 #include <daos/dtx.h>
 #include <daos/tests_lib.h>
-#include <gurt/common.h>
 #include "utest_common.h"
 
 /**

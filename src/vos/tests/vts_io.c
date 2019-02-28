@@ -125,18 +125,6 @@ inc_cntr(unsigned long op_flags)
 	}
 }
 
-void
-inc_cntr_manual(unsigned long op_flags, struct vts_counter *cntrs)
-{
-	if (op_flags & (TF_OVERWRITE | TF_PUNCH)) {
-		cntrs->cn_punch++;
-	} else {
-		cntrs->cn_dkeys++;
-		if (op_flags & TF_FIXED_AKEY)
-			cntrs->cn_fa_dkeys++;
-	}
-}
-
 static daos_ofeat_t init_ofeats;
 static int init_num_keys = VTS_IO_KEYS;
 

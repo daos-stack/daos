@@ -42,9 +42,10 @@
 #include <byteswap.h>
 
 #include <daos/debug.h>
-#include <daos_types.h>
 #include <gurt/hash.h>
+#include <gurt/common.h>
 #include <cart/api.h>
+#include <daos_types.h>
 #include <daos/checksum.h>
 
 #define DF_OID		DF_U64"."DF_U64
@@ -349,6 +350,8 @@ enum {
 #define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
+
+#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

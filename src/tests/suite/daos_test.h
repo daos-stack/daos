@@ -63,6 +63,7 @@
 	} while  (0)
 
 #include <mpi.h>
+#include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>
@@ -190,7 +191,8 @@ int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool);
 int
-test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop);
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
+		     daos_prop_t *co_prop);
 
 static inline int
 async_enable(void **state)
