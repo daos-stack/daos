@@ -176,7 +176,7 @@ def get_function(self, function):
 
 # a corresponding hello_world Python API function is added
 def hello_world(self):
-    
+
     # retrieve new function from function table
     func = self.context.get_function('hello-world')
 
