@@ -23,6 +23,10 @@
 
 package main
 
+// #cgo CFLAGS: -I${SRCDIR}/../../include
+// #include <daos/drpc_modules.h>
+import "C"
+
 import (
 	"os"
 	"path/filepath"
@@ -86,11 +90,11 @@ type srvModule struct {
 	iosrv *iosrv
 }
 
-const srvModuleID = 2
+const srvModuleID = C.DRPC_MODULE_SRV
 
 // These are srvModule dRPC methods.
 const (
-	notifyReady = iota
+	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
 )
 
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
