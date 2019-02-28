@@ -356,7 +356,7 @@ server_init()
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
-		D_GOTO(exit_drpc_fini, rc);
+		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
