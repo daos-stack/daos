@@ -249,6 +249,8 @@ enum vos_krec_bf {
 	KREC_BF_EVT			= (1 << 0),
 	/* The key is punched at time kr_latest */
 	KREC_BF_PUNCHED			= (1 << 1),
+	/* The key has been (or will be) removed */
+	KREC_BF_REMOVED			= (1 << 2),
 };
 
 /**
