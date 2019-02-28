@@ -83,7 +83,7 @@ class DaosContext(object):
     Provides environment and other info for a DAOS client.
     """
     def __init__(self, path):
-        # init 
+        # init
         libdaos = ctypes.CDLL("/path/to/libdaos.so.0.0.2", mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL("/path/to/libdaos_common.so", mode=ctypes.RTLD_GLOBAL)
 
@@ -122,7 +122,7 @@ class MyTest(Test):
         creategid = os.getegid()
         createsetid = "daos_server" # group name
         createsize = 1000000000     # size of created pool
-        
+
         # create the actual DAOS storage pool
         self.pool.create(createmode, createuid, creategid, createsize,
                          createsetid, None)
