@@ -54,10 +54,16 @@ dummy_drpc_handler3(Drpc__Call *request, Drpc__Response **response)
 {
 }
 
+static void
+dummy_drpc_handler4(Drpc__Call *request, Drpc__Response **response)
+{
+}
+
 static drpc_handler_t handler_funcs[] = {
 		dummy_drpc_handler1,
 		dummy_drpc_handler2,
-		dummy_drpc_handler3
+		dummy_drpc_handler3,
+		dummy_drpc_handler4
 };
 
 /*
