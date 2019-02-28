@@ -356,6 +356,9 @@ def Default(*args):
     """Fake Default"""
     pass
 
+def Delete(*args, **kw):
+    """Fake Delete"""
+    return ["fake"]
 
 def AlwaysBuild(*args):
     """Fake AlwaysBuild"""

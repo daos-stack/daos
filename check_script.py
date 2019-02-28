@@ -71,7 +71,7 @@ class WrapScript(object):
             if match:
                 if not scons_header:
                     scons_header = True
-                    self.write_header(outfile)
+                    new_lineno += self.write_header(outfile)
                 variables = []
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
@@ -150,7 +150,7 @@ from SCons.Variables import *
         """Get the line number"""
         os.unlink("script")
         log_file.seek(0)
-        output = open("tmp2.log", "w")
+        output = tempfile.TemporaryFile()
         for line in log_file.readlines():
             match = re.search(r":(\d+):", line)
             if match:
@@ -165,8 +165,7 @@ from SCons.Variables import *
                                             fname,
                                             match.group(2))
             output.write(line)
-        output.close()
-        os.rename("tmp2.log", "tmp.log")
+        return output
 
 
 def parse_report(log_file):
@@ -264,7 +263,7 @@ def check_script(fname, *args, **kw):
         pass
 
     if wrap:
-        wrapper.fix_log(log_file, fname)
+        log_file = wrapper.fix_log(log_file, fname)
     error_count = parse_report(log_file)
     print ""
     return error_count
