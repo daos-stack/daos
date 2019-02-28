@@ -37,8 +37,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	secpb "github.com/daos-stack/daos/src/control/security/proto"
 	"github.com/daos-stack/daos/src/control/log"
+	secpb "github.com/daos-stack/daos/src/control/security/proto"
 )
 
 // ShowStorageCommand is the struct representing the command to list storage.
@@ -199,10 +199,7 @@ func main() {
 	srv.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.
-	if err = config.populateEnv(ioIdx, &srv.Env); err != nil {
-		log.Errorf("DAOS I/O env vars could not be populated: %s", err)
-		return
-	}
+	config.populateEnv(ioIdx, &srv.Env)
 
 	// I/O server should get a SIGKILL if this process dies.
 	srv.SysProcAttr = &syscall.SysProcAttr{

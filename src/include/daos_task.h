@@ -243,6 +243,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		poh;
 	const uuid_t		uuid;
+	daos_prop_t		*prop;
 } daos_cont_create_t;
 
 typedef struct {
@@ -266,6 +267,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		coh;
 	daos_cont_info_t	*info;
+	daos_prop_t		*prop;
 } daos_cont_query_t;
 
 typedef struct {
