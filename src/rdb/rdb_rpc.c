@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *p)
 	rc = crt_proc_uint16_t(proc, &p->da_shard);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->da_padding);
+	rc = crt_proc_uint32_t(proc, &p->da_flags);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_memcpy(proc, &p->da_buf, sizeof(p->da_buf));
