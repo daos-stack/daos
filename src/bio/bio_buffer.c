@@ -177,8 +177,6 @@ struct bio_desc *
 bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 {
 	struct bio_desc *biod;
-	int rc;
-
 	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
@@ -196,22 +194,9 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 		return NULL;
 	}
 
-	rc = ABT_mutex_create(&biod->bd_mutex);
-	if (rc != ABT_SUCCESS)
-		goto free_sgls;
-
-	rc = ABT_cond_create(&biod->bd_dma_done);
-	if (rc != ABT_SUCCESS)
-		goto free_mutex;
-
+	biod->bd_mutex = ABT_MUTEX_NULL;
+	biod->bd_dma_done = ABT_COND_NULL;
 	return biod;
-
-free_mutex:
-	ABT_mutex_free(&biod->bd_mutex);
-free_sgls:
-	D_FREE(biod->bd_sgls);
-	D_FREE(biod);
-	return NULL;
 }
 
 void
@@ -221,8 +206,10 @@ bio_iod_free(struct bio_desc *biod)
 
 	D_ASSERT(!biod->bd_buffer_prep);
 
-	ABT_cond_free(&biod->bd_dma_done);
-	ABT_mutex_free(&biod->bd_mutex);
+	if (biod->bd_dma_done != ABT_COND_NULL)
+		ABT_cond_free(&biod->bd_dma_done);
+	if (biod->bd_mutex != ABT_MUTEX_NULL)
+		ABT_mutex_free(&biod->bd_mutex);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
@@ -916,13 +903,29 @@ retry:
 	bdb = iod_dma_buf(biod);
 	bdb->bdb_active_iods++;
 
-	dma_rw(biod, true);
-	if (biod->bd_result) {
-		iod_release_buffer(biod);
-		dma_drop_iod(bdb);
+	rc = ABT_mutex_create(&biod->bd_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = -DER_NOMEM;
+		goto failed;
 	}
 
-	return biod->bd_result;
+	rc = ABT_cond_create(&biod->bd_dma_done);
+	if (rc != ABT_SUCCESS) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
+
+	dma_rw(biod, true);
+	if (biod->bd_result) {
+		rc = biod->bd_result;
+		goto failed;
+	}
+
+	return 0;
+failed:
+	iod_release_buffer(biod);
+	dma_drop_iod(bdb);
+	return rc;
 }
 
 int
