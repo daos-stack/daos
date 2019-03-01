@@ -821,6 +821,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	ctx = req->cr_ctx;
 	tgt_ep = &req->cr_ep;
 
+	*uri_exists = false;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 
 	rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
@@ -832,13 +833,8 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 		D_GOTO(out, rc);
 	}
 
-	if (base_addr == NULL) {
-		*uri_exists = false;
-		D_GOTO(out, rc);
-	}
-	*uri_exists = true;
 
-	if (rpc_priv->crp_hg_addr == NULL) {
+	if (base_addr != NULL && rpc_priv->crp_hg_addr == NULL) {
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
 			D_ERROR("crt_req_fill_tgt_uri failed, "
@@ -852,7 +848,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	 * Did it in crt_grp_attach(), in the case that this context created
 	 * later can insert it here.
 	 */
-	if (!grp_priv->gp_local) {
+	if (base_addr == NULL && !grp_priv->gp_local) {
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank &&
 		    tgt_ep->ep_tag == 0) {
@@ -862,6 +858,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 			if (uri == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
+			base_addr = uri;
 			rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
 						   tgt_ep->ep_rank, 0, uri);
 			if (rc != 0) {
@@ -882,6 +879,8 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	}
 
 out:
+	if (base_addr)
+		*uri_exists = true;
 	D_FREE(uri);
 	return rc;
 }
