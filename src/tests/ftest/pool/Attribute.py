@@ -152,6 +152,8 @@ class PoolAttributeTest(Test):
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
+        if value[0] is None:
+            self.cancel("skipping these tests until DAOS-2170 is fixed")
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
@@ -211,6 +213,8 @@ class PoolAttributeTest(Test):
         else:
             expected_for_param.append(name[1])
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
+        if value[0] is None:
+            self.cancel("skipping this test until DAOS-2170 is fixed")
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
