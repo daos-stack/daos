@@ -155,26 +155,29 @@ moment.
 
 A simple high level fuse plugin (dfuse) is implemented to test the DFS API and
 functionality with existing POSIX tests and benchmarks (IOR, mdtest, etc.). The
-DFS fuse exposes one mounpoint as a single DFS namespace with a single pool and
+DFS fuse exposes one mountpoint as a single DFS namespace with a single pool and
 container. To test dfuse, the following steps need to be done:
 
-1) Launch DAOS server(s):
+1. Launch DAOS server(s):
+
    orterun --mca mtl ^psm2,ofi --enable-recovery -np 1 --report-uri ~/uri.txt daos_server -c 8
 
-2) Create a DAOS Pool with dmg tool:
-   this will return a pool uuid "puuid" and service rank list "svcl"
+1. Create a DAOS Pool with dmg tool:  This will return a pool uuid "puuid" and service rank list "svcl"
 
-3) Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs_test
+1. Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs_test
 
-4) Mount dfuse with the following command:
-   orterun -np 1 --ompi-server file:~/uri.txt dfuse /tmp/dfs_test -s -f -p puuid -l svcl
+1. Mount dfuse with the following command:
+
+   orterun -np 1 --ompi-server file:~/uri.txt dfuse /tmp/dfs_test -s -f -p puuid -l svcl  
    -p specifies the pool uuid and -l specifies the service rank list (from dmg).
 
-5) Other arguments to dfuse:
-   -r: option to destroy the container associated with the namespace when you umount.
+1. Other arguments to dfuse:
+
+   -r: option to destroy the container associated with the namespace when you umount.  
    -d: prints debug messages at the fuse mount terminal
 
-6) Now /tmp/dfs_test can be used as a POSIX file system (can run things like IOR/mdtest on it)
+1. Now /tmp/dfs_test can be used as a POSIX file system (can run things like IOR/mdtest on it)
 
-7) when you are done, unmount the file system:
+1. when you are done, unmount the file system:
+
    fusermount -u /tmp/dfs_test
