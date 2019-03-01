@@ -925,7 +925,7 @@ struct daos_acl {
 	/** length of entries list in bytes */
 	uint32_t	dal_len;
 	/** table of variable-length Access Control Entries */
-	struct daos_ace	dal_ace[];
+	uint8_t		dal_ace[];
 };
 
 /**
