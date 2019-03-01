@@ -29,7 +29,6 @@ import json
 import threading
 import string
 import random
-import time
 from avocado       import Test
 
 sys.path.append('./util')
@@ -39,7 +38,7 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosContext, DaosPool, DaosApiError
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
