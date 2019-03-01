@@ -54,6 +54,7 @@ if [ -z "$*" ]; then
   done
   # the functional test code
   flist+=$(find src/tests/ftest/ -name \*.py)
+  flist+=$(find src/utils/py/ -name \*.py)
 else
   flist=$*
 fi
