@@ -41,7 +41,7 @@ This document contains the following sections:
 <a id="63"></a>
 ### In-Memory Storage
 
-The VOS is designed to use a persistent-memory storage model that takes advantage of byte-granular, sub-√√µsecond storage access possible with new NVRAM technology.
+The VOS is designed to use a persistent-memory storage model that takes advantage of byte-granular, sub-microsecond storage access possible with new NVRAM technology.
 This enables a disruptive change in performance compared to conventional storage systems for application and system metadata, and small, fragmented and misaligned I/O.
 Direct access to byte-addressable low-latency storage opens up new horizons where metadata can be scanned in less than a second without bothering with seek time and alignment.
 
@@ -95,11 +95,11 @@ For example, if two application processes agree how to resolve a conflict on a g
 
 The VOS also allows all object updates associated with a given epoch and process group to be discarded.
 This functionality ensures that when a DAOS transaction must be aborted, all associated updates are discarded before the epoch is committed for that process group and becomes immutable.
-This ensures that distributed updates are atomic ‚ i.e.
+This ensures that distributed updates are atomic - i.e.
 when a commit completes, either all updates have been applied or been discarded.
 
 Finally, the VOS may aggregate the epoch history of objects in order to reclaim space used by inaccessible data and to speed access by simplifying indices.
-For example, when an array object is ‚punched‚ from 0 to infinity in a given epoch, all data updated after the latest snapshot before this epoch, becomes inaccessible once the container is closed.
+For example, when an array object is "punched" from 0 to infinity in a given epoch, all data updated after the latest snapshot before this epoch, becomes inaccessible once the container is closed.
 
 Internally, the VOS maintains an index of container UUIDs that references each container stored in a particular pool.
 The container itself contains three indices.
@@ -109,10 +109,10 @@ The third index maps container handle cookies, which identify updates from a pro
 The container handle cookie is used for identifying object IOs associated with a process group and primarily would be used for aborting a transaction associated with a process group from DAOS-M.
 
 The <a href="#7a">figure</a> below shows interactions between the different indexes used inside a VOS pool.
-VOS objects are not created explicitly, but are created on first write by creating the object metadata and inserting a reference to it in the owning container‚s object index.
+VOS objects are not created explicitly, but are created on first write by creating the object metadata and inserting a reference to it in the owning container's object index.
 All object updates log the data for each update, which may be a new key value, an array extent or a multilevel KV object.
-References to these updates are inserted into the object metadata index, the container‚s epoch index and also the container cookie index.
-Note that ‚punch‚ of an extent of an array object and of a key in a key value object are also logged as zeroed extents and negative entries respectively, rather than causing relevant array extents or key values to be discarded.
+References to these updates are inserted into the object metadata index, the container's epoch index and also the container cookie index.
+Note that "punch" of an extent of an array object and of a key in a key value object are also logged as zeroed extents and negative entries respectively, rather than causing relevant array extents or key values to be discarded.
 This ensures that the full version history of objects remain accessible.
 
 <a id="7a"></a>
@@ -120,15 +120,15 @@ This ensures that the full version history of objects remain accessible.
 
 When performing lookup on a KV object, the object index is traversed to find the index node with the highest epoch number less than or equal to the requested epoch (near-epoch) that matches the key.
 If a value or negative entry is found, it is returned.
-Otherwise a ‚miss" is returned meaning that this key has never been updated in this VOS.
+Otherwise a "miss" is returned meaning that this key has never been updated in this VOS.
 This ensures that the most recent value in the epoch history of the KV is returned irrespective of the time-order in which they were integrated, and that all updates after the requested epoch are ignored.
 
 Similarly, when reading an array object, its index is traversed to create a gather descriptor that collects all object extent fragments in the requested extent with the highest epoch number less than or equal to the requested epoch.
-Entries in the gather descriptor either reference an extent containing data, a punched extent that the requestor can interpret as all zeroes, or a ‚miss‚, meaning that this VOS has received no updates in this extent.
+Entries in the gather descriptor either reference an extent containing data, a punched extent that the requestor can interpret as all zeroes, or a "miss", meaning that this VOS has received no updates in this extent.
  Again, this ensures that the most recent data in the epoch history of the array is returned for all offsets in the requested extent, irrespective of the time-order in which they were written, and that all updates after the requested epoch are ignored.
 
-A ‚miss‚ is distinct from a punched extent in an array object or a punched KV entry in a KV to support storage tiering at higher layers in the stack.
-This allows the VOS to be used as a cache since it indicates that the VOS has no history at this extent or key, and therefore data must be obtained from the cache‚s backing storage tier.
+A "miss" is distinct from a punched extent in an array object or a punched KV entry in a KV to support storage tiering at higher layers in the stack.
+This allows the VOS to be used as a cache since it indicates that the VOS has no history at this extent or key, and therefore data must be obtained from the cache's backing storage tier.
 
 <a id="711"></a>
 
@@ -196,7 +196,7 @@ KV objects must also be able to support any type and size of keys and values.
 VOS supports large keys and values with four types of operations namely, update, lookup, punch, and key enumeration.
 
 The update and punch operations add a new key to a KV store or log a new value of an existing key.
-Punch logs the special value ‚punched‚ ‚ effectively a negative entry ‚ to record the epoch when the key was deleted.
+Punch logs the special value "punched", effectively a negative entry, to record the epoch when the key was deleted.
 In case that punch(es) and/or update(s) share the same epoch, behavior is decided based on the request from upper layer, typically DAOS-SR.
 DAOS-SR can differentiate behavior on overwrites depending on the type of replication.
 In case of client side replication to avoid conflicting writes from multiple client SR can request VOS to throw an error, and in case of server side replication, where conflicting updates are serialized, SR can request VOS to allow overwrites.
@@ -210,12 +210,12 @@ VOS would return an error when two cookies associated with subsequent update and
 Multiple punch on the same epoch would result in success in all cases other than the case when the cookies for the punch operations on the same epoch are different.
 
 Lookup traverses the KV metadata to determine the state of the given key at the given epoch.
-If the key is not found at all, a ‚miss‚ is returned to indicate that the key is absent from this VOS.
+If the key is not found at all, a "miss" is returned to indicate that the key is absent from this VOS.
 Otherwise the value at the near-epoch or greatest epoch less than or equal to the requested epoch is returned.
-If this is the special ‚punched‚ value, it means the key was deleted in the requested epoch.
+If this is the special "punched" value, it means the key was deleted in the requested epoch.
 The value here refers to the value in the internal tree-data structure.
 The key-value record of the KV-object is stored in the tree as value of its node.
-So in case of punch this value contains a ‚special‚ return code/flag to identify the punch operation.
+So in case of punch this value contains a "special" return code/flag to identify the punch operation.
 
 VOS also supports enumeration of keys belonging to a particular epoch.
 VOS uses iterators that can iterate through the KV store in listing all the keys and their associated values to support this enumeration.
@@ -229,7 +229,7 @@ VOS KV supports key sizes from small keys to extremely large keys.
 To provide this level of flexibility VOS hashes the keys with an assumption that with a fast and consistent hash function one can get the same hash-value for the same key.
 This way the actual key is stored once along with the value, and the hash-value of the key is used in the index structure.
 A lightweight hash function like xxHash  MurMur64  can be used.
-To verify hash collisions, the ‚actual key‚ in the KV store must be compared with the ‚actual key‚ being inserted or searched, once the node is located.
+To verify hash collisions, the "actual key" in the KV store must be compared with the "actual key" being inserted or searched, once the node is located.
 Although with a good hash function collision is a remote chance, comparison of keys is required for correctness.
 But the approach of hashing keys still avoids having to compare every huge key in the search path, which would save lot of CPU cycles especially during lookups.
 
@@ -306,7 +306,7 @@ In the <a href="#7e">table</a> below, n is number of entries in tree, m is the n
 |Update|O(log2n)|O(log<sub>b</sub>n)|
 |Lookup|O(log2n)|O(log<sub>b</sub>n)|
 |Delete|O(log2n)|O(log<sub>b</sub>n)|
-|Enumeration|√∏(m* log<sub>2</sub>(n) + log<sub>2</sub>(n))|O(m * k + log<sub>b</sub> (n))|
+|Enumeration|O(m* log<sub>2</sub>(n) + log<sub>2</sub>(n))|O(m * k + log<sub>b</sub> (n))|
 
 Although both these solutions are viable implementations, determining the ideal data structure would depend on the performance of these data structures on persistent memory hardware.
 
@@ -319,13 +319,13 @@ VOS supports enumerating keys valid in a given epoch.
 VOS provides an iterator-based approach, to extract all the keys and values from a KV object.
 Primarily, KV indexes are ordered by keys and then by epochs.
 With each key holding a long history of updates, the size of a tree can be huge.
-Enumeration with a tree-successors approach can result in an asymptotic complexity of √®(m* log (n) + log (n)) with red-black trees, where m is the number of keys valid in the requested epoch.
+Enumeration with a tree-successors approach can result in an asymptotic complexity of O(m* log (n) + log (n)) with red-black trees, where m is the number of keys valid in the requested epoch.
 It takes O(log2 (n)) to locate the first element in the tree and O(log2 (n)) to locate a successor.
-Because ‚m‚ keys need to be retrieved, O( m * log2 (n)) would be the complexity of this enumeration.
+Because "m" keys need to be retrieved, O( m * log2 (n)) would be the complexity of this enumeration.
 
 In the case of B+-trees, leaf nodes are in ascending order, and enumeration would be to parse the leaf nodes directly.
 The complexity would be O (m * k + logbn), where m is the number of keys valid in an epoch, k is the number of entries between two different keys in B+ tree leaf nodes, and b is the order for the B+tree.
-Having ‚k‚ epoch entries between two distinct keys incurs in a complexity of O(m * k).
+Having "k" epoch entries between two distinct keys incurs in a complexity of O(m * k).
 The additional O(logbn) is required to locate first leftmost key in the tree.
 The generic iterator interfaces as shown in <a href="#7d">Figure</a> above would be used for KV enumeration also.
 
@@ -363,12 +363,12 @@ VOS byte-array objects also support punch over both partial and complete extent 
 
 |Extent Range|Epoch |Write (or) Punch|
 |---|---|---|
-|0 ‚ 100|1|Write|
+|0 - 100|1|Write|
 |300 - 400|2|Write
-|400 ‚ 500|3|Write|
-|30 ‚ 60|10|Punch|
-|500 ‚ 600|8|Write|
-|600 ‚ 700|9|Write|
+|400 - 500|3|Write|
+|30 - 60|10|Punch|
+|500 - 600|8|Write|
+|600 - 700|9|Write|
 
 Similar to KV stores using a tree-based data structure, construction of an index structure to hold byte-array objects is possible, wherein the primary difference would be to use the extent range as the key for the byte-array index tree and the value would be the buffer containing the data for that extent range.
 
@@ -381,7 +381,7 @@ This helps to keep track of multi-version writes to unique extent ranges.
 In other words, splitting nodes during overlap on updates guarantees that, an extent range in a node does not overlap with any other node in the index tree with the same epoch-validity range.
 
 Since the tree is first ordered with extent-index and followed by epochs, all epoch-validity ranges of a specific extent-index falls in the same subtree.
-The <a href="#7h">Figure</a> below (b) shows that epoch validity ranges of extent range {30 ‚ 60} are in the same subtree.
+The <a href="#7h">Figure</a> below (b) shows that epoch validity ranges of extent range {30 - 60} are in the same subtree.
 
 Reads to an extent range modified in an epoch can be located directly by comparing the start and end index of the byte-array record requested.
 When encountered with an overlap of matching extent and epoch validity range, VOS updates the buffer from the client with the associated data.
@@ -425,7 +425,7 @@ By limiting the splitting to scenarios where incoming requests partially overwri
 This optimization can potentially simplify inserting extent ranges.
 But with this approach, all extents will not be unique and additional augmenting (with upper bound extent interval, upper bound and lower bound epoch interval value) similar to those used in interval trees might be needed to determine the fastest search path in the tree to locate an extent range.
 Search path in such a tree must be determined not-only based on the start offset but also the end offset, start epoch and end epoch.
-the figure <a href="#7j">below</a> shows an augmented version of the tree in the previous<a href="#7i"> Figure</a>(b), with an additional write at {0 ‚ 100} at epoch 12.
+the figure <a href="#7j">below</a> shows an augmented version of the tree in the previous<a href="#7i"> Figure</a>(b), with an additional write at {0 - 100} at epoch 12.
 Because the augmented values in subtrees are based on max values of end offsets, end epochs and min value of start epochs of all nodes in a subtree.
 The augmented values must be propagated up the tree, on every insert and delete.
 The additional metadata at each node creates a bounding box representation with {start-offset, end-offset, min-epoch, max-epoch} representing a rectangle.
@@ -457,7 +457,7 @@ The root node contains at least two slots unless the root is a leaf node.
 
 ![../../doc/graph/Fig_016.png](../../doc/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
-The figure <a href="7l">below</a> shows the rectangles constructed with splitting and trimming operations of EV-Tree for the example in the previous <a href="#7g">table</a> with an additional write at offset {0 ‚ 100} introduced to consider the case for extensive splitting.
+The figure <a href="7l">below</a> shows the rectangles constructed with splitting and trimming operations of EV-Tree for the example in the previous <a href="#7g">table</a> with an additional write at offset {0 - 100} introduced to consider the case for extensive splitting.
 The figure <a href="#7k">above</a> shows the EV-Tree construction for the same example.
 Although it looks similar to R-Tree, unlike R-Trees, EV-Trees makes sure there are no overlapping rectangles in the leaves.
 This is important to identify unique extents at different epochs and search for extents valid at near-epochs.
@@ -472,7 +472,7 @@ Splitting and trimming of rectangles in EV-trees occur only when there is an ove
 If the extent ranges are completely overwritten in the same epoch, the associated data/value of the extent range is replaced or an error is returned.
 The behavior is determined by request from upper layer like in KV store discussed in the previous section (<a href="#721">Operations Supported with Key Value Stores</a>.
 In scenarios where extent ranges get completely overwritten at a later epoch, updating the epoch validity of the rectangle at the earlier epoch would suffice.
-The algorithm splits rectangles only when a part of an extent range in an earlier epoch is overwritten in a later epoch, where only updating validity wouldn‚t suffice.
+The algorithm splits rectangles only when a part of an extent range in an earlier epoch is overwritten in a later epoch, where only updating validity wouldn't suffice.
 
 <a id="7m"></a>
 
@@ -502,7 +502,7 @@ Each internal node of the EV-Tree like an R-tree has as many slots as the order 
 An internal node/slot is added when the number of slots in the leaf node overflows.
 At this point, the choice of the leaf-node split algorithm is important to ensure there is less overlap between bounding boxes.
 The EV-tree constructed uses a quadratic split to construct the necessary bounding boxes.
-The quadratic algorithm finds the distance between two rectangles by calculating the area of individual rectangles and subtracting them from the area of the bounding box, i.e., d = area (bounding box) ‚ area (rect1) ‚ area (rect2).
+The quadratic algorithm finds the distance between two rectangles by calculating the area of individual rectangles and subtracting them from the area of the bounding box, i.e., d = area (bounding box) = area (rect1) - area (rect2).
 The rectangles with the largest distance value are kept in two different nodes, the other rectangles are placed in the bounding box with the least enlargement, ties are resolved by choosing the box with least area, and if there is still a tie, any box is chosen.
 This is just one approach to split overflowing leaf-nodes.
 There is a lot of research available on improving this aspect of R-Trees.
@@ -523,7 +523,7 @@ Since extent ranges can span across multiple rectangles, a single search can hit
 In an ideal case (where the entire extent range falls on one rectangle) the read cost is O(log<sub>b</sub>n) where b is the order of the tree.
 In case that reads can span across multiple rectangles, the read cost would be O(m * (log<sub>b</sub>n)) where m is the number of overlapping rectangles.
 
-EV-Trees guarantee that the leaves don‚t overlap, but the bounding boxes themselves can overlap when the leaf-node split algorithm is not capable of avoiding this overlap.
+EV-Trees guarantee that the leaves don't overlap, but the bounding boxes themselves can overlap when the leaf-node split algorithm is not capable of avoiding this overlap.
 During such a construction of the EV-Tree, reads falling between borders of overlapping bounding boxes might end up searching all the overlapping bounding boxes.
 In theory, this can have a worst case complexity of O(n).
 But this would be a remote case, which would mean that the heuristic for splitting leaf-node is weak and needs to be modified.
@@ -579,7 +579,7 @@ To rollback history VOS provides the discard operation.
 Aggregate and discard operations in VOS accept a range of epochs to be aggregated or discarded.
 Discard accepts an additional container handle cookie parameter.
 The cookie identifies the container handle for a process group which facilitates to limit discard to a particular process group.
- For example, a discard operation for all epochs in range [10, 15] with a cookie ‚c‚, would discard object ID records associated with the cookie ‚c‚, modified in epochs 10,11,12,13,14,15.
+ For example, a discard operation for all epochs in range [10, 15] with a cookie "c", would discard object ID records associated with the cookie "c", modified in epochs 10,11,12,13,14,15.
 The aggregate operation is carried out with the help of the epoch index present in the VOS, while discard uses the cookie index table.
 
 <a id="751"></a>
@@ -744,7 +744,7 @@ Layouts of object table and epoch table are similar to the container index table
 Each object table entry would have the object id, PMEM pointer to the tree based index structure (either rb-tree/b+-tree).
 
 An epoch-table entry would be comprised of the epoch number and its respective key.
-Key in the epoch-table is generic and can take the type as byte-array extents or KV keys, and has been left as a ‚void\*‚ persistent memory pointer for that reason.
+Key in the epoch-table is generic and can take the type as byte-array extents or KV keys, and has been left as a void\* persistent memory pointer for that reason.
 The following code in the previous<a href="#7w">Figure</a> represents the layout for B+ Tree in PMDK.
 A similar construction would be necessary for the container handle cookie index table.
 The code in previous<a href="#7w">Figure</a> presents a layout definition for VOS over PMDK.
@@ -845,7 +845,7 @@ There are two possible directions being considered to address this problem.
 The PMDK team has proposed one solution, in which every thread has its own copy of the tree that, which would be kept in-sync with the help of an insert-only, lock-free, singly-linked list, to which all memory ranges (only offset and size) are appended.
 
 A second approach is to use copy-on-write, where writes do not change existing nodes, but rather create a new node at a new location for providing updates.
-Once the update is successful, the tree‚s pointers point to the new node, rather than the old node, and reclaim space by freeing old nodes.
+Once the update is successful, the tree's pointers point to the new node, rather than the old node, and reclaim space by freeing old nodes.
 The primary benefit of this approach is that updates happen at a separate location without touching the original tree structure.
 This facilitates discarding all the latest updates to the tree without causing persistent memory leaks.
 In this case, discarding updates on failure would mean simply discarding all allocated objects for the new updates, as there was no modification to existing data.
@@ -874,7 +874,7 @@ If reads in byte-arrays spans over multiple extent ranges, VOS would have to rec
 In case if a read requests a partial byte array extent of an existing extent range, VOS would compute the checksum of the existing extent to verify correctness and then return the requested extent range to the client with its computed checksum.
 When byte array extents are aggregated, VOS individually re-computes checksum of all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
 
-Because checksum computation involves multiple layers of stack to be in-sync, VOS plans to leverage and extend either the mchecksum  library or the Intel Storage acceleration library  (https://01.org/intel√Æ-storage-acceleration-library-open-source-version).
+Because checksum computation involves multiple layers of stack to be in-sync, VOS plans to leverage and extend either the mchecksum  library or the Intel Storage acceleration library  (https://01.org/intel&#174;-storage-acceleration-library-open-source-version ).
 
 <a id="80"></a>
 
@@ -888,7 +888,7 @@ The numbers presented provide approximations rather than modeling or quantifying
 
 **Assumptions:**
 
-B+-tree with a tree order ‚8‚ is used  for implementing the KV object and all the index tables in a VOS pool.
+B+-tree with a tree order "8" is used  for implementing the KV object and all the index tables in a VOS pool.
 Let us assume that:
 <ol>
 <li>each node header consumes, 32 bytes</li>
@@ -915,8 +915,8 @@ Creating tree root would be an one time cost.</li>
 <li>tree root to hold (order, depth, class, feature) would consume 40bytes.
 Creating tree root would be an one time cost.
 <ol>
-  <li>(btr_record_metadata + key_count + depth) * 2 * (1 + 1/8 + 1/64 + ‚¶)</li>
-  <li>(64 + 2) * 2 * (1 + 1/8 + 1/64 + ‚¶) = ~151bytes</li>
+  <li>(btr_record_metadata + key_count + depth) * 2 * (1 + 1/8 + 1/64 + ...)</li>
+  <li>(64 + 2) * 2 * (1 + 1/8 + 1/64 + ...) = ~151bytes</li>
   <li>Since the order assumed is 8, the 1/8 refers to the point that 1 parent record points to 8 leaf records and so on until root.</li>
   </ol>
 <li>Metadata initial setup cost for creating one record in a KV including all indexes associated.
