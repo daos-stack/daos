@@ -915,7 +915,7 @@ struct daos_ace {
  * Header for the Access Control List, followed by the table of variable-length
  * Access Control Entries.
  * The entry list may be walked by inspecting the principal length and
- * calculating the entry's
+ * calculating the entry's overall length from that.
  */
 struct daos_acl {
 	/** Version of the table format */
@@ -924,7 +924,7 @@ struct daos_acl {
 	uint16_t	dal_reserv;
 	/** length of entries list in bytes */
 	uint32_t	dal_len;
-	/** table of variable-length Access Control Entries */
+	/** table of variable-length Access Control Entries (struct daos_ace) */
 	uint8_t		dal_ace[];
 };
 
