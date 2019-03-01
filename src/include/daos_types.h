@@ -814,14 +814,6 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
-	/**
-	 * User that owns the pool
-	 */
-	DAOS_PROP_PO_OWNER,
-	/**
-	 * Pool's assigned group
-	 */
-	DAOS_PROP_PO_GROUP,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -976,10 +968,6 @@ enum daos_cont_prop_type {
 	DAOS_PROP_CO_COMPRESS,
 	/** Encryption on/off + encryption type */
 	DAOS_PROP_CO_ENCRYPT,
-	/** User who owns the container */
-	DAOS_PROP_CO_OWNER,
-	/** Container's assigned group */
-	DAOS_PROP_CO_GROUP,
 	DAOS_PROP_CO_MAX,
 };
 
