@@ -414,7 +414,7 @@ pool_properties(void **state)
 	prop->dpp_entries[1].dpe_val = space_rb;
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, prop);
+		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
 	assert_int_equal(rc, 0);
 
 	prop_query = daos_prop_alloc(0);

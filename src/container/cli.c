@@ -166,6 +166,7 @@ dc_cont_create(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_op.ci_uuid, args->uuid);
+	in->cci_prop = args->prop;
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -743,6 +744,7 @@ struct cont_query_args {
 	struct dc_pool		*cqa_pool;
 	struct dc_cont		*cqa_cont;
 	daos_cont_info_t	*cqa_info;
+	daos_prop_t		*cqa_prop;
 	crt_rpc_t		*rpc;
 	daos_handle_t		hdl;
 };
@@ -769,6 +771,9 @@ cont_query_complete(tse_task_t *task, void *data)
 	}
 
 	rc = out->cqo_op.co_rc;
+	if (rc == 0 && arg->cqa_prop != NULL)
+		rc = daos_prop_copy(arg->cqa_prop, out->cqo_prop);
+
 	if (rc != 0) {
 		D_DEBUG(DF_DSMC, DF_CONT": failed to query container: %d\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
@@ -796,6 +801,57 @@ out:
 	return rc;
 }
 
+static uint64_t
+cont_query_bits(daos_prop_t *prop)
+{
+	uint64_t		 bits = 0;
+	int			 i;
+
+	if (prop == NULL)
+		return 0;
+	if (prop->dpp_entries == NULL)
+		return DAOS_CO_QUERY_PROP_ALL;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_prop_entry	*entry;
+
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			bits |= DAOS_CO_QUERY_PROP_LABEL;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+			bits |= DAOS_CO_QUERY_PROP_LAYOUT_TYPE;
+			break;
+		case DAOS_PROP_CO_LAYOUT_VER:
+			bits |= DAOS_CO_QUERY_PROP_LAYOUT_VER;
+			break;
+		case DAOS_PROP_CO_CSUM:
+			bits |= DAOS_CO_QUERY_PROP_CSUM;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
+			break;
+		case DAOS_PROP_CO_REDUN_LVL:
+			bits |= DAOS_CO_QUERY_PROP_REDUN_LVL;
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+			bits |= DAOS_CO_QUERY_PROP_SNAPSHOT_MAX;
+			break;
+		case DAOS_PROP_CO_COMPRESS:
+			bits |= DAOS_CO_QUERY_PROP_COMPRESS;
+			break;
+		case DAOS_PROP_CO_ENCRYPT:
+			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
+			break;
+		default:
+			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+	return bits;
+}
+
 int
 dc_cont_query(tse_task_t *task)
 {
@@ -810,9 +866,6 @@ dc_cont_query(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
-
-	if (args->info == NULL)
-		D_GOTO(err, rc = -DER_INVAL);
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -839,10 +892,12 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
+	in->cqi_bits = cont_query_bits(args->prop);
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
 	arg.cqa_info = args->info;
+	arg.cqa_prop = args->prop;
 	arg.rpc	     = rpc;
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
@@ -862,7 +917,7 @@ err_cont:
 	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "Failed to open container: %d\n", rc);
+	D_DEBUG(DF_DSMC, "Failed to query container: %d\n", rc);
 	return rc;
 }
 
