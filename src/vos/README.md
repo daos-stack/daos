@@ -46,7 +46,7 @@ This enables a disruptive change in performance compared to conventional storage
 Direct access to byte-addressable low-latency storage opens up new horizons where metadata can be scanned in less than a second without bothering with seek time and alignment.
 
 The VOS relies on a log-based architecture using persistent memory primarily to maintain internal persistent metadata indexes.
-The actual data can be stored either in persistent memory directly or in block-based storage (via SPDK  for instance).
+The actual data can be stored either in persistent memory directly or in block-based storage (via SPDK for instance).
 The DAOS service has two tiers of storage: Storage Class Memory (SCM) for byte-granular application data and metadata, and NVMe for bulk application data.
 Similar to how PMDK is currently used to faciliate access to SCM, the Storage Performance Development Kit (SPDK) is used to provide seamless and efficient access to NVMe SSDs.
 The current DAOS storage model involves three DAOS server xstreams per core, along with one main DAOS server xstream per core mapped to an NVMe SSD device.
@@ -62,7 +62,7 @@ The VOS provides a lightweight I/O stack fully in user space, leveraging the NVM
 
 ### Lightweight I/O Stack: NVM Library
 
-NVML  is an open source collection of libraries for using persistent memory, optimized specifically for NVRAM.
+NVML is an open source collection of libraries for using persistent memory, optimized specifically for NVRAM.
 NVML is actually a collection of six libraries among which the libpmemobj library implements relocatable persistent heaps called NVML pools.
 This includes memory allocation, transactions, and general facilities for persistent memory programming.
 Locks can be embedded with PM-resident data structures, which are reinitialized (i.e.
@@ -125,7 +125,7 @@ This ensures that the most recent value in the epoch history of the KV is return
 
 Similarly, when reading an array object, its index is traversed to create a gather descriptor that collects all object extent fragments in the requested extent with the highest epoch number less than or equal to the requested epoch.
 Entries in the gather descriptor either reference an extent containing data, a punched extent that the requestor can interpret as all zeroes, or a "miss", meaning that this VOS has received no updates in this extent.
- Again, this ensures that the most recent data in the epoch history of the array is returned for all offsets in the requested extent, irrespective of the time-order in which they were written, and that all updates after the requested epoch are ignored.
+Again, this ensures that the most recent data in the epoch history of the array is returned for all offsets in the requested extent, irrespective of the time-order in which they were written, and that all updates after the requested epoch are ignored.
 
 A "miss" is distinct from a punched extent in an array object or a punched KV entry in a KV to support storage tiering at higher layers in the stack.
 This allows the VOS to be used as a cache since it indicates that the VOS has no history at this extent or key, and therefore data must be obtained from the cache's backing storage tier.
@@ -183,7 +183,7 @@ Key Value (KV) stores can play a vital role in simplifying storage of such compl
 VOS provides a multi-version, concurrent KV store on persistent memory that can grow dynamically and provide quick near-epoch retrieval and enumeration of key values.
 
 Although there is an array of previous work on KV stores, most of them focus on cloud environments and do not provide effective versioning support.
-Some KV stores ,  provide versioning support, but expect monotonically increasing ordering of versions  and further, do not have the concept of near-epoch retrieval.
+Some KV stores , provide versioning support, but expect monotonically increasing ordering of versions and further, do not have the concept of near-epoch retrieval.
 
 VOS must be able to accept insertion of KV pairs at any epoch, and must be able to provide good scalability for concurrent updates and lookups on any key-value object.
 KV objects must also be able to support any type and size of keys and values.
@@ -228,7 +228,7 @@ VOS uses iterators that can iterate through the KV store in listing all the keys
 VOS KV supports key sizes from small keys to extremely large keys.
 To provide this level of flexibility VOS hashes the keys with an assumption that with a fast and consistent hash function one can get the same hash-value for the same key.
 This way the actual key is stored once along with the value, and the hash-value of the key is used in the index structure.
-A lightweight hash function like xxHash  MurMur64  can be used.
+A lightweight hash function like xxHash MurMur64 can be used.
 To verify hash collisions, the "actual key" in the KV store must be compared with the "actual key" being inserted or searched, once the node is located.
 Although with a good hash function collision is a remote chance, comparison of keys is required for correctness.
 But the approach of hashing keys still avoids having to compare every huge key in the search path, which would save lot of CPU cycles especially during lookups.
@@ -449,7 +449,7 @@ Leaf nodes are an array of leaf slots at the same level, each representing one r
 The value resides in leaf-nodes alone similar to B+ trees.
 Non-leaf nodes (or) internal nodes represent bounding box of each leaf-node or an internal node with a pointer pointing to the appropriate node.
 The root node contains at least two slots unless the root is a leaf node.
- In-addition to operations inherited from R-trees, EV-Trees support two additional operations, namely, splitting and trimming of rectangles to eliminate overlapping rectangles at leaves.
+In-addition to operations inherited from R-trees, EV-Trees support two additional operations, namely, splitting and trimming of rectangles to eliminate overlapping rectangles at leaves.
 
 <a id="7k"></a>
 
@@ -493,7 +493,7 @@ Since at anytime a rectangle is added its bound at epoch infinity (264), two rec
 Although splitting creates new rectangles, these are created primarily to record unique extent ranges at unique epoch ranges.
 Also, splitting rectangles does not fragment the associated data/value buffer.
 A reference counter can be maintained in order to track deleted rectangles associated with a value buffer.
- Trimming allows an EV-Tree to keep the epoch-validity ranges of the different extent ranges updated, and does not create additional node slots.
+Trimming allows an EV-Tree to keep the epoch-validity ranges of the different extent ranges updated, and does not create additional node slots.
 The split operation is commutative, (i.e.), irrespective of the order in which the rectangles arrive, the resultant set of split rectangles would remain the same.
 This is important because VOS data structures are expected to be updated by multiple threads in random order.
 
@@ -506,7 +506,7 @@ The quadratic algorithm finds the distance between two rectangles by calculating
 The rectangles with the largest distance value are kept in two different nodes, the other rectangles are placed in the bounding box with the least enlargement, ties are resolved by choosing the box with least area, and if there is still a tie, any box is chosen.
 This is just one approach to split overflowing leaf-nodes.
 There is a lot of research available on improving this aspect of R-Trees.
-Linear split  and splitting based on Hilbert curves  are some of the other options available.
+Linear split and splitting based on Hilbert curves are some of the other options available.
 The methodology of splitting leaf-nodes is a heuristic and can be adapted, based on how the use cases fair with this data structure.
 
 Inserts in an EV-Tree locate the appropriate leaf-node to insert, by checking for overlap.
@@ -549,10 +549,10 @@ Depending on the type of value, a B+ tree for atomic value or an EV-tree for a b
 
 <a id="7o"></a>
 
-<b>Layers of a  Document store.
+<b>Layers of a Document store.
 Value of Key Tree form separate atomic/partial value trees</b>
 
-![../../doc/graph/Fig_020.png](../../doc/graph/Fig_020.png "Layers of a  Document store.
+![../../doc/graph/Fig_020.png](../../doc/graph/Fig_020.png "Layers of a Document store.
 Value of Key Tree form separate atomic/partial value trees")
 
 A simple construction of a document store design is shown in the Figure above.
@@ -579,7 +579,7 @@ To rollback history VOS provides the discard operation.
 Aggregate and discard operations in VOS accept a range of epochs to be aggregated or discarded.
 Discard accepts an additional container handle cookie parameter.
 The cookie identifies the container handle for a process group which facilitates to limit discard to a particular process group.
- For example, a discard operation for all epochs in range [10, 15] with a cookie "c", would discard object ID records associated with the cookie "c", modified in epochs 10,11,12,13,14,15.
+For example, a discard operation for all epochs in range [10, 15] with a cookie "c", would discard object ID records associated with the cookie "c", modified in epochs 10,11,12,13,14,15.
 The aggregate operation is carried out with the help of the epoch index present in the VOS, while discard uses the cookie index table.
 
 <a id="751"></a>
@@ -653,7 +653,7 @@ The library as shown in the <a href="#7q">figure</a> below resides in user space
 
 ![../../doc/graph/Fig_022.png](../../doc/graph/Fig_022.png "Architecture of PMDK on persistent memory using a PM-Aware File System")
 
-PMDK builds on the Direct Access (DAX)  changes in Linux.
+PMDK builds on the Direct Access (DAX) changes in Linux.
 PMDK offers a collection of libraries amongst which libpmemobj, which offers transaction based persistent memory, handling is the one discussed in this section.
 Typically a DAX device is mounted on a ext4 file system.
 Libpmemobj provides API to memory-map a persistent memory file to get direct access from the DAX file system.
@@ -683,7 +683,7 @@ Although PMDK provides a way for accessing persistent memory pointers as void\*,
 PMDK addresses this issue with the help of named unions and macros as shown in Figure 6.16.
 PMDK also provides additional macros D_RW and D_RO to convert typed PMEMoid pointers to direct pointers of their associated types, which are equivalents of using pmemobj_direct on the oids and converting the resultant void* pointers to their respective types.
 
-The code in the <a href="#7s">figures</a> below show the  TOID macros for defining typed pointers in PMDK and the internal representation of List entry macros in PMDK.
+The code in the <a href="#7s">figures</a> below show the TOID macros for defining typed pointers in PMDK and the internal representation of List entry macros in PMDK.
 The PMEMmutex lock provides a pmem-aware lock that is similar to traditional pthread locks, with an additional property of auto re-initialization right after pool open, regardless of the state of lock at pool close.
 The root object in PMDK is created with the pmemobj_root() API or the macro POBJ_ROOT to return a typed pointer.
 The root object for VOS created with PMDK pointers is shown in the first <a href="#7s">example</a>.
@@ -752,7 +752,7 @@ The code in previous<a href="#7w">Figure</a> presents a layout definition for VO
 In addition to providing persistent memory friendly definitions for all the data structures required to maintain metadata in the VOS pool, PMDK requires a clearly defined layout for the PMDK pool.
 PMDK provides run-time and compile-time safety with specially-defined macros.
 previous<a href="#7x">Figure</a> shows layout definition for VOS.
-Both POBJ_LAYOUT_ROOT and POBJ_LAYOUT_TOID perform a TOID_DECLARE as show in  with an additional type_id argument.
+Both POBJ_LAYOUT_ROOT and POBJ_LAYOUT_TOID perform a TOID_DECLARE as show in with an additional type_id argument.
 
 POBJ_LAYOUT_BEGIN starts a counter to assign type IDs consecutively until end.
 This is useful in verifying whether the current version of the layout matches with the existing objects and their type numbers.
@@ -771,7 +771,7 @@ PMDK supports allocation, resizing and freeing objects from the persistent memor
 These routines are atomic with respect to other threads or any power-failure interruption.
 In the event of program failure or system crash, on recovery the allocations made are guaranteed to be entirely completed or discarded, leaving the persistent memory heap and internal object containers in a consistent state.
 
-A detailed list of these interfaces is available in the manpage  for libpmemobj.
+A detailed list of these interfaces is available in the manpage for libpmemobj.
 The alloc and free interfaces discussed here are non-transactional.
 libpmemobj offers transactional interfaces to guarantee consistency at all time.
 The following <a href="#78">section</a> discusses transactions within PMDK for VOS.
@@ -874,7 +874,7 @@ If reads in byte-arrays spans over multiple extent ranges, VOS would have to rec
 In case if a read requests a partial byte array extent of an existing extent range, VOS would compute the checksum of the existing extent to verify correctness and then return the requested extent range to the client with its computed checksum.
 When byte array extents are aggregated, VOS individually re-computes checksum of all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
 
-Because checksum computation involves multiple layers of stack to be in-sync, VOS plans to leverage and extend either the mchecksum  library or the Intel Storage acceleration library  (https://01.org/intel&#174;-storage-acceleration-library-open-source-version ).
+Because checksum computation involves multiple layers of stack to be in-sync, VOS plans to leverage and extend either the mchecksum library or the Intel Storage acceleration library  (https://01.org/intel&#174;-storage-acceleration-library-open-source-version ).
 
 <a id="80"></a>
 
@@ -888,7 +888,7 @@ The numbers presented provide approximations rather than modeling or quantifying
 
 **Assumptions:**
 
-B+-tree with a tree order "8" is used  for implementing the KV object and all the index tables in a VOS pool.
+B+-tree with a tree order "8" is used for implementing the KV object and all the index tables in a VOS pool.
 Let us assume that:
 <ol>
 <li>each node header consumes, 32 bytes</li>
@@ -935,7 +935,7 @@ Which is 145MB/106   =  ~152bytes/record</li>
 While using document KV we would have additional cost involved in creating one root-tree node for every level on each insert.
 To keep the analysis simpler, let us assume one distribution key and many attribute keys.
 Each attribute key would have a separate value tree.
- The initial metadata cost is high but the overall update cost in the best case and the average case would still remain the same as in case of the single level b-tree.
+The initial metadata cost is high but the overall update cost in the best case and the average case would still remain the same as in case of the single level b-tree.
 This is because, once a value tree for a key is created all updates are added directly to the value tree.
 And once the different levels of the trees have been initialized, at no point will two levels of the trees would get rebalanced simultaneously.
 
