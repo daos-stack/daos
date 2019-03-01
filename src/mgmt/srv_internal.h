@@ -41,6 +41,7 @@
 void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 
 /** srv_pool.c */
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
@@ -53,5 +54,6 @@ void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
+void ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */
