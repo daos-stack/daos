@@ -37,6 +37,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
+import GeneralUtils
 
 from daos_api import DaosContext, DaosPool, DaosApiError
 
@@ -60,13 +61,13 @@ def verify_list_attr(indata, size, buffer, mode):
     aggregate_len += len(indata.keys())-1
 
     if aggregate_len != size:
-        raise DaosApiError("FAIL: Size is not matching for Names in list"
+        raise DaosTestError("FAIL: Size is not matching for Names in list"
                          "attr, Expected len={0} and received len = {1}"
                          .format(aggregate_len, size))
     #verify the Attributes names in list_attr retrieve
     for key in indata.keys():
         if key not in buffer:
-            raise DaosApiError("FAIL: Name does not match after list attr,"
+            raise DaosTestError("FAIL: Name does not match after list attr,"
                              " Expected buf={0} and received buf = {1}"
                              .format(key, buffer))
 
