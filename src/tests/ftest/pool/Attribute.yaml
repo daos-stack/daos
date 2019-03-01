@@ -2,7 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_machines:
-    - boro-26
+    - boro-A
 timeout: 40
 server:
   server_group: daos_server
@@ -71,8 +71,7 @@ attrtests:
       value:
         - "! @#$%^&*()_+{}|:<>?-=[];',./"
         - PASS
-#Defect DAOS-1330, enable after it resolved as server is getting Assert
-#    null:
-#      value:
-#        - NULL
-#        - FAIL
+    null:
+      value:
+        - NULL
+        - FAIL
