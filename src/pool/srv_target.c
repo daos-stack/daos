@@ -102,7 +102,8 @@ ds_pool_child_purge(struct pool_tls *tls)
 }
 
 struct pool_child_lookup_arg {
-	void	       *pla_uuid;
+	struct ds_pool	*pla_pool;
+	void		*pla_uuid;
 	uint32_t	pla_map_version;
 };
 
@@ -110,8 +111,8 @@ struct pool_child_lookup_arg {
  * Called via dss_thread_collective() to create and add the ds_pool_child object
  * for one thread. This opens the matching VOS pool.
  */
-int
-ds_pool_child_open(uuid_t uuid, unsigned int version)
+static int
+ds_pool_child_open(struct ds_pool *pool, uuid_t uuid, unsigned int version)
 {
 	struct pool_tls		       *tls = pool_tls_get();
 	struct ds_pool_child	       *child;
@@ -149,6 +150,7 @@ ds_pool_child_open(uuid_t uuid, unsigned int version)
 	uuid_copy(child->spc_uuid, uuid);
 	child->spc_map_version = version;
 	child->spc_ref = 1; /* 1 for the list */
+	child->spc_pool = pool;
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
@@ -164,7 +166,8 @@ pool_child_add_one(void *varg)
 {
 	struct pool_child_lookup_arg   *arg = varg;
 
-	return ds_pool_child_open(arg->pla_uuid, arg->pla_map_version);
+	return ds_pool_child_open(arg->pla_pool, arg->pla_uuid,
+				  arg->pla_map_version);
 }
 
 int
@@ -224,28 +227,21 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_pool, rc = dss_abterr2der(rc));
 
+	rc = ABT_mutex_create(&pool->sp_iv_refresh_lock);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(err_lock, rc = dss_abterr2der(rc));
+
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 
-	if (arg->pca_map != NULL) {
-		rc = pl_map_update(pool->sp_uuid, arg->pca_map, true);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
-				DP_UUID(key), rc);
-			D_GOTO(err_lock, rc);
-		}
-
-		pool->sp_map = arg->pca_map;
-	}
-
+	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
-
 	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
 			DP_UUID(key), rc);
-		goto err_map;
+		goto err_iv_lock;
 	}
 
 	if (arg->pca_need_group) {
@@ -266,8 +262,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_collective:
 	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
-err_map:
-	pl_map_disconnect(pool->sp_uuid);
+err_iv_lock:
+	ABT_mutex_free(&pool->sp_iv_refresh_lock);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
@@ -310,6 +306,7 @@ pool_free_ref(struct daos_llink *llink)
 	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
 
+	ABT_mutex_free(&pool->sp_iv_refresh_lock);
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
 }
@@ -363,8 +360,6 @@ ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 {
 	struct daos_llink      *llink;
 	int			rc;
-
-	D_ASSERT(arg == NULL || !arg->pca_need_group || arg->pca_map != NULL);
 
 	ABT_mutex_lock(pool_cache_lock);
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
@@ -690,33 +685,6 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* Init the pool map */
-	if (rpc->cr_co_bulk_hdl != NULL) {
-		struct pool_buf		*buf;
-		daos_iov_t		 iov = { 0 };
-		daos_sg_list_t		 sgl;
-
-		sgl.sg_nr = 1;
-		sgl.sg_nr_out = 1;
-		sgl.sg_iovs = &iov;
-		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
-		if (rc != 0) {
-			D_ERROR(DF_UUID": crt_bulk_access failed, rc %d.\n",
-				DP_UUID(in->tci_uuid), rc);
-			D_GOTO(out, rc);
-		}
-
-		buf = iov.iov_buf;
-		D_ASSERT(buf != NULL);
-		rc = pool_map_create(buf, in->tci_map_version, &map);
-		if (rc != 0) {
-			D_ERROR(DF_UUID" failed to create pool map: %d\n",
-				DP_UUID(in->tci_uuid), rc);
-			D_GOTO(out, rc);
-		}
-	}
-
-	arg.pca_map = map;
 	arg.pca_map_version = in->tci_map_version;
 	arg.pca_need_group = 0;
 
@@ -866,6 +834,15 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	     (map != NULL && pool->sp_map == NULL))) {
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
+
+			rc = pl_map_update(pool->sp_uuid, map,
+					   pool->sp_map != NULL ? false : true);
+			if (rc != 0) {
+				ABT_rwlock_unlock(pool->sp_lock);
+				D_ERROR(DF_UUID": failed update pl_map: %d\n",
+					DP_UUID(pool->sp_uuid), rc);
+				D_GOTO(out, rc);
+			}
 
 			pool->sp_map = map;
 			map = tmp;
