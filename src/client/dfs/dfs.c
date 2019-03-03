@@ -31,10 +31,7 @@
 #include <daos/debug.h>
 #include <daos/container.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_addons.h"
-#include "daos_fs.h"
+#include "daos.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"

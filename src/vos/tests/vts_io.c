@@ -30,7 +30,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
-#include <daos_api.h>
+#include <daos.h>
 
 #define NO_FLAGS	    (0)
 

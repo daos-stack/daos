@@ -35,7 +35,7 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <daos_api.h> /* for daos_prop_alloc/_free() */
+#include <daos_types.h> /* for daos_prop_alloc/_free() */
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>

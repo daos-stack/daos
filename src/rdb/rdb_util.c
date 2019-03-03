@@ -28,8 +28,7 @@
 
 #include <daos_srv/rdb.h>
 
-#include <daos_types.h>
-#include <daos_api.h>
+#include <daos.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"

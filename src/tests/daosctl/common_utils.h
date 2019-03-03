@@ -25,7 +25,6 @@
 #define __COMMON_UTILS_H__
 
 #include <daos.h>
-#include <daos_api.h>
 #include <daos_mgmt.h>
 #include <daos/common.h>
 

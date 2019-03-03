@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,40 @@
 
 #include <daos_types.h>
 #include <daos_errno.h>
-#include <daos_event.h>
 
-#include <daos_api.h>
+#include <daos_event.h>
+#include <daos_task.h>
+
 #include <daos_mgmt.h>
+
+#include <daos_pool.h>
+#include <daos_container.h>
+#include <daos_tx.h>
+#include <daos_object.h>
+
+#include <daos_array.h>
+#include <daos_kv.h>
+
+#include <daos_fs.h>
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+/**
+ * Initialize the DAOS library.
+ */
+int
+daos_init(void);
+
+/**
+ * Finalize the DAOS library.
+ */
+int
+daos_fini(void);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __DAOS_H__ */
