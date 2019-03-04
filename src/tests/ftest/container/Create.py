@@ -39,6 +39,7 @@ from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 class CreateContainerTest(TestWithServers):
     """
     Tests DAOS container create.
+    :avocado: recursive
     """
     def test_container_create(self):
         """
