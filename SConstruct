@@ -34,7 +34,7 @@ def set_defaults(env):
               help='Preprocess selected files for profiling')
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
-                        '-fpic', '-D_GNU_SOURCE'])
+                        '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
     if GetOption("preprocess"):
@@ -54,7 +54,6 @@ def preload_prereqs(prereqs):
 
 def scons():
     """Execute build"""
-    BUILD_TARGETS.append('fixtest')
     if os.path.exists('scons_local'):
         try:
             sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
@@ -96,22 +95,11 @@ def scons():
     env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
     env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
 
-    # install the test_runner code from scons_local
-    SConscript('build/scons_local/test_runner/SConscript')
-
-    # install the build verification tests
-    SConscript('utils/bvtest/scripts/SConscript')
-
     # install the configuration files
     SConscript('utils/config/SConscript')
 
-    env.Command("fixtest", "./utils/bvtest/OrteRunner.py",
-                [Copy("$PREFIX/TESTING/test_runner/",
-                      "./utils/bvtest/OrteRunner.py")])
-
     Default('build')
     Depends('install', 'build')
-    Depends('fixtest', 'install')
 
     try:
         #if using SCons 2.4+, provide a more complete help

@@ -172,7 +172,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 }
 
 static int
-test_setup_cont_create(void **state)
+test_setup_cont_create(void **state, daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
 	int rc;
@@ -181,7 +181,8 @@ test_setup_cont_create(void **state)
 		uuid_generate(arg->co_uuid);
 		print_message("setup: creating container "DF_UUIDF"\n",
 			      DP_UUID(arg->co_uuid));
-		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, co_prop,
+				      NULL);
 		if (rc)
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 	}
@@ -222,7 +223,8 @@ test_setup_cont_open(void **state)
 }
 
 int
-test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop)
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
+		     daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
 
@@ -232,13 +234,13 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop)
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, prop);
+		return test_setup_pool_create(state, pool, po_prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
 	case SETUP_POOL_CONNECT:
 		arg->setup_state = SETUP_CONT_CREATE;
-		return test_setup_cont_create(state);
+		return test_setup_cont_create(state, co_prop);
 	case SETUP_CONT_CREATE:
 		arg->setup_state = SETUP_CONT_CONNECT;
 		return test_setup_cont_open(state);
@@ -292,7 +294,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool, NULL);
+		rc = test_setup_next_step(state, pool, NULL, NULL);
 
 	 if (rc) {
 		D_FREE(arg);
@@ -306,7 +308,6 @@ pool_destroy_safe(test_arg_t *arg)
 {
 	daos_pool_info_t		 pinfo;
 	daos_handle_t			 poh = arg->pool.poh;
-	bool				 connected = false;
 	int				 rc;
 
 	if (daos_handle_is_inval(poh)) {
@@ -317,8 +318,6 @@ pool_destroy_safe(test_arg_t *arg)
 		if (rc != 0) { /* destory straightaway */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
-		} else {
-			connected = true;
 		}
 	}
 
@@ -339,10 +338,10 @@ pool_destroy_safe(test_arg_t *arg)
 		}
 
 		/* no rebuild */
-		if (connected)
-			daos_pool_disconnect(poh, NULL);
 		break;
 	}
+
+	daos_pool_disconnect(poh, NULL);
 
 	rc = daos_pool_destroy(arg->pool.pool_uuid, arg->group, 1, NULL);
 	if (rc && rc != -DER_TIMEDOUT)
@@ -397,22 +396,6 @@ test_teardown(void **state)
 		if (rc) {
 			print_message("failed to destroy container "DF_UUIDF
 				      ": %d\n", DP_UUID(arg->co_uuid), rc);
-			return rc;
-		}
-	}
-
-	if (!daos_handle_is_inval(arg->pool.poh) && !arg->pool.slave) {
-		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-		arg->pool.poh = DAOS_HDL_INVAL;
-		if (arg->multi_rank) {
-			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-				      MPI_COMM_WORLD);
-			rc = rc_reduce;
-		}
-		if (rc) {
-			print_message("failed to disconnect pool "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->pool.pool_uuid),
-				      rc);
 			return rc;
 		}
 	}

@@ -35,103 +35,24 @@
 #define DAOS_DBG_MAX_LEN	(32)
 #define DAOS_FAC_MAX_LEN	(128)
 
+
 static int dd_ref;
 static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 
-#define DECLARE_FAC(name)	int DD_FAC(name)
-/** predefined log facilities */
-DECLARE_FAC(addons);
-DECLARE_FAC(common);
-DECLARE_FAC(tree);
-DECLARE_FAC(vos);
-DECLARE_FAC(client);
-DECLARE_FAC(server);
-DECLARE_FAC(rdb);
-DECLARE_FAC(rsvc);
-DECLARE_FAC(pool);
-DECLARE_FAC(container);
-DECLARE_FAC(object);
-DECLARE_FAC(placement);
-DECLARE_FAC(rebuild);
-DECLARE_FAC(mgmt);
-DECLARE_FAC(bio);
-DECLARE_FAC(tests);
-DECLARE_FAC(dfs);
-DECLARE_FAC(drpc);
-DECLARE_FAC(security);
+DAOS_FOREACH_DB(D_LOG_INSTANTIATE_DB, DAOS_FOREACH_DB)
+DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
-uint64_t DB_MD; /* metadata operation */
-uint64_t DB_PL; /* placement */
-uint64_t DB_MGMT; /* pool management */
-uint64_t DB_EPC; /* epoch system */
-uint64_t DB_DF; /* durable format */
-uint64_t DB_REBUILD; /* rebuild process */
-uint64_t DB_SEC; /* Security checks */
 /* debug bit groups */
 #define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC)
-
-#define DBG_DICT_ENTRY(bit, name, lname)			\
-{								\
-	.db_bit = bit,						\
-	.db_name = name,					\
-	.db_lname = lname,					\
-	.db_name_size = sizeof(name),				\
-	.db_lname_size = sizeof(lname),				\
-}
-
-static struct d_debug_bit daos_bit_dict[] = {
-	/* load DAOS-specific debug bits into dict */
-	DBG_DICT_ENTRY(&DB_MD,		"md",		"metadata"),
-	DBG_DICT_ENTRY(&DB_PL,		"pl",		"placement"),
-	DBG_DICT_ENTRY(&DB_MGMT,	"mgmt",		"management"),
-	DBG_DICT_ENTRY(&DB_EPC,		"epc",		"epoch"),
-	DBG_DICT_ENTRY(&DB_DF,		"df",		"durable_format"),
-	DBG_DICT_ENTRY(&DB_REBUILD,	"rebuild",	"rebuild"),
-	DBG_DICT_ENTRY(&DB_SEC,		"sec",		"security")
-};
-
-#define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(daos_bit_dict)
-
-#define DAOS_INIT_LOG_FAC(name, idp)			\
-	d_init_log_facility(idp, name, name);
-
-#define FOREACH_DAOS_LOG_FAC(ACTION)			\
-	ACTION("addons", d_addons_logfac)		\
-	ACTION("common", d_common_logfac)		\
-	ACTION("tree", d_tree_logfac)			\
-	ACTION("vos", d_vos_logfac)			\
-	ACTION("client", d_client_logfac)		\
-	ACTION("server", d_server_logfac)		\
-	ACTION("rdb", d_rdb_logfac)			\
-	ACTION("rsvc", d_rsvc_logfac)			\
-	ACTION("pool", d_pool_logfac)			\
-	ACTION("container", d_container_logfac)		\
-	ACTION("object", d_object_logfac)		\
-	ACTION("placement", d_placement_logfac)		\
-	ACTION("rebuild", d_rebuild_logfac)		\
-	ACTION("mgmt", d_mgmt_logfac)			\
-	ACTION("tests", d_tests_logfac)			\
-	ACTION("bio", d_bio_logfac)			\
-	ACTION("dfs", d_dfs_logfac)			\
-	ACTION("drpc", d_drpc_logfac)			\
-	ACTION("security", d_security_logfac)
-
-#define DAOS_SETUP_FAC(name, idp)			\
-	DAOS_INIT_LOG_FAC(name, &idp)
 
 static void
 debug_fini_locked(void)
 {
-	int	i;
 	int	rc;
 
-	/* Unregister DAOS debug bits */
-	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
-		rc = d_log_dbg_bit_dealloc(daos_bit_dict[i].db_name);
-		if (rc < 0)
-			D_PRINT_ERR("Error deallocating daos debug bit for %s",
-				    daos_bit_dict[i].db_name);
-	}
+	rc = D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
+	if (rc != 0) /* Just print a message but no need to fail */
+		D_PRINT_ERR("Failed to deallocate daos debug bits: %d\n", rc);
 
 	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */
@@ -156,9 +77,7 @@ daos_debug_fini(void)
 int
 daos_debug_init(char *logfile)
 {
-	int		i;
 	int		rc;
-	uint64_t	allocd_dbg_bit;
 
 	D_MUTEX_LOCK(&dd_lock);
 	if (dd_ref > 0) {
@@ -181,23 +100,13 @@ daos_debug_init(char *logfile)
 		goto failed_unlock;
 	}
 
-	FOREACH_DAOS_LOG_FAC(DAOS_SETUP_FAC)
+	rc = D_LOG_REGISTER_FAC(DAOS_FOREACH_LOG_FAC);
+	if (rc != 0) /* Just print a message but no need to fail */
+		D_PRINT_ERR("Failed to register daos log facilities: %d\n", rc);
 
-	/* Register DAOS debug bits with gurt used with DD_MASK env */
-	for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
-		/* register DAOS debug bit masks */
-		rc = d_log_dbg_bit_alloc(&allocd_dbg_bit,
-					 daos_bit_dict[i].db_name,
-					 daos_bit_dict[i].db_lname);
-		if (rc < 0) {
-			D_PRINT_ERR("Error allocating debug bit for %s:%d\n",
-				    daos_bit_dict[i].db_name, rc);
-			rc = -DER_UNINIT;
-			goto failed_unlock;
-		}
-
-		*daos_bit_dict[i].db_bit = allocd_dbg_bit;
-	}
+	rc = D_LOG_REGISTER_DB(DAOS_FOREACH_DB);
+	if (rc != 0) /* Just print a message but no need to fail */
+		D_PRINT_ERR("Failed to register daos debug bits: %d\n", rc);
 
 	/* Register DAOS debug bit groups */
 	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default");

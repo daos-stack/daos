@@ -23,7 +23,6 @@
 
 #include <unistd.h>
 #include <string.h>
-#include <gurt/common.h>
 #include <daos_errno.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
