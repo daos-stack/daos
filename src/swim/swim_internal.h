@@ -80,7 +80,7 @@ extern "C" {
 #endif
 
 /** SWIM protocol parameter defaults */
-#define SWIM_PROTOCOL_PERIOD_LEN 2000	/* milliseconds, should NOT be less
+#define SWIM_PROTOCOL_PERIOD_LEN 2400	/* milliseconds, should NOT be less
 					 * than 3 * SWIM_PING_TIMEOUT
 					 */
 #define SWIM_SUSPECT_TIMEOUT	3 * SWIM_PROTOCOL_PERIOD_LEN

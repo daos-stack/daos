@@ -41,6 +41,40 @@
 #include "swim_internal.h"
 #include <assert.h>
 
+static uint64_t swim_ping_timeout = SWIM_PING_TIMEOUT;
+
+static inline void
+swim_dump_updates(swim_id_t self_id, swim_id_t from, swim_id_t to,
+		  struct swim_member_update *upds, size_t nupds)
+{
+	FILE *fp;
+	char *msg;
+	size_t msg_size, i;
+	int rc;
+
+	if (!D_LOG_ENABLED(DLOG_INFO))
+		return;
+
+	fp = open_memstream(&msg, &msg_size);
+	if (fp != NULL) {
+		for (i = 0; i < nupds; i++) {
+			rc = fprintf(fp, " {%lu %c %lu}", upds[i].smu_id,
+				     "ASD"[upds[i].smu_state.sms_status],
+				     upds[i].smu_state.sms_incarnation);
+			if (rc < 0)
+				break;
+		}
+
+		fclose(fp);
+		/* msg and msg_size will be set after fclose(fp) only */
+		if (msg_size > 0)
+			SWIM_INFO("%lu %s %lu:%s\n", self_id,
+				  self_id == from ? "=>" : "<=",
+				  self_id == from ? to   : from, msg);
+		free(msg); /* allocated by open_memstream() */
+	}
+}
+
 static int
 swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 {
@@ -116,8 +150,10 @@ swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to)
 out_unlock:
 	swim_ctx_unlock(ctx);
 
-	if (rc == 0)
+	if (rc == 0) {
+		swim_dump_updates(self_id, self_id, to, upds, i);
 		rc = ctx->sc_ops->send_message(ctx, to, upds, i);
+	}
 
 	if (rc)
 		D_FREE(upds);
@@ -183,6 +219,11 @@ update:
 		if (item->si_id == id) {
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
+			if (swim_ping_timeout < SWIM_PROTOCOL_PERIOD_LEN) {
+				swim_ping_timeout += SWIM_PING_TIMEOUT;
+				SWIM_INFO("%lu: increase ping timeout to %lu\n",
+					  ctx->sc_self, swim_ping_timeout);
+			}
 			D_FREE(item);
 			break;
 		}
@@ -313,7 +354,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
 				from = item->si_from;
 
 				item->si_from = self_id;
-				item->u.si_deadline += SWIM_PING_TIMEOUT;
+				item->u.si_deadline += swim_ping_timeout;
 
 				D_ALLOC_PTR(item);
 				if (item == NULL)
@@ -572,7 +613,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					 ctx->sc_self, ctx->sc_self, id_sendto);
 
 				ctx->sc_dping_deadline = now
-							+ SWIM_PING_TIMEOUT;
+							+ swim_ping_timeout;
 				ctx_state = SCS_DPINGED;
 			}
 			break;
@@ -661,7 +702,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				item = TAILQ_FIRST(&ctx->sc_subgroup);
 				if (item == NULL) {
 					ctx->sc_iping_deadline = now
-							+ 2 * SWIM_PING_TIMEOUT;
+							+ 2 * swim_ping_timeout;
 					ctx_state = SCS_IPINGED;
 				}
 				break;
@@ -705,13 +746,15 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 	enum swim_context_state ctx_state;
 	struct swim_member_state self_state;
 	swim_id_t self_id = swim_self_get(ctx);
-	swim_id_t id_target, id_sendto, to = SWIM_ID_INVALID;
+	swim_id_t id_target, id_sendto, to;
 	bool send_updates = false;
 	size_t i;
 	int rc = 0;
 
-	if (self_id == SWIM_ID_INVALID) /* not initialized yet */
+	if (self_id == SWIM_ID_INVALID || nupds == 0) /* not initialized yet */
 		return 0; /* Ignore this update */
+
+	swim_dump_updates(self_id, from, self_id, upds, nupds);
 
 	swim_ctx_lock(ctx);
 	ctx_state = swim_state_get(ctx);
@@ -719,14 +762,8 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 	if (ctx_state == SCS_DPINGED && from == ctx->sc_target)
 		ctx_state = SCS_ACKED;
 
+	to = upds[0].smu_id; /* save first index from update */
 	for (i = 0; i < nupds; i++) {
-		SWIM_INFO("%lu: update: %lu %c %lu\n", self_id, upds[i].smu_id,
-			  "ASD"[upds[i].smu_state.sms_status],
-			  upds[i].smu_state.sms_incarnation);
-
-		if (to == SWIM_ID_INVALID)
-			to = upds[i].smu_id; /* save first index from update */
-
 		switch (upds[i].smu_state.sms_status) {
 		case SWIM_MEMBER_ALIVE:
 			/* ignore alive updates for self */
@@ -808,7 +845,6 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				id_target = to;
 				id_sendto = item->si_from;
 				send_updates = true;
-
 				SWIM_INFO("%lu: iresp %lu => %lu\n",
 					  self_id, id_target, id_sendto);
 
@@ -819,24 +855,34 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			}
 		}
 	} else { /* iping request or response */
-		if (to != ctx->sc_target) {
+		if (to != ctx->sc_target &&
+		    upds[0].smu_state.sms_status == SWIM_MEMBER_SUSPECT) {
+			/* send dping request to iping target */
+			id_target = to;
+			id_sendto = to;
+			send_updates = true;
+
+			/* looking if sent already */
+			TAILQ_FOREACH(item, &ctx->sc_ipings, si_link) {
+				if (item->si_id == to) {
+					/* don't send a second time */
+					send_updates = false;
+					break;
+				}
+			}
+
 			D_ALLOC_PTR(item);
 			if (item != NULL) {
 				item->si_id   = to;
 				item->si_from = from;
 				item->u.si_deadline = swim_now_ms()
-						    + SWIM_PING_TIMEOUT;
+						    + swim_ping_timeout;
 				TAILQ_INSERT_TAIL(&ctx->sc_ipings, item,
 						  si_link);
-
-				/* send dping request to iping target */
-				id_target = to;
-				id_sendto = to;
-				send_updates = true;
-
 				SWIM_INFO("%lu: iping %lu => %lu\n",
-					  self_id, from, id_sendto);
+					  self_id, from, to);
 			} else {
+				send_updates = false;
 				rc = -ENOMEM;
 			}
 		}
@@ -845,10 +891,32 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 	swim_state_set(ctx, ctx_state);
 	swim_ctx_unlock(ctx);
 
-	if (send_updates) {
+	while (send_updates) {
 		rc = swim_updates_send(ctx, id_target, id_sendto);
 		if (rc)
 			SWIM_ERROR("swim_updates_send() failed rc=%d\n", rc);
+
+		send_updates = false;
+		if (to != self_id && to == from) { /* dping response */
+			/* forward this dping response to appropriate target */
+			swim_ctx_lock(ctx);
+			TAILQ_FOREACH(item, &ctx->sc_ipings, si_link) {
+				if (item->si_id == from) {
+					id_target = to;
+					id_sendto = item->si_from;
+					send_updates = true;
+					SWIM_INFO("%lu: iresp %lu => %lu\n",
+						  self_id, id_target,
+						  id_sendto);
+
+					TAILQ_REMOVE(&ctx->sc_ipings, item,
+						     si_link);
+					D_FREE(item);
+					break;
+				}
+			}
+			swim_ctx_unlock(ctx);
+		}
 	}
 out:
 	return rc;
