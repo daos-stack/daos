@@ -93,13 +93,13 @@ class DaosPool(object):
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError("Pool create returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
             else:
                 self.attached = 1
         else:
             event = DaosEvent()
             params = [c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_scm_size, c_nvme_size, None,
+                      c_whatever, c_scm_size, c_nvme_size,
                       ctypes.byref(self.svc), self.uuid, event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
@@ -126,7 +126,8 @@ class DaosPool(object):
                       ctypes.byref(self.handle), ctypes.byref(c_info), None)
             if rc != 0:
                 self.handle = 0
-                raise DaosApiError("Pool connect returned non-zero. RC: {0}".format(rc))
+                raise DaosApiError("Pool connect returned non-zero. RC: {0}"
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc), c_flags,
@@ -147,7 +148,7 @@ class DaosPool(object):
             rc = func(self.handle, None)
             if rc != 0:
                 raise DaosApiError("Pool disconnect returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.handle, event]
@@ -171,7 +172,7 @@ class DaosPool(object):
         rc = func(self.handle, ctypes.byref(c_glob))
         if rc != 0:
             raise DaosApiError("Pool local2global returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
@@ -194,34 +195,31 @@ class DaosPool(object):
         rc = func(c_glob, ctypes.byref(local_handle))
         if rc != 0:
             raise DaosApiError("Pool global2local returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
         self.handle = local_handle
         return local_handle
 
-    def exclude(self, rank_list, tgt=-1, cb_func=None):
-        """
-        Exclude a set of storage targets from a pool.
-        Args:
-            rank_list:  server rank
-            tl_tgts:    Xstream targets on rank(server)
-                        Default -1, it means it will exclude all targets on the rank.
-            cb_func:    Command to run non-blocking mode if it's True
-        """
-        tl_ranks = DaosPool.__pylist_to_array(rank_list)
-        tl_tgts = ctypes.c_int32(tgt)
-        tl_nr = ctypes.c_uint32(1)
-        c_tgts = ctypes.pointer(DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
+    def exclude(self, tgt_rank_list, cb_func=None):
+        """Exclude a set of storage targets from a pool."""
+
+        if tgt_rank_list is None:
+            c_tgts = None
+        else:
+            rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
+            c_tgts = ctypes.pointer(RankList(rl_ranks, len(tgt_rank_list)))
 
         if self.svc is None:
             c_svc = None
         else:
             c_svc = ctypes.pointer(self.svc)
+
         func = self.context.get_function('exclude-target')
         if cb_func is None:
-            rc = func(self.uuid, self.group, c_svc, c_tgts, None)
+            rc = func(self.uuid, self.group, c_svc,
+                      c_tgts, None)
             if rc != 0:
                 raise DaosApiError("Pool exclude returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, c_svc,
@@ -247,7 +245,8 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.uuid, self.group, ctypes.byref(self.svc), None)
             if rc != 0:
-                raise DaosApiError("Pool evict returned non-zero. RC: {0}".format(rc))
+                raise DaosApiError(
+                    "Pool evict returned non-zero. RC: {0}".format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc), event]
@@ -259,19 +258,11 @@ class DaosPool(object):
                                        self))
             t.start()
 
-    def tgt_add(self, rank_list, tgt=-1, cb_func=None):
-        """
-        add a set of storage targets to a pool.
-        Args:
-            rank_list:  server rank
-            tl_tgts:    Xstream targets on rank(server)
-                        Default -1 it means it will add all targets on the rank.
-            cb_func:    Command to run non-blocking mode if it's True
-        """
-        tl_ranks = DaosPool.__pylist_to_array(rank_list)
-        tl_tgts = ctypes.c_int32(tgt)
-        tl_nr = ctypes.c_uint32(1)
-        c_tgts = ctypes.pointer(DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
+    def tgt_add(self, tgt_rank_list, cb_func=None):
+        """add a set of storage targets to a pool."""
+
+        rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
+        c_tgts = RankList(rl_ranks, len(tgt_rank_list))
         func = self.context.get_function("add-target")
 
         if cb_func is None:
@@ -279,7 +270,7 @@ class DaosPool(object):
                       ctypes.byref(c_tgts), None)
             if rc != 0:
                 raise DaosApiError("Pool tgt_add returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc),
@@ -292,26 +283,19 @@ class DaosPool(object):
                                        self))
             t.start()
 
-    def exclude_out(self, rank_list, tgt=-1, cb_func=None):
-        """
-        Exclude completely a set of storage targets from a pool.
-        Args:
-            rank_list:  server rank
-            tl_tgts:    Xstream targets on rank(server).
-                        Default -1 it means it will exclude out all targets on the rank.
-            cb_func:    Command to run non-blocking mode if it's True
-        """
-        tl_ranks = DaosPool.__pylist_to_array(rank_list)
-        tl_tgts = ctypes.c_int32(tgt)
-        tl_nr = ctypes.c_uint32(1)
-        c_tgts = ctypes.pointer(DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
+    def exclude_out(self, tgt_rank_list, cb_func=None):
+        """Exclude completely a set of storage targets from a pool."""
 
+        rl_ranks = DaosPool.__pylist_to_array(tgt_rank_list)
+        c_tgts = RankList(rl_ranks, len(tgt_rank_list))
         func = self.context.get_function('kill-target')
+
         if cb_func is None:
-            rc = func(self.uuid, self.group, ctypes.byref(self.svc), ctypes.byref(c_tgts), None)
+            rc = func(self.uuid, self.group, ctypes.byref(self.svc),
+                      ctypes.byref(c_tgts), None)
             if rc != 0:
                 raise DaosApiError("Pool exclude_out returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc),
@@ -333,7 +317,7 @@ class DaosPool(object):
             rc = func(self.handle, None)
             if rc != 0:
                 raise DaosApiError("Pool svc_Stop returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.handle, event]
@@ -354,11 +338,11 @@ class DaosPool(object):
             rc = func(self.handle, None, ctypes.byref(self.pool_info), None, None)
             if rc != 0:
                 raise DaosApiError("Pool query returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
             return self.pool_info
         else:
             event = DaosEvent()
-            params = [self.handle, None, ctypes.byref(self.pool_info), None, event]
+            params = [self.handle, None, ctypes.byref(self.pool_info), event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -384,7 +368,7 @@ class DaosPool(object):
             rc = func(self.uuid, self.group, c_force, None)
             if rc != 0:
                 raise DaosApiError("Pool destroy returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
             else:
                 self.attached = 0
         else:
@@ -399,12 +383,12 @@ class DaosPool(object):
             t.start()
 
     def set_svc(self, rank):
-        """
-        note support for a single rank only
-        """
-        svc_rank = ctypes.c_uint(rank)
-        rl_ranks = ctypes.POINTER(ctypes.c_uint)(svc_rank)
-        self.svc = RankList(rl_ranks, 1)
+         """
+         note support for a single rank only
+         """
+         svc_rank = ctypes.c_uint(rank)
+         rl_ranks = ctypes.POINTER(ctypes.c_uint)(svc_rank)
+         self.svc = RankList(rl_ranks, 1)
 
     @staticmethod
     def __pylist_to_array(pylist):
@@ -429,8 +413,9 @@ class DaosObj(object):
             func = self.context.get_function('close-obj')
             rc = func(self.oh, None)
             if rc != 0:
-                raise DaosApiError("Object close returned non-zero. RC: {0} handle: {1}"
-                                   .format(rc, self.oh))
+                raise DaosApiError(
+                    "Object close returned non-zero. RC: {0} handle: {1}"
+                    .format(rc, self.oh))
             self.oh = None
 
     def create(self, rank=None, objcls=13):
@@ -454,7 +439,7 @@ class DaosObj(object):
                   ctypes.byref(self.oh), None)
         if rc != 0:
             raise DaosApiError("Object open returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
     def close(self):
         """ close this object """
@@ -463,7 +448,7 @@ class DaosObj(object):
             rc = func(self.oh, None)
             if rc != 0:
                 raise DaosApiError("Object close returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
             self.oh = None
 
     def refresh_attr(self, tx):
@@ -530,7 +515,7 @@ class DaosObj(object):
             rc = func(self.oh, c_tx, None)
             if rc != 0:
                 raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.oh, c_tx, event]
@@ -579,7 +564,7 @@ class DaosObj(object):
                       None)
             if rc != 0:
                 raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.oh, c_tx, c_len_dkeys, ctypes.byref(c_dkeys),
@@ -632,7 +617,7 @@ class DaosObj(object):
                       ctypes.byref(c_akeys), None)
             if rc != 0:
                 raise DaosApiError("punch-akeys returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.oh, c_tx, ctypes.byref(c_dkey_iov), c_len_akeys,
@@ -703,10 +688,10 @@ class IORequest(object):
         sgl_iov_list = (IOV * len(c_data))()
         idx = 0
         for item in c_data:
-            sgl_iov_list[idx].iov_len = item[1]
-            sgl_iov_list[idx].iov_buf_len = item[1]
-            sgl_iov_list[idx].iov_buf = ctypes.cast(item[0], ctypes.c_void_p)
-            idx += 1
+             sgl_iov_list[idx].iov_len = item[1]
+             sgl_iov_list[idx].iov_buf_len = item[1]
+             sgl_iov_list[idx].iov_buf = ctypes.cast(item[0], ctypes.c_void_p)
+             idx += 1
 
         self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
                                        ctypes.POINTER(IOV))
@@ -746,7 +731,7 @@ class IORequest(object):
                   1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
     def fetch_array(self, dkey, akey, rec_count, rec_size, tx=0):
         """
@@ -777,9 +762,10 @@ class IORequest(object):
         # an arbitrary number of consecutive array entries of the same size
         sgl_iov_list = (IOV * rec_count.value)()
         for i in range(rec_count.value):
-            sgl_iov_list[i].iov_buf_len = rec_size
-            sgl_iov_list[i].iov_buf = ctypes.cast(ctypes.create_string_buffer(rec_size.value),
-                                                  ctypes.c_void_p)
+             sgl_iov_list[i].iov_buf_len = rec_size
+             sgl_iov_list[i].iov_buf = ctypes.cast(
+                 ctypes.create_string_buffer(rec_size.value),
+                 ctypes.c_void_p)
         self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
                                        ctypes.POINTER(IOV))
         self.sgl.sg_nr = rec_count
@@ -797,7 +783,7 @@ class IORequest(object):
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
         if rc != 0:
             raise DaosApiError("Array fetch returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
         # convert the output into a python list rather than return C types
         # outside this file
@@ -862,7 +848,7 @@ class IORequest(object):
                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if rc != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
     def single_fetch(self, dkey, akey, size, tx=0, test_hints=[]):
         """
@@ -926,7 +912,7 @@ class IORequest(object):
                   1, iod_ptr, sgl_ptr, None, None)
         if rc != 0:
             raise DaosApiError("Object fetch returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
         return buf
 
     def multi_akey_insert(self, dkey, data, tx):
@@ -947,7 +933,7 @@ class IORequest(object):
         c_count = ctypes.c_uint(count)
         iods = (DaosIODescriptor * count)()
         sgl_list = (SGL * count)()
-        i = 0
+        i=0
         for tup in data:
 
             sgl_iov = IOV()
@@ -985,7 +971,7 @@ class IORequest(object):
                   iod_ptr, sgl_ptr, None)
         if rc != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
     def multi_akey_fetch(self, dkey, keys, tx):
         """
@@ -1043,7 +1029,7 @@ class IORequest(object):
                   c_count, ctypes.byref(iods), sgl_ptr, None, None)
         if rc != 0:
             raise DaosApiError("multikey fetch returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
         result = {}
         i = 0
         for sgl in sgl_list:
@@ -1093,10 +1079,10 @@ class DaosContainer(object):
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError("Container create returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
-            params = [self.poh, self.uuid, None, event]
+            params = [self.poh, self.uuid, event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -1124,7 +1110,7 @@ class DaosContainer(object):
             rc = func(self.poh, self.uuid, c_force, None)
             if rc != 0:
                 raise DaosApiError("Cntnr destroy returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.poh, self.uuid, c_force, event]
@@ -1160,7 +1146,7 @@ class DaosContainer(object):
                       ctypes.byref(self.info), None)
             if rc != 0:
                 raise DaosApiError("Container open returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
@@ -1189,7 +1175,7 @@ class DaosContainer(object):
             rc = func(self.coh, None)
             if rc != 0:
                 raise DaosApiError("Container close returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
         else:
             event = DaosEvent()
             params = [self.coh, event]
@@ -1214,11 +1200,11 @@ class DaosContainer(object):
             rc = func(self.coh, ctypes.byref(self.info), None, None)
             if rc != 0:
                 raise DaosApiError("Container query returned non-zero. RC: {0}"
-                                   .format(rc))
+                                 .format(rc))
             return self.info
         else:
             event = DaosEvent()
-            params = [self.coh, ctypes.byref(self.info), None, event]
+            params = [self.coh, ctypes.byref(self.info), event]
             t = threading.Thread(target=AsyncWorker1,
                                  args=(func,
                                        params,
@@ -1242,9 +1228,9 @@ class DaosContainer(object):
         rc = func(self.coh, ctypes.byref(c_tx), None)
         if rc != 0:
             raise DaosApiError("tx open returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
-        return c_tx.value
+        return c_tx.value;
 
     def commit_tx(self, tx):
         """ close out a transaction that is done being modified """
@@ -1259,9 +1245,10 @@ class DaosContainer(object):
         rc = func(c_tx, None)
         if rc != 0:
             raise DaosApiError("TX commit returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
 
-    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None, obj_cls=13):
+    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
+			     obj_cls=13):
         """
         Write an array of data to an object.  If an object is not supplied
         a new one is created.  The update occurs in its own epoch and the epoch
@@ -1448,7 +1435,7 @@ class DaosContainer(object):
         rc = func(self.coh, ctypes.byref(c_glob))
         if rc != 0:
             raise DaosApiError("Cntnr local2global returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
@@ -1473,7 +1460,7 @@ class DaosContainer(object):
         rc = func(self.poh, c_glob, ctypes.byref(local_handle))
         if rc != 0:
             raise DaosApiError("Cntnr global2local returned non-zero. RC: {0}"
-                               .format(rc))
+                             .format(rc))
         self.coh = local_handle
         return local_handle
 
@@ -1500,7 +1487,7 @@ class DaosContainer(object):
         rc = func(self.coh, sbuf, t_size)
         if rc != 0:
             raise DaosApiError("Container List-attr returned non-zero. RC:{0}"
-                               .format(rc))
+                             .format(rc))
         buf = t_size[0]
 
         buffer = ctypes.create_string_buffer(buf  + 1).raw
@@ -1560,8 +1547,8 @@ class DaosContainer(object):
         if cb_func is None:
             rc = func(self.coh, no_of_att, names, values, sizes, None)
             if rc != 0:
-                raise DaosApiError("Container Set Attribute returned non-zero RC: {0}"
-                                   .format(rc))
+                raise DaosApiError("Container Set Attribute returned non-zero"
+                                 "RC: {0}".format(rc))
         else:
             event = DaosEvent()
             params = [self.coh, no_of_att, names, values, sizes, event]
@@ -1607,8 +1594,8 @@ class DaosContainer(object):
             rc = func(self.coh, no_of_att, ctypes.byref(attr_names_c),
                       ctypes.byref(buffer), sizes, None)
             if rc != 0:
-                raise DaosApiError("Container Get Attribute returned non-zero RC: {0}"
-                                   .format(rc))
+                raise DaosApiError("Container Get Attribute returned non-zero.\
+                RC: {0}".format(rc))
         else:
             event = DaosEvent()
             params = [self.coh, no_of_att, ctypes.byref(attr_names_c),
@@ -1628,6 +1615,82 @@ class DaosContainer(object):
             i += 1
 
         return results
+
+class DaosSnapshot(object):
+    """ A python object that can represent a DAOS snapshot. We do not save the
+    coh in the snapshot since it is different each time the container is opened.
+    """
+    def __init__(self, context, name=None):
+        """The epoch is represented as a Python integer so when sending it to
+        libdaos we know to always convert it to a ctype.
+        """
+        self.context = context
+        self.name = name # currently unused
+        self.epoch = 0
+
+    def create(self, coh, epoch):
+        """ Send a snapshot creation request and store the info in the
+        DaosSnapshot object.
+        coh     --ctype.u_long handle on an open container
+        epoch   --the epoch number of the obj to be snapshotted
+        """
+        func = self.context.get_function('create-snap')
+        epoch = ctypes.c_uint64(epoch)
+        retcode = func(coh, ctypes.byref(epoch), None, None)
+        self.epoch = epoch.value
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+
+    def list(self, coh):
+        """ List this snapshot and check that its epoch is the same as the once
+        originally created.
+        coh --ctype.u_long handle on an open container
+        Returns the value of the epoch for this DaosSnapshot object.
+        """
+        func = self.context.get_function('list-snap')
+        num = ctypes.c_uint64(1)
+        epoch = ctypes.c_uint64(self.epoch)
+        anchor = Anchor()
+        retcode = func(coh, ctypes.byref(num), ctypes.byref(epoch), None,
+                       ctypes.byref(anchor), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+        return epoch.value
+
+    def handle(self, coh):
+        """ Get a tx handle into the snapshot and return the object found.
+        coh --ctype.u_long handle on an open container
+        returns a handle on the snapshot represented by this DaosSnapshot
+        object.
+        """
+        func = self.context.get_function('open-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        txhndl = ctypes.c_uint64(0)
+        retcode = func(coh, epoch, ctypes.byref(txhndl), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}"
+                               .format(retcode))
+        return txhndl
+
+    def destroy(self, coh, evnt=None):
+        """ Destroy the snapshot. The "epoch range" is a struct with the lowest
+        epoch and the highest epoch to destroy. We have only one epoch for this
+        single snapshot object.
+        coh     --ctype.u_long open container handle
+        evnt    --event (may be None)
+        # need container handle coh, and the epoch range
+        """
+        func = self.context.get_function('destroy-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        epr = EpochRange()
+        epr.epr_lo = epoch
+        epr.epr_hi = epoch
+        retcode = func(coh, epr, evnt)
+        if retcode != 0:
+            raise Exception("Failed to destroy the snapshot. RC: {0}"
+                            .format(retcode))
 
 class DaosServer(object):
     """Represents a DAOS Server"""
@@ -1710,7 +1773,11 @@ class DaosContext(object):
             'set-attr'       : self.libdaos.daos_cont_set_attr,
             'stop-service'   : self.libdaos.daos_pool_stop_svc,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update}
+            'update-obj'     : self.libdaos.daos_obj_update,
+            'create-snap'    : self.libdaos.daos_cont_create_snap,
+            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
+            'list-snap'      : self.libdaos.daos_cont_list_snap,
+            'open-snap'      : self.libdaos.daos_tx_open_snap}
 
     def __del__(self):
         """ cleanup the DAOS API """
@@ -1798,7 +1865,7 @@ if __name__ == '__main__':
 
         print ("container created {}".format(CONTAINER.get_uuid_str()))
 
-        #POOL.pool_svc_stop()
+        #POOL.pool_svc_stop();
         pool_info = POOL.pool_query()
         print c_uuid_to_str(pool_info.pi_uuid)
         print pool_info.pi_ntargets
@@ -1921,3 +1988,4 @@ if __name__ == '__main__':
 
     print("running")
     raise DaosApiError("hit error, all good")
+
