@@ -116,6 +116,7 @@ class Test(avocadoTest):
     def setUp(self):
         self.log.info("setUp() executed from Apricot.Test")
 
+
     def tearDown(self):
         self.log.info("tearDown() executed from Apricot.Test")
 
@@ -195,3 +196,12 @@ class TestWithServers(TestWithoutServers):
             pass
 
         super(TestWithServers, self).tearDown()
+
+class TestWithServers(TestWithoutServersAndClients):
+    '''
+    Run tests with DAOS servers
+
+    :avocado: recursive
+    '''
+
+    # use hostlist_servers and hostlist_clients instead of just hostlist
