@@ -22,7 +22,6 @@
  */
 
 #include <daos_types.h>
-#include <gurt/common.h>
 #include <evt_priv.h>
 #include "csum_extent_tests.h"
 #include "vts_io.h"

@@ -95,7 +95,6 @@ static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
 					  uint32_t csum_count,
 					  uint32_t chunksize)
 {
-	D_ASSERT(csum_size * csum_count <= csum_buf_size);
 	csum_buf->cs_csum = buf;
 	csum_buf->cs_len = csum_size;
 	csum_buf->cs_buf_len = csum_buf_size;
