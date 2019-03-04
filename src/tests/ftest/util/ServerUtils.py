@@ -108,7 +108,7 @@ def create_server_yaml(basepath):
     #Read the default utils/config/examples/daos_server_sockets.yml
     try:
         with open('{}/{}'.format(basepath, DEFAULT_YAML_FILE), 'r') as read_file:
-            default_yaml_value = yaml.load(read_file)
+            default_yaml_value = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
@@ -126,7 +126,7 @@ def create_server_yaml(basepath):
         # Read avocado test yaml file.
         try:
             with open('{}'.format(avocado_yaml_file_tmp), 'r') as read_file:
-                avocado_yaml_value = yaml.load(read_file)
+                avocado_yaml_value = yaml.safe_load(read_file)
         except Exception as excpn:
             print("<SERVER> Exception occurred: {0}".format(str(excpn)))
             traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
