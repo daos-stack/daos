@@ -51,10 +51,14 @@ class ServerFailed(Exception):
 def printFunc(thestring):
     print("<SERVER>" + thestring)
 
-def nvme_yaml_config(default_value_set, bdev, enabled=False):
+def set_nvme_mode(default_value_set, bdev, enabled=False):
     """
     Enable/Disable NVMe Mode.
     NVMe is enabled by default in yaml file.So disable it for CI runs.
+    Args:
+     - default_value_set: Default dictionary value.
+     - bdev : Block device name.
+     - enabled: Set True/False for enabling NVMe, disabled by default.
     """
     if 'bdev_class' in default_value_set['servers'][0]:
         if (default_value_set['servers'][0]['bdev_class'] == bdev and
@@ -62,18 +66,6 @@ def nvme_yaml_config(default_value_set, bdev, enabled=False):
             del default_value_set['servers'][0]['bdev_class']
     if enabled:
         default_value_set['servers'][0]['bdev_class'] = bdev
-
-def remove_mux_from_yaml(avocado_yaml_file):
-    """
-    Function to remove "!mux" from yaml file and create new tmp file
-    Args:
-        avocado_yaml_file: Avocado test yaml file
-    """
-    with open(avocado_yaml_file, 'r') as rfile:
-        filedata = rfile.read()
-    filedata = filedata.replace('!mux', '')
-    with open(avocado_yaml_file, 'w') as wfile:
-        wfile.write(filedata)
 
 def create_server_yaml(basepath):
     """
@@ -99,14 +91,12 @@ def create_server_yaml(basepath):
         avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
                                 split(".")[0] + ".yaml"
 
-        # Yaml Python module is not able to read !mux so need to
-        # remove !mux before reading.
-        remove_mux_from_yaml(avocado_yaml_file)
-
         # Read avocado test yaml file.
         try:
-            with open('{}'.format(avocado_yaml_file), 'r') as read_file:
-                new_value_set = yaml.safe_load(read_file)
+            with open(avocado_yaml_file, 'r') as rfile:
+                filedata = rfile.read()
+            #Remove !mux for yaml load
+            new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
         except Exception as excpn:
             print("<SERVER> Exception occurred: {0}".format(str(excpn)))
             traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
@@ -123,7 +113,7 @@ def create_server_yaml(basepath):
                 default_value_set[key] = new_value_set['server_config'][key]
 
     #Disable NVMe from baseline data/daos_server_baseline.yml
-    nvme_yaml_config(default_value_set, "nvme")
+    set_nvme_mode(default_value_set, "nvme")
 
     #Write default_value_set dictionary in to AVOCADO_FILE
     #This will be used to start with daos_server -o option.
