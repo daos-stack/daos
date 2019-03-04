@@ -36,10 +36,8 @@ class DaosCoreTest(TestWithServers):
 
     # pylint: disable=invalid-name,missing-docstring
     def setUp(self):
-        self.hostlist = None
-        self.subtest_name = self.params.get("test_name", '/run/daos_tests/Tests/*')
-
         super(DaosCoreTest, self).setUp()
+        self.subtest_name = self.params.get("test_name", '/run/daos_tests/Tests/*')
 
     def test_subtest(self):
         """

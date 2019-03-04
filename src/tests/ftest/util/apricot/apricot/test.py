@@ -139,19 +139,15 @@ class TestWithoutServers(Test):
         self.orterun = self.basepath + '/install/bin/orterun'
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
-        # this causes a timeout in setUp() to not call tearDown()
-        #context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        # and this needs the above so we need to comment it out also
-        #self.d_log = DaosLog(context)
-        # ditto
-        #self.d_log.debug("Starting test {}".
-                         #format(self._Test__name)) # pylint: disable=no-member
+        context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.d_log = DaosLog(context)
+        self.d_log.debug("Starting test {}".
+                         format(self._Test__name)) # pylint: disable=no-member
         super(TestWithoutServers, self).setUp()
 
-    #def tearDown(self):
-        # see above.  this needs DaosContext() also
-        #self.d_log.debug("Ending test {}".
-        #                 format(self._Test__name)) # pylint: disable=no-member
+    def tearDown(self):
+        self.d_log.debug("Ending test {}".
+                         format(self._Test__name)) # pylint: disable=no-member
         super(TestWithoutServers, self).tearDown()
 
 class TestWithServers(TestWithoutServers):
