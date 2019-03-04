@@ -63,18 +63,6 @@ def nvme_yaml_config(default_value_set, bdev, enabled=False):
     if enabled:
         default_value_set['servers'][0]['bdev_class'] = bdev
 
-def remove_mux_from_yaml(avocado_yaml_file):
-    """
-    Function to remove "!mux" from yaml file and create new tmp file
-    Args:
-        avocado_yaml_file: Avocado test yaml file
-    """
-    with open(avocado_yaml_file, 'r') as rfile:
-        filedata = rfile.read()
-    filedata = filedata.replace('!mux', '')
-    with open(avocado_yaml_file, 'w') as wfile:
-        wfile.write(filedata)
-
 def create_server_yaml(basepath):
     """
     This function is to create DAOS server configuration YAML file
@@ -99,14 +87,12 @@ def create_server_yaml(basepath):
         avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
                                 split(".")[0] + ".yaml"
 
-        # Yaml Python module is not able to read !mux so need to
-        # remove !mux before reading.
-        remove_mux_from_yaml(avocado_yaml_file)
-
         # Read avocado test yaml file.
         try:
-            with open('{}'.format(avocado_yaml_file), 'r') as read_file:
-                new_value_set = yaml.safe_load(read_file)
+            with open(avocado_yaml_file, 'r') as rfile:
+                filedata = rfile.read()
+            #Remove !mux for yaml load
+            new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
         except Exception as excpn:
             print("<SERVER> Exception occurred: {0}".format(str(excpn)))
             traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
