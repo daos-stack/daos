@@ -39,7 +39,7 @@
 #define OBJ_CLS		DAOS_OC_R3S_RW
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
-
+#define REBUILD_POOL_SIZE	(4ULL << 28)
 static void
 rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		    int tgt_idx, bool kill)
@@ -151,6 +151,9 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 #define BULK_SIZE	5000
 #define REC_SIZE	64
 #define LARGE_KEY_SIZE	(512 * 1024)
+#define DKEY_LOOP	3
+#define AKEY_LOOP	3
+#define REC_LOOP	10
 	char	dkey[32];
 	char	akey[32];
 	char	data[REC_SIZE];
@@ -168,15 +171,15 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 		return -DER_NOMEM;
 	memset(large_key, 'L', LARGE_KEY_SIZE - 1);
 
-	for (j = 0; j < 5; j++) {
+	for (j = 0; j < DKEY_LOOP; j++) {
 		req->iod_type = DAOS_IOD_ARRAY;
 		/* small records */
 		sprintf(dkey, "dkey_%d", j);
 		sprintf(data, "%s_"DF_U64, "data", eph);
 		sprintf(data_verify, "%s_"DF_U64, "data", validate_eph);
-		for (k = 0; k < 3; k++) {
+		for (k = 0; k < AKEY_LOOP; k++) {
 			sprintf(akey, "akey_%d", k);
-			for (l = 0; l < 10; l++) {
+			for (l = 0; l < REC_LOOP; l++) {
 				if (validate) {
 					/* How to verify punch? XXX */
 					if (k == akey_punch_idx ||
@@ -678,7 +681,7 @@ rebuild_multiple_pools(void **state)
 	args[0] = arg;
 	/* create/connect another pool */
 	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			REBUILD_POOL_SIZE, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
@@ -767,7 +770,7 @@ rebuild_destroy_container(void **state)
 {
 	test_arg_t	*arg = *state;
 	test_arg_t	*args[2] = { 0 };
-	daos_obj_id_t	oids[OBJ_NR * 100];
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 	int		rc;
 
@@ -777,18 +780,18 @@ rebuild_destroy_container(void **state)
 	args[0] = arg;
 	/* create/connect another pool */
 	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			REBUILD_POOL_SIZE, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
 	}
 
-	for (i = 0; i < OBJ_NR * 10; i++) {
+	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(args[1], oids, OBJ_NR * 10);
+	rebuild_io(args[1], oids, OBJ_NR);
 
 	args[1]->rebuild_cb = rebuild_destroy_container_cb;
 
@@ -812,7 +815,7 @@ rebuild_close_container(void **state)
 	args[0] = arg;
 	/* create/connect another pool */
 	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			REBUILD_POOL_SIZE, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
@@ -901,7 +904,7 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 {
 	test_arg_t	*arg = *state;
 	test_arg_t	*args[2] = { 0 };
-	daos_obj_id_t	oids[OBJ_NR * 10];
+	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 	int		rc;
 
@@ -911,18 +914,18 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 	args[0] = arg;
 	/* create/connect another pool */
 	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			REBUILD_POOL_SIZE, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return;
 	}
 
-	for (i = 0; i < OBJ_NR * 10; i++) {
+	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(args[1], oids, OBJ_NR * 10);
+	rebuild_io(args[1], oids, OBJ_NR);
 
 	/* hang the rebuild */
 	if (arg->myrank == 0)
@@ -1695,7 +1698,7 @@ multi_pools_rebuild_concurrently(void **state)
 		pool = (i % CONT_PER_POOL == 0) ? NULL :
 				&args[(i/CONT_PER_POOL) * CONT_PER_POOL]->pool;
 		rc = test_setup((void **)&args[i], SETUP_CONT_CONNECT,
-				arg->multi_rank, DEFAULT_POOL_SIZE, pool);
+				arg->multi_rank, REBUILD_POOL_SIZE, pool);
 		if (rc) {
 			print_message("open/connect another pool failed: "
 				      "rc %d\n", rc);
@@ -1793,7 +1796,6 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
 };
 
-#define REBUILD_POOL_SIZE	(10ULL << 28)
 int
 rebuild_setup(void **state)
 {
