@@ -5,7 +5,7 @@ hosts:
     - boro-A
     - boro-B
 server:
-   server_group: daos_server
+   name: daos_server
 tests:
    modes:
       modeall:

@@ -5,6 +5,6 @@ hosts:
         - boro-B
 timeout: 240
 server:
-    server_group: daos_server
+    name: daos_server
 romio:
     romio_repo: "/home/standan/mpiotest/build/src/mpi/romio/test/"

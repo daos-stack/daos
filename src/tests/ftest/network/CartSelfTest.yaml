@@ -4,7 +4,7 @@ hosts:
   test_machines:
     - boro-A
 server:
-  server_group: daos_server
+  name: daos_server
 testparams:
   repetitions: 1000
   endpoint: 0:0

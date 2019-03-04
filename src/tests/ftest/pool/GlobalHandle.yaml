@@ -5,7 +5,7 @@ hosts:
     - boro-A
 timeout: 5000
 server:
-  server_group: daos_server
+  name: daos_server
 testparams:
   createmode:
     mode: 511

@@ -112,7 +112,7 @@ class ObjectMetadata(avocado.Test):
             build_paths = json.load(json_f)
 
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("server_group",
+        self.server_group = self.params.get("name",
                                             '/server/',
                                             'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')

@@ -56,7 +56,7 @@ class ConnectTest(Test):
         self.hostlist = self.params.get("test_machines",'/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        server_group = self.params.get("server_group",'/server/','daos_server')
+        server_group = self.params.get("name",'/server/','daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 

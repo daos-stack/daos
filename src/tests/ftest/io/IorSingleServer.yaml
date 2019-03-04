@@ -18,7 +18,7 @@ hosts:
                     - boro-E
 timeout: 540
 server:
-    server_group: daos_server
+    name: daos_server
 createtests:
     createmode:
         mode_RW:

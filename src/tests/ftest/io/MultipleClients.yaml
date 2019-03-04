@@ -9,7 +9,7 @@ hosts:
                     - boro-C
                     - boro-D
 server:
-    server_group: daos_server
+    name: daos_server
 pool:
     createmode:
         mode_RW:

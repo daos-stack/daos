@@ -33,7 +33,7 @@ servers:
 
   # Storage definitions
 
-  scm_mount: /mnt/daos	# map to -s /mnt/daos
+  scm_mount: /mnt/daos # map to -s /mnt/daos
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
   # service with -n <path>)

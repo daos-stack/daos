@@ -33,10 +33,14 @@ import resource
 import signal
 import fcntl
 import errno
+import yaml
 
 from avocado.utils import genio
 
 sessions = {}
+
+DEFAULT_YAML_FILE = "utils/config/examples/daos_server_sockets.yml"
+AVOCADO_YAML_FILE = "utils/config/daos_avocado_test.yml"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -44,7 +48,111 @@ class ServerFailed(Exception):
 # a callback function used when there is cmd line I/O, not intended
 # to be used outside of this file
 def printFunc(thestring):
-        print("<SERVER>" + thestring)
+    print("<SERVER>" + thestring)
+
+def nvme_yaml_config(default_yaml_value, bdev, enabled=False):
+    """
+    Enable/Disable NVMe Mode.
+    By default it's Enabled in yaml file so disable to run with ofi+sockets.
+    """
+    if 'bdev_class' in default_yaml_value['servers'][0]:
+        if default_yaml_value['servers'][0]['bdev_class'] == bdev and not enabled:
+            del default_yaml_value['servers'][0]['bdev_class']
+    if enabled:
+        default_yaml_value['servers'][0]['bdev_class'] = bdev
+
+def remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp):
+    """
+    Function to remove "!mux" from yaml file and create new tmp file
+    Args:
+        avocado_yaml_file: Avocado test yaml file
+        avocado_yaml_file_tmp: Avocado temporary test yaml file
+    """
+    with open(avocado_yaml_file, 'r') as rfile:
+        filedata = rfile.read()
+    filedata = filedata.replace('!mux', '')
+    with open(avocado_yaml_file_tmp, 'w') as wfile:
+        wfile.write(filedata)
+
+def update_server_options(avocado_yaml_value, default_yaml_value):
+    """
+    Update the 'server_options' from avocado_yaml_value dictionary to default_yaml_value dictionary.
+    """
+    default_yaml_env = default_yaml_value["servers"][0]['env_vars']
+
+    if 'server_options' in avocado_yaml_value:
+        avocado_yaml_options = avocado_yaml_value['server_options']
+        #Iterate through the server_options value from test file
+        for key, val in avocado_yaml_options.iteritems():
+            if 'env_vars' in key:
+                for no_of_env in enumerate(val):
+                    for env_k, env_v in no_of_env[1].iteritems():
+                        env_index = [default_yaml_env.index(i)
+                                     for i in  default_yaml_env if env_k in i]
+                        #Update the Existing environment variable
+                        if env_index:
+                            default_yaml_env[env_index[0]] = "{}={}".format(env_k, env_v)
+                        #Add new environment variable
+                        else:
+                            default_yaml_env.append("{}={}".format(env_k, env_v))
+            #Update/Add other non env_vars variable
+            else:
+                default_yaml_value["servers"][0].update({key:val})
+
+def create_server_yaml(basepath):
+    """
+    This function is to create DAOS server configuration YAML file based on Avocado test Yaml file.
+    Args:
+        - basepath = DAOS install basepath
+    """
+    #Read the default utils/config/examples/daos_server_sockets.yml
+    try:
+        with open('{}/{}'.format(basepath, DEFAULT_YAML_FILE), 'r') as read_file:
+            default_yaml_value = yaml.load(read_file)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Read {}/{}".format(basepath, DEFAULT_YAML_FILE))
+
+    #Read the values from avocado_testcase.yaml file if test ran with Avocado.
+    avocado_yaml_value = ""
+    if "AVOCADO_TEST_DATADIR" in os.environ:
+        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).split(".")[0] + ".yaml"
+        avocado_yaml_file_tmp = '{}.tmp'.format(avocado_yaml_file)
+
+        # Yaml Python module is not able to read !mux so need to remove !mux before reading.
+        remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp)
+
+        # Read avocado test yaml file.
+        try:
+            with open('{}'.format(avocado_yaml_file_tmp), 'r') as read_file:
+                avocado_yaml_value = yaml.load(read_file)
+        except Exception as excpn:
+            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+            traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+            raise ServerFailed("Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
+        #Remove temporary file
+        os.remove(avocado_yaml_file_tmp)
+
+    #Update main values from avocado_testcase.yaml in DAOS yaml variables.
+    if 'server' in avocado_yaml_value:
+        default_yaml_value.update(avocado_yaml_value["server"])
+
+    #Disable NVMe as it's Enabled in utils/config/examples/daos_server_sockets.yml
+    nvme_yaml_config(default_yaml_value, "nvme")
+
+    # Update servers: instance value in DAOS yaml
+    update_server_options(avocado_yaml_value, default_yaml_value)
+
+    #Write default_yaml_value dictionary in to AVOCADO_YAML_FILE, This will be used to start
+    #with daos_server -o option.
+    try:
+        with open('{}/{}'.format(basepath, AVOCADO_YAML_FILE), 'w') as write_file:
+            yaml.dump(default_yaml_value, write_file, default_flow_style=False)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Write {}/{}".format(basepath, AVOCADO_YAML_FILE))
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
@@ -56,6 +164,9 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         servers = [line.split(' ')[0]
                    for line in genio.read_all_lines(hostfile)]
         server_count = len(servers)
+
+        #Create the DAOS server configuration yaml file to pass with daos_server -o <FILE_NAME>
+        create_server_yaml(basepath)
 
         # first make sure there are no existing servers running
         killServer(servers)
@@ -72,30 +183,21 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
 
-        # before any set in env are added to env_args, add any user supplied
-        # envirables to environment first
+        env_args = []
+        # Add any user supplied environment
         if env_dict is not None:
             for k, v in env_dict.items():
                 os.environ[k] = v
-
-        env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
-                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*']
-
-        env_args = []
-        for (env_var, env_val) in os.environ.items():
-            for pat in env_vars:
-                if re.match(pat, env_var):
-                    env_args.extend(["-x", "{}={}".format(env_var, env_val)])
+                env_args.extend(["-x", "{}={}".format(k, v)])
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
         server_cmd.extend(env_args)
-        server_cmd.extend([daos_srv_bin, "-g", setname, "-c", "1",
+        server_cmd.extend([daos_srv_bin,
                            "-a", os.path.join(basepath, "install", "tmp"),
-                           "-d", os.path.join(os.sep, "var", "run", "user",
-                           str(os.geteuid()))])
+                           "-o", '{}/{}'.format(basepath, AVOCADO_YAML_FILE)])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 

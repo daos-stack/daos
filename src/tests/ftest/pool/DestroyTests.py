@@ -65,7 +65,7 @@ class DestroyTests(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.tmp = build_paths['PREFIX'] + '/tmp'
 
-        self.server_group = self.params.get("server_group",
+        self.server_group = self.params.get("name",
                                             '/server/',
                                             'daos_server')
 

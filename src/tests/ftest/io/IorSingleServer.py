@@ -48,7 +48,7 @@ class IorSingleServer(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API

@@ -51,7 +51,7 @@ class SimpleCreateDeleteTest(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group",'/server/',
+        self.server_group = self.params.get("name",'/server/',
                                            'daos_server')
 
         # setup the DAOS python API

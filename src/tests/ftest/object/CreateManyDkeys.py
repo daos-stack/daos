@@ -52,7 +52,7 @@ class CreateManyDkeys(Test):
             build_paths = json.load(json_f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         tmp = build_paths['PREFIX'] + '/tmp'
-        server_group = self.params.get("server_group",
+        server_group = self.params.get("name",
                                        '/server/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')

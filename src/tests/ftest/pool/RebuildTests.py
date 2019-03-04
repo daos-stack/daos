@@ -77,7 +77,7 @@ class RebuildTests(Test):
         # the rebuild tests need to redo this stuff each time so not in setup
         # as it usually would be
         setid = self.params.get("setname", '/run/testparams/setnames/')
-        server_group = self.params.get("server_group",
+        server_group = self.params.get("name",
                                        '/server/',
                                        'daos_server')
 
@@ -240,7 +240,7 @@ class RebuildTests(Test):
         # the rebuild tests need to redo this stuff each time so not in setup
         # as it usually would be
         setid = self.params.get("setname", '/run/testparams/setnames/')
-        server_group = self.params.get("server_group",
+        server_group = self.params.get("name",
                                        '/server/',
                                        'daos_server')
 
