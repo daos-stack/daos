@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2018-2019 Intel Corporation
+# (C) Copyright 2018-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -49,8 +49,18 @@ def number_of_failures():
             print("Building Raft Tests failed due to\n{}".format(e))
             return TEST_NOT_RUN
     else:
-        os.chdir(os.path.join("build", DIR, "src"))
-        res = subprocess.check_output("./tests_main", shell=True)
+        tgtdir = os.path.join("build", DIR, "src")
+        print("IS FILE: " + str(os.path.isfile(os.path.join("build", DIR, "src", "tests_main"))))
+        print("DIRECTORY:::::::: " + tgtdir)
+        print(os.listdir(tgtdir))
+        os.chdir(tgtdir)
+        print("CWD:::::::: " + os.getcwd())
+        print(os.listdir("."))
+        try:
+            res = subprocess.check_output("./tests_main", shell=True)
+        except Exception as e:
+            print("Running Raft Tests failed due to\n{}".format(e))
+            return TEST_NOT_RUN
 
     for line in res.split('\n'):
         if line.startswith("not ok"):
