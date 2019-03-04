@@ -1,5 +1,7 @@
 # DAOS Client Library
 
+- <a href="/src/include/">libdaos API</a> and <a href="/doc/man/man3/">man pages</a>
+
 ## Event & Event Queue
 
 ## Task Engine Integration
