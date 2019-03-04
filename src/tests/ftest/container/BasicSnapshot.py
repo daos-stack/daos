@@ -45,6 +45,7 @@ from daos_api import DaosContext, DaosPool, DaosContainer, DaosSnapshot, DaosLog
 class BasicSnapshot(Test):
     """
     DAOS-1370 Basic snapshot test
+
     Test Class Description:
     Test that a snapshot taken of a container remains unchaged even after an
     object in the container has been updated 500 times.
