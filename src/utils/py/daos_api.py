@@ -1629,6 +1629,82 @@ class DaosContainer(object):
 
         return results
 
+class DaosSnapshot(object):
+    """ A python object that can represent a DAOS snapshot. We do not save the
+    coh in the snapshot since it is different each time the container is opened.
+    """
+    def __init__(self, context, name=None):
+        """The epoch is represented as a Python integer so when sending it to
+        libdaos we know to always convert it to a ctype.
+        """
+        self.context = context
+        self.name = name # currently unused
+        self.epoch = 0
+
+    def create(self, coh, epoch):
+        """ Send a snapshot creation request and store the info in the
+        DaosSnapshot object.
+        coh     --ctype.u_long handle on an open container
+        epoch   --the epoch number of the obj to be snapshotted
+        """
+        func = self.context.get_function('create-snap')
+        epoch = ctypes.c_uint64(epoch)
+        retcode = func(coh, ctypes.byref(epoch), None, None)
+        self.epoch = epoch.value
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+
+    def list(self, coh):
+        """ List this snapshot and check that its epoch is the same as the once
+        originally created.
+        coh --ctype.u_long handle on an open container
+        Returns the value of the epoch for this DaosSnapshot object.
+        """
+        func = self.context.get_function('list-snap')
+        num = ctypes.c_uint64(1)
+        epoch = ctypes.c_uint64(self.epoch)
+        anchor = Anchor()
+        retcode = func(coh, ctypes.byref(num), ctypes.byref(epoch), None,
+                       ctypes.byref(anchor), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+        return epoch.value
+
+    def handle(self, coh):
+        """ Get a tx handle into the snapshot and return the object found.
+        coh --ctype.u_long handle on an open container
+        returns a handle on the snapshot represented by this DaosSnapshot
+        object.
+        """
+        func = self.context.get_function('open-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        txhndl = ctypes.c_uint64(0)
+        retcode = func(coh, epoch, ctypes.byref(txhndl), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}"
+                               .format(retcode))
+        return txhndl
+
+    def destroy(self, coh, evnt=None):
+        """ Destroy the snapshot. The "epoch range" is a struct with the lowest
+        epoch and the highest epoch to destroy. We have only one epoch for this
+        single snapshot object.
+        coh     --ctype.u_long open container handle
+        evnt    --event (may be None)
+        # need container handle coh, and the epoch range
+        """
+        func = self.context.get_function('destroy-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        epr = EpochRange()
+        epr.epr_lo = epoch
+        epr.epr_hi = epoch
+        retcode = func(coh, epr, evnt)
+        if retcode != 0:
+            raise Exception("Failed to destroy the snapshot. RC: {0}"
+                            .format(retcode))
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -1710,7 +1786,11 @@ class DaosContext(object):
             'set-attr'       : self.libdaos.daos_cont_set_attr,
             'stop-service'   : self.libdaos.daos_pool_stop_svc,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update}
+            'update-obj'     : self.libdaos.daos_obj_update,
+            'create-snap'    : self.libdaos.daos_cont_create_snap,
+            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
+            'list-snap'      : self.libdaos.daos_cont_list_snap,
+            'open-snap'      : self.libdaos.daos_tx_open_snap}
 
     def __del__(self):
         """ cleanup the DAOS API """
