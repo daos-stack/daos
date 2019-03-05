@@ -10,10 +10,10 @@ The Python API for DAOS provides access to DAOS API functionality with an emphas
 
 The Python API is split into several files based on functionality:
 
-* The Python object API, located in the source tree at [src/utils/py/daos_api.py](daos_api.py).
-* The mapping of C structures to Python classes, located in the source tree at [src/utils/py/daos_cref.py](daos_cref.py)
+  * The Python object API, located in the source tree at [src/utils/py/daos_api.py](daos_api.py).
+  * The mapping of C structures to Python classes, located in the source tree at [src/utils/py/daos_cref.py](daos_cref.py)
 
-High-level abstraction classes exist to manipulate the tiers of DAOS storage:
+High-level abstraction classes exist to manipulate DAOS storage:
 ```python
 class DaosPool(object)
 class DaosContainer(object)
@@ -42,77 +42,68 @@ class DaosApiError(Exception)
 
 `DaosApiError` is a custom exception class raised by the API internally in the event of a failed DAOS action.
 
+Every function exposed in the DAOS C API supports both synchronous and asynchronous execution, and the Python API exposes this same functionality. Each API takes an input event. `DaosEvent` is the Python representation of this event. If the input event is `NULL`, the call is synchronous. If an event is supplied, the function will return immediately after submitting API requests to the underlying stack and the user can poll and query the event for completion.
+
 ### Ctypes
 
 Ctypes is a built-in Python module for interfacing Python with existing libraries written in C/C++. The Python API is built as an object-oriented wrapper around the DAOS libraries utilizing ctypes.
 
-Ctypes documentation can be found here https://docs.python.org/3/library/ctypes.html
+Ctypes documentation can be found here <https://docs.python.org/3/library/ctypes.html>
 
-The following demonstrates calling a C function `hello_world` from Python, with each input parameter to the C function being cast via ctypes:
+The following demonstrates a simplified example of calling the C function `daos_pool_tgt_exclude_out` from Python, with each input parameter to the C function being cast via ctypes. This also demonstrates struct representation via ctypes:
 
 ```C
-// hello_world.c
+// daos_exclude.c
 
 #include <stdio.h>
 
-void hello_world(int *a, int b);
-
-void hello_world(int *a, int b) {
-    printf("hello world\n");
-}
+int
+daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
+                          const d_rank_list_t *svc, struct d_tgt_list *tgts,
+                          daos_event_t *ev);
 ```
+
+All input parameters must be represented via ctypes. If a struct is required as an input parameter, a corresponding Python class can be created. For struct `d_tgt_list`:
+
+```c
+struct d_tgt_list {
+	d_rank_t	*tl_ranks;
+	int32_t		*tl_tgts;
+	uint32_t	tl_nr;
+};
+```
+```python
+class DTgtList(ctypes.Structure):
+    _fields_ = [("tl_ranks", ctypes.POINTER(ctypes.c_uint32)),
+                ("tl_tgts", ctypes.POINTER(ctypes.c_int32)),
+                ("tl_nr", ctypes.c_uint32)]
+```
+
+The shared object containing `daos_pool_tgt_exclude_out` can then be imported and the function called directly:
 
 ```python
-# hello_world.py
+# api.py
 
 import ctypes
+import uuid
+import conversion # utility library to convert C <---> Python UUIDs
 
-# correctly cast the parameters via ctypes to match C function's expected input
-a = ctypes.byref(1)
-b = ctypes.c_int(2)
+# init python variables
+p_uuid = str(uuid.uuid4())
+p_tgts = 2
+p_ranks = DaosPool.__pylist_to_array([2])
 
-# load the shared object
-my_lib = ctypes.CDLL('/full/path/to/hello_world.so')
-
-# now call it
-my_lib.hello_world(a, b)
-```
-
-In the event the C API takes in a struct as a parameter, the struct will also need to be represented via ctypes in Python:
-
-```C
-// hello_world.c
-
-#include <stdio.h>
-
-void hello_world(int *a, int b);
-
-typedef struct {
-    int foo;
-} my_struct;
-
-void hello_world(int *a, my_struct b) {
-    printf("hello world\n");
-}
-```
-
-```python
-# hello_world.py
-
-import ctypes
-
-class MyStruct(ctypes.Structure):
-    _fields_ = [("foo", ctypes.c_int)]
-
-# correctly cast the parameters via ctypes to match C function's expected input
-a = ctypes.byref(1)
-b = MyStruct(2)
+# cast python variables via ctypes as necessary
+c_uuid = str_to_c_uuid(p_uuid)
+c_grp = ctypes.create_string_buffer(b"daos_group_name")
+c_svc = ctypes.POINTER(2) # ensure pointers are cast/passed as such
+c_tgt_list = ctypes.POINTER(DTgtList(p_ranks, p_tgts, 2))) # again, DTgtList must be passed as pointer
 
 # load the shared object
-my_lib = ctypes.CDLL('/full/path/to/hello_world.so')
+my_lib = ctypes.CDLL('/full/path/to/daos_exclude.so')
 
 # now call it
-my_lib.hello_world(a, b)
+my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_svc, c_tgt_list, None)
 ```
 
 ### Error Handling
@@ -176,14 +167,14 @@ obj, tx = container.write_an_obj(thedata, size, dkey, akey, None, 5)
 
 Once a function has been added to the DAOS C API, it must be represented in the Python API. In the following example, the function table is extended to reference a new C API function `hello_world()`, and a corresponding Python function is created.
 
-1. A C function is added to the DAOS API:
+ 1. A C function is added to the DAOS API:
 
 ```c
 void
 hello_world(int *a, int b);
 ```
 
-2. The C function is added to the function table in the `DaosContext` class in `daos_api.py`:
+ 2. The C function is added to the function table in the `DaosContext` class in `daos_api.py`:
 
 ```python
 class DaosContext(object):
@@ -196,7 +187,7 @@ class DaosContext(object):
         }
 ```
 
-3. A corresponding Python function is added in `daos_api.py`. Consideration must be given to whether the added function is an operation on an existing Python class or if a new class must be created:
+ 3. A corresponding Python function is added in `daos_api.py`. Consideration must be given to whether the added function is an operation on an existing Python class or if a new class must be created:
 
 ```python
 # a corresponding hello_world Python API function is added
