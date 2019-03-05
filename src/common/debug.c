@@ -63,6 +63,77 @@ debug_fini_locked(void)
 	d_log_fini();
 }
 
+/**
+ * I/O bypass descriptor, all supported I/O bypass mode should be put in
+ * the dictionary below.
+ */
+struct io_bypass {
+	int	 iob_bit;	/**< bit flag for bypass mode */
+	char	*iob_str;	/**< string name for bypass mode */
+};
+
+struct io_bypass io_bypass_dict[] = {
+	{
+		.iob_bit	= IOBP_CLI_RPC,
+		.iob_str	= IOBP_ENV_CLI_RPC,
+	},
+	{
+		.iob_bit	= IOBP_SRV_BULK,
+		.iob_str	= IOBP_ENV_SRV_BULK,
+	},
+	{
+		.iob_bit	= IOBP_TARGET,
+		.iob_str	= IOBP_ENV_TARGET,
+	},
+	{
+		.iob_bit	= IOBP_NVME,
+		.iob_str	= IOBP_ENV_NVME,
+	},
+	{
+		.iob_bit	= IOBP_PM,
+		.iob_str	= IOBP_ENV_PM,
+	},
+	{
+		.iob_bit	= IOBP_PM_SNAP,
+		.iob_str	= IOBP_ENV_PM_SNAP,
+	},
+	{
+		.iob_bit	= IOBP_OFF,
+		.iob_str	= NULL,
+	},
+};
+
+unsigned int daos_io_bypass;
+
+static void
+io_bypass_init(void)
+{
+	char	*str = getenv(DENV_IO_BYPASS);
+	char	*tok;
+
+	if (!str)
+		return;
+
+	tok = strtok(str, ",");
+	while (tok) {
+		struct io_bypass *iob;
+
+		str = strtok(NULL, ",");
+		if (str)
+			str[-1] = '\0';
+
+		tok = daos_str_trimwhite(tok);
+		for (iob = &io_bypass_dict[0]; iob->iob_str; iob++) {
+			if (strcasecmp(tok, iob->iob_str) == 0) {
+				daos_io_bypass |= iob->iob_bit;
+				D_PRINT("debugging mode: %s is disabled\n",
+				       iob->iob_str);
+			}
+		}
+		tok = str;
+	};
+}
+
 void
 daos_debug_fini(void)
 {
@@ -125,6 +196,7 @@ daos_debug_init(char *logfile)
 		goto failed_unlock;
 	}
 
+	io_bypass_init();
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);
 
