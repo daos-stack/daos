@@ -603,19 +603,23 @@ static int
 oi_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	PMEMobjpool		*pop;
+	struct vos_pool		*vpool;
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	pop = vos_cont2pop(oiter->oit_cont);
+	vpool = vos_cont2pool(oiter->oit_cont);
 
-	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(oiter->oit_hdl, args);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
+
+	rc = dbtree_iter_delete(oiter->oit_hdl, args);
+
+	rc = vos_tx_end(vpool, rc);
+
+	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
-	} TX_END
-
+exit:
 	return rc;
 }
 

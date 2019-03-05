@@ -163,7 +163,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys)
 {
-	PMEMobjpool	  *pop;
+	struct vos_pool	  *vpool;
 	struct vos_object *obj;
 	int		   rc;
 
@@ -176,19 +176,24 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
-	pop = vos_obj2pop(obj);
-	TX_BEGIN(pop) {
-		if (dkey) { /* key punch */
-			rc = key_punch(obj, epoch, pm_ver, dkey,
-				       akey_nr, akeys, flags);
-		} else { /* object punch */
-			rc = obj_punch(coh, obj, epoch, flags);
-		}
+	vpool = vos_obj2pool(obj);
 
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
+
+	if (dkey) { /* key punch */
+		rc = key_punch(obj, epoch, pm_ver, dkey,
+			       akey_nr, akeys, flags);
+	} else { /* object punch */
+		rc = obj_punch(coh, obj, epoch, flags);
+	}
+
+	rc = vos_tx_end(vpool, rc);
+
+exit:
+	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
-	} TX_END
 
 	vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
@@ -1276,18 +1281,21 @@ static int
 obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 {
 	int		rc = 0;
-	PMEMobjpool	*pop;
+	struct vos_pool	*vpool;
 
 	D_DEBUG(DB_TRACE, "BTR delete called of obj\n");
-	pop = vos_obj2pop(oiter->it_obj);
+	vpool = vos_obj2pool(oiter->it_obj);
 
-	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(oiter->it_hdl, args);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
+
+	rc = dbtree_iter_delete(oiter->it_hdl, args);
+
+	rc = vos_tx_end(vpool, rc);
+exit:
+	if (rc != 0)
 		D_ERROR("Failed to delete iter entry: %d\n", rc);
-	} TX_END
-
 	return rc;
 }
 
@@ -1352,7 +1360,7 @@ static int
 vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, uint64_t attr, bool set)
 {
-	PMEMobjpool		*pop;
+	struct vos_pool		*vpool;
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {epoch, epoch};
 	int			 rc;
@@ -1362,28 +1370,32 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	pop = vos_obj2pop(obj);
-	TX_BEGIN(pop) {
-		rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
-				     sizeof(obj->obj_df->vo_oi_attr));
-		if (set) {
-			obj->obj_df->vo_oi_attr |= attr;
-		} else {
-			/* Only clear bits that are set */
-			uint64_t to_clear = attr & obj->obj_df->vo_oi_attr;
+	vpool = vos_obj2pool(obj);
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
 
-			obj->obj_df->vo_oi_attr ^= to_clear;
-		}
-		/* Need better error handling on this path but will defer til
-		 * using pmemobj API for transactions
-		 */
-		if (rc == 0)
-			rc = vos_df_ts_update(obj, &obj->obj_df->vo_latest,
-					      &epr);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
+			     sizeof(obj->obj_df->vo_oi_attr));
+	if (rc != 0)
+		goto end;
+
+	if (set) {
+		obj->obj_df->vo_oi_attr |= attr;
+	} else {
+		/* Only clear bits that are set */
+		uint64_t to_clear = attr & obj->obj_df->vo_oi_attr;
+
+		obj->obj_df->vo_oi_attr ^= to_clear;
+	}
+
+	rc = vos_df_ts_update(obj, &obj->obj_df->vo_latest, &epr);
+end:
+	rc = vos_tx_end(vpool, rc);
+exit:
+	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to set attributes on object: %d\n", rc);
-	} TX_END
+
 	vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
 }

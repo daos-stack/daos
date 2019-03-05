@@ -163,6 +163,7 @@ smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *bond)
 	struct smd_nvme_stream_df	nvme_stab_args;
 	struct smd_store		*store = get_smd_store();
 	struct d_uuid			ukey;
+	daos_iov_t			key, value;
 	int				rc	 = 0;
 
 	if (bond == NULL) {
@@ -184,21 +185,20 @@ smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *bond)
 
 	nvme_stab_args.ns_map = *bond;
 	smd_lock(SMD_STAB_LOCK);
-	TX_BEGIN(smd_store_ptr2pop(store)) {
-		daos_iov_t	key, value;
 
-		daos_iov_set(&key, &bond->nsm_stream_id, sizeof(int));
-		daos_iov_set(&value, &nvme_stab_args, sizeof(nvme_stab_args));
+	rc = smd_tx_begin(store);
+	if (rc != 0)
+		goto failed;
 
-		rc = dbtree_update(store->sms_stream_tab, &key, &value);
-		if (rc) {
-			D_ERROR("Adding a device : %d\n", rc);
-			pmemobj_tx_abort(ENOMEM);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_ERROR("Adding a stream bond entry: %d\n", rc);
-	} TX_END;
+	daos_iov_set(&key, &bond->nsm_stream_id, sizeof(int));
+	daos_iov_set(&value, &nvme_stab_args, sizeof(nvme_stab_args));
+
+	rc = dbtree_update(store->sms_stream_tab, &key, &value);
+
+	rc = smd_tx_end(store, rc);
+failed:
+	if (rc)
+		D_ERROR("Adding a device : %d\n", rc);
 	smd_unlock(SMD_STAB_LOCK);
 
 	return rc;
