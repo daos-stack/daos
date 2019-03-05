@@ -92,7 +92,10 @@ trap 'set +e
 restore_dist_files "${yaml_files[@]}"
 i=5
 while [ $i -gt 0 ]; do
-    pdsh -l jenkins -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "sudo umount /mnt/daos
+    pdsh -l jenkins -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "
+    if grep /mnt/daos /proc/mounts; then
+        sudo umount /mnt/daos
+    fi
     x=0
     while [ \$x -lt 30 ] &&
           grep $DAOS_BASE /proc/mounts &&
@@ -226,7 +229,7 @@ else
 fi
 
 # get stacktraces for the core files
-if ls core.*; then
+if ls core.* 2>/dev/null; then
     # this really should be a debuginfo-install command but our systems lag
     # current releases
     python_rpm=\$(rpm -q python)

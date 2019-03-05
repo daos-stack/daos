@@ -605,14 +605,36 @@ pipeline {
                                                sudo mkdir -p $DAOS_BASE
                                                trap 'set +e; set -x
                                                      cd
-                                                     sudo umount /mnt/daos
-                                                     sudo umount \"$DAOS_BASE\" || {
-                                                         echo "Failed to unmount $DAOS_BASE"
+                                                     i=10
+                                                     rc=0
+                                                     while [ \\\$i -gt 0 ]; do
+                                                         let i-=1
+                                                         rc=0
+                                                         if grep /mnt/daos /proc/mounts; then
+                                                             if ! sudo umount /mnt/daos; then
+                                                                 echo \"Failed to unmount /mnt/daos\"
+                                                                 let \\\$rc+=1
+                                                             fi
+                                                         fi
+                                                         if grep \"$DAOS_BASE" /proc/mounts; then
+                                                             if ! sudo umount \"$DAOS_BASE\"; then
+                                                                 echo "Failed to unmount $DAOS_BASE"
+                                                                 let \\\$rc+=1
+                                                             fi
+                                                         fi
+                                                         if [ \\\$rc = 0 ]; then
+                                                             break
+                                                         fi
+                                                     done
+                                                     if [ \\\$rc -gt 0 ]; then
                                                          ps axf
-                                                     }' EXIT
+                                                     fi' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
                                                cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh
+                                               rc=0
+                                               if ! OLD_CI=false utils/run_test.sh; then
+                                                   rc=\\\${PIPESTATUS[0]}
+                                               fi
                                                rm -rf run_test.sh/
                                                mkdir run_test.sh/
                                                [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
@@ -622,7 +644,8 @@ pipeline {
                                                      pgrep '(orterun|daos_server|daos_io_server)'; do
                                                    sleep 1
                                                    let x=\\\$x+1
-                                               done"''',
+                                               done
+                                               exit \\\$rc"''',
                               junit_files: null
                     }
                     post {
