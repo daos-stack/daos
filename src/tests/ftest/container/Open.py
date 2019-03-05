@@ -55,7 +55,7 @@ class OpenContainerTest(TestWithServers):
 
     def setUp(self):
         super(OpenContainerTest, self).setUp()
-        
+
         # common parameters used in pool create
         self.createmode = self.params.get("mode",'/run/createtests/createmode/')
         self.createsetid = self.params.get("setname",'/run/createtests/createset/')
