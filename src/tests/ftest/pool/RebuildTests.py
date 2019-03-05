@@ -80,11 +80,10 @@ class RebuildTests(Test):
 
     def tearDown(self):
         try:
-            # really make sure everything is gone
-	    ServerUtils.killServer(self.hostlist)
-            CheckForPool.CleanupPools(self.hostlist)
+	    ServerUtils.stopServer(hosts=self.hostlist)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            # really make sure everything is gone
+            CheckForPool.CleanupPools(self.hostlist)		
 
     def test_simple_rebuild(self):
         """
