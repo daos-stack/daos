@@ -447,7 +447,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (rc != 0)
 		D_GOTO(out_args, rc);
 
-	if (cli_bypass_rpc) {
+	if (daos_io_bypass & IOBP_CLI_RPC) {
 		rc = daos_rpc_complete(req, task);
 	} else {
 		rc = daos_rpc_send(req, task);

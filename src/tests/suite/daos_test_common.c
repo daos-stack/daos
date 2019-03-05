@@ -308,7 +308,6 @@ pool_destroy_safe(test_arg_t *arg)
 {
 	daos_pool_info_t		 pinfo;
 	daos_handle_t			 poh = arg->pool.poh;
-	bool				 connected = false;
 	int				 rc;
 
 	if (daos_handle_is_inval(poh)) {
@@ -319,8 +318,6 @@ pool_destroy_safe(test_arg_t *arg)
 		if (rc != 0) { /* destory straightaway */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
-		} else {
-			connected = true;
 		}
 	}
 
@@ -341,10 +338,10 @@ pool_destroy_safe(test_arg_t *arg)
 		}
 
 		/* no rebuild */
-		if (connected)
-			daos_pool_disconnect(poh, NULL);
 		break;
 	}
+
+	daos_pool_disconnect(poh, NULL);
 
 	rc = daos_pool_destroy(arg->pool.pool_uuid, arg->group, 1, NULL);
 	if (rc && rc != -DER_TIMEDOUT)
@@ -399,22 +396,6 @@ test_teardown(void **state)
 		if (rc) {
 			print_message("failed to destroy container "DF_UUIDF
 				      ": %d\n", DP_UUID(arg->co_uuid), rc);
-			return rc;
-		}
-	}
-
-	if (!daos_handle_is_inval(arg->pool.poh) && !arg->pool.slave) {
-		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-		arg->pool.poh = DAOS_HDL_INVAL;
-		if (arg->multi_rank) {
-			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-				      MPI_COMM_WORLD);
-			rc = rc_reduce;
-		}
-		if (rc) {
-			print_message("failed to disconnect pool "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->pool.pool_uuid),
-				      rc);
 			return rc;
 		}
 	}

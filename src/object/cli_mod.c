@@ -32,7 +32,6 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-bool	cli_bypass_rpc;
 bool	srv_io_dispatch = true;
 
 /**
@@ -41,14 +40,7 @@ bool	srv_io_dispatch = true;
 int
 dc_obj_init(void)
 {
-	char	*env;
 	int	 rc;
-
-	env = getenv(IO_BYPASS_ENV);
-	if (env && !strcasecmp(env, "cli_rpc")) {
-		D_DEBUG(DB_IO, "All client I/O RPCs will be dropped\n");
-		cli_bypass_rpc = true;
-	}
 
 	d_getenv_bool("DAOS_IO_SRV_DISPATCH", &srv_io_dispatch);
 	if (srv_io_dispatch)

@@ -44,7 +44,6 @@
 #define DAOS_VOS_VERSION 1
 
 extern struct dss_module_key vos_module_key;
-extern umem_class_id_t vos_mem_class;
 
 #define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
