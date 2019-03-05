@@ -41,7 +41,7 @@ set -e
 if [ ! -d "scons_local" ];then
   cd ..
 fi
-PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/:$PWD/src/utils/py:${PYTHONPATH}
+PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/:$PWD/src/tests/ftest/util/apricot:$PWD/src/utils/py:${PYTHONPATH}
 export PYTHONPATH
 
 if [ -z "$*" ]; then
