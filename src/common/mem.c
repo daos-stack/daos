@@ -410,6 +410,36 @@ static umem_ops_t	vmem_ops = {
 	.mo_tx_add_callback = vmem_tx_add_callback,
 };
 
+static int
+pmem_no_tx_add(struct umem_instance *umm, umem_id_t ummid,
+	    uint64_t offset, size_t size)
+{
+	return 0;
+}
+
+static int
+pmem_no_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
+{
+	return 0;
+}
+
+static umem_ops_t	pmem_no_snap_ops = {
+	.mo_id			= pmem_id,
+	.mo_addr		= pmem_addr,
+	.mo_equal		= pmem_equal,
+	.mo_tx_free		= pmem_tx_free,
+	.mo_tx_alloc		= pmem_tx_alloc,
+	.mo_tx_add		= pmem_no_tx_add,
+	.mo_tx_add_ptr		= pmem_no_tx_add_ptr,
+	.mo_tx_abort		= pmem_tx_abort,
+	.mo_tx_begin		= pmem_tx_begin,
+	.mo_tx_commit		= pmem_tx_commit,
+	.mo_reserve		= pmem_reserve,
+	.mo_cancel		= pmem_cancel,
+	.mo_tx_publish		= pmem_tx_publish,
+	.mo_tx_add_callback	= pmem_tx_add_callback,
+};
+
 /** Unified memory class definition */
 struct umem_class {
 	umem_class_id_t           umc_id;
@@ -428,6 +458,11 @@ static struct umem_class umem_class_defined[] = {
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
 		.umc_name	= "pmem",
+	},
+	{
+		.umc_id		= UMEM_CLASS_PMEM_NO_SNAP,
+		.umc_ops	= &pmem_no_snap_ops,
+		.umc_name	= "pmem_no_snap",
 	},
 	{
 		.umc_id		= UMEM_CLASS_UNKNOWN,

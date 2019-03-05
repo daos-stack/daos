@@ -93,4 +93,36 @@ int  daos_debug_init(char *logfile);
 /** finalize the debug system */
 void daos_debug_fini(void);
 
+/** I/O bypass tunables for performance debugging */
+enum {
+	IOBP_OFF		= 0,
+	/** client RPC is not sent */
+	IOBP_CLI_RPC		= (1 << 0),
+	/** server ignores bulk transfer (garbage data is stored) */
+	IOBP_SRV_BULK		= (1 << 1),
+	/** bypass target I/O, no VOS and BIO at all */
+	IOBP_TARGET		= (1 << 2),
+	/** server does not store bulk data in NVMe (drop it) */
+	IOBP_NVME		= (1 << 3),
+	/** metadata and small I/O are stored in DRAM */
+	IOBP_PM			= (1 << 4),
+	/** no PMDK snapshot (PMDK transaction will be broken) */
+	IOBP_PM_SNAP		= (1 << 5),
+};
+
+/**
+ * This environment is mostly for performance debugging, it can be set to
+ * combination of strings below, invalid combination will be ignored.
+ */
+#define DENV_IO_BYPASS		"DAOS_IO_BYPASS"
+
+#define IOBP_ENV_CLI_RPC	"cli_rpc"
+#define IOBP_ENV_SRV_BULK	"srv_bulk"
+#define IOBP_ENV_TARGET		"target"
+#define IOBP_ENV_NVME		"nvme"
+#define IOBP_ENV_PM		"pm"
+#define IOBP_ENV_PM_SNAP	"pm_snap"
+
+extern unsigned int daos_io_bypass;
+
 #endif /* __DAOS_DEBUG_H__ */
