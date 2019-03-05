@@ -1,0 +1,72 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts: !mux
+    test_machines1:
+      test_machines:
+        - boro-A
+server:
+  server_group: lustre_server
+
+createtests:
+  # specify the lustre mountpoint
+  # if a lustre is already mounted, run tests inside the existing filesystem
+  # if lustre is not mounted, lustre will be mounted on specified mountpoint
+  mountpoint: /mnt/testfs
+  pdsh: pdsh -t 10 -S -w # pdsh / clush
+  ltestpath: /home/riauxjb/lustre-release/lustre/tests/
+  llmountcfg: /home/riauxjb/lustre-release/lustre/tests/cfg/daos.sh
+  # set writeconfig to True to force rewrite of llmount config file
+  # if set to false, script check if config exists and will write the config file if not found
+  writeconfig: False
+  test-suites: "sanity sanity-flr"
+  # slow is global param at auster level
+  slow: True
+  sanity:
+    # sanity ONLY and EXCEPT (force/skip tests)
+    only: "17h 24B"
+    except: None #"17h 24C"
+    # if you want to run default tests, please pass None to only
+    default: "17h 24B 24C 24u 27A 27B 27D 27F 27G 27H 27a 27b 27e 27f 27g 27i 27j 27l 27r 27w 27wa 31p 33e 33f 36i 44A 56a 56aa 56b 56s 56t 56u 56v 56w 57b 65a 65b 65c 65d 65e 65f 65g 65h 65l 65m 101c 102b 102c 102d 102j 102n 103b 116a 130a 130b 130c 130d 130f 131a 133b 162b 184a 184b 184c 184d 184d 184e 184e 204a 204b 204c 204d 204e 204f 204g 204h 206 207a 207b 225a 225b 229 236 270f 272a 272b 272c 273a 300a 300b 300c 300d 300e 300f 300g 300h 300i 300k 300l 300l 300m 300n 300o 300p 402 405 406"
+  sanity-flr:
+    only: "0a"
+    except: None
+    default: "To be defined"
+  sanity-hsm:
+    only: "1A"
+    except: None
+    default: "To be defined"
+  filesystem:
+    lustre_sources: None
+    fsname: daos #fsname must match filename of sanity:cfg above
+    fstype: ldiskfs
+    mdscount: 2 # must be number of mds described bellow or less
+    osscount: 2 # must be number of oss described bellow or less
+    mdssize: 250000
+    ostsize: 1000000
+    nettype: tcp #tcp or o2ib
+# clients can be comma separated or given by range (must be
+# compatible with pdsh style)
+clients: boro-A
+mgs: 192.168.137.130
+mds:
+  mds1:
+    host:
+      - boro-A
+    dev:
+      - /root/mdt0
+  mds2:
+    host:
+      - boro-B
+    dev:
+      - /root/mdt1
+oss:
+  oss1:
+    host:
+      - boro-A
+    dev:
+      - /root/ost0
+  oss2:
+    host:
+      - boro-B
+    dev:
+      - /root/ost1
