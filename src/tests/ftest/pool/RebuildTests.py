@@ -83,7 +83,7 @@ class RebuildTests(Test):
 	    ServerUtils.stopServer(hosts=self.hostlist)
         finally:
             # really make sure everything is gone
-            CheckForPool.CleanupPools(self.hostlist)		
+            CheckForPool.CleanupPools(self.hostlist)
 
     def test_simple_rebuild(self):
         """
