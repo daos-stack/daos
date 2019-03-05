@@ -34,7 +34,7 @@ from avocado import main
 import ServerUtils
 import WriteHostFile
 from conversion import c_uuid_to_str
-from daos_api import Daoscontext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class ObjUpdateBadParam(TestWithServers):
     """

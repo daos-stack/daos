@@ -35,7 +35,7 @@ import ServerUtils
 import WriteHostFile
 from GeneralUtils import DaosTestError
 
-from daos_api import Daoscontext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000

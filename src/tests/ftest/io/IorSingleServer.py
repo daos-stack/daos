@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -48,8 +48,8 @@ class IorSingleServer(Test):
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.POOL = None
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.pool = None
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
         self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
@@ -70,8 +70,8 @@ class IorSingleServer(Test):
                 os.remove(self.hostfile_clients)
             if self.hostfile_servers is not None:
                 os.remove(self.hostfile_servers)
-            if self.POOL is not None and self.POOL.attached:
-                self.POOL.destroy(1)
+            if self.pool is not None and self.pool.attached:
+                self.pool.destroy(1)
         finally:
             ServerUtils.stopServer(hosts=self.hostlist_servers)
 
@@ -101,15 +101,15 @@ class IorSingleServer(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.POOL = DaosPool(self.Context)
-            self.POOL.create(createmode, createuid, creategid,
+            self.pool = DaosPool(self.context)
+            self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None, None, createsvc)
-            pool_uuid = self.POOL.get_uuid_str()
+            pool_uuid = self.pool.get_uuid_str()
             print ("pool_uuid: {}".format(pool_uuid))
             list = []
             svc_list = ""
             for i in range(createsvc):
-                list.append(int(self.POOL.svc.rl_ranks[i]))
+                list.append(int(self.pool.svc.rl_ranks[i]))
                 svc_list += str(list[i]) + ":"
             svc_list = svc_list[:-1]
 

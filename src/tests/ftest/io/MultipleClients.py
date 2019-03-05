@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ class MultipleClients(Test):
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.pool = None
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
@@ -104,7 +104,7 @@ class MultipleClients(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
                     createsize, createsetid, None, None, createsvc)
 

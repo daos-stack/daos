@@ -35,7 +35,7 @@ from avocado.utils import process
 import ServerUtils
 import WriteHostFile
 import CheckForPool
-from daos_api import Daoscontext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 def CheckHandle(buf_len, iov_len, buf, uuidstr, rank):
     """
@@ -49,7 +49,7 @@ def CheckHandle(buf_len, iov_len, buf, uuidstr, rank):
             build_paths = json.load(f)
 
         # setup the DAOS python API in this process
-        context = Daoscontext(build_paths['PREFIX'] + '/lib/')
+        context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         pool = DaosPool(context)
         pool.set_uuid_str(uuidstr)

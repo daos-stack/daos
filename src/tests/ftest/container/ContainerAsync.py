@@ -94,31 +94,31 @@ class ContainerAsync(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.Container1 = DaosContainer(self.context)
-            self.Container2 = DaosContainer(self.context)
+            self.container1 = DaosContainer(self.context)
+            self.container2 = DaosContainer(self.context)
 
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.create(poh, None, cb_func)
+            self.container1.create(poh, None, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after successful Container create: " , GLOB_RC)
+            print ("RC after successful container create: " , GLOB_RC)
 
             # Try to recreate container after destroying pool,
             # this should fail. Checking rc after failure.
             self.pool.destroy(1)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.create(poh, None, cb_func)
+            self.container2.create(poh, None, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC == 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after unsuccessful Container create: " , GLOB_RC)
+            print ("RC after unsuccessful container create: " , GLOB_RC)
 
-            # cleanup the Pool and Container
+            # cleanup the pool and container
             self.pool = None
 
         except DaosApiError as e:
@@ -155,31 +155,31 @@ class ContainerAsync(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.Container1 = DaosContainer(self.context)
-            self.Container2 = DaosContainer(self.context)
+            self.container1 = DaosContainer(self.context)
+            self.container2 = DaosContainer(self.context)
 
-            self.Container1.create(poh)
+            self.container1.create(poh)
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.destroy(1, poh, None, cb_func)
+            self.container1.destroy(1, poh, None, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after successful Container create: " , GLOB_RC)
+            print ("RC after successful container create: " , GLOB_RC)
 
             # Try to destroy container again, this should fail, as non-existent.
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.destroy(1, poh, None, cb_func)
+            self.container2.destroy(1, poh, None, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != -1003:
                 self.fail("RC not as expected in async test")
-            print ("RC after Container destroy failed:", GLOB_RC)
+            print ("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the Pool and Container
+            # cleanup the pool and container
             self.pool.disconnect()
             self.pool.destroy(1)
             self.pool = None
@@ -218,36 +218,36 @@ class ContainerAsync(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.Container1 = DaosContainer(self.context)
-            self.Container2 = DaosContainer(self.context)
+            self.container1 = DaosContainer(self.context)
+            self.container2 = DaosContainer(self.context)
 
-            self.Container1.create(poh)
+            self.container1.create(poh)
 
-            str_cuuid = self.Container1.get_uuid_str()
+            str_cuuid = self.container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.open(poh, cuuid, 2, cb_func)
+            self.container1.open(poh, cuuid, 2, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after successful Container create: " , GLOB_RC)
+            print ("RC after successful container create: " , GLOB_RC)
 
             # Try to open container2, this should fail, as non-existent.
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.open(None, None, None, cb_func)
+            self.container2.open(None, None, None, cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC == 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after Container destroy failed:", GLOB_RC)
+            print ("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the Pool and Container
-            self.Container1.close()
-            self.Container1.destroy()
+            # cleanup the pool and container
+            self.container1.close()
+            self.container1.destroy()
             self.pool.disconnect()
             self.pool.destroy(1)
             self.pool = None
@@ -287,37 +287,37 @@ class ContainerAsync(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.Container1 = DaosContainer(self.context)
-            self.Container2 = DaosContainer(self.context)
+            self.container1 = DaosContainer(self.context)
+            self.container2 = DaosContainer(self.context)
 
-            self.Container1.create(poh)
+            self.container1.create(poh)
 
-            str_cuuid = self.Container1.get_uuid_str()
+            str_cuuid = self.container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
 
-            self.Container1.open(poh, cuuid, 2)
+            self.container1.open(poh, cuuid, 2)
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.close(cb_func=cb_func)
+            self.container1.close(cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
-            print ("RC after successful Container create: " , GLOB_RC)
+            print ("RC after successful container create: " , GLOB_RC)
 
             # Try to open container2, this should fail, as non-existent.
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.close(cb_func=cb_func)
+            self.container2.close(cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC == 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
-            print ("RC after Container destroy failed:", GLOB_RC)
+            print ("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the Pool and Container
-            self.Container1.destroy()
+            # cleanup the pool and container
+            self.container1.destroy()
             self.pool.disconnect()
             self.pool.destroy(1)
             self.pool = None
@@ -356,41 +356,41 @@ class ContainerAsync(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.Container1 = DaosContainer(self.context)
-            self.Container2 = DaosContainer(self.context)
+            self.container1 = DaosContainer(self.context)
+            self.container2 = DaosContainer(self.context)
 
-            self.Container1.create(poh)
+            self.container1.create(poh)
 
-            str_cuuid = self.Container1.get_uuid_str()
+            str_cuuid = self.container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
 
-            # Open Container
-            self.Container1.open(poh, None, 2, None)
+            # Open container
+            self.container1.open(poh, None, 2, None)
 
             GLOB_SIGNAL = threading.Event()
-            self.Container1.query(cb_func=cb_func)
+            self.container1.query(cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
-            print ("RC after successful Container create: " , GLOB_RC)
+            print ("RC after successful container create: " , GLOB_RC)
 
-            # Close opened Container
-            self.Container1.close()
+            # Close opened container
+            self.container1.close()
 
             # Try to open container2, this should fail, as non-existent.
             # Checking rc after failure.
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            self.Container2.query(cb_func=cb_func)
+            self.container2.query(cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC == 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
-            print ("RC after Container destroy failed:", GLOB_RC)
+            print ("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the Pool and Container
-            self.Container1.destroy()
+            # cleanup the pool and container
+            self.container1.destroy()
             self.pool.disconnect()
             self.pool.destroy(1)
             self.pool = None

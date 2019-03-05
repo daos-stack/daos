@@ -72,7 +72,7 @@ class OpenClose(TestWithServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
                             createsize, createsetid, None)
 
@@ -80,28 +80,28 @@ class OpenClose(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.Container1 = DaosContainer(self.Context)
-            self.Container1.create(poh)
-            str_cuuid = self.Container1.get_uuid_str()
+            self.container1 = DaosContainer(self.context)
+            self.container1.create(poh)
+            str_cuuid = self.container1.get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
-            self.Container1.open(poh, cuuid, 2, None)
+            self.container1.open(poh, cuuid, 2, None)
 
             # Defining 'good' and 'bad' container handles
-            saved_coh = self.Container1.coh
+            saved_coh = self.container1.coh
             if coh_params[0] == 'GOOD':
-                coh = self.Container1.coh
+                coh = self.container1.coh
             else:
                 # create a second container, open to get a handle
                 # then close & destroy so handle is invalid
-                self.Container2 = DaosContainer(self.Context)
-                self.Container2.create(poh)
-                self.Container2.open(poh, cuuid, 2, None)
-                coh = self.Container2.coh
-                self.Container2.close()
-                self.Container2.destroy()
+                self.container2 = DaosContainer(self.context)
+                self.container2.create(poh)
+                self.container2.open(poh, cuuid, 2, None)
+                coh = self.container2.coh
+                self.container2.close()
+                self.container2.destroy()
 
             # close container with either good or bad handle
-            self.Container1.close(coh)
+            self.container1.close(coh)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -114,10 +114,10 @@ class OpenClose(TestWithServers):
 
             # close above failed so close for real with the right coh
             if saved_coh is not None:
-                self.Container1.close(saved_coh)
+                self.container1.close(saved_coh)
 
         finally:
-            self.Container1.destroy(1)
+            self.container1.destroy(1)
             self.pool.disconnect()
             self.pool.destroy(1)
             self.pool = None

@@ -72,7 +72,7 @@ class SimpleCreateDeleteTest(TestWithoutServers):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.Context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
@@ -80,7 +80,7 @@ class SimpleCreateDeleteTest(TestWithoutServers):
             pool.connect(1 << 1)
 
             # create a container
-            container = DaosContainer(self.Context)
+            container = DaosContainer(self.context)
             container.create(pool.handle)
 
             # now open it

@@ -37,7 +37,7 @@ import ServerUtils
 import WriteHostFile
 
 from daos_cref import RankList
-from daos_api import Daoscontext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class OpenContainerTest(TestWithServers):
     """
@@ -48,10 +48,10 @@ class OpenContainerTest(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         super(OpenContainerTest, self).__init__(*args, **kwargs)
-        self.POOL1 = None
-        self.POOL2 = None
-        self.CONTAINER1 = None
-        self.CONTAINER2 = None
+        self.pool1 = None
+        self.pool2 = None
+        self.container1 = None
+        self.container2 = None
 
     def setUp(self):
         super(OpenContainerTest, self).setUp()
@@ -61,24 +61,24 @@ class OpenContainerTest(TestWithServers):
         self.createsetid = self.params.get("setname",'/run/createtests/createset/')
         self.createsize  = self.params.get("size",'/run/createtests/createsize/')
 
-        # POOL 1 UID GID
+        # pool 1 UID GID
         self.createuid1  = self.params.get("uid",'/run/createtests/createuid1/')
         self.creategid1  = self.params.get("gid",'/run/createtests/creategid1/')
 
-        # POOL 2 UID GID
+        # pool 2 UID GID
         self.createuid2  = self.params.get("uid",'/run/createtests/createuid2/')
         self.creategid2  = self.params.get("gid",'/run/createtests/creategid2/')
 
     def tearDown(self):
         try:
-            if self.CONTAINER1 is not None:
-                self.CONTAINER1.destroy()
-            if self.CONTAINER2 is not None:
-                self.CONTAINER2.destroy()
-            if self.POOL1 is not None and self.POOL1.attached:
-                self.POOL1.destroy(1)
-            if self.POOL2 is not None and self.POOL2.attached:
-                self.POOL2.destroy(1)
+            if self.container1 is not None:
+                self.container1.destroy()
+            if self.container2 is not None:
+                self.container2.destroy()
+            if self.pool1 is not None and self.pool1.attached:
+                self.pool1.destroy(1)
+            if self.pool2 is not None and self.pool2.attached:
+                self.pool2.destroy(1)
         finally:
             super(OpenContainerTest, self).tearDown()
 
@@ -107,31 +107,31 @@ class OpenContainerTest(TestWithServers):
 
         try:
             # create two pools and try to create containers in these pools
-            self.POOL1 = DaosPool(self.context)
-            self.POOL1.create(self.createmode, self.createuid1, self.creategid1,
+            self.pool1 = DaosPool(self.context)
+            self.pool1.create(self.createmode, self.createuid1, self.creategid1,
                               self.createsize, self.createsetid, None)
 
-            self.POOL2 = DaosPool(self.context)
-            self.POOL2.create(self.createmode, self.createuid2, self.creategid2,
+            self.pool2 = DaosPool(self.context)
+            self.pool2.create(self.createmode, self.createuid2, self.creategid2,
                               self.createsize, None, None)
 
             # Connect to the pools
-            self.POOL1.connect(1 << 1)
-            self.POOL2.connect(1 << 1)
+            self.pool1.connect(1 << 1)
+            self.pool2.connect(1 << 1)
 
             # defines pool handle for container open
-            if pohlist[0] == 'POOL1':
-                poh = self.POOL1.handle
+            if pohlist[0] == 'pool1':
+                poh = self.pool1.handle
             else:
-                poh = self.POOL2.handle
+                poh = self.pool2.handle
 
-            # Create a container in POOL1
-            self.CONTAINER1 = DaosContainer(self.context)
-            self.CONTAINER1.create(self.POOL1.handle)
+            # Create a container in pool1
+            self.container1 = DaosContainer(self.context)
+            self.container1.create(self.pool1.handle)
 
             # defines test UUID for container open
-            if uuidlist[0] == 'POOL1':
-                struuid = self.CONTAINER1.get_uuid_str()
+            if uuidlist[0] == 'pool1':
+                struuid = self.container1.get_uuid_str()
                 containerUUID = uuid.UUID(struuid)
             else:
                 if uuidlist[0] == 'MFUUID':
@@ -140,22 +140,22 @@ class OpenContainerTest(TestWithServers):
                     containerUUID = uuid.uuid4() # random uuid
 
             # tries to open the container1
-            # open should be ok only if poh = POOL1.handle && containerUUID = CONTAINER1.uuid
-            self.CONTAINER1.open(poh, containerUUID)
+            # open should be ok only if poh = pool1.handle && containerUUID = container1.uuid
+            self.container1.open(poh, containerUUID)
 
             # wait a few seconds and then destroy containers
             time.sleep(5)
-            self.CONTAINER1.close()
-            self.CONTAINER1.destroy()
-            self.CONTAINER1 = None
+            self.container1.close()
+            self.container1.destroy()
+            self.container1 = None
 
             # cleanup the pools
-            self.POOL1.disconnect()
-            self.POOL1.destroy(1)
-            self.POOL1 = None
-            self.POOL2.disconnect()
-            self.POOL2.destroy(1)
-            self.POOL2 = None
+            self.pool1.disconnect()
+            self.pool1.destroy(1)
+            self.pool1 = None
+            self.pool2.disconnect()
+            self.pool2.destroy(1)
+            self.pool2 = None
 
             if expected_result in ['FAIL']:
                     self.fail("Test was expected to fail but it passed.\n")

@@ -134,7 +134,7 @@ class GlobalHandle(TestWithServers):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.Context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
             pool.connect(1 << 1)
@@ -149,7 +149,7 @@ class GlobalHandle(TestWithServers):
                     iov_len)
 
             # create a container
-            container = DaosContainer(self.Context)
+            container = DaosContainer(self.context)
             container.create(pool.handle)
             container.open()
 

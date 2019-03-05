@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-	(C) Copyright 2018 Intel Corporation.
+	(C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -50,9 +50,9 @@ class Permission(Test):
                                             'daos_server')
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.pool = None
-        self.d_log = DaosLog(self.Context)
+        self.d_log = DaosLog(self.context)
 
         # getting hostfile
         self.hostfile = None
@@ -100,7 +100,7 @@ class Permission(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.d_log.debug("Pool initialisation successful")
 
             self.pool.create(createmode, createuid, creategid,
@@ -144,7 +144,7 @@ class Permission(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.d_log.debug("Pool initialisation successful")
             self.pool.create(createmode,
                              createuid,
@@ -157,15 +157,15 @@ class Permission(Test):
             self.pool.connect(1 << permissions)
             self.d_log.debug("Pool Connect successful")
 
-            self.container = DaosContainer(self.Context)
+            self.container = DaosContainer(self.context)
             self.d_log.debug("Contianer initialisation successful")
 
             self.container.create(self.pool.handle)
-            self.d_log.debug("Container create successful")
+            self.d_log.debug("container create successful")
 
             # now open it
             self.container.open()
-            self.d_log.debug("Container open successful")
+            self.d_log.debug("container open successful")
 
             thedata = "a string that I want to stuff into an object"
             size = 45
@@ -173,7 +173,7 @@ class Permission(Test):
             akey = "this is the akey"
 
             self.container.write_an_obj(thedata, size, dkey, akey)
-            self.d_log.debug("Container write successful")
+            self.d_log.debug("container write successful")
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 

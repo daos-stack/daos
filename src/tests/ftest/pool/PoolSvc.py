@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import WriteHostFile
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
 
 class PoolSvc(Test):
+
     """
     Tests svc argument while pool create.
     :avocado: recursive
@@ -53,7 +54,7 @@ class PoolSvc(Test):
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.pool = None
 
         self.hostfile = None
@@ -90,7 +91,7 @@ class PoolSvc(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
                     createsize, createsetid, None, None, createsvc[0])
             self.pool.connect(1 << 1)
@@ -119,7 +120,7 @@ class PoolSvc(Test):
                 process.system(cmd)
                 self.pool.connect(1 << 1)
                 self.pool.disconnect()
-                server = DaosServer(self.Context, self.server_group, 2)
+                server = DaosServer(self.context, self.server_group, 2)
                 server.kill(1)
                 self.pool.exclude([2])
                 self.pool.connect(1 << 1)

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ class RebuildTests(Test):
             self.build_paths = json.load(f)
 
         # setup the DAOS python API
-        self.Context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
 
     def test_simple_rebuild(self):
         """
@@ -98,7 +98,7 @@ class RebuildTests(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.Context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
@@ -120,7 +120,7 @@ class RebuildTests(Test):
             pool_version = pool.pool_info.pi_rebuild_st.rs_version
 
             # create a container
-            container = DaosContainer(self.Context)
+            container = DaosContainer(self.context)
             container.create(pool.handle)
 
             # now open it
@@ -168,7 +168,7 @@ class RebuildTests(Test):
                         self.fail("Write data 1, read it back, didn't match\n")
 
             # kill a server that has
-            server = DaosServer(self.Context, server_group, rank)
+            server = DaosServer(self.context, server_group, rank)
             server.kill(1)
 
             # temporarily, the exclude of a failed target must be done
@@ -262,8 +262,8 @@ class RebuildTests(Test):
             # initialize python pool object then create the underlying
             # daos storage, the way the code is now the pools should be
             # on the same storage and have the same service leader
-            pool1 = DaosPool(self.Context)
-            pool2 = DaosPool(self.Context)
+            pool1 = DaosPool(self.context)
+            pool2 = DaosPool(self.context)
             pool1.create(createmode, createuid, creategid,
                          createsize, createsetid, None)
             pool2.create(createmode, createuid, creategid,
@@ -274,9 +274,9 @@ class RebuildTests(Test):
             pool2.connect(1 << 1)
 
             # create containers
-            container1 = DaosContainer(self.Context)
+            container1 = DaosContainer(self.context)
             container1.create(pool1.handle)
-            container2 = DaosContainer(self.Context)
+            container2 = DaosContainer(self.context)
             container2.create(pool2.handle)
 
             # now open them
@@ -336,7 +336,7 @@ class RebuildTests(Test):
                         self.fail("Wrote data P2, read it back, didn't match\n")
 
             # kill a server
-            server = DaosServer(self.Context, server_group, rank)
+            server = DaosServer(self.context, server_group, rank)
             server.kill(1)
 
             # temporarily, the exclude of a failed target must be done

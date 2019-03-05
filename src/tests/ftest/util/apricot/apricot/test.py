@@ -92,14 +92,8 @@ class Test(avocadoTest):
         self.tmp = None
         self.server_group = None
         self.daosctl = None
-        # TODO: harmonize the various CONTEXT, Context, context, etc.
-        self.CONTEXT = None
-        self.Context = None
         self.context = None
-        # TODO: harmonize the various POOL, pool, Pool, etc.
-        self.POOL = None
         self.pool = None
-        self.CONTAINER = None
         self.container = None
         self.hostlist = None
         self.hostlist_servers = None
@@ -115,10 +109,11 @@ class Test(avocadoTest):
 
     def setUp(self):
         self.log.info("setUp() executed from Apricot.Test")
-
+        super(Test, self).setUp()
 
     def tearDown(self):
         self.log.info("tearDown() executed from Apricot.Test")
+        super(Test, self).tearDown()
 
     def cancelForTicket(self, ticket):
         ''' Skip a test due to a ticket needing to be completed '''
@@ -140,8 +135,8 @@ class TestWithoutServers(Test):
         self.orterun = self.basepath + '/install/bin/orterun'
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
-        context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.d_log = DaosLog(context)
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.d_log = DaosLog(self.context)
         self.d_log.debug("Starting test {}".
                          format(self._Test__name)) # pylint: disable=no-member
         super(TestWithoutServers, self).setUp()

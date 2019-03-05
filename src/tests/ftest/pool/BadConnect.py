@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -125,11 +125,11 @@ class BadConnectTest(Test):
             # setup the DAOS python API
             with open('../../../.build_vars.json') as f:
                 data = json.load(f)
-            CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
+            context = DaosContext(data['PREFIX'] + '/lib/')
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(CONTEXT)
+            pool = DaosPool(context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
             # save this uuid since we might trash it as part of the test

@@ -42,16 +42,6 @@ class ObjOpenBadParam(TestWithServers):
 
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        """
-        Initialize values for variables that are used in tearDown() such that
-        if setUp() fails for any reason, tearDown() will avoid throwing
-        an AttributeError exception.
-        """
-        super(ObjOpenBadParam, self).__init__(*args, **kwargs)
-        self.container = None
-        self.pool = None
-
     def setUp(self):
         super(ObjOpenBadParam, self).setUp()
         try:
