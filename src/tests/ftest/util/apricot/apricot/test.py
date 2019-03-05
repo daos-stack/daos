@@ -197,7 +197,7 @@ class TestWithServers(TestWithoutServers):
 
         super(TestWithServers, self).tearDown()
 
-class TestWithServers(TestWithoutServersAndClients):
+class TestWithServersAndClients(TestWithServers):
     '''
     Run tests with DAOS servers
 
