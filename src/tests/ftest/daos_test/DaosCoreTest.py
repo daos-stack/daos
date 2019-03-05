@@ -77,11 +77,16 @@ class DaosCoreTest(Test):
                                                     filename)
                 # rename on each of the servers
                 for host in self.hostlist:
-                    subprocess.check_call(['ssh', host,
-                                           '[ -f \"{0}\" ] && '
-                                           '    mv \"{0}\" '
-                                           '    \"{1}\"'.format(logfile,
-                                                                new_logfile)])
+                    try:
+                        subprocess.check_output(['ssh', host,
+                                               '[ -f \"{0}\" ] && '
+                                               '    mv \"{0}\" '
+                                               '    \"{1}\"'.format(logfile,
+                                                                    new_logfile)],
+                                               stderr=subprocess.STDOUT)
+                    except subprocess.CalledProcessError as excpn:
+                        print excpn.output
+                        raise
             except KeyError:
                 pass
 
