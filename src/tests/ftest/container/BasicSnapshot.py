@@ -106,8 +106,8 @@ class BasicSnapshot(Test):
             # now open it
             self.container.open()
 
-        except DaosApiError as exception:
-            print(exception)
+        except DaosApiError as error:
+            print(error)
             print(traceback.format_exc())
             self.fail("Test failed before snapshot taken")
 
@@ -154,9 +154,9 @@ class BasicSnapshot(Test):
             self.snapshot.create(self.container.coh, epoch)
             print("Wrote an object and created a snapshot")
 
-        except DaosApiError as exception:
+        except DaosApiError as error:
             self.fail("Test failed during the initial object write.\n{0}"
-                      .format(exception))
+                      .format(error))
 
         # Make 500 changes to the data object. The write_an_obj function does a
         # commit when the update is complete
@@ -175,9 +175,9 @@ class BasicSnapshot(Test):
                                                          obj_cls=1)
                 new_obj.close()
                 more_transactions -= 1
-        except Exception as exception:
+        except Exception as error:
             self.fail("Test failed during the write of 500 objects.\n{0}"
-                      .format(exception))
+                      .format(error))
 
         # List the snapshot and make sure it contains the original epoch
         try:
@@ -188,9 +188,9 @@ class BasicSnapshot(Test):
                                 "snapshotted.")
             print("After 500 additional commits the snapshot is still "
                   "available")
-        except Exception as exception:
+        except Exception as error:
             self.fail("Test was unable to list the snapshot\n{0}"
-                      .format(exception))
+                      .format(error))
 
         # Make sure the data in the snapshot is the original data.
         # Get a handle for the snapshot and read the object at dkey, akey.
@@ -204,12 +204,12 @@ class BasicSnapshot(Test):
                 raise Exception("The data in the snapshot is not the same as "
                                 "the original data")
             print("The snapshot data matches the data originally written.")
-        except Exception as exception:
+        except Exception as error:
             self.fail("Error when retrieving the snapshot data.\n{0}"
-                      .format(exception))
+                      .format(error))
         # Now destroy the snapshot
         try:
             self.snapshot.destroy(self.container.coh)
             print("Snapshot successfully destroyed")
-        except Exception as exception:
-            self.fail("{0}".format(exception))
+        except Exception as error:
+            self.fail("{0}".format(error))
