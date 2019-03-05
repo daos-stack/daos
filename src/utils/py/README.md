@@ -10,8 +10,8 @@ The Python API for DAOS provides access to DAOS API functionality with an emphas
 
 The Python API is split into several files based on functionality:
 
-  * The Python object API, located in the source tree at [src/utils/py/daos_api.py](daos_api.py).
-  * The mapping of C structures to Python classes, located in the source tree at [src/utils/py/daos_cref.py](daos_cref.py)
+* The Python object API, located in the source tree at [src/utils/py/daos_api.py](daos_api.py).
+* The mapping of C structures to Python classes, located in the source tree at [src/utils/py/daos_cref.py](daos_cref.py)
 
 High-level abstraction classes exist to manipulate DAOS storage:
 ```python
@@ -27,7 +27,7 @@ class IORequest(object)
 
 `DaosObj` is a Python class representing a DAOS object. Functionality such as creating/deleting objects in a container, 'punching' objects (delete an object from the specified transaction only), and object query.
 
-`IORequest` is a Python class representing a DAOS transaction. Functionality is exposed to create, delete, and modify DAOS transactions.
+`IORequest` is a Python class representing a read or write request against a DAOS object.
 
 Several classes exist for management purposes as well:
 ```python
@@ -36,13 +36,13 @@ class DaosLog
 class DaosApiError(Exception)
 ```
 
-`DaosContext` is a wrapper around the DAOS libraries. It is initialized with the path where DAOS libraries can be found. It describes the environmental context in which to run.
+`DaosContext` is a wrapper around the DAOS libraries. It is initialized with the path where DAOS libraries can be found.
 
 `DaosLog` exposes functionality to write messages to the DAOS client log.
 
 `DaosApiError` is a custom exception class raised by the API internally in the event of a failed DAOS action.
 
-Every function exposed in the DAOS C API supports both synchronous and asynchronous execution, and the Python API exposes this same functionality. Each API takes an input event. `DaosEvent` is the Python representation of this event. If the input event is `NULL`, the call is synchronous. If an event is supplied, the function will return immediately after submitting API requests to the underlying stack and the user can poll and query the event for completion.
+Most functions exposed in the DAOS C API support both synchronous and asynchronous execution, and the Python API exposes this same functionality. Each API takes an input event. `DaosEvent` is the Python representation of this event. If the input event is `NULL`, the call is synchronous. If an event is supplied, the function will return immediately after submitting API requests to the underlying stack and the user can poll and query the event for completion.
 
 ### Ctypes
 
@@ -50,7 +50,7 @@ Ctypes is a built-in Python module for interfacing Python with existing librarie
 
 Ctypes documentation can be found here <https://docs.python.org/3/library/ctypes.html>
 
-The following demonstrates a simplified example of calling the C function `daos_pool_tgt_exclude_out` from Python, with each input parameter to the C function being cast via ctypes. This also demonstrates struct representation via ctypes:
+The following demonstrates a simplified example of creating a Python wrapper for the C function `daos_pool_tgt_exclude_out`, with each input parameter to the C function being cast via ctypes. This also demonstrates struct representation via ctypes:
 
 ```C
 // daos_exclude.c
@@ -167,14 +167,14 @@ obj, tx = container.write_an_obj(thedata, size, dkey, akey, None, 5)
 
 Once a function has been added to the DAOS C API, it must be represented in the Python API. In the following example, the function table is extended to reference a new C API function `hello_world()`, and a corresponding Python function is created.
 
- 1. A C function is added to the DAOS API:
+1. A C function is added to the DAOS API:
 
 ```c
 void
 hello_world(int *a, int b);
 ```
 
- 2. The C function is added to the function table in the `DaosContext` class in `daos_api.py`:
+2. The C function is added to the function table in the `DaosContext` class in `daos_api.py`:
 
 ```python
 class DaosContext(object):
@@ -187,7 +187,7 @@ class DaosContext(object):
         }
 ```
 
- 3. A corresponding Python function is added in `daos_api.py`. Consideration must be given to whether the added function is an operation on an existing Python class or if a new class must be created:
+3. A corresponding Python function is added in `daos_api.py`. Consideration must be given to whether the added function is an operation on an existing Python class or if a new class must be created:
 
 ```python
 # a corresponding hello_world Python API function is added
@@ -208,7 +208,7 @@ def hello_world(self):
 
 #### C API Modifications
 
-If an existing C API is modified, a corresponding update must be made to the Python API. For example, if the member `foo` of `my_struct` were to change from `int foo` to `int *foo`, the Python class representing `my_struct` must also be modified:
+If an existing function is modified, a corresponding update must be made to the Python API. For example, if the member `foo` of `my_struct` were to change from `int foo` to `int *foo`, the Python class representing `my_struct` must also be modified:
 
 ```c
 typedef struct {
