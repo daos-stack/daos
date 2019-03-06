@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -461,6 +461,28 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
+
+/**
+ * Mount a DFS namespace in a special container designated as the root
+ * container. If the root container does not exist, this call creates it.
+ *
+ * \param[in]   poh     Pool connection handle
+ * \param[out]  dfs     Pointer to the root DFS created.
+ *
+ * \return              0 on Success. Negative on Failure.
+ */
+int
+dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
+
+/**
+ * Unmount the root DFS.
+ *
+ * \param[in]	dfs	Pointer to the root DFS file system.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_umount_root_cont(dfs_t *dfs);
 
 #if defined(__cplusplus)
 }
