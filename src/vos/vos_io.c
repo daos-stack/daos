@@ -370,9 +370,8 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			rsize = ent_array.ea_inob;
 		D_ASSERT(rsize == ent_array.ea_inob);
 
-		if (csum && csum->cs_len > 0 &&
-		    csum_copied < csum->cs_buf_len &&
-			csum->cs_chunksize > 0) {
+		if (csum && csum_copied < csum->cs_buf_len &&
+		    csum->cs_chunksize > 0) {
 			D_ASSERT(lo >= recx->rx_idx);
 			daos_size_t csum_nr = csum_chunk_count(
 				csum->cs_chunksize,
