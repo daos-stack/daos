@@ -209,10 +209,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 static void
 ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
 {
-	size_t size;
-
-	size = sizeof(ent_array->ea_ents[0]) * ent_array->ea_ent_nr;
-	memset(ent_array->ea_ents, 0, size);
 	ent_array->ea_ent_nr = 0;
 	ent_array->ea_inob = tcx->tc_inob;
 }
@@ -236,6 +232,11 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	return 0;
 }
 
+static inline struct evt_list_entry *
+evt_array_entry2le(struct evt_entry *ent)
+{
+	return container_of(ent, struct evt_list_entry, le_ent);
+}
 
 /**
  * Take an embedded entry, or allocate a new entry if all embedded entries
@@ -247,6 +248,7 @@ static int
 ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		struct evt_entry **entry, bool notify_realloc)
 {
+	struct evt_list_entry	*le;
 	uint32_t		 size;
 	int			 i;
 	int			 rc;
@@ -293,6 +295,9 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	D_ASSERT(ent_array->ea_ent_nr < ent_array->ea_size);
 
 	*entry = evt_ent_array_get(ent_array, ent_array->ea_ent_nr++);
+	le = evt_array_entry2le(*entry);
+	memset(le, 0, sizeof(*le));
+
 	return 0;
 }
 
@@ -389,21 +394,24 @@ int evt_ent_list_cmp_covered(const void *p1, const void *p2)
 	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, EVT_COVERED);
 }
 
-static inline struct evt_entry *
-evt_array_get_list_entry(d_list_t *link)
+static inline struct evt_list_entry *
+evt_array_link2le(d_list_t *link)
 {
-	struct evt_list_entry *le = d_list_entry(link, struct evt_list_entry,
-						 le_link);
+	return d_list_entry(link, struct evt_list_entry, le_link);
+}
+
+static inline struct evt_entry *
+evt_array_link2entry(d_list_t *link)
+{
+	struct evt_list_entry *le = evt_array_link2le(link);
 
 	return &le->le_ent;
 }
 
 static inline d_list_t *
-evt_array_get_entry_link(struct evt_entry *ent)
+evt_array_entry2link(struct evt_entry *ent)
 {
-	struct evt_list_entry *le;
-
-	le = container_of(ent, struct evt_list_entry, le_ent);
+	struct evt_list_entry *le = evt_array_entry2le(ent);
 
 	return &le->le_link;
 }
@@ -418,7 +426,7 @@ evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
 	struct evt_entry	*next_ent;
 
 	while (*next != head) {
-		next_ent = evt_array_get_list_entry(*next);
+		next_ent = evt_array_link2entry(*next);
 
 		if (next_ent->en_epoch > this_ent->en_epoch)
 			return next_ent; /* next_ent is a later update */
@@ -452,7 +460,8 @@ evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
 		struct evt_entry *next, struct evt_entry *split,
 		struct evt_entry *covered)
 {
-	daos_off_t	 diff;
+	struct evt_list_entry	*le;
+	daos_off_t		 diff;
 
 	*covered = *split = *current;
 	diff = next->en_sel_ext.ex_hi + 1 - split->en_sel_ext.ex_lo;
@@ -466,6 +475,9 @@ evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
 	evt_ent_addr_update(tcx, split, diff);
 	evt_ent_addr_update(tcx, covered,
 			    evt_extent_width(&current->en_sel_ext));
+	/* the split entry may also be covered so store a back pointer */
+	le = evt_array_entry2le(split);
+	le->le_prev = covered;
 }
 
 static d_list_t *
@@ -476,10 +488,10 @@ evt_insert_sorted(struct evt_entry *this_ent, d_list_t *head, d_list_t *current)
 	d_list_t		*this_link;
 	int			 cmp;
 
-	this_link = evt_array_get_entry_link(this_ent);
+	this_link = evt_array_entry2link(this_ent);
 
 	while (current != head) {
-		next_ent = evt_array_get_list_entry(current);
+		next_ent = evt_array_link2entry(current);
 		cmp = evt_ent_cmp(this_ent, next_ent, 0);
 		if (cmp < 0) {
 			d_list_add(this_link, current->prev);
@@ -495,6 +507,44 @@ out:
 }
 
 static int
+evt_truncate_next(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		  struct evt_entry *this_ent, struct evt_entry *next_ent)
+{
+	struct evt_list_entry	*le;
+	struct evt_entry	*temp_ent;
+	daos_size_t		 diff;
+	int			 rc;
+
+	le = evt_array_entry2le(next_ent);
+	if (le->le_prev &&
+	    le->le_prev->en_visibility == (EVT_COVERED | EVT_PARTIAL)) {
+		/* The truncated part has same visibility as prior split */
+		temp_ent = le->le_prev;
+		D_ASSERTF(temp_ent->en_sel_ext.ex_hi + 1 ==
+			  next_ent->en_sel_ext.ex_lo,
+			  "next_ent "DF_ENT" is not contiguous "DF_ENT"\n",
+			  DP_ENT(next_ent), DP_ENT(temp_ent));
+	} else {
+		/* allocate a record for truncated entry */
+		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+		if (rc != 0)
+			return rc;
+
+		*temp_ent = *next_ent;
+		temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
+	}
+
+	le->le_prev = temp_ent;
+	next_ent->en_visibility |= EVT_PARTIAL;
+	diff = this_ent->en_sel_ext.ex_hi + 1 - next_ent->en_sel_ext.ex_lo;
+	next_ent->en_sel_ext.ex_lo = this_ent->en_sel_ext.ex_hi + 1;
+	temp_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_lo - 1;
+	evt_ent_addr_update(tcx, next_ent, diff);
+
+	return 0;
+}
+
+static int
 evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 int *num_visible)
 {
@@ -507,7 +557,6 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	d_list_t		 covered;
 	d_list_t		*current;
 	d_list_t		*next;
-	daos_size_t		 diff;
 	bool			 insert;
 	int			 rc = 0;
 
@@ -517,21 +566,22 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	/* Now place all entries sorted in covered list */
 	evt_ent_array_for_each(this_ent, ent_array) {
-		next = evt_array_get_entry_link(this_ent);
+		next = evt_array_entry2link(this_ent);
 		d_list_add_tail(next, &covered);
 	}
 
 	/* Now uncover entries */
 	current = covered.next;
 	/* Some compilers can't tell that this_ent will be initialized */
-	this_ent = evt_array_get_list_entry(current);
+	this_ent = evt_array_link2entry(current);
 	insert = true;
 	next = current->next;
 
 	while (next != &covered) {
 		if (insert) {
-			this_ent = evt_array_get_list_entry(current);
+			this_ent = evt_array_link2entry(current);
 			this_ent->en_visibility |= EVT_VISIBLE;
+			evt_array_entry2le(this_ent)->le_prev = NULL;
 			(*num_visible)++;
 		}
 
@@ -558,22 +608,19 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 			continue;
 		}
 
-		/* allocate a record for truncated entry */
-		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
-		if (rc != 0)
-			return rc;
-
 		if (next_ent->en_epoch < this_ent->en_epoch) {
 			/* Case #2, next rect is partially under this rect,
-			 * Truncate left end of next_rec, reinsert.
+			 * Truncate left end of next_ent, reinsert.
+			 *
+			 * This case is complicated by the fact that the
+			 * left end may just be an extension of a previously
+			 * split but covered entry.
 			 */
-			*temp_ent = *next_ent;
-			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
-			next_ent->en_visibility |= EVT_PARTIAL;
-			diff = this_ext->ex_hi + 1 - next_ext->ex_lo;
-			next_ext->ex_lo = this_ext->ex_hi + 1;
-			temp_ent->en_sel_ext.ex_hi = next_ext->ex_lo - 1;
-			evt_ent_addr_update(tcx, next_ent, diff);
+			rc = evt_truncate_next(tcx, ent_array, this_ent,
+					       next_ent);
+			if (rc != 0)
+				return rc;
+
 			/* current now points at next_ent.  Remove it and
 			 * reinsert it in the list in case truncation moved
 			 * it to a new position
@@ -585,8 +632,16 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 			 * inserting this_ent again
 			 */
 			insert = false;
-		} else if (next_ext->ex_hi >= this_ext->ex_hi) {
-			/* Case #3, truncate entry */
+			continue;
+		}
+
+		/* allocate a record for truncated entry */
+		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+		if (rc != 0)
+			return rc;
+
+		if (next_ext->ex_hi >= this_ext->ex_hi) {
+			/* Case #3, truncate this_ent */
 			*temp_ent = *this_ent;
 			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
 			this_ent->en_visibility |= EVT_PARTIAL;
@@ -611,7 +666,7 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		}
 	}
 
-	this_ent = evt_array_get_list_entry(current);
+	this_ent = evt_array_link2entry(current);
 	D_ASSERT(!evt_flags_equal(this_ent->en_visibility, EVT_COVERED));
 	this_ent->en_visibility |= EVT_VISIBLE;
 	(*num_visible)++;
