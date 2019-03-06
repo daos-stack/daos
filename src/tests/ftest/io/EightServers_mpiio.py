@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018-19 Intel Corporation.
+    (C) Copyright 2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
+import IorUtils
 from MpioUtils import MpioUtils, MpioFailed
 from daos_api import DaosContext, DaosPool, DaosApiError
 
@@ -62,7 +63,7 @@ class EightServers(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         print "<<{}>>".format(self.basepath)
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -73,7 +74,7 @@ class EightServers(Test):
 
         self.hostlist_clients = self.params.get("test_clients", '/run/hosts/test_machines/*')
         self.np = self.params.get("np", '/run/ior/client_processes/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
+        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir, None)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
@@ -104,18 +105,12 @@ class EightServers(Test):
         expected_result = 'PASS'
 
         try:
-            # Do not need slots in hostfile
-            with open(self.hostfile_clients) as f:
-                newText = f.read().replace('slots=1', '')
-
-            with open(self.hostfile_clients, "w") as f:
-                f.write(newText)
-
             # initialize MpioUtils
             self.mpio = MpioUtils()
             if self.mpio.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
 
+            #print self.mpio.mpichinstall
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.Context)
@@ -131,17 +126,12 @@ class EightServers(Test):
 
             print ("svc_list: {}".format(svc_list))
 
-            self.mpio.run_ior(self.basepath, pool_uuid, svc_list, self.np,
-                              self.hostfile_clients, iorflags, iteration,
-                              transfer_size, block_size)
-
-            if expected_result == 'FAIL':
-                self.fail("Test was expected to fail but it passed.\n")
+            IorUtils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall, pool_uuid, \
+                                   svc_list, self.np, self.hostfile_clients, iorflags, \
+                                   iteration, transfer_size, block_size, True)
 
         except (DaosApiError, MpioFailed) as e:
             print(e)
-            if expected_result != 'FAIL':
-                self.fail("Test was expected to pass but it failed.\n")
 
     def test_ssf(self):
         """

@@ -20,7 +20,7 @@ hosts:
             - boro-P
 timeout: 2000
 server:
-    server_group: daos_server
+    name: daos_server
 pool:
     createmode:
         mode_RW:
@@ -31,7 +31,7 @@ pool:
         scm_size: 8000000000
         nvme_size: 30000000000
     createsvc:
-        svcn: 1
+        svcn: 5
 ior:
     client_processes: !mux
         np_1:
@@ -41,7 +41,7 @@ ior:
         np_128:
             np: 128
     iteration:
-        iter: 5
+        iter: 1
     iorflags:
         ssf:
             F: "-w -r"
