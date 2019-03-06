@@ -144,14 +144,12 @@ class DaosObjLayout(ctypes.Structure):
                 ("ol_shards", ctypes.POINTER(DaosObjShard * 5))]
 
 class CheckSum(ctypes.Structure):
-    _fields_ = [
-                ("cs_csum", ctypes.c_char_p),
+    _fields_ = [("cs_csum", ctypes.c_char_p),
                 ("cs_nr", ctypes.c_uint32),
                 ("cs_type", ctypes.c_uint16),
                 ("cs_len", ctypes.c_uint16),
                 ("cs_buf_len", ctypes.c_uint32),
-                ("cs_chunksize", ctypes.c_uint32),
-                ]
+                ("cs_chunksize", ctypes.c_uint32)]
 
 class Extent(ctypes.Structure):
     _fields_ = [("rx_idx", ctypes.c_uint64),
