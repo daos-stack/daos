@@ -93,7 +93,7 @@ class ContainerAttributeTest(Test):
             build_paths = json.load(f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
-                                       '/server/',
+                                       '/server_config/',
                                        'daos_server')
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
 

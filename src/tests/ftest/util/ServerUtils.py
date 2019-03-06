@@ -39,8 +39,8 @@ from avocado.utils import genio
 
 sessions = {}
 
-DEFAULT_YAML_FILE = "utils/config/examples/daos_server_sockets.yml"
-AVOCADO_YAML_FILE = "utils/config/daos_avocado_test.yml"
+DEFAULT_YAML_FILE = "src/tests/ftest/data/daos_server_baseline.yml"
+AVOCADO_YAML_FILE = "src/tests/ftest/data/daos_avocado_test.yml"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -73,31 +73,6 @@ def remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp):
     filedata = filedata.replace('!mux', '')
     with open(avocado_yaml_file_tmp, 'w') as wfile:
         wfile.write(filedata)
-
-def update_server_options(avocado_yaml_value, default_yaml_value):
-    """
-    Update the 'server_options' from avocado_yaml_value dictionary to default_yaml_value dictionary.
-    """
-    default_yaml_env = default_yaml_value["servers"][0]['env_vars']
-
-    if 'server_options' in avocado_yaml_value:
-        avocado_yaml_options = avocado_yaml_value['server_options']
-        #Iterate through the server_options value from test file
-        for key, val in avocado_yaml_options.iteritems():
-            if 'env_vars' in key:
-                for no_of_env in enumerate(val):
-                    for env_k, env_v in no_of_env[1].iteritems():
-                        env_index = [default_yaml_env.index(i)
-                                     for i in  default_yaml_env if env_k in i]
-                        #Update the Existing environment variable
-                        if env_index:
-                            default_yaml_env[env_index[0]] = "{}={}".format(env_k, env_v)
-                        #Add new environment variable
-                        else:
-                            default_yaml_env.append("{}={}".format(env_k, env_v))
-            #Update/Add other non env_vars variable
-            else:
-                default_yaml_value["servers"][0].update({key:val})
 
 def create_server_yaml(basepath):
     """
@@ -133,16 +108,15 @@ def create_server_yaml(basepath):
             raise ServerFailed("Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
         #Remove temporary file
         os.remove(avocado_yaml_file_tmp)
-
-    #Update main values from avocado_testcase.yaml in DAOS yaml variables.
-    if 'server' in avocado_yaml_value:
-        default_yaml_value.update(avocado_yaml_value["server"])
+    #Update values from avocado_testcase.yaml in DAOS yaml variables.
+    for key in avocado_yaml_value['server_config']:
+        if key in default_yaml_value['servers'][0]:
+            default_yaml_value['servers'][0][key] = avocado_yaml_value['server_config'][key]
+        elif key in default_yaml_value:
+            default_yaml_value[key] = avocado_yaml_value['server_config'][key]
 
     #Disable NVMe as it's Enabled in utils/config/examples/daos_server_sockets.yml
     nvme_yaml_config(default_yaml_value, "nvme")
-
-    # Update servers: instance value in DAOS yaml
-    update_server_options(avocado_yaml_value, default_yaml_value)
 
     #Write default_yaml_value dictionary in to AVOCADO_YAML_FILE, This will be used to start
     #with daos_server -o option.
@@ -174,8 +148,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         # clean the tmpfs on the servers
         for server in servers:
             subprocess.check_call(['ssh', server,
-                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-                "xargs -0r rm -rf"])
+                                   "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                                   "xargs -0r rm -rf"])
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
@@ -302,7 +276,7 @@ def stopServer(setname=None, hosts=None):
         raise ServerFailed("daos processes {} found on hosts "
                            "{} after stopServer() were "
                            "killed".format(', '.join(stdout.splitlines()),
-                           found_hosts))
+                                           found_hosts))
 
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously

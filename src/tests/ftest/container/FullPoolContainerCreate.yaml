@@ -3,7 +3,7 @@
 hosts:
     test_machines1:
       - boro-A
-server:
+server_config:
    name: daos_server
 conttests:
    createmode:

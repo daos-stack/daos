@@ -62,7 +62,7 @@ class ObjectDataValidation(avocado.Test):
             build_paths = json.load(json_f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
-                                       '/server/',
+                                       '/server_config/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)

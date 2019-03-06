@@ -60,7 +60,7 @@ class BadExcludeTest(Test):
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         server_group = self.params.get("name",
-                                       '/server/',
+                                       '/server_config/',
                                        'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)

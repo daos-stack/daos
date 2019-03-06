@@ -12,7 +12,7 @@ hosts:
     - boro-H
 # rebuild alone takes about 2hrs
 timeout: 9000
-server:
+server_config:
   name: daos_server
 daos_tests:
   num_clients:

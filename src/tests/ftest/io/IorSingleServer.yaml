@@ -17,7 +17,7 @@ hosts:
                     - boro-D
                     - boro-E
 timeout: 540
-server:
+server_config:
     name: daos_server
 createtests:
     createmode:

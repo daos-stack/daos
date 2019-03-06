@@ -66,7 +66,7 @@ class DestroyTests(Test):
         self.tmp = build_paths['PREFIX'] + '/tmp'
 
         self.server_group = self.params.get("name",
-                                            '/server/',
+                                            '/server_config/',
                                             'daos_server')
 
         # setup the DAOS python API

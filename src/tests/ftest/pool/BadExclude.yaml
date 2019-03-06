@@ -1,4 +1,4 @@
-server:
+server_config:
    name: test_server
 hosts:
   test_machines:

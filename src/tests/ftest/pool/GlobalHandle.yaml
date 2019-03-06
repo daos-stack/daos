@@ -4,7 +4,7 @@ hosts:
   test_machines:
     - boro-A
 timeout: 5000
-server:
+server_config:
   name: daos_server
 testparams:
   createmode:

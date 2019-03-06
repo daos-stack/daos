@@ -1,6 +1,6 @@
 # Note that stuff that is commented out represents tests that presently
 # fail and will be uncommented as the daos code is fixed
-server:
+server_config:
    name: scott_server
 hosts:
   test_machines:

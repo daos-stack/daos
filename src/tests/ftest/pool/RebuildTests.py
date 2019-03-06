@@ -78,7 +78,7 @@ class RebuildTests(Test):
         # as it usually would be
         setid = self.params.get("setname", '/run/testparams/setnames/')
         server_group = self.params.get("name",
-                                       '/server/',
+                                       '/server_config/',
                                        'daos_server')
 
         basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
@@ -241,7 +241,7 @@ class RebuildTests(Test):
         # as it usually would be
         setid = self.params.get("setname", '/run/testparams/setnames/')
         server_group = self.params.get("name",
-                                       '/server/',
+                                       '/server_config/',
                                        'daos_server')
 
         basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")

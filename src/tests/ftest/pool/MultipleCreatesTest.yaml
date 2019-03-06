@@ -4,7 +4,7 @@ hosts:
   test_machines:
     - boro-A
     - boro-B
-server:
+server_config:
    name: daos_server
 tests:
    modes:

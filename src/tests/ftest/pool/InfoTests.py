@@ -48,7 +48,7 @@ class InfoTests(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
         self.tmp = build_paths['PREFIX'] + '/tmp'
-        self.server_group = self.params.get("name", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 
         context = DaosContext(build_paths['PREFIX'] + '/lib/')

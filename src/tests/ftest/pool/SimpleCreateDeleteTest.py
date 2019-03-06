@@ -56,7 +56,7 @@ class SimpleCreateDeleteTest(Test):
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        server_group = self.params.get("name", '/server/', 'daos_server')
+        server_group = self.params.get("name", '/server_config/', 'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 

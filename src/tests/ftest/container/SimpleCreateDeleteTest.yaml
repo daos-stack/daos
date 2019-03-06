@@ -12,8 +12,13 @@ hosts: !mux
         - boro-D
         - boro-E
         - boro-F
-server:
+server_config:
    name: daos_server
+   cpus: [0-5]
+   fabric_iface: eth0
+   env_vars:
+    - ABT_ENV_MAX_NUM_XSTREAMS=100
+    - ABT_MAX_NUM_XSTREAMS=100
 conttests:
    createmode:
      mode: 511

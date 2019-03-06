@@ -9,7 +9,7 @@ hosts:
     - boro-E
     - boro-F
 timeout: 5000
-server:
+server_config:
   name: daos_server
 testparams:
   ranks: !mux

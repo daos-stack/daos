@@ -53,7 +53,7 @@ class ArrayObjTest(Test):
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("name",'/run/server/', 'daos_server')
+        self.server_group = self.params.get("name",'/run/server_config/', 'daos_server')
 
         # setup the DAOS python API
         self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')

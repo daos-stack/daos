@@ -56,7 +56,7 @@ class DaosCoreTest(Test):
             build_paths = json.load(build_vars)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("name", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server_config/', 'daos_server')
         self.daos_test = self.basepath + '/install/bin/daos_test'
         self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
@@ -77,17 +77,11 @@ class DaosCoreTest(Test):
                                                     filename)
                 # rename on each of the servers
                 for host in self.hostlist:
-                    try:
-                        output = subprocess.check_output(['ssh', host,
-                                               '[ -f \"{0}\" ] && '
-                                               '    mv \"{0}\" '
-                                               '    \"{1}\"'.format(logfile,
-                                                                    new_logfile)],
-                                               stderr=subprocess.STDOUT)
-                    except subprocess.CalledProcessError as excpn:
-                        print ("Status-Copy : FAIL", excpn.returncode, excpn.output)
-                        print ("Output = ",output)
-                        raise
+                    subprocess.check_call(['ssh', host,
+                                           '[ -f \"{0}\" ] && '
+                                           '    mv \"{0}\" '
+                                           '    \"{1}\"'.format(logfile,
+                                                                new_logfile)])
             except KeyError:
                 pass
 
