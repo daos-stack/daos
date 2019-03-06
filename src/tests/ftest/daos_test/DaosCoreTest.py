@@ -78,14 +78,15 @@ class DaosCoreTest(Test):
                 # rename on each of the servers
                 for host in self.hostlist:
                     try:
-                        subprocess.check_output(['ssh', host,
+                        output = subprocess.check_output(['ssh', host,
                                                '[ -f \"{0}\" ] && '
                                                '    mv \"{0}\" '
                                                '    \"{1}\"'.format(logfile,
                                                                     new_logfile)],
                                                stderr=subprocess.STDOUT)
                     except subprocess.CalledProcessError as excpn:
-                        print excpn.output
+                        print ("Status-Copy : FAIL", excpn.returncode, excpn.output)
+                        print ("Output = ",output)
                         raise
             except KeyError:
                 pass
