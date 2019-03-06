@@ -541,6 +541,12 @@ parse(int argc, char **argv)
 			dss_core_offset = nr;
 			break;
 		case 'g':
+			if (strlen(optarg) > sizeof(uuid_t) - 1) {
+				printf("group name must be shorter than %zu "
+				       "bytes\n", sizeof(uuid_t) - 1);
+				rc = -DER_INVAL;
+				break;
+			}
 			server_group_id = optarg;
 			break;
 		case 's':

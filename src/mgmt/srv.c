@@ -43,6 +43,11 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
+	.co_aggregate	= ds_mgmt_tgt_map_update_aggregator,
+	.co_pre_forward	= ds_mgmt_tgt_map_update_pre_forward,
+};
+
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition
  */
@@ -282,6 +287,12 @@ ds_mgmt_init()
 	if (rc)
 		return rc;
 
+	rc = ds_mgmt_system_module_init();
+	if (rc != 0) {
+		ds_mgmt_tgt_fini();
+		return rc;
+	}
+
 	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
 }
@@ -289,9 +300,16 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_system_module_fini();
 	ds_mgmt_tgt_fini();
 	D_DEBUG(DB_MGMT, "successfull fini call\n");
 	return 0;
+}
+
+static int
+ds_mgmt_cleanup()
+{
+	return ds_mgmt_svc_stop();
 }
 
 struct dss_module mgmt_module = {
@@ -300,6 +318,7 @@ struct dss_module mgmt_module = {
 	.sm_ver			= DAOS_MGMT_VERSION,
 	.sm_init		= ds_mgmt_init,
 	.sm_fini		= ds_mgmt_fini,
+	.sm_cleanup		= ds_mgmt_cleanup,
 	.sm_proto_fmt		= &mgmt_proto_fmt,
 	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,
 	.sm_handlers		= mgmt_handlers,

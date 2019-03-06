@@ -90,6 +90,12 @@ unsigned int	dss_tgt_nr;
 /** number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 
+unsigned int
+dss_ctx_nr_get(void)
+{
+	return DSS_CTX_NR_TOTAL;
+}
+
 #define REBUILD_DEFAULT_SCHEDULE_RATIO 30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 
