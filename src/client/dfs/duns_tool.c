@@ -73,7 +73,6 @@ link_hdlr(int argc, char *argv[])
 		}
 	}
 
-
 	rc = duns_link_path(path, attr);
 	if (rc)
 		fprintf(stderr, "Failed to link path %s\n", path);

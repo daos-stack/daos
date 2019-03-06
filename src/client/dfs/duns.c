@@ -65,7 +65,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	t = strtok_r(str, ".", &saveptr);
 	if (t == NULL) {
-		fprintf(stderr, "Invalid DAOS xattr format (%s).\n", str);
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
 		return -DER_INVAL;
 	}
 
@@ -99,6 +99,10 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	return 0;
 }
 
+/*
+ * TODO: should detect backend file system and if Lustre, use special LOV/LVM EA
+ * instead of regular extended attribute.
+ */
 int
 duns_link_path(const char *path, struct duns_attr_t attr)
 {
@@ -123,13 +127,13 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 	 */
 	svcl_str = getenv("DAOS_SVCL");
 	if (svcl_str == NULL) {
-		fprintf(stderr, "missing pool service rank list\n");
+		D_ERROR("missing pool service rank list\n");
 		return -DER_INVAL;
 	}
 
 	svcl = daos_rank_list_parse(svcl_str, ":");
 	if (svcl == NULL) {
-		fprintf(stderr, "Invalid pool service rank list\n");
+		D_ERROR("Invalid pool service rank list\n");
 		return -DER_INVAL;
 	}
 
@@ -170,15 +174,39 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 		D_GOTO(err_link, rc);
 	}
 
+	uuid_unparse(attr.da_puuid, pool);
+	daos_unparse_oclass(attr.da_oclass, oclass);
+	daos_unparse_ctype(attr.da_type, type);
+
 	/** generate a random container uuid and try to create it */
 	do {
 		uuid_generate(attr.da_cuuid);
+		uuid_unparse(attr.da_cuuid, cont);
+
+		/** store the daos attributes in the path xattr */
+		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass);
+		if (len < 90) {
+			D_ERROR("Failed to create xattr value\n");
+			D_GOTO(err_pool, rc = -DER_INVAL);
+		}
+
+		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
+		if (rc) {
+			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
+			D_GOTO(err_pool, rc = -DER_INVAL);
+		}
+
 		rc = daos_cont_create(poh, attr.da_cuuid, NULL, NULL);
 	} while (rc == -DER_EXIST);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
 		D_GOTO(err_pool, rc);
 	}
+
+	/*
+	 * TODO: Add a container attribute to store the inode number (or Lustre
+	 * FID) of the file.
+	 */
 
 	/** If this is a POSIX container, create DFS mount */
 	if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
@@ -200,24 +228,6 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 			D_ERROR("dfs_mount failed (%d)\n", rc);
 			D_GOTO(err_cont, rc = 1);
 		}
-	}
-
-	/** store the daos attributes in the path xattr */
-	uuid_unparse(attr.da_puuid, pool);
-	uuid_unparse(attr.da_cuuid, cont);
-	daos_unparse_oclass(attr.da_oclass, oclass);
-	daos_unparse_ctype(attr.da_type, type);
-
-	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass);
-	if (len < 90) {
-		D_ERROR("Failed to create xattr value\n");
-		D_GOTO(err_cont, rc = -DER_INVAL);
-	}
-
-	rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
-	if (rc) {
-		D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
-		D_GOTO(err_cont, rc = -DER_INVAL);
 	}
 
 	daos_pool_disconnect(poh, NULL);
