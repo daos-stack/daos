@@ -83,8 +83,7 @@ class DaosCoreTest(Test):
                                                '    mv \"{0}\" '
                                                '    \"{1}\"'.format(logfile,
                                                                     new_logfile)],
-                                               stderr=subprocess.STDOUT,
-                                               shell=True)
+                                               stderr=subprocess.STDOUT)
                     except subprocess.CalledProcessError as excpn:
                         print excpn.output
                         raise
