@@ -21,6 +21,14 @@ def main():
             break
 
     req = requests.get(base_url + '%s/steps' % node['id'])
-    print "Steps:\n", json.dumps(json.loads(req.text), indent=4)
+    steps = json.loads(req.text)
+    print "Steps:\n", json.dumps(steps, indent=4)
 
+    step = None
+    for step in steps:
+        print step['id'], step['displayName'], step['state']
+        if step['state'] == 'Running':
+            break
+
+    print "Node: {}, step: {}".format(node['id'], step['id'])
 main()
