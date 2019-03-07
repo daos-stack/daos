@@ -41,27 +41,6 @@ import (
 	secpb "github.com/daos-stack/daos/src/control/security/proto"
 )
 
-// ShowStorageCommand is the struct representing the command to list storage.
-type ShowStorageCommand struct{}
-
-// Execute is run when ShowStorageCommand activates
-//
-// Perform task then exit immediately. No config parsing performed.
-func (s *ShowStorageCommand) Execute(args []string) error {
-	config := newConfiguration()
-	mgmtControlServer, err := newControlService(&config)
-	if err != nil {
-		return log.WrapAndLogErr(err, "initialising ControlService")
-	}
-	mgmtControlServer.Setup()
-	mgmtControlServer.showLocalStorage()
-	mgmtControlServer.Teardown()
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
-	return nil
-}
-
 // cliOptions struct defined flags that can be used when invoking daos_server.
 type cliOptions struct {
 	Port        uint16             `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
@@ -75,6 +54,7 @@ type cliOptions struct {
 	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+	PrepNvme    PrepNvmeCommand    `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
 }
 
 func main() {
@@ -122,7 +102,7 @@ func main() {
 	if config.ControlLogFile != "" {
 		f, err := common.AppendFile(config.ControlLogFile)
 		if err != nil {
-			err = log.WrapAndLogErr(err, "creating log file")
+			log.Errorf("Failure creating log file: %s", err)
 			return
 		}
 		defer f.Close()

@@ -120,13 +120,9 @@ func (s *spdkSetup) reset() error {
 // Setup method implementation for nvmeStorage.
 //
 // Perform any setup to be performed before accessing NVMe devices.
+// NOTE: doesn't attempt SPDK prep which requires elevated privileges,
+//       that instead can be performed explicitly with subcommand.
 func (n *nvmeStorage) Setup() (err error) {
-	if err = n.spdk.reset(); err != nil {
-		return
-	}
-	if err = n.spdk.prep(); err != nil {
-		return
-	}
 	if err = n.Discover(); err != nil {
 		return
 	}
@@ -165,11 +161,11 @@ func (n *nvmeStorage) Discover() error {
 	}
 	// specify shmID to be set as opt in SPDK env init
 	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
-		return err
+		return errors.WithMessage(err, "SPDK env init, has setup been run?")
 	}
 	cs, ns, err := n.nvme.Discover()
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "SPDK discovery")
 	}
 	n.controllers = loadControllers(cs, ns)
 	n.initialized = true
@@ -186,7 +182,7 @@ func (n *nvmeStorage) Update(pciAddr string, path string, slot int32) error {
 		n.controllers = loadControllers(cs, ns)
 		return nil
 	}
-	return fmt.Errorf("nvme storage not initialized")
+	return errors.New("nvme storage not initialized")
 }
 
 // BurnIn method implementation for nvmeStorage
@@ -224,7 +220,7 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 			"BurnIn command string: %s %s %v", env, fioPath, cmds)
 		return
 	}
-	err = fmt.Errorf("nvme storage not initialized")
+	err = errors.New("nvme storage not initialized")
 	return
 }
 
