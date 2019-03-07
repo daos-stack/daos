@@ -38,7 +38,7 @@
  */
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@githubNotify-target-url") _
 
 def arch=""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -78,11 +78,11 @@ pipeline {
                     }
                     steps {
                         sh '''env
-                              ./blueocean.py
-                              exit 1'''
+                              ./blueocean.py'''
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*"
+                        sh 'exit 1'
                     }
                     post {
                         always {
