@@ -24,7 +24,6 @@
 #define D_LOGFAC	DD_FAC(dfs)
 
 #include <fuse3/fuse.h>
-#include <string.h>
 #include <errno.h>
 #include <stdio.h>
 #include <dirent.h>
@@ -49,6 +48,8 @@ struct dfuse_data {
 	char		*pool;
 	char		*svcl;
 	char		*group;
+	char		*cont;
+	bool		root_cont;
 	struct fuse	*fuse;
 };
 
@@ -61,173 +62,6 @@ do {								\
 		fprintf(stderr, "%s [%d]: "fmt, __func__,	\
 			__LINE__, ##__VA_ARGS__);		\
 } while (0)
-
-#define UINT64ENCODE(p, n)					\
-do {								\
-	uint64_t _n = (n);					\
-	size_t _i;						\
-	uint8_t *_p = (uint8_t *)(p);				\
-	for (_i = 0; _i < sizeof(uint64_t); _i++, _n >>= 8)	\
-		*_p++ = (uint8_t)(_n & 0xff);			\
-	for (; _i < 8; _i++)					\
-		*_p++ = 0;					\
-	(p) = (uint8_t *)(p) + 8;				\
-} while (0)
-
-#define UINT64DECODE(p, n)					\
-do {								\
-	/* WE DON'T CHECK FOR OVERFLOW! */			\
-	size_t _i;						\
-	n = 0;							\
-	(p) += 8;						\
-	for (_i = 0; _i < sizeof(uint64_t); _i++)		\
-		n = (n << 8) | *(--p);				\
-	(p) += 8;						\
-} while (0)
-
-/* Decode a variable-sized buffer */
-/* (Assumes that the high bits of the integer will be zero) */
-#define DECODE_VAR(p, n, l)					\
-do {                                                            \
-	size_t _i;						\
-	n = 0;							\
-	(p) += l;						\
-	for (_i = 0; _i < l; _i++)				\
-		n = (n << 8) | *(--p);				\
-	(p) += l;						\
-} while (0)
-
-/* Decode a variable-sized buffer into a 64-bit unsigned integer */
-/* (Assumes that the high bits of the integer will be zero) */
-#define UINT64DECODE_VAR(p, n, l) DECODE_VAR(p, n, l)
-
-/* Multiply two 128 bit unsigned integers to yield a 128 bit unsigned integer */
-static void
-duuid_mult128(uint64_t x_lo, uint64_t x_hi, uint64_t y_lo, uint64_t y_hi,
-	      uint64_t *ans_lo, uint64_t *ans_hi)
-{
-	uint64_t xlyl;
-	uint64_t xlyh;
-	uint64_t xhyl;
-	uint64_t xhyh;
-	uint64_t temp;
-
-	/** First calculate x_lo * y_lo */
-	/*
-	 * Compute 64 bit results of multiplication of each combination of high
-	 * and low 32 bit sections of x_lo and y_lo.
-	 */
-	xlyl = (x_lo & 0xffffffff) * (y_lo & 0xffffffff);
-	xlyh = (x_lo & 0xffffffff) * (y_lo >> 32);
-	xhyl = (x_lo >> 32) * (y_lo & 0xffffffff);
-	xhyh = (x_lo >> 32) * (y_lo >> 32);
-
-	/* Calculate lower 32 bits of the answer */
-	*ans_lo = xlyl & 0xffffffff;
-
-	/*
-	 * Calculate second 32 bits of the answer. Use temp to keep a 64 bit
-	 * result of the calculation for these 32 bits, to keep track of
-	 * overflow past these 32 bits.
-	 */
-	temp = (xlyl >> 32) + (xlyh & 0xffffffff) + (xhyl & 0xffffffff);
-	*ans_lo += temp << 32;
-
-	/*
-	 * Calculate third 32 bits of the answer, including overflowed result
-	 * from the previous operation.
-	 */
-	temp >>= 32;
-	temp += (xlyh >> 32) + (xhyl >> 32) + (xhyh & 0xffffffff);
-	*ans_hi = temp & 0xffffffff;
-
-	/*
-	 * Calculate highest 32 bits of the answer. No need to keep track of
-	 * overflow because it has overflowed past the end of the 128 bit
-	 * answer.
-	 */
-	temp >>= 32;
-	temp += (xhyh >> 32);
-	*ans_hi += temp << 32;
-
-	/*
-	 * Now add the results from multiplying x_lo * y_hi and x_hi * y_lo. No
-	 * need to consider overflow here, and no need to consider x_hi * y_hi
-	 * because those results would overflow past the end of the 128 bit
-	 * answer.
-	 */
-	*ans_hi += (x_lo * y_hi) + (x_hi * y_lo);
-} /* end duuid_mult128() */
-
-/* Implementation of the FNV hash algorithm */
-static void
-duuid_hash128(const char *name, void *hash, uint64_t *hi, uint64_t *lo)
-{
-	const uint8_t *name_p = (const uint8_t *)name;
-	uint8_t *hash_p = (uint8_t *)hash;
-	uint64_t name_lo;
-	uint64_t name_hi;
-	/* Initialize hash value in accordance with the FNV algorithm */
-	uint64_t hash_lo = 0x62b821756295c58d;
-	uint64_t hash_hi = 0x6c62272e07bb0142;
-	/* Initialize FNV prime number in accordance with the FNV algorithm */
-	const uint64_t fnv_prime_lo = 0x13b;
-	const uint64_t fnv_prime_hi = 0x1000000;
-	size_t name_len_rem = strlen(name);
-
-	while (name_len_rem > 0) {
-		/*
-		 * "Decode" lower 64 bits of this 128 bit section of the name,
-		 * so the numberical value of the integer is the same on both
-		 * little endian and big endian systems.
-		 */
-		if (name_len_rem >= 8) {
-			UINT64DECODE(name_p, name_lo);
-			name_len_rem -= 8;
-		} /* end if */
-		else {
-			name_lo = 0;
-			UINT64DECODE_VAR(name_p, name_lo, name_len_rem);
-			name_len_rem = 0;
-		} /* end else */
-
-		/* "Decode" second 64 bits */
-		if (name_len_rem > 0) {
-			if (name_len_rem >= 8) {
-				UINT64DECODE(name_p, name_hi);
-				name_len_rem -= 8;
-			} /* end if */
-			else {
-				name_hi = 0;
-				UINT64DECODE_VAR(name_p, name_hi, name_len_rem);
-				name_len_rem = 0;
-			} /* end else */
-		} /* end if */
-		else
-			name_hi = 0;
-
-		/*
-		 * FNV algorithm - XOR hash with name then multiply by
-		 * fnv_prime.
-		 */
-		hash_lo ^= name_lo;
-		hash_hi ^= name_hi;
-		duuid_mult128(hash_lo, hash_hi, fnv_prime_lo, fnv_prime_hi,
-			      &hash_lo, &hash_hi);
-	} /* end while */
-
-	/*
-	 * "Encode" hash integers to char buffer, so the buffer is the same on
-	 * both little endian and big endian systems.
-	 */
-	UINT64ENCODE(hash_p, hash_lo);
-	UINT64ENCODE(hash_p, hash_hi);
-
-	if (hi)
-		*hi = hash_hi;
-	if (lo)
-		*lo = hash_lo;
-} /* end duuid_hash128() */
 
 static int
 error_convert(int error)
@@ -1255,6 +1089,8 @@ static void usage(const char *progname)
 "	-p		DAOS pool uuid to connect with\n"
 "	-l		DAOS pool service rank list\n"
 "	-g		DAOS server group name to connect to\n"
+"	-c		DAOS cont uuid to create/mount\n"
+"	--root-cont	mount the special root container on the pool\n"
 "	-r		Remove/Destroy the DAOS container when unmounted\n"
 "\n"
 "FUSE Options:\n",
@@ -1275,6 +1111,8 @@ static struct fuse_opt dfuse_opts[] = {
 	DFUSE_OPT("-p %s", pool, 0),
 	DFUSE_OPT("-l %s", svcl, 0),
 	DFUSE_OPT("-g %s", group, 0),
+	DFUSE_OPT("-c %s", cont, 0),
+	DFUSE_OPT("--root-cont", root_cont, 1),
 	DFUSE_OPT("-r", destroy, 1),
 	FUSE_OPT_END
 };
@@ -1386,37 +1224,61 @@ int main(int argc, char *argv[])
 		D_GOTO(out_daos, rc = 1);
 	}
 
-	/** Hash container name to container uuid */
-	duuid_hash128(dfuse_fs.mountpoint, &co_uuid, NULL, NULL);
-
-	if (dfuse_fs.debug) {
-		fprintf(stderr, "Container create/open\n");
-		fprintf(stderr, "DFS Container: %s, uuid: "DF_UUIDF"\n",
-			dfuse_fs.mountpoint, DP_UUID(co_uuid));
-	}
-
-	/** Try to open the DAOS container first (the mountpoint) */
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-	/* If NOEXIST we create it */
-	if (rc == -DER_NONEXIST) {
-		if (dfuse_fs.debug)
-			fprintf(stderr, "Cont does not exist, creating..\n");
-		rc = daos_cont_create(poh, co_uuid, NULL, NULL);
-		if (rc == 0) {
-			cont_created = true;
-			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh,
-					    &co_info, NULL);
+	if (dfuse_fs.root_cont) {
+		if (dfuse_fs.destroy) {
+			fprintf(stderr, "Can't destroy root container\n");
+			D_GOTO(out_disc, rc = 1);
 		}
-	}
-	if (rc) {
-		fprintf(stderr, "Failed to create/open container (%d)\n", rc);
-		D_GOTO(out_disc, rc = 1);
-	}
 
-	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
-	if (rc) {
-		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
-		D_GOTO(out_cont, rc = 1);
+		if (dfuse_fs.debug)
+			fprintf(stderr, "Mounting root Container\n");
+
+		rc = dfs_mount_root_cont(poh, &dfs);
+		if (rc) {
+			fprintf(stderr, "failed to mount root cont (%d)\n", rc);
+			D_GOTO(out_disc, rc = 1);
+		}
+	} else {
+		if (!dfuse_fs.cont) {
+			fprintf(stderr, "Missing Container UUID\n");
+			D_GOTO(out_disc, rc = 1);
+		}
+
+		if (dfuse_fs.debug) {
+			fprintf(stderr, "Container create/open\n");
+			fprintf(stderr, "DFS Container: %s\n", dfuse_fs.cont);
+		}
+
+		rc = uuid_parse(dfuse_fs.cont, co_uuid);
+		if (rc) {
+			fprintf(stderr, "Failed to parse Container uuid\n");
+			D_GOTO(out_disc, rc = 1);
+		}
+
+		/** Try to open the DAOS container first (the mountpoint) */
+		rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
+				    NULL);
+		/* If NOEXIST we create it */
+		if (rc == -DER_NONEXIST) {
+			if (dfuse_fs.debug)
+				fprintf(stderr, "Creating Container..\n");
+			rc = daos_cont_create(poh, co_uuid, NULL, NULL);
+			if (rc == 0) {
+				cont_created = true;
+				rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW,
+						    &coh, &co_info, NULL);
+			}
+		}
+		if (rc) {
+			fprintf(stderr, "Failed container open (%d)\n", rc);
+			D_GOTO(out_disc, rc = 1);
+		}
+
+		rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+		if (rc) {
+			fprintf(stderr, "dfs_mount failed (%d)\n", rc);
+			D_GOTO(out_cont, rc = 1);
+		}
 	}
 
 	dfuse_fs.fuse = fuse_new(&args, &dfuse_ops, sizeof(dfuse_ops), NULL);
@@ -1444,11 +1306,16 @@ out_fmount:
 out_fdest:
 	fuse_destroy(dfuse_fs.fuse);
 out_dmount:
-	dfs_umount(dfs);
+	if (dfuse_fs.root_cont)
+		dfs_umount_root_cont(dfs);
+	else
+		dfs_umount(dfs);
 out_cont:
-	daos_cont_close(coh, NULL);
+	if (!dfuse_fs.root_cont)
+		daos_cont_close(coh, NULL);
 out_disc:
 	if (dfuse_fs.destroy || (rc && cont_created)) {
+		D_ASSERT(!dfuse_fs.root_cont);
 		fprintf(stderr, "Destroying DFS Container\n");
 		daos_cont_destroy(poh, co_uuid, 1, NULL);
 	}
