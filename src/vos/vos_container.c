@@ -362,6 +362,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable);
 	cont->vc_dtx_committable_count = 0;
+	cont->vc_dtx_time_last_commit = time(NULL);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,

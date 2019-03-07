@@ -115,6 +115,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/** The time in second when commit the DTXs for the last time. */
+	uint64_t		vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
