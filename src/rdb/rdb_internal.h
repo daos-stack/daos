@@ -149,7 +149,7 @@ int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_installsnapshot_handler(crt_rpc_t *rpc);
-void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);
+void rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 
 /* rdb_rpc.c ******************************************************************/
@@ -252,7 +252,7 @@ CRT_RPC_DECLARE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 		DAOS_OSEQ_RDB_INSTALLSNAPSHOT)
 
 int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
-int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);
+int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db);
 int rdb_abort_raft_rpcs(struct rdb *db);
 int rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc);
 void rdb_recvd(void *arg);

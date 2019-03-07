@@ -103,7 +103,7 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	uuid_copy(in->rvi_op.ri_uuid, db->d_uuid);
 	in->rvi_msg = *msg;
 
-	rc = rdb_send_raft_rpc(rpc, db, node);
+	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send RV RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
@@ -193,7 +193,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 		D_GOTO(err_rpc, rc);
 	}
 
-	rc = rdb_send_raft_rpc(rpc, db, node);
+	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send AE RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
@@ -301,15 +301,18 @@ err:
 static void
 rdb_raft_unload_replicas(struct rdb *db)
 {
-	int	n = raft_get_num_nodes(db->d_raft);
 	int	i;
 
-	for (i = 0; i < n; i++) {
+	if (db->d_replicas == NULL)
+		return;
+
+	for (i = 0; i < db->d_replicas->rl_nr; i++) {
 		raft_node_t	       *node;
 		struct rdb_raft_node   *rdb_node;
 
 		node = raft_get_node(db->d_raft, db->d_replicas->rl_ranks[i]);
-		D_ASSERT(node != NULL);
+		if (node != NULL)
+			continue;
 		rdb_node = raft_node_get_udata(node);
 		D_ASSERT(rdb_node != NULL);
 		raft_remove_node(db->d_raft, node);
@@ -510,7 +513,7 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 		goto err_kds_bulk;
 	}
 
-	rc = rdb_send_raft_rpc(rpc, db, node);
+	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send IS RPC to rank %u: %d\n",
 			DP_DB(db), rdb_node->dn_rank, rc);
@@ -2663,7 +2666,7 @@ out:
 }
 
 void
-rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
+rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 {
 	struct rdb_raft_state		state;
 	crt_opcode_t			opc = opc_get(rpc->cr_opc);
@@ -2671,6 +2674,8 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 	struct rdb_requestvote_out     *out_rv;
 	struct rdb_appendentries_out   *out_ae;
 	struct rdb_installsnapshot_out *out_is;
+	d_rank_t			rank = rpc->cr_ep.ep_rank;
+	raft_node_t		       *node;
 	int				rc;
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
@@ -2680,9 +2685,9 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 		return;
 	}
 
-	if (!daos_rank_list_find(db->d_replicas, rpc->cr_ep.ep_rank, NULL)) {
-		D_WARN(DF_DB": Rank %d no longer exists\n", DP_DB(db),
-		       rpc->cr_ep.ep_rank);
+	node = raft_get_node(db->d_raft, rank);
+	if (node == NULL) {
+		D_WARN(DF_DB": Rank %d no longer exists\n", DP_DB(db), rank);
 		return;
 	}
 
