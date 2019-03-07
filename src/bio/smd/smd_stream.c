@@ -190,7 +190,7 @@ smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *bond)
 	if (rc != 0)
 		goto failed;
 
-	daos_iov_set(&key, &bond->nsm_stream_id, sizeof(int));
+	daos_iov_set(&key, &bond->nsm_stream_id, sizeof(bond->nsm_stream_id));
 	daos_iov_set(&value, &nvme_stab_args, sizeof(nvme_stab_args));
 
 	rc = dbtree_update(store->sms_stream_tab, &key, &value);
@@ -228,7 +228,7 @@ smd_nvme_get_stream_bond(int stream_id,
 		D_ERROR("Missing input parameters: %d\n", rc);
 		return rc;
 	}
-	daos_iov_set(&key, &stream_id, sizeof(int));
+	daos_iov_set(&key, &stream_id, sizeof(stream_id));
 	daos_iov_set(&value, &nvme_stab_args,
 		     sizeof(struct smd_nvme_stream_df));
 
@@ -275,7 +275,7 @@ smd_nvme_list_streams(uint32_t *nr, struct smd_nvme_stream_bond *streams,
 		daos_iov_t	key, value;
 		int		stream_id;
 
-		daos_iov_set(&key, &stream_id, sizeof(int));
+		daos_iov_set(&key, &stream_id, sizeof(stream_id));
 		daos_iov_set(&value, &streams[i],
 			     sizeof(struct smd_nvme_stream_bond));
 		rc = dbtree_iter_fetch(sti_hdl, &key, &value, anchor);
