@@ -10,5 +10,8 @@ pool:
         mode: 511
     createset:
         setname: daos_server
-    createsize:
-        size: 1073741824
+    createsize: !mux
+        size1gb:
+            size: 1073741824
+        size8gb:
+            size: 8489934592

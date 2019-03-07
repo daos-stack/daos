@@ -86,7 +86,8 @@ class BasicSnapshot(Test):
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/pool/createmode/')
             createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
+            createsize = self.params.get("size", '/run/pool/createsize/*')
+            print("createsize = {}".format(createsize))
             createuid = os.geteuid()
             creategid = os.getegid()
 
@@ -113,13 +114,14 @@ class BasicSnapshot(Test):
 
     def tearDown(self):
         try:
-            self.container.close()
-            self.container.destroy()
-            self.pool.disconnect()
-            self.pool.destroy(1)
+            if self.container:
+                self.container.close()
+                self.container.destroy()
+            if self.pool:
+                self.pool.disconnect()
+                self.pool.destroy(1)
         finally:
             ServerUtils.stopServer()
-            ServerUtils.killServer(self.hostlist)
 
     def test_basic_snapshot(self):
         """
@@ -153,7 +155,6 @@ class BasicSnapshot(Test):
             self.snapshot = DaosSnapshot(self.context)
             self.snapshot.create(self.container.coh, epoch)
             print("Wrote an object and created a snapshot")
-
         except DaosApiError as error:
             self.fail("Test failed during the initial object write.\n{0}"
                       .format(error))
@@ -179,8 +180,9 @@ class BasicSnapshot(Test):
             self.fail("Test failed during the write of 500 objects.\n{0}"
                       .format(error))
 
-        # List the snapshot and make sure it contains the original epoch
+        # List the snapshot and make sure it reflects the original epoch
         try:
+            num = 1
             reported_epoch = self.snapshot.list(self.container.coh)
             if self.snapshot.epoch != reported_epoch:
                 raise Exception("The snapshot epoch returned from snapshot "
@@ -197,7 +199,7 @@ class BasicSnapshot(Test):
         # Compare it to the originally written data.
         try:
             obj.open()
-            snap_handle = self.snapshot.handle(self.container.coh)
+            snap_handle = self.snapshot.open(self.container.coh)
             thedata2 = self.container.read_an_obj(datasize, dkey, akey, obj,
                                                   snap_handle.value)
             if thedata2.value != thedata:

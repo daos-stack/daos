@@ -1655,9 +1655,12 @@ class DaosSnapshot(object):
             raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
                                .format(retcode))
 
+    # TODO Generalize this function to accept and return the number of
+    #  snapshots and the epochs and names lists. See description of
+    #  daos_cont_list_snap in src/include/daos_api.h.
     def list(self, coh):
-        """ List this snapshot and check that its epoch is the same as the once
-        originally created.
+        """ Call daos_cont_snap_list and make sure there is a snapshot in the
+        list.
         coh --ctype.u_long handle on an open container
         Returns the value of the epoch for this DaosSnapshot object.
         """
@@ -1672,7 +1675,7 @@ class DaosSnapshot(object):
                                .format(retcode))
         return epoch.value
 
-    def handle(self, coh):
+    def open(self, coh):
         """ Get a tx handle into the snapshot and return the object found.
         coh --ctype.u_long handle on an open container
         returns a handle on the snapshot represented by this DaosSnapshot
@@ -1755,10 +1758,12 @@ class DaosContext(object):
             'create-cont'    : self.libdaos.daos_cont_create,
             'create-eq'      : self.libdaos.daos_eq_create,
             'create-pool'    : self.libdaos.daos_pool_create,
+            'create-snap'    : self.libdaos.daos_cont_create_snap,
             'd_log'          : self.libtest.dts_log,
             'destroy-cont'   : self.libdaos.daos_cont_destroy,
             'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
+            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
             'destroy-tx'     : self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
@@ -1772,8 +1777,10 @@ class DaosContext(object):
             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
             'kill-target'    : self.libdaos.daos_pool_tgt_exclude_out,
             'list-attr'      : self.libdaos.daos_cont_list_attr,
+            'list-snap'      : self.libdaos.daos_cont_list_snap,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
+            'open-snap'      : self.libdaos.daos_tx_open_snap,
             'open-tx'        : self.libdaos.daos_tx_open,
             'poll-eq'        : self.libdaos.daos_eq_poll,
             'punch-akeys'    : self.libdaos.daos_obj_punch_akeys,
@@ -1786,11 +1793,7 @@ class DaosContext(object):
             'set-attr'       : self.libdaos.daos_cont_set_attr,
             'stop-service'   : self.libdaos.daos_pool_stop_svc,
             'test-event'     : self.libdaos.daos_event_test,
-            'update-obj'     : self.libdaos.daos_obj_update,
-            'create-snap'    : self.libdaos.daos_cont_create_snap,
-            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
-            'list-snap'      : self.libdaos.daos_cont_list_snap,
-            'open-snap'      : self.libdaos.daos_tx_open_snap}
+            'update-obj'     : self.libdaos.daos_obj_update}
 
     def __del__(self):
         """ cleanup the DAOS API """
