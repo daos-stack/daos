@@ -77,11 +77,12 @@ pipeline {
                         }
                     }
                     steps {
-                        sh 'env'
+                        sh '''env
+                              ./blueocean.py
+                              exit 1'''
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*"
-                        sh 'exit 1'
                     }
                     post {
                         always {
