@@ -184,13 +184,24 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 	wt_diff->wt_minor = wt1->wt_minor - wt2->wt_minor;
 }
 
-/** Initialize an entry list */
-void
-evt_ent_array_init(struct evt_entry_array *ent_array)
+/** Internal function for initializing an array.   Using 0 for max
+ *  ultimately cause it to be set to maximum size needed by
+ *  evt_find_visible.
+ */
+static inline void
+evt_ent_array_init_internal(struct evt_entry_array *ent_array, int max)
 {
 	memset(ent_array, 0, sizeof(*ent_array));
 	ent_array->ea_ents = ent_array->ea_embedded_ents;
 	ent_array->ea_size = EVT_EMBEDDED_NR;
+	ent_array->ea_max = max;
+}
+
+/** Initialize an entry list */
+void
+evt_ent_array_init(struct evt_entry_array *ent_array)
+{
+	evt_ent_array_init_internal(ent_array, 0);
 }
 
 /** Finalize an entry list */
@@ -279,6 +290,10 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		ent_array->ea_inob = tcx->tc_inob;
 	}
 	if (ent_array->ea_ent_nr == ent_array->ea_size) {
+		/** We should never exceed the maximum number of entries. */
+		D_ASSERTF(ent_array->ea_size != ent_array->ea_max,
+			  "Maximum number of ent_array entries exceeded: %d\n",
+			  ent_array->ea_max);
 		size = ent_array->ea_size * 4;
 		if (size < EVT_MIN_ALLOC)
 			size = EVT_MIN_ALLOC;
@@ -1707,7 +1722,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		return -DER_INVAL;
 	}
 
-	evt_ent_array_init(&ent_array);
+	evt_ent_array_init_internal(&ent_array, 1);
 
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
@@ -1826,14 +1841,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	ent_array_reset(tcx, ent_array);
+	if (ent_array == &tcx->tc_iter.it_entries)
+		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
 	nd_off = tcx->tc_root->tr_node;
 	while (1) {
-		struct evt_node	*node;
-		bool		 leaf;
+		struct evt_node_entry	*ne;
+		struct evt_node		*node;
+		bool			 leaf;
 
 		node = evt_off2node(tcx, nd_off);
 		leaf = evt_node_is_leaf(tcx, node);
@@ -1844,13 +1861,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			DP_RECT(evt_node_mbr_get(tcx, node)), nd_off, level, at,
 			leaf);
 
-		for (i = at; i < node->tn_nr; i++) {
+		ne = evt_node_entry_at(tcx, node, at);
+
+		for (i = at; i < node->tn_nr; i++, ne++) {
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
 			int			 time_overlap;
 			int			 range_overlap;
 
-			rtmp = evt_node_rect_at(tcx, node, i);
+			rtmp = &ne->ne_rect;
+
 			V_TRACE(DB_TRACE, " rect[%d]="DF_RECT"\n",
 				i, DP_RECT(rtmp));
 
@@ -2712,7 +2732,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 		return -DER_NO_HDL;
 
 	/* NB: This function presently only supports exact match on extent. */
-	evt_ent_array_init(&ent_array);
+	evt_ent_array_init_internal(&ent_array, 1);
 
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
