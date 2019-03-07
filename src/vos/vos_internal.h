@@ -44,7 +44,6 @@
 #define DAOS_VOS_VERSION 1
 
 extern struct dss_module_key vos_module_key;
-extern umem_class_id_t vos_mem_class;
 
 #define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
@@ -116,6 +115,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/** The time in second when commit the DTXs for the last time. */
+	uint64_t		vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */

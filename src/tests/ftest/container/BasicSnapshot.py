@@ -87,7 +87,6 @@ class BasicSnapshot(Test):
             createmode = self.params.get("mode", '/run/pool/createmode/')
             createsetid = self.params.get("setname", '/run/pool/createset/')
             createsize = self.params.get("size", '/run/pool/createsize/*')
-            print("createsize = {}".format(createsize))
             createuid = os.geteuid()
             creategid = os.getegid()
 
@@ -141,6 +140,7 @@ class BasicSnapshot(Test):
 
         try:
             # create an object and write some data into it
+            obj_cls = self.params.get("obj_class", '/run/pool/object_class/*')
             thedata = "Now is the winter of our discontent made glorious"
             datasize = len(thedata) + 1
             dkey = "dkey"
@@ -149,7 +149,7 @@ class BasicSnapshot(Test):
                                                      datasize,
                                                      dkey,
                                                      akey,
-                                                     obj_cls=1)
+                                                     obj_cls=obj_cls)
             obj.close()
             # Take a snapshot of the container
             self.snapshot = DaosSnapshot(self.context)
@@ -173,7 +173,7 @@ class BasicSnapshot(Test):
                                                          size,
                                                          dkey,
                                                          akey,
-                                                         obj_cls=1)
+                                                         obj_cls=obj_cls)
                 new_obj.close()
                 more_transactions -= 1
         except Exception as error:
@@ -182,7 +182,6 @@ class BasicSnapshot(Test):
 
         # List the snapshot and make sure it reflects the original epoch
         try:
-            num = 1
             reported_epoch = self.snapshot.list(self.container.coh)
             if self.snapshot.epoch != reported_epoch:
                 raise Exception("The snapshot epoch returned from snapshot "

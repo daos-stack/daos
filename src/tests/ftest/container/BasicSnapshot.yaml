@@ -15,3 +15,14 @@ pool:
             size: 1073741824
         size8gb:
             size: 8489934592
+object_class: !mux
+    tiny:
+        obj_class: DAOS_OC_TINY_RW
+    small:
+        obj_class: DAOS_OC_SMALL_RW
+    large:
+        obj_class: DAOS_OC_LARGE_RW
+    small_repl:
+        obj_class: DAOS_OC_R2S_RW
+    large_repl:
+        obj_class: DAOS_OC_R2_RW
