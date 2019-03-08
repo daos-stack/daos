@@ -79,7 +79,6 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   stepName: env.STAGE_NAME,
                                    ignored_files: "src/control/vendor/*"
                     }
                     post {
@@ -131,8 +130,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}"
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -217,8 +215,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
                     }
                     post {
                         always {
@@ -279,8 +276,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}"
                     }
                     post {
                         always {
@@ -340,8 +336,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
                     }
                     post {
                         always {
@@ -402,8 +397,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}"
                     }
                     post {
                         always {
@@ -464,8 +458,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
                     }
                     post {
                         always {
@@ -526,8 +519,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   stepName: env.STAGE_NAME
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc"
                     }
                     post {
                         always {
@@ -631,8 +623,7 @@ pipeline {
                                                    sleep 1
                                                    let x=\\\$x+1
                                                done"''',
-                                junit_files: null,
-                                stepName: env.STAGE_NAME
+                                junit_files: null
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -679,8 +670,7 @@ pipeline {
                                                test_tag=regression,vm
                                            fi
                                            ./ftest.sh "$test_tag" ''' + env.NODELIST,
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml",
-                                stepName: env.STAGE_NAME
+                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml"
                     }
                     post {
                         always {
