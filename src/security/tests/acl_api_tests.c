@@ -1103,7 +1103,7 @@ test_acl_add_ace_replace(void **state)
 	assert_non_null(result_acl);
 	assert_int_equal(orig_acl->dal_len, result_acl->dal_len);
 
-	// type EVERYONE is last, and there is only one ACE for it
+	/* type EVERYONE is last, and there is only one ACE for it */
 	result_ace_addr = result_acl->dal_ace + result_acl->dal_len -
 			daos_ace_get_size(new_ace);
 	assert_memory_equal(new_ace, result_ace_addr,
@@ -1263,7 +1263,7 @@ test_acl_remove_ace_multi_user(void **state)
 	/* Result should have only removed that user */
 	assert_non_null(result_acl);
 	assert_ptr_not_equal(result_acl, orig_acl);
-	assert_int_equal(result_acl->dal_len,orig_acl->dal_len -
+	assert_int_equal(result_acl->dal_len, orig_acl->dal_len -
 			daos_ace_get_size(ace[removed_idx]));
 
 	for (i = 0; i < num_aces; i++) {
