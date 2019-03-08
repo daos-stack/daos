@@ -25,6 +25,7 @@
 import os
 import sys
 import json
+import distutils.spawn
 from avocado       import Test
 
 sys.path.append('./util')
@@ -34,7 +35,6 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import IorUtils
-import distutils.spawn
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class EightServers(Test):
@@ -49,7 +49,7 @@ class EightServers(Test):
 
         self.basepath = None
         self.server_group = None
-        self.Context = None
+        self.context = None
         self.pool = None
         self.slots = None
         self.hostlist_servers = None
@@ -66,7 +66,7 @@ class EightServers(Test):
         self.server_group = self.params.get("server_group", '/server/', 'daos_server')
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/test_machines/*')
         self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
@@ -118,7 +118,7 @@ class EightServers(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None, None, createsvc)
 
