@@ -526,7 +526,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc"
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
                                    stepName: env.STAGE_NAME
                     }
                     post {
