@@ -43,7 +43,7 @@
 def arch="-Linux"
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def singleNodeTest() {
+def singleNodeTest(test_mode) {
     provisionNodes NODELIST: env.NODELIST,
                    node_count: 1,
                    snapshot: true
@@ -58,6 +58,7 @@ def singleNodeTest() {
                            set -e
                            sudo mkdir -p \$CART_BASE
                            sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
+                           export CART_TEST_MODE=$test_mode
                            cd \$CART_BASE
                            if RUN_UTEST=false bash -x utils/run_test.sh; then
                                echo \"run_test.sh exited successfully with \\\${PIPESTATUS[0]}\"
@@ -591,11 +592,8 @@ pipeline {
                     agent {
                         label 'ci_vm1'
                     }
-                    environment {
-                        CART_TEST_MODE = 'native'
-                    }
                     steps {
-                        singleNodeTest()
+                        singleNodeTest('native')
                     }
                     post {
                         always {
@@ -639,11 +637,8 @@ pipeline {
                     agent {
                         label 'ci_vm1'
                     }
-                    environment {
-                        CART_TEST_MODE = 'memcheck'
-                    }
                     steps {
-                        singleNodeTest()
+                        singleNodeTest('memcheck')
                     }
                     post {
                         always {
@@ -656,7 +651,22 @@ pipeline {
                                                            build/Linux/src/utest_valgrind/test_output'''
                              */
                             sh 'mv install/Linux/TESTING/testLogs{,_valgrind}'
-                            archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs_valgrind/**'
+                            publishValgrind (
+                                failBuildOnInvalidReports: true,
+                                failBuildOnMissingReports: true,
+                                failThresholdDefinitelyLost: '0',
+                                failThresholdInvalidReadWrite: '0',
+                                failThresholdTotal: '0',
+                                pattern: '**/*.memcheck',
+                                publishResultsForAbortedBuilds: false,
+                                publishResultsForFailedBuilds: false,
+                                sourceSubstitutionPaths: '',
+                                unstableThresholdDefinitelyLost: '',
+                                unstableThresholdInvalidReadWrite: '',
+                                unstableThresholdTotal: ''
+                                )
+
+                            archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs_valgrind/**,**/*.memcheck'
                         /* when JENKINS-39203 is resolved, can probably use stepResult
                            here and remove the remaining post conditions
                            stepResult name: env.STAGE_NAME,

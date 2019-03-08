@@ -283,7 +283,7 @@ class CommonTestSuite(unittest.TestCase):
             suppressfile = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
                            "memcheck-cart.supp")
             prefix = " valgrind --xml=yes" + \
-                " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.xml" + \
+                " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.memcheck" + \
                 " --fair-sched=try " + \
                 " --partial-loads-ok=yes" + \
                 " --leak-check=yes --gen-suppressions=all" + \
