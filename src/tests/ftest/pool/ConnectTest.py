@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+
+from __future__ import print_function
 
 import os
 import time
@@ -82,47 +84,45 @@ class ConnectTest(Test):
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
-                if result == 'FAIL':
-                      expected_result = 'FAIL'
-                      break
+            if result == 'FAIL':
+                expected_result = 'FAIL'
+                break
         try:
-                uid = os.geteuid()
-                gid = os.getegid()
+            uid = os.geteuid()
+            gid = os.getegid()
 
-                # TODO make these params in the yaml
-                daosctl = self.basepath + '/install/bin/daosctl'
+            # TODO make these params in the yaml
+            daosctl = self.basepath + '/install/bin/daosctl'
 
-                host1 = self.hostlist[0]
-                host2 = self.hostlist[1]
+            host1 = self.hostlist[0]
+            host2 = self.hostlist[1]
 
-                create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} '
-                             '-s {4} -c 1'.format(
-                            daosctl, 0731, uid, gid, setid))
-                uuid_str = """{0}""".format(process.system_output(create_cmd))
-                print("uuid is {0}\n".format(uuid_str))
+            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} '
+                          '-s {4} -c 1'.format(
+                              daosctl, 0731, uid, gid, setid))
+            uuid_str = """{0}""".format(process.system_output(create_cmd))
+            print("uuid is {0}\n".format(uuid_str))
 
-                exists = CheckForPool.checkForPool(host1, uuid_str)
-                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                                format(uuid_str, host1))
-                exists = CheckForPool.checkForPool(host2, uuid_str)
-                if exists != 0:
-                      self.fail("Pool {0} not found on host {1}.\n".
-                                format(uuid_str, host2))
+            exists = CheckForPool.checkForPool(host1, uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1}.\n".
+                          format(uuid_str, host1))
+            exists = CheckForPool.checkForPool(host2, uuid_str)
+            if exists != 0:
+                self.fail("Pool {0} not found on host {1}.\n".
+                          format(uuid_str, host2))
 
-                connect_cmd = ('{0} connect-pool -i {1} '
-                              '-s {2} -r -l 0,1'.format(daosctl,
-                    uuid_str, setid))
-                process.system(connect_cmd)
+            connect_cmd = ('{0} connect-pool -i {1} '
+                           '-s {2} -r -l 0,1'.format(daosctl,
+                                                     uuid_str, setid))
+            process.system(connect_cmd)
 
-                delete_cmd = ('{0} destroy-pool -i {1} -s {2} -f'.format(
-                    daosctl, uuid_str, setid))
 
-                if expected_result == 'FAIL':
-                      self.fail("Expected to fail but passed.\n")
+            if expected_result == 'FAIL':
+                self.fail("Expected to fail but passed.\n")
 
         except Exception as e:
-                print e
-                print traceback.format_exc()
-                if expected_result == 'PASS':
-                      self.fail("Expecting to pass but test has failed.\n")
+            print(e)
+            print(traceback.format_exc())
+            if expected_result == 'PASS':
+                self.fail("Expecting to pass but test has failed.\n")
