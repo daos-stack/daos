@@ -76,13 +76,21 @@ func (s *ShowStorageCommand) Execute(args []string) (errs error) {
 
 // PrepNvmeCommand is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
-type PrepNvmeCommand struct{}
+type PrepNvmeCommand struct {
+	NrHugepages int `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+}
 
 // Execute is run when PrepNvmeCommand activates
 //
 // Perform task then exit immediately. No config parsing performed.
-func (s *PrepNvmeCommand) Execute(args []string) error {
+func (p *PrepNvmeCommand) Execute(args []string) error {
 	config := newConfiguration()
+
+	// don't load config file because we don't want to put unnecessary
+	// limitations on parameters provided if we are doing something simple
+	if p.NrHugepages != 0 {
+		config.NrHugepages = p.NrHugepages
+	}
 
 	server, err := newControlService(&config)
 	if err != nil {
