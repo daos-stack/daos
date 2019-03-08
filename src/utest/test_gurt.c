@@ -47,6 +47,7 @@
 #include "gurt/heap.h"
 #include "gurt/dlog.h"
 #include "gurt/hash.h"
+#include "gurt/atomic.h"
 
 /* machine epsilon */
 #define EPSILON (1.0E-16)
@@ -1759,6 +1760,57 @@ test_gurt_circular_list(void **state)
 	assert(D_CIRCLEQ_EMPTY(&head));
 }
 
+#define NUM_THREADS 16
+
+static ATOMIC uint64_t inc;
+static ATOMIC uint64_t inc2;
+static ATOMIC uint64_t dec;
+static ATOMIC uint64_t mix;
+
+static void *thread_func(void *arg)
+{
+	int i;
+
+	for (i = 0; i < NUM_THREADS; i++) {
+		atomic_fetch_add(&inc,  1);
+		atomic_fetch_add(&inc2, 2);
+		atomic_fetch_sub(&dec,  1);
+		if (i % 2)
+			atomic_fetch_add(&mix, 1);
+		else
+			atomic_fetch_sub(&mix, 1);
+	}
+
+	return NULL;
+}
+
+static void
+test_gurt_atomic(void **state)
+{
+	pthread_t	 thread[NUM_THREADS];
+	int		 i, rc;
+
+	inc  = 0;
+	inc2 = 0;
+	dec  = NUM_THREADS*NUM_THREADS;
+	mix  = 123456;
+
+	for (i = 0; i < NUM_THREADS; i++) {
+		rc = pthread_create(&thread[i], NULL, thread_func, NULL);
+		assert(rc == 0);
+	}
+
+	for (i = 0; i < NUM_THREADS; i++) {
+		rc = pthread_join(thread[i], NULL);
+		assert(rc == 0);
+	}
+
+	assert(inc  == NUM_THREADS*NUM_THREADS);
+	assert(inc2 == 2*NUM_THREADS*NUM_THREADS);
+	assert(dec  == 0);
+	assert(mix  == 123456);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1777,6 +1829,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_parallel_same_operations),
 		cmocka_unit_test(test_gurt_hash_parallel_different_operations),
 		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
+		cmocka_unit_test(test_gurt_atomic),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);

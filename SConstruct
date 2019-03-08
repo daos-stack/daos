@@ -68,6 +68,18 @@ def save_build_info(env, prereqs, platform):
     env.InstallAs('$PREFIX/TESTING/.build_vars.sh', sh_build_vars)
     env.InstallAs('$PREFIX/TESTING/.build_vars.json', json_build_vars)
 
+def run_checks(env):
+    """Run all configure time checks"""
+
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    config = Configure(cenv)
+
+    if config.CheckHeader('stdatomic.h'):
+        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+
+    config.Finish()
+
 def scons():
     """Scons function"""
     platform = os.uname()[0]
@@ -84,7 +96,12 @@ def scons():
                               config_file=commits_file, arch=platform)
     prereqs.load_definitions(prebuild=['ompi', 'mercury', 'uuid', 'crypto',
                                        'pmix', 'boost'])
+
+    if not env.GetOption('clean'):
+        run_checks(env)
+
     opts.Save(opts_file, env)
+
     env.Alias('install', '$PREFIX')
 
     if platform == 'Darwin':
