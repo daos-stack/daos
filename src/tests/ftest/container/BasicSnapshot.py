@@ -39,7 +39,8 @@ sys.path.append('./../../utils/py')
 # pylint: disable=import-error
 import ServerUtils
 import WriteHostFile
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosSnapshot, DaosLog, DaosApiError
+from daos_api import (DaosContext, DaosPool, DaosContainer, DaosSnapshot,
+                      DaosLog, DaosApiError)
 
 # pylint: disable=broad-except
 class BasicSnapshot(Test):
@@ -140,7 +141,7 @@ class BasicSnapshot(Test):
 
         try:
             # create an object and write some data into it
-            obj_cls = self.params.get("obj_class", '/run/pool/object_class/*')
+            obj_cls = self.params.get("obj_class", '/run/object_class/*')
             thedata = "Now is the winter of our discontent made glorious"
             datasize = len(thedata) + 1
             dkey = "dkey"
