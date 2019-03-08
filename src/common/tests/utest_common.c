@@ -149,7 +149,7 @@ utest_vmem_create(size_t root_size, struct utest_context **utx)
 
 	umem_class_init(&ctx->uc_uma, &ctx->uc_umm);
 
-	ctx->uc_root = umem_alloc(&ctx->uc_umm, sizeof(*root) + root_size);
+	ctx->uc_root = umem_zalloc(&ctx->uc_umm, sizeof(*root) + root_size);
 
 	if (UMMID_IS_NULL(ctx->uc_root)) {
 		rc = -DER_NOMEM;
