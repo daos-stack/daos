@@ -673,16 +673,16 @@ static inline bool vos_recx_is_equal(daos_recx_t *recx1, daos_recx_t *recx2)
 	return !(memcmp(recx1, recx2, sizeof(daos_recx_t)));
 }
 
-static inline PMEMobjpool *
-vos_cont2pop(struct vos_container *cont)
+static inline struct vos_pool *
+vos_cont2pool(struct vos_container *cont)
 {
-	return vos_pool_ptr2pop(cont->vc_pool);
+	return cont->vc_pool;
 }
 
-static inline PMEMobjpool *
-vos_obj2pop(struct vos_object *obj)
+static inline struct vos_pool *
+vos_obj2pool(struct vos_object *obj)
 {
-	return vos_cont2pop(obj->obj_cont);
+	return vos_cont2pool(obj->obj_cont);
 }
 
 static inline struct umem_attr *

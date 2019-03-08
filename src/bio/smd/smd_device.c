@@ -181,16 +181,16 @@ smd_dtab_df_update(struct smd_store *nvme_obj, struct d_uuid *ukey,
 	daos_iov_set(&key, ukey, sizeof(struct d_uuid));
 	daos_iov_set(&value, ndev_df, sizeof(struct smd_nvme_dev_df));
 
-	TX_BEGIN(smd_store_ptr2pop(nvme_obj)) {
-		rc = dbtree_update(nvme_obj->sms_dev_tab, &key, &value);
-		if (rc) {
-			D_ERROR("Adding a device/updating status: %d\n", rc);
-			pmemobj_tx_abort(ENOMEM);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = smd_tx_begin(nvme_obj);
+	if (rc != 0)
+		goto failed;
+
+	rc = dbtree_update(nvme_obj->sms_dev_tab, &key, &value);
+
+	rc = smd_tx_end(nvme_obj, rc);
+failed:
+	if (rc != 0)
 		D_ERROR("Adding/updating a device entry: %d\n", rc);
-	} TX_END;
 
 	return rc;
 }
