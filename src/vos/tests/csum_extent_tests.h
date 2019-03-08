@@ -1,4 +1,4 @@
-/*
+/**
  * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,42 +16,34 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
+ * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_DRPC_MODULES_H__
-#define __DAOS_DRPC_MODULES_H__
 
-/**
- * DAOS dRPC Modules
- *
- * dRPC modules are used to multiplex communications over the Unix Domain Socket
- * to appropriate handlers. They are populated in the Drpc__Call structure.
- *
- * dRPC module IDs must be unique. This is a list of all DAOS dRPC modules.
- */
+#ifndef __CSUM_TESTS_H__
+#define __CSUM_TESTS_H__
 
-enum drpc_module {
-	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
-	DRPC_MODULE_SECURITY_AGENT	= 1,
-	DRPC_MODULE_MGMT_SERVER		= 2,
-	DRPC_MODULE_SRV			= 3,	/* daos_server */
+void
+csum_multiple_extents_tests(void **state);
 
-	NUM_DRPC_MODULES			/* Must be last */
-};
+void
+csum_test_csum_buffer_of_0_during_fetch(void **state);
 
-enum drpc_mgmt_method {
-	DRPC_METHOD_MGMT_KILL_RANK	= 201,
+void
+csum_test_holes(void **state);
 
-	NUM_DRPC_MGMT_METHODS			/* Must be last */
-};
+void
+csum_helper_functions_tests(void **state);
 
-enum drpc_srv_method {
-	DRPC_METHOD_SRV_NOTIFY_READY	= 301,
+void
+csum_extent_not_starting_at_0(void **state);
 
-	NUM_DRPC_SRV_METHODS			/* Must be last */
-};
+void
+csum_extent_not_chunk_aligned(void **state);
 
-#endif /* __DAOS_DRPC_MODULES_H__ */
+void
+evt_csum_helper_functions_tests(void **state);
+
+#endif

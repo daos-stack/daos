@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &csum->cs_type);
+	rc = crt_proc_uint16_t(proc, &csum->cs_type);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -140,12 +140,12 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint16_t(proc, &csum->cs_buf_len);
+	rc = crt_proc_uint32_t(proc, &csum->cs_buf_len);
 	if (rc != 0)
 		return -DER_HG;
 
 	if (csum->cs_buf_len < csum->cs_len) {
-		D_ERROR("invalid csum buf len %hu < csum len %hu\n",
+		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
 	}

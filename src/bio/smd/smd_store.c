@@ -385,7 +385,8 @@ smd_nvme_create_md_store(const char *path, const char *fname,
 	PMEMobjpool		*ph = NULL;
 	struct smd_df		*smd_df = NULL;
 	struct umem_attr	*l_uma = NULL;
-	struct umem_attr	uma;
+	struct umem_attr	uma = {0};
+	struct umem_instance	umm = {0};
 
 
 	if (md_store_created) {
@@ -435,32 +436,46 @@ smd_nvme_create_md_store(const char *path, const char *fname,
 		D_GOTO(err_pool_destroy, rc);
 	}
 
-	TX_BEGIN(ph) {
-		smd_df  = pmempool_pop2df(ph);
-		pmemobj_tx_add_range_direct(smd_df, sizeof(*smd_df));
-		memset(smd_df, 0, sizeof(*smd_df));
+	uma.uma_id = md_mem_class;
+	uma.uma_pool = ph;
+	rc = umem_class_init(&uma, &umm);
+	if (rc != 0)
+		D_GOTO(failed, rc);
 
-		memset(&uma, 0, sizeof(uma));
-		uma.uma_id = md_mem_class;
-		uma.uma_pool = ph;
-		l_uma = &uma;
+	rc = umem_tx_begin(&umm, NULL);
+	if (rc != 0)
+		D_GOTO(failed, rc);
 
-		uuid_parse(pool_uuid, smd_df->smd_id);
-		rc = smd_nvme_md_dtab_create(&uma, &smd_df->smd_dev_tab_df);
-		if (rc != 0)
-			pmemobj_tx_abort(EFAULT);
-		rc = smd_nvme_md_ptab_create(&uma,
-					     &smd_df->smd_pool_tab_df);
-		if (rc != 0)
-			pmemobj_tx_abort(EFAULT);
-		rc = smd_nvme_md_stab_create(&uma,
-					     &smd_df->smd_stream_tab_df);
-		if (rc != 0)
-			pmemobj_tx_abort(EFAULT);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	smd_df  = pmempool_pop2df(ph);
+	rc = pmemobj_tx_add_range_direct(smd_df, sizeof(*smd_df));
+	if (rc != 0)
+		D_GOTO(end, rc);
+	memset(smd_df, 0, sizeof(*smd_df));
+
+	l_uma = &uma;
+
+	uuid_parse(pool_uuid, smd_df->smd_id);
+	rc = smd_nvme_md_dtab_create(&uma, &smd_df->smd_dev_tab_df);
+	if (rc != 0)
+		D_GOTO(end, rc);
+	rc = smd_nvme_md_ptab_create(&uma,
+				     &smd_df->smd_pool_tab_df);
+	if (rc != 0)
+		D_GOTO(end, rc);
+	rc = smd_nvme_md_stab_create(&uma,
+				     &smd_df->smd_stream_tab_df);
+	if (rc != 0)
+		D_GOTO(end, rc);
+end:
+	if (rc == 0)
+		rc = umem_tx_commit(&umm);
+	else
+		rc = umem_tx_abort(&umm, rc);
+failed:
+	if (rc != 0) {
 		D_ERROR("Initialize md pool root error:%d\n", rc);
-	} TX_END
+		D_GOTO(err_pool_destroy, rc);
+	}
 
 err_obj_create:
 	rc = smd_nvme_obj_create(ph, l_uma, smd_df);

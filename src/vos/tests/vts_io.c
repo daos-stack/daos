@@ -30,6 +30,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
+#include "csum_extent_tests.h"
 #include <daos_api.h>
 
 #define NO_FLAGS	    (0)
@@ -69,8 +70,12 @@ static struct io_test_flag io_test_flags[] = {
 		.tf_bits	= TF_REC_EXT,
 	},
 	{
-		.tf_str		= "CSUM",
+		.tf_str		= "Single Value + CSUM",
 		.tf_bits	= TF_USE_CSUM,
+	},
+	{
+		.tf_str		= "Array Value + CSUM",
+		.tf_bits	= TF_USE_CSUM | TF_REC_EXT,
 	},
 	{
 		.tf_str		= "ZC + extent",
@@ -90,7 +95,7 @@ hash_key(d_iov_t *key, int flag)
 	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
 }
 
-static void
+void
 set_iov(daos_iov_t *iov, char *buf, int int_flag)
 {
 	if (int_flag)
@@ -559,8 +564,9 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	daos_key_t		akey;
 	daos_recx_t		rex;
 	daos_csum_buf_t		csum;
-	char			expected_csum_buf[UPDATE_CSUM_SIZE];
-	char			actual_csum_buf[UPDATE_CSUM_SIZE];
+	char			expected_csum_buf[UPDATE_CSUM_BUF_SIZE];
+	char			actual_csum_buf[UPDATE_CSUM_BUF_SIZE];
+	uint16_t		csum_count = 0;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
@@ -570,27 +576,36 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	unsigned int		recx_size;
 	unsigned int		recx_nr;
 
+	/* Setup */
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
+	memset(&expected_csum_buf, 0, sizeof(expected_csum_buf));
+	memset(&actual_csum_buf, 0, sizeof(actual_csum_buf));
+	memset(&csum, 0, sizeof(csum));
 
 	if (arg->ta_flags & TF_REC_EXT) {
 		iod.iod_type = DAOS_IOD_ARRAY;
 		recx_size = UPDATE_REC_SIZE;
 		recx_nr   = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
+		if (arg->ta_flags & TF_USE_CSUM) {
+			csum_count = UPDATE_CSUM_MAX_COUNT;
+			dts_buf_render(expected_csum_buf, UPDATE_CSUM_BUF_SIZE);
+			daos_csum_set_multiple(&csum, expected_csum_buf,
+					       UPDATE_CSUM_BUF_SIZE,
+					       UPDATE_CSUM_SIZE, csum_count,
+					       UPDATE_BUF_SIZE / csum_count);
+
+			iod.iod_csums = &csum;
+		}
 	} else {
 		iod.iod_type = DAOS_IOD_SINGLE;
 		recx_size = UPDATE_BUF_SIZE;
 		recx_nr   = 1;
 
-		/* currently, checksums only supported for single value */
 		if (arg->ta_flags & TF_USE_CSUM) {
-			memset(&csum, 0, sizeof(csum));
-			memset(&expected_csum_buf, 0,
-			       sizeof(expected_csum_buf));
-			memset(&actual_csum_buf, 0, sizeof(actual_csum_buf));
-			dts_buf_render(expected_csum_buf,
-				       sizeof(expected_csum_buf));
+			csum_count = 1;
+			dts_buf_render(expected_csum_buf, UPDATE_CSUM_SIZE);
 			daos_csum_set(&csum, expected_csum_buf,
 				      UPDATE_CSUM_SIZE);
 			iod.iod_csums = &csum;
@@ -646,27 +661,34 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
 
+	/* Act */
 	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
 
+	/* Changes */
 	inc_cntr(arg->ta_flags);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	iod.iod_size = DAOS_REC_ANY;
+	memset(actual_csum_buf, 0, sizeof(actual_csum_buf));
+	if (arg->ta_flags & TF_USE_CSUM)
+		daos_csum_set_multiple(&csum, actual_csum_buf,
+				       UPDATE_CSUM_BUF_SIZE,
+				       UPDATE_CSUM_SIZE, csum_count,
+				       UPDATE_BUF_SIZE / csum_count);
 
-	if (!(arg->ta_flags & TF_REC_EXT) && arg->ta_flags & TF_USE_CSUM)
-		daos_csum_set(&csum, actual_csum_buf, UPDATE_CSUM_SIZE);
-
+	/* Act again */
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
 
-	if (!(arg->ta_flags & TF_REC_EXT) && arg->ta_flags & TF_USE_CSUM)
+	/* Verify */
+	if (arg->ta_flags & TF_USE_CSUM)
 		assert_memory_equal(expected_csum_buf, actual_csum_buf,
-				    UPDATE_CSUM_SIZE);
+				    UPDATE_CSUM_SIZE * csum_count);
 
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
@@ -1333,6 +1355,7 @@ io_set_attribute_test(void **state)
 		assert_int_equal(attr, expected);
 	}
 }
+
 static void
 pool_cont_same_uuid(void **state)
 {
@@ -2335,6 +2358,20 @@ static const struct CMUnitTest io_tests[] = {
 		pool_cont_same_uuid, NULL, NULL},
 	{ "VOS299: Space overflow negative error test",
 		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
+	{ "VOS300: Extent checksums with multiple extents requested",
+		csum_multiple_extents_tests, NULL, NULL},
+	{ "VOS301: Extent checksums with zero len csum buffer",
+		csum_test_csum_buffer_of_0_during_fetch, NULL, NULL},
+	{ "VOS302: Extent checksums with holes",
+		csum_test_holes, NULL, NULL},
+	{ "VOS303: Test some checksum helper functions",
+		csum_helper_functions_tests, NULL, NULL},
+	{ "VOS304: Test checksums when extent index doesn't start at 0",
+		csum_extent_not_starting_at_0, NULL, NULL},
+	{ "VOS305: Test checksums with chunk-unaligned extents",
+		csum_extent_not_chunk_aligned, NULL, NULL},
+	{ "VOS306: Some EVT Checksum Helper Functions",
+		evt_csum_helper_functions_tests, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
