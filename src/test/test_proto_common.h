@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Intel Corporation
+/* Copyright (C) 2018-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -178,6 +178,20 @@ struct crt_proto_format my_proto_fmt_0 = {
 	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_0),
 	.cpf_prf = &my_proto_rpc_fmt_0[0],
 	.cpf_base = OPC_MY_PROTO,
+};
+
+/* Format with the same .cpf_ver and .cpf_base as my_proto_fmt_0.
+ * Used for testing crt_proto_register() returning error on
+ * re-registration of the same base+version
+ */
+struct crt_proto_format my_proto_fmt_0_duplicate = {
+	.cpf_name = "my-proto-re-reg",
+	.cpf_ver = 0,
+	.cpf_base = OPC_MY_PROTO,
+
+	/* Chose different count from my_proto_fmt_0 */
+	.cpf_count = 1,
+	.cpf_prf = &my_proto_rpc_fmt_0[1],
 };
 
 struct crt_proto_format my_proto_fmt_1 = {

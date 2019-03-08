@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,9 @@
 
 #include <semaphore.h>
 #include "crt_internal.h"
+
+static int
+crt_proto_query_local(crt_opcode_t base_opc, uint32_t ver);
 
 /* init L2, alloc 32 entries by default */
 static int
@@ -362,40 +365,14 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	    size_t output_size, crt_rpc_cb_t rpc_cb,
 	    struct crt_corpc_ops *co_ops)
 {
-	bool		     disable_reply;
-	bool		     enable_reset_timer;
+	bool	disable_reply;
+	bool	enable_reset_timer;
+	int	rc = 0;
 
 	if (opc_info->coi_inited == 1) {
-		if (opc_info->coi_input_size != input_size) {
-			D_DEBUG(DB_TRACE, "opc %#x, update input_size "
-					"from "DF_U64" to "DF_U64".\n", opc,
-					opc_info->coi_input_size, input_size);
-			opc_info->coi_input_size = input_size;
-		}
-		if (opc_info->coi_output_size != output_size) {
-			D_DEBUG(DB_TRACE, "opc %#x, update output_size "
-					"from "DF_U64" to "DF_U64".\n", opc,
-					opc_info->coi_output_size, output_size);
-			opc_info->coi_output_size = output_size;
-		}
-		opc_info->coi_crf = crf;
-		if (rpc_cb != NULL) {
-			if (opc_info->coi_rpc_cb != NULL)
-				D_DEBUG(DB_TRACE, "re-reg rpc callback, "
-						"opc %#x.\n", opc);
-			else
-				opc_info->coi_rpccb_init = 1;
-			opc_info->coi_rpc_cb = rpc_cb;
-		}
-		if (co_ops != NULL) {
-			if (opc_info->coi_co_ops != NULL)
-				D_DEBUG(DB_TRACE, "re-reg co_ops, "
-						"opc %#x.\n", opc);
-			else
-				opc_info->coi_coops_init = 1;
-			opc_info->coi_co_ops = co_ops;
-		}
-		D_GOTO(set, 0);
+		D_ERROR("RPC with opcode 0x%x already registered\n",
+			opc_info->coi_opc);
+		D_GOTO(out, rc = -DER_EXIST);
 	};
 
 	opc_info->coi_opc = opc;
@@ -414,7 +391,6 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 
 	opc_info->coi_inited = 1;
 
-set:
 	/* Calculate the size required for the RPC.
 	 *
 	 * If crp_forward is enabled memory is only allocated for output buffer,
@@ -445,8 +421,8 @@ set:
 	else
 		D_DEBUG(DB_TRACE, "opc %#x, reset_timer disabled.\n", opc);
 
-
-	return DER_SUCCESS;
+out:
+	return rc;
 }
 
 static int

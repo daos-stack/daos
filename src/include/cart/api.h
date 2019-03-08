@@ -1644,7 +1644,9 @@ crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
  */
 
 /**
- * Register a protocol. Can be called on a server or a client.
+ * Register a protocol. Can be called on a server or a client. Re-registering
+ * existing base_opc + version combination will result in -DER_EXIST error
+ * being returned to the caller.
  *
  * \param[in] cpf              protocol format description. (See \ref
  *                             crt_proto_format)
