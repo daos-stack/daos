@@ -56,7 +56,6 @@ enum {
 
 /** EVTree data pointer */
 struct evt_desc {
-	uint64_t			dc_csum;
 	/** buffer on SCM or NVMe */
 	bio_addr_t			dc_ex_addr;
 	/** Pool map version for the record */
@@ -65,6 +64,9 @@ struct evt_desc {
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
 	umem_id_t			dc_dtx;
+	/** placeholder for csum array buffer */
+	/** csum_count * csum_len (from tree root) is length of csum buf */
+	uint8_t				pt_csum[0];
 };
 
 struct evt_extent {
@@ -186,6 +188,12 @@ struct evt_root {
 	uint32_t			tr_inob;
 	/** see \a evt_feats */
 	uint64_t			tr_feats;
+	/** number of bytes used to generate each csum */
+	uint32_t			tr_csum_chunk_size;
+	/** type of the csum used in tree */
+	uint16_t			tr_csum_type;
+	/** length of each csum in bytes */
+	uint16_t			tr_csum_len;
 };
 
 enum evt_feats {
@@ -200,7 +208,7 @@ struct evt_entry_in {
 	/** Extent to insert */
 	struct evt_rect	ei_rect;
 	/** checksum of entry */
-	uint64_t	ei_csum;
+	daos_csum_buf_t ei_csum;
 	/** pool map version */
 	uint32_t	ei_ver;
 	/** number of bytes per record, zero for punch */
@@ -229,8 +237,8 @@ struct evt_entry {
 	struct evt_extent		en_ext;
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
-	/** checksum of entry */
-	uint64_t			en_csum;
+	/** checksums of selected extent*/
+	daos_csum_buf_t			en_csum;
 	/** pool map version */
 	uint32_t			en_ver;
 	/** Visibility flags for extent */
@@ -315,6 +323,17 @@ evt_ent_array_get_next(struct evt_entry_array *ent_array, struct evt_entry *ent)
 		return NULL;
 
 	return &(el + 1)->le_ent;
+}
+
+/**
+ * Calculate the offset of the selected extent compared to the actual extent.
+ * @param entry - contains both selected and full extents.
+ * @return the offset
+ */
+static inline daos_size_t
+evt_entry_selected_offset(const struct evt_entry *entry)
+{
+	return entry->en_sel_ext.ex_lo - entry->en_ext.ex_lo;
 }
 
 /** iterate over all entries of a ent_array */

@@ -1694,7 +1694,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
-	dst_desc->dc_csum = ent->ei_csum;
+	evt_desc_csum_fill(tcx, dst_desc, ent);
 
 	return 0;
 }
@@ -1811,7 +1811,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	entry->en_csum = desc->dc_csum;
+	evt_entry_csum_fill(tcx, desc, entry);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2402,15 +2402,35 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		TMMID(struct evt_desc)	 desc_mmid;
 		struct evt_desc		*desc;
 
+		/**
+		 * csum len, type, and chunksize will be a configuration stored
+		 * in the container meta data. for now trust the entity checksum
+		 * to have correct values.
+		 */
+		const daos_csum_buf_t *csum = &ent->ei_csum;
+
+		tcx->tc_root->tr_csum_len		= csum->cs_len;
+		tcx->tc_root->tr_csum_type		= csum->cs_type;
+		tcx->tc_root->tr_csum_chunk_size	= csum->cs_chunksize;
+		uint32_t csum_buf_size =
+			evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+
+		if (csum_buf_size > 0)
+			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
+						"for checksum", csum_buf_size);
+
+		size_t allocation_size = sizeof(struct evt_desc) +
+					 csum_buf_size;
+
 		desc_mmid = umem_zalloc_typed(evt_umm(tcx), struct evt_desc,
-					     sizeof(struct evt_desc));
+					     allocation_size);
 		if (TMMID_IS_NULL(desc_mmid))
 			return -DER_NOMEM;
 		ne->ne_child = desc_mmid.oid.off;
 		desc = evt_tmmid2ptr(tcx, desc_mmid);
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		desc->dc_csum = ent->ei_csum;
+		evt_desc_csum_fill(tcx, desc, ent);
 		desc->dc_ver = ent->ei_ver;
 	} else {
 		ne->ne_child = in_off;
@@ -2766,4 +2786,74 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	 * with 1 entry in the list
 	 */
 	return evt_tx_end(tcx, rc);
+}
+
+daos_size_t
+csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
+		 daos_off_t inob)
+{
+	if (chunk_size == 0)
+		return 0;
+	lo *= inob;
+	hi *= inob;
+
+	/** Align to chunk size */
+	lo = lo - lo % chunk_size;
+	hi = hi + chunk_size - hi % chunk_size;
+	daos_off_t width = hi - lo;
+
+	return width / chunk_size;
+}
+
+daos_size_t
+evt_csum_count(const struct evt_context *tcx,
+	       const struct evt_extent *extent)
+{
+	return csum_chunk_count(tcx->tc_root->tr_csum_chunk_size,
+				extent->ex_lo,
+				extent->ex_hi, tcx->tc_root->tr_inob);
+}
+
+daos_size_t
+evt_csum_buf_len(const struct evt_context *tcx,
+		 const struct evt_extent *extent)
+{
+	if (tcx->tc_root->tr_csum_chunk_size == 0)
+		return 0;
+	return tcx->tc_root->tr_csum_len * evt_csum_count(tcx, extent);
+}
+
+void
+evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
+		   const struct evt_entry_in *ent)
+{
+	const daos_csum_buf_t *csum = &ent->ei_csum;
+	daos_size_t csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+
+	D_ASSERT(csum->cs_buf_len >= csum_buf_len);
+	memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+}
+
+void
+evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
+		    struct evt_entry *entry)
+{
+	if (tcx->tc_root->tr_csum_len > 0) {
+		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
+		daos_off_t lo_offset = evt_entry_selected_offset(entry);
+		uint32_t csum_count = evt_csum_count(tcx, &entry->en_ext);
+		uint32_t chunk_len = tcx->tc_root->tr_csum_chunk_size;
+
+		uint64_t csum_start = lo_offset / chunk_len;
+
+		entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
+		entry->en_csum.cs_nr = csum_count;
+		entry->en_csum.cs_buf_len = csum_count *
+			tcx->tc_root->tr_csum_len;
+		entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
+		entry->en_csum.cs_chunksize = chunk_len;
+		entry->en_csum.cs_csum =
+			&desc->pt_csum[0] + csum_start *
+					    tcx->tc_root->tr_csum_len;
+	}
 }

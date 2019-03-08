@@ -304,7 +304,8 @@ biov_set_hole(struct bio_iov *biov, ssize_t len)
 /** Fetch an extent from an akey */
 static int
 akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
-		daos_size_t *rsize_p, struct vos_io_context *ioc)
+		daos_csum_buf_t *csum, daos_size_t *rsize_p,
+		struct vos_io_context *ioc)
 {
 	struct evt_entry	*ent;
 	/* At present, this is not exposed in interface but passing it toggles
@@ -332,6 +333,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		goto failed;
 
 	holes = 0;
+	uint32_t csum_copied = 0;
 	rsize = 0;
 	evt_ent_array_for_each(ent, &ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
@@ -367,6 +369,32 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 		if (rsize == 0)
 			rsize = ent_array.ea_inob;
 		D_ASSERT(rsize == ent_array.ea_inob);
+
+		if (csum && csum_copied < csum->cs_buf_len &&
+		    csum->cs_chunksize > 0) {
+			D_ASSERT(lo >= recx->rx_idx);
+			daos_size_t csum_nr = csum_chunk_count(
+				csum->cs_chunksize,
+				lo, hi, rsize);
+
+			void *csum_ptr = daos_csum_from_offset(csum,
+				(uint32_t) ((lo - recx->rx_idx) * rsize));
+
+			memcpy(csum_ptr, ent->en_csum.cs_csum,
+			       csum_nr * ent->en_csum.cs_len);
+			csum_copied += csum_nr * ent->en_csum.cs_len;
+
+			csum->cs_nr += csum_nr;
+
+			/** These should all be the same for each entry,
+			 * so it's okay to copy over previously written
+			 * value
+			 */
+			csum->cs_len = ent->en_csum.cs_len;
+			csum->cs_type = ent->en_csum.cs_type;
+		}
+
+
 
 		biov.bi_data_len = nr * ent_array.ea_inob;
 		biov.bi_addr = ent->en_addr;
@@ -497,7 +525,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
 		rc = akey_fetch_recx(toh, epoch, &iod->iod_recxs[i],
-				     &rsize, ioc);
+				     daos_iod_csum(iod, i), &rsize, ioc);
 		if (rc != 0) {
 			D_DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
 			goto out;
@@ -690,7 +718,8 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
  */
 static int
 akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
-		 daos_recx_t *recx, daos_size_t rsize,
+		 daos_recx_t *recx, daos_csum_buf_t *iod_csum,
+		 daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
 	struct evt_entry_in ent;
@@ -698,11 +727,14 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	int rc;
 
 	D_ASSERT(recx->rx_nr > 0);
+	memset(&ent, 0, sizeof(ent));
 	ent.ei_rect.rc_epc = epoch;
 	ent.ei_rect.rc_ex.ex_lo = recx->rx_idx;
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
+	if (iod_csum)
+		ent.ei_csum = *iod_csum;
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
@@ -794,8 +826,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		}
 
 		D_DEBUG(DB_IO, "Array update %d eph "DF_U64"\n", i, epoch);
+		daos_csum_buf_t *csum = daos_iod_csum(iod, i);
 		rc = akey_update_recx(toh, epoch, pm_ver, &iod->iod_recxs[i],
-				      iod->iod_size, ioc);
+				      csum, iod->iod_size, ioc);
 		if (rc != 0)
 			goto failed;
 	}

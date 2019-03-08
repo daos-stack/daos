@@ -231,7 +231,7 @@ ioreq_init_basic(struct a_ioreq *ioreq, daos_iod_type_t iod_type)
 	ioreq->iod.iod_type = iod_type;
 	ioreq->rex.rx_nr = 1;
 
-	ioreq->csum.cs_csum = &ioreq->csum_buf;
+	ioreq->csum.cs_csum = (uint8_t *) &ioreq->csum_buf;
 	ioreq->csum.cs_buf_len = UPDATE_CSUM_SIZE;
 	ioreq->csum.cs_len = UPDATE_CSUM_SIZE;
 

@@ -784,7 +784,7 @@ test_evt_iter_delete(void **state)
 			entry.ei_rect.rc_ex.ex_lo = offset;
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
-			entry.ei_csum = 0;
+			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
 			sum = offset - epoch + 1;
@@ -914,7 +914,7 @@ test_evt_iter_delete_internal(void **state)
 			entry.ei_rect.rc_ex.ex_lo = offset;
 			entry.ei_rect.rc_ex.ex_hi = offset;
 			entry.ei_rect.rc_epc = epoch;
-			entry.ei_csum = 0;
+			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 			entry.ei_ver = 0;
 			entry.ei_inob = sizeof(offset);
 			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
