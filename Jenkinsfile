@@ -79,6 +79,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
+                                   stepName: "checkpatch run",
                                    ignored_files: "src/control/vendor/*"
                         sh '''env
                               ./blueocean.py
