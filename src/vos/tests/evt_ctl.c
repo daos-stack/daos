@@ -987,7 +987,6 @@ test_evt_ent_alloc_bug(void **state)
 	nr2  = nr1;
 	idx3 = idx1 + 1;
 	nr3  = idx2 + nr2 - idx1 - 2;
-	entry_in.ei_csum = 0;
 	entry_in.ei_ver = 0;
 	entry_in.ei_inob = 0;
 	/* We will insert nothing but holes as we are just checking sorted
