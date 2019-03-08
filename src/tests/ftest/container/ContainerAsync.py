@@ -136,7 +136,7 @@ class ContainerAsync(Test):
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after successful container create: " , GLOB_RC)
+            print ("RC after successful container create: ", GLOB_RC)
 
             # Try to recreate container after destroying pool,
             # this should fail. Checking rc after failure.
@@ -148,7 +148,7 @@ class ContainerAsync(Test):
             GLOB_SIGNAL.wait()
             if GLOB_RC == 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after unsuccessful container create: " , GLOB_RC)
+            print ("RC after unsuccessful container create: ", GLOB_RC)
 
             # cleanup the pool and container
             self.pool = None
@@ -198,7 +198,7 @@ class ContainerAsync(Test):
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after successful container create: " , GLOB_RC)
+            print ("RC after successful container create: ", GLOB_RC)
 
             # Try to destroy container again, this should fail, as non-existent.
             # Checking rc after failure.
@@ -264,7 +264,7 @@ class ContainerAsync(Test):
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test")
-            print ("RC after successful container create: " , GLOB_RC)
+            print ("RC after successful container create: ", GLOB_RC)
 
             # Try to open container2, this should fail, as non-existent.
             # Checking rc after failure.
@@ -335,7 +335,7 @@ class ContainerAsync(Test):
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:
                 self.fail("RC not as expected in async test:{0}".format(GLOB_RC))
-            print ("RC after successful container create: " , GLOB_RC)
+            print ("RC after successful container create: ", GLOB_RC)
 
             # Try to open container2, this should fail, as non-existent.
             # Checking rc after failure.
