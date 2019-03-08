@@ -151,7 +151,7 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	csum->cs_len  = krec->kr_cs_size;
 	csum->cs_type = krec->kr_cs_type;
 	if (csum->cs_csum == NULL)
-		csum->cs_csum = vos_krec2csum(krec);
+		csum->cs_csum = (uint8_t *) vos_krec2csum(krec);
 	else if (csum->cs_buf_len > csum->cs_len)
 		memcpy(csum->cs_csum, vos_krec2csum(krec), csum->cs_len);
 
@@ -589,7 +589,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 			memcpy(csum->cs_csum,
 			       vos_irec2csum(irec), csum->cs_len);
 		else
-			csum->cs_csum = vos_irec2csum(irec);
+			csum->cs_csum = (uint8_t *) vos_irec2csum(irec);
 	}
 
 	rbund->rb_rsize	= irec->ir_size;
