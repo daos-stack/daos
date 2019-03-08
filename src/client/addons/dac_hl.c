@@ -30,9 +30,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <daos/addons.h>
-#include <daos_api.h>
-#include <daos_addons.h>
-#include <daos_task.h>
+#include <daos.h>
 
 struct io_params {
 	daos_key_t		dkey;

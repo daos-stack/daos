@@ -32,8 +32,8 @@ extern "C" {
 #endif
 
 #include <daos_types.h>
-#include <daos_addons.h>
-#include <daos_errno.h>
+#include <daos_array.h>
+#include <daos_kv.h>
 #include <daos/tse.h>
 
 /** DAOS operation codes for task creation */

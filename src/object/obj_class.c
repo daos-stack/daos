@@ -23,7 +23,7 @@
 #define D_LOGFAC	DD_FAC(object)
 
 #include "obj_internal.h"
-#include <daos_api.h>
+#include <daos.h>
 
 /** DAOS object class */
 struct daos_obj_class {

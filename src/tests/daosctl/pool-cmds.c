@@ -39,9 +39,7 @@
 /* daos specific */
 #include "common_utils.h"
 #include <daos.h>
-#include <daos_api.h>
 #include <daos/common.h>
-#include <daos_mgmt.h>
 
 /**
  * This file contains the pool related user commands.

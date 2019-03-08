@@ -39,10 +39,7 @@
 
 /* daos specific */
 #include <daos.h>
-#include <daos_api.h>
-#include <daos_types.h>
 #include <tests_lib.h>
-#include <daos_mgmt.h>
 #include <daos/common.h>
 
 #include "common_utils.h"

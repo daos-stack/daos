@@ -34,8 +34,6 @@
 #include "daosctl.h"
 
 #include <daos.h>
-#include <daos_api.h>
-#include <daos_mgmt.h>
 #include <daos/common.h>
 
 #define USE_MPI 0

@@ -29,7 +29,7 @@
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
+#include <daos_object.h> /* For ofeat bits */
 #include "vos_internal.h"
 
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */

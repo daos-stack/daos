@@ -31,7 +31,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
+#include <daos_object.h> /* For ofeat bits */
 #include "vos_internal.h"
 
 struct open_query {

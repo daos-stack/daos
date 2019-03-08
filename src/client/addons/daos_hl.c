@@ -30,7 +30,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/addons.h>
-#include <daos_addons.h>
+#include <daos_kv.h>
 
 int
 daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,

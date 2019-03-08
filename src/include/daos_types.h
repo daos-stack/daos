@@ -668,6 +668,17 @@ typedef struct {
 	daos_epoch_range_t	*iom_eprs;
 } daos_iom_t;
 
+/**
+ * Multi-dkey I/O data structure
+ */
+typedef struct {
+        daos_key_t      *ioa_dkey;
+        unsigned int    ioa_nr;
+        daos_iod_t      *ioa_iods;
+        daos_sg_list_t  *ioa_sgls;
+        daos_iom_t      *ioa_maps;
+} daos_dkey_io_t;
+
 /** record status */
 enum {
 	/** Reserved for cache miss */
@@ -778,6 +789,25 @@ struct d_tgt_list {
 };
 
 struct daos_eq;
+
+/**
+ * Allocate DAOS properties.
+ *
+ * \param[in]	entries_nr	number of entries
+ *
+ * \return	allocated daos_prop_t pointer, NULL if failed.
+ */
+daos_prop_t *
+daos_prop_alloc(uint32_t entries_nr);
+
+/**
+ * Free the DAOS properties.
+ *
+ * \param[int]	prop		properties to be freed.
+ */
+void
+daos_prop_free(daos_prop_t *prop);
+
 /**
  * DAOS pool property types
  * valid in range (DAOS_PROP_PO_MIN, DAOS_PROP_PO_MAX)

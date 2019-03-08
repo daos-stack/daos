@@ -34,8 +34,7 @@
 #include <libgen.h>
 
 #include <daos/common.h>
-#include "daos_fs.h"
-#include "daos_api.h"
+#include "daos.h"
 
 struct dfuse_data {
 	int		show_help;

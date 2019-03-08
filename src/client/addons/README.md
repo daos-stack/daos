@@ -50,7 +50,7 @@ Array records: 9
 
 ### API and Implementation
 
-The API (include/daos_addons.h) includes operations to:
+The API (include/daos_array.h) includes operations to:
 - create an array with the required, immutable metadata of the array.
 - open an existing array which returns the metadata associated with the array.
 - read from an array object.
@@ -67,9 +67,9 @@ I/O.
 
 The API is currently tested with daos_addons_test.
 
-## DAOS High Level (HL) API
+## DAOS KV API
 
-The HL API simplifies the DAOS Object API and exposes a simple API to manipulate
+The KV API (include/daos_kv.h) simplifies the DAOS Object API and exposes a simple API to manipulate
 a Key-Value object with simple put/get/remove operations. The API exposes only a
 single Key (no multi-level keys) and a value associated with that key which is
 overwritten entirely anytime the key is updated. So internally the mapping of a

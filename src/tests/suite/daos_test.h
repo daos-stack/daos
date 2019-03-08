@@ -63,11 +63,11 @@
 	} while  (0)
 
 #include <mpi.h>
+#include <daos.h>
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>
-#include <daos.h>
 
 /** Server crt group ID */
 extern const char *server_group;

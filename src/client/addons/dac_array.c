@@ -31,9 +31,8 @@
 #include <daos/container.h>
 #include <daos/tse.h>
 #include <daos/addons.h>
-#include <daos_api.h>
-#include <daos_addons.h>
-#include <daos_task.h>
+
+#include <daos.h>
 
 #define AKEY_MAGIC_V	0xdaca55a9daca55a9
 #define ARRAY_MD_KEY	"daos_array_metadata"

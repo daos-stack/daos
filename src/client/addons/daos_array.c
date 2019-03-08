@@ -30,7 +30,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/addons.h>
-#include <daos_addons.h>
+#include <daos_array.h>
 
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,

@@ -33,7 +33,7 @@
 	#endif
 #endif
 #include <daos_types.h>
-#include <daos_addons.h>
+#include <daos_kv.h>
 #include "daos_test.h"
 #include "daos_addons_test.h"
 

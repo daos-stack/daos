@@ -27,7 +27,7 @@
  */
 
 #include <daos_types.h>
-#include <daos_addons.h>
+#include <daos_array.h>
 #include "daos_test.h"
 #include "daos_addons_test.h"
 

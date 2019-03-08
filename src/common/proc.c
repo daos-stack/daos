@@ -27,7 +27,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
-#include <daos_api.h>
+#include <daos_types.h>
 
 static int
 crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
