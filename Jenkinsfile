@@ -79,7 +79,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   stepName: "checkpatch run",
+                                   stepName: env.STAGE_NAME,
                                    ignored_files: "src/control/vendor/*"
                     }
                     post {
