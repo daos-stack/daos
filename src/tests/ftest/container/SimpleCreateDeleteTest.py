@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017 Intel Corporation.
+  (C) Copyright 2017-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ class SimpleCreateDeleteTest(Test):
                                            'daos_server')
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
     def test_container_basics(self):
         """
@@ -86,7 +86,7 @@ class SimpleCreateDeleteTest(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.Context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
@@ -94,7 +94,7 @@ class SimpleCreateDeleteTest(Test):
             pool.connect(1 << 1)
 
             # create a container
-            container = DaosContainer(self.Context)
+            container = DaosContainer(self.context)
             container.create(pool.handle)
 
             # now open it
