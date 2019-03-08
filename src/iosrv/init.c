@@ -36,6 +36,7 @@
 #include <daos/btree_class.h>
 #include <daos/common.h>
 #include "srv_internal.h"
+#include "drpc_internal.h"
 
 #include <daos.h> /* for daos_init() */
 
@@ -347,9 +348,15 @@ server_init()
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
+	rc = drpc_init();
+	if (rc != 0) {
+		D_ERROR("Failed to initialize dRPC: %d\n", rc);
+		goto exit_daos_fini;
+	}
+
 	rc = dss_module_setup_all();
 	if (rc != 0)
-		D_GOTO(exit_daos_fini, rc);
+		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
@@ -358,6 +365,8 @@ server_init()
 
 	return 0;
 
+exit_drpc_fini:
+	drpc_fini();
 exit_daos_fini:
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
@@ -382,6 +391,7 @@ server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
+	drpc_fini();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
 	else
