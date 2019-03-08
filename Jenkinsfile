@@ -38,7 +38,7 @@
  */
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value="pipeline-lib@githubNotify-target-url") _
+@Library(value="pipeline-lib@CORCI-522") _
 
 def arch=""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
