@@ -1,4 +1,5 @@
 #!/usr/bin/python
+''' Experiments with BlueOcean REST API'''
 
 import json
 import os
@@ -6,7 +7,8 @@ import requests
 
 def main():
     ''' main '''
-    base_url = 'https://build.hpdd.intel.com/blue/rest/organizations/' + \
+    url_prefix = 'https://build.hpdd.intel.com/'
+    base_url = url_prefix + 'blue/rest/organizations/' + \
                'jenkins/pipelines/daos-stack/pipelines/daos/branches/' + \
                '{}/runs/{}/nodes/'.format(os.environ['BRANCH_NAME'],
                                           os.environ['BUILD_ID'])
@@ -31,4 +33,12 @@ def main():
             break
 
     print "Node: {}, step: {}".format(node['id'], step['id'])
+
+    for action in step['actions']:
+        if action['urlName'] == 'log':
+            req = requests.get(url_prefix + action['_links']['self']['href'] + \
+                               '?start=0')
+            break
+    print "Log:\n", req.text
+
 main()
