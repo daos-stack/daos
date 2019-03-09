@@ -68,7 +68,7 @@ class RebuildNoCap(Test):
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
         # fire up the DAOS servers
-        self.server_group = self.params.get("name",'/run/server_config/',
+        self.server_group = self.params.get("name", '/run/server_config/',
                                             'daos_server')
         ServerUtils.runServer(self.hostfile, self.server_group,
                               build_paths['PREFIX'] + '/../')

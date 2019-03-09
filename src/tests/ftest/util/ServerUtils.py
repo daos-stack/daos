@@ -126,7 +126,8 @@ def create_server_yaml(basepath):
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Write {}/{}".format(basepath, AVOCADO_YAML_FILE))
+        raise ServerFailed("Failed to Write {}/{}".format(basepath,
+                                                          AVOCADO_YAML_FILE))
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
@@ -139,7 +140,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                    for line in genio.read_all_lines(hostfile)]
         server_count = len(servers)
 
-        #Create the DAOS server configuration yaml file to pass with daos_server -o <FILE_NAME>
+        #Create the DAOS server configuration yaml file to pass
+        #with daos_server -o <FILE_NAME>
         create_server_yaml(basepath)
 
         # first make sure there are no existing servers running
@@ -148,8 +150,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         # clean the tmpfs on the servers
         for server in servers:
             subprocess.check_call(['ssh', server,
-                                   "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-                                   "xargs -0r rm -rf"])
+                                   "find /mnt/daos -mindepth 1 -maxdepth 1 "
+                                   "-print0 | xargs -0r rm -rf"])
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:

@@ -113,7 +113,7 @@ class ObjectMetadata(avocado.Test):
 
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.server_group = self.params.get("name",
-                                            '/server/',
+                                            '/server_config/',
                                             'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
