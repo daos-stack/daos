@@ -66,6 +66,7 @@ while [ $# -gt 0 ]; do
 done
 
 set -x
+set -e
 
 run_test()
 {
@@ -75,7 +76,6 @@ run_test()
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
         "${VCMD[@]}" "$BTR" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
-
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \

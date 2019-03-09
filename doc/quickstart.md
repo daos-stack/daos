@@ -58,9 +58,9 @@ On CentOS and openSuSE:
     yum install -y doxygen pandoc flex patch nasm yasm
     yum install -y ninja-build meson libyaml-devel
     # Required SPDK packages for managing NVMe SSDs
-    yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
+    yum install -y CUnit-devel libaio-devel python-pep8 lcov
     yum install -y python clang-analyzer sg3_utils libiscsi-devel
-    yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
+    yum install -y libibverbs-devel numactl-devel doxygen graphviz
     # Required IpmCtl packages for managing SCM Modules
     yum install -y yum-plugin-copr epel-release
     yum copr -y enable jhli/ipmctl
@@ -78,7 +78,7 @@ On Ubuntu and Debian:
     apt-get install -y ninja-build meson libyaml-dev python2.7-dev
     # Required SPDK packages for managing NVMe SSDs
     apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
-    apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen libnuma-dev
+    apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen libnuma-dev
     # Required IpmCtl packages for managing SCM Modules
     apt-get install -y software-properties-common
     add-apt-repository ppa:jhli/libsafec
