@@ -28,7 +28,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -218,4 +220,23 @@ func SyncDir(path string) (err error) {
 	}()
 
 	return d.Sync()
+}
+
+// CheckSudo verifies process is running as root.
+func CheckSudo() (ok bool, err error) {
+	cmd := exec.Command("id", "-u")
+	output, err := cmd.Output()
+	if err != nil {
+		return
+	}
+
+	// trim trailing new-line char
+	// 0 = root, 501 = non-root user
+	i, err := strconv.Atoi(string(output[:len(output)-1]))
+	if err != nil {
+		return
+	}
+
+	ok = (i == 0)
+	return
 }

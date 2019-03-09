@@ -77,17 +77,26 @@ func (s *ShowStorageCommand) Execute(args []string) (errs error) {
 // PrepNvmeCommand is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
 type PrepNvmeCommand struct {
-	NrHugepages int `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+	NrHugepages int  `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+	Reset       bool `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
 }
 
 // Execute is run when PrepNvmeCommand activates
 //
 // Perform task then exit immediately. No config parsing performed.
 func (p *PrepNvmeCommand) Execute(args []string) error {
+	ok, err := common.CheckSudo()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("This subcommand must be run as root! (sudo)")
+	}
+
 	config := newConfiguration()
 
 	// don't load config file because we don't want to put unnecessary
-	// limitations on parameters provided if we are doing something simple
+	// limitations on config file parameters if performing specific task
 	if p.NrHugepages != 0 {
 		config.NrHugepages = p.NrHugepages
 	}
@@ -97,11 +106,14 @@ func (p *PrepNvmeCommand) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
+	// run reset first to ensure reallocation of hugepages
 	if err := server.nvme.spdk.reset(); err != nil {
 		return errors.WithMessage(err, "SPDK setup reset")
 	}
-	if err := server.nvme.spdk.prep(); err != nil {
-		return errors.WithMessage(err, "SPDK setup")
+	if !p.Reset {
+		if err := server.nvme.spdk.prep(); err != nil {
+			return errors.WithMessage(err, "SPDK setup")
+		}
 	}
 
 	// exit immediately to avoid continuation of main
