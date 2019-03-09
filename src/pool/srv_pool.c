@@ -988,7 +988,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 
 			/* Need to update pool->sp_map. Swap with map. */
 			pool->sp_map_version = map_version;
-			rc = pl_map_create_v2(map, &pool->sp_pl_map);
+			rc = pl_map_update(pool->sp_uuid, map, false, true);
 			if (rc != 0) {
 				svc->ps_pool = NULL;
 				ABT_rwlock_unlock(pool->sp_lock);
@@ -2297,7 +2297,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * new pool map with the old one in the cache.
 	 */
 	ABT_rwlock_wrlock(svc->ps_pool->sp_lock);
-	rc = pl_map_create_v2(map, &svc->ps_pool->sp_pl_map);
+	rc = pl_map_update(pool_uuid, map, false, true);
 	if (rc == 0) {
 		map_tmp = svc->ps_pool->sp_map;
 		svc->ps_pool->sp_map = map;
@@ -3245,34 +3245,39 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 		     uint32_t version, struct pl_obj_layout **plo)
 {
 	struct ds_pool		*pool;
+	struct pl_map		*map = NULL;
 	struct pl_obj_layout	*layout = NULL;
 	struct pool_target	*target;
 	struct daos_obj_md	 md = { 0 };
 	d_rank_t		 leader;
 	d_rank_t		 myrank;
-	int			 rc;
+	int			 rc = 0;
 
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL)
 		return -DER_INVAL;
 
+	map = pl_map_find(pool_uuid, oid->id_pub);
+	if (map == NULL) {
+		D_WARN("Failed to find pool map tp select leader for "
+		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
 	md.omd_id = oid->id_pub;
 	md.omd_ver = version;
-	ABT_rwlock_rdlock(pool->sp_lock);
-	D_ASSERT(pool->sp_pl_map != NULL);
-
-	rc = pl_obj_place(pool->sp_pl_map, &md, NULL, &layout);
-	ABT_rwlock_unlock(pool->sp_lock);
+	rc = pl_obj_place(map, &md, NULL, &layout);
 	if (rc != 0)
 		goto out;
 
-	rc = pl_select_leader(oid, layout->ol_nr, true, ds_pool_get_shard,
-			      layout, &leader);
-	if (rc != 0) {
+	leader = pl_select_leader(oid->id_pub, oid->id_shard, layout->ol_nr,
+				  true, ds_pool_get_shard, layout);
+	if (leader < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",
-		       DP_UOID(*oid), version, rc);
-		goto out;
+		       DP_UOID(*oid), version, leader);
+		D_GOTO(out, rc = leader);
 	}
 
 	rc = pool_map_find_target(pool->sp_map, leader, &target);
@@ -3294,6 +3299,8 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 out:
 	if (rc <= 0 && layout != NULL)
 		pl_obj_layout_free(layout);
+	if (map != NULL)
+		pl_map_decref(map);
 	ds_pool_put(pool);
 	return rc;
 }
