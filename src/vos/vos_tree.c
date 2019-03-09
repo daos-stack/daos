@@ -342,18 +342,12 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
-	struct vos_btr_attr	*ta;
-	struct umem_attr	 uma;
-	daos_handle_t		 btr_oh = DAOS_HDL_INVAL;
-	daos_handle_t		 evt_oh = DAOS_HDL_INVAL;
-	uint64_t		 tree_feats = 0;
-	int			 rc;
+	int			 rc = 0;
 
 	kbund = iov2key_bundle(key_iov);
 	rbund = iov2rec_bundle(val_iov);
 
-	rec->rec_mmid = umem_zalloc(&tins->ti_umm,
-				    vos_krec_size(rbund->rb_tclass, rbund));
+	rec->rec_mmid = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return -DER_NOMEM;
 
@@ -373,55 +367,9 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	}
 	rbund->rb_krec = krec;
 
-	/* Step-1: find the btree attributes and create btree */
-	ta = obj_tree_find_attr(tins->ti_root->tr_class);
-	D_ASSERTF(ta != NULL, "gets NULL ta for tr_class %d.\n",
-		 tins->ti_root->tr_class);
+	/** Subtree will be created later */
 
-	D_DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
-	if (rbund->rb_tclass == VOS_BTR_DKEY) {
-		uint64_t	obj_feats;
-
-		/* Check and setup the akey key compare bits */
-		obj_feats = tins->ti_root->tr_feats & VOS_OFEAT_MASK;
-		obj_feats = obj_feats >> VOS_OFEAT_SHIFT;
-		/* Use hashed key if feature bits aren't set for object */
-		tree_feats = obj_feats << VOS_OFEAT_SHIFT;
-		if (obj_feats & DAOS_OF_AKEY_UINT64)
-			tree_feats |= VOS_KEY_CMP_UINT64_SET;
-		else if (obj_feats & DAOS_OF_AKEY_LEXICAL)
-			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
-	}
-
-	umem_attr_get(&tins->ti_umm, &uma);
-	rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats, ta->ta_order,
-				      &uma, &krec->kr_btr, tins->ti_coh,
-				      &btr_oh);
-	if (rc != 0) {
-		D_ERROR("Failed to create btree: %d\n", rc);
-		return rc;
-	}
-
-	/* Step-2: create evtree for akey only */
-	if (rbund->rb_tclass == VOS_BTR_AKEY) {
-		D_DEBUG(DB_TRACE, "Create evtree\n");
-
-		krec->kr_bmap |= KREC_BF_EVT;
-		rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
-					&krec->kr_evt[0], tins->ti_coh,
-					&evt_oh);
-		if (rc != 0) {
-			D_ERROR("Failed to create evtree: %d\n", rc);
-			D_GOTO(out, rc);
-		}
-	}
 	ktr_rec_store(tins, rec, kbund, rbund);
- out:
-	if (!daos_handle_is_inval(btr_oh))
-		dbtree_close(btr_oh);
-
-	if (!daos_handle_is_inval(evt_oh))
-		evt_close(evt_oh);
 
 	return rc;
 }
@@ -441,23 +389,28 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	umem_attr_get(&tins->ti_umm, &uma);
 
 	/* has subtree? */
-	if (krec->kr_btr.tr_order) {
+	if (krec->kr_bmap & KREC_BF_EVT) {
+		if (krec->kr_evt.tr_order == 0)
+			goto exit; /* No subtree */
+
+		rc = evt_open_inplace(&krec->kr_evt, &uma, tins->ti_coh,
+				      tins->ti_blks_info, &toh);
+		if (rc != 0)
+			D_ERROR("Failed to open evtree: %d\n", rc);
+		else
+			evt_destroy(toh);
+	} else if (krec->kr_bmap & KREC_BF_BTR) {
+		D_ASSERT(krec->kr_bmap & KREC_BF_BTR);
+		if (krec->kr_btr.tr_order == 0)
+			goto exit; /* No subtree */
 		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma, tins->ti_coh,
 					    tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
 			dbtree_destroy(toh);
-	}
-
-	if ((krec->kr_bmap & KREC_BF_EVT) && krec->kr_evt[0].tr_order) {
-		rc = evt_open_inplace(&krec->kr_evt[0], &uma, tins->ti_coh,
-				      tins->ti_blks_info, &toh);
-		if (rc != 0)
-			D_ERROR("Failed to open evtree: %d\n", rc);
-		else
-			evt_destroy(toh);
-	}
+	} /* It's possible that neither tree is created in case of punch only */
+exit:
 	umem_free(&tins->ti_umm, rec->rec_mmid);
 	return rc;
 }
@@ -786,6 +739,98 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	},
 };
 
+static int
+tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
+		 struct vos_krec_df *krec, daos_handle_t *sub_toh)
+{
+	struct umem_attr	*uma = vos_obj2uma(obj);
+	struct vea_space_info	*info = obj->obj_cont->vc_pool->vp_vea_info;
+	daos_handle_t		 coh = vos_cont2hdl(obj->obj_cont);
+	int			 expected_flag;
+	int			 unexpected_flag;
+	int			 rc = 0;
+
+	if (flags & SUBTR_EVT) {
+		expected_flag = KREC_BF_EVT;
+		unexpected_flag = KREC_BF_BTR;
+	} else {
+		expected_flag = KREC_BF_BTR;
+		unexpected_flag = KREC_BF_EVT;
+	}
+
+	if (krec->kr_bmap & unexpected_flag) {
+		if (flags & SUBTR_CREATE) {
+			D_ERROR("Mixing single value and array not allowed\n");
+			rc = -DER_NO_PERM;
+			goto out;
+		}
+		D_DEBUG(DB_TRACE, "Attempt to fetch wrong value type\n");
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	if (krec->kr_bmap & expected_flag) {
+		if (flags & SUBTR_EVT) {
+			rc = evt_open_inplace(&krec->kr_evt, uma, coh, info,
+					      sub_toh);
+		} else {
+			rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh,
+						    info, sub_toh);
+		}
+		if (rc != 0)
+			D_ERROR("Failed to open tree: %d\n", rc);
+
+		goto out;
+	}
+
+	D_ASSERT(flags & SUBTR_CREATE);
+
+	if (flags & SUBTR_EVT) {
+		rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER,
+					uma, &krec->kr_evt, coh, sub_toh);
+		if (rc != 0) {
+			D_ERROR("Failed to create evtree: %d\n", rc);
+			goto out;
+		}
+	} else {
+		struct vos_btr_attr	*ta;
+		uint64_t		 tree_feats = 0;
+
+		/* Step-1: find the btree attributes and create btree */
+		if (tclass == VOS_BTR_DKEY) {
+			uint64_t	obj_feats;
+
+			/* Check and setup the akey key compare bits */
+			obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
+			tree_feats = (uint64_t)obj_feats << VOS_OFEAT_SHIFT;
+			if (obj_feats & DAOS_OF_AKEY_UINT64)
+				tree_feats |= VOS_KEY_CMP_UINT64_SET;
+			else if (obj_feats & DAOS_OF_AKEY_LEXICAL)
+				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
+		}
+
+
+		ta = obj_tree_find_attr(tclass);
+
+		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
+			ta->ta_name, tree_feats);
+
+		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
+					      ta->ta_order, uma, &krec->kr_btr,
+					      coh, sub_toh);
+		if (rc != 0) {
+			D_ERROR("Failed to create btree: %d\n", rc);
+			goto out;
+		}
+	}
+
+	/* NB: Should probably be transactional */
+	krec->kr_bmap |= expected_flag;
+
+out:
+	return rc;
+}
+
 /**
  * Load the subtree roots embedded in the parent tree record.
  *
@@ -799,14 +844,12 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		 daos_key_t *key, int flags, uint32_t intent,
 		 struct vos_krec_df **krecp, daos_handle_t *sub_toh)
 {
-	struct umem_attr	*uma = vos_obj2uma(obj);
 	struct vos_krec_df	*krec;
 	daos_csum_buf_t		 csum;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_iov_t		 kiov;
 	daos_iov_t		 riov;
-	struct vea_space_info	*info;
 	int			 rc;
 
 	if (krecp != NULL)
@@ -871,20 +914,7 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	if (krecp != NULL)
 		*krecp = krec;
 
-	info = obj->obj_cont->vc_pool->vp_vea_info;
-	if (flags & SUBTR_EVT) {
-		rc = evt_open_inplace(&krec->kr_evt[0], uma,
-				      vos_cont2hdl(obj->obj_cont),
-				      info, sub_toh);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	} else {
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma,
-					    vos_cont2hdl(obj->obj_cont),
-					    info, sub_toh);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
  out:
 	return rc;
 }
@@ -963,18 +993,21 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 		daos_iov_t	         tmp;
 
 		krec2 = rbund->rb_krec;
-		krec2->kr_btr = krec->kr_btr;
-		umem_tx_add_ptr(umm, &krec->kr_btr, sizeof(krec->kr_btr));
-		memset(&krec->kr_btr, 0, sizeof(krec->kr_btr));
-
-		if (krec->kr_bmap & KREC_BF_EVT) {
-			krec2->kr_evt[0] = krec->kr_evt[0];
-			umem_tx_add_ptr(umm, &krec->kr_evt[0],
-					sizeof(krec->kr_evt[0]));
-			memset(&krec->kr_evt[0], 0, sizeof(krec->kr_evt[0]));
+		if (krec->kr_bmap & KREC_BF_BTR) {
+			krec2->kr_btr = krec->kr_btr;
+			umem_tx_add_ptr(umm, &krec->kr_btr,
+					sizeof(krec->kr_btr));
+			memset(&krec->kr_btr, 0, sizeof(krec->kr_btr));
+		} else {
+			D_ASSERT(krec->kr_bmap & KREC_BF_EVT);
+			krec2->kr_evt = krec->kr_evt;
+			umem_tx_add_ptr(umm, &krec->kr_evt,
+					sizeof(krec->kr_evt));
+			memset(&krec->kr_evt, 0, sizeof(krec->kr_evt));
 		}
 		/* Capture the earliest modification time of the removed key */
 		krec2->kr_earliest = krec->kr_earliest;
+		krec2->kr_bmap = krec->kr_bmap | KREC_BF_PUNCHED;
 
 		tree_key_bundle2iov(&kbund2, &tmp);
 		kbund2.kb_key	= kbund->kb_key;

@@ -631,7 +631,7 @@ discard_4(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct agg_tst_dataset	 ds = { 0 };
-	daos_epoch_t		 punch_epoch[2];
+	daos_epoch_t		 punch_epoch[3] = {};
 	int			 i, punch_nr;
 
 	ds.td_type = DAOS_IOD_SINGLE;
@@ -750,7 +750,7 @@ aggregate_2(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct agg_tst_dataset	 ds = { 0 };
-	daos_epoch_t		 punch_epoch[2];
+	daos_epoch_t		 punch_epoch[3] = {};
 	int			 i, punch_nr;
 
 	ds.td_type = DAOS_IOD_SINGLE;

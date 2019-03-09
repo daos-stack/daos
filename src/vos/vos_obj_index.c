@@ -596,6 +596,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		it_entry->ie_epoch = obj->vo_latest;
 	else
 		it_entry->ie_epoch = DAOS_EPOCH_MAX;
+	it_entry->ie_child_type = VOS_ITER_DKEY;
 	return 0;
 }
 

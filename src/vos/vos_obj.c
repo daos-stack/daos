@@ -247,6 +247,16 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		else
 			ent->ie_epoch = DAOS_EPOCH_MAX;
 		ent->ie_earliest = rbund.rb_krec->kr_earliest;
+		if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
+			if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
+				ent->ie_child_type = VOS_ITER_RECX;
+			} else {
+				D_ASSERT(rbund.rb_krec->kr_bmap & KREC_BF_BTR);
+				ent->ie_child_type = VOS_ITER_SINGLE;
+			}
+		} else {
+			ent->ie_child_type = VOS_ITER_AKEY;
+		}
 	}
 	return rc;
 }
@@ -278,9 +288,12 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	info->ii_epr.epr_hi = MIN(oiter->it_epr.epr_hi, krec->kr_latest);
 
 	if (type == VOS_ITER_RECX) {
-		D_ASSERT(krec->kr_bmap & KREC_BF_EVT);
-		info->ii_evt = &krec->kr_evt[0];
+		if ((krec->kr_bmap & KREC_BF_EVT) == 0)
+			return -DER_NONEXIST;
+		info->ii_evt = &krec->kr_evt;
 	} else {
+		if ((krec->kr_bmap & KREC_BF_BTR) == 0)
+			return -DER_NONEXIST;
 		info->ii_btr = &krec->kr_btr;
 	}
 

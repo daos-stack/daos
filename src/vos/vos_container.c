@@ -683,6 +683,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));
 	uuid_copy(it_entry->ie_couuid, args.ca_cont_df->cd_id);
+	it_entry->ie_child_type = VOS_ITER_OBJ;
 
 	return rc;
 }
