@@ -40,6 +40,7 @@ def scons():
     SConscript('pool/SConscript')
     SConscript('container/SConscript')
     SConscript('placement/SConscript')
+    SConscript('dtx/SConscript')
     SConscript('object/SConscript')
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
