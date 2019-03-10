@@ -146,7 +146,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	for (i = 0; i < failed_cnt; i++)
 		plt_fail_tgt(failed_tgts[i]);
 
-	rc = pl_map_update(pl_uuid, po_map, false);
+	rc = pl_map_update(pl_uuid, po_map, false, false);
 	D_ASSERT(rc == 0);
 	pl_map = pl_map_find(pl_uuid, oid);
 	D_ASSERT(pl_map != NULL);
