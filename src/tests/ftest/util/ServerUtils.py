@@ -50,17 +50,17 @@ class ServerFailed(Exception):
 def printFunc(thestring):
     print("<SERVER>" + thestring)
 
-def nvme_yaml_config(default_yaml_value, bdev, enabled=False):
+def nvme_yaml_config(default_value, bdev, enabled=False):
     """
     Enable/Disable NVMe Mode.
     By default it's Enabled in yaml file so disable to run with ofi+sockets.
     """
-    if 'bdev_class' in default_yaml_value['servers'][0]:
-        if (default_yaml_value['servers'][0]['bdev_class'] == bdev and
+    if 'bdev_class' in default_value['servers'][0]:
+        if (default_value['servers'][0]['bdev_class'] == bdev and
                 not enabled):
-            del default_yaml_value['servers'][0]['bdev_class']
+            del default_value['servers'][0]['bdev_class']
     if enabled:
-        default_yaml_value['servers'][0]['bdev_class'] = bdev
+        default_value['servers'][0]['bdev_class'] = bdev
 
 def remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp):
     """
@@ -82,11 +82,11 @@ def create_server_yaml(basepath):
     Args:
         - basepath = DAOS install basepath
     """
-    #Read the default utils/config/examples/daos_server_sockets.yml
+    #Read the baseline conf file data/daos_server_baseline.yml
     try:
         with open('{}/{}'.format(basepath,
                                  DEFAULT_YAML_FILE), 'r') as read_file:
-            default_yaml_value = yaml.safe_load(read_file)
+            default_value = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
@@ -96,11 +96,12 @@ def create_server_yaml(basepath):
     #Read the values from avocado_testcase.yaml file if test ran with Avocado.
     avocado_yaml_value = ""
     if "AVOCADO_TEST_DATADIR" in os.environ:
-        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).split(".")[0] \
-                                + ".yaml"
+        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
+                                split(".")[0] + ".yaml"
         avocado_yaml_file_tmp = '{}.tmp'.format(avocado_yaml_file)
 
-        # Yaml Python module is not able to read !mux so need to remove !mux before reading.
+        # Yaml Python module is not able to read !mux so need to
+        # remove !mux before reading.
         remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp)
 
         # Read avocado test yaml file.
@@ -116,19 +117,21 @@ def create_server_yaml(basepath):
         os.remove(avocado_yaml_file_tmp)
     #Update values from avocado_testcase.yaml in DAOS yaml variables.
     for key in avocado_yaml_value['server_config']:
-        if key in default_yaml_value['servers'][0]:
-            default_yaml_value['servers'][0][key] = avocado_yaml_value['server_config'][key]
-        elif key in default_yaml_value:
-            default_yaml_value[key] = avocado_yaml_value['server_config'][key]
+        if key in default_value['servers'][0]:
+            default_value['servers'][0][key] = avocado_yaml_value\
+            ['server_config'][key]
+        elif key in default_value:
+            default_value[key] = avocado_yaml_value['server_config'][key]
 
-    #Disable NVMe as it's Enabled in utils/config/examples/daos_server_sockets.yml
-    nvme_yaml_config(default_yaml_value, "nvme")
+    #Disable NVMe from baseline data/daos_server_baseline.yml
+    nvme_yaml_config(default_value, "nvme")
 
-    #Write default_yaml_value dictionary in to AVOCADO_YAML_FILE, This will be used to start
-    #with daos_server -o option.
+    #Write default_value dictionary in to AVOCADO_YAML_FILE
+    #This will be used to start with daos_server -o option.
     try:
-        with open('{}/{}'.format(basepath, AVOCADO_YAML_FILE), 'w') as write_file:
-            yaml.dump(default_yaml_value, write_file, default_flow_style=False)
+        with open('{}/{}'.format(basepath,
+                                 AVOCADO_YAML_FILE), 'w') as write_file:
+            yaml.dump(default_value, write_file, default_flow_style=False)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
