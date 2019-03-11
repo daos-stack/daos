@@ -78,8 +78,9 @@ func (s *ShowStorageCommand) Execute(args []string) (errs error) {
 // PrepNvmeCommand is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
 type PrepNvmeCommand struct {
-	NrHugepages int  `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
-	Reset       bool `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
+	NrHugepages int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+	TargetUser  string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	Reset       bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
 }
 
 // Execute is run when PrepNvmeCommand activates
@@ -88,7 +89,13 @@ type PrepNvmeCommand struct {
 func (p *PrepNvmeCommand) Execute(args []string) error {
 	ok, usr := common.CheckSudo()
 	if !ok {
-		return errors.New("This subcommand must be run with sudo!")
+		return errors.New("This subcommand must be run as root or sudo!")
+	}
+
+	// falls back to sudoer or root if TargetUser is unspecified
+	tUsr := usr
+	if p.TargetUser != "" {
+		tUsr = p.TargetUser
 	}
 
 	config := newConfiguration()
@@ -104,7 +111,7 @@ func (p *PrepNvmeCommand) Execute(args []string) error {
 		return errors.WithMessage(err, "SPDK setup reset")
 	}
 	if !p.Reset {
-		if err := server.nvme.spdk.prep(p.NrHugepages, usr); err != nil {
+		if err := server.nvme.spdk.prep(p.NrHugepages, tUsr); err != nil {
 			return errors.WithMessage(err, "SPDK setup")
 		}
 	}

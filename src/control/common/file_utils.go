@@ -35,7 +35,10 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const sudoUserEnv = "SUDO_USER"
+const (
+	sudoUserEnv = "SUDO_USER"
+	rootUser    = "root"
+)
 
 // GetAbsInstallPath retrieves absolute path of files in daos install dir
 func GetAbsInstallPath(relPath string) (string, error) {
@@ -222,8 +225,13 @@ func SyncDir(path string) (err error) {
 	return d.Sync()
 }
 
-// CheckSudo returns true if current process is running under sudo.
+// CheckSudo returns true if current process is running as root or with sudo.
+// Returns either sudoer or current user if not running under sudo.
 func CheckSudo() (bool, string) {
 	usr := os.Getenv(sudoUserEnv)
-	return (os.Geteuid() == 0 && usr != ""), usr
+	if usr == "" {
+		usr = rootUser
+	}
+
+	return (os.Geteuid() == 0), usr
 }
