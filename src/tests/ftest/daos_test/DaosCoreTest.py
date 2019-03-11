@@ -39,6 +39,11 @@ import ServerUtils
 import WriteHostFile
 # pylint: enable=wrong-import-position,import-error
 
+#This needs to be changed after configuration file integration on client tools.
+#As per current implementation control plane API will not use the D_LOF_FILE
+#Env variable, if OFI_INTERFACE and CRT_PHY_ADDR_STR. DAOS-2178
+DEFAULT_LOG="/tmp/daos.log"
+
 class DaosCoreTest(Test):
     """
     Runs the daos_test subtests with multiple servers.
@@ -59,7 +64,7 @@ class DaosCoreTest(Test):
         self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         self.daos_test = self.basepath + '/install/bin/daos_test'
-        self.orterun = self.basepath + '/install/bin/orterun'
+        self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
 
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
@@ -72,8 +77,8 @@ class DaosCoreTest(Test):
         # subtest
         if self.subtest_name:
             try:
-                logfile = os.environ['D_LOG_FILE']
-                dirname, filename = os.path.split(logfile)
+                env_logfile = os.environ['D_LOG_FILE']
+                dirname, filename = os.path.split(env_logfile)
                 new_logfile = os.path.join(dirname, self.subtest_name + "_" + \
                                                     filename)
                 # rename on each of the servers
@@ -81,7 +86,7 @@ class DaosCoreTest(Test):
                     subprocess.check_call(['ssh', host,
                                            '[ -f \"{0}\" ] && '
                                            '    mv \"{0}\" '
-                                           '    \"{1}\"'.format(logfile,
+                                           '    \"{1}\"'.format(DEFAULT_LOG,
                                                                 new_logfile)])
             except KeyError:
                 pass
