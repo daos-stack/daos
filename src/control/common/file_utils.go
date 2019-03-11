@@ -28,14 +28,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
+
+const sudoUserEnv = "SUDO_USER"
 
 // GetAbsInstallPath retrieves absolute path of files in daos install dir
 func GetAbsInstallPath(relPath string) (string, error) {
@@ -222,21 +222,8 @@ func SyncDir(path string) (err error) {
 	return d.Sync()
 }
 
-// CheckSudo verifies process is running as root.
-func CheckSudo() (ok bool, err error) {
-	cmd := exec.Command("id", "-u")
-	output, err := cmd.Output()
-	if err != nil {
-		return
-	}
-
-	// trim trailing new-line char
-	// 0 = root, 501 = non-root user
-	i, err := strconv.Atoi(string(output[:len(output)-1]))
-	if err != nil {
-		return
-	}
-
-	ok = (i == 0)
-	return
+// CheckSudo returns true if current process is running under sudo.
+func CheckSudo() (bool, string) {
+	usr := os.Getenv(sudoUserEnv)
+	return (os.Geteuid() == 0 && usr != ""), usr
 }

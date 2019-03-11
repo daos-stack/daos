@@ -85,21 +85,12 @@ type PrepNvmeCommand struct {
 //
 // Perform task then exit immediately. No config parsing performed.
 func (p *PrepNvmeCommand) Execute(args []string) error {
-	ok, err := common.CheckSudo()
-	if err != nil {
-		return err
-	}
+	ok, usr := common.CheckSudo()
 	if !ok {
-		return errors.New("This subcommand must be run as root! (sudo)")
+		return errors.New("This subcommand must be run with sudo!")
 	}
 
 	config := newConfiguration()
-
-	// don't load config file because we don't want to put unnecessary
-	// limitations on config file parameters if performing specific task
-	if p.NrHugepages != 0 {
-		config.NrHugepages = p.NrHugepages
-	}
 
 	server, err := newControlService(&config)
 	if err != nil {
@@ -111,7 +102,7 @@ func (p *PrepNvmeCommand) Execute(args []string) error {
 		return errors.WithMessage(err, "SPDK setup reset")
 	}
 	if !p.Reset {
-		if err := server.nvme.spdk.prep(); err != nil {
+		if err := server.nvme.spdk.prep(p.NrHugepages, usr); err != nil {
 			return errors.WithMessage(err, "SPDK setup")
 		}
 	}

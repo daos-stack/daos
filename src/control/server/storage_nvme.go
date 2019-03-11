@@ -41,18 +41,19 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-var (
-	spdkSetupPath    = "share/control/setup_spdk.sh"
-	spdkFioPluginDir = "share/spdk/fio_plugin"
-	fioExecPath      = "bin/fio"
-	nrHugepagesEnv   = "_NRHUGE"
-	targetUserEnv    = "_TARGET_USER"
+const (
+	spdkSetupPath      = "share/control/setup_spdk.sh"
+	spdkFioPluginDir   = "share/spdk/fio_plugin"
+	fioExecPath        = "bin/fio"
+	defaultNrHugepages = 1024
+	nrHugepagesEnv     = "_NRHUGE"
+	targetUserEnv      = "_TARGET_USER"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
 type SpdkSetup interface {
-	prep() error
+	prep(int, string) error
 	reset() error
 }
 
@@ -78,28 +79,28 @@ type nvmeStorage struct {
 // (that don't have active mountpoints) to generic kernel driver.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetup) prep() error {
+func (s *spdkSetup) prep(nrHugepages int, usr string) error {
 	srv := exec.Command(s.scriptPath)
 	srv.Env = os.Environ()
 	var stderr bytes.Buffer
 	srv.Stderr = &stderr
-	var hp, tUsr string
+	var hPages, tUsr string
 
-	if s.nrHugePages != 0 {
-		hp = nrHugepagesEnv + "=" + strconv.Itoa(s.nrHugePages)
-		srv.Env = append(srv.Env, hp)
+	if nrHugepages <= 0 {
+		nrHugepages = defaultNrHugepages
 	}
-	usr := os.Getenv("USER")
-	if usr == "" {
-		return errors.New("missing USER envar")
-	}
+	hPages = nrHugepagesEnv + "=" + strconv.Itoa(nrHugepages)
+	srv.Env = append(srv.Env, hPages)
+	log.Debugf("spdk setup with %s\n", hPages)
+
 	tUsr = targetUserEnv + "=" + usr
 	srv.Env = append(srv.Env, tUsr)
+	log.Debugf("spdk setup with %s\n", tUsr)
 
 	return errors.Wrapf(
 		srv.Run(),
-		"spdk setup failed (%s, %s, %s), is no-password sudo enabled?",
-		hp, tUsr, stderr.String())
+		"spdk setup failed (%s, %s, %s)",
+		hPages, tUsr, stderr.String())
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
@@ -113,7 +114,7 @@ func (s *spdkSetup) reset() error {
 
 	return errors.Wrapf(
 		srv.Run(),
-		"spdk reset failed (%s), is no-password sudo enabled?",
+		"spdk reset failed (%s)",
 		stderr.String())
 }
 
