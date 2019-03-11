@@ -38,7 +38,7 @@
  */
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@debug") _
+//@Library(value="pipeline-lib@your_branch") _
 
 def arch="-Linux"
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -95,6 +95,12 @@ pipeline {
     }
 
     stages {
+        stage('Cancel Previous Builds') {
+            when { changeRequest() }
+            steps {
+                cancelPreviousBuilds()
+            }
+        }
         stage('Pre-build') {
             parallel {
                 stage('checkpatch') {
