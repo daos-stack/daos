@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
@@ -34,25 +34,25 @@ import (
 )
 
 // listNvmeCtrlrs returns NVMe controllers in protobuf format.
-func (mc *client) listNvmeCtrlrs() (cs NvmeControllers, err error) {
+func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.client.ListNvmeCtrlrs(ctx, &pb.EmptyParams{})
+	stream, err := c.client.ListNvmeCtrlrs(ctx, &pb.EmptyParams{})
 	if err != nil {
 		return
 	}
 
-	var c *pb.NvmeController
+	var ctrlr *pb.NvmeController
 	for {
-		c, err = stream.Recv()
+		ctrlr, err = stream.Recv()
 		if err == io.EOF {
 			err = nil
 			break
 		} else if err != nil {
 			return
 		}
-		cs = append(cs, c)
+		ctrlrs = append(ctrlrs, ctrlr)
 	}
 
 	return
@@ -60,13 +60,13 @@ func (mc *client) listNvmeCtrlrs() (cs NvmeControllers, err error) {
 
 // UpdateNvmeCtrlr updates firmware of a given controller.
 // Returns new firmware revision.
-func (mc *client) UpdateNvmeCtrlr(
+func (c *control) UpdateNvmeCtrlr(
 	params *pb.UpdateNvmeParams) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ctrlr, err := mc.client.UpdateNvmeCtrlr(ctx, params)
+	ctrlr, err := c.client.UpdateNvmeCtrlr(ctx, params)
 	if err != nil {
 		return "", err
 	}
@@ -76,11 +76,11 @@ func (mc *client) UpdateNvmeCtrlr(
 
 // FetchFioConfigPaths retrieves absolute file paths for fio configurations
 // residing in spdk fio_plugin directory on server.
-func (mc *client) FetchFioConfigPaths() (paths []string, err error) {
+func (c *control) FetchFioConfigPaths() (paths []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.client.FetchFioConfigPaths(ctx, &pb.EmptyParams{})
+	stream, err := c.client.FetchFioConfigPaths(ctx, &pb.EmptyParams{})
 	if err != nil {
 		return
 	}
@@ -100,7 +100,7 @@ func (mc *client) FetchFioConfigPaths() (paths []string, err error) {
 
 // BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 // in a stream to the gRPC consumer.
-func (mc *client) BurnInNvme(pciAddr string, configPath string) (
+func (c *control) BurnInNvme(pciAddr string, configPath string) (
 	reports []string, err error) {
 
 	// Maximum time limit for BurnIn is 2hrs
@@ -111,7 +111,7 @@ func (mc *client) BurnInNvme(pciAddr string, configPath string) (
 		Pciaddr: pciAddr,
 		Path:    &pb.FioConfigPath{Path: configPath},
 	}
-	stream, err := mc.client.BurnInNvme(ctx, params)
+	stream, err := c.client.BurnInNvme(ctx, params)
 	if err != nil {
 		return
 	}

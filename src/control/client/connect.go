@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
@@ -50,7 +50,7 @@ type Addresses []string
 
 // ConnFactory is an interface providing capability to create clients.
 type ConnFactory interface {
-	createConn(string) MgmtClient
+	createConn(string) Control
 }
 
 // Connections is an interface providing functionality across multiple
@@ -66,21 +66,22 @@ type Connections interface {
 	ListFeatures() (ClientFeatureMap, error)
 	ListNvme() (ClientNvmeMap, error)
 	ListScm() (ClientScmMap, error)
+	KillRank(uuid string, rank uint32) error
 }
 
 // connList is an implementation of Connections, a collection of connected
 // client instances, one per target server.
 type connList struct {
 	factory ConnFactory
-	clients []MgmtClient
+	clients []Control
 }
 
 // connFactory as an implementation of ConnFactory.
 type connFactory struct{}
 
 // createConn instantiates and connects a client to server at given address.
-func (c *connFactory) createConn(address string) MgmtClient {
-	return &client{}
+func (c *connFactory) createConn(address string) Control {
+	return &control{}
 }
 
 // ConnectClients populates collection of client-server connections.
@@ -188,9 +189,21 @@ func (c *connList) ListScm() (ClientScmMap, error) {
 	return cmms, nil
 }
 
+// KillRank Will terminate server running at given rank on pool specified by
+// uuid.
+func (c *connList) KillRank(uuid string, rank uint32) error {
+	for _, mc := range c.clients {
+		err := mc.killRank(uuid, rank)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NewConnections is a factory for Connections interface to operate over
 // multiple clients.
 func NewConnections() Connections {
-	var clients []MgmtClient
+	var clients []Control
 	return &connList{factory: &connFactory{}, clients: clients}
 }
