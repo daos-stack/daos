@@ -60,22 +60,70 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 #undef X
 
 static void
+process_daos_request(Proto__DaosRank *rank, Proto__DaosResponse *response)
+(
+	/* currently response status is populated with SUCCESS on init */
+	D_DEBUG("mgmt", "Received kill rank daos request");
+	/* TODO: process request and populate daos response */
+
+}
+
+static void
 mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 {
-	Drpc__Response *resp;
+	uint8_t			*body;
+	Drpc__Response		*drpc_resp;
+	Proto__DaosResponse	*daos_resp;
+	Proto__DaosRank		*daos_rank;
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
-		D_ERROR("Failed to allocate response\n");
+		D_ERROR("Failed to allocate drpc response\n");
 		return;
 	}
 
-	drpc__response__init(resp);
-	resp->sequence = request->sequence;
-	resp->status = DRPC__STATUS__SUCCESS;
+	proto__daos_response__init(daos_resp);
 
-	*response = resp;
-	D_DEBUG(DB_MGMT, "empty successful response set in mgmt drpc hdlr\n");
+	/* assumes daos response is of a static size which may change */
+	D_ALLOC(body, proto__daos_response__get_packed_size(daos_resp));
+	if (body == NULL) {
+		D_ERROR("Failed to allocate drpc response body\n");
+	        return;
+	}
+
+	drpc__response__init(drpc_resp);
+	drpc_resp->sequence = request->sequence;
+	drpc_resp->status = DRPC__STATUS__SUCCESS;
+
+	/* TODO: select against multiple methods */
+	if (request->method == DRPC_METHOD_MGMT_KILL_RANK) {
+		/* Unpack the daos request from the drpc call body */
+		pb_rank = proto__daos_rank__unpack(
+			NULL, request->body.len, request->body.data);
+
+		if (pb_rank == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to extract rank from request\n");
+		} else {
+			/* Process daos request and populate daos response */
+			process_daos_request(pb_rank, daos_resp);
+
+			proto__daos_rank__free_unpacked(pb_rank, NULL);
+		}
+	} else {
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
+		D_ERROR("Unknown method\n");
+	}
+
+	/* Populate drpc response body with daos response. TODO: verify len */
+	size_t len = proto__daos_response__pack(daos_resp, body);
+
+	drpc_resp->body.len = len;
+	drpc_resp->body.data = body;
+
+	*response = drpc_resp;
+	proto__daos_response__free_unpacked(daos_resp, NULL);
+	D_DEBUG(DB_MGMT, "response set in mgmt drpc hdlr\n");
 }
 
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
