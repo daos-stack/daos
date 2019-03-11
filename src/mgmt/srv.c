@@ -67,7 +67,7 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		D_ERROR("Failed to allocate response\n");
-		return
+		return;
 	}
 
 	drpc__response__init(resp);
