@@ -273,7 +273,8 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace);
  *
  * \param[in]	acl		ACL to search
  * \param[in]	type		Principal type to search for
- * \param[in]	principal	Principal name, if type is USER or GROUP
+ * \param[in]	principal	Principal name, if type is USER or GROUP. NULL
+ *				otherwise.
  *
  * \return	Pointer to the matching ACE, or NULL if not found
  */

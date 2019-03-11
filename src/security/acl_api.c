@@ -24,8 +24,9 @@
 #include <daos_types.h>
 #include <daos_api.h>
 #include <gurt/common.h>
+#include <gurt/debug.h>
 
-#define DAOS_ACL_VERSION	1
+#define	DAOS_ACL_VERSION		1
 
 /*
  * Comparison function for qsort. Compares by principal type.
@@ -53,17 +54,22 @@ sort_aces_by_principal_type(struct daos_ace *aces[], uint16_t num_aces)
  * list.
  */
 static void
-flatten_aces(uint8_t *buffer, struct daos_ace *aces[], uint16_t num_aces)
+flatten_aces(uint8_t *buffer, uint32_t buf_len, struct daos_ace *aces[],
+		uint16_t num_aces)
 {
 	int	i;
-	uint8_t	*current_ace;
+	uint8_t	*pen; /* next addr to write in the buffer */
 
-	current_ace = buffer;
+	pen = buffer;
 	for (i = 0; i < num_aces; i++) {
 		int ace_size = daos_ace_get_size(aces[i]);
 
-		memcpy(current_ace, aces[i], ace_size);
-		current_ace += ace_size;
+		/* Internal error if we walk outside the buffer */
+		D_ASSERTF((pen + ace_size) <= (buffer + buf_len),
+				"ACEs too long for buffer size %u", buf_len);
+
+		memcpy(pen, aces[i], ace_size);
+		pen += ace_size;
 	}
 }
 
@@ -91,6 +97,15 @@ get_flattened_ace_size(struct daos_ace *aces[], uint16_t num_aces)
 	return total_size;
 }
 
+/*
+ * ace_len is the length of the ACE list tacked onto the daos_acl struct
+ */
+static size_t
+get_daos_acl_size(uint32_t ace_len)
+{
+	return sizeof(struct daos_acl) + ace_len;
+}
+
 struct daos_acl *
 daos_acl_alloc(struct daos_ace *aces[], uint16_t num_aces)
 {
@@ -105,7 +120,7 @@ daos_acl_alloc(struct daos_ace *aces[], uint16_t num_aces)
 
 	sort_aces_by_principal_type(aces, num_aces);
 
-	D_ALLOC(acl, sizeof(struct daos_acl) + ace_len);
+	D_ALLOC(acl, get_daos_acl_size(ace_len));
 	if (acl == NULL) {
 		/* Couldn't allocate */
 		return NULL;
@@ -114,7 +129,7 @@ daos_acl_alloc(struct daos_ace *aces[], uint16_t num_aces)
 	acl->dal_ver = DAOS_ACL_VERSION;
 	acl->dal_len = ace_len;
 
-	flatten_aces(acl->dal_ace, aces, num_aces);
+	flatten_aces(acl->dal_ace, acl->dal_len, aces, num_aces);
 
 	return acl;
 }
@@ -129,12 +144,13 @@ daos_acl_free(struct daos_acl *acl)
 static bool
 principal_name_matches_ace(struct daos_ace *ace, const char *principal)
 {
-	if (principal == NULL) {
+	if (principal == NULL && ace->dae_principal_len == 0) {
 		/* Nothing to compare */
 		return true;
 	}
 
-	return (strncmp(principal, ace->dae_principal, ace->dae_principal_len)
+	return (principal != NULL &&
+		strncmp(principal, ace->dae_principal, ace->dae_principal_len)
 			== 0);
 }
 
@@ -188,11 +204,9 @@ copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
 		} else if (!new_written && principals_match(current,
 					new_ace)) {
 			new_written = true;
+
+			/* Overwrite the old entry */
 			pen = write_ace(new_ace, pen);
-
-			/* new ACE already in old list - shorten the length */
-			new_acl->dal_len = acl->dal_len;
-
 			current = daos_acl_get_next_ace(acl, current);
 		} else {
 			pen = write_ace(current, pen);
@@ -206,12 +220,21 @@ copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
 	}
 }
 
+static bool
+acl_already_has_principal(struct daos_acl *acl,
+		enum daos_acl_principal_type type,
+		const char *principal_name)
+{
+	return daos_acl_get_ace_for_principal(acl, type, principal_name) !=
+			NULL;
+}
+
 int
 daos_acl_add_ace_realloc(struct daos_acl *acl, struct daos_ace *new_ace,
 		struct daos_acl **new_acl)
 {
-	int		new_ace_len;
-	int		new_len;
+	int	new_len;
+	int	new_ace_len;
 
 	if (acl == NULL || new_acl == NULL) {
 		return -DER_INVAL;
@@ -223,9 +246,14 @@ daos_acl_add_ace_realloc(struct daos_acl *acl, struct daos_ace *new_ace,
 		return -DER_INVAL;
 	}
 
-	new_len = acl->dal_len + new_ace_len;
+	if (acl_already_has_principal(acl, new_ace->dae_principal_type,
+			new_ace->dae_principal)) {
+		new_len = acl->dal_len;
+	} else {
+		new_len = acl->dal_len + new_ace_len;
+	}
 
-	D_ALLOC(*new_acl, sizeof(struct daos_acl) + new_len);
+	D_ALLOC(*new_acl, get_daos_acl_size(new_len));
 	if (*new_acl == NULL) {
 		return -DER_NOMEM;
 	}
@@ -284,6 +312,8 @@ daos_acl_remove_ace_realloc(struct daos_acl *acl,
 		size_t principal_name_len, struct daos_acl **new_acl)
 {
 	struct daos_ace	*current;
+	struct daos_ace	*ace_to_remove;
+	uint32_t	new_len;
 	uint8_t		*pen;
 
 	if (acl == NULL || new_acl == NULL || !type_is_valid(type) ||
@@ -292,16 +322,21 @@ daos_acl_remove_ace_realloc(struct daos_acl *acl,
 		return -DER_INVAL;
 	}
 
-	if (daos_acl_get_ace_for_principal(acl, type, principal_name) == NULL) {
+	ace_to_remove = daos_acl_get_ace_for_principal(acl, type,
+			principal_name);
+	if (ace_to_remove == NULL) {
 		/* requested principal not in the list */
 		return -DER_NONEXIST;
 	}
 
-	D_ALLOC(*new_acl, sizeof(struct daos_acl) + acl->dal_len);
+	new_len = acl->dal_len - daos_ace_get_size(ace_to_remove);
+
+	D_ALLOC(*new_acl, get_daos_acl_size(new_len));
 	if (*new_acl == NULL) {
 		return -DER_NOMEM;
 	}
 
+	(*new_acl)->dal_len = new_len;
 	(*new_acl)->dal_ver = acl->dal_ver;
 
 	pen = (*new_acl)->dal_ace;
@@ -310,7 +345,6 @@ daos_acl_remove_ace_realloc(struct daos_acl *acl,
 		if (!ace_matches_principal(current, type, principal_name,
 				principal_name_len)) {
 			pen = write_ace(current, pen);
-			(*new_acl)->dal_len += daos_ace_get_size(current);
 		}
 
 		current = daos_acl_get_next_ace(acl, current);
