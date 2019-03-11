@@ -56,7 +56,8 @@ def nvme_yaml_config(default_yaml_value, bdev, enabled=False):
     By default it's Enabled in yaml file so disable to run with ofi+sockets.
     """
     if 'bdev_class' in default_yaml_value['servers'][0]:
-        if default_yaml_value['servers'][0]['bdev_class'] == bdev and not enabled:
+        if (default_yaml_value['servers'][0]['bdev_class'] == bdev and
+                not enabled):
             del default_yaml_value['servers'][0]['bdev_class']
     if enabled:
         default_yaml_value['servers'][0]['bdev_class'] = bdev
@@ -76,23 +77,27 @@ def remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp):
 
 def create_server_yaml(basepath):
     """
-    This function is to create DAOS server configuration YAML file based on Avocado test Yaml file.
+    This function is to create DAOS server configuration YAML file
+    based on Avocado test Yaml file.
     Args:
         - basepath = DAOS install basepath
     """
     #Read the default utils/config/examples/daos_server_sockets.yml
     try:
-        with open('{}/{}'.format(basepath, DEFAULT_YAML_FILE), 'r') as read_file:
+        with open('{}/{}'.format(basepath,
+                                 DEFAULT_YAML_FILE), 'r') as read_file:
             default_yaml_value = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Read {}/{}".format(basepath, DEFAULT_YAML_FILE))
+        raise ServerFailed("Failed to Read {}/{}".format(basepath,
+                                                         DEFAULT_YAML_FILE))
 
     #Read the values from avocado_testcase.yaml file if test ran with Avocado.
     avocado_yaml_value = ""
     if "AVOCADO_TEST_DATADIR" in os.environ:
-        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).split(".")[0] + ".yaml"
+        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).split(".")[0] \
+                                + ".yaml"
         avocado_yaml_file_tmp = '{}.tmp'.format(avocado_yaml_file)
 
         # Yaml Python module is not able to read !mux so need to remove !mux before reading.
@@ -105,7 +110,8 @@ def create_server_yaml(basepath):
         except Exception as excpn:
             print("<SERVER> Exception occurred: {0}".format(str(excpn)))
             traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-            raise ServerFailed("Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
+            raise ServerFailed("Failed to Read {}"
+                               .format('{}.tmp'.format(avocado_yaml_file)))
         #Remove temporary file
         os.remove(avocado_yaml_file_tmp)
     #Update values from avocado_testcase.yaml in DAOS yaml variables.
