@@ -41,9 +41,10 @@ type ShowStorageCommand struct{}
 func (s *ShowStorageCommand) Execute(args []string) (errs error) {
 	config := newConfiguration()
 
-	server, err := newControlService(&config)
+	server, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
+		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
 	server.Setup()
@@ -92,7 +93,8 @@ func (p *PrepNvmeCommand) Execute(args []string) error {
 
 	config := newConfiguration()
 
-	server, err := newControlService(&config)
+	server, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}

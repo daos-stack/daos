@@ -111,7 +111,8 @@ func main() {
 	// Backup active config.
 	saveActiveConfig(&config)
 
-	mgmtControlServer, err := newControlService(&config)
+	mgmtControlServer, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		log.Errorf("Failed to init ControlService: %s", err)
 		return

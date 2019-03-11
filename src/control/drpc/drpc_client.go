@@ -26,6 +26,7 @@ package drpc
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"net"
 )
 
@@ -103,7 +104,7 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 
 	_, _, err = c.conn.WriteMsgUnix(callBytes, nil, nil)
 	if err != nil {
-		return fmt.Errorf("dRPC send: %v", err)
+		return errors.Wrap(err, "dRPC send")
 	}
 
 	return nil
@@ -113,7 +114,7 @@ func (c *ClientConnection) recvResponse() (*Response, error) {
 	respBytes := make([]byte, MAXMSGSIZE)
 	numBytes, _, _, _, err := c.conn.ReadMsgUnix(respBytes, nil)
 	if err != nil {
-		return nil, fmt.Errorf("dRPC recv: %v", err)
+		return nil, errors.Wrap(err, "dRPC recv")
 	}
 
 	resp := &Response{}
@@ -139,7 +140,7 @@ func (c *ClientConnection) SendMsg(msg *Call) (*Response, error) {
 
 	err := c.sendCall(msg)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	return c.recvResponse()

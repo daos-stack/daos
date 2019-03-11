@@ -250,8 +250,12 @@ struct evt_entry {
 };
 
 struct evt_list_entry {
-	d_list_t		le_link;
-	struct evt_entry	le_ent;
+	/** A back pointer to the previous split entry, if applicable */
+	struct evt_entry	*le_prev;
+	/** List link for the entry */
+	d_list_t		 le_link;
+	/** The metadata associated with the entry */
+	struct evt_entry	 le_ent;
 };
 
 #define EVT_EMBEDDED_NR 32

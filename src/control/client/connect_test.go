@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
@@ -47,8 +47,8 @@ type mockConnFactory struct {
 	modules  ScmModules
 }
 
-func (m *mockConnFactory) createConn(address string) MgmtClient {
-	return newMockMgmtClient(address, m.state, m.features, m.ctrlrs, m.modules)
+func (m *mockConnFactory) createConn(address string) Control {
+	return newMockControl(address, m.state, m.features, m.ctrlrs, m.modules)
 }
 
 func newMockConnections(

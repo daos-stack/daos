@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,8 +52,6 @@ struct pl_map_init_attr {
 	};
 };
 
-struct pl_map;
-
 struct pl_target {
 	uint32_t		pt_pos;
 };
@@ -71,6 +69,7 @@ struct pl_target_grp {
 struct pl_obj_shard {
 	uint32_t	po_shard;	/* shard index */
 	uint32_t	po_target;	/* target id */
+	uint32_t	po_fseq;	/* The latest failure sequence */
 	uint32_t	po_rebuilding:1; /* rebuilding status */
 };
 
@@ -80,8 +79,30 @@ struct pl_obj_layout {
 	struct pl_obj_shard	*ol_shards;
 };
 
-int  pl_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
-		   struct pl_map **mapp);
+/** common header of all placement map */
+struct pl_map {
+	/** correpsonding pool uuid */
+	uuid_t			 pl_uuid;
+	/** link chain on hash */
+	d_list_t		 pl_link;
+	/** protect refcount */
+	pthread_spinlock_t	 pl_lock;
+	/** refcount */
+	int			 pl_ref;
+	/** pool connections, protected by pl_rwlock */
+	int			 pl_connects;
+	/** type of placement map */
+	pl_map_type_t		 pl_type;
+	/** reference to pool map */
+	struct pool_map		*pl_poolmap;
+	/** placement map operations */
+	struct pl_map_ops       *pl_ops;
+};
+
+int pl_map_create_v2(struct pool_map *pool_map, struct pl_map **pl_mapp);
+void pl_map_destroy_v2(struct pl_map **pl_mapp);
+int pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
+		  struct pl_map **pl_mapp);
 void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 
@@ -112,5 +133,10 @@ int pl_obj_find_reint(struct pl_map *map,
 		      struct daos_obj_shard_md *shard_md,
 		      struct pl_target_grp *tgp_recov,
 		      uint32_t *tgt_reint);
+
+typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
+
+int pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
+		     pl_get_shard_t pl_get_shard, void *data, uint32_t *leader);
 
 #endif /* __DAOS_PLACEMENT_H__ */
