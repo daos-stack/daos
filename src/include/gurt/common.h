@@ -83,7 +83,7 @@ extern "C" {
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
 	do {								\
-		if (D_SHOULD_FAIL(0)) {					\
+		if (D_SHOULD_FAIL(d_fault_attr_mem)) {			\
 			free(ptr);					\
 			ptr = NULL;					\
 		}							\

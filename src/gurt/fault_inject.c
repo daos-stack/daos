@@ -45,14 +45,71 @@
 
 #define FI_MAX_FAULT_ID 8192
 
+/* (1 << D_FA_TABLE_BITS) is the number of buckets of fa hash table */
+#define D_FA_TABLE_BITS		(13)
+
 #include <gurt/common.h>
+#include <gurt/hash.h>
+#include "fi.h"
+
+
+struct d_fault_attr_t *d_fault_attr_mem;
+int d_fault_id_mem;
+
+static struct d_fault_attr *
+fa_link2ptr(d_list_t *rlink)
+{
+	D_ASSERT(rlink != NULL);
+	return container_of(rlink, struct d_fault_attr, fa_link);
+}
+
+static bool
+fa_op_key_cmp(struct d_hash_table *htab, d_list_t *rlink, const void *key,
+	      unsigned int ksize)
+{
+	struct d_fault_attr *fa_ptr = fa_link2ptr(rlink);
+
+	D_ASSERT(ksize == sizeof(uint32_t));
+
+	return fa_ptr->fa_attr.fa_id == *(uint32_t *)key;
+}
+
+static void
+fa_op_rec_free(struct d_hash_table *htab, d_list_t *rlink)
+{
+	struct d_fault_attr	*ht_rec = fa_link2ptr(rlink);
+	int			 rc;
+
+	D_FREE(ht_rec->fa_attr.fa_argument);
+	rc = D_SPIN_DESTROY(&ht_rec->fa_attr.fa_lock);
+	if (rc != DER_SUCCESS)
+		D_ERROR("Can't destroy spinlock for fault id: %d\n",
+			ht_rec->fa_attr.fa_id);
+	D_FREE(ht_rec);
+}
+
+/**
+ * abuse hop_rec_decref() so that we can safely use it without a
+ * hop_rec_addref(). The goal is to have d_hash_table_destroy_inplace()
+ * destroy all records automatically.
+ */
+static bool
+fa_op_rec_decref(struct d_hash_table *htab, d_list_t *rlink)
+{
+	return true;
+}
+
+static d_hash_table_ops_t fa_table_ops = {
+	.hop_key_cmp	= fa_op_key_cmp,
+	.hop_rec_decref	= fa_op_rec_decref,
+	.hop_rec_free	= fa_op_rec_free,
+};
 
 struct d_fi_gdata_t {
 	unsigned int		  dfg_refcount;
 	unsigned int		  dfg_inited;
 	pthread_rwlock_t	  dfg_rwlock;
-	struct d_fault_attr_t	**dfg_fa;
-	uint32_t		  dfg_fa_capacity;
+	struct d_hash_table	  dfg_fa_table;
 };
 
 /**
@@ -70,13 +127,11 @@ static inline int
 fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 {
 	struct d_fault_attr_t	 *fault_attr;
-	struct d_fault_attr_t	 *new_fault_attr;
-	struct d_fault_attr_t	**new_fa_arr;
-	uint32_t		  new_capacity;
-	void			 *start;
-	size_t			  num_bytes;
 	char			 *fa_argument = NULL;
 	bool			  should_free = true;
+	struct d_fault_attr	 *new_rec = NULL;
+	struct d_fault_attr	 *rec = NULL;
+	d_list_t		 *rlink = NULL;
 	int			  rc = DER_SUCCESS;
 
 	if (fault_id > FI_MAX_FAULT_ID) {
@@ -85,8 +140,8 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 		return -DER_INVAL;
 	}
 
-	D_ALLOC_PTR(new_fault_attr);
-	if (new_fault_attr == NULL)
+	D_ALLOC_PTR(new_rec);
+	if (new_rec == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (fa_in.fa_argument) {
@@ -99,31 +154,20 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	if (take_lock)
 		D_RWLOCK_WRLOCK(&d_fi_gdata.dfg_rwlock);
 
-	if (fault_id >= d_fi_gdata.dfg_fa_capacity) {
-		new_capacity = fault_id + 1;
-		D_REALLOC_ARRAY(new_fa_arr, d_fi_gdata.dfg_fa, new_capacity);
-		if (new_fa_arr == NULL)
-			D_GOTO(out_unlock, rc = -DER_NOMEM);
-
-		start = new_fa_arr + d_fi_gdata.dfg_fa_capacity;
-		num_bytes = sizeof(*new_fa_arr)
-			    * (new_capacity - d_fi_gdata.dfg_fa_capacity);
-		memset(start, 0, num_bytes);
-		d_fi_gdata.dfg_fa = new_fa_arr;
-		d_fi_gdata.dfg_fa_capacity = new_capacity;
-	}
-
-	fault_attr = d_fi_gdata.dfg_fa[fault_id];
-	if (fault_attr == NULL) {
-		fault_attr = new_fault_attr;
-
+	rlink = d_hash_rec_find_insert(&d_fi_gdata.dfg_fa_table, &fault_id,
+				sizeof(fault_id), &new_rec->fa_link);
+	if (rlink == &new_rec->fa_link) {
+		fault_attr = &new_rec->fa_attr;
 		rc = D_SPIN_INIT(&fault_attr->fa_lock,
 				 PTHREAD_PROCESS_PRIVATE);
 		if (rc != DER_SUCCESS)
 			D_GOTO(out_unlock, rc);
-
-		d_fi_gdata.dfg_fa[fault_id] = fault_attr;
+		D_DEBUG(DB_ALL, "new fault id: %u added.\n", fault_id);
 		should_free = false;
+	} else {
+		rec = fa_link2ptr(rlink);
+		D_ASSERT(rec->fa_attr.fa_id == fault_id);
+		fault_attr = &rec->fa_attr;
 	}
 
 	D_SPIN_LOCK(&fault_attr->fa_lock);
@@ -145,7 +189,7 @@ out_unlock:
 		D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 out:
 	if (should_free) {
-		D_FREE(new_fault_attr);
+		D_FREE(new_rec);
 		if (fa_in.fa_argument)
 			D_FREE(fa_argument);
 	}
@@ -159,19 +203,37 @@ d_fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in)
 	return fault_attr_set(fault_id, fa_in, true);
 }
 
+struct d_fault_attr_t *
+d_fault_attr_lookup(uint32_t fault_id)
+{
+	struct d_fault_attr_t	*fault_attr;
+	struct d_fault_attr	*ht_rec;
+	d_list_t		*rlink;
+
+	D_RWLOCK_RDLOCK(&d_fi_gdata.dfg_rwlock);
+	rlink = d_hash_rec_find(&d_fi_gdata.dfg_fa_table, (void *)&fault_id,
+				sizeof(fault_id));
+	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
+	if (rlink == NULL) {
+		D_DEBUG(DB_ALL, "fault attr for fault ID %d not set yet.\n",
+			fault_id);
+		fault_attr = NULL;
+	} else {
+		ht_rec = fa_link2ptr(rlink);
+		D_ASSERT(ht_rec->fa_attr.fa_id == fault_id);
+		fault_attr = &ht_rec->fa_attr;
+	}
+
+	return fault_attr;
+}
+
 int
 d_fault_attr_err_code(uint32_t fault_id)
 {
 	struct d_fault_attr_t	*fault_attr;
 	uint32_t		 err_code;
 
-	if (fault_id >= d_fi_gdata.dfg_fa_capacity) {
-		D_ERROR("fault id (%u) out of range [0, %u]\n",
-			fault_id, d_fi_gdata.dfg_fa_capacity);
-		return -DER_INVAL;
-	}
-
-	fault_attr = d_fi_gdata.dfg_fa[fault_id];
+	fault_attr = d_fault_attr_lookup(fault_id);
 	if (fault_attr == NULL) {
 		D_ERROR("fault id: %u not set.\n", fault_id);
 		return -DER_INVAL;
@@ -368,20 +430,35 @@ out:
 static void
 d_fi_gdata_init(void)
 {
+	int rc;
+
 	d_fi_gdata.dfg_refcount = 0;
 	d_fi_gdata.dfg_inited = 1;
 	D_RWLOCK_INIT(&d_fi_gdata.dfg_rwlock, NULL);
+	rc =  d_hash_table_create_inplace(D_HASH_FT_NOLOCK, D_FA_TABLE_BITS,
+					  NULL, &fa_table_ops,
+					  &d_fi_gdata.dfg_fa_table);
+	if (rc != 0)
+		D_ERROR("d_hash_table_create_inplace() failed, rc: %d.\n", rc);
 }
 
 static void
 d_fi_gdata_destroy(void)
 {
+	int rc;
+
+	rc = d_hash_table_destroy_inplace(&d_fi_gdata.dfg_fa_table,
+					  true /* force */);
+	if (rc != 0) {
+		D_ERROR("failed to destroy fault attr data. force: %d, "
+			"d_hash_table_destroy_inplace failed, rc: %d\n",
+			true, rc);
+	}
 	D_RWLOCK_DESTROY(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata.dfg_refcount = 0;
 	d_fi_gdata.dfg_inited = 0;
-	d_fi_gdata.dfg_fa_capacity = 0;
-	d_fi_gdata.dfg_fa = NULL;
 }
+
 /**
  * parse config file
  */
@@ -479,6 +556,13 @@ d_fault_inject_init(void)
 		D_GOTO(out, rc);
 	}
 
+	d_fault_id_mem = 0;
+	d_fault_attr_mem = d_fault_attr_lookup(d_fault_id_mem);
+	if (!d_fault_attr_mem) {
+		D_ERROR("d_fault_attr_lookup(%d) failed.\n", d_fault_id_mem);
+		D_GOTO(out, rc = -DER_MISC);
+	}
+
 out:
 	if (fp)
 		fclose(fp);
@@ -488,7 +572,6 @@ out:
 int
 d_fault_inject_fini()
 {
-	int	i;
 	int	rc = 0;
 
 	if (d_fi_gdata.dfg_inited == 0) {
@@ -502,24 +585,6 @@ d_fault_inject_fini()
 		D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 		return rc;
 	}
-
-	for (i = 0; i < d_fi_gdata.dfg_fa_capacity; i++) {
-		int	local_rc;
-
-		if (d_fi_gdata.dfg_fa[i] == NULL)
-			continue;
-
-		local_rc = D_SPIN_DESTROY(&d_fi_gdata.dfg_fa[i]->fa_lock);
-		if (local_rc != DER_SUCCESS)
-			D_ERROR("Can't destroy spinlock for fault id: %d\n", i);
-		if (rc == 0 && local_rc)
-			rc = local_rc;
-		if (d_fi_gdata.dfg_fa[i]->fa_argument)
-			D_FREE(d_fi_gdata.dfg_fa[i]->fa_argument);
-
-		D_FREE(d_fi_gdata.dfg_fa[i]);
-	}
-	D_FREE(d_fi_gdata.dfg_fa);
 
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata_destroy();
@@ -565,9 +630,8 @@ d_fi_initialized()
  *                           support injecting X faults in Y occurances
  */
 bool
-d_should_fail(uint32_t fault_id)
+d_should_fail(struct d_fault_attr_t *fault_attr)
 {
-	struct d_fault_attr_t	*fault_attr;
 	bool			 rc = true;
 
 	if (!d_fi_initialized()) {
@@ -579,15 +643,8 @@ d_should_fail(uint32_t fault_id)
 	 * based on the state of fault_attr, decide if a fault should
 	 * be injected
 	 */
-	if (fault_id >= d_fi_gdata.dfg_fa_capacity) {
-		D_ERROR("fault id (%u) out of range [0, %u]\n",
-			fault_id, d_fi_gdata.dfg_fa_capacity - 1);
-		return false;
-	}
-
-	fault_attr = d_fi_gdata.dfg_fa[fault_id];
-
 	if (!fault_attr) {
+		D_DEBUG(DB_ALL, "fault_attr is NULL.\n");
 		return false;
 	}
 

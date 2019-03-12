@@ -74,6 +74,8 @@ struct test_t {
 	pthread_t	 t_tid[TEST_CTX_MAX_NUM];
 	sem_t		 t_token_to_proceed;
 	int		 t_roomno;
+	struct d_fault_attr_t	 *t_fault_attr_1000;
+	struct d_fault_attr_t	 *t_fault_attr_5000;
 };
 
 struct test_t test_g = { .t_hold_time = 0, .t_ctx_num = 1, .t_roomno = 1082 };
@@ -132,7 +134,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	e_reply->ret = 0;
 	e_reply->room_no = test_g.t_roomno++;
 	e_reply->bool_val = e_req->bool_val;
-	if (D_SHOULD_FAIL(5000)) {
+	if (D_SHOULD_FAIL(test_g.t_fault_attr_5000)) {
 		e_reply->ret = -DER_MISC;
 		e_reply->room_no = -1;
 	} else {
@@ -293,6 +295,9 @@ test_init(void)
 	rc = crt_init(test_g.t_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
+	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
+	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
+
 	rc = crt_group_rank(NULL, &test_g.t_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 	if (test_g.t_is_service) {
@@ -366,7 +371,7 @@ check_in(crt_group_t *remote_group, int rank)
 	 * config file: under fault id 1000, change the probability from 0 to
 	 * anything in [1, 100]
 	 */
-	if (D_SHOULD_FAIL(1000)) {
+	if (D_SHOULD_FAIL(test_g.t_fault_attr_1000)) {
 		buffer = NULL;
 	} else {
 		D_ALLOC(buffer, 256);
