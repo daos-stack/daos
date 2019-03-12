@@ -311,7 +311,7 @@ rdb_raft_unload_replicas(struct rdb *db)
 		struct rdb_raft_node   *rdb_node;
 
 		node = raft_get_node(db->d_raft, db->d_replicas->rl_ranks[i]);
-		if (node != NULL)
+		if (node == NULL)
 			continue;
 		rdb_node = raft_node_get_udata(node);
 		D_ASSERT(rdb_node != NULL);
