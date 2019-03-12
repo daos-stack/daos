@@ -27,8 +27,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-
-	"github.com/pkg/errors"
 )
 
 // Log levels.
@@ -85,14 +83,6 @@ func SetLevel(level int) {
 // SetOutput sets the output destination for the default logger
 func SetOutput(w io.Writer) {
 	logger.logger.SetOutput(w)
-}
-
-// WrapAndLogErr is a utility function that wraps and logs an error to the
-// default logger.
-func WrapAndLogErr(err error, msg string) error {
-	err = errors.Wrap(err, msg)
-	logger.Errordf(3, err.Error())
-	return err
 }
 
 // Logger struct contains reference and level

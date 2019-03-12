@@ -25,7 +25,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 
 	"github.com/pkg/errors"
@@ -65,6 +64,7 @@ func (c *controlService) Teardown() {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
 	}
+
 	if err := c.scm.Teardown(); err != nil {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
@@ -77,35 +77,24 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 	if err != nil {
 		return
 	}
+
 	m = make(FeatureMap)
+
 	file, err := ioutil.ReadFile(absPath)
 	if err != nil {
 		return
 	}
+
 	var features []*pb.Feature
 	if err = json.Unmarshal(file, &features); err != nil {
 		return
 	}
+
 	for _, f := range features {
 		m[f.Fname.Name] = f
 	}
-	return
-}
 
-// showLocalStorage retrieves and prints details of locally attached SCM and
-// NVMe storage to daos_server stdout.
-func (c *controlService) showLocalStorage() {
-	fmt.Println("Listing attached storage...")
-	if err := c.nvme.Discover(); err != nil {
-		fmt.Println("Failure retrieving NVMe details: ", err)
-	} else {
-		common.PrintStructs("NVMe", c.nvme.controllers)
-	}
-	if err := c.scm.Discover(); err != nil {
-		fmt.Println("Failure retrieving SCM details: ", err)
-	} else {
-		common.PrintStructs("SCM", c.scm.modules)
-	}
+	return
 }
 
 // newcontrolService creates a new instance of controlService struct.
