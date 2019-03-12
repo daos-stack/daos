@@ -234,7 +234,7 @@ daos_prop_free(daos_prop_t *prop);
  * \return	allocated daos_acl pointer, NULL if failed
  */
 struct daos_acl *
-daos_acl_alloc(struct daos_ace *aces[], uint16_t num_aces);
+daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
 
 /**
  * Free a DAOS Access Control List.
@@ -286,21 +286,21 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
  * Insert an Access Control Entry in the appropriate location in the ACE
  * list. The expected order is: Owner, Users, Assigned Group, Groups, Everyone.
  *
- * This requires us to reconstruct and reallocate the ACL structure. Both the
- * old structure and the new one must be freed by the caller. The old data is
- * left unchanged.
+ * The ACL structure may be reallocated to make room for the new ACE. If so the
+ * old structure will be freed.
  *
  * If the new ACE is an update of an existing entry, it will replace the old
  * entry.
  *
- * \param[in]	acl	Original ACL
+ * \param[in]	acl	ACL to modify
  * \param[in]	new_ace	ACE to be added
- * \param[out]	new_acl	Reallocated copy of the ACL with new item inserted
  *
- * \return	DER_SUCCESS or error code
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Failed to allocate required memory
  */
 int
-daos_acl_add_ace_realloc(struct daos_acl *acl, struct daos_ace *new_ace,
+daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
 		struct daos_acl **new_acl);
 
 /**
@@ -318,10 +318,13 @@ daos_acl_add_ace_realloc(struct daos_acl *acl, struct daos_ace *new_ace,
  * \param[out]	new_acl			Reallocated copy of the ACL with the
  *					ACE removed
  *
- * \return	DER_SUCCESS or error code
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Failed to allocate required memory
+ *		-DER_NOEXIST	Requested ACE was not in the ACL
  */
 int
-daos_acl_remove_ace_realloc(struct daos_acl *acl,
+daos_acl_remove_ace(struct daos_acl *acl,
 		enum daos_acl_principal_type type, const char *principal_name,
 		size_t principal_name_len, struct daos_acl **new_acl);
 
@@ -341,7 +344,7 @@ daos_acl_remove_ace_realloc(struct daos_acl *acl,
  *			length, and type set.
  */
 struct daos_ace *
-daos_ace_alloc(enum daos_acl_principal_type type, const char *principal_name,
+daos_ace_create(enum daos_acl_principal_type type, const char *principal_name,
 		size_t principal_name_len);
 
 /**

@@ -107,7 +107,7 @@ get_daos_acl_size(uint32_t ace_len)
 }
 
 struct daos_acl *
-daos_acl_alloc(struct daos_ace *aces[], uint16_t num_aces)
+daos_acl_create(struct daos_ace *aces[], uint16_t num_aces)
 {
 	struct daos_acl	*acl;
 	int		ace_len;
@@ -122,7 +122,6 @@ daos_acl_alloc(struct daos_ace *aces[], uint16_t num_aces)
 
 	D_ALLOC(acl, get_daos_acl_size(ace_len));
 	if (acl == NULL) {
-		/* Couldn't allocate */
 		return NULL;
 	}
 
@@ -230,7 +229,7 @@ acl_already_has_principal(struct daos_acl *acl,
 }
 
 int
-daos_acl_add_ace_realloc(struct daos_acl *acl, struct daos_ace *new_ace,
+daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
 		struct daos_acl **new_acl)
 {
 	int	new_len;
@@ -307,7 +306,7 @@ principal_meets_type_requirements(enum daos_acl_principal_type type,
 }
 
 int
-daos_acl_remove_ace_realloc(struct daos_acl *acl,
+daos_acl_remove_ace(struct daos_acl *acl,
 		enum daos_acl_principal_type type, const char *principal_name,
 		size_t principal_name_len, struct daos_acl **new_acl)
 {
@@ -432,7 +431,7 @@ type_is_group(enum daos_acl_principal_type type)
 }
 
 struct daos_ace *
-daos_ace_alloc(enum daos_acl_principal_type type, const char *principal_name,
+daos_ace_create(enum daos_acl_principal_type type, const char *principal_name,
 		size_t principal_name_len)
 {
 	struct daos_ace	*ace;
