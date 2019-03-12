@@ -152,9 +152,11 @@ pipeline {
             }
         }
         stage('Build') {
-            // abort other builds if/when one fails to avoid wasting time
-            // and resources
-            failFast true
+            /* Don't use failFast here as whilst it avoids using extra resources
+             * and gives faster results for PRs it's also on for master where we
+	     * do want complete results in the case of partial failure
+	     */
+            //failFast true
             parallel {
                 stage('Build on CentOS 7') {
                     agent {
@@ -226,7 +228,6 @@ pipeline {
                     }
                 }
                 stage('Build on CentOS 7 with Clang') {
-                    when { branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos:7'
