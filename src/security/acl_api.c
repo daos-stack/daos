@@ -193,7 +193,7 @@ copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
 	uint8_t		*pen;
 	bool		new_written = false;
 
-	current = daos_acl_get_first_ace(acl);
+	current = daos_acl_get_next_ace(acl, NULL);
 	pen = new_acl->dal_ace;
 	while (current != NULL) {
 		if (!new_written && current->dae_principal_type >
@@ -262,7 +262,7 @@ daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
 
 	copy_acl_with_new_ace_inserted(acl, *new_acl, new_ace);
 
-	return DER_SUCCESS;
+	return 0;
 }
 
 static bool
@@ -339,7 +339,7 @@ daos_acl_remove_ace(struct daos_acl *acl,
 	(*new_acl)->dal_ver = acl->dal_ver;
 
 	pen = (*new_acl)->dal_ace;
-	current = daos_acl_get_first_ace(acl);
+	current = daos_acl_get_next_ace(acl, NULL);
 	while (current != NULL) {
 		if (!ace_matches_principal(current, type, principal_name,
 				principal_name_len)) {
@@ -349,17 +349,7 @@ daos_acl_remove_ace(struct daos_acl *acl,
 		current = daos_acl_get_next_ace(acl, current);
 	}
 
-	return DER_SUCCESS;
-}
-
-struct daos_ace *
-daos_acl_get_first_ace(struct daos_acl *acl)
-{
-	if (acl == NULL || acl->dal_len == 0) {
-		return NULL;
-	}
-
-	return (struct daos_ace *)acl->dal_ace;
+	return 0;
 }
 
 static bool
@@ -371,13 +361,23 @@ is_in_ace_list(uint8_t *addr, struct daos_acl *acl)
 	return addr >= start_addr && addr < end_addr;
 }
 
+static bool
+is_first_ace(struct daos_acl *acl, struct daos_ace *ace)
+{
+	return (ace == NULL && acl->dal_len > 0);
+}
+
 struct daos_ace *
 daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 {
 	size_t offset;
 
-	if (acl == NULL || current_ace == NULL) {
+	if (acl == NULL) {
 		return NULL;
+	}
+
+	if (is_first_ace(acl, current_ace)) {
+		return (struct daos_ace *)acl->dal_ace;
 	}
 
 	/* already at/beyond the end */
@@ -405,7 +405,7 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
 		return NULL;
 	}
 
-	result = daos_acl_get_first_ace(acl);
+	result = daos_acl_get_next_ace(acl, NULL);
 	while (result != NULL) {
 		if (result->dae_principal_type == type &&
 			principal_name_matches_ace(result, principal)) {

@@ -245,22 +245,12 @@ void
 daos_acl_free(struct daos_acl *acl);
 
 /**
- * Get the first Access Control Entry in the Access Control List, for iterating
- * over the list.
- *
- * \param[in]	acl	ACL to traverse
- *
- * \return	Pointer to the first ACE in the ACL, or NULL if none exists
- */
-struct daos_ace *
-daos_acl_get_first_ace(struct daos_acl *acl);
-
-/**
  * Get the next Access Control Entry in the Access Control List, for iterating
  * over the list.
  *
  * \param[in]	acl		ACL to traverse
- * \param[in]	current_ace	Current ACE, to determine the next one
+ * \param[in]	current_ace	Current ACE, to determine the next one, or NULL
+ *				for the first ACE
  *
  * \return	Pointer to the next ACE in the ACL, or NULL if at the end
  */

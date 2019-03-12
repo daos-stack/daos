@@ -411,17 +411,11 @@ test_acl_alloc_null_ace(void **state)
 }
 
 static void
-test_acl_get_first_ace_null_acl(void **state)
-{
-	assert_null(daos_acl_get_first_ace(NULL));
-}
-
-static void
 test_acl_get_first_ace_empty_list(void **state)
 {
 	struct daos_acl *acl = daos_acl_create(NULL, 0);
 
-	assert_null(daos_acl_get_first_ace(acl));
+	assert_null(daos_acl_get_next_ace(acl, NULL));
 
 	daos_acl_free(acl);
 }
@@ -438,7 +432,7 @@ test_acl_get_first_ace_multiple(void **state)
 
 	acl = daos_acl_create(ace, num_aces);
 
-	result = daos_acl_get_first_ace(acl);
+	result = daos_acl_get_next_ace(acl, NULL);
 
 	assert_non_null(result);
 	assert_ptr_equal(result, acl->dal_ace);
@@ -457,16 +451,6 @@ test_acl_get_next_ace_null_acl(void **state)
 	assert_null(daos_acl_get_next_ace(NULL, ace));
 
 	daos_ace_free(ace);
-}
-
-static void
-test_acl_get_next_ace_null_ace(void **state)
-{
-	struct daos_acl *acl = daos_acl_create(NULL, 0);
-
-	assert_null(daos_acl_get_next_ace(acl, NULL));
-
-	daos_acl_free(acl);
 }
 
 static void
@@ -1386,11 +1370,9 @@ main(void)
 		cmocka_unit_test(test_acl_alloc_two_users),
 		cmocka_unit_test(test_acl_alloc_type_order),
 		cmocka_unit_test(test_acl_alloc_null_ace),
-		cmocka_unit_test(test_acl_get_first_ace_null_acl),
 		cmocka_unit_test(test_acl_get_first_ace_empty_list),
 		cmocka_unit_test(test_acl_get_first_ace_multiple),
 		cmocka_unit_test(test_acl_get_next_ace_null_acl),
-		cmocka_unit_test(test_acl_get_next_ace_null_ace),
 		cmocka_unit_test(test_acl_get_next_ace_success),
 		cmocka_unit_test(test_acl_get_next_ace_last_item),
 		cmocka_unit_test(test_acl_get_next_ace_empty),
