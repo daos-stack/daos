@@ -46,12 +46,11 @@ func (c *controlService) callDrpcMethodWithMessage(
 
 	fmt.Printf("%+v\n", drpcResp)
 	resp = &pb.DaosResponse{}
-	// TODO: unmarsal daos response message returned in drpc response body,
-	//       populated by io server mgmt drpc handler
-	//	err = proto.Unmarshal(drpcResp.Body, resp)
-	//	if err != nil {
-	//		return nil, fmt.Errorf("invalid dRPC response body: %v", err)
-	//	}
+	// unmarsal daos response message returned in drpc response body
+	err = proto.Unmarshal(drpcResp.Body, resp)
+	if err != nil {
+		return nil, fmt.Errorf("invalid dRPC response body: %v", err)
+	}
 
 	return
 }
