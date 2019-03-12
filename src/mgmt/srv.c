@@ -88,8 +88,8 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 	drpc_resp->sequence = request->sequence;
 	drpc_resp->status = DRPC__STATUS__SUCCESS;
 
-	/* TODO: select against multiple methods */
-	if (request->method == DRPC_METHOD_MGMT_KILL_RANK) {
+	switch (request->method) {
+	case DRPC_METHOD_MGMT_KILL_RANK:
 		/* Unpack the daos request from the drpc call body */
 		daos_rank = proto__daos_rank__unpack(
 			NULL, request->body.len, request->body.data);
@@ -98,37 +98,40 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 			/* TODO: should this be drpc or method failure? */
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Failed to extract rank from request\n");
-		} else {
-			proto__daos_response__init(daos_resp);
-
-			/* Process daos request and populate daos response,
-			 * errors should be indicated inside daos response */
-			process_daos_request(daos_rank, daos_resp);
-			proto__daos_rank__free_unpacked(daos_rank, NULL);
-
-			D_ALLOC(body, proto__daos_response__get_packed_size(daos_resp));
-			if (body == NULL) {
-				drpc_resp->status = DRPC__STATUS__FAILURE;
-				D_ERROR("Failed to allocate drpc response body\n");
-				proto__daos_rank__free_unpacked(daos_rank, NULL);
-				return;
-			}
-
-			/* Populate drpc response body with daos response. */
-			len = proto__daos_response__pack(daos_resp, body);
-			if (len != sizeof(*body)) {
-				drpc_resp->status = DRPC__STATUS__FAILURE;
-				D_ERROR("Unexpected num bytes for daos resp\n");
-				proto__daos_rank__free_unpacked(daos_rank, NULL);
-				return;
-			}
-
-			drpc_resp->body.len = len;
-			drpc_resp->body.data = body;
-
-			proto__daos_rank__free_unpacked(daos_rank, NULL);
+			break;
 		}
-	} else {
+
+		proto__daos_response__init(daos_resp);
+
+		/* Process daos request and populate daos response,
+		 * errors should be indicated inside daos response */
+		process_daos_request(daos_rank, daos_resp);
+
+		proto__daos_rank__free_unpacked(daos_rank, NULL);
+
+		len = proto__daos_response__get_packed_size(daos_resp);
+		D_ALLOC(body, len);
+		if (body == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate drpc response body\n");
+			proto__daos_rank__free_unpacked(daos_rank, NULL);
+			break;
+		}
+
+		/* Populate drpc response body with daos response. */
+		if (proto__daos_response__pack(daos_resp, body) != len) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Unexpected num bytes for daos resp\n");
+			proto__daos_rank__free_unpacked(daos_rank, NULL);
+			break;
+		}
+
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+
+		proto__daos_rank__free_unpacked(daos_rank, NULL);
+		break;
+	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");
 	}
