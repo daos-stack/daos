@@ -36,7 +36,13 @@ service MgmtControl {
 	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
 	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
 	rpc ListScmModules(EmptyParams) returns (stream ScmModule) {};
+	// Kill rank on pool
+	rpc KillRank(DaosRank) returns (DaosResponse) {};
 }
+
+// Management Service Protobuf Definitions
+// These are the request objects and gRPC services used to handle operations on
+// related to various management features.
 
 message EmptyParams {}
 
@@ -130,4 +136,21 @@ message ScmModule {
 	uint64 capacity = 6;
 	// The firmware revision of the module.
 	//string fwrev = 10;
+}
+
+// Identifier for server rank within DAOS pool
+message DaosRank {
+	string pool_uuid = 1;	// UUID of the pool
+	uint32 rank = 2;	// Server rank
+}
+
+enum DaosRequestStatus {
+	SUCCESS = 0;
+	ERR_UNKNOWN = -1;		// Unknown error
+	ERR_INVALID_RANK = -2;		// Rank requested is invalid
+	ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
+}
+
+message DaosResponse {
+	DaosRequestStatus status = 1;
 }

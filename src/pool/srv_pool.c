@@ -988,6 +988,14 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 
 			/* Need to update pool->sp_map. Swap with map. */
 			pool->sp_map_version = map_version;
+			rc = pl_map_create_v2(map, &pool->sp_pl_map);
+			if (rc != 0) {
+				svc->ps_pool = NULL;
+				ABT_rwlock_unlock(pool->sp_lock);
+				ds_pool_put(pool);
+				goto out;
+			}
+
 			tmp = pool->sp_map;
 			pool->sp_map = map;
 			map = tmp;
@@ -1269,10 +1277,10 @@ ds_pool_svc_stop_all(void)
 
 static int
 bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
-	     crt_rpc_t **rpc)
+	     crt_bulk_t bulk_hdl, crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE, opcode,
-				    rpc, NULL, NULL);
+				    rpc, bulk_hdl, NULL);
 }
 
 /**
@@ -1563,7 +1571,8 @@ permitted(const struct pool_prop_ugm *ugm, uint32_t uid, uint32_t gid,
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas,
-		   daos_iov_t *global_ns, struct daos_pool_space *ps)
+		   daos_iov_t *global_ns, struct daos_pool_space *ps,
+		   crt_bulk_t map_buf_bulk)
 {
 	struct pool_tgt_connect_in     *in;
 	struct pool_tgt_connect_out    *out;
@@ -1577,7 +1586,7 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = bcast_create(ctx, svc, POOL_TGT_CONNECT, &rpc);
+	rc = bcast_create(ctx, svc, POOL_TGT_CONNECT, map_buf_bulk, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1628,10 +1637,15 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
  * Transfer the pool map to "remote_bulk". If the remote bulk buffer is too
  * small, then return -DER_TRUNC and set "required_buf_size" to the local pool
  * map buffer size.
+ * If the map_buf_bulk is non-NULL, then the created local bulk handle for
+ * pool_buf will be returned and caller needs to do crt_bulk_free later.
+ * If the map_buf_bulk is NULL then the internally created local bulk handle
+ * will be freed within this function.
  */
 static int
 transfer_map_buf(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc,
-		 crt_bulk_t remote_bulk, uint32_t *required_buf_size)
+		 crt_bulk_t remote_bulk, uint32_t *required_buf_size,
+		 crt_bulk_t *map_buf_bulk)
 {
 	struct pool_buf	       *map_buf;
 	size_t			map_buf_size;
@@ -1639,7 +1653,7 @@ transfer_map_buf(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc,
 	daos_size_t		remote_bulk_size;
 	daos_iov_t		map_iov;
 	daos_sg_list_t		map_sgl;
-	crt_bulk_t		bulk;
+	crt_bulk_t		bulk = CRT_BULK_NULL;
 	struct crt_bulk_desc	map_desc;
 	crt_bulk_opid_t		map_opid;
 	ABT_eventual		eventual;
@@ -1713,7 +1727,10 @@ transfer_map_buf(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc,
 out_eventual:
 	ABT_eventual_free(&eventual);
 out_bulk:
-	crt_bulk_free(bulk);
+	if (map_buf_bulk != NULL)
+		*map_buf_bulk = bulk;
+	else
+		crt_bulk_free(bulk);
 out:
 	return rc;
 }
@@ -1724,6 +1741,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
+	crt_bulk_t			map_buf_bulk = CRT_BULK_NULL;
 	struct rdb_tx			tx;
 	daos_iov_t			key;
 	daos_iov_t			value;
@@ -1814,7 +1832,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * its pool_buf away.
 	 */
 	rc = transfer_map_buf(&tx, svc, rpc, in->pci_map_bulk,
-			      &out->pco_map_buf_size);
+			      &out->pco_map_buf_size, &map_buf_bulk);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
@@ -1849,7 +1867,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas, &iv_iov, &out->pco_space);
+				in->pci_capas, &iv_iov, &out->pco_space,
+				map_buf_bulk);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
@@ -1880,6 +1899,7 @@ out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pco_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
+	crt_bulk_free(map_buf_bulk);
 	out->pco_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, rc);
@@ -1897,7 +1917,7 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = bcast_create(ctx, svc, POOL_TGT_DISCONNECT, &rpc);
+	rc = bcast_create(ctx, svc, POOL_TGT_DISCONNECT, NULL, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2044,7 +2064,7 @@ pool_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 
 	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, &rpc);
+	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, NULL, &rpc);
 	if (rc != 0)
 		goto out;
 
@@ -2135,7 +2155,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	out->pqo_prop = prop;
 
 	rc = transfer_map_buf(&tx, svc, rpc, in->pqi_map_bulk,
-			      &out->pqo_map_buf_size);
+			      &out->pqo_map_buf_size, NULL);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
@@ -2277,10 +2297,18 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * new pool map with the old one in the cache.
 	 */
 	ABT_rwlock_wrlock(svc->ps_pool->sp_lock);
-	map_tmp = svc->ps_pool->sp_map;
-	svc->ps_pool->sp_map = map;
-	map = map_tmp;
-	svc->ps_pool->sp_map_version = map_version;
+	rc = pl_map_create_v2(map, &svc->ps_pool->sp_pl_map);
+	if (rc == 0) {
+		map_tmp = svc->ps_pool->sp_map;
+		svc->ps_pool->sp_map = map;
+		map = map_tmp;
+		svc->ps_pool->sp_map_version = map_version;
+	} else {
+		D_WARN(DF_UUID": failed to update p_map, "
+		       "old_version = %u, new_version = %u: rc = %u\n",
+		       DP_UUID(pool_uuid), svc->ps_pool->sp_map_version,
+		       map_version, rc);
+	}
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
 out_map:
@@ -3189,4 +3217,83 @@ out:
 	out->pmo_failed = ranks;
 	out->pmo_rc = rc;
 	crt_reply_send(rpc);
+}
+
+static inline struct pl_obj_shard*
+ds_pool_get_shard(void *data, int idx)
+{
+	struct pl_obj_layout	*layout = data;
+
+	return &layout->ol_shards[idx];
+}
+
+/**
+ * Check whether the leader replica of the given object resides
+ * on current server or not.
+ *
+ * \param [IN]	pool_uuid	The pool UUID
+ * \param [IN]	oid		The OID of the object to be checked
+ * \param [IN]	version		The pool map version
+ * \param [OUT]	plo		The pointer to the pl_obj_layout of the object
+ *
+ * \return			+1 if leader is on current server.
+ * \return			Zero if the leader resides on another server.
+ * \return			Negative value if error.
+ */
+int
+ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
+		     uint32_t version, struct pl_obj_layout **plo)
+{
+	struct ds_pool		*pool;
+	struct pl_obj_layout	*layout = NULL;
+	struct pool_target	*target;
+	struct daos_obj_md	 md = { 0 };
+	d_rank_t		 leader;
+	d_rank_t		 myrank;
+	int			 rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL)
+		return -DER_INVAL;
+
+	md.omd_id = oid->id_pub;
+	md.omd_ver = version;
+	ABT_rwlock_rdlock(pool->sp_lock);
+	D_ASSERT(pool->sp_pl_map != NULL);
+
+	rc = pl_obj_place(pool->sp_pl_map, &md, NULL, &layout);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0)
+		goto out;
+
+	rc = pl_select_leader(oid, layout->ol_nr, true, ds_pool_get_shard,
+			      layout, &leader);
+	if (rc != 0) {
+		D_WARN("Failed to select leader for "DF_UOID
+		       "version = %d: rc = %d\n",
+		       DP_UOID(*oid), version, rc);
+		goto out;
+	}
+
+	rc = pool_map_find_target(pool->sp_map, leader, &target);
+	if (rc < 0)
+		goto out;
+
+	if (rc != 1)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	crt_group_rank(pool->sp_group, &myrank);
+	if (myrank != target->ta_comp.co_rank) {
+		rc = 0;
+	} else {
+		if (plo != NULL)
+			*plo = layout;
+		rc = 1;
+	}
+
+out:
+	if (rc <= 0 && layout != NULL)
+		pl_obj_layout_free(layout);
+	ds_pool_put(pool);
+	return rc;
 }

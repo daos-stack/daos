@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1191,6 +1191,7 @@ next_fail:
 		if (spare_avail) {
 			/* The selected spare target is up and ready */
 			l_shard->po_target = spare_tgt->ta_comp.co_id;
+			l_shard->po_fseq = spare_tgt->ta_comp.co_fseq;
 
 			/*
 			 * Mark the shard as 'rebuilding' so that read will
@@ -1262,6 +1263,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			tgt = &tgts[pos];
 			layout->ol_shards[k].po_shard  = rop->rop_shard_id + k;
 			layout->ol_shards[k].po_target = tgt->ta_comp.co_id;
+			layout->ol_shards[k].po_fseq   = tgt->ta_comp.co_fseq;
 
 			if (pool_target_unavail(tgt)) {
 				rc = ring_remap_alloc_one(remap_list, k, tgt);
@@ -1319,7 +1321,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	return 0;
 }
 
-#define SHARDS_ON_STACK_COUNT	256
+#define SHARDS_ON_STACK_COUNT	128
 int
 ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		      struct daos_obj_shard_md *shard_md,

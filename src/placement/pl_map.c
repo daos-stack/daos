@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -375,6 +375,41 @@ pl_htable_init()
 					   &pl_hash_ops, &pl_htable);
 }
 
+void
+pl_map_destroy_v2(struct pl_map **pl_mapp)
+{
+	if (*pl_mapp != NULL) {
+		struct pl_map	*map = *pl_mapp;
+		bool		 last;
+
+		*pl_mapp = NULL;
+		D_SPIN_LOCK(&map->pl_lock);
+		/* Drop the reference when create */
+		map->pl_ref--;
+		last = (map->pl_ref == 0);
+		D_SPIN_UNLOCK(&map->pl_lock);
+		if (last)
+			pl_map_destroy(map);
+	}
+}
+
+int
+pl_map_create_v2(struct pool_map *pool_map, struct pl_map **pl_mapp)
+{
+	struct pl_map		*pl_map = NULL;
+	struct pl_map_init_attr	 mia;
+	int			 rc;
+
+	pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
+	rc = pl_map_create_inited(pool_map, &mia, &pl_map);
+	if (rc == 0) {
+		pl_map_destroy_v2(pl_mapp);
+		*pl_mapp = pl_map;
+	}
+
+	return rc;
+}
+
 /**
  * Create a placement map based on attributes in \a mia
  */
@@ -526,4 +561,91 @@ uint32_t
 pl_map_version(struct pl_map *map)
 {
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
+}
+
+int
+pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
+		 pl_get_shard_t pl_get_shard, void *data, uint32_t *leader)
+{
+	struct pl_obj_shard		*shard;
+	struct daos_oclass_attr		*oc_attr;
+	uint32_t			 replicas;
+	int				 preferred;
+	int				 rdg_idx;
+	int				 start;
+	int				 pos;
+	int				 off;
+	int				 i;
+
+	if (nr <= oid->id_shard)
+		return -DER_INVAL;
+
+	oc_attr = daos_oclass_attr_find(oid->id_pub);
+	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		/* For non-replicated object, elect current shard as leader. */
+		shard = pl_get_shard(data, oid->id_shard);
+		if (for_tgt_id)
+			*leader = shard->po_target;
+		else
+			*leader = shard->po_shard;
+		return 0;
+	}
+
+	replicas = oc_attr->u.repl.r_num;
+	if (replicas == DAOS_OBJ_REPL_MAX)
+		replicas = nr;
+
+	if (replicas < 1)
+		return -DER_INVAL;
+
+	if (replicas == 1) {
+		shard = pl_get_shard(data, oid->id_shard);
+		if (shard->po_target == -1)
+			return -DER_NONEXIST;
+
+		/* Single replicated object will not rebuild. */
+		D_ASSERT(!shard->po_rebuilding);
+		D_ASSERT(shard->po_shard == oid->id_shard);
+
+		if (for_tgt_id)
+			*leader = shard->po_target;
+		else
+			*leader = shard->po_shard;
+		return 0;
+	}
+
+	/* XXX: The shards within [start, start + replicas) will search from
+	 *	the same @preferred position, then they will have the same
+	 *	leader. The shards (belonging to the same object) in
+	 *	other redundancy group may get different leader node.
+	 *
+	 *	The one with the lowest f_seq will be elected as the leader
+	 *	to avoid leader switch.
+	 */
+	rdg_idx = oid->id_shard / replicas;
+	start = rdg_idx * replicas;
+	preferred = start + (oid->id_pub.lo + rdg_idx) % replicas;
+	for (i = 0, off = preferred, pos = -1; i < replicas;
+	     i++, off = (off + 1) % replicas + start) {
+		shard = pl_get_shard(data, off);
+		if (shard->po_target == -1 || shard->po_rebuilding)
+			continue;
+
+		if (pos == -1 ||
+		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
+			pos = off;
+	}
+
+	if (pos != -1) {
+		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
+
+		if (for_tgt_id)
+			*leader = pl_get_shard(data, pos)->po_target;
+		else
+			*leader = pl_get_shard(data, pos)->po_shard;
+		return 0;
+	}
+
+	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */
+	return -DER_NONEXIST;
 }

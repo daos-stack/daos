@@ -32,6 +32,7 @@ import (
 	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -48,9 +49,10 @@ type ShowStorageCommand struct{}
 // Perform task then exit immediately. No config parsing performed.
 func (s *ShowStorageCommand) Execute(args []string) error {
 	config := newConfiguration()
-	mgmtControlServer, err := newControlService(&config)
+	mgmtControlServer, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
-		return log.WrapAndLogErr(err, "initialising ControlService")
+		return errors.WithMessage(err, "failed to init ControlService")
 	}
 	mgmtControlServer.Setup()
 	mgmtControlServer.showLocalStorage()
@@ -131,7 +133,8 @@ func main() {
 	// Backup active config.
 	saveActiveConfig(&config)
 
-	mgmtControlServer, err := newControlService(&config)
+	mgmtControlServer, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		log.Errorf("Failed to init ControlService: %s", err)
 		return

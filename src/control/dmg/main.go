@@ -66,7 +66,7 @@ type cliOptions struct {
 
 var (
 	opts  = new(cliOptions)
-	conns = mgmtclient.NewConnections()
+	conns = client.NewConnections()
 )
 
 func connectHosts() error {

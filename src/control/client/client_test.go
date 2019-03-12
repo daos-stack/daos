@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-// implement mock/stub behaviour for MgmtClient
-type mockMgmtClient struct {
+// implement mock/stub behaviour for Control
+type mockControl struct {
 	address   string
 	connState connectivity.State
 	features  []*pb.Feature
@@ -39,16 +39,16 @@ type mockMgmtClient struct {
 	modules   ScmModules
 }
 
-func (m *mockMgmtClient) connect(addr string) error {
+func (m *mockControl) connect(addr string) error {
 	m.address = addr
 	return nil
 }
-func (m *mockMgmtClient) close() error { return nil }
-func (m *mockMgmtClient) connected() (connectivity.State, bool) {
+func (m *mockControl) close() error { return nil }
+func (m *mockControl) connected() (connectivity.State, bool) {
 	return m.connState, checkState(m.connState)
 }
-func (m *mockMgmtClient) getAddress() string { return m.address }
-func (m *mockMgmtClient) listAllFeatures() (FeatureMap, error) {
+func (m *mockControl) getAddress() string { return m.address }
+func (m *mockControl) listAllFeatures() (FeatureMap, error) {
 	fm := make(FeatureMap)
 	for _, f := range m.features {
 		fm[f.Fname.Name] = fmt.Sprintf(
@@ -56,16 +56,19 @@ func (m *mockMgmtClient) listAllFeatures() (FeatureMap, error) {
 	}
 	return fm, nil
 }
-func (m *mockMgmtClient) listNvmeCtrlrs() (NvmeControllers, error) {
+func (m *mockControl) listNvmeCtrlrs() (NvmeControllers, error) {
 	return m.ctrlrs, nil
 }
-func (m *mockMgmtClient) listScmModules() (ScmModules, error) {
+func (m *mockControl) listScmModules() (ScmModules, error) {
 	return m.modules, nil
 }
+func (m *mockControl) killRank(uuid string, rank uint32) error {
+	return nil
+}
 
-func newMockMgmtClient(
+func newMockControl(
 	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules) MgmtClient {
+	ctrlrs NvmeControllers, modules ScmModules) Control {
 
-	return &mockMgmtClient{address, state, features, ctrlrs, modules}
+	return &mockControl{address, state, features, ctrlrs, modules}
 }

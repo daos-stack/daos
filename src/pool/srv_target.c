@@ -220,8 +220,16 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 
-	if (arg->pca_map != NULL)
+	if (arg->pca_map != NULL) {
+		rc = pl_map_create_v2(arg->pca_map, &pool->sp_pl_map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create pl_map: %d\n",
+				DP_UUID(key), rc);
+			D_GOTO(err_lock, rc);
+		}
+
 		pool->sp_map = arg->pca_map;
+	}
 
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -230,7 +238,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
 			DP_UUID(key), rc);
-		D_GOTO(err_lock, rc);
+		goto err_map;
 	}
 
 	if (arg->pca_need_group) {
@@ -251,6 +259,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_collective:
 	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
+err_map:
+	pl_map_destroy_v2(&pool->sp_pl_map);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
@@ -289,8 +299,10 @@ pool_free_ref(struct daos_llink *llink)
 		D_ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	if (pool->sp_map != NULL)
+	if (pool->sp_map != NULL) {
+		pl_map_destroy_v2(&pool->sp_pl_map);
 		pool_map_decref(pool->sp_map);
+	}
 
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
@@ -638,12 +650,13 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 void
 ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_connect_in     *in = crt_req_get(rpc);
-	struct pool_tgt_connect_out    *out = crt_reply_get(rpc);
-	struct ds_pool		       *pool;
-	struct ds_pool_hdl	       *hdl;
-	struct ds_pool_create_arg	arg;
-	int				rc;
+	struct pool_tgt_connect_in	*in = crt_req_get(rpc);
+	struct pool_tgt_connect_out	*out = crt_reply_get(rpc);
+	struct pool_map			*map = NULL;
+	struct ds_pool			*pool;
+	struct ds_pool_hdl		*hdl;
+	struct ds_pool_create_arg	 arg;
+	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->tci_uuid), rpc, DP_UUID(in->tci_hdl));
@@ -671,7 +684,33 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	arg.pca_map = NULL;
+	/* Init the pool map */
+	if (rpc->cr_co_bulk_hdl != NULL) {
+		struct pool_buf		*buf;
+		daos_iov_t		 iov = { 0 };
+		daos_sg_list_t		 sgl;
+
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs = &iov;
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		if (rc != 0) {
+			D_ERROR(DF_UUID": crt_bulk_access failed, rc %d.\n",
+				DP_UUID(in->tci_uuid), rc);
+			D_GOTO(out, rc);
+		}
+
+		buf = iov.iov_buf;
+		D_ASSERT(buf != NULL);
+		rc = pool_map_create(buf, in->tci_map_version, &map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID" failed to create pool map: %d\n",
+				DP_UUID(in->tci_uuid), rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	arg.pca_map = map;
 	arg.pca_map_version = in->tci_map_version;
 	arg.pca_need_group = 0;
 
@@ -703,6 +742,9 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 
 	rc = pool_tgt_query(pool, &out->tco_space);
 out:
+	if (rc != 0 && map != NULL)
+		pool_map_decref(map);
+
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
@@ -819,6 +861,15 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
+			rc = pl_map_create_v2(map, &pool->sp_pl_map);
+			if (rc != 0) {
+				ABT_rwlock_unlock(pool->sp_lock);
+				D_ERROR(DF_UUID
+					": failed to create pl_map: %d\n",
+					DP_UUID(pool->sp_uuid), rc);
+				D_GOTO(out, rc);
+			}
+
 			pool->sp_map = map;
 			map = tmp;
 		}
@@ -835,6 +886,14 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		   pool_map_get_version(pool->sp_map) < map_version &&
 		   map != NULL) {
 		struct pool_map *tmp = pool->sp_map;
+
+		rc = pl_map_create_v2(map, &pool->sp_pl_map);
+		if (rc != 0) {
+			ABT_rwlock_unlock(pool->sp_lock);
+			D_ERROR(DF_UUID": failed to create pl_map: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			D_GOTO(out, rc);
+		}
 
 		/* drop the stale map */
 		pool->sp_map = map;

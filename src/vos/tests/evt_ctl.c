@@ -945,6 +945,99 @@ test_evt_iter_delete_internal(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static inline int
+insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
+{
+	int		rc;
+	static int	epoch = 1;
+
+	entry->ei_rect.rc_ex.ex_lo = idx;
+	entry->ei_rect.rc_ex.ex_hi = idx + nr - 1;
+	entry->ei_rect.rc_epc = epoch;
+	rc = evt_insert(toh, entry);
+	assert_int_equal(rc, 0);
+
+	return epoch++;
+}
+
+#define EVT_ALLOC_BUG_NR 1000
+static void
+test_evt_ent_alloc_bug(void **state)
+{
+	TMMID(struct evt_root)	 root_mmid;
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry_in	 entry_in = {0};
+	struct evt_entry	 entry = {0};
+	int			 rc;
+	int			 count = 0;
+	uint32_t		 inob;
+	int			 last = 0;
+	int			 idx1, nr1, idx2, nr2, idx3, nr3;
+
+	root_mmid = TMMID_NULL(struct evt_root);
+
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, &root_mmid, &toh);
+	assert_int_equal(rc, 0);
+
+	idx1 = 0;
+	nr1  = 500;
+	idx2 = idx1 + nr1;
+	nr2  = nr1;
+	idx3 = idx1 + 1;
+	nr3  = idx2 + nr2 - idx1 - 2;
+	entry_in.ei_ver = 0;
+	entry_in.ei_inob = 0;
+	/* We will insert nothing but holes as we are just checking sorted
+	 * iteration.
+	 */
+	bio_alloc_init(arg->ta_utx, &entry_in.ei_addr, NULL, 0);
+
+	/* Fill in the entries */
+	while (nr1 > 0 && nr2 > 0 && nr3 > 0) {
+		last = insert_and_check(toh, &entry_in, idx1, nr1);
+		if (last >= EVT_ALLOC_BUG_NR)
+			break;
+		idx1 += 2;
+		nr1 -= 4;
+		last = insert_and_check(toh, &entry_in, idx2, nr2);
+		if (last >= EVT_ALLOC_BUG_NR)
+			break;
+		idx2 += 2;
+		nr2 -= 4;
+		last = insert_and_check(toh, &entry_in, idx3, nr3);
+		if (last >= EVT_ALLOC_BUG_NR)
+			break;
+		idx3 += 2;
+		nr3 -= 4;
+	}
+
+	/* Now, do a sorted iteration */
+	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED, NULL,
+			      &ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Ok, count the entries */
+	while (!evt_iter_fetch(ih, &inob, &entry, NULL)) {
+		rc = evt_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+		count++;
+	}
+	print_message("Number of entries is %d\n", count);
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+
+	assert_in_range(count, last, last * 3);
+}
 static int
 run_internal_tests(void)
 {
@@ -953,6 +1046,9 @@ run_internal_tests(void)
 			setup_builtin, teardown_builtin},
 		{ "EVT002: evt_iter_delete_internal",
 			test_evt_iter_delete_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT003: evt_ent_alloc_bug",
+			test_evt_ent_alloc_bug,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
