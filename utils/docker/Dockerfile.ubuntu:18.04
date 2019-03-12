@@ -28,7 +28,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y git   \
                        libreadline6-dev curl doxygen pandoc flex patch nasm   \
                        yasm graphviz doxygen libibverbs-dev librdmacm-dev     \
                        libcunit1-dev libnuma-dev libaio-dev sg3-utils         \
-                       libiscsi-dev python-dev mscgen ninja-build meson       \
+                       libiscsi-dev python-dev ninja-build meson              \
                        pylint bash locales clang libyaml-dev
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
