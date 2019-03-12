@@ -411,6 +411,49 @@ test_acl_alloc_null_ace(void **state)
 }
 
 static void
+test_acl_copy_null_acl(void **state)
+{
+	assert_null(daos_acl_copy(NULL));
+}
+
+static void
+test_acl_copy_empty_acl(void **state)
+{
+	struct daos_acl *acl = daos_acl_create(NULL, 0);
+	struct daos_acl *copy;
+
+	copy = daos_acl_copy(acl);
+
+	assert_non_null(copy);
+	assert_memory_equal(acl, copy, sizeof(struct daos_acl));
+
+	daos_acl_free(acl);
+	daos_acl_free(copy);
+}
+
+static void
+test_acl_copy_with_aces(void **state)
+{
+	struct daos_acl	*acl;
+	struct daos_acl	*copy;
+	size_t		num_aces = 3;
+	struct daos_ace	*ace[num_aces];
+
+	fill_ace_list_with_users(ace, num_aces);
+	acl = daos_acl_create(ace, num_aces);
+
+	copy = daos_acl_copy(acl);
+
+	assert_non_null(copy);
+	assert_int_equal(copy->dal_len, acl->dal_len);
+	assert_memory_equal(copy, acl, acl->dal_len);
+
+	daos_acl_free(acl);
+	daos_acl_free(copy);
+	free_all_aces(ace, num_aces);
+}
+
+static void
 test_acl_get_first_ace_empty_list(void **state)
 {
 	struct daos_acl *acl = daos_acl_create(NULL, 0);
@@ -702,34 +745,29 @@ test_acl_get_ace_name_not_needed(void **state)
 }
 
 static void
-test_acl_add_ace_with_null_acl(void **state)
+test_acl_add_ace_with_null_acl_ptr(void **state)
 {
 	struct daos_ace *ace;
-	struct daos_acl *new_acl = NULL;
 
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
 
-	assert_int_equal(daos_acl_add_ace(NULL, ace, &new_acl),
+	assert_int_equal(daos_acl_add_ace(NULL, ace),
 			-DER_INVAL);
-
-	assert_null(new_acl);
 
 	daos_ace_free(ace);
 }
 
 static void
-test_acl_add_ace_with_null_new_acl(void **state)
+test_acl_add_ace_with_null_acl(void **state)
 {
 	struct daos_ace *ace;
-	struct daos_acl *acl;
+	struct daos_acl *acl = NULL;
 
-	acl = daos_acl_create(NULL, 0);
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
 
-	assert_int_equal(daos_acl_add_ace(acl, ace, NULL),
+	assert_int_equal(daos_acl_add_ace(&acl, ace),
 			-DER_INVAL);
 
-	daos_acl_free(acl);
 	daos_ace_free(ace);
 }
 
@@ -737,14 +775,11 @@ static void
 test_acl_add_ace_with_null_ace(void **state)
 {
 	struct daos_acl *acl;
-	struct daos_acl *new_acl = NULL;
 
 	acl = daos_acl_create(NULL, 0);
 
-	assert_int_equal(daos_acl_add_ace(acl, NULL, &new_acl),
+	assert_int_equal(daos_acl_add_ace(&acl, NULL),
 			-DER_INVAL);
-
-	assert_null(new_acl);
 
 	daos_acl_free(acl);
 }
@@ -753,24 +788,21 @@ static void
 expect_empty_acl_adds_ace_as_only_item(struct daos_ace *ace)
 {
 	struct daos_acl *acl;
-	struct daos_acl *new_acl = NULL;
+	struct daos_acl *original_acl;
 	size_t		ace_len;
 
 	ace_len = daos_ace_get_size(ace);
 	acl = daos_acl_create(NULL, 0);
+	original_acl = daos_acl_copy(acl);
 
-	assert_int_equal(daos_acl_add_ace(acl, ace, &new_acl),
-			DER_SUCCESS);
+	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
 
-	assert_non_null(new_acl);
-	assert_ptr_not_equal(new_acl, acl);
-
-	assert_int_equal(new_acl->dal_ver, acl->dal_ver);
-	assert_int_equal(new_acl->dal_len, ace_len);
-	assert_memory_equal(new_acl->dal_ace, ace, ace_len);
+	assert_int_equal(acl->dal_ver, original_acl->dal_ver);
+	assert_int_equal(acl->dal_len, ace_len);
+	assert_memory_equal(acl->dal_ace, ace, ace_len);
 
 	daos_acl_free(acl);
-	daos_acl_free(new_acl);
+	daos_acl_free(original_acl);
 }
 
 static void
@@ -847,32 +879,32 @@ static void
 expect_ace_inserted_at_correct_location(struct daos_ace *ace[], int num_aces,
 		struct daos_ace *new_ace)
 {
+	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
-	struct daos_acl	*result_acl = NULL;
 	size_t		expected_len = 0;
 
 	expected_len = get_total_ace_list_size(ace, num_aces);
-	orig_acl = daos_acl_create(ace, num_aces);
+	acl = daos_acl_create(ace, num_aces);
+	orig_acl = daos_acl_copy(acl);
 
 	/* Add some permission bits for testing */
 	new_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	new_ace->dae_allow_perms = DAOS_ACL_PERM_READ;
 	expected_len += daos_ace_get_size(new_ace);
 
-	assert_int_equal(daos_acl_add_ace(orig_acl, new_ace,
-			&result_acl), DER_SUCCESS);
+	assert_int_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
-	assert_non_null(result_acl);
-	assert_int_equal(result_acl->dal_ver, orig_acl->dal_ver);
-	assert_int_equal(result_acl->dal_len, expected_len);
+	assert_non_null(acl);
+	assert_int_equal(acl->dal_ver, orig_acl->dal_ver);
+	assert_int_equal(acl->dal_len, expected_len);
 
-	assert_memory_equal(new_ace, result_acl->dal_ace +
+	assert_memory_equal(new_ace, acl->dal_ace +
 		get_offset_for_type(new_ace->dae_principal_type, ace, num_aces),
 		daos_ace_get_size(new_ace));
 
 	/* cleanup */
+	daos_acl_free(acl);
 	daos_acl_free(orig_acl);
-	daos_acl_free(result_acl);
 }
 
 static void
@@ -991,71 +1023,51 @@ test_acl_add_ace_everyone_to_existing_list(void **state)
 }
 
 static void
-test_acl_add_ace_duplicate(void **state)
+expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 {
 	int		num_aces = DAOS_ACL_EVERYONE + 1;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
+	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
-	struct daos_acl	*result_acl = NULL;
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
-	orig_acl = daos_acl_create(ace, num_aces);
+	acl = daos_acl_create(ace, num_aces);
+	orig_acl = daos_acl_copy(acl);
 
 	/* Create an exact duplicate */
-	D_ALLOC(new_ace, daos_ace_get_size(ace[DAOS_ACL_USER]));
-	memcpy(new_ace, ace[DAOS_ACL_USER],
-			daos_ace_get_size(ace[DAOS_ACL_USER]));
+	D_ALLOC(new_ace, daos_ace_get_size(ace[type]));
+	memcpy(new_ace, ace[type],
+			daos_ace_get_size(ace[type]));
 
-	assert_int_equal(daos_acl_add_ace(orig_acl, new_ace,
-			&result_acl), DER_SUCCESS);
+	assert_int_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
 	/* Expect a copy of original */
-	assert_non_null(result_acl);
-	assert_int_equal(result_acl->dal_len, orig_acl->dal_len);
-	assert_memory_equal(result_acl, orig_acl,
+	assert_non_null(acl);
+	assert_int_equal(acl->dal_len, orig_acl->dal_len);
+	assert_memory_equal(acl, orig_acl,
 			sizeof(struct daos_acl) + orig_acl->dal_len);
-	assert_ptr_not_equal(result_acl, orig_acl);
 
 	/* cleanup */
+	daos_acl_free(acl);
 	daos_acl_free(orig_acl);
-	daos_acl_free(result_acl);
 	free_all_aces(ace, num_aces);
 	daos_ace_free(new_ace);
 }
 
 static void
+test_acl_add_ace_duplicate(void **state)
+{
+	expect_add_duplicate_ace_unchanged(DAOS_ACL_USER);
+	expect_add_duplicate_ace_unchanged(DAOS_ACL_GROUP);
+}
+
+static void
 test_acl_add_ace_duplicate_no_name(void **state)
 {
-	int		num_aces = DAOS_ACL_EVERYONE + 1;
-	struct daos_ace	*ace[num_aces];
-	struct daos_ace	*new_ace;
-	struct daos_acl	*orig_acl;
-	struct daos_acl	*result_acl = NULL;
-
-	fill_ace_list_with_all_types(ace, "user1@", "group1@");
-	orig_acl = daos_acl_create(ace, num_aces);
-
-	/* Create an exact duplicate */
-	D_ALLOC(new_ace, daos_ace_get_size(ace[DAOS_ACL_OWNER]));
-	memcpy(new_ace, ace[DAOS_ACL_OWNER],
-			daos_ace_get_size(ace[DAOS_ACL_OWNER]));
-
-	assert_int_equal(daos_acl_add_ace(orig_acl, new_ace,
-			&result_acl), DER_SUCCESS);
-
-	/* Expect a copy of original */
-	assert_non_null(result_acl);
-	assert_int_equal(orig_acl->dal_len, result_acl->dal_len);
-	assert_memory_equal(orig_acl, result_acl,
-			sizeof(struct daos_acl) + orig_acl->dal_len);
-	assert_ptr_not_equal(result_acl, orig_acl);
-
-	/* cleanup */
-	daos_acl_free(orig_acl);
-	daos_acl_free(result_acl);
-	free_all_aces(ace, num_aces);
-	daos_ace_free(new_ace);
+	expect_add_duplicate_ace_unchanged(DAOS_ACL_OWNER);
+	expect_add_duplicate_ace_unchanged(DAOS_ACL_OWNER_GROUP);
+	expect_add_duplicate_ace_unchanged(DAOS_ACL_EVERYONE);
 }
 
 static void
@@ -1064,12 +1076,13 @@ test_acl_add_ace_replace(void **state)
 	int		num_aces = DAOS_ACL_EVERYONE + 1;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
+	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
-	struct daos_acl	*result_acl = NULL;
 	uint8_t		*result_ace_addr;
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
-	orig_acl = daos_acl_create(ace, num_aces);
+	acl = daos_acl_create(ace, num_aces);
+	orig_acl = daos_acl_copy(acl);
 
 	/* Create an updated ACE */
 	new_ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
@@ -1080,22 +1093,21 @@ test_acl_add_ace_replace(void **state)
 	new_ace->dae_allow_perms = DAOS_ACL_PERM_READ;
 	new_ace->dae_alarm_perms = DAOS_ACL_PERM_WRITE;
 
-	assert_int_equal(daos_acl_add_ace(orig_acl, new_ace,
-			&result_acl), DER_SUCCESS);
+	assert_int_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
 	/* Expect the entry was replaced, not added */
-	assert_non_null(result_acl);
-	assert_int_equal(orig_acl->dal_len, result_acl->dal_len);
+	assert_non_null(acl);
+	assert_int_equal(acl->dal_len, orig_acl->dal_len);
 
 	/* type EVERYONE is last, and there is only one ACE for it */
-	result_ace_addr = result_acl->dal_ace + result_acl->dal_len -
+	result_ace_addr = acl->dal_ace + acl->dal_len -
 			daos_ace_get_size(new_ace);
 	assert_memory_equal(new_ace, result_ace_addr,
 		daos_ace_get_size(new_ace));
 
 	/* cleanup */
+	daos_acl_free(acl);
 	daos_acl_free(orig_acl);
-	daos_acl_free(result_acl);
 	free_all_aces(ace, num_aces);
 	daos_ace_free(new_ace);
 }
@@ -1370,6 +1382,9 @@ main(void)
 		cmocka_unit_test(test_acl_alloc_two_users),
 		cmocka_unit_test(test_acl_alloc_type_order),
 		cmocka_unit_test(test_acl_alloc_null_ace),
+		cmocka_unit_test(test_acl_copy_null_acl),
+		cmocka_unit_test(test_acl_copy_empty_acl),
+		cmocka_unit_test(test_acl_copy_with_aces),
 		cmocka_unit_test(test_acl_get_first_ace_empty_list),
 		cmocka_unit_test(test_acl_get_first_ace_multiple),
 		cmocka_unit_test(test_acl_get_next_ace_null_acl),
@@ -1385,8 +1400,8 @@ main(void)
 		cmocka_unit_test(test_acl_get_ace_name_not_found),
 		cmocka_unit_test(test_acl_get_ace_name_needed),
 		cmocka_unit_test(test_acl_get_ace_name_not_needed),
+		cmocka_unit_test(test_acl_add_ace_with_null_acl_ptr),
 		cmocka_unit_test(test_acl_add_ace_with_null_acl),
-		cmocka_unit_test(test_acl_add_ace_with_null_new_acl),
 		cmocka_unit_test(test_acl_add_ace_with_null_ace),
 		cmocka_unit_test(test_acl_add_ace_without_name),
 		cmocka_unit_test(test_acl_add_ace_with_name),

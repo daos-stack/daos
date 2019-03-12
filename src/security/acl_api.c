@@ -133,6 +133,27 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces)
 	return acl;
 }
 
+struct daos_acl *
+daos_acl_copy(struct daos_acl *acl)
+{
+	struct daos_acl	*acl_copy;
+	size_t		acl_len;
+
+	if (acl == NULL) {
+		return NULL;
+	}
+
+	acl_len = get_daos_acl_size(acl->dal_len);
+	D_ALLOC(acl_copy, get_daos_acl_size(acl_len));
+	if (acl_copy == NULL) {
+		return NULL;
+	}
+
+	memcpy(acl_copy, acl, acl_len);
+
+	return acl_copy;
+}
+
 void
 daos_acl_free(struct daos_acl *acl)
 {
@@ -197,16 +218,9 @@ copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
 	pen = new_acl->dal_ace;
 	while (current != NULL) {
 		if (!new_written && current->dae_principal_type >
-				new_ace->dae_principal_type)  {
+				new_ace->dae_principal_type) {
 			new_written = true;
 			pen = write_ace(new_ace, pen);
-		} else if (!new_written && principals_match(current,
-					new_ace)) {
-			new_written = true;
-
-			/* Overwrite the old entry */
-			pen = write_ace(new_ace, pen);
-			current = daos_acl_get_next_ace(acl, current);
 		} else {
 			pen = write_ace(current, pen);
 			current = daos_acl_get_next_ace(acl, current);
@@ -216,6 +230,22 @@ copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
 	/* didn't insert it - tack it on the end */
 	if (!new_written) {
 		write_ace(new_ace, pen);
+	}
+}
+
+static void
+overwrite_ace_for_principal(struct daos_acl *acl, struct daos_ace *new_ace)
+{
+	struct daos_ace	*current;
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	while (current != NULL) {
+		if (principals_match(current, new_ace)) {
+			write_ace(new_ace, (uint8_t *)current);
+			break;
+		}
+
+		current = daos_acl_get_next_ace(acl, current);
 	}
 }
 
@@ -229,13 +259,13 @@ acl_already_has_principal(struct daos_acl *acl,
 }
 
 int
-daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
-		 struct daos_acl **new_acl)
+daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace)
 {
-	int	new_len;
-	int	new_ace_len;
+	int		new_len;
+	int		new_ace_len;
+	struct daos_acl	*new_acl;
 
-	if (acl == NULL || new_acl == NULL) {
+	if (acl == NULL || *acl == NULL) {
 		return -DER_INVAL;
 	}
 
@@ -245,22 +275,26 @@ daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
 		return -DER_INVAL;
 	}
 
-	if (acl_already_has_principal(acl, new_ace->dae_principal_type,
+	if (acl_already_has_principal(*acl, new_ace->dae_principal_type,
 			new_ace->dae_principal)) {
-		new_len = acl->dal_len;
-	} else {
-		new_len = acl->dal_len + new_ace_len;
+		overwrite_ace_for_principal(*acl, new_ace);
+		return 0;
 	}
 
-	D_ALLOC(*new_acl, get_daos_acl_size(new_len));
-	if (*new_acl == NULL) {
+	new_len = (*acl)->dal_len + new_ace_len;
+
+	D_ALLOC(new_acl, get_daos_acl_size(new_len));
+	if (new_acl == NULL) {
 		return -DER_NOMEM;
 	}
 
-	(*new_acl)->dal_ver = acl->dal_ver;
-	(*new_acl)->dal_len = new_len;
+	new_acl->dal_ver = (*acl)->dal_ver;
+	new_acl->dal_len = new_len;
 
-	copy_acl_with_new_ace_inserted(acl, *new_acl, new_ace);
+	copy_acl_with_new_ace_inserted(*acl, new_acl, new_ace);
+
+	daos_acl_free(*acl);
+	*acl = new_acl;
 
 	return 0;
 }

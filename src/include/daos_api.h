@@ -237,6 +237,17 @@ struct daos_acl *
 daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
 
 /**
+ * Allocate a new copy of a DAOS Access Control List.
+ *
+ * \param[in]	acl	ACL structure to be copied
+ *
+ * \return	Newly allocated copy of the ACL, or NULL if the ACL can't be
+ *		allocated
+ */
+struct daos_acl *
+daos_acl_copy(struct daos_acl *acl);
+
+/**
  * Free a DAOS Access Control List.
  *
  * \param[in]	acl	ACL pointer to be freed
@@ -291,8 +302,7 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
  *		-DER_NOMEM	Failed to allocate required memory
  */
 int
-daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
-		 struct daos_acl **new_acl);
+daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
 
 /**
  * Remove an Access Control Entry from the list.
