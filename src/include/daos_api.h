@@ -270,7 +270,8 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace);
  */
 struct daos_ace *
 daos_acl_get_ace_for_principal(struct daos_acl *acl,
-		enum daos_acl_principal_type type, const char *principal);
+			       enum daos_acl_principal_type type,
+			       const char *principal);
 
 /**
  * Insert an Access Control Entry in the appropriate location in the ACE
@@ -291,7 +292,7 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
  */
 int
 daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
-		struct daos_acl **new_acl);
+		 struct daos_acl **new_acl);
 
 /**
  * Remove an Access Control Entry from the list.
@@ -315,8 +316,9 @@ daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
  */
 int
 daos_acl_remove_ace(struct daos_acl *acl,
-		enum daos_acl_principal_type type, const char *principal_name,
-		size_t principal_name_len, struct daos_acl **new_acl);
+		    enum daos_acl_principal_type type,
+		    const char *principal_name,
+		    size_t principal_name_len, struct daos_acl **new_acl);
 
 /**
  * Allocate a new Access Control Entry with an appropriately aligned principal

@@ -55,7 +55,7 @@ sort_aces_by_principal_type(struct daos_ace *aces[], uint16_t num_aces)
  */
 static void
 flatten_aces(uint8_t *buffer, uint32_t buf_len, struct daos_ace *aces[],
-		uint16_t num_aces)
+	     uint16_t num_aces)
 {
 	int	i;
 	uint8_t	*pen; /* next addr to write in the buffer */
@@ -155,8 +155,8 @@ principal_name_matches_ace(struct daos_ace *ace, const char *principal)
 
 static bool
 ace_matches_principal(struct daos_ace *ace,
-		enum daos_acl_principal_type type, const char *principal,
-		size_t principal_len)
+		      enum daos_acl_principal_type type, const char *principal,
+		      size_t principal_len)
 {
 	return	(ace->dae_principal_type == type) &&
 		(ace->dae_principal_len == D_ALIGNUP(principal_len, 8)) &&
@@ -187,7 +187,7 @@ write_ace(struct daos_ace *ace, uint8_t *pen)
 
 static void
 copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
-		struct daos_ace *new_ace)
+			       struct daos_ace *new_ace)
 {
 	struct daos_ace	*current;
 	uint8_t		*pen;
@@ -230,7 +230,7 @@ acl_already_has_principal(struct daos_acl *acl,
 
 int
 daos_acl_add_ace(struct daos_acl *acl, struct daos_ace *new_ace,
-		struct daos_acl **new_acl)
+		 struct daos_acl **new_acl)
 {
 	int	new_len;
 	int	new_ace_len;
@@ -299,7 +299,8 @@ type_needs_name(enum daos_acl_principal_type type)
 
 static bool
 principal_meets_type_requirements(enum daos_acl_principal_type type,
-		const char *principal_name, size_t principal_name_len)
+				  const char *principal_name,
+				  size_t principal_name_len)
 {
 	return	(!type_needs_name(type) ||
 		(principal_name != NULL && principal_name_len != 0));
@@ -307,8 +308,9 @@ principal_meets_type_requirements(enum daos_acl_principal_type type,
 
 int
 daos_acl_remove_ace(struct daos_acl *acl,
-		enum daos_acl_principal_type type, const char *principal_name,
-		size_t principal_name_len, struct daos_acl **new_acl)
+		    enum daos_acl_principal_type type,
+		    const char *principal_name,
+		    size_t principal_name_len, struct daos_acl **new_acl)
 {
 	struct daos_ace	*current;
 	struct daos_ace	*ace_to_remove;
@@ -396,7 +398,8 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 
 struct daos_ace *
 daos_acl_get_ace_for_principal(struct daos_acl *acl,
-		enum daos_acl_principal_type type, const char *principal)
+			       enum daos_acl_principal_type type,
+			       const char *principal)
 {
 	struct daos_ace *result;
 
