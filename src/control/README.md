@@ -40,11 +40,11 @@ If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR
 
 This subcommand requires elevated permissions and needs to be run with root permissions (sudo).
 
-NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server prep-nvme -p 4096`. This will perform the required setup in order for `daos_server` to be granted access to the NVMe SSDs through SPDK when run as an unprivileged user (the user issuing the sudo command) including the allocation of 4096 hugepages.
+NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server prep-nvme -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-u` short option) defines the number of huge pages to allocate for use by SPDK.
 
 The configuration commands that require elevated permissions are in `src/control/mgmt/init/setup_spdk.sh` (script is installed as `install/share/setup_spdk.sh`).
 
-The sudoers file can be accessed with command `visudo` and the simplest way to achieve the necessary access is to grant sudo permissions to a user to execute a specific command pattern (requires knowledge of `daos_server` binary location):
+The sudoers file can be accessed with command `visudo` and permissions can be granted to a user to execute a specific command pattern (requires prior knowledge of `daos_server` binary location):
 ```
 linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 ```
