@@ -63,24 +63,25 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 static void
 process_daos_request(Proto__DaosRank *rank, Proto__DaosResponse *response)
 {
-	/* currently response status is populated with SUCCESS on init */
-	D_DEBUG(DB_MGMT, "Received kill rank daos request\n");
-	/* TODO: process request and populate daos response */
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to kill rank (%u) on pool (%s)\n",
+		rank->rank, rank->pool_uuid);
 
+	/* TODO: process request and populate daos response status */
 }
 
 static void
 mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 {
-	uint8_t			*body = NULL;
 	Drpc__Response		*drpc_resp = NULL;
-	Proto__DaosResponse	*daos_resp = NULL;
 	Proto__DaosRank		*daos_rank = NULL;
+	Proto__DaosResponse	*daos_resp = NULL;
+	uint8_t			*body = NULL;
 	size_t			len = 0;
 
 	D_ALLOC_PTR(drpc_resp);
 	if (drpc_resp == NULL) {
-		D_ERROR("Failed to allocate drpc response\n");
+		D_ERROR("Failed to allocate drpc response ref\n");
 		return;
 	}
 
@@ -95,16 +96,24 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 			NULL, request->body.len, request->body.data);
 
 		if (daos_rank == NULL) {
-			/* TODO: should this be drpc or method failure? */
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Failed to extract rank from request\n");
 			break;
 		}
 
+		D_ALLOC_PTR(daos_resp);
+		if (daos_resp == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate daos response ref\n");
+			break;
+		}
+
 		proto__daos_response__init(daos_resp);
 
-		/* Process daos request and populate daos response,
-		 * errors should be indicated inside daos response */
+		/**
+		 * Process daos request and populate daos response,
+		 * command errors should be indicated inside daos response.
+		 */
 		process_daos_request(daos_rank, daos_resp);
 
 		proto__daos_rank__free_unpacked(daos_rank, NULL);
@@ -114,22 +123,19 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 		if (body == NULL) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Failed to allocate drpc response body\n");
-			proto__daos_rank__free_unpacked(daos_rank, NULL);
 			break;
 		}
 
-		/* Populate drpc response body with daos response. */
+		D_ERROR("daos response status: %d\n", daos_resp->status);
 		if (proto__daos_response__pack(daos_resp, body) != len) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Unexpected num bytes for daos resp\n");
-			proto__daos_rank__free_unpacked(daos_rank, NULL);
 			break;
 		}
 
+		/* Populate drpc response body with packed daos response */
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
-
-		proto__daos_rank__free_unpacked(daos_rank, NULL);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
@@ -137,8 +143,6 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 	}
 
 	*response = drpc_resp;
-	proto__daos_response__free_unpacked(daos_resp, NULL);
-	D_DEBUG(DB_MGMT, "response set in mgmt drpc hdlr\n");
 }
 
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
