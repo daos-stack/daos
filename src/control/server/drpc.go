@@ -33,7 +33,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-var sockFileName = "daos_server.sock"
+const (
+	initialSeq   = 1
+	sockFileName = "daos_server.sock"
+)
 
 func getDrpcClientSocket(sockDir string) string {
 	return filepath.Join(sockDir, "daos_io_server.sock")
@@ -104,9 +107,10 @@ func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.C
 	}
 
 	return &drpc.Call{
-		Module: module,
-		Method: method,
-		Body:   bodyBytes,
+		Module:   module,
+		Method:   method,
+		Sequence: initialSeq, // needs to be nonzero
+		Body:     bodyBytes,
 	}, nil
 }
 
