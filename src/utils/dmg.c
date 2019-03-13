@@ -424,6 +424,7 @@ pool_op_hdlr(int argc, char *argv[])
 		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 		int				 i;
 
+		pinfo.pi_bits = DPI_ALL;
 		rc = daos_pool_query(pool, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
