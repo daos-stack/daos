@@ -110,8 +110,10 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 
 		proto__daos_response__init(daos_resp);
 
-		/* Process daos request and populate daos response,
-		 * command errors should be indicated inside daos response */
+		/**
+		 * Process daos request and populate daos response,
+		 * command errors should be indicated inside daos response.
+		 */
 		process_daos_request(daos_rank, daos_resp);
 
 		proto__daos_rank__free_unpacked(daos_rank, NULL);
