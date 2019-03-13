@@ -21,12 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <daos_types.h>
-#include <daos_api.h>
+#include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
-
-#define	DAOS_ACL_VERSION		1
 
 /*
  * Comparison function for qsort. Compares by principal type.

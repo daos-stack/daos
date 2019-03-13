@@ -31,7 +31,7 @@
 #include <cmocka.h>
 
 #include <daos_types.h>
-#include <daos_api.h>
+#include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/errno.h>
 
