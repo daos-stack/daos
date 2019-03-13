@@ -2761,18 +2761,21 @@ ds_pool_attr_set_handler(crt_rpc_t *rpc)
 
 	rc = pool_svc_lookup_leader(in->pasi_op.pi_uuid, &svc, &out->po_hint);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	ABT_rwlock_wrlock(svc->ps_lock);
-
 	rc = ds_rsvc_set_attr(&svc->ps_rsvc, &tx, &svc->ps_user,
 			      in->pasi_bulk, rpc, in->pasi_count);
-	if (rc == 0)
-		rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		goto out_lock;
+
+	rc = rdb_tx_commit(&tx);
+
+out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -2799,11 +2802,11 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 
 	rc = pool_svc_lookup_leader(in->pagi_op.pi_uuid, &svc, &out->po_hint);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	ABT_rwlock_rdlock(svc->ps_lock);
 	rc = ds_rsvc_get_attr(&svc->ps_rsvc, &tx, &svc->ps_user, in->pagi_bulk,
@@ -2836,11 +2839,11 @@ ds_pool_attr_list_handler(crt_rpc_t *rpc)
 	rc = pool_svc_lookup_leader(in->pali_op.pi_uuid, &svc,
 				    &out->palo_op.po_hint);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	ABT_rwlock_rdlock(svc->ps_lock);
 	rc = ds_rsvc_list_attr(&svc->ps_rsvc, &tx, &svc->ps_user,

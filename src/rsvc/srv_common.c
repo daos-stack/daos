@@ -63,13 +63,15 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 	D_DEBUG(DB_MD, "%s: count=%lu, size=%lu\n", svc->s_name, count,
 		bulk_size);
 
 	D_ALLOC(data, bulk_size);
-	if (data == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (data == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = sgl.sg_nr;
@@ -78,12 +80,12 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
 			     CRT_BULK_RW, &local_bulk);
 	if (rc != 0)
-		D_GOTO(out_mem, rc);
+		goto out_mem;
 
 	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
 				remote_bulk, 0, 0, bulk_size);
 	if (rc != 0)
-		D_GOTO(out_bulk, rc);
+		goto out_bulk;
 
 	names = data;
 	/* go to the end of names array */
@@ -108,7 +110,7 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		if (rc != 0) {
 			D_ERROR("%s: failed to update attribute '%s': %d\n",
 				 svc->s_name, (char *) key.iov_buf, rc);
-			D_GOTO(out_bulk, rc);
+			goto out_bulk;
 		}
 	}
 
@@ -139,7 +141,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 	D_DEBUG(DB_MD, "%s: count=%lu, key_length=%lu, size=%lu\n",
 		svc->s_name, count, key_length, bulk_size);
 
@@ -147,13 +149,17 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	D_ASSERT(input_size <= bulk_size);
 
 	D_ALLOC(data, input_size);
-	if (data == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (data == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	/* for output sizes */
 	D_ALLOC_ARRAY(iovs, (int)(1 + count));
-	if (iovs == NULL)
-		D_GOTO(out_data, rc = -DER_NOMEM);
+	if (iovs == NULL) {
+		rc = -DER_NOMEM;
+		goto out_data;
+	}
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = sgl.sg_nr;
@@ -162,13 +168,13 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
 			     CRT_BULK_RW, &local_bulk);
 	if (rc != 0)
-		D_GOTO(out_iovs, rc);
+		goto out_iovs;
 
 	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
 				remote_bulk, 0, 0, input_size);
 	crt_bulk_free(local_bulk);
 	if (rc != 0)
-		D_GOTO(out_iovs, rc);
+		goto out_iovs;
 
 	names = data;
 	sizes = (size_t *)(names + key_length);
@@ -189,7 +195,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		if (rc != 0) {
 			D_ERROR("%s: failed to lookup attribute '%s': %d\n",
 				 svc->s_name, (char *) key.iov_buf, rc);
-			D_GOTO(out_iovs, rc);
+			goto out_iovs;
 		}
 		iovs[j].iov_buf_len = sizes[i];
 		sizes[i] = iovs[j].iov_len;
@@ -205,13 +211,13 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
 			     CRT_BULK_RO, &local_bulk);
 	if (rc != 0)
-		D_GOTO(out_iovs, rc);
+		goto out_iovs;
 
 	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk, remote_bulk,
 				0, key_length, bulk_size - key_length);
 	crt_bulk_free(local_bulk);
 	if (rc != 0)
-		D_GOTO(out_iovs, rc);
+		goto out_iovs;
 
 out_iovs:
 	D_FREE(iovs);
@@ -236,13 +242,15 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	if (remote_bulk) {
 		rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			goto out;
 		D_DEBUG(DB_MD, "%s: bulk_size=%lu\n", svc->s_name, bulk_size);
 
 		/* Start with 1 and grow as needed */
 		D_ALLOC_PTR(iter_args.iovs);
-		if (iter_args.iovs == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		if (iter_args.iovs == NULL) {
+			rc = -DER_NOMEM;
+			goto out;
+		}
 		iter_args.iov_count = 1;
 	} else {
 		bulk_size = 0;
@@ -256,7 +264,7 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			    attr_list_iter_cb, &iter_args);
 	*size = iter_args.length;
 	if (rc != 0)
-		D_GOTO(out_mem, rc);
+		goto out_mem;
 
 	if (iter_args.iov_index > 0) {
 		daos_sg_list_t	 sgl = {
@@ -267,7 +275,7 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
 				     CRT_BULK_RW, &local_bulk);
 		if (rc != 0)
-			D_GOTO(out_mem, rc);
+			goto out_mem;
 
 		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
 					remote_bulk, 0, 0,
@@ -310,18 +318,24 @@ attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
 			};
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
 
 	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
 	if (rc != 0)
-		D_GOTO(out_eventual, rc);
+		goto out_eventual;
 
 	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_eventual;
+	}
+	if (*status != 0) {
+		rc = *status;
+		goto out_eventual;
+	}
 
 out_eventual:
 	ABT_eventual_free(&eventual);
