@@ -225,9 +225,16 @@ principal_name_matches_ace(struct daos_ace *ace, const char *principal)
 
 static bool
 ace_matches_principal(struct daos_ace *ace,
-		      enum daos_acl_principal_type type, const char *principal,
-		      size_t principal_len)
+		      enum daos_acl_principal_type type, const char *principal)
 {
+	size_t principal_len;
+
+	if (principal == NULL || strlen(principal) == 0) {
+		principal_len = 0;
+	} else {
+		principal_len = strlen(principal) + 1;
+	}
+
 	return	(ace->dae_principal_type == type) &&
 		(ace->dae_principal_len == D_ALIGNUP(principal_len, 8)) &&
 		principal_name_matches_ace(ace, principal);
@@ -237,7 +244,7 @@ static bool
 principals_match(struct daos_ace *ace1, struct daos_ace *ace2)
 {
 	return ace_matches_principal(ace1, ace2->dae_principal_type,
-			ace2->dae_principal, ace2->dae_principal_len);
+			ace2->dae_principal);
 }
 
 /*
@@ -384,18 +391,16 @@ type_needs_name(enum daos_acl_principal_type type)
 
 static bool
 principal_meets_type_requirements(enum daos_acl_principal_type type,
-				  const char *principal_name,
-				  size_t principal_name_len)
+				  const char *principal_name)
 {
 	return	(!type_needs_name(type) ||
-		(principal_name != NULL && principal_name_len != 0));
+		(principal_name != NULL && strlen(principal_name) != 0));
 }
 
 int
 daos_acl_remove_ace(struct daos_acl **acl,
 		    enum daos_acl_principal_type type,
-		    const char *principal_name,
-		    size_t principal_name_len)
+		    const char *principal_name)
 {
 	struct daos_ace	*current;
 	struct daos_ace	*ace_to_remove;
@@ -405,8 +410,7 @@ daos_acl_remove_ace(struct daos_acl **acl,
 	int		rc;
 
 	if (acl == NULL || *acl == NULL || !type_is_valid(type) ||
-		!principal_meets_type_requirements(type, principal_name,
-				principal_name_len)) {
+		!principal_meets_type_requirements(type, principal_name)) {
 		return -DER_INVAL;
 	}
 
@@ -430,8 +434,7 @@ daos_acl_remove_ace(struct daos_acl **acl,
 	pen = new_acl->dal_ace;
 	current = daos_acl_get_next_ace(*acl, NULL);
 	while (current != NULL) {
-		if (!ace_matches_principal(current, type, principal_name,
-				principal_name_len)) {
+		if (!ace_matches_principal(current, type, principal_name)) {
 			pen = write_ace(current, pen);
 		}
 
@@ -528,8 +531,7 @@ type_is_group(enum daos_acl_principal_type type)
 }
 
 struct daos_ace *
-daos_ace_create(enum daos_acl_principal_type type, const char *principal_name,
-		size_t principal_name_len)
+daos_ace_create(enum daos_acl_principal_type type, const char *principal_name)
 {
 	struct daos_ace	*ace;
 	size_t		principal_array_len = 0;
@@ -539,12 +541,12 @@ daos_ace_create(enum daos_acl_principal_type type, const char *principal_name,
 	}
 
 	if (type_needs_name(type)) {
-		if (principal_name == NULL || principal_name_len == 0) {
+		if (principal_name == NULL || strlen(principal_name) == 0) {
 			return NULL;
 		}
 
 		/* align to 64 bits */
-		principal_array_len = D_ALIGNUP(principal_name_len, 8);
+		principal_array_len = D_ALIGNUP(strlen(principal_name) + 1, 8);
 	}
 
 	D_ALLOC(ace, sizeof(struct daos_ace) + principal_array_len);

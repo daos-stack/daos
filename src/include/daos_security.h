@@ -130,7 +130,6 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  * \param[in]	type			Principal type of the ACE to remove
  * \param[in]	principal_name		Principal name of the ACE to remove
  *					(NULL if type isn't user/group)
- * \param[in]	principal_name_len	Length of the principal_name string
  * \param[out]	new_acl			Reallocated copy of the ACL with the
  *					ACE removed
  *
@@ -142,8 +141,7 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
 int
 daos_acl_remove_ace(struct daos_acl **acl,
 		    enum daos_acl_principal_type type,
-		    const char *principal_name,
-		    size_t principal_name_len);
+		    const char *principal_name);
 
 /**
  * Allocate a new Access Control Entry with an appropriately aligned principal
@@ -155,14 +153,12 @@ daos_acl_remove_ace(struct daos_acl **acl,
  * \param[in]	principal_name		Principal name will be added to the end
  *					of the structure. For types that don't
  *					use it, it is ignored. OK to pass NULL.
- * \param[in]	principal_name_len	Length of the principal_name string
  *
  * \return	New ACE structure with an appropriately packed principal name,
  *			length, and type set.
  */
 struct daos_ace *
-daos_ace_create(enum daos_acl_principal_type type, const char *principal_name,
-		size_t principal_name_len);
+daos_ace_create(enum daos_acl_principal_type type, const char *principal_name);
 
 /**
  * Free an Access Control Entry allocated by daos_ace_alloc().

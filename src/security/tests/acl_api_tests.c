@@ -50,8 +50,7 @@ test_ace_alloc_principal_user(void **state)
 	enum daos_acl_principal_type	expected_type = DAOS_ACL_USER;
 	struct daos_ace			*ace;
 
-	ace = daos_ace_create(expected_type, expected_name,
-			sizeof(expected_name));
+	ace = daos_ace_create(expected_type, expected_name);
 
 	assert_non_null(ace);
 	assert_int_equal(ace->dae_principal_type, expected_type);
@@ -67,18 +66,17 @@ test_ace_alloc_principal_user_no_name(void **state)
 {
 	struct daos_ace *ace;
 
-	ace = daos_ace_create(DAOS_ACL_USER, "", 0);
+	ace = daos_ace_create(DAOS_ACL_USER, "");
 
 	assert_null(ace);
 }
 
 static void
-test_ace_alloc_principal_user_bad_len(void **state)
+test_ace_alloc_principal_user_null_name(void **state)
 {
 	struct daos_ace *ace;
 
-	/* nonzero len for NULL name is invalid */
-	ace = daos_ace_create(DAOS_ACL_USER, NULL, 5);
+	ace = daos_ace_create(DAOS_ACL_USER, NULL);
 
 	assert_null(ace);
 }
@@ -90,8 +88,7 @@ test_ace_alloc_principal_group(void **state)
 	enum daos_acl_principal_type	expected_type = DAOS_ACL_GROUP;
 	struct daos_ace			*ace;
 
-	ace = daos_ace_create(expected_type, expected_name,
-			sizeof(expected_name));
+	ace = daos_ace_create(expected_type, expected_name);
 
 	assert_non_null(ace);
 	assert_int_equal(ace->dae_principal_type, expected_type);
@@ -107,7 +104,7 @@ test_ace_alloc_principal_group_no_name(void **state)
 {
 	struct daos_ace *ace;
 
-	ace = daos_ace_create(DAOS_ACL_GROUP, "", 0);
+	ace = daos_ace_create(DAOS_ACL_GROUP, "");
 
 	assert_null(ace);
 }
@@ -126,7 +123,7 @@ test_ace_alloc_principal_owner(void **state)
 {
 	struct daos_ace *ace;
 
-	ace = daos_ace_create(DAOS_ACL_OWNER, "", 0);
+	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
 
 	expect_valid_owner_ace(ace);
 
@@ -139,19 +136,7 @@ test_ace_alloc_principal_owner_ignores_name(void **state)
 	const char	name[] = "owner@";
 	struct daos_ace	*ace;
 
-	ace = daos_ace_create(DAOS_ACL_OWNER, name, sizeof(name));
-
-	expect_valid_owner_ace(ace);
-
-	daos_ace_free(ace);
-}
-
-static void
-test_ace_alloc_principal_owner_ignores_len(void **state)
-{
-	struct daos_ace *ace;
-
-	ace = daos_ace_create(DAOS_ACL_OWNER, NULL, 6);
+	ace = daos_ace_create(DAOS_ACL_OWNER, name);
 
 	expect_valid_owner_ace(ace);
 
@@ -164,7 +149,7 @@ test_ace_alloc_principal_owner_group(void **state)
 	enum daos_acl_principal_type	expected_type = DAOS_ACL_OWNER_GROUP;
 	struct daos_ace			*ace;
 
-	ace = daos_ace_create(expected_type, NULL, 0);
+	ace = daos_ace_create(expected_type, NULL);
 
 	assert_non_null(ace);
 	assert_int_equal(ace->dae_principal_type, expected_type);
@@ -180,7 +165,7 @@ test_ace_alloc_principal_everyone(void **state)
 	enum daos_acl_principal_type	expected_type = DAOS_ACL_EVERYONE;
 	struct daos_ace			*ace;
 
-	ace = daos_ace_create(expected_type, NULL, 0);
+	ace = daos_ace_create(expected_type, NULL);
 
 	assert_non_null(ace);
 	assert_int_equal(ace->dae_principal_type, expected_type);
@@ -195,7 +180,7 @@ test_ace_alloc_principal_invalid(void **state)
 {
 	struct daos_ace *ace;
 
-	ace = daos_ace_create(DAOS_ACL_EVERYONE + 0xFF, "", 0);
+	ace = daos_ace_create(DAOS_ACL_EVERYONE + 0xFF, "");
 
 	assert_null(ace);
 }
@@ -211,7 +196,7 @@ test_ace_get_size_without_name(void **state)
 {
 	struct daos_ace	*ace;
 
-	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
 	assert_int_equal(daos_ace_get_size(ace), sizeof(struct daos_ace));
 
@@ -224,7 +209,7 @@ test_ace_get_size_with_name(void **state)
 	const char	name[] = "group1@";
 	struct daos_ace	*ace;
 
-	ace = daos_ace_create(DAOS_ACL_GROUP, name, sizeof(name));
+	ace = daos_ace_create(DAOS_ACL_GROUP, name);
 
 	/* name string rounded up to 64 bits */
 	assert_int_equal(daos_ace_get_size(ace), sizeof(struct daos_ace) +
@@ -252,7 +237,7 @@ test_acl_alloc_one_user(void **state)
 	struct daos_ace *ace[1];
 	const char	name[] = "user1@";
 
-	ace[0] = daos_ace_create(DAOS_ACL_USER, name, sizeof(name));
+	ace[0] = daos_ace_create(DAOS_ACL_USER, name);
 
 	acl = daos_acl_create(ace, 1);
 
@@ -275,8 +260,7 @@ fill_ace_list_with_users(struct daos_ace *ace[], size_t num_aces)
 		char name[256];
 
 		snprintf(name, sizeof(name), "user%d@", i + 1);
-		ace[i] = daos_ace_create(DAOS_ACL_USER, name,
-				strlen(name) + 1);
+		ace[i] = daos_ace_create(DAOS_ACL_USER, name);
 	}
 }
 
@@ -337,13 +321,11 @@ fill_ace_list_with_all_types_shuffled(struct daos_ace *ace[],
 		const char *user_name, const char *group_name)
 {
 	/* Shuffled order */
-	ace[0] = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
-	ace[1] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL, 0);
-	ace[2] = daos_ace_create(DAOS_ACL_USER, user_name,
-			strlen(user_name) + 1);
-	ace[3] = daos_ace_create(DAOS_ACL_OWNER, NULL, 0);
-	ace[4] = daos_ace_create(DAOS_ACL_GROUP, group_name,
-			strlen(group_name) + 1);
+	ace[0] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
+	ace[1] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
+	ace[2] = daos_ace_create(DAOS_ACL_USER, user_name);
+	ace[3] = daos_ace_create(DAOS_ACL_OWNER, NULL);
+	ace[4] = daos_ace_create(DAOS_ACL_GROUP, group_name);
 }
 
 static void
@@ -398,7 +380,7 @@ test_acl_alloc_null_ace(void **state)
 	size_t		num_aces = 2;
 	struct daos_ace *ace[num_aces];
 
-	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL, 0);
+	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL);
 	ace[1] = NULL;
 
 	acl = daos_acl_create(ace, num_aces);
@@ -489,7 +471,7 @@ test_acl_get_first_ace_multiple(void **state)
 static void
 test_acl_get_next_ace_null_acl(void **state)
 {
-	struct daos_ace *ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	struct daos_ace *ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
 	assert_null(daos_acl_get_next_ace(NULL, ace));
 
@@ -782,7 +764,7 @@ test_acl_add_ace_with_null_acl_ptr(void **state)
 {
 	struct daos_ace *ace;
 
-	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
 	assert_int_equal(daos_acl_add_ace(NULL, ace),
 			-DER_INVAL);
@@ -796,7 +778,7 @@ test_acl_add_ace_with_null_acl(void **state)
 	struct daos_ace *ace;
 	struct daos_acl *acl = NULL;
 
-	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
 	assert_int_equal(daos_acl_add_ace(&acl, ace),
 			-DER_INVAL);
@@ -843,7 +825,7 @@ test_acl_add_ace_without_name(void **state)
 {
 	struct daos_ace *ace;
 
-	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	ace->dae_allow_perms = DAOS_ACL_PERM_READ;
 
@@ -858,7 +840,7 @@ test_acl_add_ace_with_name(void **state)
 	struct daos_ace	*ace;
 	const char	name[] = "myuser@";
 
-	ace = daos_ace_create(DAOS_ACL_USER, name, sizeof(name));
+	ace = daos_ace_create(DAOS_ACL_USER, name);
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	ace->dae_allow_perms = DAOS_ACL_PERM_READ;
 
@@ -878,13 +860,11 @@ fill_ace_list_with_all_types(struct daos_ace *ace[],
 
 	for (i = 0; i < (DAOS_ACL_EVERYONE + 1); i++) {
 		if (i == DAOS_ACL_USER) {
-			ace[i] = daos_ace_create(DAOS_ACL_USER, user_name,
-					strlen(user_name) + 1);
+			ace[i] = daos_ace_create(DAOS_ACL_USER, user_name);
 		} else if (i == DAOS_ACL_GROUP) {
-			ace[i] = daos_ace_create(DAOS_ACL_GROUP, group_name,
-					strlen(group_name) + 1);
+			ace[i] = daos_ace_create(DAOS_ACL_GROUP, group_name);
 		} else {
-			ace[i] = daos_ace_create(i, NULL, 0);
+			ace[i] = daos_ace_create(i, NULL);
 		}
 	}
 }
@@ -950,8 +930,7 @@ test_acl_add_ace_user_to_existing_list(void **state)
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
 
-	new_ace = daos_ace_create(DAOS_ACL_USER, new_ace_name,
-			sizeof(new_ace_name));
+	new_ace = daos_ace_create(DAOS_ACL_USER, new_ace_name);
 
 	expect_ace_inserted_at_correct_location(ace, num_aces, new_ace);
 
@@ -970,8 +949,7 @@ test_acl_add_ace_group_to_existing_list(void **state)
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
 
-	new_ace = daos_ace_create(DAOS_ACL_GROUP, new_ace_name,
-			sizeof(new_ace_name));
+	new_ace = daos_ace_create(DAOS_ACL_GROUP, new_ace_name);
 
 	expect_ace_inserted_at_correct_location(ace, num_aces, new_ace);
 
@@ -989,14 +967,12 @@ test_acl_add_ace_owner_to_existing_list(void **state)
 	const char	user_name[] = "user1@";
 	const char	group_name[] = "group1@";
 
-	ace[0] = daos_ace_create(DAOS_ACL_USER, user_name,
-			sizeof(user_name));
-	ace[1] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL, 0);
-	ace[2] = daos_ace_create(DAOS_ACL_GROUP, group_name,
-			sizeof(group_name));
-	ace[3] = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	ace[0] = daos_ace_create(DAOS_ACL_USER, user_name);
+	ace[1] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
+	ace[2] = daos_ace_create(DAOS_ACL_GROUP, group_name);
+	ace[3] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
-	new_ace = daos_ace_create(DAOS_ACL_OWNER, NULL, 0);
+	new_ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
 
 	expect_ace_inserted_at_correct_location(ace, num_aces, new_ace);
 
@@ -1014,14 +990,12 @@ test_acl_add_ace_owner_group_to_existing_list(void **state)
 	const char	user_name[] = "user1@";
 	const char	group_name[] = "group1@";
 
-	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL, 0);
-	ace[1] = daos_ace_create(DAOS_ACL_USER, user_name,
-			sizeof(user_name));
-	ace[2] = daos_ace_create(DAOS_ACL_GROUP, group_name,
-			sizeof(group_name));
-	ace[3] = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL);
+	ace[1] = daos_ace_create(DAOS_ACL_USER, user_name);
+	ace[2] = daos_ace_create(DAOS_ACL_GROUP, group_name);
+	ace[3] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
-	new_ace = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL, 0);
+	new_ace = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
 
 	expect_ace_inserted_at_correct_location(ace, num_aces, new_ace);
 
@@ -1039,14 +1013,12 @@ test_acl_add_ace_everyone_to_existing_list(void **state)
 	const char	user_name[] = "user1@";
 	const char	group_name[] = "group1@";
 
-	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL, 0);
-	ace[1] = daos_ace_create(DAOS_ACL_USER, user_name,
-			sizeof(user_name));
-	ace[2] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL, 0);
-	ace[3] = daos_ace_create(DAOS_ACL_GROUP, group_name,
-			sizeof(group_name));
+	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL);
+	ace[1] = daos_ace_create(DAOS_ACL_USER, user_name);
+	ace[2] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
+	ace[3] = daos_ace_create(DAOS_ACL_GROUP, group_name);
 
-	new_ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	new_ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
 	expect_ace_inserted_at_correct_location(ace, num_aces, new_ace);
 
@@ -1118,7 +1090,7 @@ test_acl_add_ace_replace(void **state)
 	orig_acl = daos_acl_copy(acl);
 
 	/* Create an updated ACE */
-	new_ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL, 0);
+	new_ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	new_ace->dae_access_flags = DAOS_ACL_FLAG_ACCESS_FAIL |
 			DAOS_ACL_FLAG_POOL_INHERIT;
 	new_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW |
@@ -1150,8 +1122,8 @@ test_acl_remove_ace_null_acl_ptr(void **state)
 {
 	struct daos_acl	*result_acl = NULL;
 
-	assert_int_equal(daos_acl_remove_ace(NULL, DAOS_ACL_EVERYONE,
-			NULL, 0), -DER_INVAL);
+	assert_int_equal(daos_acl_remove_ace(NULL, DAOS_ACL_EVERYONE, NULL),
+			-DER_INVAL);
 
 	assert_null(result_acl);
 }
@@ -1161,8 +1133,8 @@ test_acl_remove_ace_null_acl(void **state)
 {
 	struct daos_acl	*acl = NULL;
 
-	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_EVERYONE,
-			NULL, 0), -DER_INVAL);
+	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_EVERYONE, NULL),
+			-DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1179,8 +1151,8 @@ test_acl_remove_ace_invalid_type(void **state)
 	acl = daos_acl_create(ace, num_aces);
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_EVERYONE + 1, ace[0]->dae_principal,
-			ace[0]->dae_principal_len), -DER_INVAL);
+			DAOS_ACL_EVERYONE + 1, ace[0]->dae_principal),
+			-DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1197,7 +1169,7 @@ expect_acl_remove_ace_missing_name_fails(enum daos_acl_principal_type type)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl, type, NULL, 5), -DER_INVAL);
+	assert_int_equal(daos_acl_remove_ace(&acl, type, NULL), -DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1222,10 +1194,10 @@ test_acl_remove_ace_name_len_zero(void **state)
 	acl = daos_acl_create(ace, num_aces);
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_USER, "user1@", 0), -DER_INVAL);
+			DAOS_ACL_USER, ""), -DER_INVAL);
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_GROUP, "group1@", 0), -DER_INVAL);
+			DAOS_ACL_GROUP, ""), -DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1243,8 +1215,7 @@ test_acl_remove_ace_one_user(void **state)
 	acl = daos_acl_create(ace, num_aces);
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
-			ace[0]->dae_principal_type, ace[0]->dae_principal,
-			ace[0]->dae_principal_len), DER_SUCCESS);
+			ace[0]->dae_principal_type, ace[0]->dae_principal), 0);
 
 	/* Result should be empty ACL */
 	assert_non_null(acl);
@@ -1271,9 +1242,8 @@ test_acl_remove_ace_multi_user(void **state)
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
 			ace[removed_idx]->dae_principal_type,
-			ace[removed_idx]->dae_principal,
-			ace[removed_idx]->dae_principal_len),
-			DER_SUCCESS);
+			ace[removed_idx]->dae_principal),
+			0);
 
 	/* Result should have only removed that user */
 	assert_non_null(acl);
@@ -1304,7 +1274,7 @@ test_acl_remove_ace_multi_user(void **state)
 
 static void
 expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
-		const char *principal, size_t principal_len)
+		const char *principal)
 {
 	int		num_aces = DAOS_ACL_EVERYONE + 1;
 	struct daos_ace	*ace[num_aces];
@@ -1316,8 +1286,7 @@ expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 	acl = daos_acl_create(ace, num_aces);
 	orig_acl = daos_acl_copy(acl);
 
-	assert_int_equal(daos_acl_remove_ace(&acl, type, principal,
-			principal_len), DER_SUCCESS);
+	assert_int_equal(daos_acl_remove_ace(&acl, type, principal), 0);
 
 	/* Result should have the specific ACE removed */
 	assert_non_null(acl);
@@ -1335,13 +1304,13 @@ expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 static void
 test_acl_remove_ace_first(void **state)
 {
-	expect_acl_remove_ace_removes_principal(DAOS_ACL_OWNER, NULL, 0);
+	expect_acl_remove_ace_removes_principal(DAOS_ACL_OWNER, NULL);
 }
 
 static void
 test_acl_remove_ace_last(void **state)
 {
-	expect_acl_remove_ace_removes_principal(DAOS_ACL_EVERYONE, NULL, 0);
+	expect_acl_remove_ace_removes_principal(DAOS_ACL_EVERYONE, NULL);
 }
 
 static void
@@ -1350,10 +1319,8 @@ test_acl_remove_ace_with_name(void **state)
 	const char user_name[] = "user1@";
 	const char group_name[] = "group1@";
 
-	expect_acl_remove_ace_removes_principal(DAOS_ACL_USER, user_name,
-			sizeof(user_name));
-	expect_acl_remove_ace_removes_principal(DAOS_ACL_GROUP, group_name,
-			sizeof(group_name));
+	expect_acl_remove_ace_removes_principal(DAOS_ACL_USER, user_name);
+	expect_acl_remove_ace_removes_principal(DAOS_ACL_GROUP, group_name);
 }
 
 static void
@@ -1367,8 +1334,8 @@ test_acl_remove_ace_not_found(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_USER,
-			name, sizeof(name)), -DER_NONEXIST);
+	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_USER, name),
+			-DER_NONEXIST);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1381,12 +1348,11 @@ main(void)
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test(test_ace_alloc_principal_user),
 		cmocka_unit_test(test_ace_alloc_principal_user_no_name),
-		cmocka_unit_test(test_ace_alloc_principal_user_bad_len),
+		cmocka_unit_test(test_ace_alloc_principal_user_null_name),
 		cmocka_unit_test(test_ace_alloc_principal_group),
 		cmocka_unit_test(test_ace_alloc_principal_group_no_name),
 		cmocka_unit_test(test_ace_alloc_principal_owner),
 		cmocka_unit_test(test_ace_alloc_principal_owner_ignores_name),
-		cmocka_unit_test(test_ace_alloc_principal_owner_ignores_len),
 		cmocka_unit_test(test_ace_alloc_principal_owner_group),
 		cmocka_unit_test(test_ace_alloc_principal_everyone),
 		cmocka_unit_test(test_ace_alloc_principal_invalid),
