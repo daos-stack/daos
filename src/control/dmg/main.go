@@ -35,33 +35,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ShowStorageCommand is the struct representing the command to list storage.
-type ShowStorageCommand struct{}
-
-// Execute is run when ShowStorageCommand activates
-func (s *ShowStorageCommand) Execute(args []string) error {
-	// TODO: implement configuration file parsing
-	if opts.ConfigPath != "" {
-		return errors.New("config-path option not implemented")
-	}
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
-	}
-	fmt.Printf(
-		checkAndFormat(conns.ListNvme()),
-		"NVMe SSD controller and constituent namespace")
-	fmt.Printf(checkAndFormat(conns.ListScm()), "SCM module")
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
-	return nil
-}
-
 type cliOptions struct {
-	Hostlist    string             `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
-	Hostfile    string             `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	Hostlist string `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	// TODO: implement host file parsing
+	Hostfile string `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	// TODO: implement client side configuration file parsing
 	ConfigPath  string             `short:"o" long:"config-path" description:"Client config file path"`
 	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+	KillRank    KillRankCommand    `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
 }
 
 var (

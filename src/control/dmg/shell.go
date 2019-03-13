@@ -117,7 +117,7 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			c.Print("Kill Rank succeeding on all active connections!")
+			c.Print("Kill Rank succeeding on all active connections!\n")
 		},
 	})
 
