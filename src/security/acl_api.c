@@ -456,12 +456,6 @@ is_in_ace_list(uint8_t *addr, struct daos_acl *acl)
 	return addr >= start_addr && addr < end_addr;
 }
 
-static bool
-is_first_ace(struct daos_acl *acl, struct daos_ace *ace)
-{
-	return (ace == NULL && acl->dal_len > 0);
-}
-
 struct daos_ace *
 daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 {
@@ -471,7 +465,8 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 		return NULL;
 	}
 
-	if (is_first_ace(acl, current_ace)) {
+	/* requested the first ACE */
+	if (current_ace == NULL && acl->dal_len > 0) {
 		return (struct daos_ace *)acl->dal_ace;
 	}
 
