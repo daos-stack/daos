@@ -62,7 +62,7 @@ flatten_aces(uint8_t *buffer, uint32_t buf_len, struct daos_ace *aces[],
 
 	pen = buffer;
 	for (i = 0; i < num_aces; i++) {
-		int ace_size = daos_ace_get_size(aces[i]);
+		ssize_t ace_size = daos_ace_get_size(aces[i]);
 
 		/* Internal error if we walk outside the buffer */
 		D_ASSERTF((pen + ace_size) <= (buffer + buf_len),
@@ -85,7 +85,7 @@ get_flattened_ace_size(struct daos_ace *aces[], uint16_t num_aces)
 	int	total_size = 0;
 
 	for (i = 0; i < num_aces; i++) {
-		int len = daos_ace_get_size(aces[i]);
+		ssize_t len = daos_ace_get_size(aces[i]);
 
 		if (len < 0) {
 			return len;
@@ -263,8 +263,8 @@ acl_already_has_principal(struct daos_acl *acl,
 int
 daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace)
 {
-	int		new_len;
-	int		new_ace_len;
+	uint32_t	new_len;
+	ssize_t		new_ace_len;
 	struct daos_acl	*new_acl;
 
 	if (acl == NULL || *acl == NULL) {
@@ -520,7 +520,7 @@ daos_ace_free(struct daos_ace *ace)
 	D_FREE(ace);
 }
 
-int
+ssize_t
 daos_ace_get_size(struct daos_ace *ace)
 {
 	if (ace == NULL) {

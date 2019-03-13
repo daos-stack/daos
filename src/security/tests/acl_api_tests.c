@@ -280,10 +280,10 @@ fill_ace_list_with_users(struct daos_ace *ace[], size_t num_aces)
 	}
 }
 
-static size_t
+static ssize_t
 get_total_ace_list_size(struct daos_ace *ace[], size_t num_aces)
 {
-	int ace_len = 0;
+	ssize_t ace_len = 0;
 	int i;
 
 	for (i = 0; i < num_aces; i++) {
@@ -307,7 +307,7 @@ static void
 test_acl_alloc_two_users(void **state)
 {
 	struct daos_acl *acl;
-	int		ace_len;
+	ssize_t		ace_len;
 	size_t		num_aces = 2;
 	struct daos_ace *ace[num_aces];
 
@@ -351,7 +351,7 @@ test_acl_alloc_type_order(void **state)
 {
 	struct daos_acl			*acl;
 	int				i;
-	int				ace_len = 0;
+	ssize_t				ace_len = 0;
 	size_t				num_aces = DAOS_ACL_EVERYONE + 1;
 	struct daos_ace			*ace[num_aces];
 	const char			group_name[] = "mygroup@";
@@ -889,12 +889,12 @@ fill_ace_list_with_all_types(struct daos_ace *ace[],
 	}
 }
 
-static size_t
+static ssize_t
 get_offset_for_type(enum daos_acl_principal_type type,
 		struct daos_ace *ace[], int num_aces)
 {
 	int	i;
-	size_t	offset = 0;
+	ssize_t	offset = 0;
 
 	/* Expect it to be inserted at the end of its own type list */
 	for (i = 0; i < num_aces; i++) {
@@ -914,7 +914,7 @@ expect_ace_inserted_at_correct_location(struct daos_ace *ace[], int num_aces,
 {
 	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
-	size_t		expected_len = 0;
+	ssize_t		expected_len = 0;
 
 	expected_len = get_total_ace_list_size(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);

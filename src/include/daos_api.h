@@ -365,9 +365,10 @@ daos_ace_free(struct daos_ace *ace);
  *
  * \param[in]	ace	ACE to get the size of
  *
- * \return	Size of ACE in bytes
+ * \return	Success		Size of ACE in bytes
+ *		-DER_INVAL	Invalid input
  */
-int
+ssize_t
 daos_ace_get_size(struct daos_ace *ace);
 
 /**
