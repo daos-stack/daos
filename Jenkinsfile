@@ -65,6 +65,12 @@ pipeline {
     }
 
     stages {
+        stage('Cancel Previous Builds') {
+            when { changeRequest() }
+            steps {
+                cancelPreviousBuilds()
+            }
+        }
         stage('Pre-build') {
             parallel {
                 stage('checkpatch') {

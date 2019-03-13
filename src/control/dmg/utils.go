@@ -31,7 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func hasConnections(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
+func hasConnections(addrs client.Addresses, eMap client.ErrorMap) (
 	out string) {
 
 	out = sprintConns(addrs, eMap)
@@ -41,7 +41,7 @@ func hasConnections(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
 	return
 }
 
-func sprintConns(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
+func sprintConns(addrs client.Addresses, eMap client.ErrorMap) (
 	out string) {
 
 	// map keys always processed in order
