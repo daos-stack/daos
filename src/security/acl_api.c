@@ -43,9 +43,54 @@ compare_aces(const void *p1, const void *p2)
 }
 
 static void
-sort_aces_by_principal_type(struct daos_ace *aces[], uint16_t num_aces)
+free_ace_array(struct daos_ace **aces, uint16_t num_aces)
 {
-	qsort(aces, num_aces, sizeof(struct daos_ace *), compare_aces);
+	uint16_t i;
+
+	for (i = 0; i < num_aces; i++) {
+		daos_ace_free(aces[i]);
+	}
+
+	D_FREE(aces);
+}
+
+static struct daos_ace **
+copy_ace_array(struct daos_ace *aces[], uint16_t num_aces)
+{
+	struct daos_ace	**copy;
+	uint16_t	i;
+
+	D_ALLOC_ARRAY(copy, num_aces);
+	if (copy == NULL) {
+		return NULL;
+	}
+
+	for (i = 0; i < num_aces; i++) {
+		D_ALLOC(copy[i], daos_ace_get_size(aces[i]));
+		if (copy[i] == NULL) {
+			free_ace_array(copy, num_aces);
+			return NULL;
+		}
+
+		memcpy(copy[i], aces[i], daos_ace_get_size(aces[i]));
+	}
+
+	return copy;
+}
+
+static struct daos_ace **
+get_copy_sorted_by_principal_type(struct daos_ace *aces[], uint16_t num_aces)
+{
+	struct daos_ace	**copy;
+
+	copy = copy_ace_array(aces, num_aces);
+	if (copy == NULL) {
+		return NULL;
+	}
+
+	qsort(copy, num_aces, sizeof(struct daos_ace *), compare_aces);
+
+	return copy;
 }
 
 /*
@@ -111,6 +156,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces)
 {
 	struct daos_acl	*acl;
 	int		ace_len;
+	struct daos_ace	**sorted_aces;
 
 	ace_len = get_flattened_ace_size(aces, num_aces);
 	if (ace_len < 0) {
@@ -118,17 +164,23 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces)
 		return NULL;
 	}
 
-	sort_aces_by_principal_type(aces, num_aces);
+	sorted_aces = get_copy_sorted_by_principal_type(aces, num_aces);
+	if (sorted_aces == NULL) {
+		return NULL;
+	}
 
 	D_ALLOC(acl, get_daos_acl_size(ace_len));
 	if (acl == NULL) {
+		free_ace_array(sorted_aces, num_aces);
 		return NULL;
 	}
 
 	acl->dal_ver = DAOS_ACL_VERSION;
 	acl->dal_len = ace_len;
 
-	flatten_aces(acl->dal_ace, acl->dal_len, aces, num_aces);
+	flatten_aces(acl->dal_ace, acl->dal_len, sorted_aces, num_aces);
+
+	free_ace_array(sorted_aces, num_aces);
 
 	return acl;
 }
