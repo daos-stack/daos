@@ -276,13 +276,16 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace);
  * \param[in]	type		Principal type to search for
  * \param[in]	principal	Principal name, if type is USER or GROUP. NULL
  *				otherwise.
+ * \param[out]	ace		Pointer to matching ACE within ACL (not a copy)
  *
- * \return	Pointer to the matching ACE, or NULL if not found
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	Matching ACE not found
  */
-struct daos_ace *
+int
 daos_acl_get_ace_for_principal(struct daos_acl *acl,
 			       enum daos_acl_principal_type type,
-			       const char *principal);
+			       const char *principal, struct daos_ace **ace);
 
 /**
  * Insert an Access Control Entry in the appropriate location in the ACE
@@ -321,7 +324,7 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  * \return	0		Success
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Failed to allocate required memory
- *		-DER_NOEXIST	Requested ACE was not in the ACL
+ *		-DER_NONEXIST	Requested ACE was not in the ACL
  */
 int
 daos_acl_remove_ace(struct daos_acl **acl,

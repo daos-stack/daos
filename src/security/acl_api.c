@@ -254,8 +254,10 @@ acl_already_has_principal(struct daos_acl *acl,
 		enum daos_acl_principal_type type,
 		const char *principal_name)
 {
-	return daos_acl_get_ace_for_principal(acl, type, principal_name) !=
-			NULL;
+	struct daos_ace *result = NULL;
+
+	return (daos_acl_get_ace_for_principal(acl, type, principal_name,
+			&result) == 0);
 }
 
 int
@@ -351,6 +353,7 @@ daos_acl_remove_ace(struct daos_acl **acl,
 	struct daos_acl	*new_acl;
 	uint32_t	new_len;
 	uint8_t		*pen;
+	int		rc;
 
 	if (acl == NULL || *acl == NULL || !type_is_valid(type) ||
 		!principal_meets_type_requirements(type, principal_name,
@@ -358,11 +361,11 @@ daos_acl_remove_ace(struct daos_acl **acl,
 		return -DER_INVAL;
 	}
 
-	ace_to_remove = daos_acl_get_ace_for_principal(*acl, type,
-			principal_name);
-	if (ace_to_remove == NULL) {
+	rc = daos_acl_get_ace_for_principal(*acl, type,
+			principal_name, &ace_to_remove);
+	if (rc != 0) {
 		/* requested principal not in the list */
-		return -DER_NONEXIST;
+		return rc;
 	}
 
 	new_len = (*acl)->dal_len - daos_ace_get_size(ace_to_remove);
@@ -434,16 +437,16 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 	return (struct daos_ace *)((uint8_t *)current_ace + offset);
 }
 
-struct daos_ace *
+int
 daos_acl_get_ace_for_principal(struct daos_acl *acl,
 			       enum daos_acl_principal_type type,
-			       const char *principal)
+			       const char *principal, struct daos_ace **ace)
 {
 	struct daos_ace *result;
 
-	if (acl == NULL || !type_is_valid(type) ||
-		(type_needs_name(type) && principal == NULL)) {
-		return NULL;
+	if (acl == NULL || ace == NULL || !type_is_valid(type) ||
+	    (type_needs_name(type) && principal == NULL)) {
+		return -DER_INVAL;
 	}
 
 	result = daos_acl_get_next_ace(acl, NULL);
@@ -456,10 +459,14 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
 		result = daos_acl_get_next_ace(acl, result);
 	}
 
-	return result;
+	if (result == NULL) {
+		return -DER_NONEXIST;
+	}
+
+	*ace = result;
+
+	return 0;
 }
-
-
 
 static bool
 type_is_group(enum daos_acl_principal_type type)
