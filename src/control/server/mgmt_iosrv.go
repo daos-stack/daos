@@ -40,13 +40,11 @@ func (c *controlService) callDrpcMethodWithMessage(
 
 	drpcResp, err := makeDrpcCall(c.drpc, mgmtModuleID, methodID, body)
 	if err != nil {
-		fmt.Printf("%+v\n", err)
 		return nil, errors.WithStack(err)
 	}
 
-	fmt.Printf("%+v\n", drpcResp)
-	resp = &pb.DaosResponse{}
 	// unmarsal daos response message returned in drpc response body
+	resp = &pb.DaosResponse{}
 	err = proto.Unmarshal(drpcResp.Body, resp)
 	if err != nil {
 		return nil, fmt.Errorf("invalid dRPC response body: %v", err)
@@ -55,9 +53,9 @@ func (c *controlService) callDrpcMethodWithMessage(
 	return
 }
 
+// KillRank implements the method defined for the MgmtControl protobuf service.
 func (c *controlService) KillRank(
 	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResponse, error) {
 
-	// TODO: handle KillRank response
 	return c.callDrpcMethodWithMessage(killRank, rank)
 }

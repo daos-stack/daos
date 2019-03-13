@@ -126,7 +126,6 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 			break;
 		}
 
-		D_ERROR("daos response status: %d\n", daos_resp->status);
 		if (proto__daos_response__pack(daos_resp, body) != len) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Unexpected num bytes for daos resp\n");
