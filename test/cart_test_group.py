@@ -91,10 +91,6 @@ class TestGroup(commontestsuite.CommonTestSuite):
     def tearDown(self):
         """tear down the test"""
         self.logger.info("tearDown begin")
-        os.environ.pop("CRT_PHY_ADDR_STR", "")
-        os.environ.pop("OFI_INTERFACE", "")
-        os.environ.pop("D_LOG_MASK", "")
-        os.environ.pop("D_FI_CONFIG", "")
         self.logger.info("tearDown end\n")
 
     def test_group_one_node(self):

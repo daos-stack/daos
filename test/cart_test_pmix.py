@@ -69,7 +69,6 @@ class TestPMIx(commontestsuite.CommonTestSuite):
     def tearDown(self):
         """tear down the test"""
         self.logger.info("tearDown begin")
-        os.environ.pop("D_LOG_MASK", "")
         self.logger.info("tearDown end\n")
 
     def test_pmix_one_node(self):

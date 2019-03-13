@@ -81,10 +81,6 @@ class TestCorpcPreFwd(commontestsuite.CommonTestSuite):
     def tearDown(self):
         """tear down the test"""
         self.logger.info("tearDown begin")
-        os.environ.pop("CRT_PHY_ADDR_STR", "")
-        os.environ.pop("OFI_INTERFACE", "")
-        os.environ.pop("D_LOG_MASK", "")
-        os.environ.pop("CRT_TEST_SERVER", "")
         self.logger.info("tearDown end\n")
 
     def test_corpc_version(self):

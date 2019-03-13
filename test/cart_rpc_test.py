@@ -91,9 +91,6 @@ class TestRpc(commontestsuite.CommonTestSuite):
         self.logger.info("tearDown begin")
         self.logger.info("tearDown removing temp directory")
         shutil.rmtree(self.tempdir)
-        os.environ.pop("CRT_PHY_ADDR_STR", "")
-        os.environ.pop("OFI_INTERFACE", "")
-        os.environ.pop("D_LOG_MASK", "")
         self.logger.info("tearDown end\n")
 
     def test_rpc_node(self):
