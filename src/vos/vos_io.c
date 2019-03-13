@@ -733,7 +733,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
-	if (iod_csum)
+	if (daos_csum_isvalid(iod_csum))
 		ent.ei_csum = *iod_csum;
 
 	biov = iod_update_biov(ioc);
