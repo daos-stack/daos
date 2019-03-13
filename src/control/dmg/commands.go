@@ -54,8 +54,8 @@ func (s *ShowStorageCommand) Execute(args []string) error {
 // KillRankCommand is the struct representing the command to kill server
 // identified by rank on given pool identified by uuid.
 type KillRankCommand struct {
-	rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server"`
-	poolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to"`
+	Rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server"`
+	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to"`
 }
 
 // Execute is run when KillRankCommand activates
@@ -64,7 +64,7 @@ func (k *KillRankCommand) Execute(args []string) error {
 		return errors.WithMessage(err, "unable to connect to hosts")
 	}
 
-	if err := conns.KillRank(k.poolUUID, k.rank); err != nil {
+	if err := conns.KillRank(k.PoolUUID, k.Rank); err != nil {
 		return errors.WithMessage(err, "Kill Rank failed")
 	}
 
