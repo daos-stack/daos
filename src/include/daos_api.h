@@ -307,9 +307,8 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
 /**
  * Remove an Access Control Entry from the list.
  *
- * This requires us to reconstruct and reallocate the ACL structure. Both the
- * old structure and the new one must be freed by the caller. The old data is
- * left unchanged.
+ * When the entry is removed, the ACL is reallocated, and the old structure
+ * is freed.
  *
  * \param[in]	acl			Original ACL
  * \param[in]	type			Principal type of the ACE to remove
@@ -325,10 +324,10 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  *		-DER_NOEXIST	Requested ACE was not in the ACL
  */
 int
-daos_acl_remove_ace(struct daos_acl *acl,
+daos_acl_remove_ace(struct daos_acl **acl,
 		    enum daos_acl_principal_type type,
 		    const char *principal_name,
-		    size_t principal_name_len, struct daos_acl **new_acl);
+		    size_t principal_name_len);
 
 /**
  * Allocate a new Access Control Entry with an appropriately aligned principal

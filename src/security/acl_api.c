@@ -341,49 +341,53 @@ principal_meets_type_requirements(enum daos_acl_principal_type type,
 }
 
 int
-daos_acl_remove_ace(struct daos_acl *acl,
+daos_acl_remove_ace(struct daos_acl **acl,
 		    enum daos_acl_principal_type type,
 		    const char *principal_name,
-		    size_t principal_name_len, struct daos_acl **new_acl)
+		    size_t principal_name_len)
 {
 	struct daos_ace	*current;
 	struct daos_ace	*ace_to_remove;
+	struct daos_acl	*new_acl;
 	uint32_t	new_len;
 	uint8_t		*pen;
 
-	if (acl == NULL || new_acl == NULL || !type_is_valid(type) ||
+	if (acl == NULL || *acl == NULL || !type_is_valid(type) ||
 		!principal_meets_type_requirements(type, principal_name,
 				principal_name_len)) {
 		return -DER_INVAL;
 	}
 
-	ace_to_remove = daos_acl_get_ace_for_principal(acl, type,
+	ace_to_remove = daos_acl_get_ace_for_principal(*acl, type,
 			principal_name);
 	if (ace_to_remove == NULL) {
 		/* requested principal not in the list */
 		return -DER_NONEXIST;
 	}
 
-	new_len = acl->dal_len - daos_ace_get_size(ace_to_remove);
+	new_len = (*acl)->dal_len - daos_ace_get_size(ace_to_remove);
 
-	D_ALLOC(*new_acl, get_daos_acl_size(new_len));
-	if (*new_acl == NULL) {
+	D_ALLOC(new_acl, get_daos_acl_size(new_len));
+	if (new_acl == NULL) {
 		return -DER_NOMEM;
 	}
 
-	(*new_acl)->dal_len = new_len;
-	(*new_acl)->dal_ver = acl->dal_ver;
+	new_acl->dal_len = new_len;
+	new_acl->dal_ver = (*acl)->dal_ver;
 
-	pen = (*new_acl)->dal_ace;
-	current = daos_acl_get_next_ace(acl, NULL);
+	pen = new_acl->dal_ace;
+	current = daos_acl_get_next_ace(*acl, NULL);
 	while (current != NULL) {
 		if (!ace_matches_principal(current, type, principal_name,
 				principal_name_len)) {
 			pen = write_ace(current, pen);
 		}
 
-		current = daos_acl_get_next_ace(acl, current);
+		current = daos_acl_get_next_ace(*acl, current);
 	}
+
+	daos_acl_free(*acl);
+	*acl = new_acl;
 
 	return 0;
 }
