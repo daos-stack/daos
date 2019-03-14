@@ -65,7 +65,7 @@ func setupShell() *ishell.Shell {
 		Name: "listmgmtfeatures",
 		Help: "Command to retrieve all supported management features from any client connections",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListFeatures()), "management feature")
 		},
 	})
@@ -74,7 +74,7 @@ func setupShell() *ishell.Shell {
 		Name: "listnvmecontrollers",
 		Help: "Command to list NVMe SSD controllers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(
 				checkAndFormat(conns.ListNvme()),
 				"NVMe SSD controller and constituent namespace")
@@ -85,7 +85,7 @@ func setupShell() *ishell.Shell {
 		Name: "listscmmodules",
 		Help: "Command to list installed SCM modules",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListScm()), "SCM module")
 		},
 	})
@@ -104,7 +104,7 @@ func setupShell() *ishell.Shell {
 			c.Print("Rank: ")
 			rankIn := c.ReadLine()
 
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 
 			rank, err := strconv.Atoi(rankIn)
 			if err != nil {

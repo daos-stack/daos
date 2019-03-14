@@ -31,7 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func hasConnections(addrs client.Addresses, eMap client.ErrorMap) (
+func hasConns(addrs client.Addresses, eMap client.ErrorMap) (
 	out string) {
 
 	out = sprintConns(addrs, eMap)
