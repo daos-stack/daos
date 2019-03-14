@@ -43,7 +43,7 @@ func (c *controlService) callDrpcMethodWithMessage(
 		return nil, errors.WithStack(err)
 	}
 
-	// unmarsal daos response message returned in drpc response body
+	// unmarshal daos response message returned in drpc response body
 	resp = &pb.DaosResponse{}
 	err = proto.Unmarshal(drpcResp.Body, resp)
 	if err != nil {
