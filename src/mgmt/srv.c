@@ -61,7 +61,7 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 #undef X
 
 static void
-process_killrank_request(Drpc__Call *daos_req, Proto__DaosResponse *daos_resp)
+process_killrank_request(Drpc__Call *drpc_req, Proto__DaosResponse *daos_resp)
 {
 	Proto__DaosRank	*pb_rank = NULL;
 
@@ -69,7 +69,7 @@ process_killrank_request(Drpc__Call *daos_req, Proto__DaosResponse *daos_resp)
 
 	/* Unpack the daos request from the drpc call body */
 	pb_rank = proto__daos_rank__unpack(
-		NULL, daos_req->body.len, daos_req->body.data);
+		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (pb_rank == NULL) {
 		daos_resp->status = PROTO__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
@@ -84,11 +84,11 @@ process_killrank_request(Drpc__Call *daos_req, Proto__DaosResponse *daos_resp)
 
 	/* TODO: do something with request and populate daos response status */
 
-	proto__daos_rank__free_unpacked(daos_rank, NULL);
+	proto__daos_rank__free_unpacked(pb_rank, NULL);
 }
 
 static void
-process_drpc_request(drpc_req, drpc_resp)
+process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	int 			rc = 0;
 	Proto__DaosResponse	*daos_resp = NULL;
