@@ -824,7 +824,9 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	}
 
-	/* NB: Should probably be transactional */
+	/* NB: Only happens on create so krec will be in the transaction log
+	 * already.
+	 */
 	krec->kr_bmap |= expected_flag;
 
 out:

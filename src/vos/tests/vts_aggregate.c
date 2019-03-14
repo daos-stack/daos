@@ -344,9 +344,8 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	assert_non_null(buf_u);
 
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
-		if (punch_nr > 0 && punch_epoch[punch_idx] == epoch) {
+		if (punch_idx < punch_nr && punch_epoch[punch_idx] == epoch) {
 			arg->ta_flags |= TF_PUNCH;
-			assert_true(punch_idx < punch_nr);
 			punch_idx++;
 		} else if (punch_nr < 0 && (rand() % 2) == 0) {
 			arg->ta_flags |= TF_PUNCH;
@@ -631,7 +630,7 @@ discard_4(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct agg_tst_dataset	 ds = { 0 };
-	daos_epoch_t		 punch_epoch[3] = {};
+	daos_epoch_t		 punch_epoch[2];
 	int			 i, punch_nr;
 
 	ds.td_type = DAOS_IOD_SINGLE;
@@ -750,7 +749,7 @@ aggregate_2(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct agg_tst_dataset	 ds = { 0 };
-	daos_epoch_t		 punch_epoch[3] = {};
+	daos_epoch_t		 punch_epoch[2];
 	int			 i, punch_nr;
 
 	ds.td_type = DAOS_IOD_SINGLE;
