@@ -1510,8 +1510,8 @@ int
 crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
 
 /**
- * Unregister a callback function. The par of arguments (ctx_idx and arg)
- * should be equal to remove this callback from the list.
+ * Unregister a callback function. The pair of arguments (ctx_idx and arg)
+ * should be same as the ones provided during registration.
  */
 int
 crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
@@ -1531,6 +1531,53 @@ typedef void
  */
 int
 crt_register_eviction_cb(crt_eviction_cb cb, void *arg);
+
+enum crt_event_source {
+	CRT_EVS_UNKNOWN,
+	CRT_EVS_PMIX,
+	CRT_EVS_SWIM,
+};
+
+enum crt_event_type {
+	CRT_EVT_ALIVE,
+	CRT_EVT_DEAD,
+};
+
+typedef void
+(*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
+		 enum crt_event_type type, void *arg);
+
+/**
+ * This function registers an event handler for any changes in rank state.
+ * There is not any modification about the rank in rank list at this point.
+ * The decision about adding or eviction the rank should be made from
+ * an information from this handler.
+ *
+ * Important:
+ * The event should be processed in non-blocking mode because this
+ * handler is called under lock which should not be held for long time.
+ * Sleeping is also prohibited in this handler! Only quick reaction is
+ * expected into this handler before return.
+ *
+ * \param[in] event_handler    event handler to register
+ * \param[in] arg              arg to event_handler
+ *
+ * \return                     DER_SUCCESS on success, negative value on error
+ */
+int
+crt_register_event_cb(crt_event_cb event_handler, void *arg);
+
+/**
+ * Unregister an event handler. The pair of arguments (event_handler and arg)
+ * should be same as the ones provided during registration.
+ *
+ * \param[in] event_handler    event handler to register
+ * \param[in] arg              arg to event_handler
+ *
+ * \return                     DER_SUCCESS on success, negative value on error
+ */
+int
+crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
 /**
  * Retrieve the PSR candidate list for \a tgt_grp.  There is guaranteed to be

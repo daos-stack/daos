@@ -154,36 +154,43 @@ crt_plugin_init(void)
 	/** init the lists */
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs[i]);
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_eviction_cbs);
 	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
 	if (rc != 0)
-		return rc;
+		D_GOTO(out, rc);
 
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
 	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
-	if (rc != 0) {
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out_destroy_prog, rc);
 
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
 	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_event_rwlock, NULL);
-	if (rc != 0) {
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out_destroy_timeout, rc);
 
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_eviction_cbs);
 	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_eviction_rwlock, NULL);
-	if (rc != 0) {
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
-		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out_destroy_event, rc);
 
 	crt_plugin_gdata.cpg_inited = 1;
-	return 0;
+	if (CRT_PMIX_ENABLED() && crt_is_service() && !crt_is_singleton()) {
+		rc = crt_plugin_pmix_init();
+		if (rc != 0)
+			D_GOTO(out_destroy_eviction, rc);
+	}
+	D_GOTO(out, rc = 0);
+
+out_destroy_eviction:
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_eviction_rwlock);
+out_destroy_event:
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
+out_destroy_timeout:
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
+out_destroy_prog:
+	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock);
+out:
+	return rc;
 }
 
 int

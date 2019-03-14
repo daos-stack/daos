@@ -55,21 +55,6 @@
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 
-enum crt_event_source {
-	CRT_EVS_UNKNOWN,
-	CRT_EVS_PMIX,
-	CRT_EVS_SWIM,
-};
-
-enum crt_event_type {
-	CRT_EVT_ALIVE,
-	CRT_EVT_DEAD,
-};
-
-typedef void
-(*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
-		 enum crt_event_type type, void *arg);
-
 /* CaRT global data */
 struct crt_gdata {
 	crt_phy_addr_t		cg_addr;

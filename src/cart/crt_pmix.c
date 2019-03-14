@@ -706,7 +706,7 @@ crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
 
 }
 
-static int
+int
 crt_plugin_pmix_init(void)
 {
 	sem_t	token_to_proceed;
@@ -803,51 +803,4 @@ crt_plugin_pmix_fini(void)
 	rc = sem_destroy(&token_to_proceed);
 	if (rc != 0)
 		D_ERROR("sem_destroy failed, rc: %d.\n", rc);
-}
-
-int
-crt_register_event_cb(crt_event_cb event_handler, void *arg)
-{
-	/* store the event codes, the user event handler function ponter,
-	 * and the user-provided void arg to a list of global sturctures.
-	 */
-	struct crt_event_cb_priv *event_cb_priv;
-	int rc;
-
-	D_ASSERT(CRT_PMIX_ENABLED());
-
-	rc = crt_plugin_pmix_init();
-	if (rc)
-		D_GOTO(out, rc);
-
-	D_ALLOC_PTR(event_cb_priv);
-	if (event_cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	event_cb_priv->cecp_func = event_handler;
-	event_cb_priv->cecp_args = arg;
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_add_tail(&event_cb_priv->cecp_link,
-			&crt_plugin_gdata.cpg_event_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-
-out:
-	return rc;
-}
-
-void
-crt_unregister_event_cb(crt_event_cb event_handler, void *arg)
-{
-	struct crt_event_cb_priv *event_cb_priv, *next;
-
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry_safe(event_cb_priv, next,
-				   &crt_plugin_gdata.cpg_event_cbs,
-				   cecp_link) {
-		if (event_cb_priv->cecp_func == event_handler &&
-		    event_cb_priv->cecp_args == arg) {
-			d_list_del(&event_cb_priv->cecp_link);
-			D_FREE(event_cb_priv);
-		}
-	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 }

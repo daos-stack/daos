@@ -65,22 +65,8 @@ int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri);
 int crt_pmix_attach(struct crt_grp_priv *grp_priv);
 void crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv);
 void crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv);
+int  crt_plugin_pmix_init(void);
 void crt_plugin_pmix_fini(void);
 int crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
-/**
- * This function registers an event handler for process failures. If the calling
- * process has not yet registered a PMIx event handler for the
- * PMIX_ERR_PROC_ABORTED event, this function will do so.  When the external RAS
- * notifies the current process with a process failure event, event_handler()
- * will be executed. Invocation of event_handler() does not mean the rank has
- * been evicted.
- *
- * \param[in] event_handler    event handler to register
- * \param[in] arg              arg to event_handler
- *
- * \return                     DER_SUCCESS on success, negative value on error
- */
-int  crt_register_event_cb(crt_event_cb event_handler, void *arg);
-void crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
 #endif /* __CRT_PMIX_H__ */

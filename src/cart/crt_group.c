@@ -3371,6 +3371,58 @@ out:
 }
 
 int
+crt_register_event_cb(crt_event_cb event_handler, void *arg)
+{
+	struct crt_event_cb_priv	*cb_priv, *cb_priv2;
+	int				 rc = DER_SUCCESS;
+
+	D_ALLOC_PTR(cb_priv);
+	if (cb_priv == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	cb_priv->cecp_func = event_handler;
+	cb_priv->cecp_args = arg;
+
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+	d_list_for_each_entry(cb_priv2, &crt_plugin_gdata.cpg_event_cbs,
+			      cecp_link) {
+		if (cb_priv2->cecp_func == event_handler &&
+		    cb_priv2->cecp_args == arg) {
+			D_FREE(cb_priv);
+			rc = -DER_EXIST;
+			break;
+		}
+	}
+	if (rc == 0)
+		d_list_add_tail(&cb_priv->cecp_link,
+				&crt_plugin_gdata.cpg_event_cbs);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+
+out:
+	return rc;
+}
+
+int
+crt_unregister_event_cb(crt_event_cb event_handler, void *arg)
+{
+	struct crt_event_cb_priv	*cb_priv;
+	int				 rc = -DER_NONEXIST;
+
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
+			      cecp_link) {
+		if (cb_priv->cecp_func == event_handler &&
+		    cb_priv->cecp_args == arg) {
+			d_list_del(&cb_priv->cecp_link);
+			D_FREE(cb_priv);
+			rc = DER_SUCCESS;
+			break;
+		}
+	}
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+	return rc;
+}
+
+int
 crt_grp_failed_ranks_dup(crt_group_t *grp, d_rank_list_t **failed_ranks)
 {
 	struct crt_grp_priv	*grp_priv;

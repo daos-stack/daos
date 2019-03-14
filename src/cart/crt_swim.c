@@ -233,6 +233,37 @@ out:
 	return id;
 }
 
+static void
+crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
+{
+	struct crt_event_cb_priv *cb_priv;
+	enum crt_event_type	 cb_type;
+	crt_event_cb		 cb_func;
+	void			*cb_arg;
+
+	D_ASSERT(state != NULL);
+	switch (state->sms_status) {
+	case SWIM_MEMBER_ALIVE:
+		cb_type = CRT_EVT_ALIVE;
+		break;
+	case SWIM_MEMBER_DEAD:
+		cb_type = CRT_EVT_ALIVE;
+		break;
+	default:
+		return;
+	}
+
+	/* walk the global list to execute the user callbacks */
+	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
+			      cecp_link) {
+		cb_func = cb_priv->cecp_func;
+		cb_arg  = cb_priv->cecp_args;
+		cb_func(rank, CRT_EVS_SWIM, cb_type, cb_arg);
+	}
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+}
+
 static int crt_swim_get_member_state(struct swim_context *ctx,
 				     swim_id_t id,
 				     struct swim_member_state *state)
@@ -265,9 +296,6 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	struct crt_grp_priv	*grp_priv = swim_data(ctx);
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
-	struct crt_event_cb_priv *event_cb_priv;
-	crt_event_cb		 cb_func;
-	void			*arg;
 	int			 rc = -DER_INVAL;
 
 	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
@@ -283,30 +311,9 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	}
 	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
 
-	if (rc)
-		D_GOTO(out, rc);
+	if (rc == 0)
+		crt_swim_notify_rank_state((d_rank_t)id, state);
 
-	switch (state->sms_status) {
-	case SWIM_MEMBER_ALIVE:
-		break;
-	case SWIM_MEMBER_SUSPECT:
-		break;
-	case SWIM_MEMBER_DEAD:
-		/* Emulate PIMx event: */
-		/* walk the global list to execute the user callbacks */
-		D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-		d_list_for_each_entry(event_cb_priv,
-				      &crt_plugin_gdata.cpg_event_cbs,
-				      cecp_link) {
-			cb_func = event_cb_priv->cecp_func;
-			arg = event_cb_priv->cecp_args;
-			cb_func((d_rank_t)id, CRT_EVS_SWIM, CRT_EVT_DEAD, arg);
-		}
-		D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-		break;
-	}
-
-out:
 	return rc;
 }
 
