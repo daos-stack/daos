@@ -661,12 +661,15 @@ write_to_extent(struct extent_key *extent_key, daos_recx_t *extent,
 static uint8_t *
 allocate_random(size_t len)
 {
-	uint8_t *result = (uint8_t *)malloc(len);
+	uint8_t *result;;
+	D_ALLOC(result, len);
 
-	D_ASSERT(result != NULL);
+	assert_non_null(result);
 	dts_buf_render((char *) result, (unsigned int) len);
 	return result;
 }
+
+#define	D_ALLOC_RAND(ptr, len) ptr = allocate_random(len)
 
 static void
 read_from_extent(struct extent_key *extent_key, daos_recx_t *extent,
@@ -842,15 +845,13 @@ csum_extent_not_chunk_aligned(void **state)
 	struct extent_key	 extent_key;
 	daos_csum_buf_t		 csum;
 	daos_csum_buf_t		 read_csum;
-	uint8_t			*csum_buf_1 = NULL;
-	uint8_t			*csum_read_buf = NULL;
-	uint8_t			*data_buf_1 = allocate_random(data_size);
-	uint8_t			*read_data_buf = calloc(data_size, 1);
+	uint8_t			*csum_buf_1;
+	uint8_t			*csum_read_buf;
+	uint8_t			*data_buf_1;
+	uint8_t			*read_data_buf;
 	daos_recx_t		 extent = {10, data_size};
 
 	extent_key_from_test_args(&extent_key, (struct io_test_args *) *state);
-
-
 
 	csum.cs_len = 8; /** CRC64 maybe? */
 	csum.cs_type = 1;
@@ -858,8 +859,11 @@ csum_extent_not_chunk_aligned(void **state)
 	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
-	csum_buf_1 = allocate_random(csum.cs_buf_len);
-	csum_read_buf = calloc(csum.cs_buf_len, 1);
+	D_ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
+	D_ALLOC(csum_read_buf, csum.cs_buf_len);
+
+	D_ALLOC_RAND(data_buf_1, data_size);
+	D_ALLOC(read_data_buf, data_size);
 
 	csum.cs_csum = csum_buf_1;
 	write_to_extent(&extent_key, &extent, data_buf_1, data_size, &csum);
@@ -891,11 +895,11 @@ void csum_invalid_input_tests(void **state)
 	struct extent_key	 extent_key;
 	daos_csum_buf_t		 csum;
 	daos_csum_buf_t		 read_csum;
-	uint8_t			*csum_buf_1 = NULL;
-	uint8_t			*csum_zero_buf = NULL;
-	uint8_t			*csum_read_buf = NULL;
-	uint8_t			*data_buf_1 = allocate_random(data_size);
-	uint8_t			*read_data_buf = calloc(data_size, 1);
+	uint8_t			*csum_buf_1;
+	uint8_t			*csum_zero_buf;
+	uint8_t			*csum_read_buf;
+	uint8_t			*data_buf_1;
+	uint8_t			*read_data_buf;
 	daos_recx_t		 extent = {10, data_size};
 
 	extent_key_from_test_args(&extent_key, (struct io_test_args *) *state);
@@ -906,13 +910,15 @@ void csum_invalid_input_tests(void **state)
 	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
-	csum_buf_1 = allocate_random(csum.cs_buf_len);
-	csum_zero_buf = calloc(csum.cs_buf_len, 1);
-	csum_read_buf = calloc(csum.cs_buf_len, 1);
+	D_ALLOC_RAND(data_buf_1, data_size);
+	D_ALLOC(read_data_buf, data_size);
+
+	D_ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
+	D_ALLOC(csum_zero_buf, csum.cs_buf_len);
+	D_ALLOC(csum_read_buf, csum.cs_buf_len);
 
 	csum.cs_csum = csum_buf_1;
 	write_to_extent(&extent_key, &extent, data_buf_1, data_size, &csum);
-
 
 	memset(&read_csum, 0, sizeof(read_csum));
 	read_csum.cs_len = csum.cs_len;
@@ -920,6 +926,7 @@ void csum_invalid_input_tests(void **state)
 	read_csum.cs_buf_len = csum.cs_buf_len;
 	read_csum.cs_csum = csum_read_buf;
 
+	assert_memory_not_equal(csum_zero_buf, csum_read_buf, csum.cs_buf_len);
 	read_from_extent(&extent_key, &extent, read_data_buf, data_size,
 			 &read_csum);
 
