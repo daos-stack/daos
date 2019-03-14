@@ -670,10 +670,12 @@ obj_op_hdlr(int argc, char *argv[])
 		struct daos_obj_shard *shard;
 
 		shard = layout->ol_shards[i];
-		fprintf(stdout, "grp: %d\n", i);
+		fprintf(stdout, "grp: %d replica %d\n", i,
+			shard->os_replica_nr);
 		for (j = 0; j < shard->os_replica_nr; j++)
-			fprintf(stdout, "replica %d %d\n", j,
-				shard->os_ranks[j]);
+			fprintf(stdout, "i:%d rank: %d tgt_id: %d\n",
+				j, shard->os_ids[j].ti_rank,
+				shard->os_ids[j].ti_tgt);
 	}
 
 	daos_obj_layout_free(layout);

@@ -787,7 +787,7 @@ daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
 	for (i = 0; i < grp_nr; i++) {
 		D_ALLOC((*layout)->ol_shards[i],
 			sizeof(struct daos_obj_shard) +
-			grp_size * sizeof(uint32_t));
+			grp_size * sizeof(struct daos_target_id));
 		if ((*layout)->ol_shards[i] == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -832,13 +832,11 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 
 		shard = layout->ol_shards[i];
 		shard->os_replica_nr = grp_size;
-		for (j = 0; j < grp_size; j++) {
+		for (j = 0; j < grp_size; j++, k++) {
 			struct pool_target *tgt;
 
-			if (obj->cob_shards[k].do_target_id == -1) {
-				k++;
+			if (obj->cob_shards[k].do_target_id == -1)
 				continue;
-			}
 
 			rc = dc_cont_tgt_idx2ptr(obj->cob_coh,
 					obj->cob_shards[k].do_target_id,
@@ -846,7 +844,8 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 			if (rc != 0)
 				D_GOTO(out, rc);
 
-			shard->os_ranks[j] = tgt->ta_comp.co_rank;
+			shard->os_ids[j].ti_rank = tgt->ta_comp.co_rank;
+			shard->os_ids[j].ti_tgt = tgt->ta_comp.co_id;
 		}
 	}
 	*p_layout = layout;
