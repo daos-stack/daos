@@ -25,9 +25,10 @@ package drpc
 
 import (
 	"fmt"
+	"net"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"net"
 )
 
 // DomainSocketClient is the interface to a dRPC client communicating over a
@@ -57,6 +58,7 @@ type ClientConnection struct {
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
 	conn       domainSocketConn   // UDS connection
+	sequence   int64              // Increment each time we send
 }
 
 // IsConnected indicates whether the client connection is currently active
@@ -77,6 +79,7 @@ func (c *ClientConnection) Connect() error {
 	}
 
 	c.conn = conn
+	c.sequence = 0 // reset message sequence number on connect
 	return nil
 }
 
@@ -97,6 +100,10 @@ func (c *ClientConnection) Close() error {
 }
 
 func (c *ClientConnection) sendCall(msg *Call) error {
+	// increment sequence every call, always nonzero
+	c.sequence++
+	msg.Sequence = c.sequence
+
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshall dRPC call: %v", err)
