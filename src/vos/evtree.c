@@ -2863,3 +2863,18 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 					    tcx->tc_root->tr_csum_len;
 	}
 }
+
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd)
+{
+	if (ovhd == NULL) {
+		D_ERROR("Invalid ovhd argument\n");
+		return -DER_INVAL;
+	}
+
+	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
+	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
+		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_order = tree_order;
+	return 0;
+}

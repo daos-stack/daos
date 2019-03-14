@@ -789,7 +789,7 @@ daos_obj_list_class(daos_handle_t coh, daos_oclass_list_t *clist,
  * address space.
  *
  * \param[in,out]
- *		oid	[in]: Object ID with low 160 bits set and unique inside
+ *		oid	[in]: Object ID with low 96 bits set and unique inside
  *			the container. [out]: Fully populated DAOS object
  *			identifier with the the low 96 bits untouched and the
  *			DAOS private bits (the high 32 bits) encoded.
