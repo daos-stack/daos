@@ -661,15 +661,18 @@ write_to_extent(struct extent_key *extent_key, daos_recx_t *extent,
 static uint8_t *
 allocate_random(size_t len)
 {
-	uint8_t *result;;
-	D_ALLOC(result, len);
+	uint8_t *result;
 
-	assert_non_null(result);
-	dts_buf_render((char *) result, (unsigned int) len);
+	D_ALLOC(result, len);
+	if (result)
+		dts_buf_render((char *) result, (unsigned int) len);
 	return result;
 }
 
-#define	D_ALLOC_RAND(ptr, len) ptr = allocate_random(len)
+#define	D_ALLOC_RAND(ptr, len) do { \
+	(ptr) = allocate_random(len); \
+	assert_non_null(ptr); \
+	} while (0)
 
 static void
 read_from_extent(struct extent_key *extent_key, daos_recx_t *extent,
@@ -926,7 +929,6 @@ void csum_invalid_input_tests(void **state)
 	read_csum.cs_buf_len = csum.cs_buf_len;
 	read_csum.cs_csum = csum_read_buf;
 
-	assert_memory_not_equal(csum_zero_buf, csum_read_buf, csum.cs_buf_len);
 	read_from_extent(&extent_key, &extent, read_data_buf, data_size,
 			 &read_csum);
 
