@@ -57,9 +57,14 @@ struct daos_obj_shard_md {
 /**
  * object layout information.
  **/
+struct daos_target_id {
+	uint32_t	ti_tgt;
+	uint32_t	ti_rank;
+};
+
 struct daos_obj_shard {
 	uint32_t	os_replica_nr;
-	uint32_t	os_ranks[0];
+	struct daos_target_id	os_ids[0];
 };
 
 struct daos_obj_layout {
