@@ -258,6 +258,7 @@ int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
+int run_daos_demo_rebuild_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
@@ -365,7 +366,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-#define MAX_KILLS	3
+#define MAX_KILLS	1
 extern d_rank_t ranks_to_kill[MAX_KILLS];
 d_rank_t test_get_last_svr_rank(test_arg_t *arg);
 
