@@ -133,7 +133,7 @@ process_drpc_request(drpc_req, drpc_resp)
 		D_ERROR("Unknown method\n");
 	}
 
-	// free daos_resp
+	D_FREE(daos_resp);
 	return 0;
 }
 
@@ -155,7 +155,7 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 	process_drpc_request(request, drpc_resp);
 
 	*response = drpc_resp;
-	// free drpc_resp
+	D_FREE(drpc_resp);
 }
 
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
