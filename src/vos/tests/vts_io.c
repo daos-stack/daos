@@ -380,7 +380,6 @@ out:
 	return rc;
 }
 
-
 static int
 io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 		 vos_it_epc_expr_t expr,
