@@ -291,17 +291,8 @@ def define_components(reqs):
                           "PREFIX=$CART_PREFIX install"],
                 headers=["cart/api.h", "gurt/list.h"],
                 libs=["cart", "gurt"],
-                requires=['mpi4py', 'mercury', 'uuid', 'crypto', 'ompi',
+                requires=['mercury', 'uuid', 'crypto', 'ompi',
                           'pmix', 'boost', 'yaml'])
-
-    url = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-2.0.0.tar.gz'
-    web_retriever = WebRetriever(url)
-    reqs.define('mpi4py',
-                retriever=web_retriever,
-                commands=['python setup.py build '
-                          '--mpicc=$OMPI_PREFIX/bin/mpicc',
-                          'python setup.py install --prefix $MPI4PY_PREFIX'],
-                requires=['ompi'])
 
     reqs.define('fio',
                 retriever=GitRepoRetriever(
