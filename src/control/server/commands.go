@@ -89,7 +89,7 @@ type PrepNvmeCommand struct {
 func (p *PrepNvmeCommand) Execute(args []string) error {
 	ok, usr := common.CheckSudo()
 	if !ok {
-		return errors.New("This subcommand must be run as root or sudo!")
+		return errors.New("subcommand must be run as root or sudo")
 	}
 
 	// falls back to sudoer or root if TargetUser is unspecified
