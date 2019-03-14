@@ -810,6 +810,10 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 
 			shard->os_ids[j].ti_rank = tgt->ta_comp.co_rank;
 			shard->os_ids[j].ti_tgt = tgt->ta_comp.co_id;
+			fprintf(stdout, "shard->os_ids[%d].ti_rank = %u\n", j,
+				shard->os_ids[j].ti_rank);
+			fprintf(stdout, "shard->os_ids[%d].ti_tgt = %u\n", j,
+				shard->os_ids[j].ti_rank);
 		}
 	}
 	*p_layout = layout;

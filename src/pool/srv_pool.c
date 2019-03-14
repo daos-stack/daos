@@ -499,6 +499,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 			map_comp.co_index = j;
 			map_comp.co_id = i * dss_tgt_nr + j;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
+			printf("target_addrs->rl_ranks[%d]=%d\n", i, map_comp.co_rank);
 			map_comp.co_ver = map_version;
 			map_comp.co_fseq = 1;
 			map_comp.co_nr = 1;

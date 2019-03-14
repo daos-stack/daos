@@ -639,6 +639,7 @@ obj_op_hdlr(int argc, char *argv[])
 		D_GOTO(disconnect, rc);
 	}
 
+	fprintf(stdout, "calling daos_obj_layout_get()\n");
 	rc = daos_obj_layout_get(coh, oid, &layout);
 	if (rc) {
 		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
