@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright (C) 2018 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -52,9 +52,6 @@ if [ -z "$*" ]; then
   for file in $scripts; do
     flist+=" -s $file"
   done
-  # the functional test code
-  flist+=$(find src/tests/ftest/ -name \*.py)
-  flist+=$(find src/utils/py/ -name \*.py)
 else
   flist=$*
 fi
