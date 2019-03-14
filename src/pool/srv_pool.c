@@ -2747,44 +2747,6 @@ ds_pool_svc_term_get(uuid_t uuid, uint64_t *term)
 	return 0;
 }
 
-static int
-attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
-		   crt_bulk_t local_bulk, crt_bulk_t remote_bulk,
-		   off_t local_off, off_t remote_off, size_t length)
-{
-	ABT_eventual		 eventual;
-	int			*status;
-	int			 rc;
-	struct crt_bulk_desc	 bulk_desc = {
-				.bd_rpc		= rpc,
-				.bd_bulk_op	= op,
-				.bd_local_hdl	= local_bulk,
-				.bd_local_off	= local_off,
-				.bd_remote_hdl	= remote_bulk,
-				.bd_remote_off	= remote_off,
-				.bd_len		= length,
-			};
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
-	return rc;
-}
-
 void
 ds_pool_attr_set_handler(crt_rpc_t *rpc)
 {
@@ -2792,87 +2754,27 @@ ds_pool_attr_set_handler(crt_rpc_t *rpc)
 	struct pool_op_out	 *out = crt_reply_get(rpc);
 	struct pool_svc		 *svc;
 	struct rdb_tx		  tx;
-	crt_bulk_t		  local_bulk;
-	daos_size_t		  bulk_size;
-	daos_iov_t		  iov;
-	daos_sg_list_t		  sgl;
-	void			 *data;
-	char			 *names;
-	char			 *values;
-	size_t			 *sizes;
 	int			  rc;
-	int			  i;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_UUID(in->pasi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pasi_op.pi_uuid, &svc, &out->po_hint);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	ABT_rwlock_wrlock(svc->ps_lock);
-
-	rc = crt_bulk_get_len(in->pasi_bulk, &bulk_size);
+	rc = ds_rsvc_set_attr(&svc->ps_rsvc, &tx, &svc->ps_user,
+			      in->pasi_bulk, rpc, in->pasi_count);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
-	D_DEBUG(DF_DSMS, DF_UUID": count=%lu, size=%lu\n",
-		DP_UUID(in->pasi_op.pi_uuid), in->pasi_count, bulk_size);
+		goto out_lock;
 
-	D_ALLOC(data, bulk_size);
-	if (data == NULL)
-		D_GOTO(out_lock, rc = -DER_NOMEM);
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = &iov;
-	daos_iov_set(&iov, data, bulk_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_mem, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
-				in->pasi_bulk, 0, 0, bulk_size);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
-
-	names = data;
-	/* go to the end of names array */
-	for (values = names, i = 0; i < in->pasi_count; ++values)
-		if (*values == '\0')
-			++i;
-	sizes = (size_t *)values;
-	values = (char *)(sizes + in->pasi_count);
-
-	for (i = 0; i < in->pasi_count; i++) {
-		size_t len;
-		daos_iov_t key;
-		daos_iov_t value;
-
-		len = strlen(names) /* trailing '\0' */ + 1;
-		daos_iov_set(&key, names, len);
-		names += len;
-		daos_iov_set(&value, values, sizes[i]);
-		values += sizes[i];
-
-		rc = rdb_tx_update(&tx, &svc->ps_user, &key, &value);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to update attribute "
-				 "'%s': %d\n", DP_UUID(svc->ps_uuid),
-				 (char *) key.iov_buf, rc);
-			D_GOTO(out_bulk, rc);
-		}
-	}
 	rc = rdb_tx_commit(&tx);
 
-out_bulk:
-	crt_bulk_free(local_bulk);
-out_mem:
-	D_FREE(data);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2893,116 +2795,22 @@ ds_pool_attr_get_handler(crt_rpc_t *rpc)
 	struct pool_op_out	 *out = crt_reply_get(rpc);
 	struct pool_svc		 *svc;
 	struct rdb_tx		  tx;
-	crt_bulk_t		  local_bulk;
-	daos_size_t		  bulk_size;
-	daos_size_t		  input_size;
-	daos_iov_t		 *iovs;
-	daos_sg_list_t		  sgl;
-	void			 *data;
-	char			 *names;
-	size_t			 *sizes;
 	int			  rc;
-	int			  i;
-	int			  j;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_UUID(in->pagi_op.pi_hdl));
 
 	rc = pool_svc_lookup_leader(in->pagi_op.pi_uuid, &svc, &out->po_hint);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	ABT_rwlock_rdlock(svc->ps_lock);
-
-
-	rc = crt_bulk_get_len(in->pagi_bulk, &bulk_size);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-	D_DEBUG(DF_DSMS, DF_UUID": count=%lu, key_length=%lu, size=%lu\n",
-		DP_UUID(in->pagi_op.pi_uuid),
-		in->pagi_count, in->pagi_key_length, bulk_size);
-
-	input_size = in->pagi_key_length + in->pagi_count * sizeof(*sizes);
-	D_ASSERT(input_size <= bulk_size);
-
-	D_ALLOC(data, input_size);
-	if (data == NULL)
-		D_GOTO(out_lock, rc = -DER_NOMEM);
-
-	/* for output sizes */
-	D_ALLOC_ARRAY(iovs, (int)(1 + in->pagi_count));
-	if (iovs == NULL)
-		D_GOTO(out_data, rc = -DER_NOMEM);
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = &iovs[0];
-	daos_iov_set(&iovs[0], data, input_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
-				in->pagi_bulk, 0, 0, input_size);
-	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	names = data;
-	sizes = (size_t *)(names + in->pagi_key_length);
-	daos_iov_set(&iovs[0], (void *)sizes,
-		     in->pagi_count * sizeof(*sizes));
-
-	for (i = 0, j = 1; i < in->pagi_count; ++i) {
-		size_t len;
-		daos_iov_t key;
-
-		len = strlen(names) + /* trailing '\0' */ 1;
-		daos_iov_set(&key, names, len);
-		names += len;
-		daos_iov_set(&iovs[j], NULL, 0);
-
-		rc = rdb_tx_lookup(&tx, &svc->ps_user, &key, &iovs[j]);
-
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to lookup attribute "
-				 "'%s': %d\n", DP_UUID(svc->ps_uuid),
-				 (char *) key.iov_buf, rc);
-			D_GOTO(out_iovs, rc);
-		}
-		iovs[j].iov_buf_len = sizes[i];
-		sizes[i] = iovs[j].iov_len;
-
-		/* If buffer length is zero, send only size */
-		if (iovs[j].iov_buf_len > 0)
-			++j;
-	}
-
-	sgl.sg_nr = j;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = iovs;
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RO, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-				in->pagi_bulk, 0, in->pagi_key_length,
-				bulk_size - in->pagi_key_length);
-	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-out_iovs:
-	D_FREE(iovs);
-out_data:
-	D_FREE(data);
-out_lock:
+	rc = ds_rsvc_get_attr(&svc->ps_rsvc, &tx, &svc->ps_user, in->pagi_bulk,
+			      rpc, in->pagi_count, in->pagi_key_length);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3016,58 +2824,6 @@ out:
 
 }
 
-struct attr_list_iter_args {
-	size_t		 alia_available; /* Remaining client buffer space */
-	size_t		 alia_length; /* Aggregate length of attribute names */
-	size_t		 alia_iov_index;
-	size_t		 alia_iov_count;
-	daos_iov_t	*alia_iovs;
-};
-
-static int
-attr_list_iter_cb(daos_handle_t ih,
-		  daos_iov_t *key, daos_iov_t *val, void *arg)
-{
-	struct attr_list_iter_args *i_args = arg;
-
-	i_args->alia_length += key->iov_len;
-
-	if (i_args->alia_available > key->iov_len && key->iov_len > 0) {
-		/*
-		 * Exponentially grow the array of IOVs if insufficient.
-		 * Considering the pathological case where each key is just
-		 * a single character, with one additional trailing '\0',
-		 * if the client buffer is 'N' bytes, it can hold at the most
-		 * N/2 keys, which requires that many IOVs to be allocated.
-		 * Thus, the upper limit on the space required for IOVs is:
-		 * sizeof(daos_iov_t) * N/2 = 24 * N/2 = 12*N bytes.
-		 */
-		if (i_args->alia_iov_index == i_args->alia_iov_count) {
-			void *ptr;
-
-			D_REALLOC(ptr, i_args->alia_iovs,
-				  i_args->alia_iov_count *
-				  2 * sizeof(daos_iov_t));
-			/*
-			 * TODO: Fail or continue transferring
-			 *	 iteratively using available memory?
-			 */
-			if (ptr == NULL)
-				return -DER_NOMEM;
-			i_args->alia_iovs = ptr;
-			i_args->alia_iov_count *= 2;
-		}
-
-		memcpy(&i_args->alia_iovs[i_args->alia_iov_index],
-		       key, sizeof(daos_iov_t));
-		i_args->alia_iovs[i_args->alia_iov_index]
-			.iov_buf_len = key->iov_len;
-		i_args->alia_available -= key->iov_len;
-		++i_args->alia_iov_index;
-	}
-	return 0;
-}
-
 void
 ds_pool_attr_list_handler(crt_rpc_t *rpc)
 {
@@ -3075,10 +2831,7 @@ ds_pool_attr_list_handler(crt_rpc_t *rpc)
 	struct pool_attr_list_out	*out	    = crt_reply_get(rpc);
 	struct pool_svc			*svc;
 	struct rdb_tx			 tx;
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
 	int				 rc;
-	struct attr_list_iter_args	 iter_args;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pali_op.pi_uuid), rpc, DP_UUID(in->pali_op.pi_hdl));
@@ -3086,63 +2839,15 @@ ds_pool_attr_list_handler(crt_rpc_t *rpc)
 	rc = pool_svc_lookup_leader(in->pali_op.pi_uuid, &svc,
 				    &out->palo_op.po_hint);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	ABT_rwlock_rdlock(svc->ps_lock);
-
-	/*
-	 * If remote bulk handle does not exist, only aggregate size is sent.
-	 */
-	if (in->pali_bulk) {
-		rc = crt_bulk_get_len(in->pali_bulk, &bulk_size);
-		if (rc != 0)
-			D_GOTO(out_lock, rc);
-		D_DEBUG(DF_DSMS, DF_UUID": bulk_size=%lu\n",
-			DP_UUID(in->pali_op.pi_uuid), bulk_size);
-
-		/* Start with 1 and grow as needed */
-		D_ALLOC_PTR(iter_args.alia_iovs);
-		if (iter_args.alia_iovs == NULL)
-			D_GOTO(out_lock, rc = -DER_NOMEM);
-		iter_args.alia_iov_count = 1;
-	} else {
-		bulk_size = 0;
-		iter_args.alia_iovs = NULL;
-		iter_args.alia_iov_count = 0;
-	}
-	iter_args.alia_iov_index = 0;
-	iter_args.alia_length	 = 0;
-	iter_args.alia_available = bulk_size;
-	rc = rdb_tx_iterate(&tx, &svc->ps_user, false /* !backward */,
-			    attr_list_iter_cb, &iter_args);
-	out->palo_size = iter_args.alia_length;
-	if (rc != 0)
-		D_GOTO(out_mem, rc);
-
-	if (iter_args.alia_iov_index > 0) {
-		daos_sg_list_t	 sgl = {
-			.sg_nr_out = iter_args.alia_iov_index,
-			.sg_nr	   = iter_args.alia_iov_index,
-			.sg_iovs   = iter_args.alia_iovs
-		};
-		rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-				     CRT_BULK_RW, &local_bulk);
-		if (rc != 0)
-			D_GOTO(out_mem, rc);
-
-		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-					in->pali_bulk, 0, 0,
-					bulk_size - iter_args.alia_available);
-		crt_bulk_free(local_bulk);
-	}
-
-out_mem:
-	D_FREE(iter_args.alia_iovs);
-out_lock:
+	rc = ds_rsvc_list_attr(&svc->ps_rsvc, &tx, &svc->ps_user,
+			       in->pali_bulk, rpc, &out->palo_size);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
