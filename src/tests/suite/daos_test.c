@@ -30,8 +30,8 @@
 #include "daos_test.h"
 
 /** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceiACoROdr";
-static const char *all_tests_defined = "mpceixACoROdr";
+static const char *all_tests = "mpceiACoROdrD";
+static const char *all_tests_defined = "mpceixACoROdrD";
 
 static void
 print_usage(int rank)
@@ -41,6 +41,7 @@ print_usage(int rank)
 
 	print_message("\n\nDAOS TESTS\n=============================\n");
 	print_message("Use one of these options(s) for specific test\n");
+	print_message("daos_test -D| --demo (for DIO-9 demo rebuild tests)\n");
 	print_message("daos_test -m|--mgmt\n");
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
@@ -154,6 +155,14 @@ run_specified_tests(const char *tests, int rank, int size,
 							   sub_tests,
 							   sub_tests_size);
 			break;
+		case 'D':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS DIO-9 demo rebuild tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_demo_rebuild_test(rank, size,
+								sub_tests,
+								sub_tests_size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -189,6 +198,7 @@ main(int argc, char **argv)
 
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
+		{"demo",	no_argument,		NULL,	'D'},
 		{"mgmt",	no_argument,		NULL,	'm'},
 		{"pool",	no_argument,		NULL,	'p'},
 		{"cont",	no_argument,		NULL,	'c'},
@@ -219,7 +229,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdixAeoROg:s:u:E:w:W:hr",
+	while ((opt = getopt_long(argc, argv, "aDmpcCdixAeoROg:s:u:E:w:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

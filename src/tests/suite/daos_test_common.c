@@ -343,10 +343,16 @@ pool_destroy_safe(test_arg_t *arg)
 	}
 
 	daos_pool_disconnect(poh, NULL);
+	print_message("pool disconnect "DF_UUIDF"\n",
+		      DP_UUID(arg->pool.pool_uuid));
 
-	rc = daos_pool_destroy(arg->pool.pool_uuid, arg->group, 1, NULL);
-	if (rc && rc != -DER_TIMEDOUT)
-		print_message("daos_pool_destroy failed, rc: %d\n", rc);
+	/* TODO Pool destroy causes an error after server node failure:
+	 * unreachable node (should just skip server)
+	 * rc = daos_pool_destroy(arg->pool.pool_uuid, arg->group, 1, NULL);
+	 * if (rc && rc != -DER_TIMEDOUT)
+	 * 	print_message("daos_pool_destroy failed, rc: %d\n", rc);
+	 * print_message("pool destroy "DF_UUIDF"\n", DP_UUID(arg->pool.pool_uuid));
+	 */
 	return rc;
 }
 
@@ -367,6 +373,8 @@ test_teardown(void **state)
 		MPI_Barrier(MPI_COMM_WORLD);
 
 	if (!daos_handle_is_inval(arg->coh)) {
+		print_message("container close "DF_UUIDF"\n",
+			      DP_UUID(arg->co_uuid));
 		rc = daos_cont_close(arg->coh, NULL);
 		if (arg->multi_rank) {
 			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
@@ -383,6 +391,8 @@ test_teardown(void **state)
 
 	if (!uuid_is_null(arg->co_uuid)) {
 		while (arg->myrank == 0) {
+			print_message("container destroy "DF_UUIDF"\n",
+				      DP_UUID(arg->co_uuid));
 			rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
 					       NULL);
 			if (rc == -DER_BUSY) {
@@ -620,41 +630,31 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 	int rc;
 
 	D_ASSERT(pool_size > 0);
-	rc = test_setup(&state, SETUP_CONT_CONNECT, true, pool_size, NULL);
-	if (rc)
-		return rc;
-
-	if (setup_cb != NULL) {
-		rc = setup_cb(&state);
-		if (rc)
-			return rc;
-	}
 
 	for (i = 0; i < sub_tests_size; i++) {
 		int idx = sub_tests ? sub_tests[i] : i;
-		test_arg_t	*arg = state;
 
 		if (idx >= tests_size) {
 			print_message("No test %d\n", idx);
 			continue;
 		}
 
-		arg->index = idx;
 		print_message("%s\n", tests[idx].name);
 		if (tests[idx].setup_func)
 			tests[idx].setup_func(&state);
-
-		tests[idx].test_func(&state);
-		if (tests[idx].teardown_func)
-			tests[idx].teardown_func(&state);
-	}
-
-	if (teardown_cb != NULL) {
-		rc = teardown_cb(&state);
+		rc = test_setup(&state, SETUP_CONT_CONNECT, true, pool_size,
+				NULL);
 		if (rc)
 			return rc;
-	} else {
+
+
+		tests[idx].test_func(&state);
+
+		if (tests[idx].teardown_func)
+			tests[idx].teardown_func(&state);
 		test_teardown(&state);
+
+		state = NULL;
 	}
 
 	return 0;
@@ -672,6 +672,13 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt_idx;
+	if (*targets.tl_tgts == -1)
+		print_message("Excluding all targets from rank %d\n",
+			      *targets.tl_ranks);
+	else
+		print_message("Excluding %d target [%d] from rank %d\n",
+			      targets.tl_nr, *targets.tl_tgts,
+			      *targets.tl_ranks);
 	rc = daos_pool_tgt_exclude(pool_uuid, grp, svc, &targets, NULL);
 	if (rc)
 		print_message("exclude pool failed rc %d\n", rc);
@@ -719,7 +726,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 	arg->srv_disabled_ntgts += tgts_per_node;
 	if (d_rank_in_rank_list(svc, rank))
 		svc->rl_nr--;
-	print_message("\tKilling target %d (total of %d with %d already "
+	print_message("Killing rank %d (total of %d tgts with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
