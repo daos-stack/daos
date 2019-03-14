@@ -69,7 +69,7 @@ process_killrank_request(Drpc__Call *drpc_req, Proto__DaosResponse *daos_resp)
 
 	/* Unpack the daos request from the drpc call body */
 	pb_rank = proto__daos_rank__unpack(
-		NULL, drpc_req->body.len, daos_req->body.data);
+		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (pb_rank == NULL) {
 		daos_resp->status = PROTO__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
@@ -158,7 +158,6 @@ mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
 	process_drpc_request(request, drpc_resp);
 
 	*response = drpc_resp;
-	D_FREE(drpc_resp);
 }
 
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
