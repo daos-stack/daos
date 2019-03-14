@@ -69,7 +69,7 @@ process_killrank_request(Drpc__Call *drpc_req, Proto__DaosResponse *daos_resp)
 
 	/* Unpack the daos request from the drpc call body */
 	pb_rank = proto__daos_rank__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
+		NULL, drpc_req->body.len, daos_req->body.data);
 
 	if (pb_rank == NULL) {
 		daos_resp->status = PROTO__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
@@ -90,7 +90,6 @@ process_killrank_request(Drpc__Call *drpc_req, Proto__DaosResponse *daos_resp)
 static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	int 			rc = 0;
 	Proto__DaosResponse	*daos_resp = NULL;
 	uint8_t			*body = NULL;
 	size_t			len = 0;
