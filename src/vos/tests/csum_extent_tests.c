@@ -940,5 +940,4 @@ void csum_invalid_input_tests(void **state)
 	free(data_buf_1);
 	free(read_data_buf);
 	free(csum_buf_1);
-
 }
