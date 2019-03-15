@@ -22,15 +22,25 @@ The [shell](dmg/daos_shell) is an example client application which can connect t
 
 ## Configuration
 
-`daos_server` configuration file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`daos_server -h` for usage) or default location (`<daos install dir>/install/etc/daos_server.yml`).
+`daos_server` config file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`-o` option) or default location (`<daos install dir>/install/etc/daos_server.yml`).
 
-Parameters will be parsed and populated with defaults (located in `config_types.go`) if not present in configuration.
+Example config files can be found in the [examples folder](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
 
-Commandline parameters take precedence over configuration file values but if not specified on commandline, configuration file values will be applied (or parsed defaults).
+Some parameters will be parsed and populated with defaults as documented in the [default daos server config](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml) if not present in config file.
 
-For convenience, active parsed config values are written to either directory where config file was read from or `/tmp/` if that fails.
+Parameters passed to `daos_server` on the commandline as application options (excluding environment variables) take precedence over values specified in config file.
 
-If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation a "Warning: using os env vars..." message will be printed to the console and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
+For convenience, active parsed config values are written to the directory where the server config file was read from or `/tmp/` if that fails.
+
+If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation an error message beginning "using os env vars..." message will be printed and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
+
+It is strongly recommended to specify all parameters and environment for running DAOS servers in the [server config file](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml).
+
+To clarify:
+
+* If the trigger environment variable is set in the users shell, the control plane will not set the values in the config file and environment variables in shell will be used.
+
+* If the trigger environment variable is not set in the users shell, the control plane will set the values in the config file in preference to those set in the users shell (the users shell environment variables will be overridden by the parameters set in the config file)
 
 ## Subcommands
 
