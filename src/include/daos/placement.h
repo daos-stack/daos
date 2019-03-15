@@ -91,6 +91,7 @@ struct pl_map {
 	int			 pl_ref;
 	/** pool connections, protected by pl_rwlock */
 	int			 pl_connects;
+	unsigned int		 pl_ignore_connects:1;
 	/** type of placement map */
 	pl_map_type_t		 pl_type;
 	/** reference to pool map */
@@ -99,15 +100,14 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 };
 
-int pl_map_create_v2(struct pool_map *pool_map, struct pl_map **pl_mapp);
-void pl_map_destroy_v2(struct pl_map **pl_mapp);
 int pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		  struct pl_map **pl_mapp);
 void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 
 struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
-int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect);
+int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect,
+		   bool ignore_connects);
 void pl_map_disconnect(uuid_t uuid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
@@ -136,7 +136,7 @@ int pl_obj_find_reint(struct pl_map *map,
 
 typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
 
-int pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
-		     pl_get_shard_t pl_get_shard, void *data, uint32_t *leader);
+int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 #endif /* __DAOS_PLACEMENT_H__ */

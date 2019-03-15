@@ -25,9 +25,10 @@ package drpc
 
 import (
 	"fmt"
+	"net"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"net"
 )
 
 // DomainSocketClient is the interface to a dRPC client communicating over a

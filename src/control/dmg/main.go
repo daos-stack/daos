@@ -66,7 +66,7 @@ type cliOptions struct {
 
 var (
 	opts  = new(cliOptions)
-	conns = client.NewConnections()
+	conns = client.NewConnect()
 )
 
 func connectHosts() error {

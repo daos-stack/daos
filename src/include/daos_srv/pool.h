@@ -46,7 +46,6 @@ struct ds_pool {
 	uuid_t			sp_uuid;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
-	struct pl_map	       *sp_pl_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
 	struct ds_iv_ns		*sp_iv_ns;
