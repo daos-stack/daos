@@ -21,7 +21,7 @@ pool:
   svcn: 1
 ior:
  iteration: 1
- iorflags: "-w -r -k -vv" 
+ iorflags: "-w -r -k -vv"
  stripecount: 1024
  asyncio: 16
  object_type:
