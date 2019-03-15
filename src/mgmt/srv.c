@@ -105,7 +105,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	switch (drpc_req->method) {
 	case DRPC_METHOD_MGMT_KILL_RANK:
 		/**
-		 * Process daos request and populate daos response,
+		 * Process drpc request and populate daos response,
 		 * command errors should be indicated inside daos response.
 		 */
 		process_killrank_request(drpc_req, daos_resp);
