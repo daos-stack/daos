@@ -221,9 +221,9 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 
 	if (arg->pca_map != NULL) {
-		rc = pl_map_create_v2(arg->pca_map, &pool->sp_pl_map);
+		rc = pl_map_update(pool->sp_uuid, arg->pca_map, false, true);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to create pl_map: %d\n",
+			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
 				DP_UUID(key), rc);
 			D_GOTO(err_lock, rc);
 		}
@@ -260,7 +260,7 @@ err_collective:
 	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
 err_map:
-	pl_map_destroy_v2(&pool->sp_pl_map);
+	pl_map_disconnect(pool->sp_uuid);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
@@ -299,10 +299,9 @@ pool_free_ref(struct daos_llink *llink)
 		D_ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	if (pool->sp_map != NULL) {
-		pl_map_destroy_v2(&pool->sp_pl_map);
+	pl_map_disconnect(pool->sp_uuid);
+	if (pool->sp_map != NULL)
 		pool_map_decref(pool->sp_map);
-	}
 
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
@@ -861,11 +860,11 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
-			rc = pl_map_create_v2(map, &pool->sp_pl_map);
+			rc = pl_map_update(pool->sp_uuid, map, false, true);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				D_ERROR(DF_UUID
-					": failed to create pl_map: %d\n",
+					": failed to update pl_map: %d\n",
 					DP_UUID(pool->sp_uuid), rc);
 				D_GOTO(out, rc);
 			}
@@ -887,10 +886,10 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		   map != NULL) {
 		struct pool_map *tmp = pool->sp_map;
 
-		rc = pl_map_create_v2(map, &pool->sp_pl_map);
+		rc = pl_map_update(pool->sp_uuid, map, false, true);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
-			D_ERROR(DF_UUID": failed to create pl_map: %d\n",
+			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
 			D_GOTO(out, rc);
 		}

@@ -39,14 +39,19 @@ struct daos_tx_id {
 };
 
 static inline void
-daos_generate_dti(struct daos_tx_id *dti)
+daos_dti_gen(struct daos_tx_id *dti, bool zero)
 {
-	uuid_generate(dti->dti_uuid);
-	dti->dti_sec = time(NULL);
+	if (zero) {
+		memset(dti, 0, sizeof(*dti));
+	} else {
+		/* It will be replaced by HLC when it is ready. */
+		uuid_generate(dti->dti_uuid);
+		dti->dti_sec = time(NULL);
+	}
 }
 
 static inline void
-daos_copy_dti(struct daos_tx_id *des, struct daos_tx_id *src)
+daos_dti_copy(struct daos_tx_id *des, struct daos_tx_id *src)
 {
 	if (src != NULL)
 		*des = *src;
