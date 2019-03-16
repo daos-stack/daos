@@ -32,15 +32,16 @@ Parameters passed to `daos_server` on the commandline as application options (ex
 
 For convenience, active parsed config values are written to the directory where the server config file was read from or `/tmp/` if that fails.
 
-If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation an error message beginning "using os env vars..." message will be printed and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
+If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation an error message beginning "using os env vars..." will be printed and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
 
 It is strongly recommended to specify all parameters and environment for running DAOS servers in the [server config file](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml).
 
-To clarify:
+To clarify with respect to environment variables affecting the behaviour of `daos_io_server` instances:
 
-* If the trigger environment variable is set in the users shell, the control plane will not set the values in the config file and environment variables in shell will be used.
+* If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell.
+The config file will be ignored.
 
-* If the trigger environment variable is not set in the users shell, the control plane will set the values in the config file in preference to those set in the users shell (the users shell environment variables will be overridden by the parameters set in the config file)
+* If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
 
 ## Subcommands
 
