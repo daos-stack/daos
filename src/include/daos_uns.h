@@ -46,6 +46,8 @@ struct duns_attr_t {
 	daos_cont_layout_t	da_type;
 	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass;
+	/** Default Chunks size for all files in container */
+	daos_size_t		da_chunk_size;
 };
 
 /**

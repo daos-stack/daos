@@ -44,6 +44,7 @@ link_hdlr(int argc, char *argv[])
 		{"pool",	required_argument,	NULL,	'p'},
 		{"type",	required_argument,	NULL,	't'},
 		{"oclass",	required_argument,	NULL,	'o'},
+		{"chunk_size",	required_argument,	NULL,	'c'},
 		{NULL,		0,			NULL,	0}
 	};
 	const char		*path = NULL;
@@ -67,6 +68,9 @@ link_hdlr(int argc, char *argv[])
 			break;
 		case 'o':
 			daos_parse_oclass(optarg, &attr.da_oclass);
+			break;
+		case 'c':
+			attr.da_chunk_size = strtoull(optarg, NULL, 10);
 			break;
 		default:
 			return 2;
@@ -155,7 +159,7 @@ resolve_hdlr(int argc, char *argv[])
 	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(attr.da_cuuid));
 	printf("Object Class:\t");
 	print_oclass(attr.da_oclass);
-
+	printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
 	return rc;
 }
 
@@ -174,6 +178,7 @@ link_path options:\n\
 	--path=STR	path name\n\
 	--pool=UUID	pool UUID to connect to\n\
 	--oclass=STR	object class (tiny, small, large, R2S, R2, repl_max)\n\
+	--chunk_size=STR Chunk size of files created\n\
 	--type=STR	container type to create (POSIX, HDF5)\n");
 	printf("\
 resolve_path options:\n\
