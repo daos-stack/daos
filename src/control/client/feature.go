@@ -33,6 +33,19 @@ import (
 	"golang.org/x/net/context"
 )
 
+// FeatureMap is an alias for mgmt features supported by gRPC server.
+type FeatureMap map[string]string
+
+// featureResult contains results and error of a request
+type featureResult struct {
+	fm FeatureMap
+	e  error
+}
+
+// cFeatureMap is an alias for management features supported on server
+// connected to given client.
+type cFeatureMap map[string]featureResult
+
 // getFeature returns a feature from a requested name.
 func (c *control) getFeature(name string) (*pb.Feature, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -93,4 +106,30 @@ func (c *control) listFeatures(category string) (
 		fm[f.Fname.Name] = f.Description
 	}
 	return
+}
+
+// ListFeatures returns supported management features for each server connected.
+func (c *connList) ListFeatures() (cFeatureMap, error) {
+	cResults := c.MakeRequests(MakeFeatureRequest)
+	cFeatures := make(cFeatureMap) // mapping of server addresses to features
+
+	for _, res := range cResults {
+		if res.err != nil {
+			cFeatures[res.address] = featureResult{nil, res.err}
+			continue
+		}
+
+		// extract obj from generic result type returned over channel
+		fMap, ok := res.value.(FeatureMap)
+		if !ok {
+			err := fmt.Errorf(
+				"type assertion failed, wanted %+v got %+v",
+				FeatureMap{}, res.value)
+			cFeatures[res.address] = featureResult{nil, err}
+			continue
+		}
+
+		cFeatures[res.address] = featureResult{fMap, nil}
+	}
+	return cFeatures, nil
 }

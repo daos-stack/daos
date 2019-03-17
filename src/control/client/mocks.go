@@ -38,7 +38,7 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) cFeatureMap {
 			fMap[f.Fname.Name] = fmt.Sprintf(
 				"category %s, %s", f.Category.Category, f.Description)
 		}
-		cf[addr] = fMap
+		cf[addr] = featureResult{fMap, nil}
 	}
 	return cf
 }

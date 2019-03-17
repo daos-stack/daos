@@ -31,10 +31,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// cFeatureMap is an alias for management features supported on server
-// connected to given client.
-type cFeatureMap map[string]FeatureMap
-
 // cNvmeMap is an alias for NVMe controllers (and any residing namespaces)
 // on server node connected to given client.
 type cNvmeMap map[string]NvmeControllers
@@ -70,19 +66,29 @@ type Connect interface {
 	KillRank(uuid string, rank uint32) error
 }
 
-// connList is an implementation of Connect and stores controllers
-// (connections to clients, one per target server).
-type connList struct {
-	factory     ControllerFactory
-	controllers []Control
-}
-
 // controllerFactory as an implementation of ControllerFactory.
 type controllerFactory struct{}
 
 // create instantiates and connects a client to server at given address.
 func (c *controllerFactory) create(address string) Control {
 	return &control{}
+}
+
+// result is a generic container far output of client method calls
+type result struct {
+	address string
+	value   interface{}
+	err     error
+}
+
+// clientResults map client addresses to method call results
+type clientResults map[string]result
+
+// connList is an implementation of Connect and stores controllers
+// (connections to clients, one per target server).
+type connList struct {
+	factory     ControllerFactory
+	controllers []Control
 }
 
 // ConnectClients populates collection of client-server controllers.
@@ -154,17 +160,30 @@ func (c *connList) ClearConns() ErrorMap {
 	return eMap
 }
 
+// MakeRequestSimple issues request accross all connections for
+// methods with no parameters which just return error.
+func MakeFeatureRequest(controller Control, ch chan result) {
+	fMap, err := controller.listAllFeatures()
+	ch <- result{controller.getAddress(), fMap, err}
+}
+
 // ListFeatures returns supported management features for each server connected.
-func (c *connList) ListFeatures() (cFeatureMap, error) {
-	cf := make(cFeatureMap)
+func (c *connList) MakeRequests(
+	requestFn func(Control, chan result)) clientResults {
+
+	cMap := make(clientResults) // mapping of server host addresses to results
+	ch := make(chan result)
+
 	for _, mc := range c.controllers {
-		fMap, err := mc.listAllFeatures()
-		if err != nil {
-			return cf, err
-		}
-		cf[mc.getAddress()] = fMap
+		go requestFn(mc, ch)
 	}
-	return cf, nil
+
+	for range c.controllers {
+		res := <-ch
+		cMap[res.address] = res
+	}
+
+	return cMap
 }
 
 // ListNvme returns installed NVMe SSD controllers for each server connected.
