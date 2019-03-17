@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,22 +24,20 @@
 syntax = "proto3";
 package proto;
 
-// Management Service Protobuf Definitions related to interactions between
-// DAOS control server and DAOS IO Servers.
+import "storage.proto";
+import "srv.proto";
 
-// Identifier for server rank within DAOS pool
-message DaosRank {
-	string pool_uuid = 1;	// UUID of the pool
-	uint32 rank = 2;	// Server rank
-}
-
-enum DaosRequestStatus {
-	SUCCESS = 0;
-	ERR_UNKNOWN = -1;		// Unknown error
-	ERR_INVALID_RANK = -2;		// Rank requested is invalid
-	ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
-}
-
-message DaosResponse {
-	DaosRequestStatus status = 1;
+// This is the main service definition for communications involving the
+// gRPC management server. In order to add RPCs associated with your
+// service add them in the ManagementService definition below.
+service MgmtControl {
+	rpc GetFeature(FeatureName) returns (Feature) {};
+	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
+	rpc ListFeatures(Category) returns (stream Feature) {};
+	rpc ListNvmeCtrlrs(EmptyParams) returns (stream NvmeController) {};
+	rpc UpdateNvmeCtrlr(UpdateNvmeParams) returns (NvmeController) {};
+	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
+	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
+	rpc ListScmModules(EmptyParams) returns (stream ScmModule) {};
+	rpc KillRank(DaosRank) returns (DaosResponse) {}; // Kill server of rank
 }
