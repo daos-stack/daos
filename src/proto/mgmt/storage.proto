@@ -22,7 +22,7 @@
 //
 
 syntax = "proto3";
-package proto;
+package mgmt;
 
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.

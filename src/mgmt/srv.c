@@ -61,18 +61,18 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 #undef X
 
 static void
-process_killrank_request(Drpc__Call *drpc_req, Proto__DaosResponse *daos_resp)
+process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
 {
-	Proto__DaosRank	*pb_rank = NULL;
+	Mgmt__DaosRank	*pb_rank = NULL;
 
-	proto__daos_response__init(daos_resp);
+	mgmt__daos_response__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
-	pb_rank = proto__daos_rank__unpack(
+	pb_rank = mgmt__daos_rank__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (pb_rank == NULL) {
-		daos_resp->status = PROTO__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
 		D_ERROR("Failed to extract rank from request\n");
 
 		return;
@@ -84,13 +84,13 @@ process_killrank_request(Drpc__Call *drpc_req, Proto__DaosResponse *daos_resp)
 
 	/* TODO: do something with request and populate daos response status */
 
-	proto__daos_rank__free_unpacked(pb_rank, NULL);
+	mgmt__daos_rank__free_unpacked(pb_rank, NULL);
 }
 
 static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Proto__DaosResponse	*daos_resp = NULL;
+	Mgmt__DaosResponse	*daos_resp = NULL;
 	uint8_t			*body = NULL;
 	size_t			len = 0;
 
@@ -110,7 +110,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		 */
 		process_killrank_request(drpc_req, daos_resp);
 
-		len = proto__daos_response__get_packed_size(daos_resp);
+		len = mgmt__daos_response__get_packed_size(daos_resp);
 		D_ALLOC(body, len);
 		if (body == NULL) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -119,7 +119,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			break;
 		}
 
-		if (proto__daos_response__pack(daos_resp, body) != len) {
+		if (mgmt__daos_response__pack(daos_resp, body) != len) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Unexpected num bytes for daos resp\n");
 

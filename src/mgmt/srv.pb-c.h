@@ -15,35 +15,35 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
-typedef struct _Proto__DaosRank Proto__DaosRank;
-typedef struct _Proto__DaosResponse Proto__DaosResponse;
+typedef struct _Mgmt__DaosRank Mgmt__DaosRank;
+typedef struct _Mgmt__DaosResponse Mgmt__DaosResponse;
 
 
 /* --- enums --- */
 
-typedef enum _Proto__DaosRequestStatus {
-  PROTO__DAOS_REQUEST_STATUS__SUCCESS = 0,
+typedef enum _Mgmt__DaosRequestStatus {
+  MGMT__DAOS_REQUEST_STATUS__SUCCESS = 0,
   /*
    * Unknown error
    */
-  PROTO__DAOS_REQUEST_STATUS__ERR_UNKNOWN = -1,
+  MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN = -1,
   /*
    * Rank requested is invalid
    */
-  PROTO__DAOS_REQUEST_STATUS__ERR_INVALID_RANK = -2,
+  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_RANK = -2,
   /*
    * Pool UUID requested is invalid
    */
-  PROTO__DAOS_REQUEST_STATUS__ERR_INVALID_UUID = -3
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(PROTO__DAOS_REQUEST_STATUS)
-} Proto__DaosRequestStatus;
+  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_UUID = -3
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__DAOS_REQUEST_STATUS)
+} Mgmt__DaosRequestStatus;
 
 /* --- messages --- */
 
 /*
  * Identifier for server rank within DAOS pool
  */
-struct  _Proto__DaosRank
+struct  _Mgmt__DaosRank
 {
   ProtobufCMessage base;
   /*
@@ -55,66 +55,66 @@ struct  _Proto__DaosRank
    */
   uint32_t rank;
 };
-#define PROTO__DAOS_RANK__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&proto__daos_rank__descriptor) \
+#define MGMT__DAOS_RANK__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_rank__descriptor) \
     , (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Proto__DaosResponse
+struct  _Mgmt__DaosResponse
 {
   ProtobufCMessage base;
-  Proto__DaosRequestStatus status;
+  Mgmt__DaosRequestStatus status;
 };
-#define PROTO__DAOS_RESPONSE__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&proto__daos_response__descriptor) \
-    , PROTO__DAOS_REQUEST_STATUS__SUCCESS }
+#define MGMT__DAOS_RESPONSE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_response__descriptor) \
+    , MGMT__DAOS_REQUEST_STATUS__SUCCESS }
 
 
-/* Proto__DaosRank methods */
-void   proto__daos_rank__init
-                     (Proto__DaosRank         *message);
-size_t proto__daos_rank__get_packed_size
-                     (const Proto__DaosRank   *message);
-size_t proto__daos_rank__pack
-                     (const Proto__DaosRank   *message,
+/* Mgmt__DaosRank methods */
+void   mgmt__daos_rank__init
+                     (Mgmt__DaosRank         *message);
+size_t mgmt__daos_rank__get_packed_size
+                     (const Mgmt__DaosRank   *message);
+size_t mgmt__daos_rank__pack
+                     (const Mgmt__DaosRank   *message,
                       uint8_t             *out);
-size_t proto__daos_rank__pack_to_buffer
-                     (const Proto__DaosRank   *message,
+size_t mgmt__daos_rank__pack_to_buffer
+                     (const Mgmt__DaosRank   *message,
                       ProtobufCBuffer     *buffer);
-Proto__DaosRank *
-       proto__daos_rank__unpack
+Mgmt__DaosRank *
+       mgmt__daos_rank__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   proto__daos_rank__free_unpacked
-                     (Proto__DaosRank *message,
+void   mgmt__daos_rank__free_unpacked
+                     (Mgmt__DaosRank *message,
                       ProtobufCAllocator *allocator);
-/* Proto__DaosResponse methods */
-void   proto__daos_response__init
-                     (Proto__DaosResponse         *message);
-size_t proto__daos_response__get_packed_size
-                     (const Proto__DaosResponse   *message);
-size_t proto__daos_response__pack
-                     (const Proto__DaosResponse   *message,
+/* Mgmt__DaosResponse methods */
+void   mgmt__daos_response__init
+                     (Mgmt__DaosResponse         *message);
+size_t mgmt__daos_response__get_packed_size
+                     (const Mgmt__DaosResponse   *message);
+size_t mgmt__daos_response__pack
+                     (const Mgmt__DaosResponse   *message,
                       uint8_t             *out);
-size_t proto__daos_response__pack_to_buffer
-                     (const Proto__DaosResponse   *message,
+size_t mgmt__daos_response__pack_to_buffer
+                     (const Mgmt__DaosResponse   *message,
                       ProtobufCBuffer     *buffer);
-Proto__DaosResponse *
-       proto__daos_response__unpack
+Mgmt__DaosResponse *
+       mgmt__daos_response__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   proto__daos_response__free_unpacked
-                     (Proto__DaosResponse *message,
+void   mgmt__daos_response__free_unpacked
+                     (Mgmt__DaosResponse *message,
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
-typedef void (*Proto__DaosRank_Closure)
-                 (const Proto__DaosRank *message,
+typedef void (*Mgmt__DaosRank_Closure)
+                 (const Mgmt__DaosRank *message,
                   void *closure_data);
-typedef void (*Proto__DaosResponse_Closure)
-                 (const Proto__DaosResponse *message,
+typedef void (*Mgmt__DaosResponse_Closure)
+                 (const Mgmt__DaosResponse *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -122,9 +122,9 @@ typedef void (*Proto__DaosResponse_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCEnumDescriptor    proto__daos_request_status__descriptor;
-extern const ProtobufCMessageDescriptor proto__daos_rank__descriptor;
-extern const ProtobufCMessageDescriptor proto__daos_response__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__daos_request_status__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__daos_rank__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__daos_response__descriptor;
 
 PROTOBUF_C__END_DECLS
 
