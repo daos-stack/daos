@@ -283,7 +283,7 @@ copy_acl_with_new_ace_inserted(struct daos_acl *acl, struct daos_acl *new_acl,
 		}
 	}
 
-	/* didn't insert it - tack it on the end */
+	/* didn't insert it - add it onto the end */
 	if (!new_written) {
 		write_ace(new_ace, pen);
 	}
