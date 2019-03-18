@@ -24,9 +24,10 @@
 package security
 
 import (
-	"golang.org/x/sys/unix"
 	"net"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // DomainInfo holds our socket credentials to be used by the DomainSocketServer

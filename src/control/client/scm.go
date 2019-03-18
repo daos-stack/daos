@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"io"
@@ -33,11 +33,11 @@ import (
 )
 
 // listScmModules prints all discovered Storage Class Memory modules installed.
-func (mc *client) listScmModules() (mms ScmModules, err error) {
+func (c *control) listScmModules() (mms ScmModules, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.client.ListScmModules(ctx, &pb.EmptyParams{})
+	stream, err := c.client.ListScmModules(ctx, &pb.EmptyParams{})
 	if err != nil {
 		return
 	}
