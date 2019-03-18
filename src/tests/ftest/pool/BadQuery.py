@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -104,24 +104,24 @@ class BadQueryTest(Test):
             # setup the DAOS python API
             with open('../../../.build_vars.json') as f:
                 data = json.load(f)
-            CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
+            context = DaosContext(data['PREFIX'] + '/lib/')
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(CONTEXT)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
-            POOL.connect(connectmode)
+            pool.connect(connectmode)
 
             # trash the pool handle value
             if not handle == 'VALID':
-                POOL.handle = handle
+                pool.handle = handle
 
             if  infoptr == 'NULL':
-                info = POOL.pool_query(InfoPtr=None)
+                pool.pool_query(InfoPtr=None)
             else:
-                info = POOL.pool_query()
+                pool.pool_query()
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")

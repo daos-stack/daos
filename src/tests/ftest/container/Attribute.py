@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -95,14 +95,14 @@ class ContainerAttributeTest(Test):
         server_group = self.params.get("server_group",
                                        '/server/',
                                        'daos_server')
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
-        self.pool = DaosPool(self.Context)
+        self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/attrtests/createmode/*'),
                          os.geteuid(),
                          os.getegid(),
@@ -111,7 +111,7 @@ class ContainerAttributeTest(Test):
                          None)
         self.pool.connect(1 << 1)
         poh = self.pool.handle
-        self.container = DaosContainer(self.Context)
+        self.container = DaosContainer(self.context)
         self.container.create(poh)
         self.container.open()
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ class GlobalHandle(Test):
             self.build_paths = json.load(f)
 
         # setup the DAOS python API
-        self.Context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
 
         server_group = self.params.get("server_group",'/server/',
                                            'daos_server')
@@ -133,13 +133,13 @@ class GlobalHandle(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.Context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
             pool.connect(1 << 1)
 
             # create a container just to make sure handle is good
-            container = DaosContainer(self.Context)
+            container = DaosContainer(self.context)
             container.create(pool.handle)
 
             # create a global handle

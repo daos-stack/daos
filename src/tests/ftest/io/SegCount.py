@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ class SegCount(Test):
         super(SegCount, self).__init__(*args, **kwargs)
 
         self.basepath = None
-        self.Context = None
+        self.context = None
         self.pool = None
         self.slots = None
         self.hostlist_servers = None
@@ -62,7 +62,7 @@ class SegCount(Test):
         self.server_group = self.params.get("server_group", '/server/', 'daos_server')
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/*')
         hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
@@ -135,7 +135,7 @@ class SegCount(Test):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.Context)
+            self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None, None, createsvc)
 

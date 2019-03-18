@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ class DestroyTests(Test):
                                             'daos_server')
 
         # setup the DAOS python API
-        self.Context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
     def tearDown(self):
         pass
@@ -402,15 +402,15 @@ class DestroyTests(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(self.Context)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(self.context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # need a connection to create container
-            POOL.connect(1 << 1)
+            pool.connect(1 << 1)
 
             # destroy pool with connection open
-            POOL.destroy(0)
+            pool.destroy(0)
 
             # should throw an exception and not hit this
             self.fail("Shouldn't hit this line.\n")
@@ -454,26 +454,26 @@ class DestroyTests(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(self.Context)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(self.context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # blow it away immediately
-            POOL.destroy(1)
+            pool.destroy(1)
 
             # now recreate
-            POOL.create(createmode, createuid, creategid,
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # blow it away immediately
-            POOL.destroy(1)
+            pool.destroy(1)
 
             # now recreate
-            POOL.create(createmode, createuid, creategid,
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # blow it away immediately
-            POOL.destroy(1)
+            pool.destroy(1)
 
         except DaosApiError as e:
             print (e)
@@ -511,14 +511,14 @@ class DestroyTests(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(self.Context)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(self.context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             time.sleep(1)
 
             # okay, get rid of it
-            POOL.destroy(1)
+            pool.destroy(1)
 
         except DaosApiError as e:
             print (e)
@@ -557,29 +557,29 @@ class DestroyTests(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(self.Context)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(self.context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # need a connection to create container
-            POOL.connect(1 << 1)
+            pool.connect(1 << 1)
 
             # create a container
-            CONTAINER = DaosContainer(self.Context)
-            CONTAINER.create(POOL.handle)
+            container = DaosContainer(self.context)
+            container.create(pool.handle)
 
-            POOL.disconnect()
+            pool.disconnect()
 
             daosctl = self.basepath + '/install/bin/daosctl'
 
             write_cmd = ('{0} write-pattern -i {1} -l 0 -c {2} -p sequential'.
-                         format(daosctl, c_uuid_to_str(POOL.uuid),
-                                c_uuid_to_str(CONTAINER.uuid)))
+                         format(daosctl, c_uuid_to_str(pool.uuid),
+                                c_uuid_to_str(container.uuid)))
 
             process.system_output(write_cmd)
 
             # blow it away
-            POOL.destroy(1)
+            pool.destroy(1)
 
         except DaosApiError as e:
             print (e)
@@ -621,15 +621,15 @@ class DestroyTests(Test):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            POOL = DaosPool(self.Context)
-            POOL.create(createmode, createuid, creategid,
+            pool = DaosPool(self.context)
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
             # allow the callback to tell us when its been called
             GLOB_SIGNAL = threading.Event()
 
             # blow it away but this time get return code via callback function
-            POOL.destroy(1, cb_func)
+            pool.destroy(1, cb_func)
 
             # wait for callback
             GLOB_SIGNAL.wait()
@@ -638,12 +638,12 @@ class DestroyTests(Test):
 
             # recreate the pool, reset the signal, shutdown the
             # servers so call will fail and then check rc in the callback
-            POOL.create(createmode, createuid, creategid,
+            pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
             ServerUtils.stopServer(hosts=self.hostlist)
-            POOL.destroy(1, cb_func)
+            pool.destroy(1, cb_func)
 
             # wait for callback, expecting a timeout since servers are down
             GLOB_SIGNAL.wait()
