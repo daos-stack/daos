@@ -99,7 +99,7 @@ vts_key_gen(char *dest, size_t len, bool is_dkey, struct io_test_args *arg)
 	memset(dest, 0, len);
 	if (is_dkey) {
 		vts_key_gen_helper(dest, len, DKEY, dkey, arg);
-	} else if (arg->ofeat & TF_FIXED_AKEY) {
+	} else if (arg->ta_flags & TF_FIXED_AKEY) {
 		if (arg->ofeat & DAOS_OF_AKEY_UINT64) {
 			if (arg->ta_flags & TF_REC_EXT) {
 				memcpy(&dest[0], &update_akey_array,

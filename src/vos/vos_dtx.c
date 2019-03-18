@@ -413,12 +413,11 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 
 	if (key->kr_bmap & KREC_BF_EVT) {
 		tgt_key->kr_evt = key->kr_evt;
-		tgt_key->kr_bmap |= KREC_BF_EVT;
+		D_ASSERT(tgt_key->kr_bmap & KREC_BF_EVT);
 		/* The @key which epoch is MAX will be removed later. */
 		memset(&key->kr_evt, 0, sizeof(key->kr_evt));
 	} else {
-		D_ASSERT(key->kr_bmap & KREC_BF_BTR);
-		tgt_key->kr_bmap |= KREC_BF_BTR;
+		D_ASSERT(tgt_key->kr_bmap & KREC_BF_BTR);
 		tgt_key->kr_btr = key->kr_btr;
 		/* The @key which epoch is MAX will be removed later. */
 		memset(&key->kr_btr, 0, sizeof(key->kr_btr));
