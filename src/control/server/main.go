@@ -92,8 +92,10 @@ func main() {
 	// Set log level mask for default logger from config.
 	switch config.ControlLogMask {
 	case cLogDebug:
+		log.Debugf("Switching control log level to DEBUG")
 		log.SetLevel(log.Debug)
 	case cLogError:
+		log.Debugf("Switching control log level to ERROR")
 		log.SetLevel(log.Error)
 	}
 
@@ -105,6 +107,11 @@ func main() {
 			return
 		}
 		defer f.Close()
+
+		log.Debugf(
+			"%s logging to file %s",
+			os.Args[0], config.ControlLogFile)
+
 		log.SetOutput(f)
 	}
 

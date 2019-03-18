@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,5 +102,12 @@ extern btr_ops_t dbtree_iv_ops;
  */
 #define DBTREE_CLASS_RECX (DBTREE_DSM_BEGIN + 5)
 extern btr_ops_t dbtree_recx_ops;
+
+/**
+ * The key is a uint64_t integer: 32-bits rank + 32-bits VOS tag.
+ * The value is the array of DTX IDs.
+ * The dbtree is usually in the volatile memory for classifying DTX IDs.
+ */
+#define DBTREE_CLASS_DTX_CF (DBTREE_DSM_BEGIN + 6)
 
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */

@@ -25,10 +25,11 @@ package drpc
 
 import (
 	"fmt"
-	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/golang/protobuf/proto"
 	"net"
 	"testing"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/golang/protobuf/proto"
 )
 
 // testSockPath is an arbitrary path string to use for testing. These tests
