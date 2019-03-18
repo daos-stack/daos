@@ -1,5 +1,4 @@
 #!/usr/bin/python
-from __future__ import print_statement
 '''
   (C) Copyright 2019 Intel Corporation.
 
@@ -22,6 +21,7 @@ from __future__ import print_statement
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_statement
 
 import os
 import sys
