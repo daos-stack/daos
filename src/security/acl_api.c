@@ -533,7 +533,7 @@ daos_acl_dump(struct daos_acl *acl)
 	}
 
 	printf("\tVersion: %hu\n", acl->dal_ver);
-	printf("\tLength: %hu\n", acl->dal_len);
+	printf("\tLength: %u\n", acl->dal_len);
 
 	current = daos_acl_get_next_ace(acl, NULL);
 	while (current != NULL) {
@@ -651,7 +651,7 @@ print_principal(uint indent_tabs, struct daos_ace *ace)
 		ace->dae_principal_type);
 
 	indent(indent_tabs);
-	printf("Principal Length: %u\n", ace->dae_principal_len);
+	printf("Principal Length: %hu\n", ace->dae_principal_len);
 
 	if (ace->dae_principal_len > 0) {
 		indent(indent_tabs);
@@ -683,7 +683,7 @@ static void
 print_access_type(uint indent_tabs, uint8_t type)
 {
 	indent(indent_tabs);
-	printf("%s (0x%x)\n", get_access_type_string(type), type);
+	printf("%s (0x%hhx)\n", get_access_type_string(type), type);
 }
 
 static void
