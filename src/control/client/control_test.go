@@ -43,7 +43,7 @@ func (m *mockControl) connect(addr string) error {
 	m.address = addr
 	return nil
 }
-func (m *mockControl) close() error { return nil }
+func (m *mockControl) disconnect() error { return nil }
 func (m *mockControl) connected() (connectivity.State, bool) {
 	return m.connState, checkState(m.connState)
 }

@@ -29,9 +29,9 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// NewClientFM provides a mock ClientFeatureMap for testing.
-func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
-	cf := make(ClientFeatureMap)
+// NewClientFM provides a mock cFeatureMap for testing.
+func NewClientFM(features []*pb.Feature, addrs Addresses) cFeatureMap {
+	cf := make(cFeatureMap)
 	for _, addr := range addrs {
 		fMap := make(FeatureMap)
 		for _, f := range features {
@@ -43,18 +43,18 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
 	return cf
 }
 
-// NewClientNvme provides a mock ClientNvmeMap for testing.
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
-	cMap := make(ClientNvmeMap)
+// NewClientNvme provides a mock cNvmeMap for testing.
+func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) cNvmeMap {
+	cMap := make(cNvmeMap)
 	for _, addr := range addrs {
 		cMap[addr] = ctrlrs
 	}
 	return cMap
 }
 
-// NewClientScm provides a mock ClientScmMap for testing.
-func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
-	cMap := make(ClientScmMap)
+// NewClientScm provides a mock cScmMap for testing.
+func NewClientScm(mms ScmModules, addrs Addresses) cScmMap {
+	cMap := make(cScmMap)
 	for _, addr := range addrs {
 		cMap[addr] = mms
 	}

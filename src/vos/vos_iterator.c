@@ -441,7 +441,7 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 
 static inline void
 set_reprobe(vos_iter_type_t type, unsigned int acts,
-	    struct vos_iter_anchors *anchors)
+	    struct vos_iter_anchors *anchors, bool unsorted)
 {
 	bool yield = (acts & VOS_ITER_CB_YIELD);
 	bool delete = (acts & VOS_ITER_CB_DELETE);
@@ -452,7 +452,9 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_sv = 1;
 		/* fallthrough */
 	case VOS_ITER_RECX:
-		/* evtree doesn't need reprobe on deletion or yield */
+		/* evtree only need reprobe on yield for unsorted iteration */
+		if (unsorted && yield && (type == VOS_ITER_RECX))
+			anchors->ia_reprobe_ev = 1;
 		/* fallthrough */
 	case VOS_ITER_AKEY:
 		if (yield || (delete && (type == VOS_ITER_AKEY)))
@@ -518,6 +520,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	vos_iter_entry_t	iter_ent;
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
+	bool			skipped;
 	int			rc;
 
 	D_ASSERT(type >= VOS_ITER_OBJ && type <= VOS_ITER_RECX);
@@ -565,7 +568,9 @@ probe:
 		if (rc != 0)
 			break;
 
-		set_reprobe(type, acts, anchors);
+		set_reprobe(type, acts, anchors,
+			    param->ip_flags == VOS_IT_RECX_ALL);
+		skipped = (acts & VOS_ITER_CB_SKIP);
 		acts = 0;
 
 		if (need_reprobe(type, anchors)) {
@@ -574,7 +579,7 @@ probe:
 			goto probe;
 		}
 
-		if (recursive && !is_last_level(type)) {
+		if (recursive && !is_last_level(type) && !skipped) {
 			vos_iter_param_t	child_param = *param;
 
 			child_param.ip_ih = ih;

@@ -217,6 +217,7 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 enum {
 	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
 	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
+	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
 };
 
 /**
