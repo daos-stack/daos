@@ -38,6 +38,8 @@ typedef enum {
 	PL_TYPE_UNKNOWN,
 	/** only support ring map for the time being */
 	PL_TYPE_RING,
+	/**Prototype placement map*/
+	PL_TYPE_MAPLESS,
 	/** reserved */
 	PL_TYPE_PETALS,
 } pl_map_type_t;

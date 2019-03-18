@@ -31,6 +31,7 @@
 #include <gurt/hash.h>
 
 extern struct pl_map_ops	ring_map_ops;
+extern struct pl_map_ops	mapless_map_ops;
 
 /** dictionary for all unknown placement maps */
 struct pl_map_dict {
@@ -48,6 +49,11 @@ static struct pl_map_dict pl_maps[] = {
 		.pd_type	= PL_TYPE_RING,
 		.pd_ops		= &ring_map_ops,
 		.pd_name	= "ring",
+	},
+	{
+		.pd_type    = PL_TYPE_MAPLESS,
+		.pd_ops     = &mapless_map_ops,
+		.pd_name    = "mapless",
 	},
 	{
 		.pd_type	= PL_TYPE_UNKNOWN,
