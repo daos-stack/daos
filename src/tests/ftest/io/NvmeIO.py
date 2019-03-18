@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from __future__ import print_statement
 '''
   (C) Copyright 2019 Intel Corporation.
 
