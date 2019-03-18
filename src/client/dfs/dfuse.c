@@ -459,7 +459,8 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	}
 
 	mode = S_IFREG | mode;
-	rc = dfs_open(dfs, parent, name, mode, fi->flags, DAOS_OC_LARGE_RW,
+	/** TODO - set the oclass and array chunk size using the UNS */
+	rc = dfs_open(dfs, parent, name, mode, fi->flags, DAOS_OC_LARGE_RW, 0,
 		      NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc);
@@ -505,7 +506,9 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, 0, NULL, &obj);
+	/** TODO - set the oclass and array chunk size using the UNS */
+	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, DAOS_OC_LARGE_RW,
+		      0, NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -553,7 +556,8 @@ dfuse_opendir(const char *path, struct fuse_file_info *fi)
 		fi->fh = (uint64_t)parent;
 		free_parent = false;
 	} else {
-		rc = dfs_open(dfs, parent, name, S_IFDIR, O_RDONLY, 0, NULL,
+		/** TODO - set the oclass and array chunk size using the UNS */
+		rc = dfs_open(dfs, parent, name, S_IFDIR, O_RDONLY, 0, 0, NULL,
 			      &obj);
 		if (rc)
 			D_GOTO(out, rc);
@@ -696,7 +700,8 @@ dfuse_symlink(const char *from, const char *to)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dfs_open(dfs, parent, name, S_IFLNK, O_CREAT, 0, from, &sym);
+	/** TODO - set the object class and array chunk size using the UNS */
+	rc = dfs_open(dfs, parent, name, S_IFLNK, O_CREAT, 0, 0, from, &sym);
 	if (rc)
 		D_GOTO(out, rc);
 
