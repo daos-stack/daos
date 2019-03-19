@@ -166,3 +166,11 @@ func TestListStorage(t *testing.T) {
 		t, clientScm, NewClientScm(modules, addresses),
 		"unexpected client SCM modules returned")
 }
+
+func TestKillRank(t *testing.T) {
+	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
+
+	eMap := cc.KillRank("acd", 0)
+
+	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+}

@@ -39,9 +39,25 @@ type nvmeResult struct {
 	e  error
 }
 
+// scmResult contains results and error of a request
+type scmResult struct {
+	mms ScmModules
+	e   error
+}
+
+// storageResult container for results from multiple storage subsystems queries.
+type storageResult struct {
+	nvme nvmeResult
+	scm  scmResult
+}
+
 // cNvmeMap is an alias for query results of NVMe controllers (and
 // any residing namespaces) on connected servers keyed on address.
 type cNvmeMap map[string]nvmeResult
+
+// cScmMap is an alias for query results of SCM modules installed
+// on connected servers keyed on address.
+type cScmMap map[string]scmResult
 
 // listNvmeCtrlrs returns NVMe controllers in protobuf format.
 func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
@@ -66,6 +82,73 @@ func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
 	}
 
 	return
+}
+
+// listScmModules prints all discovered Storage Class Memory modules installed.
+func (c *control) listScmModules() (mms ScmModules, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream, err := c.client.ListScmModules(ctx, &pb.EmptyParams{})
+	if err != nil {
+		return
+	}
+
+	var mm *pb.ScmModule
+	for {
+		mm, err = stream.Recv()
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			return
+		}
+		mms = append(mms, mm)
+	}
+
+	return
+}
+
+// listStorageRequest is to be called as a goroutine and returns result
+// containing locally attached NVMe and SCM storage devices over channel.
+func listStorageRequest(mc Control, ch chan result) {
+	sRes := storageResult{}
+
+	ctrlrs, err := mc.listNvmeCtrlrs()
+	sRes.nvme = nvmeResult{ctrlrs, err}
+
+	mms, err := mc.listScmModules()
+	sRes.scm = scmResult{mms, err}
+
+	ch <- result{mc.getAddress(), sRes, nil} // result.err is ignored
+}
+
+// ListStorage returns locally-attached nonvolatile storage devices for each
+// connected server.
+func (c *connList) ListStorage() (cNvmeMap, cScmMap) {
+	cResults := c.makeRequests(listStorageRequest)
+	cCtrlrs := make(cNvmeMap) // mapping of server address to NVMe SSDs
+	cModules := make(cScmMap) // mapping of server address to SCM modules
+
+	for _, res := range cResults {
+		// we want to extract obj regardless of error as may only refer
+		// to one of the subsystems, ignore res.err
+		storageRes, ok := res.value.(storageResult)
+		if !ok {
+			err := fmt.Errorf(
+				"type assertion failed, wanted %+v got %+v",
+				storageResult{}, res.value)
+
+			cCtrlrs[res.address] = nvmeResult{nil, err}
+			cModules[res.address] = scmResult{nil, err}
+			continue
+		}
+
+		cCtrlrs[res.address] = storageRes.nvme
+		cModules[res.address] = storageRes.scm
+	}
+
+	return cCtrlrs, cModules
 }
 
 // UpdateNvmeCtrlr updates firmware of a given controller.
