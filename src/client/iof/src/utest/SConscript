@@ -56,7 +56,7 @@ DEPS = {'test_ctrl_fs.c':['cart', 'fuse'],
         'utest_vector.c':['cart']}
 CPPPATH = {'test_ctrl_fs.c':['../cnss', '../include'],
            'utest_preload.c':['../include', '../common/include', '../il']}
-LIBS = {'test_ctrl_fs.c':['pthread'],
+LIBS = {'test_ctrl_fs.c':['pthread', 'daos_common'],
         'utest_pool.c':['pthread'],
         'utest_vector.c':['pthread']}
 DEFINES = {}

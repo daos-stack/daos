@@ -51,8 +51,7 @@ except ImportError:
 IOF_VERSION = "0.0.1"
 
 # Desired compiler flags that will be used if the compiler supports them.
-DESIRED_FLAGS = ['-Wdeclaration-after-statement',
-                 '-Wno-missing-braces',
+DESIRED_FLAGS = ['-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wunknown-warning-option',
                  '-Wno-gnu-designator',
@@ -122,7 +121,7 @@ def scons():
     
     Export('env prereqs IOF_VERSION')
 
-    env.Append(CFLAGS=['-g', '-Wall', '-std=gnu99'])
+    env.Append(CFLAGS=['-g', '-Wall'])
 
     if not env.GetOption('clean'):
         run_checks(env, prereqs, platform)

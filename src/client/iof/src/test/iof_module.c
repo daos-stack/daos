@@ -54,7 +54,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BUF_SIZE 4096
+#define BUF_SIZE 128
 
 struct module_state {
 	PyObject	*error;

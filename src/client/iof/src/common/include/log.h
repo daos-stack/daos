@@ -42,12 +42,11 @@
 
 #include <inttypes.h>
 
-extern int iof_log_handle;
 #ifndef D_LOGFAC
-#define D_LOGFAC iof_log_handle
+#define D_LOGFAC DD_FAC(iof)
 #endif
 
-#include <gurt/debug.h>
+#include <daos/common.h>
 
 /* Allow changing the default so these macros can be
  * used by files that don't log to the default facility

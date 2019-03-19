@@ -37,9 +37,10 @@
  */
 
 #include <pthread.h>
-#include <gurt/common.h>
 
 #include "log.h"
+
+#include <gurt/common.h>
 
 int iof_log_handle;
 
@@ -50,7 +51,7 @@ void iof_log_init(const char *shortname, const char *longname, int *handle)
 	d_log_init();
 	new_handle = d_log_allocfacility(shortname, longname);
 	d_log_sync_mask();
-
+	
 	if (handle == NULL) {
 		iof_log_handle = new_handle;
 	} else {

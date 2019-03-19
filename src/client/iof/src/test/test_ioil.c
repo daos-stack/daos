@@ -63,7 +63,7 @@ static uint64_t max_iov_read_size;
 #define WRITE_LOG(...) \
 	WRITE_LOG_VERBOSE(" at %s:%d", __VA_ARGS__, __FILE__, __LINE__)
 
-#define BUF_SIZE 4096
+#define BUF_SIZE 128
 
 char big_string[BUF_SIZE];
 

@@ -621,7 +621,7 @@ static void ioc_eviction_cb(crt_group_t *group, d_rank_t rank, void *arg)
 	struct iof_projection_info	*fs_handle;
 	crt_rpc_t			*rpc = NULL;
 	int				active = 0;
-	int crc, rc;
+	int crc, rc = 0;
 
 	IOF_TRACE_INFO(iof_state,
 		       "Eviction handler, Group: %s; Rank: %u",

@@ -39,6 +39,8 @@
 #define IOF_COMMON_H
 
 #include <sys/stat.h>
+
+#include <daos/common.h>
 #include <cart/api.h>
 #include <gurt/common.h>
 

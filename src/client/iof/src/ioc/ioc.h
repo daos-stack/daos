@@ -894,7 +894,7 @@ void ioc_ll_write(fuse_req_t, fuse_ino_t, const char *,	size_t, off_t,
 void ioc_ll_write_buf(fuse_req_t, fuse_ino_t, struct fuse_bufvec *,
 		      off_t, struct fuse_file_info *);
 
-void ioc_ll_ioctl(fuse_req_t, fuse_ino_t, unsigned int, void *,
+void ioc_ll_ioctl(fuse_req_t, fuse_ino_t, int, void *,
 		  struct fuse_file_info *, unsigned int, const void *,
 		  size_t, size_t);
 

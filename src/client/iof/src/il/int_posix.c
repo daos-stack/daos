@@ -469,6 +469,7 @@ IOF_PUBLIC int iof_open(const char *pathname, int flags, ...)
 		fd = __real_open(pathname, flags, mode);
 	} else {
 		fd =  __real_open(pathname, flags);
+		mode = 0;
 	}
 
 	if (!ioil_initialized || (fd == -1))

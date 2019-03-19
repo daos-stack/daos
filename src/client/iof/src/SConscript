@@ -173,7 +173,7 @@ def scons():
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     tenv.AppendUnique(CPPPATH=['common/include'])
     tenv.AppendUnique(CPPPATH=['include'])
-    tenv.AppendUnique(LIBS='pthread')
+    tenv.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
     prereqs.require(tenv, 'cart')
 

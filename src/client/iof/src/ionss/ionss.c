@@ -1642,7 +1642,7 @@ iof_readlink_handler(crt_rpc_t *rpc)
 	struct iof_gah_in *in = crt_req_get(rpc);
 	struct iof_string_out *out = crt_reply_get(rpc);
 	struct ionss_file_handle *file = NULL;
-	char reply[IOF_MAX_PATH_LEN] = {0};
+	char reply[128] = {0};
 	int rc;
 
 	VALIDATE_ARGS_GAH_FILE(rpc, in, out, file);
@@ -1650,7 +1650,7 @@ iof_readlink_handler(crt_rpc_t *rpc)
 		goto out;
 
 	errno = 0;
-	rc = readlinkat(file->fd, "", reply, IOF_MAX_PATH_LEN);
+	rc = readlinkat(file->fd, "", reply, 128);
 
 	if (rc < 0)
 		out->rc = errno;

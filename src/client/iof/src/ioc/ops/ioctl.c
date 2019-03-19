@@ -38,8 +38,8 @@
 
 #include <sys/ioctl.h>
 
-#include <gurt/common.h>
 #include "iof_common.h"
+#include <gurt/common.h>
 #include "ioc.h"
 #include "log.h"
 #include "iof_ioctl.h"
@@ -68,7 +68,7 @@ handle_gah_ioctl(int cmd, struct iof_file_handle *handle,
 	gah_info->cli_fs_id = fs_handle->proj.cli_fs_id;
 }
 
-void ioc_ll_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
+void ioc_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		  struct fuse_file_info *fi, unsigned int flags,
 		  const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {

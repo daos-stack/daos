@@ -59,7 +59,8 @@
 	ACTION(duns,      duns,      arg)	\
 	ACTION(drpc,      drpc,      arg)	\
 	ACTION(security,  security,  arg)	\
-	ACTION(dtx,       dtx,       arg)
+	ACTION(dtx,       dtx,       arg)	\
+	ACTION(iof,       iof,       arg)
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\

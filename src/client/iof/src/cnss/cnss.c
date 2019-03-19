@@ -42,13 +42,14 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
+#include "log.h"
+
 #include <cart/api.h>
 #include <gurt/common.h>
 #include <signal.h>
 
 #include "cnss_plugin.h"
 #include "version.h"
-#include "log.h"
 #include "ctrl_common.h"
 
 #include "cnss.h"
@@ -803,10 +804,6 @@ int main(int argc, char **argv)
 		IOF_TRACE_INFO(cnss_info, "Skipping IOF plugin");
 	} else {
 		/* Load the built-in iof "plugin" */
-
-		IOF_TRACE_INFO(cnss_info,
-			       "Loading plugin at entry point %p",
-			       FN_TO_PVOID(iof_plugin_init));
 
 		rcb = add_plugin(cnss_info, iof_plugin_init, NULL);
 		if (!rcb)
