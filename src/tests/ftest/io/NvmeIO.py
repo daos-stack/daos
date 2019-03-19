@@ -21,13 +21,14 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_statement
+from __future__ import print_function
 
 import os
 import sys
 import json
 import traceback
 import uuid
+import re
 import avocado
 
 sys.path.append('./util')
@@ -53,7 +54,7 @@ class NvmeIo(avocado.Test):
         self.hostfile_clients = None
         self.hostfile = None
         self.out_queue = None
-        self.pool_connect = True
+        self.pool_connect = False
 
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
@@ -97,7 +98,14 @@ class NvmeIo(avocado.Test):
         free_pool_size = (
             original_pool_info.pi_space.ps_space.s_free[storage_index]
             - current_pool_info.pi_space.ps_space.s_free[storage_index])
-        expected_pool_size = ior_args['slots'] * ior_args['block_size']
+
+        obj_multiplier = 1
+        replica_number = re.findall(r'\d+', "ior_args['object_class']")
+        if replica_number:
+            obj_multiplier = int(replica_number[0])
+        expected_pool_size = (ior_args['slots'] * ior_args['block_size'] *
+                              obj_multiplier)
+
         if free_pool_size < expected_pool_size:
             raise DaosTestError(
                 'Pool Free Size did not match Actual = {} Expected = {}'
@@ -113,11 +121,10 @@ class NvmeIo(avocado.Test):
         This test is running multiple IOR on same server start instance.
         :avocado: tags=nvme,nvme_io,large
         """
-        total_ior_threads = 1
         ior_args = {}
 
         hostlist_clients = self.params.get("clients", '/run/hosts/*')
-        tests = self.params.get("tests", '/run/ior/*')
+        tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
         #Loop for every IOR object type
         for obj_type in object_type:
@@ -142,7 +149,7 @@ class NvmeIo(avocado.Test):
                                                  '/run/pool/createset/*'),
                                  nvme_size=ior_param[1])
                 self.pool.connect(1 << 1)
-
+                self.pool_connect = True
                 createsvc = self.params.get("svcn", '/run/pool/createsvc/')
                 svc_list = ""
                 for i in range(createsvc):
@@ -168,26 +175,27 @@ class NvmeIo(avocado.Test):
                 ior_args['object_class'] = obj_type
                 ior_args['slots'] = ior_param[4]
 
+                #IOR is going to use the same --daos.stripeSize,
+                #--daos.recordSize and Transfer size.
                 try:
-                    for i in range(total_ior_threads):
-                        size_before_ior = self.pool.pool_query()
-                        IorUtils.run_ior(ior_args['client_hostfile'],
-                                         ior_args['iorflags'],
-                                         ior_args['iteration'],
-                                         ior_args['block_size'],
-                                         ior_args['stripe_size'],
-                                         ior_args['pool_uuid'],
-                                         ior_args['svc_list'],
-                                         ior_args['stripe_size'],
-                                         ior_args['stripe_size'],
-                                         ior_args['stripe_count'],
-                                         ior_args['async_io'],
-                                         ior_args['object_class'],
-                                         ior_args['basepath'],
-                                         ior_args['slots'],
-                                         filename=str(uuid.uuid4()),
-                                         display_output=True)
-                        self.verify_pool_size(size_before_ior, ior_args)
+                    size_before_ior = self.pool.pool_query()
+                    IorUtils.run_ior(ior_args['client_hostfile'],
+                                     ior_args['iorflags'],
+                                     ior_args['iteration'],
+                                     ior_args['block_size'],
+                                     ior_args['stripe_size'],
+                                     ior_args['pool_uuid'],
+                                     ior_args['svc_list'],
+                                     ior_args['stripe_size'],
+                                     ior_args['stripe_size'],
+                                     ior_args['stripe_count'],
+                                     ior_args['async_io'],
+                                     ior_args['object_class'],
+                                     ior_args['basepath'],
+                                     ior_args['slots'],
+                                     filename=str(uuid.uuid4()),
+                                     display_output=True)
+                    self.verify_pool_size(size_before_ior, ior_args)
                 except IorUtils.IorFailed as exe:
                     print (exe)
                     print (traceback.format_exc())
