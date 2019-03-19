@@ -81,7 +81,7 @@ class CartSelfTest(Test):
             self.env_list.append("{0}={1}".format(k, v))
 
         # daos server params
-        self.server_group = self.params.get("server", 'server_group',
+        self.server_group = self.params.get("server_config", 'name',
                                             'daos_server')
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath,

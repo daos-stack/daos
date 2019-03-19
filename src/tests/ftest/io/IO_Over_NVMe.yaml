@@ -2,21 +2,12 @@
 # required quantity is indicated by the placeholders
 hosts:
   servers:
-    - boro-15
+    - boro-53
   clients:
     - boro-54
-nvme:
-  nvme_mode:Enabled
-  drive_count:1
-nvme_conf:
-  TransportID_trtype:PCIe
-  Timeout:0
-  ActionOnTimeout:None
-  AdminPollRate:100000
-  HotplugEnable:No
-  HotplugPollRate:0
 server_config:
   name: daos_server
+  bdev_class: nvme
 pool:
   createmode:
     mode: 511

@@ -13,8 +13,8 @@ hosts:
             - boro-I
             - boro-J
 timeout: 2000
-server:
-    server_group: daos_server
+server_config:
+    name: daos_server
 pool:
     createmode:
         mode_RW:

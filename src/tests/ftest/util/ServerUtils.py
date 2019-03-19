@@ -36,15 +36,18 @@ import errno
 import getpass
 import aexpect
 from SSHConnection import Ssh
+import yaml
 
 from avocado.utils import genio
 
 DAOS_PATH = os.environ['DAOS_PATH']
-SPDK_SETUP_SCRIPT = os.path.join(DAOS_PATH,
-                                 "../_build.external/spdk/scripts/setup.sh")
+SPDK_SETUP_SCRIPT = "/opt/daos/spdk/scripts/setup.sh"
 DAOS_CONF_FILE = "/etc/daos_nvme.conf"
 
 sessions = {}
+
+DEFAULT_YAML_FILE = "src/tests/ftest/data/daos_server_baseline.yml"
+AVOCADO_YAML_FILE = "src/tests/ftest/data/daos_avocado_test.yml"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -52,7 +55,95 @@ class ServerFailed(Exception):
 # a callback function used when there is cmd line I/O, not intended
 # to be used outside of this file
 def printFunc(thestring):
-        print("<SERVER>" + thestring)
+    print("<SERVER>" + thestring)
+
+def nvme_yaml_config(default_value, bdev, enabled=False):
+    """
+    Enable/Disable NVMe Mode.
+    By default it's Enabled in yaml file so disable to run with ofi+sockets.
+    """
+    if 'bdev_class' in default_value['servers'][0]:
+        if (default_value['servers'][0]['bdev_class'] == bdev and
+                not enabled):
+            del default_value['servers'][0]['bdev_class']
+    if enabled:
+        default_value['servers'][0]['bdev_class'] = bdev
+
+def remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp):
+    """
+    Function to remove "!mux" from yaml file and create new tmp file
+    Args:
+        avocado_yaml_file: Avocado test yaml file
+        avocado_yaml_file_tmp: Avocado temporary test yaml file
+    """
+    with open(avocado_yaml_file, 'r') as rfile:
+        filedata = rfile.read()
+    filedata = filedata.replace('!mux', '')
+    with open(avocado_yaml_file_tmp, 'w') as wfile:
+        wfile.write(filedata)
+
+def create_server_yaml(basepath):
+    """
+    This function is to create DAOS server configuration YAML file
+    based on Avocado test Yaml file.
+    Args:
+        - basepath = DAOS install basepath
+    """
+    #Read the baseline conf file data/daos_server_baseline.yml
+    try:
+        with open('{}/{}'.format(basepath,
+                                 DEFAULT_YAML_FILE), 'r') as read_file:
+            default_value = yaml.safe_load(read_file)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Read {}/{}".format(basepath,
+                                                         DEFAULT_YAML_FILE))
+
+    #Read the values from avocado_testcase.yaml file if test ran with Avocado.
+    avocado_yaml_value = ""
+    if "AVOCADO_TEST_DATADIR" in os.environ:
+        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
+                                split(".")[0] + ".yaml"
+        avocado_yaml_file_tmp = '{}.tmp'.format(avocado_yaml_file)
+
+        # Yaml Python module is not able to read !mux so need to
+        # remove !mux before reading.
+        remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp)
+
+        # Read avocado test yaml file.
+        try:
+            with open('{}'.format(avocado_yaml_file_tmp), 'r') as read_file:
+                avocado_yaml_value = yaml.safe_load(read_file)
+        except Exception as excpn:
+            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+            traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+            raise ServerFailed("Failed to Read {}"
+                               .format('{}.tmp'.format(avocado_yaml_file)))
+        #Remove temporary file
+        os.remove(avocado_yaml_file_tmp)
+    #Update values from avocado_testcase.yaml in DAOS yaml variables.
+    for key in avocado_yaml_value['server_config']:
+        if key in default_value['servers'][0]:
+            default_value['servers'][0][key] = avocado_yaml_value\
+            ['server_config'][key]
+        elif key in default_value:
+            default_value[key] = avocado_yaml_value['server_config'][key]
+
+    #Disable NVMe from baseline data/daos_server_baseline.yml
+    nvme_yaml_config(default_value, "nvme")
+
+    #Write default_value dictionary in to AVOCADO_YAML_FILE
+    #This will be used to start with daos_server -o option.
+    try:
+        with open('{}/{}'.format(basepath,
+                                 AVOCADO_YAML_FILE), 'w') as write_file:
+            yaml.dump(default_value, write_file, default_flow_style=False)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Write {}/{}".format(basepath,
+                                                          AVOCADO_YAML_FILE))
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
@@ -65,14 +156,18 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                    for line in genio.read_all_lines(hostfile)]
         server_count = len(servers)
 
+        #Create the DAOS server configuration yaml file to pass
+        #with daos_server -o <FILE_NAME>
+        create_server_yaml(basepath)
+
         # first make sure there are no existing servers running
         killServer(servers)
 
         # clean the tmpfs on the servers
         for server in servers:
             subprocess.check_call(['ssh', server,
-                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-                "xargs -0r rm -rf"])
+                                   "find /mnt/daos -mindepth 1 -maxdepth 1 "
+                                   "-print0 | xargs -0r rm -rf"])
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
@@ -80,30 +175,21 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
 
-        # before any set in env are added to env_args, add any user supplied
-        # envirables to environment first
+        env_args = []
+        # Add any user supplied environment
         if env_dict is not None:
             for k, v in env_dict.items():
                 os.environ[k] = v
-
-        env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
-                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*']
-
-        env_args = []
-        for (env_var, env_val) in os.environ.items():
-            for pat in env_vars:
-                if re.match(pat, env_var):
-                    env_args.extend(["-x", "{}={}".format(env_var, env_val)])
+                env_args.extend(["-x", "{}={}".format(k, v)])
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
         server_cmd.extend(env_args)
-        server_cmd.extend([daos_srv_bin, "-g", setname, "-c", "1",
+        server_cmd.extend([daos_srv_bin,
                            "-a", os.path.join(basepath, "install", "tmp"),
-                           "-d", os.path.join(os.sep, "var", "run", "user",
-                           str(os.geteuid()))])
+                           "-o", '{}/{}'.format(basepath, AVOCADO_YAML_FILE)])
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
         resource.setrlimit(
@@ -207,7 +293,7 @@ def stopServer(setname=None, hosts=None):
         raise ServerFailed("daos processes {} found on hosts "
                            "{} after stopServer() were "
                            "killed".format(', '.join(stdout.splitlines()),
-                           found_hosts))
+                                           found_hosts))
 
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously
@@ -231,7 +317,7 @@ class Nvme(object):
     """
     This is the NVMe class
     """
-    def __init__(self, host, no_of_drive=0, nvme_conf_param="", debug=False):
+    def __init__(self, host, debug=False):
         """
         Initialize the remote machine for SSH Connection.
         Args:
@@ -243,10 +329,7 @@ class Nvme(object):
             None
         """
         self.machine = host
-        self.no_of_drive = no_of_drive
-        self.nvme_conf_param = nvme_conf_param
         self.host = Ssh(host, sudo=True, debug=debug)
-        self.nvme_drives = []
 
     def init_spdk(self, enable):
         """
@@ -259,7 +342,7 @@ class Nvme(object):
         Raises:
             generic if spdk enabled/disabled failed
         """
-        cmd = ("HUGEMEM=4096 " +
+        cmd = ("sudo HUGEMEM=4096 " +
                "TARGET_USER=\"{0}\" {1}".format(getpass.getuser(),
                                                 SPDK_SETUP_SCRIPT))
 
@@ -269,91 +352,6 @@ class Nvme(object):
         rc = self.host.call(cmd)
         if rc is not 0:
             raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd, rc))
-
-    def get_pci_link(self):
-        """
-        To get the PCI mapping of NVMe drives on host
-        Args:
-            None
-        return:
-            pci_mapping [list]: Return the NVMe drives mapping
-                                example ["../../../0000:81:00.0"]
-        Raises:
-            generic if pci readlink command gets fail.
-        """
-        pci_mapping = []
-        for drive in self.nvme_drives:
-            cmd = "readlink /sys/block/{0}/device/device".format(drive)
-            _output = self.host.check_output(cmd)
-            pci_mapping.append(_output)
-
-        return pci_mapping
-
-    def create_daos_conf(self):
-        """
-        To create the daos_nvme.conf file with the parameters given in yaml file
-        PCI mapping will be collected from machine.
-        This File will be used by daos_server. If it's present means
-        it will use the NVMe otherwise SCM partition will be used.
-        Args:
-            None:
-        return:
-            None
-        Raises:
-            generic if daos_nvme.conf file remove command fails.
-        """
-        pci_slots = self.get_pci_link()
-
-        #Create the dictionary for the config parameter provided from yaml file.
-        param_dict = {}
-        for _param in self.nvme_conf_param.split(" "):
-            _tmp = _param.split(":")
-            param_dict[_tmp[0]] = _tmp[1]
-
-        pci_map = " "
-        for _id, _nvme_pci in enumerate(pci_slots):
-            mapping = _nvme_pci.split("/")[-1]
-            pci_map = pci_map + ("TransportID \"trtype:{0} traddr:{1}\" Nvme{2}\n"
-                                 .format(param_dict['TransportID_trtype'],
-                                         mapping.strip('\n'),
-                                         _id))
-        content = ("""[Nvme]\n
-                    {0}
-                   TimeoutUsec {1}\n
-                   ActionOnTimeout {2}\n
-                   AdminPollRate {3}\n
-                   HotplugEnable {4}\n
-                   HotplugPollRate {5}\n""".format(pci_map,
-                                                   param_dict['Timeout'],
-                                                   param_dict['ActionOnTimeout'],
-                                                   param_dict['AdminPollRate'],
-                                                   param_dict['HotplugEnable'],
-                                                   param_dict['HotplugPollRate']))
-        cmd = "rm -f {0}".format(DAOS_CONF_FILE)
-        rc = self.host.call(cmd)
-        if rc is not 0:
-            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd, rc))
-        self.host.file_create(DAOS_CONF_FILE, content)
-
-    def check_drive_available(self):
-        """
-        To check if the requested drives are available on each hosts
-        Args:
-            None
-        return:
-            None
-        Raises:
-            generic if requested drives not available on server.
-        """
-        self.init_spdk(enable=False)
-
-        output = self.host.check_output("lsblk")
-        for i in range(0, self.no_of_drive):
-            name = "nvme{0}n1".format(i)
-            self.nvme_drives.append(name)
-            if name not in output:
-                raise ServerFailed("Found {0} drive and yaml file has requested {1}"
-                                   .format(i, self.no_of_drive))
 
     def setup(self):
         """
@@ -366,15 +364,13 @@ class Nvme(object):
             generic if permission commands fail on server.
         """
         self.host.connect()
-        self.check_drive_available()
-        self.create_daos_conf()
         self.init_spdk(enable=True)
 
-        permission_cmd = ["chmod 777 /dev/hugepages",
-                          "chmod 666 /dev/uio*",
-                          "chmod 666 /sys/class/uio/uio*/device/config",
-                          "chmod 666 /sys/class/uio/uio*/device/resource*",
-                          "rm -f /dev/hugepages/*"]
+        permission_cmd = ["sudo /usr/bin/chmod 777 /dev/hugepages",
+                          "sudo /usr/bin/chmod 666 /dev/uio*",
+                          "sudo /usr/bin/chmod 666 /sys/class/uio/uio*/device/config",
+                          "sudo /usr/bin/chmod 666 /sys/class/uio/uio*/device/resource*",
+                          "sudo /usr/bin/rm -f /dev/hugepages/*"]
 
         rc = self.host.call("&&".join(permission_cmd))
         if rc is not 0:
@@ -394,15 +390,12 @@ class Nvme(object):
         """
         self.host.connect()
         self.init_spdk(enable=False)
-        cmds = ["rm -f /dev/hugepages/*",
-                "rm -f {0}".format(DAOS_CONF_FILE)]
-
-        rc = self.host.call("&&".join(cmds))
+        rc = self.host.call("sudo /usr/bin/rm -f /dev/hugepages/*")
         if rc is not 0:
             raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmds, rc))
         self.host.disconnect()
 
-def nvme_setup(hostlist, nvme_no_of_drive, nvme_conf_param):
+def nvme_setup(hostlist):
     """
     nvme_setup function called from Avocado test
     Args:
@@ -419,8 +412,6 @@ def nvme_setup(hostlist, nvme_no_of_drive, nvme_conf_param):
     host_nvme = []
     for _hosts in hostlist:
         host_nvme.append(Nvme(_hosts,
-                              nvme_no_of_drive,
-                              nvme_conf_param,
                               debug=True))
 
     for host in host_nvme:

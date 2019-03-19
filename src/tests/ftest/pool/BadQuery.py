@@ -56,8 +56,8 @@ class BadQueryTest(Test):
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
-        server_group = self.params.get("server_group",
-                                       '/server/',
+        server_group = self.params.get("name",
+                                       '/server_config/',
                                        'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
