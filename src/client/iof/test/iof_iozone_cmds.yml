@@ -1,0 +1,87 @@
+# To be able to execute the standalone fio test do the following:
+#
+# Please look in "iof_iozone_main.yml".
+
+description: "IOF IOZONE test cmds."
+
+defaultENV:
+
+    D_LOG_MASK: "INFO"
+
+module:
+
+    name:        "iof_iozone_cmds"
+    logBaseName: "iof_iozone_cmds"
+    path:        "$PWD/scripts"
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+
+directives:
+
+    testMode: "scripts"
+
+subList:
+
+    nodename:    node
+    iozone_path: "/usr/bin"
+
+execStrategy:
+
+    - name:       "iof_iozone_help"
+      exe:        "{iozone_path}/iozone"
+      type:       exe
+      parameters: "-h"
+
+    - name:       "iof_iozone_mkdir"
+      exe:        "/usr/bin/mkdir"
+      type:       exe
+      parameters: "-p {CNSS_PREFIX}/FS_2/{nodename}"
+
+    # Generate test.bin for iozone read test.
+    # NOTE: test.bin contains 0x3a (supported by older version of iozone) or
+    #       0xdb (supported by newer version of iozone).
+    - name:       "iof_iozone_dd_read"
+      exe:        "/usr/bin/dd"
+      type:       exe
+      parameters: "status=none bs=512K count=4000 if=/dev/zero | \
+                   tr \'\\0\' \'\\72\' > {CNSS_PREFIX}/FS_2/{nodename}/test.bin"
+
+    # Generate test.bin for iozone random (read/write) test.
+    # NOTE: YAML parser does not allow escaped octal chars in the cmd or
+    #       parameter, hence this shell script approach can be used as an
+    #       alternative to execStrategy entry named "iof_dd_pipe_tr".
+    # - name:       "iof_iozone_dd_read"
+    #   exe:        "iof_iozone_dd_tr"
+    #   type:       shell
+    #   parameters: "{CNSS_PREFIX}/FS_2/{nodename}/test.bin"
+
+    # Iozone read test.
+    - name:       "iof_iozone_read"
+      exe:        "{iozone_path}/iozone"
+      type:       exe
+      parameters: "-i 1 -t 1 -c -e -w -r 1m -s 2g -+n -F \
+                   {CNSS_PREFIX}/FS_2/{nodename}/test.bin"
+
+    # Iozone write test.
+    - name:       "iof_iozone_write"
+      exe:        "{iozone_path}/iozone"
+      type:       exe
+      parameters: "-i 0 -t 1 -c -e -w -r 1m -s 2g -+n -F \
+                   {CNSS_PREFIX}/FS_2/{nodename}/test.bin"
+
+    # Generate test.bin for iozone random (read/write) test.
+    # NOTE: YAML parser does not allow escaped octal chars in the cmd or
+    #       parameter, hence this shell script approach can be used as an
+    #       alternative to execStrategy entry named "iof_dd_pipe_tr".
+    # - name:       "iof_iozone_dd_random"
+    #   exe:        "iof_iozone_dd_tr"
+    #   type:       shell
+    #   parameters: "{CNSS_PREFIX}/FS_2/{nodename}/test.bin"
+
+    # Iozone random test.
+    - name:       "iof_iozone_random"
+      exe:        "{iozone_path}/iozone"
+      type:       exe
+      parameters: "-i 2 -t 1 -c -e -w -r 1m -s 2g -+n -F \
+                   {CNSS_PREFIX}/FS_2/{nodename}/test.bin"

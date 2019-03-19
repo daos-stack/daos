@@ -1,0 +1,43 @@
+# To be able to execute the standalone fio test do the following:
+#
+# Please look in "nfs_mdtest_main.yml".
+
+description: "MDTEST write, read and random (read & write) tests cmds over NFS."
+
+defaultENV:
+    OFI_INTERFACE: "eth0"
+    D_LOG_MASK:    "INFO"
+    OMPI_MCA_rmaps_base_oversubscribe: "1"
+    MPI_TASKS: "32"
+
+module:
+    name:        "nfs_mdtest_cmds" # Python program filename (without ext).
+    className:   "Nfs_Mdtest_Cmds" # Class name in python program file.
+    logBaseName: "nfs_mdtest_cmds"
+    path:        "$PWD/scripts"
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+    hostConfig:
+        type:       buildList
+        numServers: 1 # ionss node(s): IOF_TEST_ION
+        numClients: 1 # cnss  node(s): IOF_TEST_CN
+
+directives:
+    testMode:         "python"
+    renameTestRun:    "no"
+    printTestLogPath: "yes"
+    usePython:        "python3"
+
+subList:
+    nodename: node
+
+# execStrategy names are method names in the class (Nfs_Mdtest_Cmds), in the
+# python program file (nfs_mdtest_cmds.py).
+execStrategy:
+    - name: "init"
+    - name: "export"
+    - name: "mount"
+    - name: "mdtest_tasks"
+    - name: "unmount"
+    - name: "unexport"

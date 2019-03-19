@@ -1,0 +1,41 @@
+# To be able to execute the standalone fio test do the following:
+#
+# Please look in "nfs_fio_main.yml".
+
+description: "Fio write, read and random (read & write) tests cmds over NFS."
+
+defaultENV:
+    D_LOG_MASK:    "INFO"
+    OFI_INTERFACE: "eth0"
+
+module:
+    name:        "nfs_fio_cmds" # Python program filename (without ext).
+    className:   "Nfs_Fio_Cmds" # Class name in python program file.
+    logBaseName: "nfs_fio_cmds"
+    path:        "$PWD/scripts"
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+
+directives:
+    testMode:         "python"
+    renameTestRun:    "no"
+    printTestLogPath: "yes"
+    usePython:        "python3"
+
+subList:
+
+    nodename: node
+
+# execStrategy names are method names in the class (Nfs_Fio_Cmds), in the python
+# program file (nfs_fio_cmds.py).
+execStrategy:
+    - name: "init"
+    - name: "export"
+    - name: "mount"
+    - name: "read"
+    - name: "write"
+    - name: "random"
+    - name: "mixed"
+    - name: "unmount"
+    - name: "unexport"

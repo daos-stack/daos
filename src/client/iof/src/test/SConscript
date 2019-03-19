@@ -1,0 +1,162 @@
+# Copyright (C) 2017 Intel Corporation
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions, and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions, and the following disclaimer in the
+#    documentation and/or materials provided with the distribution.
+#
+# 3. In addition, redistributions of modified forms of the source or binary
+#    code must carry prominent notices stating that the original code was
+#    changed and the date of the change.
+#
+#  4. All publications or advertising materials mentioning features or use of
+#     this software are asked, but not required, to acknowledge that it was
+#     developed by Intel Corporation and credit the contributors.
+#
+# 5. Neither the name of Intel Corporation, nor the name of any Contributor
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Build ping test"""
+
+#pylint: disable=import-error
+import distutils.sysconfig
+#pylint: enable=import-error
+
+IOIL_TEST_SRC = ['test_ioil.c']
+IOIL_BUILD_STATIC = False
+
+def build_static_tests(env):
+    """build the static interception library"""
+
+    #This code requires a full static chain or some major
+    #linker magic.  Disabled for now.
+    if IOIL_BUILD_STATIC:
+        to_build = env.get('libioil')
+        if to_build == 'none' or to_build == 'shared':
+            return []
+
+        ilenv = env.Clone()
+
+        ioil_opt = '-Wl,--whole-archive -lioil -Wl,--no-whole-archive'
+        ioil_script = "%s/../il/ioil-ld-opts" % Dir('.').abspath
+        ilenv.AppendUnique(CFLAGS=['-Wl,@%s' % ioil_script, ioil_opt])
+        ilenv.AppendUnique(LINKFLAGS=['-static', '-Wl,--whole-archive',
+                                      '-lioil', '-Wl,--no-whole-archive'])
+
+        il_test = []
+        for test in IOIL_TEST_SRC:
+            il_test += ilenv.Program(test)
+
+        return il_test
+
+    return []
+
+def build_shim(env, pdevel_ver):
+    """build the python/C shim"""
+    # Python wrapper
+    svars = {}
+    for item in ['CC', 'OPT', 'BASECFLAGS', 'LDSHARED', 'SO']:
+        svars[item] = distutils.sysconfig.get_config_var(item)
+        if svars[item] is None:
+            svars[item] = ""
+
+    defines = ""
+    if pdevel_ver == "3.5":
+        defines = "IOF_PYTHON_35"
+
+    lib = env.SharedLibrary(target='iofmod', source=['iof_module.c'],
+                            CC=svars["CC"], SHLINK=svars["LDSHARED"],
+                            CPPDEFINES=[defines],
+                            SHLINKFLAGS=[], SHLIBPREFIX="",
+                            SHLIBSUFFIX=svars["SO"],
+                            CPPPATH=["$CPPPATH",
+                                     distutils.sysconfig.get_python_inc()],
+                            CPPFLAGS=svars["BASECFLAGS"] + " " + \
+                            svars["OPT"], CFLAGS=[])
+    env.Install('$PREFIX/TESTING/scripts', lib)
+    Default(lib)
+
+def scons():
+    """Scons function"""
+
+    Import('env prereqs')
+
+    if not prereqs.check_component('cunit'):
+        print("\n************************************************")
+        print("CUnit packages must be installed to enable tests")
+        print("************************************************\n")
+        # Just returning is the desired behavior here.  The utest target
+        # has yet to be defined so the build will just fail.
+        return
+
+    # Set options which are used throughout the src.
+    tenv = env.Clone()
+    tenv.AppendUnique(CFLAGS=['-pthread'])
+    tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
+    tenv.AppendUnique(CPPPATH=['../common/include'])
+    tenv.AppendUnique(CPPPATH=['../include'])
+    tenv.AppendUnique(LIBPATH='../il')
+    tenv.AppendUnique(RPATH='$PREFIX/lib')
+
+    prereqs.require(tenv, 'cart', 'cunit')
+
+    il_test = []
+
+    lfenv = tenv.Clone()
+    lfenv.AppendUnique(OBJPREFIX='lf_')
+    lfenv.AppendUnique(CPPDEFINES='LARGEFILE64_SOURCE')
+
+    tenv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
+
+    il_test += build_static_tests(tenv)
+    il_test += build_static_tests(lfenv)
+
+    tenv.AppendUnique(OBJPREFIX='s_')
+    tenv.AppendUnique(LIBS=['ioil'])
+    lfenv.AppendUnique(OBJPREFIX='s_')
+    lfenv.AppendUnique(LIBS=['ioil'])
+
+    for test in IOIL_TEST_SRC:
+        il_test += tenv.Program(test)
+        il_test += lfenv.Program(test)
+
+    Default(il_test)
+
+    tenv.Install('$PREFIX/TESTING/tests', il_test)
+
+    prereqs.define('python35_devel', headers=['python3.5m/Python.h'],
+                   package='python35-devel')
+
+    pdevel_ver = "3.5"
+
+    if not prereqs.check_component('python35_devel'):
+        pdevel_ver = "3.4"
+        if not prereqs.check_component('python34_devel'):
+            print("\n********************************************************")
+            print("Python/C Shim not enabled - needs python34-devel package")
+            print("********************************************************\n")
+            return
+
+    menv = env.Clone()
+    build_shim(menv, pdevel_ver)
+
+if __name__ == "SCons.Script":
+    scons()

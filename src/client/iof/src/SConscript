@@ -1,0 +1,239 @@
+# Copyright (C) 2016-2017 Intel Corporation
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions, and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions, and the following disclaimer in the
+#    documentation and/or materials provided with the distribution.
+#
+# 3. In addition, redistributions of modified forms of the source or binary
+#    code must carry prominent notices stating that the original code was
+#    changed and the date of the change.
+#
+#  4. All publications or advertising materials mentioning features or use of
+#     this software are asked, but not required, to acknowledge that it was
+#     developed by Intel Corporation and credit the contributors.
+#
+# 5. Neither the name of Intel Corporation, nor the name of any Contributor
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Build ping test"""
+import os
+
+HEADERS = ['cnss_plugin.h', 'iof_ctrl_util.h', 'iof_io.h', 'iof_defines.h',
+           'iof_api.h', 'iof_preload.h']
+COMMON_SRC = ['version.c',
+              'ios_gah.c',
+              'iof_fs.c',
+              'log.c',
+              'iof_rpc.c',
+              'iof_bulk.c',
+              'iof_pool.c',
+              'iof_obj_pool.c',
+              'iof_vector.c',
+              'iof_mntent.c']
+LIBIOF_SRC = ['ctrl_fs_util.c']
+CNSS_SRC = ['cnss.c',
+            'ctrl_common.c',
+            'ctrl_fs.c']
+IOC_SRC = ['ioc_main.c',
+           'ioc_fuseops.c',
+           'inode.c']
+IONSS_SRC = ['config.c',
+             'fh.c',
+             'ionss.c']
+RPC_SRC = ['closedir',
+           'create',
+           'fgetattr',
+           'forget',
+           'fsync',
+           'ioctl',
+           'lookup',
+           'mkdir',
+           'open',
+           'opendir',
+           'read',
+           'readdir',
+           'readlink',
+           'release',
+           'rename',
+           'setattr',
+           'statfs',
+           'symlink',
+           'unlink',
+           'write']
+
+IOFIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
+
+def build_common(env, files, is_shared):
+    """Build the common objects as shared or static"""
+    common = []
+
+    for src in files:
+        src_file = os.path.join('common', src)
+        if is_shared:
+            common += env.SharedObject(src_file, SHOBJPREFIX='s_')
+        else:
+            common += env.Object(src_file)
+
+    return common
+
+def build_client_libs_shared(env, version):
+    """build the shared interception library"""
+    to_build = env.get('client_libs')
+    if to_build == 'none':
+        return []
+
+    ilenv = env.Clone()
+    ilenv.AppendUnique(CFLAGS=['-fPIC'])
+    ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
+    penv = ilenv.Clone()
+    penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
+
+    il_obj = []
+    for src in IOFIL_SRC:
+        il_obj += ilenv.SharedObject(os.path.join('il', src),
+                                     SHOBJPREFIX='s_')
+    common = build_common(penv, COMMON_SRC, True)
+    common += build_common(penv, LIBIOF_SRC, True)
+
+    # Now build the interception library
+    il_lib = ilenv.SharedLibrary('il/libioil', il_obj + common,
+                                 SHLIBVERSION=version)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), il_lib,
+                            SHLIBVERSION=version)
+
+    iof_lib = ilenv.SharedLibrary('common/libiof', common,
+                                  SHLIBVERSION=version)
+
+    gen_script = ilenv.Program(['il/gen_script.c'])
+    script = ilenv.Command('il/check_ioil_syms', gen_script,
+                           "$SOURCE -s $TARGET")
+    env.Install('$PREFIX/TESTING/scripts', script)
+    if to_build != 'shared':
+        script = ilenv.Command('il/ioil-ld-opts', gen_script,
+                               '$SOURCE -l $TARGET')
+        env.Install('$PREFIX/share', script)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), iof_lib,
+                            SHLIBVERSION=version)
+    return iof_lib + il_lib
+
+def build_client_libs_static(env, common):
+    """build the static interception library"""
+    to_build = env.get('client_libs')
+    if to_build == 'none' or to_build == 'shared':
+        return []
+
+    ilenv = env.Clone()
+    il_obj = []
+    for src in IOFIL_SRC:
+        il_obj += ilenv.Object(os.path.join('il', src))
+
+    # Now build the interception library
+    il_lib_src = ilenv.Library('il/libioil_source', il_obj + common)
+    il_lib = ilenv.Command('il/libioil.a', il_lib_src,
+                           'objcopy --localize-hidden $SOURCE $TARGET')
+
+    env.Install('$PREFIX/lib', il_lib)
+
+    # Now build the interception library
+    iof_lib_src = ilenv.Library('common/libiof_source', common)
+    iof_lib = ilenv.Command('common/libiof.a', iof_lib_src,
+                            'objcopy --localize-hidden $SOURCE $TARGET')
+    env.Install('$PREFIX/lib', iof_lib)
+
+    return il_lib + iof_lib
+
+#pylint: disable=too-many-statements
+def scons():
+    """Scons function"""
+
+    Import('env prereqs IOF_VERSION')
+
+    # Set options which are used throughout the src.
+    tenv = env.Clone()
+    tenv.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
+    tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
+    tenv.AppendUnique(CPPPATH=['common/include'])
+    tenv.AppendUnique(CPPPATH=['include'])
+    tenv.AppendUnique(LIBS='pthread')
+
+    prereqs.require(tenv, 'cart')
+
+    libs = build_client_libs_shared(tenv, IOF_VERSION)
+
+    static_env = tenv.Clone()
+
+    # Set this after cloning environment used for interception library.
+    # Otherwise, can't define open and open64 entry points
+    tenv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
+
+    # Build a static library of the common parts.
+    common = build_common(tenv, COMMON_SRC, False)
+    client_common = common + build_common(tenv, LIBIOF_SRC, False)
+
+    libs += build_client_libs_static(static_env, client_common)
+
+    # Now build the CNSS application
+    cenv = tenv.Clone()
+
+    # Set the define in SConscript so that it's in place for the prereqs.require
+    # check which will verify fuse3/fuse.h can be loaded.
+    cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+    cenv.AppendUnique(CPPPATH=['cnss'])
+    cenv.AppendUnique(CPPPATH=['ioc'])
+
+    if env.get('PLATFORM') != 'darwin':
+        cenv.AppendUnique(LIBS='dl')
+
+    prereqs.require(cenv, 'fuse')
+
+    cnss_obj = []
+    for src in CNSS_SRC:
+        cnss_obj += cenv.Object(os.path.join('cnss', src))
+    for src in IOC_SRC:
+        cnss_obj += cenv.Object(os.path.join('ioc', src))
+    for src in RPC_SRC:
+        cnss_obj += cenv.Object(os.path.join('ioc', 'ops', '%s.c' % src))
+    progs = cenv.Program('cnss/cnss', common + cnss_obj)
+
+    # Build the IONSS application
+    ienv = tenv.Clone()
+    ienv.AppendUnique(LIBS='yaml')
+    prereqs.require(ienv, 'fuse', headers_only=True)
+    ionss_obj = []
+    for src in IONSS_SRC:
+        ionss_obj += ienv.Object(os.path.join('ionss', src))
+    progs += ienv.Program('ionss/ionss', common + ionss_obj)
+
+    Default(progs + libs)
+
+    tenv.Install(os.path.join("$PREFIX", 'bin'), progs)
+
+    for header in HEADERS:
+        tenv.Install(os.path.join("$PREFIX", 'include'), 'include/%s' % header)
+
+
+    SConscript('utest/SConscript')
+    SConscript('test/SConscript')
+#pylint: enable=too-many-statements
+
+if __name__ == "SCons.Script":
+    scons()

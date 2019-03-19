@@ -1,0 +1,147 @@
+# Copyright (C) 2016-2017 Intel Corporation
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions, and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions, and the following disclaimer in the
+#    documentation and/or materials provided with the distribution.
+#
+# 3. In addition, redistributions of modified forms of the source or binary
+#    code must carry prominent notices stating that the original code was
+#    changed and the date of the change.
+#
+#  4. All publications or advertising materials mentioning features or use of
+#     this software are asked, but not required, to acknowledge that it was
+#     developed by Intel Corporation and credit the contributors.
+#
+# 5. Neither the name of Intel Corporation, nor the name of any Contributor
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Unit tests"""
+import os
+
+CUNIT_SRC = ['utest_gah.c', 'test_ctrl_fs.c', 'utest_pool.c',
+             'utest_vector.c', 'utest_preload.c']
+VALGRIND_EXCLUSIONS = ['test_ctrl_fs.c']
+OBJS = {'utest_gah.c':['../common/ios_gah$OBJSUFFIX'],
+        'utest_pool.c':['../common/iof_obj_pool$OBJSUFFIX'],
+        'utest_vector.c':['../common/iof_obj_pool$OBJSUFFIX',
+                          '../common/iof_vector$OBJSUFFIX'],
+        'test_ctrl_fs.c':['../cnss/ctrl_fs$OBJSUFFIX',
+                          '../cnss/ctrl_common$OBJSUFFIX',
+                          '../common/ctrl_fs_util$OBJSUFFIX',
+                          '../common/iof_mntent$OBJSUFFIX',
+                          '../common/log$OBJSUFFIX']
+       }
+CFLAGS = {'utest_preload.c':['-fPIC']} #Required for weak symbols to work
+DEPS = {'test_ctrl_fs.c':['cart', 'fuse'],
+        'utest_pool.c':['cart'],
+        'utest_vector.c':['cart']}
+CPPPATH = {'test_ctrl_fs.c':['../cnss', '../include'],
+           'utest_preload.c':['../include', '../common/include', '../il']}
+LIBS = {'test_ctrl_fs.c':['pthread'],
+        'utest_pool.c':['pthread'],
+        'utest_vector.c':['pthread']}
+DEFINES = {}
+
+def compile_tests(env, sources, prereqs):
+    """compile the tests"""
+    tests = []
+    for test in sources:
+        if GetOption('utest_mode') != 'native':
+            if test in VALGRIND_EXCLUSIONS:
+                continue
+        src_list = [test]
+        if test in OBJS:
+            src_list += OBJS[test]
+        tenv = env.Clone()
+        if test in DEPS:
+            for dep in DEPS[test]:
+                prereqs.require(tenv, dep)
+        if test in CFLAGS:
+            tenv.AppendUnique(CFLAGS=CFLAGS[test])
+        if test in CPPPATH:
+            tenv.AppendUnique(CPPPATH=CPPPATH[test])
+        if test in LIBS:
+            tenv.AppendUnique(LIBS=LIBS[test])
+        if test in DEFINES:
+            tenv.AppendUnique(CPPDEFINES=DEFINES[test])
+        tests += tenv.Program(src_list)
+    return tests
+
+def create_preload_script(target, source, env):
+    """Builder for the script to run utest_preload with LD_PRELOAD"""
+    var_str = ""
+    environ = env["ENV"]
+    for var in environ.keys():
+        var_str += 'export %s="%s"\n' % (var, environ[var])
+
+    script = open(target[0].abspath, "w")
+    ioil = source[1].abspath
+    contents = """#!/bin/sh
+export D_LOG_MASK=CRIT
+export LD_PRELOAD=%s
+%s%s""" % (ioil, var_str, source[0].abspath)
+    script.write("%s\n" % contents)
+    script.close()
+    os.chmod(target[0].abspath, 0755)
+    return None
+
+def scons():
+    """Scons function"""
+
+    Import('env prereqs')
+
+    if not prereqs.check_component('cunit'):
+        print("\n*****************************************************")
+        print("CUnit packages must be installed to enable unit tests")
+        print("*****************************************************\n")
+        # Just returning is the desired behavior here.  The utest target
+        # has yet to be defined so the build will just fail.
+        return
+
+    test_env = env.Clone()
+    test_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
+
+    test_env.AppendUnique(CPPPATH=['../common/include'])
+    prereqs.require(test_env, 'cart', 'cunit')
+    cunit_env = test_env.Clone()
+    tests = []
+    tests += compile_tests(cunit_env, CUNIT_SRC, prereqs)
+    if GetOption('utest_mode') == 'native':
+        script = cunit_env.Command('utest_preload.sh',
+                                   ['utest_preload', '../il/libioil.so'],
+                                   create_preload_script)
+        tests.append(script)
+
+    Default(tests)
+
+    # Run tests in a new environment so a rebuilt of the tests isn't triggered
+    # by changes to the environment
+    run_env = test_env.Clone()
+
+    run_tests = run_env.RunTests(tests)
+
+    run_env.Alias('utest', run_tests)
+
+    AlwaysBuild(run_tests)
+
+if __name__ == "SCons.Script":
+    scons()

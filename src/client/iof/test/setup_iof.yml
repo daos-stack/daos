@@ -1,0 +1,22 @@
+description: "setup iof test module"
+
+#The default value for CNSS_PREFIX here serves as a placeholder.
+#The /tmp will be replaced by a temporary directory created by
+#the Iof daemon specific to each CNSS instance being launched.
+defaultENV:
+    CNSS_PREFIX: "/tmp"
+
+module:
+    name: "setup_iof"
+    className: "TestSetUpIof"
+    subLogKey: "IOF_TESTLOG"
+
+directives:
+    testMode: "python"
+    renameTestRun: "no"
+    printTestLogPath: "no"
+
+execStrategy:
+    - name: test_iof_started
+      type: setup
+      setEnvVars:

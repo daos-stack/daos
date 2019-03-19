@@ -1,0 +1,106 @@
+# This is the primary yml file used to describe the node topology and
+# execution strategy of the IOR benchmarking test via IOF.
+#
+# Following are the setup requirements to be able to execute this test:
+#
+# 1) The following files should exist in the iof repo:
+#
+#    test/iof_ior_main.yml
+#    test/iof_ior_cmds.yml
+#
+# 2) The files in (1) are copied to the scripts directory after exec'ing:
+#
+#    scons install
+#
+#    and they exist as in the following (in the iof repo):
+#
+#    install/Linux/TESTING/scripts/iof_ior_main.yml
+#    install/Linux/TESTING/scripts/iof_ior_cmds.yml
+#
+# 3) For standalone (not CI testing) run the following cmds in the iof repo:
+#
+# 3.1) You need a config file in the following dir, example:
+#
+#      install/Linux/TESTING/scripts/iof_ior_main.cfg
+#
+#      with the following contents:
+#
+#      {
+#      "host_list": ["<NODE_SERVER>", "<NODE_CLIENT>"],
+#      "test_mode": "littleChief"
+#      }
+#
+#      NOTE: You need to replace the following node names:
+#            <NODE_SERVER>
+#            <NODE_CLIENT>
+#            with provisioned and already configured nodes.
+#
+# 3.2) To run the standalone test, exec the following cmds form the iof repo
+#
+#      cd install/Linux/TESTING/ ;
+#
+#      # test_runner standalone test:
+#      python3.4 test_runner config=scripts/iof_ior_main.cfg \
+#                scripts/iof_ior_main.yml ;
+#
+#      # test_runner CI test:
+#      python3.4 test_runner config=scripts/iof_ior_main.cfg \
+#                scripts/iof_multi_two_node.yml ;
+#
+# 4) The results can be viewed in following dir in the iof repo:
+#
+#    install/Linux/TESTING/testLogs/
+#
+# 4.1) Do the following to find failures in install/Linux/TESTING/testLogs/
+#
+#      find testRun -name subtest_results.yml -exec grep -Hi fail {} \;
+
+description: "IOR test module."
+
+defaultENV:
+
+    CRT_PHY_ADDR_STR: "ofi+sockets"
+    OFI_INTERFACE:    "eth0"
+    D_LOG_MASK:       "INFO"
+
+module:
+
+    name:           "iof_ior_main"
+    setKeyFromHost: ["IOF_TEST_ION", "IOF_TEST_CN"] # Endpoint nodes.
+
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+
+    hostConfig:
+        type:       buildList
+        numServers: 1 # ionss node(s): IOF_TEST_ION
+        numClients: 1 # cnss  node(s): IOF_TEST_CN
+
+directives:
+
+    renameTestRun:    "no"
+    printTestLogPath: "no"
+    copyHostList:     "no"
+    usePython:        "python3"
+
+# Deamon to facilitate IOF setup on each respective node.
+use_daemon:
+
+    name: "IofRunner"
+
+execStrategy:
+
+    - name:     "setup_iof"
+      type:     setup
+      nodeType: "IOF_TEST_CN"
+
+    - name:     "iof_ior_cmds" # Evaluate iof_ior_cmds.yml.
+      nodeType: "IOF_TEST_CN"  # Node on which iof_ior_cmds.yml evaluated.
+      useNodes: "0"            # Test with nodes IOF_TEST_CN[0].
+
+cleanupStrategy:
+
+    - name:     "cleanup_iof"
+      type:     cleanup
+      nodeType: "IOF_TEST_CN"

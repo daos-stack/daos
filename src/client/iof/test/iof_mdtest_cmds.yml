@@ -1,0 +1,61 @@
+# To be able to execute the standalone mdtest test do the following:
+#
+# Please look in "iof_mdtest_main.yml".
+
+description: "IOF mdtest test cmds."
+
+defaultENV:
+
+    D_LOG_MASK: "WARN"
+    OMPI_MCA_rmaps_base_oversubscribe: "1"
+
+module:
+
+    name:        "iof_mdtest"
+    logBaseName: "iof_mdtest"
+    path:        "$PWD/scripts"
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+
+directives:
+
+    testMode: "scripts"
+
+subList:
+
+    nodename: node
+    mdtest_exe: "/testbin/mdtest/bin/mdtest"
+    MPI_TASKS: "32"
+
+execStrategy:
+
+    - name:       "iof_mdtest_help"
+      type:       exe
+      exe:        "{mdtest_exe}"
+      parameters: "-h"
+
+    - name:       "iof_mpirun_help"
+      type:       exe
+      exe:        "{IOF_OMPI_BIN}mpirun"
+      parameters: "-h"
+
+    # Make the test directory, i.e. value of "{CNSS_PREFIX}/FS_2/{nodename}".
+    - name:       "iof_mkdir"
+      type:       exe
+      exe:        "/usr/bin/mkdir"
+      parameters: "-vp {CNSS_PREFIX}/FS_2/{nodename}"
+
+    # Env var OMPI_MCA_rmaps_base_oversubscribe=1 is passed in through
+    # defaultENV.
+    - name:       "iof_mdtest_cmd"
+      exe:        "{IOF_OMPI_BIN}mpirun -N {MPI_TASKS}"
+      type:       exe
+      parameters: "{mdtest_exe} -d {CNSS_PREFIX}/FS_2/{nodename} \
+                   -i 75 -I 5 -u"
+
+    # Remove the test directory, i.e. value of "{CNSS_PREFIX}/FS_2/{nodename}".
+    - name:       "iof_rmdir"
+      type:       exe
+      exe:        "/usr/bin/rm"
+      parameters: "-vrf {CNSS_PREFIX}/FS_2/{nodename}"

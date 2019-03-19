@@ -1,0 +1,136 @@
+# This is the primary yml file used to describe the node topology and
+# execution strategy of the MDTEST benchmarking test via NFS.
+#
+# Following are the setup requirements to be able to execute this test:
+#
+# 1) Set up *all* the test nodes.
+#
+# 1.1) Insert the following entries in /etc/ssh/sshd_config:
+#
+#      PermitRootLogin        yes
+#      PasswordAuthentication yes
+#      PubkeyAuthentication   yes
+#
+# 1.2) Allow sudo (for everyone with authorization) for all cmds in /etc/sudoers:
+#
+#      ALL  ALL = (root) NOPASSWD: /usr/sbin/
+#      ALL  ALL = (root) NOPASSWD: /usr/bin/
+#
+# 1.3) Install the following NFS and related packages:
+#
+#      yum install nfs-utils libnfsidmap ;
+#
+# 1.4) Start the following NFS and related services:
+#
+#      service rpcbind start ;
+#      service nfs-server start ;
+#      service nfs-client.target start ;
+#      service rpc-statd start ;
+#      service nfs-lock start ;
+#      service nfs-idmap start ;
+#      service rpc-gssd start ;
+#
+# 1.5) Check the status of the following NFS and related services:
+#
+#      service rpcbind status ;
+#      service nfs-server status ;
+#      service nfs-client.target status ;
+#      service rpc-statd status ;
+#      service nfs-lock status ;
+#      service nfs-idmap status ;
+#      service rpc-gssd status ;
+#
+# 2) The following files should exist in the iof repo:
+#
+#    test/nfs_mdtest_main.yml : Primary description file.
+#    test/nfs_mdtest_cmds.yml : Mdtest cmds description file.
+#    test/nfs_mdtest_cmds.py  : Mdtest cmds python program file.
+#
+# 3) The files in (2) are copied to the scripts directory after exec'ing:
+#
+#    scons install
+#
+#    and they exist as in the following (in the iof repo):
+#
+#    install/Linux/TESTING/scripts/nfs_mdtest_main.yml
+#    install/Linux/TESTING/scripts/nfs_mdtest_cmds.yml
+#    install/Linux/TESTING/scripts/nfs_mdtest_cmds.py
+
+# 4) For standalone (not CI testing) run the following cmds in the iof repo:
+#
+# 4.1) You need a configuration file in the following dir, example:
+#
+#      install/Linux/TESTING/scripts/nfs_mdtest_main.cfg
+#
+#      with the following contents:
+#
+#      {
+#      "host_list": ["<NODE_SERVER>", "<NODE_CLIENT>"],
+#      "test_mode": "littleChief"
+#      }
+#
+#      where you need to replace the following node names:
+#
+#      <NODE_SERVER>
+#      <NODE_CLIENT>
+#
+#      with provisioned and already configured nodes.
+#
+# 4.2) To run the standalone test, exec the following cmds form the iof repo:
+#
+#      cd install/Linux/TESTING/ ;
+#
+#      # test_runner standalone test:
+#      python3.4 test_runner config=scripts/nfs_mdtest_main.cfg \
+#                scripts/nfs_mdtest_main.yml ;
+#
+#      # test_runner CI test:
+#      python3.4 test_runner config=scripts/nfs_mdtest_main.cfg \
+#                scripts/iof_multi_two_node.yml ;
+#
+# 5) The results can be viewed in following dir in the iof repo:
+#
+#    install/Linux/TESTING/testLogs/
+#
+# 5.1) Do the following to find failures in install/Linux/TESTING/testLogs/
+#
+#      find testRun -name subtest_results.yml -exec grep -Hi fail {} \;
+
+description: "MDTEST tests over NFS."
+
+defaultENV:
+
+    D_LOG_MASK: "INFO"
+
+module:
+
+    name:           "nfs_mdtest_main"
+    setKeyFromHost: ["IOF_TEST_ION", "IOF_TEST_CN"] # Endpoint nodes.
+
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+
+    hostConfig:
+        type:       buildList
+        numServers: 1 # Num of export node(s): IOF_TEST_ION
+        numClients: 1 # Num of mount  node(s): IOF_TEST_CN
+
+directives:
+
+    renameTestRun:    "no"
+    printTestLogPath: "no"
+    copyHostList:     "no"
+    usePython:        "python3"
+
+execStrategy:
+
+    - name:     "nfs_mdtest_cmds" # Refers to description file: nfs_mdtest_cmds
+      nodeType: "IOF_TEST_ION"    # Node on which nfs_mdtest_cmds.yml evaluated.
+      useNodes: "0"               # Test with nodes IOF_TEST_ION[0].
+
+cleanupStrategy:
+
+    - name:     "cleanup_iof"
+      type:     cleanup
+      nodeType: "IOF_TEST_ION"

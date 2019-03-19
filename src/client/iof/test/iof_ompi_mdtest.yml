@@ -1,0 +1,25 @@
+description: "mdtest test module"
+
+defaultENV:
+
+module:
+    name: "iof_ompi_mdtest"
+    className: "TestMdtest"
+    subLogKey: "TR_TESTLOG"
+    setKeyFromHost: ["TR_LOCAL_SERVER", "TR_LOCAL_CLIENT"]
+    setKeyFromInfo:
+        - [IOF_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [IOF_TEST_BIN, PREFIX, "/bin"]
+
+directives:
+    testMode: "python"
+    renameTestRun: "no"
+    printTestLogPath: "yes"
+    usePython: python3.4
+
+subList:
+    mdtest_path: "/testbin/mdtest/bin"
+
+execStrategy:
+    - name: "test_mdtest_ompi"
+      type: test
