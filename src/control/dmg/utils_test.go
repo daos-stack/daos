@@ -63,7 +63,7 @@ func TestHasConnection(t *testing.T) {
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, hasConnections(tt.addrs, tt.eMap), tt.out, "bad output")
+		AssertEqual(t, hasConns(tt.addrs, tt.eMap), tt.out, "bad output")
 	}
 }
 

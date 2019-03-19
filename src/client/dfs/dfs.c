@@ -59,8 +59,7 @@
 #define SYML_NAME	"syml"
 
 /** Array object stripe size for regular files */
-/** TODO - make this user configurable */
-#define STRIPE_SIZE	1048576
+#define DFS_DEFAULT_CHUNK_SIZE	1048576
 
 /** Parameters for dkey enumeration */
 #define ENUM_KEY_NR     1000
@@ -649,7 +648,7 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 
 static int
 open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
-	  daos_oclass_id_t cid, dfs_obj_t *file)
+	  daos_oclass_id_t cid, daos_size_t chunk_size, dfs_obj_t *file)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -686,7 +685,9 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 		/** Create array object for the file */
 		rc = daos_array_create(dfs->coh, file->oid, th, 1,
-				       STRIPE_SIZE, &file->oh, NULL);
+				       (chunk_size ? chunk_size :
+					DFS_DEFAULT_CHUNK_SIZE),
+				       &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_create() failed (%d)\n", rc);
 			return rc;
@@ -1614,7 +1615,8 @@ out:
 
 int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	 int flags, daos_oclass_id_t cid, const char *value, dfs_obj_t **_obj)
+	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	 const char *value, dfs_obj_t **_obj)
 {
 	dfs_obj_t	*obj;
 	daos_handle_t	th = DAOS_TX_NONE;
@@ -1652,7 +1654,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	switch (mode & S_IFMT) {
 	case S_IFREG:
-		rc = open_file(dfs, th, parent, flags, cid, obj);
+		rc = open_file(dfs, th, parent, flags, cid, chunk_size, obj);
 		if (rc) {
 			D_ERROR("Failed to open file (%d)", rc);
 			D_FREE(obj);

@@ -65,7 +65,7 @@ func setupShell() *ishell.Shell {
 		Name: "listmgmtfeatures",
 		Help: "Command to retrieve all supported management features from any client connections",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListFeatures()), "management feature")
 		},
 	})
@@ -74,7 +74,7 @@ func setupShell() *ishell.Shell {
 		Name: "listnvmecontrollers",
 		Help: "Command to list NVMe SSD controllers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(
 				checkAndFormat(conns.ListNvme()),
 				"NVMe SSD controller and constituent namespace")
@@ -85,7 +85,7 @@ func setupShell() *ishell.Shell {
 		Name: "listscmmodules",
 		Help: "Command to list installed SCM modules",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListScm()), "SCM module")
 		},
 	})
@@ -94,19 +94,30 @@ func setupShell() *ishell.Shell {
 		Name: "killrank",
 		Help: "Command to terminate server running as specific rank on a DAOS pool",
 		Func: func(c *ishell.Context) {
-			if len(c.Args) != 2 {
-				c.Println(c.HelpText())
-				return
-			}
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
-			rank, err := strconv.Atoi(c.Args[1])
+			// disable the '>>>' for cleaner same line input.
+			c.ShowPrompt(false)
+			defer c.ShowPrompt(true) // revert after command.
+
+			c.Print("Pool uuid: ")
+			poolUUID := c.ReadLine()
+
+			c.Print("Rank: ")
+			rankIn := c.ReadLine()
+
+			c.Println(hasConns(conns.GetActiveConns(nil)))
+
+			rank, err := strconv.Atoi(rankIn)
 			if err != nil {
 				c.Println("bad rank")
 				return
 			}
-			c.Printf(
-				"Kill Rank returned: %s\n",
-				conns.KillRank(c.Args[0], uint32(rank)))
+
+			if err := conns.KillRank(poolUUID, uint32(rank)); err != nil {
+				c.Printf("Kill Rank failed: %s\n", err)
+				return
+			}
+
+			c.Print("Kill Rank succeeding on all active connections!\n")
 		},
 	})
 

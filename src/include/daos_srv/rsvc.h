@@ -135,4 +135,13 @@ void ds_rsvc_put(struct ds_rsvc *svc);
 void ds_rsvc_put_leader(struct ds_rsvc *svc);
 void ds_rsvc_set_hint(struct ds_rsvc *svc, struct rsvc_hint *hint);
 
+int ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
+		     crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t count);
+int ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
+		     crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t count,
+		     uint64_t key_length);
+int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
+		      crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t *size);
+
+
 #endif /* DAOS_SRV_RSVC_H */
