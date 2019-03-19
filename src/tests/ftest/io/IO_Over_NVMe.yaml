@@ -1,0 +1,49 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  servers:
+    - boro-15
+  clients:
+    - boro-54
+nvme:
+  nvme_mode:Enabled
+  drive_count:1
+nvme_conf:
+  TransportID_trtype:PCIe
+  Timeout:0
+  ActionOnTimeout:None
+  AdminPollRate:100000
+  HotplugEnable:No
+  HotplugPollRate:0
+server_config:
+  name: daos_server
+pool:
+  createmode:
+    mode: 511
+  createset:
+    setname: daos_server
+  createsize:
+    size: 20000000000
+  createsvc:
+    svcn: 1
+ior:
+  iteration:
+    iter: 3
+  iorflags:
+    F: "-v -w -r"
+  blocksize:
+    b: '12g'
+  transfersize:
+    t: '1m'
+  recordsize:
+    r: '1m'
+  segmentcount:
+    s: '1m'
+  stripecount:
+    c: 1024
+  asyncio: !mux
+    aios_64:
+      a:
+      - 16
+  objectclass:
+    o: "LARGE"
