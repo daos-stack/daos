@@ -31,19 +31,16 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func hasConns(addrs client.Addresses, eMap client.ErrorMap) (
-	out string) {
-
+func hasConns(addrs client.Addresses, eMap client.ResultMap) (out string) {
 	out = sprintConns(addrs, eMap)
 	if len(addrs) == 0 {
 		out = fmt.Sprintf("%sNo active connections!", out)
 	}
+
 	return
 }
 
-func sprintConns(addrs client.Addresses, eMap client.ErrorMap) (
-	out string) {
-
+func sprintConns(addrs client.Addresses, eMap client.ResultMap) (out string) {
 	// map keys always processed in order
 	var keys []string
 	for k := range eMap {
@@ -55,13 +52,11 @@ func sprintConns(addrs client.Addresses, eMap client.ErrorMap) (
 		out = fmt.Sprintf(
 			"%sfailed to connect to %s (%s)\n", out, key, eMap[key])
 	}
+
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
-func checkAndFormat(i interface{}, err error) string {
-	if err != nil {
-		return fmt.Sprintf("Unable to retrieve %%[1]ss (%s)\n", err)
-	}
+func checkAndFormat(i interface{}) string {
 	s, err := common.StructsToString(i)
 	if err != nil {
 		return fmt.Sprintf(

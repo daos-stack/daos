@@ -39,11 +39,13 @@ func (s *ShowStorageCommand) Execute(args []string) error {
 		return errors.Wrap(err, "unable to connect to hosts")
 	}
 
+	cCtrlrs, cModules := conns.ListStorage()
+
 	fmt.Printf(
-		checkAndFormat(conns.ListNvme()),
+		checkAndFormat(cCtrlrs),
 		"NVMe SSD controller and constituent namespace")
 
-	fmt.Printf(checkAndFormat(conns.ListScm()), "SCM module")
+	fmt.Printf(checkAndFormat(cModules), "SCM module")
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
@@ -64,11 +66,13 @@ func (k *KillRankCommand) Execute(args []string) error {
 		return errors.WithMessage(err, "unable to connect to hosts")
 	}
 
-	if err := conns.KillRank(k.PoolUUID, k.Rank); err != nil {
-		return errors.WithMessage(err, "Kill Rank failed")
-	}
+	errors := conns.KillRank(k.PoolUUID, k.Rank)
 
-	fmt.Println("Kill Rank succeeding on all active connections!")
+	if len(errors) == 0 {
+		fmt.Println("Kill Rank succeeding on all active connections!")
+	} else {
+		fmt.Printf(checkAndFormat(errors), "Kill Rank command failures")
+	}
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)

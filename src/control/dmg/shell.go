@@ -71,22 +71,18 @@ func setupShell() *ishell.Shell {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "listnvmecontrollers",
-		Help: "Command to list NVMe SSD controllers",
+		Name: "liststorage",
+		Help: "Command to list NVMe SSD controllers and SCM modules",
 		Func: func(c *ishell.Context) {
 			c.Println(hasConns(conns.GetActiveConns(nil)))
-			c.Printf(
-				checkAndFormat(conns.ListNvme()),
-				"NVMe SSD controller and constituent namespace")
-		},
-	})
 
-	shell.AddCmd(&ishell.Cmd{
-		Name: "listscmmodules",
-		Help: "Command to list installed SCM modules",
-		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
-			c.Printf(checkAndFormat(conns.ListScm()), "SCM module")
+			cCtrlrs, cModules := conns.ListStorage()
+
+			c.Printf(
+				checkAndFormat(cCtrlrs),
+				"NVMe SSD controller and constituent namespace")
+
+			c.Printf(checkAndFormat(cModules), "SCM module")
 		},
 	})
 
@@ -112,12 +108,16 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			if err := conns.KillRank(poolUUID, uint32(rank)); err != nil {
-				c.Printf("Kill Rank failed: %s\n", err)
-				return
-			}
+			errors := conns.KillRank(poolUUID, uint32(rank))
 
-			c.Print("Kill Rank succeeding on all active connections!\n")
+			if len(errors) == 0 {
+				c.Println(
+					"Kill Rank succeeding on all active connections!")
+			} else {
+				c.Printf(
+					checkAndFormat(errors),
+					"Kill Rank command failures")
+			}
 		},
 	})
 

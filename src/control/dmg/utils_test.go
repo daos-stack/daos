@@ -43,22 +43,22 @@ var (
 func TestHasConnection(t *testing.T) {
 	var shelltests = []struct {
 		addrs Addresses
-		eMap  ErrorMap
+		eMap  ResultMap
 		out   string
 	}{
 		{
 			addresses,
-			ErrorMap{},
+			ResultMap{},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ErrorMap{"1.2.3.4:10000": errors.New("test")},
+			ResultMap{"1.2.3.4:10000": result{"1.2.3.4:10000", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ErrorMap{"1.2.3.4:10000": errors.New("test"), "1.2.3.5:10001": errors.New("test")},
+			ResultMap{"1.2.3.4:10000": client.result{"1.2.3.4:10000", nil, errors.New("test")}, "1.2.3.5:10001": client.result{"1.2.3.5:10001", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\nNo active connections!",
 		},
 	}
@@ -70,22 +70,22 @@ func TestHasConnection(t *testing.T) {
 func TestSprintConns(t *testing.T) {
 	var shelltests = []struct {
 		addrs Addresses
-		eMap  ErrorMap
+		eMap  ResultMap
 		out   string
 	}{
 		{
 			addresses,
-			ErrorMap{},
+			ResultMap{},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ErrorMap{"1.2.3.4:10000": errors.New("test")},
+			ResultMap{"1.2.3.4:10000": result{"1.2.3.4:10000", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ErrorMap{"1.2.3.4:10000": errors.New("test"), "1.2.3.5:10001": errors.New("test")},
+			ResultMap{"1.2.3.4:10000": errors.New("test"), "1.2.3.5:10001": errors.New("test")},
 			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\n",
 		},
 	}
