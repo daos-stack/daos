@@ -18,8 +18,8 @@ def scons():
     denv.Install('$PREFIX/lib/daos_srv', ds_sec)
 
     # dc_security: Security Client
-    dc_security_tgts = denv.SharedObject(['cli_security.c',
-                                          'acl_api.c']) + common_src
+    dc_security_tgts = denv.SharedObject(['cli_security.c', 'acl_api.c'],
+                                         OBJPREFIX="c_") + common_src
     Export('dc_security_tgts')
 
     dc_sectest_tgts = denv.SharedObject(['cli_security.c', 'srv_acl.c'],
