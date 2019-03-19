@@ -910,7 +910,7 @@ discard_10(void **state)
 	punch_nr = 3;
 	punch_epoch[0] = 3;
 	punch_epoch[1] = 4;
-	punch_epoch[1] = 7;
+	punch_epoch[2] = 7;
 
 	VERBOSE_MSG("Discard punch records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
@@ -1501,6 +1501,144 @@ aggregate_14(void **state)
 	aggregate_multi(arg, &ds);
 }
 
+static void
+print_space_info(vos_pool_info_t *pi, char *desc)
+{
+	struct vea_attr	*attr = &pi->pif_vea_attr;
+	struct vea_stat	*stat = &pi->pif_vea_stat;
+
+	VERBOSE_MSG("== Pool space information: %s ==\n", desc);
+	VERBOSE_MSG("  Total bytes: SCM["DF_U64"], NVMe["DF_U64"]\n",
+		    pi->pif_scm_sz, pi->pif_nvme_sz);
+	VERBOSE_MSG("  Free bytes : SCM["DF_U64"], NVMe["DF_U64"]\n",
+		    pi->pif_scm_free, pi->pif_nvme_free);
+
+	/* NVMe isn't enabled */
+	if (attr->va_tot_blks == 0)
+		return;
+
+	VERBOSE_MSG("  NVMe allocator statistics:\n");
+	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
+		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
+		    "\tmax_frag_blks: %u\n",
+		    stat->vs_free_persistent, stat->vs_free_transient,
+		    stat->vs_large_frags, stat->vs_small_frags,
+		    stat->vs_largest_blks);
+	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
+		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
+		    stat->vs_resrv_large, stat->vs_resrv_small);
+}
+
+static int
+fill_cont(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
+	  char *akey, daos_size_t total, daos_epoch_t *epc_hi)
+{
+	char		*buf_u;
+	daos_size_t	 iod_size = (1UL << 10), size_max = (1UL << 20);
+	daos_size_t	 written = 0;
+	daos_recx_t	 recx;
+	uint64_t	 idx_max, nr_max;
+
+	D_ALLOC(buf_u, size_max);
+	assert_non_null(buf_u);
+
+	idx_max = (total / iod_size) / 5;
+	nr_max = size_max / iod_size;
+	assert_true(idx_max > nr_max);
+
+	while (written < total) {
+		recx.rx_idx = rand() % idx_max;
+		recx.rx_nr = (rand() % nr_max) + 1;
+		if (recx.rx_nr < (VOS_BLK_SZ / iod_size))
+			recx.rx_nr = (VOS_BLK_SZ / iod_size);
+
+		/* Add few random punches */
+		if ((rand() % 10) > 7 && written != 0)
+			arg->ta_flags |= TF_PUNCH;
+
+		update_value(arg, oid, *epc_hi, dkey, akey, DAOS_IOD_ARRAY,
+			     iod_size, &recx, buf_u);
+		(*epc_hi)++;
+		if (arg->ta_flags & TF_PUNCH)
+			arg->ta_flags &= ~TF_PUNCH;
+		else
+			written += (recx.rx_nr * iod_size);
+	}
+	D_FREE(buf_u);
+
+	return 0;
+}
+
+#define AT_REPEAT_AGG_CNT	10
+/*
+ * Update & Aggregate EV repeatedly.
+ */
+static void
+aggregate_15(void **state)
+{
+	struct io_test_args	*arg = *state;
+	vos_pool_info_t		 pool_info;
+	daos_epoch_t		 epc_hi = 1;
+	daos_epoch_range_t	 epr;
+	daos_size_t		 fill_size;
+	daos_unit_oid_t		 oid;
+	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char			 akey[UPDATE_AKEY_SIZE] = { 0 };
+	int			 i, rc;
+
+	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+	assert_int_equal(rc, 0);
+	print_space_info(&pool_info, "INIT");
+
+	fill_size = pool_info.pif_nvme_free ? : pool_info.pif_scm_free;
+	assert_true(fill_size > 0);
+
+	if (fill_size > VPOOL_2G)
+		fill_size = VPOOL_2G;
+	fill_size = fill_size / 3;
+
+	oid = dts_unit_oid_gen(0, 0, 0);
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	epr.epr_lo = 0;
+	for (i = 0; i < AT_REPEAT_AGG_CNT; i++) {
+		VERBOSE_MSG("Fill round: %d, size:"DF_U64", epc_hi:"DF_U64"\n",
+			    i, fill_size, epc_hi);
+
+		rc = fill_cont(arg, oid, dkey, akey, fill_size, &epc_hi);
+		if (rc) {
+			print_error("fill container %d failed:%d\n", i, rc);
+			break;
+		}
+
+		rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+		assert_int_equal(rc, 0);
+		print_space_info(&pool_info, "FILLED");
+
+		VERBOSE_MSG("Aggregate round: %d\n", i);
+		epr.epr_hi = epc_hi;
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+		if (rc) {
+			print_error("aggregate %d failed:%d\n", i, rc);
+			break;
+		}
+
+		rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+		assert_int_equal(rc, 0);
+		print_space_info(&pool_info, "AGGREGATED");
+
+		VERBOSE_MSG("Wait 10 secs for free extents expiring...\n");
+		sleep(10);
+	}
+
+	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+	assert_int_equal(rc, 0);
+	print_space_info(&pool_info, "FINAL");
+
+	assert_int_equal(i, AT_REPEAT_AGG_CNT);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -1566,6 +1704,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Aggregate mixed SV/EV, multiple objects, keys",
 	  aggregate_14, NULL, agg_tst_teardown },
+	{ "VOS415: Update & Aggregate EV repeatedly",
+	  aggregate_15, NULL, agg_tst_teardown },
 };
 
 int

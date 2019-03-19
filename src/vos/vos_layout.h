@@ -227,6 +227,17 @@ struct vos_obj_table_df {
 	struct btr_root			obt_btr;
 };
 
+enum vos_io_stream {
+	/**
+	 * I/O stream for generic purpose, like client updates, updates
+	 * initiated for rebuild , reintegration or rebalance.
+	 */
+	VOS_IOS_GENERIC		= 0,
+	/** I/O stream for extents coalescing, like aggregation. */
+	VOS_IOS_AGGREGATION,
+	VOS_IOS_CNT
+};
+
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
@@ -236,11 +247,8 @@ struct vos_cont_df {
 	struct vos_obj_table_df		cd_otab_df;
 	/** The DTXs table. */
 	struct vos_dtx_table_df		cd_dtx_table_df;
-	/*
-	 * Allocation hint for block allocator, it can be turned into
-	 * a hint vector when we need to support multiple active epochs.
-	 */
-	struct vea_hint_df		cd_hint_df;
+	/** Allocation hints for block allocator. */
+	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 };
 
 /** btree (d/a-key) record bit flags */

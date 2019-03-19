@@ -948,7 +948,7 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt[VOS_IOS_GENERIC];
 	D_ASSERT(hint_ctxt);
 	blk_cnt = vos_byte2blkcnt(size);
 
@@ -1150,7 +1150,8 @@ dkey_update_begin(struct vos_io_context *ioc, daos_key_t *dkey)
 
 /* Publish or cancel the NVMe block reservations */
 int
-vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish)
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
+		   enum vos_io_stream ios)
 {
 	struct vea_space_info	*vsi;
 	struct vea_hint_context	*hint_ctxt;
@@ -1161,7 +1162,7 @@ vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish)
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt[ios];
 	D_ASSERT(hint_ctxt);
 
 	rc = publish ? vea_tx_publish(vsi, hint_ctxt, blk_list) :
@@ -1206,7 +1207,8 @@ update_cancel(struct vos_io_context *ioc)
 	}
 
 	/* Cancel NVMe reservations */
-	vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, false);
+	vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, false,
+			   VOS_IOS_GENERIC);
 }
 
 int
@@ -1249,7 +1251,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err)
 	}
 
 	/* Publish NVMe reservations */
-	err = vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, true);
+	err = vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, true,
+				 VOS_IOS_GENERIC);
 
 abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
