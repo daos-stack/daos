@@ -48,8 +48,8 @@ class Permission(Test):
         with open('../../../.build_vars.json') as f:
             build_paths = json.load(f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("server_group",
-                                            '/server/',
+        self.server_group = self.params.get("name",
+                                            '/server_config/',
                                             'daos_server')
 
         # setup the DAOS python API

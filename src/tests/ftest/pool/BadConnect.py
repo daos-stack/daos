@@ -68,7 +68,8 @@ class BadConnectTest(Test):
 
         # launch the server
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
-        server_group = self.params.get("server_group",'/server/','daos_server')
+        server_group = self.params.get("name", '/server_config/',
+                                       'daos_server')
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):

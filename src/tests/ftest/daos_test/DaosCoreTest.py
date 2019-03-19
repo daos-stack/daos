@@ -56,7 +56,8 @@ class DaosCoreTest(Test):
             build_paths = json.load(build_vars)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server_config/',
+                                            'daos_server')
         self.daos_test = self.basepath + '/install/bin/daos_test'
         self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')

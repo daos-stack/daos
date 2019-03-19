@@ -58,16 +58,9 @@ class IorOverNvme(Test):
                                                             tmp_path)
 
         #This is for NVMe Setup
-        _nvme_param = self.params.get("nvme", '/run/*')
-        self.nvme_parameter = {}
-        for _param in _nvme_param.split(" "):
-            _tmp = _param.split(":")
-            self.nvme_parameter[_tmp[0]] = _tmp[1]
-        if self.nvme_parameter['nvme_mode'] == "Enabled":
-            nvme_conf_param = self.params.get("nvme_conf", '/run/*')
-            ServerUtils.nvme_setup(self.hostlist_servers,
-                                   int(self.nvme_parameter['drive_count']),
-                                   nvme_conf_param)
+        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
+        if self.nvme_parameter == "nvme":
+            ServerUtils.nvme_setup(self.hostlist_servers)
 
         #IorUtils.build_ior(self.basepath)
         ServerUtils.runServer(self.hostfile_servers, server_group, self.basepath)

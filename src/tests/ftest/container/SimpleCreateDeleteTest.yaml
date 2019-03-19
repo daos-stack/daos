@@ -3,17 +3,14 @@
 hosts: !mux
     test_machines1:
       test_machines:
-        - boro-A
-    test_machines6:
-      test_machines:
-        - boro-A
-        - boro-B
-        - boro-C
-        - boro-D
-        - boro-E
-        - boro-F
-server:
-   server_group: daos_server
+        - boro-52
+server_config:
+   name: daos_server
+   cpus: [0-5]
+   fabric_iface: eth0
+   env_vars:
+    - ABT_ENV_MAX_NUM_XSTREAMS=100
+    - ABT_MAX_NUM_XSTREAMS=100
 conttests:
    createmode:
      mode: 511

@@ -21,8 +21,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from paramiko import client, Transport, SFTPClient
-SUDO_USER = "root"
-SUDO_PASSWD = "lustre"
 
 class Ssh(object):
     """
@@ -38,7 +36,6 @@ class Ssh(object):
         Args:
             address: remote machine IP address or hostname.
             timeout: Timeout for waiting to finish the command
-            sudo   : To run command as sudo user or current user.
             debug  : To print the command on console.
         return:
             None
@@ -54,12 +51,7 @@ class Ssh(object):
         """
         Connect the client via ssh connection
         """
-        if not self.sudo:
-            self.client.connect(self.address)
-        else:
-            self.client.connect(self.address,
-                                username=SUDO_USER,
-                                password=SUDO_PASSWD)
+        self.client.connect(self.address)
 
         if self.debug:
             print("SSH Connection open to {0}.".format(self.address))
@@ -131,29 +123,6 @@ class Ssh(object):
                           command,
                           exit_status))
         return exit_status
-
-    def file_create(self, file_name, info):
-        """
-        To open the SFTP connection and create file on remote machine.
-        Args:
-            file_nameL Name of the File
-            info: Content to be written in file
-        return:
-            None
-        Exception:
-            general: during the file opening/writing on remote machine.
-        """
-        try:
-            transport = Transport((self.address))
-            transport.connect(username=SUDO_USER,
-                              password=SUDO_PASSWD)
-            _sftp = SFTPClient.from_transport(transport)
-            _file = _sftp.open(file_name, "wb")
-            _file.write(info)
-            _file.close()
-        except Exception as _e:
-            print("ERROR: Exception during daos_nvme.conf update")
-            raise
 
     def disconnect(self):
         """
