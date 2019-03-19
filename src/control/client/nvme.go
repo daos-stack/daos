@@ -33,6 +33,16 @@ import (
 	"golang.org/x/net/context"
 )
 
+// nvmeResult contains results and error of a request
+type nvmeResult struct {
+	cs NvmeControllers
+	e  error
+}
+
+// cNvmeMap is an alias for query results of NVMe controllers (and
+// any residing namespaces) on connected servers keyed on address.
+type cNvmeMap map[string]nvmeResult
+
 // listNvmeCtrlrs returns NVMe controllers in protobuf format.
 func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

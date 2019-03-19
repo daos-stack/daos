@@ -108,9 +108,17 @@ func (c *control) listFeatures(category string) (
 	return
 }
 
+// listFeaturesRequest is to be called as a goroutine and returns result
+// containing supported server features over channel.
+func listFeaturesRequest(controller Control, ch chan result) {
+	fMap, err := controller.listAllFeatures()
+	ch <- result{controller.getAddress(), fMap, err}
+}
+
 // ListFeatures returns supported management features for each server connected.
-func (c *connList) ListFeatures() (cFeatureMap, error) {
-	cResults := c.MakeRequests(MakeFeatureRequest)
+func (c *connList) ListFeatures() cFeatureMap {
+	var err error = nil
+	cResults := c.makeRequests(listFeaturesRequest)
 	cFeatures := make(cFeatureMap) // mapping of server addresses to features
 
 	for _, res := range cResults {
@@ -122,14 +130,13 @@ func (c *connList) ListFeatures() (cFeatureMap, error) {
 		// extract obj from generic result type returned over channel
 		fMap, ok := res.value.(FeatureMap)
 		if !ok {
-			err := fmt.Errorf(
+			err = fmt.Errorf(
 				"type assertion failed, wanted %+v got %+v",
 				FeatureMap{}, res.value)
-			cFeatures[res.address] = featureResult{nil, err}
-			continue
 		}
 
-		cFeatures[res.address] = featureResult{fMap, nil}
+		cFeatures[res.address] = featureResult{fMap, err}
 	}
-	return cFeatures, nil
+
+	return cFeatures
 }

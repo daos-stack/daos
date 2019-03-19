@@ -53,7 +53,7 @@ type mockControllerFactory struct {
 	modules  ScmModules
 }
 
-func (m *mockControllerFactory) create(address string) Control {
+func (m *mockControllerFactory) create(address string) (Control, error) {
 	return newMockControl(address, m.state, m.features, m.ctrlrs, m.modules)
 }
 
@@ -83,15 +83,19 @@ func TestConnectClients(t *testing.T) {
 		addrs, eMap := cc.ConnectClients(tt.addrsIn)
 
 		if tt.shouldSucceed {
-			AssertEqual(t, addrs, tt.addrsOut, "unexpected client address list returned")
-			AssertEqual(t, eMap, ErrorMap{}, "unexpected non-nil failure map")
+			AssertStringsEqual(
+				t, addrs, tt.addrsOut,
+				"unexpected client address list returned")
+			AssertEqual(
+				t, eMap, ResultMap{},
+				"unexpected non-nil failure map")
 			continue
 		}
 		AssertEqual(t, len(addrs), 0, "unexpected number of clients connected")
 		AssertEqual(t, len(eMap), len(tt.addrsIn), "unexpected failure map")
 		for _, addr := range tt.addrsIn {
 			AssertEqual(
-				t, eMap[addr],
+				t, eMap[addr].err,
 				fmt.Errorf("socket connection is not active (%s)", tt.state),
 				"unexpected failure in map")
 		}
@@ -111,73 +115,52 @@ func TestDuplicateConns(t *testing.T) {
 	cc := newMockConnect(connectivity.Ready, features, ctrlrs, modules)
 	addrs, eMap := cc.ConnectClients(append(addresses, addresses...))
 
-	// verify duplicates are removed and failed attempts recorded.
-	AssertEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, len(eMap), len(addresses), "unexpected failure map")
-	for _, addr := range addresses {
-		AssertEqual(
-			t, eMap[addr],
-			fmt.Errorf("duplicate connection to %s", addr),
-			"unexpected failure in map")
-	}
+	// verify duplicates are ignored.
+	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
+	AssertEqual(t, len(eMap), 0, "unexpected failure map")
 }
 
 func TestGetClearConns(t *testing.T) {
 	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
 
-	addrs, eMap := cc.GetActiveConns(ErrorMap{})
-	AssertEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, eMap, ErrorMap{}, "unexpected failure map")
+	addrs, eMap := cc.GetActiveConns(ResultMap{})
+	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
+	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
 
 	eMap = cc.ClearConns()
-	AssertEqual(t, eMap, ErrorMap{}, "unexpected failure map")
+	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
 
-	addrs, eMap = cc.GetActiveConns(ErrorMap{})
-	AssertEqual(t, addrs, Addresses(nil), "expected nil client address list to be returned")
-	AssertEqual(t, eMap, ErrorMap{}, "unexpected failure map")
+	addrs, eMap = cc.GetActiveConns(ResultMap{})
+	AssertEqual(t, addrs, Addresses{}, "expected nil client address list to be returned")
+	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
 
 	addrs, eMap = cc.ConnectClients(addresses)
-	AssertEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, eMap, ErrorMap{}, "unexpected failure map")
+	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
+	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
 
-	addrs, eMap = cc.GetActiveConns(ErrorMap{})
-	AssertEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, eMap, ErrorMap{}, "unexpected failure map")
+	addrs, eMap = cc.GetActiveConns(ResultMap{})
+	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
+	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
 }
 
 func TestListFeatures(t *testing.T) {
 	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
 
-	clientFeatures, err := cc.ListFeatures()
-	if err != nil {
-		t.Fatal(err)
-	}
+	clientFeatures := cc.ListFeatures()
 
 	AssertEqual(
 		t, clientFeatures, NewClientFM(features, addresses),
 		"unexpected client features returned")
 }
 
-func TestListNvme(t *testing.T) {
+func TestListStorage(t *testing.T) {
 	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
 
-	clientNvme, err := cc.ListNvme()
-	if err != nil {
-		t.Fatal(err)
-	}
+	clientNvme, clientScm := cc.ListStorage()
 
 	AssertEqual(
 		t, clientNvme, NewClientNvme(ctrlrs, addresses),
 		"unexpected client NVMe SSD controllers returned")
-}
-
-func TestListScm(t *testing.T) {
-	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
-
-	clientScm, err := cc.ListScm()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	AssertEqual(
 		t, clientScm, NewClientScm(modules, addresses),

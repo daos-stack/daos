@@ -25,29 +25,34 @@ package client
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/pkg/errors"
 )
-
-// cNvmeMap is an alias for NVMe controllers (and any residing namespaces)
-// on server node connected to given client.
-type cNvmeMap map[string]NvmeControllers
-
-// cScmMap is an alias for SCM modules installed on server node
-// connected to given client.
-type cScmMap map[string]ScmModules
-
-// ErrorMap is an alias to return errors keyed on address.
-type ErrorMap map[string]error
 
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
 type Addresses []string
 
+// result is a container for output of any type of client request.
+type result struct {
+	address string
+	value   interface{}
+	err     error
+}
+
+// ResultMap map client addresses to method call results
+type ResultMap map[string]result
+
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {
-	create(string) Control
+	create(string) (Control, error)
+}
+
+// controllerFactory as an implementation of ControllerFactory.
+type controllerFactory struct{}
+
+// create instantiates and connects a client to server at given address.
+func (c *controllerFactory) create(address string) (Control, error) {
+	return newControl(address)
 }
 
 // Connect is an interface providing functionality across multiple
@@ -55,34 +60,15 @@ type ControllerFactory interface {
 type Connect interface {
 	// ConnectClients attempts to connect a list of addresses, returns
 	// list of connected clients (controllers) and map of any errors.
-	ConnectClients(Addresses) (Addresses, ErrorMap)
+	ConnectClients(Addresses) (Addresses, ResultMap)
 	// GetActiveConns verifies states of controllers and removes inactive
 	// from stored. Adds failure to failure map and returns active.
-	GetActiveConns(ErrorMap) (Addresses, ErrorMap)
-	ClearConns() ErrorMap
-	ListFeatures() (cFeatureMap, error)
-	ListNvme() (cNvmeMap, error)
-	ListScm() (cScmMap, error)
-	KillRank(uuid string, rank uint32) error
+	GetActiveConns(ResultMap) (Addresses, ResultMap)
+	ClearConns() ResultMap
+	ListFeatures() cFeatureMap
+	ListStorage() (cNvmeMap, cScmMap)
+	KillRank(uuid string, rank uint32) ResultMap
 }
-
-// controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct{}
-
-// create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string) Control {
-	return &control{}
-}
-
-// result is a generic container far output of client method calls
-type result struct {
-	address string
-	value   interface{}
-	err     error
-}
-
-// clientResults map client addresses to method call results
-type clientResults map[string]result
 
 // connList is an implementation of Connect and stores controllers
 // (connections to clients, one per target server).
@@ -95,83 +81,106 @@ type connList struct {
 //
 // Returns errors if server addresses doesn't resolve but will add
 // controllers for any server addresses that are connectable.
-func (c *connList) ConnectClients(addresses Addresses) (
-	Addresses, ErrorMap) {
+func (c *connList) ConnectClients(addresses Addresses) (Addresses, ResultMap) {
+	errors := make(ResultMap)
+	ch := make(chan result)
 
-	failures := make(ErrorMap)
 	for _, address := range addresses {
-		controller := c.factory.create(address)
-		if err := controller.connect(address); err != nil {
-			failures[address] = err
+		go func(f ControllerFactory, addr string, ch chan result) {
+			c, err := f.create(addr)
+			ch <- result{addr, c, err}
+		}(c.factory, address, ch)
+	}
+
+	for range addresses {
+		res := <-ch
+
+		if res.err != nil {
+			errors[res.address] = res
 			continue
 		}
+
+		controller, ok := res.value.(Control)
+		if !ok {
+			res.err = fmt.Errorf(
+				"type assertion failed, wanted %+v got %+v",
+				control{}, res.value)
+
+			errors[res.address] = res
+			continue
+		}
+
 		c.controllers = append(c.controllers, controller)
 	}
 
-	// small delay to allow correct states to register
-	time.Sleep(100 * time.Millisecond)
-	return c.GetActiveConns(failures)
+	return c.GetActiveConns(errors)
 }
 
-// GetActiveConns is an access method to verify active connections.
-//
-// Mutate controller slice with only valid unique connected conns, return
-// addresses and map of failed connections.
+// GetActiveConns verifies active connections and (re)builds connection list.
 //
 // TODO: resolve hostname and compare destination IPs for duplicates.
-func (c *connList) GetActiveConns(failures ErrorMap) (
-	addresses Addresses, eMap ErrorMap) {
-
-	eMap = failures
-	if eMap == nil {
-		eMap = make(ErrorMap)
+func (c *connList) GetActiveConns(errors ResultMap) (Addresses, ResultMap) {
+	if errors == nil {
+		errors = make(ResultMap)
 	}
+	addresses := []string{}
 
+	// purge inactive connections
 	controllers := c.controllers[:0]
 	for _, mc := range c.controllers {
 		address := mc.getAddress()
 		if common.Include(addresses, address) {
-			eMap[address] = fmt.Errorf("duplicate connection to %s", address)
-			continue
+			continue // ignore duplicate
 		}
+
 		state, ok := mc.connected()
 		if ok {
 			addresses = append(addresses, address)
 			controllers = append(controllers, mc)
 			continue
 		}
-		eMap[address] = fmt.Errorf("socket connection is not active (%s)", state)
+
+		errors[address] = result{
+			address, state,
+			fmt.Errorf(
+				"socket connection is not active (%s)", state),
+		}
 	}
 
 	c.controllers = controllers
-	return
+	return Addresses(addresses), errors
 }
 
 // ClearConns clears all stored connections.
-func (c *connList) ClearConns() ErrorMap {
-	eMap := make(ErrorMap)
+func (c *connList) ClearConns() ResultMap {
+	errors := make(ResultMap)
+	ch := make(chan result)
+
 	for _, controller := range c.controllers {
-		addr := controller.getAddress()
-		if err := controller.disconnect(); err != nil {
-			eMap[addr] = err
+		go func(c Control, ch chan result) {
+			err := c.disconnect()
+			ch <- result{c.getAddress(), nil, err}
+		}(controller, ch)
+	}
+
+	for range c.controllers {
+		res := <-ch
+
+		if res.err != nil {
+			errors[res.address] = res
 		}
 	}
 	c.controllers = nil
-	return eMap
+
+	return errors
 }
 
-// MakeRequestSimple issues request accross all connections for
-// methods with no parameters which just return error.
-func MakeFeatureRequest(controller Control, ch chan result) {
-	fMap, err := controller.listAllFeatures()
-	ch <- result{controller.getAddress(), fMap, err}
-}
+// makeRequests performs supplied method over each controller in connList and
+// stores generic result object for each in map keyed on address.
+func (c *connList) makeRequests(
+	requestFn func(Control, chan result)) ResultMap {
 
-// ListFeatures returns supported management features for each server connected.
-func (c *connList) MakeRequests(
-	requestFn func(Control, chan result)) clientResults {
-
-	cMap := make(clientResults) // mapping of server host addresses to results
+	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan result)
 
 	for _, mc := range c.controllers {
@@ -186,42 +195,76 @@ func (c *connList) MakeRequests(
 	return cMap
 }
 
-// ListNvme returns installed NVMe SSD controllers for each server connected.
-func (c *connList) ListNvme() (cNvmeMap, error) {
-	cCtrlrs := make(cNvmeMap)
-	for _, mc := range c.controllers {
-		ctrlrs, err := mc.listNvmeCtrlrs()
-		if err != nil {
-			return cCtrlrs, err
-		}
-		cCtrlrs[mc.getAddress()] = ctrlrs
-	}
-	return cCtrlrs, nil
+// storageResult container for results from multiple storage subsystems queries.
+type StorageResult struct {
+	nvme nvmeResult
+	scm  scmResult
 }
 
-// ListScm returns installed SCM module details for each server connected.
-func (c *connList) ListScm() (cScmMap, error) {
-	cmms := make(cScmMap)
-	for _, mc := range c.controllers {
-		mms, err := mc.listScmModules()
-		if err != nil {
-			return cmms, err
+// listStorageRequest is to be called as a goroutine and returns result
+// containing locally attached NVMe and SCM storage devices over channel.
+func listStorageRequest(mc Control, ch chan result) {
+	sRes := StorageResult{}
+
+	ctrlrs, err := mc.listNvmeCtrlrs()
+	sRes.nvme = nvmeResult{ctrlrs, err}
+
+	mms, err := mc.listScmModules()
+	sRes.scm = scmResult{mms, err}
+
+	ch <- result{mc.getAddress(), sRes, nil} // result.err is ignored
+}
+
+// ListStorage returns locally-attached nonvolatile storage devices for each
+// connected server.
+func (c *connList) ListStorage() (cNvmeMap, cScmMap) {
+	cResults := c.makeRequests(listStorageRequest)
+	cCtrlrs := make(cNvmeMap) // mapping of server address to NVMe SSDs
+	cModules := make(cScmMap) // mapping of server address to SCM modules
+
+	for _, res := range cResults {
+		// we want to extract obj regardless of error as may only refer
+		// to one of the subsystems, ignore res.err
+		storageRes, ok := res.value.(StorageResult)
+		if !ok {
+			err := fmt.Errorf(
+				"type assertion failed, wanted %+v got %+v",
+				StorageResult{}, res.value)
+
+			cCtrlrs[res.address] = nvmeResult{nil, err}
+			cModules[res.address] = scmResult{nil, err}
+			continue
 		}
-		cmms[mc.getAddress()] = mms
+
+		cCtrlrs[res.address] = storageRes.nvme
+		cModules[res.address] = storageRes.scm
 	}
-	return cmms, nil
+
+	return cCtrlrs, cModules
 }
 
 // KillRank Will terminate server running at given rank on pool specified by
 // uuid.
-func (c *connList) KillRank(uuid string, rank uint32) error {
+func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+	errors := make(ResultMap)
+	ch := make(chan result)
+
 	for _, mc := range c.controllers {
-		err := mc.killRank(uuid, rank)
-		if err != nil {
-			return errors.WithMessage(err, mc.getAddress())
-		}
+		go func() {
+			ch <- result{
+				mc.getAddress(),
+				nil,
+				mc.killRank(uuid, rank),
+			}
+		}()
 	}
-	return nil
+
+	for range c.controllers {
+		res := <-ch
+		errors[res.address] = res
+	}
+
+	return errors
 }
 
 // NewConnect is a factory for Connect interface to operate over

@@ -47,7 +47,7 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) cFeatureMap {
 func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) cNvmeMap {
 	cMap := make(cNvmeMap)
 	for _, addr := range addrs {
-		cMap[addr] = ctrlrs
+		cMap[addr] = nvmeResult{ctrlrs, nil}
 	}
 	return cMap
 }
@@ -56,7 +56,7 @@ func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) cNvmeMap {
 func NewClientScm(mms ScmModules, addrs Addresses) cScmMap {
 	cMap := make(cScmMap)
 	for _, addr := range addrs {
-		cMap[addr] = mms
+		cMap[addr] = scmResult{mms, nil}
 	}
 	return cMap
 }

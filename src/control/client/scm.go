@@ -32,6 +32,16 @@ import (
 	"golang.org/x/net/context"
 )
 
+// scmResult contains results and error of a request
+type scmResult struct {
+	mms ScmModules
+	e   error
+}
+
+// cScmMap is an alias for query results of SCM modules installed
+// on connected servers keyed on address.
+type cScmMap map[string]scmResult
+
 // listScmModules prints all discovered Storage Class Memory modules installed.
 func (c *control) listScmModules() (mms ScmModules, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

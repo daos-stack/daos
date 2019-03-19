@@ -68,7 +68,7 @@ func (m *mockControl) killRank(uuid string, rank uint32) error {
 
 func newMockControl(
 	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules) Control {
+	ctrlrs NvmeControllers, modules ScmModules) (Control, error) {
 
-	return &mockControl{address, state, features, ctrlrs, modules}
+	return &mockControl{address, state, features, ctrlrs, modules}, nil
 }
