@@ -21,7 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
+from __future__ import print_function
 import os
 import sys
 import json
@@ -86,7 +86,7 @@ def ior_runner_thread(result_queue, tname, operation, **kwargs):
                              filename=cont_uuid,
                              display_output=False)
             result_queue.put("PASS")
-        except Exception as exe:
+        except IorUtils.IorFailed as exe:
             result_queue.put("FAIL")
             print("--- FAIL --- {0} Failed to run IOR {1} Exception {2}"
                   .format(tname,
@@ -198,7 +198,7 @@ class ObjectMetadata(avocado.Test):
             thrd.join()
 
         while not self.out_queue.empty():
-            if self.out_queue.get() is "FAIL":
+            if self.out_queue.get() == "FAIL":
                 return "FAIL"
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
@@ -207,11 +207,13 @@ class ObjectMetadata(avocado.Test):
     def test_metadata_server_restart(self):
         """
         Test ID: DAOS-1512
-        Test Description: This test will verify 2000 IOR small size container after server restart.
-                          Test will write IOR in 5 different threads for faster execution time.
-                          Each thread will create 400 (8bytes) containers to the same pool.
-                          Restart the servers, read IOR container file written previously and
-                          validate data integrity by using IOR option "-R -G 1".
+        Test Description: This test will verify 2000 IOR small size container
+                          after server restart. Test will write IOR in 5
+                          different threads for faster execution time. Each
+                          thread will create 400 (8bytes) containers to the
+                          same pool. Restart the servers, read IOR container
+                          file written previously and validate data integrity
+                          by using IOR option "-R -G 1".
         :avocado: tags=metadata,metadata_ior,nvme,small
         """
         self.pool_connect = False

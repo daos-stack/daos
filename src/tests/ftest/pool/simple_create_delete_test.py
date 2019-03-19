@@ -21,12 +21,13 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import traceback
 import sys
 import json
-from avocado       import Test
+from avocado import Test
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -54,9 +55,10 @@ class SimpleCreateDeleteTest(Test):
 
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
-        server_group = self.params.get("server_group", '/server/', 'daos_server')
+        server_group = self.params.get("server_group", '/server/',
+                                       'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
@@ -112,7 +114,7 @@ class SimpleCreateDeleteTest(Test):
                 self.fail("Test was expected to fail but it passed.\n")
 
         except DaosApiError as exc:
-            print (exc)
+            print(exc)
             print(traceback.format_exc())
             if expected_result not in ['FAIL']:
                 self.fail("Test was expected to pass but it failed.\n")

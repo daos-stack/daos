@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import traceback
@@ -51,7 +52,7 @@ def cb_func(event):
     GLOB_RC = event.event.ev_error
     GLOB_SIGNAL.set()
 
-def verify_list_attr(indata, size, buffer, mode="sync"):
+def verify_list_attr(indata, size, buff, mode="sync"):
     """
     verify the length of the Attribute names
     """
@@ -64,10 +65,10 @@ def verify_list_attr(indata, size, buffer, mode="sync"):
                             .format(length, size))
     #verify the Attributes names in list_attr retrieve
     for key in indata.keys():
-        if key not in buffer:
+        if key not in buff:
             raise DaosTestError("FAIL: Name does not match after list attr,"
                                 " Expected buf={0} and received buf = {1}"
-                                .format(key, buffer))
+                                .format(key, buff))
 
 def verify_get_attr(indata, outdata):
     """
@@ -76,7 +77,7 @@ def verify_get_attr(indata, outdata):
     for attr, value in indata.iteritems():
         if value != outdata[attr]:
             raise DaosTestError("FAIL: Value does not match after get attr,"
-                             " Expected val={0} and received val = {1}"
+                                " Expected val={0} and received val = {1}"
                                 .format(value, outdata[attr]))
 
 class ContainerAttributeTest(Test):
@@ -89,8 +90,8 @@ class ContainerAttributeTest(Test):
         self.hostlist = None
         self.large_data_set = {}
 
-        with open('../../../.build_vars.json') as f:
-            build_paths = json.load(f)
+        with open('../../../.build_vars.json') as build_file:
+            build_paths = json.load(build_file)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("server_group",
                                        '/server/',
@@ -107,7 +108,8 @@ class ContainerAttributeTest(Test):
                          os.geteuid(),
                          os.getegid(),
                          self.params.get("size", '/run/attrtests/createsize/*'),
-                         self.params.get("setname", '/run/attrtests/createset/*'),
+                         self.params.get("setname", 
+                                         '/run/attrtests/createset/*'),
                          None)
         self.pool.connect(1 << 1)
         poh = self.pool.handle
@@ -128,8 +130,9 @@ class ContainerAttributeTest(Test):
         """
         allchar = string.ascii_letters + string.digits
         for i in range(1024):
-            self.large_data_set[str(i)] = "".join(random.choice(allchar)
-                                                  for x in range(random.randint(1, 100)))
+            self.large_data_set[str(i)] = (
+                "".join(random.choice(allchar) 
+                for x in range(random.randint(1, 100))))
 
     def test_container_attribute(self):
         """
@@ -170,18 +173,18 @@ class ContainerAttributeTest(Test):
             # for this test the dictionary has been altered, need to just
             # set it to what we are expecting to get back
             if name[0] is not None:
-               if "largenumberofattr" in name[0]:
-                   attr_dict.clear()
-                   attr_dict[name[0]] = value[0]
+                if "largenumberofattr" in name[0]:
+                    attr_dict.clear()
+                    attr_dict[name[0]] = value[0]
 
             verify_get_attr(attr_dict, results)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except Exception as e:
-            print (e)
-            print (traceback.format_exc())
+        except (DaosApiError, DaosTestError) as excep:
+            print(excep)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
 
@@ -248,8 +251,8 @@ class ContainerAttributeTest(Test):
                 if GLOB_RC == 0 and expected_result in ['FAIL']:
                     self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as e:
-            print(e)
+        except DaosApiError as excep:
+            print(excep)
             print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")

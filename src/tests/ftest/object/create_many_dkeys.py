@@ -21,12 +21,12 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import sys
 import json
 import ctypes
-import traceback
 import avocado
 from avocado       import Test
 
@@ -56,7 +56,7 @@ class CreateManyDkeys(Test):
                                        '/server/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
+        self.container = None
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
 
