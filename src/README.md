@@ -11,10 +11,11 @@ This document contains the following sections:
     - <a href="#21">gRPC and Protocol Buffers</a>
     - <a href="#22">dRPC</a>
     - <a href="#23">CART</a>
-- <a href="#3">DAOS Layering and Microservices</a>
+- <a href="#3">DAOS Layering and Services</a>
     - <a href="#31">Architecture</a>
     - <a href="#32">Code Structure</a>
-    - <a href="#33">Infastructure & Microservices</a>
+    - <a href="#33">Infrastructure Libraries</a>
+    - <a href="#34">DAOS Services</a>
 - <a href="#4">Software compatibility</a>
     - <a href="#41">Protocol Compatibility</a>
     - <a href="#42">PM Schema Compatibility and Upgrade</a>
@@ -22,12 +23,14 @@ This document contains the following sections:
 <a id="1"></a>
 ## DAOS Components
 
-A DAOS installation involves several components that can be either colocated or distributed. The DAOS software-defined storage framework relies on two different communication channels: an out-of-band TCP/IP network for management and a high-performant fabric for data access. In practice, the same network can be used for both management and data access. IP over fabric can also be used as the management network.
+As illustrated in the diagram below, a DAOS installation involves several components that can be either colocated or distributed. The DAOS software-defined storage (SDS) framework relies on two different communication channels: an out-of-band TCP/IP network for management and a high-performant fabric for data access. In practice, the same network can be used for both management and data access. IP over fabric can also be used as the management network.
+
+![DAOS SDS Components](/doc/graph/system_architecture.png)
 
 <a id="11"></a>
 ### DAOS System
 
-A DAOS server is a multi-tenant daemon running on a Linux instance (i.e. physical node, VM or container) and managing the locally-attached NVM storage allocated to DAOS. It listens to a management port, addressed by an IP address and a TCP port number, plus one or more fabric endpoints, addressed by network URIs. The DAOS server is configured through a YAML file (i.e. /etc/daos_server.yml or different path provided on the commmand line) and can be integrated with different daemon management or orchestration frameworks (e.g. a systemd script, a Kunernetes service or even via a parallel launcher like pdsh).
+A DAOS server is a multi-tenant daemon running on a Linux instance (i.e. physical node, VM or container) and managing the locally-attached NVM storage allocated to DAOS. It listens to a management port, addressed by an IP address and a TCP port number, plus one or more fabric endpoints, addressed by network URIs. The DAOS server is configured through a YAML file (i.e. /etc/daos_server.yml or different path provided on the commmand line) and can be integrated with different daemon management or orchestration frameworks (e.g. a systemd script, a Kunernetes service or even via a parallel launcher like pdsh or srun).
 
 A DAOS system is identified by a system name and consists of a set of DAOS servers connected to the same fabric. Two different systems comprise two disjoint sets of servers and do not coordinate with each other. DAOS pools cannot span across multiple systems.
 
@@ -89,31 +92,61 @@ Like gRPC, RPC are serialized via protocol buffers.
 [CART](https://github.com/daos-stack/cart) is a userspace function shipping library that provides low-latency high-bandwidth communications for the DAOS data plane. It supports RDMA capabilities and scalable collective operations. CART is built over [Mercury](https://github.com/mercury-hpc/mercury) and [libfabric](https://ofiwg.github.io/libfabric/). The CART library is used for all communications between libdaos and daos_io_server instances.
 
 <a id="3"></a>
-## DAOS Layering and Microservices
+## DAOS Layering and Services
 
 <a id="31"></a>
 ### Architecture
 
-The DAOS stack is organized as a set of microservices over a client/server architecture. The <a href="#5a">figure</a> below shows the logical layering of the DAOS stack.
+As shown in the diagram below, the DAOS stack is structured as a collection of storage services over a client/server architecture. Examples of DAOS services are the pool, container, object and rebuild services.
+
+![DAOS Internal Services & Libraries](/doc/graph/services.png)
+
+A DAOS service can be spread across the control and data planes and communicate internally through dRPC. Most services have client and server components that can synchronize through gRPC or CART. Cross-service communications are always done through direct API calls. Those function calls can be invoked across either the client or server component of the services. While each DAOS service is designed to be fairly autonomous and isolated, some are more tightly coupled than others. That is typically the case of the rebuild service that needs to interact closely with the pool, container and object services to restore data redundancy after a DAOS server failure.
+
+While the service-based architecture offers flexibility and extensibility, it is combined with a set of infrastucture libraries that provide a rich software ecosystem (e.g. communications, persistent storage access, asynchronous task execution with dependency graph, accelerator support, ...) accessible to all the DAOS services.
 
 <a id="32"></a>
-### Code Structure
+### Source Code Structure
+
+Each infrastructure library and service is allocated a dedicated directory under src/. The client and server components of a service are stored in seperate files. Functions that are part of the client component are prefixed with dc\_ (stands for DAOS Client) whereas server-side functions use the ds\_ prefix (stands for DAOS Server). The protocol and RPC format used between the client and server components is usually defined in a header file named rpc.h.
+
+All the Go code executed in context of the control plane is located under src/control. Management and security are the services spread across the control (Go language) and data (C language) planes and communicating internally through dRPC.
+
+Headers for the official DAOS API exposed to the end user (i.e. I/O middleware or application developers) are under src/include and use the daos\_ prefix. Each infrastructure library exports an API that is available under src/include/daos and can be used by any services. The client-side API (with dc\_ prefix) exported by a given service is also stored under src/include/daos whereas the server-side interfaces (with ds\_ prefix) are under src/include/daos_srv.
 
 <a id="33"></a>
-### Infastructure & Microservices
+### Infrastructure Libraries
 
-- <a href="vos/README.md">Versioning Object Store</a>
-- <a href="bio/README.md">Blob I/O</a>
-- <a href="rdb/README.md">Service Replication</a>
-- <a href="pool/README.md">Pool Service</a>
-- <a href="container/README.md">Container Service</a>
-- <a href="object/README.md">Key Array Object</a>
-- <a href="placement/README.md">Algorithmic Object Placement</a>
-- <a href="rebuild/README.md">Self-healing</a>
-- <a href="security/README.md">Security</a>
-- <a href="client/api/README.md">DAOS Client Library</a>
-- <a href="client/dfs/README.md">POSIX File & Directory Emulation</a>
+The GURT and common DAOS (i.e. libdaos_common) libraries provide logging, debugging and common data structures (e.g. hash table, btree, ...) to the DAOS services.
+
+Local NVM storage is managed by the Versioning Object Store (VOS) and blob I/O (BIO) libraries. VOS implements the persistent index in SCM whereas BIO is responsible for storing application data in either NVMe SSD or SCM depending on the allocation strategy. The VEA layer is integrated into VOS and manages block allocation on NVMe SSDs.
+
+DAOS objects are distributed across multiple targets for both performance (i.e. sharding) and resilience (i.e. replication or erasure code). The placement library implements different algorithms (e.g. ring-based placement, jump consistent hash, ...) to generate the layout of an object from the list of targets and the object identifier.
+
+The replicated service (RSCV) library finally provides some common code to support fault tolerance. This is used by the pool, container & management services in conjunction with the RDB library that implements a replicated key-value store over Raft.
+
+For further reading on those infrastructure libraries, please see:
 - <a href="common/README.md">Common Library</a>
+- <a href="vos/README.md">Versioning Object Store (VOS)</a>
+- <a href="bio/README.md">Blob I/O (BIO)</a>
+- <a href="placement/README.md">Algorithmic object placement</a>
+- <a href="rdb/README.md">Replicated database (RDB)</a>
+- <a href="rsvc/README.md">Replicated service framework (RSVC)</a>
+
+<a id="34"></a>
+### DAOS Services
+
+The diagram below shows the internal layering of the DAOS services and interactions with the different libraries mentioned above.
+![DAOS Internal Layering](/doc/graph/layering.png)
+
+Vertical boxes represent DAOS services whereas horizontal ones are for infrastructure libraries.
+
+For further reading on the internals of each service:
+- <a href="pool/README.md">Pool service</a>
+- <a href="container/README.md">Container service</a>
+- <a href="object/README.md">Key-array object service</a>
+- <a href="rebuild/README.md">Self-healing (aka rebuild)</a>
+- <a href="security/README.md">Security</a>
 
 <a id="4"></a>
 ## Software Compatibility
