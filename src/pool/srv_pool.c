@@ -2954,7 +2954,7 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 	struct pl_obj_layout	*layout = NULL;
 	struct pool_target	*target;
 	struct daos_obj_md	 md = { 0 };
-	d_rank_t		 leader;
+	int			 leader;
 	d_rank_t		 myrank;
 	int			 rc = 0;
 

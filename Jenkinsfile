@@ -151,6 +151,7 @@ pipeline {
                                                  build/src/iosrv/tests/drpc_handler_tests,
                                                  build/src/iosrv/tests/drpc_listener_tests,
                                                  build/src/security/tests/cli_security_tests,
+                                                 build/src/security/tests/acl_api_tests,
                                                  build/src/vos/vea/tests/vea_ut,
                                                  scons_local/build_info/**,
                                                  src/common/tests/btree.sh,

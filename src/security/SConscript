@@ -13,11 +13,13 @@ def scons():
     # Shared src between server and client
     common_src = denv.SharedObject(['security.pb-c.c'])
 
-    ds_sec = daos_build.library(denv, 'security', ['srv.c', 'srv_acl.c'])
+    ds_sec = daos_build.library(denv, 'security',
+                                ['srv.c', 'srv_acl.c', 'acl_api.c'])
     denv.Install('$PREFIX/lib/daos_srv', ds_sec)
 
     # dc_security: Security Client
-    dc_security_tgts = denv.SharedObject(['cli_security.c']) + common_src
+    dc_security_tgts = denv.SharedObject(['cli_security.c',
+                                          'acl_api.c']) + common_src
     Export('dc_security_tgts')
 
     dc_sectest_tgts = denv.SharedObject(['cli_security.c', 'srv_acl.c'],
