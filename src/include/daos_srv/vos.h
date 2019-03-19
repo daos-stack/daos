@@ -126,12 +126,14 @@ vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
 /**
  * Check whether the specified DTX can be committed or not.
  *
- * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifier.
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch operation or not.
  *
- * \return		DTX_ST_INIT	Related DTX does not exist, or it is
- *					initialized, but the modification has
- *					not completed yet.
+ * \return		DTX_ST_INIT	Related DTX has been initialized, but
+ *					the modification has not completed yet.
  *			DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
  *					on related replica(s). If all replicas
@@ -141,7 +143,9 @@ vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
  *			Negative value if error.
  */
 int
-vos_dtx_check_committable(daos_handle_t coh, struct daos_tx_id *dti);
+vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
+			  struct daos_tx_id *dti, uint64_t dkey_hash,
+			  bool punch);
 
 /**
  * Commit the specified DTXs.
