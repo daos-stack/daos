@@ -36,7 +36,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
-import FaultConfigUtils
+import fault_config_utils
 from conversion import c_uuid_to_str
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
@@ -63,8 +63,9 @@ class BasicTxTest(Test):
             # not using workdir because the huge path was messing up
             # orterun or something, could re-evaluate this later
             tmp = os.path.join(self.basepath, 'install', 'tmp')
-            self.fault_file = FaultConfigUtils.WriteFaultFile(tmp,
-                                                              fault_list, None)
+            self.fault_file = fault_config_utils.write_fault_file(tmp,
+                                                                  fault_list,
+                                                                  None)
             os.environ["D_FI_CONFIG"] = self.fault_file
 
         # setup the DAOS python API

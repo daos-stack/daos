@@ -49,7 +49,7 @@ FAULTS = {
 class FaultInjectionFailed(Exception):
     """Raise if FI failed"""
 
-def WriteFaultFile(path, fault_list=None, on_the_fly_fault=None):
+def write_fault_file(path, fault_list=None, on_the_fly_fault=None):
     """ Write out a fault injection config file.
 
         path             --where to write the file
@@ -85,11 +85,11 @@ def WriteFaultFile(path, fault_list=None, on_the_fly_fault=None):
 # just for testing above function
 def main():
     on_the_fly = {'id': '52',
-        'probability': '100',
-        'interval': '1',
-        'max_faults': '50'
+                  'probability': '100',
+                  'interval': '1',
+                  'max_faults': '50'
     }
-    print(WriteFaultFile('.', ['obj_update_timeout'], on_the_fly))
+    print(write_fault_file('.', ['obj_update_timeout'], on_the_fly))
 
 if __name__ == "__main__":
     main()

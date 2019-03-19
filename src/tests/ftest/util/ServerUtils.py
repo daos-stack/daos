@@ -161,7 +161,7 @@ def stopServer(setname=None, hosts=None):
     global SESSIONS
     try:
         if setname is None:
-            for key, value in SESSIONS.items():
+            for _key, value in SESSIONS.items():
                 value.send_signal(signal.SIGINT)
                 time.sleep(5)
                 if value.poll() is None:
