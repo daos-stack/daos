@@ -230,8 +230,6 @@ def scons():
     for header in HEADERS:
         tenv.Install(os.path.join("$PREFIX", 'include'), 'include/%s' % header)
 
-
-    SConscript('utest/SConscript')
     SConscript('test/SConscript')
 #pylint: enable=too-many-statements
 
