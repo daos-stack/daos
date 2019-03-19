@@ -21,7 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
+from __future__ import print_function
 import traceback
 import sys
 import os
@@ -36,7 +36,7 @@ import errno
 
 from avocado.utils import genio
 
-sessions = {}
+SESSIONS = {}
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -44,14 +44,14 @@ class ServerFailed(Exception):
 # a callback function used when there is cmd line I/O, not intended
 # to be used outside of this file
 def printFunc(thestring):
-        print("<SERVER>" + thestring)
+    print("<SERVER>" + thestring)
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     Launches DAOS servers in accordance with the supplied hostfile.
 
     """
-    global sessions
+    global SESSIONS
     try:
         servers = [line.split(' ')[0]
                    for line in genio.read_all_lines(hostfile)]
@@ -75,8 +75,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         # before any set in env are added to env_args, add any user supplied
         # envirables to environment first
         if env_dict is not None:
-            for k, v in env_dict.items():
-                os.environ[k] = v
+            for key, value in env_dict.items():
+                os.environ[key] = value
 
         env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
                     'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*', 'D_FI_CONFIG']
@@ -103,12 +103,12 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
             resource.RLIMIT_CORE,
             (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
 
-        sessions[setname] = subprocess.Popen(server_cmd,
+        SESSIONS[setname] = subprocess.Popen(server_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=subprocess.PIPE)
-        fd = sessions[setname].stdout.fileno()
-        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        fdesc = SESSIONS[setname].stdout.fileno()
+        fstat = fcntl.fcntl(fdesc, fcntl.F_GETFL)
+        fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
         timeout = 600
         start_time = time.time()
         result = 0
@@ -117,7 +117,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         while True:
             output = ""
             try:
-                output = sessions[setname].stdout.read()
+                output = SESSIONS[setname].stdout.read()
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
                     raise excpn
@@ -133,18 +133,18 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 break
         print("<SERVER> server started and took %s seconds to start" % \
               (time.time() - start_time))
-    except Exception as excpn:
-        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
+        traceback.print_exception(excpn.__class__, error, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
-            sessions[setname].send_signal(signal.SIGINT)
+            SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
             # get the stderr
-            error = sessions[setname].stderr.read()
-            if sessions[setname].poll() is None:
-                sessions[setname].kill()
-            retcode = sessions[setname].wait()
+            error = SESSIONS[setname].stderr.read()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            retcode = SESSIONS[setname].wait()
             print("<SERVER> server start return code: {}\n" \
                   "stderr:\n{}".format(retcode, error))
         except KeyError:
@@ -158,24 +158,24 @@ def stopServer(setname=None, hosts=None):
     has spawned.  Doesn't always work though.
     """
 
-    global sessions
+    global SESSIONS
     try:
-        if setname == None:
-            for k, v in sessions.items():
-                v.send_signal(signal.SIGINT)
+        if setname is None:
+            for key, value in SESSIONS.items():
+                value.send_signal(signal.SIGINT)
                 time.sleep(5)
-                if v.poll() == None:
-                    v.kill()
-                v.wait()
+                if value.poll() is None:
+                    value.kill()
+                value.wait()
         else:
-            sessions[setname].send_signal(signal.SIGINT)
+            SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
-            if sessions[setname].poll() == None:
-                sessions[setname].kill()
-            sessions[setname].wait()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            SESSIONS[setname].wait()
         print("<SERVER> server stopped")
-    except Exception as e:
-        print("<SERVER> Exception occurred: {0}".format(str(e)))
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
         raise ServerFailed("Server didn't stop!")
 
     if not hosts:
