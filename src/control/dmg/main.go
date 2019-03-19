@@ -82,15 +82,12 @@ func connectHosts() error {
 }
 
 func main() {
-	var err error
-	defer func() {
-		status := 0
-		if err != nil {
-			status = 1
-		}
-		os.Exit(status)
-	}()
+	if dmgMain() != nil {
+		os.Exit(1)
+	}
+}
 
+func dmgMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
@@ -98,21 +95,21 @@ func main() {
 	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
 
-	_, err = p.Parse()
+	_, err := p.Parse()
 	if err != nil {
-		return
+		return err
 	}
 
 	// TODO: implement configuration file parsing
 	if opts.ConfigPath != "" {
 		err = errors.New("config-path option not implemented")
 		log.Errorf(err.Error())
-		return
+		return err
 	}
 	err = connectHosts()
 	if err != nil {
 		log.Errorf("unable to connect to hosts: %v", err)
-		return
+		return err
 	}
 
 	// If no subcommand is specified, interactive shell is started
@@ -120,4 +117,6 @@ func main() {
 	shell := setupShell()
 	shell.Println("DAOS Management Shell")
 	shell.Run()
+
+	return nil
 }
