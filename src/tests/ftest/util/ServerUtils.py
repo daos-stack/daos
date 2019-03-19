@@ -33,8 +33,16 @@ import resource
 import signal
 import fcntl
 import errno
+import getpass
+import aexpect
+from SSHConnection import Ssh
 
 from avocado.utils import genio
+
+DAOS_PATH = os.environ['DAOS_PATH']
+SPDK_SETUP_SCRIPT = os.path.join(DAOS_PATH,
+                                 "../_build.external/spdk/scripts/setup.sh")
+DAOS_CONF_FILE = "/etc/daos_nvme.conf"
 
 sessions = {}
 
@@ -96,7 +104,6 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                            "-a", os.path.join(basepath, "install", "tmp"),
                            "-d", os.path.join(os.sep, "var", "run", "user",
                            str(os.geteuid()))])
-
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
         resource.setrlimit(
@@ -219,3 +226,221 @@ def killServer(hosts):
                  "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+
+class Nvme(object):
+    """
+    This is the NVMe class
+    """
+    def __init__(self, host, no_of_drive=0, nvme_conf_param="", debug=False):
+        """
+        Initialize the remote machine for SSH Connection.
+        Args:
+            host : Remote machine IP address or hostname.
+            no_of_drive (int): Number of drives to be setup default = 0
+            nvme_conf_param (): Parameter to be updated in daos_nvme.conf
+            debug : To print the command on console for debug purpose.
+        return:
+            None
+        """
+        self.machine = host
+        self.no_of_drive = no_of_drive
+        self.nvme_conf_param = nvme_conf_param
+        self.host = Ssh(host, sudo=True, debug=debug)
+        self.nvme_drives = []
+
+    def init_spdk(self, enable):
+        """
+        Enabled/Disable SPDK on host
+        Args:
+            enable [True/False]: True will setup the SPDK and False will disable
+                                 SPDK on host
+        return:
+            None
+        Raises:
+            generic if spdk enabled/disabled failed
+        """
+        cmd = ("HUGEMEM=4096 " +
+               "TARGET_USER=\"{0}\" {1}".format(getpass.getuser(),
+                                                SPDK_SETUP_SCRIPT))
+
+        if enable is False:
+            cmd = cmd + " reset"
+
+        rc = self.host.call(cmd)
+        if rc is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd, rc))
+
+    def get_pci_link(self):
+        """
+        To get the PCI mapping of NVMe drives on host
+        Args:
+            None
+        return:
+            pci_mapping [list]: Return the NVMe drives mapping
+                                example ["../../../0000:81:00.0"]
+        Raises:
+            generic if pci readlink command gets fail.
+        """
+        pci_mapping = []
+        for drive in self.nvme_drives:
+            cmd = "readlink /sys/block/{0}/device/device".format(drive)
+            _output = self.host.check_output(cmd)
+            pci_mapping.append(_output)
+
+        return pci_mapping
+
+    def create_daos_conf(self):
+        """
+        To create the daos_nvme.conf file with the parameters given in yaml file
+        PCI mapping will be collected from machine.
+        This File will be used by daos_server. If it's present means
+        it will use the NVMe otherwise SCM partition will be used.
+        Args:
+            None:
+        return:
+            None
+        Raises:
+            generic if daos_nvme.conf file remove command fails.
+        """
+        pci_slots = self.get_pci_link()
+
+        #Create the dictionary for the config parameter provided from yaml file.
+        param_dict = {}
+        for _param in self.nvme_conf_param.split(" "):
+            _tmp = _param.split(":")
+            param_dict[_tmp[0]] = _tmp[1]
+
+        pci_map = " "
+        for _id, _nvme_pci in enumerate(pci_slots):
+            mapping = _nvme_pci.split("/")[-1]
+            pci_map = pci_map + ("TransportID \"trtype:{0} traddr:{1}\" Nvme{2}\n"
+                                 .format(param_dict['TransportID_trtype'],
+                                         mapping.strip('\n'),
+                                         _id))
+        content = ("""[Nvme]\n
+                    {0}
+                   TimeoutUsec {1}\n
+                   ActionOnTimeout {2}\n
+                   AdminPollRate {3}\n
+                   HotplugEnable {4}\n
+                   HotplugPollRate {5}\n""".format(pci_map,
+                                                   param_dict['Timeout'],
+                                                   param_dict['ActionOnTimeout'],
+                                                   param_dict['AdminPollRate'],
+                                                   param_dict['HotplugEnable'],
+                                                   param_dict['HotplugPollRate']))
+        cmd = "rm -f {0}".format(DAOS_CONF_FILE)
+        rc = self.host.call(cmd)
+        if rc is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd, rc))
+        self.host.file_create(DAOS_CONF_FILE, content)
+
+    def check_drive_available(self):
+        """
+        To check if the requested drives are available on each hosts
+        Args:
+            None
+        return:
+            None
+        Raises:
+            generic if requested drives not available on server.
+        """
+        self.init_spdk(enable=False)
+
+        output = self.host.check_output("lsblk")
+        for i in range(0, self.no_of_drive):
+            name = "nvme{0}n1".format(i)
+            self.nvme_drives.append(name)
+            if name not in output:
+                raise ServerFailed("Found {0} drive and yaml file has requested {1}"
+                                   .format(i, self.no_of_drive))
+
+    def setup(self):
+        """
+        Class setup function
+        Args:
+            None:
+        return:
+            None
+        Raises:
+            generic if permission commands fail on server.
+        """
+        self.host.connect()
+        self.check_drive_available()
+        self.create_daos_conf()
+        self.init_spdk(enable=True)
+
+        permission_cmd = ["chmod 777 /dev/hugepages",
+                          "chmod 666 /dev/uio*",
+                          "chmod 666 /sys/class/uio/uio*/device/config",
+                          "chmod 666 /sys/class/uio/uio*/device/resource*",
+                          "rm -f /dev/hugepages/*"]
+
+        rc = self.host.call("&&".join(permission_cmd))
+        if rc is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}"
+                               .format(permission_cmd, rc))
+        self.host.disconnect()
+
+    def cleanup(self):
+        """
+        Class cleanup function
+        Args:
+            None:
+        return:
+            None
+        Raises:
+            generic if cleanup (rm) commands fail on server.
+        """
+        self.host.connect()
+        self.init_spdk(enable=False)
+        cmds = ["rm -f /dev/hugepages/*",
+                "rm -f {0}".format(DAOS_CONF_FILE)]
+
+        rc = self.host.call("&&".join(cmds))
+        if rc is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmds, rc))
+        self.host.disconnect()
+
+def nvme_setup(hostlist, nvme_no_of_drive, nvme_conf_param):
+    """
+    nvme_setup function called from Avocado test
+    Args:
+        hostlist[list]: servers to start with NVMe.
+        nvme_no_of_drive: Total number of drives per server.
+        nvme_conf_param: NVMe config file parameters.
+
+        *IMPORTANT* (All above parameter can be passed via yaml file)
+        please look at the example Nvme.yaml
+    return:
+        None
+    """
+    print("NVMe server Setup Started......")
+    host_nvme = []
+    for _hosts in hostlist:
+        host_nvme.append(Nvme(_hosts,
+                              nvme_no_of_drive,
+                              nvme_conf_param,
+                              debug=True))
+
+    for host in host_nvme:
+        host.setup()
+    print("NVMe server Setup Finished......")
+
+def nvme_cleanup(hostlist):
+    """
+    nvme_cleanup function called from Avocado test
+    Args:
+        hostlist[list]: Number of hosts to start ther server with NVMe
+    return:
+        None
+    """
+    print("NVMe server cleanup Started......")
+    host_nvme = []
+    for _hosts in hostlist:
+        host_nvme.append(Nvme(_hosts,
+                              debug=True))
+
+    for host in host_nvme:
+        host.cleanup()
+    print("NVMe server cleanup Finished......")
