@@ -1264,3 +1264,39 @@ out_mem:
 out:
 	return rc;
 }
+
+int
+ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
+		      daos_epoch_t **snapshots, int *snap_count)
+{
+	struct cont_svc	*svc;
+	struct rdb_tx	tx;
+	struct cont	*cont = NULL;
+	int		rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	rc = read_snap_list(&tx, cont, snapshots, snap_count);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out_put:
+	cont_svc_put_leader(svc);
+
+	return rc;
+}

@@ -147,7 +147,7 @@ ds_cont_svc_step_down(struct cont_svc *svc)
 	svc->cs_pool = NULL;
 }
 
-static int
+int
 cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
 		       struct rsvc_hint *hint)
 {
@@ -163,7 +163,7 @@ cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
 	return 0;
 }
 
-static void
+void
 cont_svc_put_leader(struct cont_svc *svc)
 {
 	ds_rsvc_put_leader(svc->cs_rsvc);
@@ -599,7 +599,7 @@ out:
 	return rc;
 }
 
-static int
+int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	    struct cont **cont)
 {
@@ -1640,3 +1640,4 @@ out_pool_hdl:
 out:
 	return rc;
 }
+
