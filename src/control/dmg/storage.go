@@ -23,6 +23,42 @@
 
 package main
 
+import (
+	"fmt"
+	"os"
+
+	"github.com/pkg/errors"
+)
+
+// StorCmd is the struct representing the top-level storage subcommand.
+type StorCmd struct {
+	List ListStorCmd `command:"list" alias:"l" description:"List locally-attached SCM and NVMe storage"`
+}
+
+// ListStorCmd is the struct representing the list storage subcommand.
+type ListStorCmd struct{}
+
+// Execute is run when ListStorCmd activates
+func (s *ListStorCmd) Execute(args []string) error {
+	if err := connectHosts(); err != nil {
+		return errors.Wrap(err, "unable to connect to hosts")
+	}
+
+	// run NVMe and SCM storage query on all connected servers
+	cCtrlrs, cModules := conns.ListStorage()
+
+	fmt.Printf(
+		checkAndFormat(cCtrlrs),
+		"NVMe SSD controller and constituent namespace")
+
+	fmt.Printf(checkAndFormat(cModules), "SCM module")
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
 // todo: implement shell commands for features other than discovery on
 // multiple nodes
 

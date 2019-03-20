@@ -62,8 +62,8 @@ func setupShell() *ishell.Shell {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "listmgmtfeatures",
-		Help: "Command to retrieve all supported management features from any client connections",
+		Name: "listfeatures",
+		Help: "Command to retrieve supported management features on connected servers",
 		Func: func(c *ishell.Context) {
 			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListFeatures()), "management feature")
@@ -72,7 +72,7 @@ func setupShell() *ishell.Shell {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "liststorage",
-		Help: "Command to list NVMe SSD controllers and SCM modules",
+		Help: "Command to list locally-attached NVMe SSD controllers and SCM modules",
 		Func: func(c *ishell.Context) {
 			c.Println(hasConns(conns.GetActiveConns(nil)))
 
@@ -120,67 +120,6 @@ func setupShell() *ishell.Shell {
 			}
 		},
 	})
-
-	// todo: implement shell commands for feature other than discovery on
-	// multiple nodes
-
-	//			// record strings that make up the option list
-	//			cStrs := make([]string, len(cs))
-	//			for i, v := range cs {
-	//				cStrs[i] = fmt.Sprintf("[%d] %+v", i, v)
-	//			}
-	//
-	//			ctrlrIdxs := c.Checklist(
-	//				cStrs,
-	//				"Select the controllers you want to run tasks on.",
-	//				nil)
-	//			if len(ctrlrIdxs) == 0 {
-	//				c.Println("No controllers selected!")
-	//				return
-	//			}
-	//
-	//			// filter list of selected controllers to act on
-	//			var ctrlrs []*pb.NvmeController
-	//			for i, ctrlr := range cs {
-	//				for j := range ctrlrIdxs {
-	//					if i == j {
-	//						ctrlrs = append(ctrlrs, ctrlr)
-	//					}
-	//				}
-	//			}
-	//
-	//			featureMap, err := mgmtClient.ListFeatures("nvme")
-	//			if err != nil {
-	//				c.Println("Unable to retrieve nvme features", err)
-	//				return
-	//			}
-	//
-	//			taskStrs := make([]string, len(featureMap))
-	//			taskHandlers := make([]string, len(featureMap))
-	//			i := 0
-	//			for k, v := range featureMap {
-	//				taskStrs[i] = fmt.Sprintf("[%d] %s - %s", i, k, v)
-	//				taskHandlers[i] = k
-	//				i++
-	//			}
-	//
-	//			taskIdx := c.MultiChoice(
-	//				taskStrs,
-	//				"Select the task you would like to run on the selected controllers.")
-	//
-	//			c.Printf(
-	//				"\nRunning task %s on the following controllers:\n",
-	//				taskHandlers[taskIdx])
-	//			for _, ctrlr := range ctrlrs {
-	//				c.Printf("\t- %+v\n", ctrlr)
-	//			}
-	//			c.Println("")
-	//
-	//			if err := nvmeTaskLookup(c, ctrlrs, taskHandlers[taskIdx]); err != nil {
-	//				c.Println("Problem running task: ", err)
-	//			}
-	//		},
-	//	})
 
 	return shell
 }
