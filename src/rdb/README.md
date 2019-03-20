@@ -1,6 +1,6 @@
 # Service Replication
 
-Pool and container services are made highly available by replicating their stateâpool and container metadataâusing Raft-based consensus and strong leadership. A service replicated in this generic approach tolerates the failure of any minority of its replicas. By spreading replicas of each service across the fault domains, pool and container services can therefore tolerate a reasonable number of target failures.
+Pool and container services are made highly available by replicating their stateÃ¢pool and container metadataÃ¢using Raft-based consensus and strong leadership. A service replicated in this generic approach tolerates the failure of any minority of its replicas. By spreading replicas of each service across the fault domains, pool and container services can therefore tolerate a reasonable number of target failures.
 
 <a id="8.3.1"></a>
 ## Architecture
@@ -21,7 +21,7 @@ The <a href="#f8.1">figure</a> below shows the modules constituting a service re
 
 When an RPC request arrives at the leader, a service thread of the service module picks up the request and handles it by executing a handler function designed for this type of request. As far as service replication is concerned, a handler comprises state queries (e.g., reading the epoch state), state updates (writing a new version of the pool map), and RPCs to other services (e.g., TARGET_CONTAINER_OPEN RPCs sent to target services). Some handlers involve only queries, some involve updates as well as queries, and others involve all three kinds of actions; rarely, if ever, do handlers involve only updates but no queries.
 
-A handler must assemble all its updates into a single log entry, commit the log entry, and wait for the log entry to become applicable before applying the updates to the service state. Using a single log entry per update RPC easily makes each update RPC atomic with regard to leader crashes and leadership changes. If RPCs that cannot satisfy this requirement are introduced in the future, additional transaction recovery mechanisms will be required. A leaderâs service state therefore always represents the effects of all completed update RPCs this leader has handled so far.
+A handler must assemble all its updates into a single log entry, commit the log entry, and wait for the log entry to become applicable before applying the updates to the service state. Using a single log entry per update RPC easily makes each update RPC atomic with regard to leader crashes and leadership changes. If RPCs that cannot satisfy this requirement are introduced in the future, additional transaction recovery mechanisms will be required. A leaderÃ¢s service state therefore always represents the effects of all completed update RPCs this leader has handled so far.
 
 Queries, on the other hand, can read directly from the service state, without going through the replicated log. However, to make sure a request sees the effects of all completed update RPCs handled by all leaders ever elected, the handler must ask the Raft module whether there has been any leadership changes. If there has been none, all queries made for this request so far are not stale. If the leader has lost its leadership, the handler aborts the request with an error redirecting the client to the new leader.
 
@@ -53,6 +53,6 @@ If any of the replicas is a leader, the configuration change will also result in
 Executing a target exclusion request from a caller. The pool service handles this case in the same way as it handles case 2.
 </li>
 </ol>
-In all the cases, the decision making is based on the definitive pool map maintained by the pool service, with the goal that the replicas of a service shall belong to different fault domains when possible, so that they are unlikely to fail together. And, the decisions are executed through configuration changes that follow Raftâs single-server membership change protocol. (The alternative arbitrary membership change protocol may also be considered in the future if it proves to offer meaningful performance benefits.)
+In all the cases, the decision making is based on the definitive pool map maintained by the pool service, with the goal that the replicas of a service shall belong to different fault domains when possible, so that they are unlikely to fail together. And, the decisions are executed through configuration changes that follow RaftÃ¢s single-server membership change protocol. (The alternative arbitrary membership change protocol may also be considered in the future if it proves to offer meaningful performance benefits.)
 
 In the remainder of this section, the addresses of the replicas belonging to a replicated service are collectively referred to as the service address. Pool and container services are assumed to be highly available when discussing higher-level protocols, because the service replication internals are largely transparent and irrelevant.
