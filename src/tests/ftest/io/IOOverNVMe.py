@@ -50,12 +50,12 @@ class IorOverNvme(Test):
         context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist_servers = self.params.get("servers", '/run/hosts/*')
-        self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers,
-                                                            tmp_path)
+        self.hostfile_servers = WriteHostFile.WriteHostFile(
+            self.hostlist_servers, tmp_path)
 
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients,
-                                                            tmp_path)
+        self.hostfile_clients = WriteHostFile.WriteHostFile(
+            self.hostlist_clients, tmp_path)
 
         #This is for NVMe Setup
         self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
@@ -63,7 +63,8 @@ class IorOverNvme(Test):
             ServerUtils.nvme_setup(self.hostlist_servers)
 
         #IorUtils.build_ior(self.basepath)
-        ServerUtils.runServer(self.hostfile_servers, server_group, self.basepath)
+        ServerUtils.runServer(self.hostfile_servers, server_group,
+                              self.basepath)
 
         self.pool = DaosPool(context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -71,8 +72,8 @@ class IorOverNvme(Test):
                          os.getegid(),
                          self.params.get("size", '/run/pool/createsize/*'),
                          self.params.get("setname", '/run/pool/createset/*'),
-                         nvme_size = self.params.get("size",
-                                                     '/run/pool/createsize/*'))
+                         nvme_size=self.params.get("size",
+                                                   '/run/pool/createsize/*'))
         self.pool.connect(1 << 1)
 
     def tearDown(self):
@@ -115,6 +116,7 @@ class IorOverNvme(Test):
             svc_list += str(rank_list[i]) + ":"
         svc_list = svc_list[:-1]
 
-        IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration, block_size, transfer_size,
-                         pool_uuid, svc_list, record_size, segment_count, stripe_count,
-                         async_io[0], object_class, self.basepath)
+        IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration,
+                         block_size, transfer_size, pool_uuid, svc_list,
+                         record_size, segment_count, stripe_count, async_io[0],
+                         object_class, self.basepath)

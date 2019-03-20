@@ -34,10 +34,9 @@ import signal
 import fcntl
 import errno
 import getpass
-import aexpect
-from SSHConnection import Ssh
 import yaml
 
+from SSHConnection import Ssh
 from avocado.utils import genio
 
 DAOS_PATH = os.environ['DAOS_PATH']
@@ -345,13 +344,12 @@ class Nvme(object):
         cmd = ("sudo HUGEMEM=4096 " +
                "TARGET_USER=\"{0}\" {1}".format(getpass.getuser(),
                                                 SPDK_SETUP_SCRIPT))
-
         if enable is False:
             cmd = cmd + " reset"
-
-        rc = self.host.call(cmd)
-        if rc is not 0:
-            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd, rc))
+        rccode = self.host.call(cmd)
+        if rccode is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd,
+                                                                     rccode))
 
     def setup(self):
         """
@@ -372,10 +370,10 @@ class Nvme(object):
                           "sudo /usr/bin/chmod 666 /sys/class/uio/uio*/device/resource*",
                           "sudo /usr/bin/rm -f /dev/hugepages/*"]
 
-        rc = self.host.call("&&".join(permission_cmd))
-        if rc is not 0:
+        rccode = self.host.call("&&".join(permission_cmd))
+        if rccode is not 0:
             raise ServerFailed("ERROR Command = {0} RC = {1}"
-                               .format(permission_cmd, rc))
+                               .format(permission_cmd, rccode))
         self.host.disconnect()
 
     def cleanup(self):
@@ -390,9 +388,11 @@ class Nvme(object):
         """
         self.host.connect()
         self.init_spdk(enable=False)
-        rc = self.host.call("sudo /usr/bin/rm -f /dev/hugepages/*")
-        if rc is not 0:
-            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmds, rc))
+        cmd = "sudo /usr/bin/rm -f /dev/hugepages/*"
+        rccode = self.host.call(cmd)
+        if rccode is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd,
+                                                                     rccode))
         self.host.disconnect()
 
 def nvme_setup(hostlist):

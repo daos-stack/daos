@@ -20,7 +20,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from paramiko import client, Transport, SFTPClient
+from paramiko import client
 
 class Ssh(object):
     """
@@ -76,7 +76,7 @@ class Ssh(object):
             stdout = channel.makefile('rb').read()
             exit_status = channel.recv_exit_status()
             channel.close()
-        except Exception as e:
+        except:
             print("Exception in call for command {0}".format(command))
             raise
 
@@ -113,7 +113,7 @@ class Ssh(object):
             channel.exec_command(command)
             exit_status = channel.recv_exit_status()
             channel.close()
-        except Exception as e:
+        except:
             print("Exception in call for command {0}".format(command))
             raise
 
