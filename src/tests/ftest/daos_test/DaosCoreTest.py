@@ -42,7 +42,6 @@ import WriteHostFile
 #This needs to be changed after configuration file integration on client tools.
 #As per current implementation control plane API will not use the D_LOF_FILE
 #Env variable, if OFI_INTERFACE and CRT_PHY_ADDR_STR. DAOS-2178
-DEFAULT_LOG="/tmp/daos.log"
 
 class DaosCoreTest(Test):
     """
@@ -77,8 +76,8 @@ class DaosCoreTest(Test):
         # subtest
         if self.subtest_name:
             try:
-                env_logfile = os.environ['D_LOG_FILE']
-                dirname, filename = os.path.split(env_logfile)
+                logfile = os.environ['D_LOG_FILE']
+                dirname, filename = os.path.split(logfile)
                 new_logfile = os.path.join(dirname, self.subtest_name + "_" + \
                                                     filename)
                 # rename on each of the servers
@@ -86,7 +85,7 @@ class DaosCoreTest(Test):
                     subprocess.check_call(['ssh', host,
                                            '[ -f \"{0}\" ] && '
                                            '    mv \"{0}\" '
-                                           '    \"{1}\"'.format(DEFAULT_LOG,
+                                           '    \"{1}\"'.format(logfile,
                                                                 new_logfile)])
             except KeyError:
                 pass
