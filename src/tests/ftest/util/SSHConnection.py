@@ -20,11 +20,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-<<<<<<< HEAD
 from paramiko import client
-=======
-from paramiko import client, Transport, SFTPClient
->>>>>>> 52cd77d506a273b148a0d5d94ac19178388bfcec
 
 class Ssh(object):
     """
