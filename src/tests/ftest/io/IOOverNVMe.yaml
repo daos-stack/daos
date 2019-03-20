@@ -3,6 +3,8 @@
 hosts:
   servers:
     - boro-53
+    - boro-14
+    - boro-15
   clients:
     - boro-54
 server_config:
