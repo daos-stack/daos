@@ -24,6 +24,7 @@
 import os, shutil
 import subprocess
 import json
+import sys
 
 class IorFailed(Exception):
     """Raise if Ior failed"""
@@ -115,6 +116,53 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_u
         print "<IorRunFailed> Exception occurred: {0}".format(str(e))
         raise IorFailed("IOR Run process Failed")
 
+
+def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile, ior_flags, iteration,
+                  transfer_size, block_size, display_output=True):
+        """
+            Running IOR over mpich
+            basepath       --Daos basepath
+            mpichinstall   --location of installed mpich
+            pool_uuid      --Daos Pool UUID
+            svcl           --Daos Pool SVCL
+            np             --number of client processes
+            hostfile       --client file holding client hostname and slots
+            ior_flags      --all ior specific flags
+            iteration      --number of iterations for ior run
+            block_size     --contiguous bytes to write per task
+            transfer_size  --size of transfer in bytes
+            display_output --print IOR output on console.
+        """
+        try:
+            env_variables = ["export CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
+                             "export DAOS_POOL={}".format(pool_uuid), "export MPI_LIB=''",
+                             "export DAOS_SVCL={}".format(svcl), "export DAOS_SINGLETON_CLI=1",
+                             "export FI_PSM2_DISCONNECT=1"]
+
+            run_cmd = env_variables[0] + ";" + env_variables[1] + ";" + env_variables[2] + \
+                      ";" + env_variables[3] + ";" + env_variables[4] + ";" + env_variables[5] + \
+                      ";" + mpichinstall + "/mpirun -np {0} --hostfile {1} \
+                      /home/standan/mpiio/ior/build/src/ior -a MPIIO {2} -i {3} -t {4} -b {5} \
+                      -o daos:testFile".format(np, hostfile, ior_flags, iteration,
+                                               transfer_size, block_size)
+
+            if display_output:
+                print ("run_cmd: {}".format(run_cmd))
+
+            process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE, shell=True)
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output and display_output:
+                    print output.strip()
+            if process.poll() != 0:
+                raise IorFailed("IOR Run process Failed with non zero exit code:{}"
+                                 .format(process.poll()))
+
+        except (OSError, ValueError) as e:
+            print "<IorRunFailed> Exception occurred: {0}".format(str(e))
+            raise IorFailed("IOR Run process Failed")
 
 # Enable this whenever needs to check
 # if the script is functioning normally.
