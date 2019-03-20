@@ -206,7 +206,7 @@ pipeline {
                         }
                         */
                         unstable {
-                            sh 'mv config${arch}.log config.log-centos7-gcc'
+                            sh "mv config${arch}.log config.log-centos7-gcc"
                             archiveArtifacts artifacts: 'config.log-centos7-gcc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -216,7 +216,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-centos7-gcc'
+                            sh "mv config${arch}.log config.log-centos7-gcc"
                             archiveArtifacts artifacts: 'config.log-centos7-gcc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -266,7 +266,7 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config${arch}.log config.log-centos7-clang'
+                            sh "mv config${arch}.log config.log-centos7-clang"
                             archiveArtifacts artifacts: 'config.log-centos7-clang'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -276,7 +276,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-centos7-clang'
+                            sh "mv config${arch}.log config.log-centos7-clang"
                             archiveArtifacts artifacts: 'config.log-centos7-clang'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -327,7 +327,7 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config${arch}.log config.log-ubuntu18.04-gcc'
+                            sh "mv config${arch}.log config.log-ubuntu18.04-gcc"
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -337,7 +337,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-ubuntu18.04-gcc'
+                            sh "mv config${arch}.log config.log-ubuntu18.04-gcc"
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -387,7 +387,7 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config${arch}.log config.log-ubuntu18.04-clang'
+                            sh "mv config${arch}.log config.log-ubuntu18.04-clang"
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -397,7 +397,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-ubuntu18.04-clang'
+                            sh "mv config${arch}.log config.log-ubuntu18.04-clang"
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -448,7 +448,7 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config${arch}.log config.log-leap15-gcc'
+                            sh "mv config${arch}.log config.log-leap15-gcc"
                             archiveArtifacts artifacts: 'config.log-leap15-gcc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -458,7 +458,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-leap15-gcc'
+                            sh "mv config${arch}.log config.log-leap15-gcc"
                             archiveArtifacts artifacts: 'config.log-leap15-gcc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -509,7 +509,7 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config${arch}.log config.log-leap15-clang'
+                            sh "mv config${arch}.log config.log-leap15-clang"
                             archiveArtifacts artifacts: 'config.log-leap15-clang'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -519,7 +519,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-leap15-clang'
+                            sh "mv config${arch}.log config.log-leap15-clang"
                             archiveArtifacts artifacts: 'config.log-leap15-clang'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -570,7 +570,7 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config${arch}.log config.log-leap15-intelc'
+                            sh "mv config${arch}.log config.log-leap15-intelc"
                             archiveArtifacts artifacts: 'config.log-leap15-intelc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -580,7 +580,7 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config${arch}.log config.log-leap15-intelc'
+                            sh "mv config${arch}.log config.log-leap15-intelc"
                             archiveArtifacts artifacts: 'config.log-leap15-intelc'
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
