@@ -669,9 +669,10 @@ allocate_random(size_t len)
 	return result;
 }
 
-#define	D_ALLOC_RAND(ptr, len) do { \
-	(ptr) = allocate_random(len); \
-	assert_non_null(ptr); \
+#define	ALLOC_RAND(ptr, len) \
+	do { \
+		(ptr) = allocate_random(len); \
+		assert_non_null(ptr); \
 	} while (0)
 
 static void
@@ -862,10 +863,10 @@ csum_extent_not_chunk_aligned(void **state)
 	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
-	D_ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
+	ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
 	D_ALLOC(csum_read_buf, csum.cs_buf_len);
 
-	D_ALLOC_RAND(data_buf_1, data_size);
+	ALLOC_RAND(data_buf_1, data_size);
 	D_ALLOC(read_data_buf, data_size);
 
 	csum.cs_csum = csum_buf_1;
@@ -913,10 +914,10 @@ void csum_invalid_input_tests(void **state)
 	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
-	D_ALLOC_RAND(data_buf_1, data_size);
+	ALLOC_RAND(data_buf_1, data_size);
 	D_ALLOC(read_data_buf, data_size);
 
-	D_ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
+	ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
 	D_ALLOC(csum_zero_buf, csum.cs_buf_len);
 	D_ALLOC(csum_read_buf, csum.cs_buf_len);
 
