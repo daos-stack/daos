@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,7 @@
 #include <sys/queue.h>
 #include <sys/xattr.h>
 
+#define D_LOGFAC DD_FAC(ctrl)
 #include "log.h"
 
 #include <gurt/common.h>
@@ -186,7 +187,7 @@ static void init_root_node(void)
 {
 	int rc;
 
-	iof_log_init("CTRL", "CTRLFS", NULL);
+	iof_log_init();
 
 	rc = init_node(&ctrl_fs.root, "", S_IFDIR | 0700, 0);
 
@@ -834,7 +835,7 @@ static void cleanup_ctrl_fs(void)
 
 static int find_path_node(const char *path, struct ctrl_node **node)
 {
-	char buf[128];
+	char buf[PATH_MAX];
 	char *token;
 	char *cursor;
 	struct ctrl_node *current_node;
@@ -847,8 +848,8 @@ static int find_path_node(const char *path, struct ctrl_node **node)
 
 	current_node = &ctrl_fs.root;
 
-	strncpy(buf, path, 128);
-	buf[127 - 1] = 0;
+	strncpy(buf, path, PATH_MAX);
+	buf[PATH_MAX - 1] = 0;
 
 	token = strtok_r(buf, "/", &cursor);
 
@@ -1129,8 +1130,6 @@ static int ctrl_read(const char *fname,
 	return len;
 }
 
-char mybuf[IOF_CTRL_MAX_LEN];
-
 static int ctrl_write(const char *fname,
 		      const char *buf,
 		      size_t len,
@@ -1139,6 +1138,7 @@ static int ctrl_write(const char *fname,
 {
 	struct open_handle *handle = (struct open_handle *)finfo->fh;
 	struct ctrl_node *node = handle->node;
+	char mybuf[IOF_CTRL_MAX_LEN];
 	int rc;
 
 	IOF_LOG_INFO("ctrl fs write called for %s", node->name);

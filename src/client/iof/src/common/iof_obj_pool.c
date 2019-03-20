@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@
  * A simple, efficient pool for allocating objects of equal size
  */
 #include <pthread.h>
+#include "log.h"
 #include <gurt/common.h> /* container_of */
 #include <gurt/list.h>
 #include "iof_obj_pool.h"

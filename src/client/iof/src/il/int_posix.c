@@ -35,6 +35,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#define D_LOGFAC DD_FAC(il)
 #include <stdarg.h>
 #include <inttypes.h>
 #include <libgen.h>
@@ -49,6 +50,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include "log.h"
 #include <gurt/list.h>
 #include <cart/api.h>
 #include "iof_mntent.h"
@@ -305,7 +307,7 @@ static __attribute__((constructor)) void ioil_init(void)
 
 	pthread_once(&init_links_flag, init_links);
 
-	iof_log_init("IL", "IOIL", NULL);
+	iof_log_init();
 
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);

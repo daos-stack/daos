@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#define D_LOGFAC DD_FAC(ctrl)
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -319,7 +320,7 @@ int main(int argc, char **argv)
 	setenv("D_LOG_FILE", tmp_name, 1);
 	free(tmp_name);
 	setenv("D_LOG_MASK", "INFO,ctrl=DEBUG", 1);
-	iof_log_init("ctrl", "iof_ctrl_test", NULL);
+	iof_log_init();
 
 	rc = asprintf(&tmp_name, "%s/.ctrl", prefix);
 	if (rc == -1) {

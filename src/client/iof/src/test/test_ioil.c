@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,6 +48,8 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <CUnit/Basic.h>
+#define D_LOGFAC DD_FAC(test)
+#include "log.h"
 #include "iof_ctrl_util.h"
 #include "iof_ioctl.h"
 #include "iof_api.h"
@@ -63,7 +65,7 @@ static uint64_t max_iov_read_size;
 #define WRITE_LOG(...) \
 	WRITE_LOG_VERBOSE(" at %s:%d", __VA_ARGS__, __FILE__, __LINE__)
 
-#define BUF_SIZE 128
+#define BUF_SIZE 4096
 
 char big_string[BUF_SIZE];
 

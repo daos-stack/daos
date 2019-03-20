@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,6 @@
 #include "log.h"
 #include "iof_common.h"
 #include "iof_fs.h"
-
 
 #define IOF_PROTO_SIGNON_BASE 0x02000000
 #define IOF_PROTO_SIGNON_VERSION 2

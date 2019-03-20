@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,16 +42,32 @@
 
 #include <inttypes.h>
 
+#define D_LOG_USE_V2
+#ifndef DD_FAC
+#define DD_FAC(name) iof_##name##_logfac
+#endif
 #ifndef D_LOGFAC
 #define D_LOGFAC DD_FAC(iof)
 #endif
 
-#include <daos/common.h>
+#include <gurt/debug_setup.h>
+
+#define IOF_FOREACH_LOG_FAC(ACTION, arg) \
+	ACTION(iof, iof, arg)            \
+	ACTION(il,  ioil, arg)           \
+	ACTION(cli, client, arg)         \
+	ACTION(cn, cnss, arg)            \
+	ACTION(ctrl, ctrlfs, arg)        \
+	ACTION(ion, ionss, arg)          \
+	ACTION(test,  test, arg)
+
+IOF_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, D_NOOP)
+
+#include <gurt/debug.h>
 
 /* Allow changing the default so these macros can be
  * used by files that don't log to the default facility
  */
-
 
 #define IOF_LOG_WARNING(fmt, ...)	\
 	D_WARN(fmt "\n", ## __VA_ARGS__)
@@ -117,13 +133,9 @@
 #define IOF_TRACE_ROOT(ptr, type)				\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' as root\n", type)
 
-/* Initialize a log facility.   Pass NULL as log handle to initialize
- * the default facilility.  If the user never initializes the default
- * facility, it will be set to whatever is passed in first.
- */
-void iof_log_init(const char *shortname, const char *longname,
-		  int *log_handle);
-/* Close a the log for a log facility */
+/** Initialize iof log facilities */
+void iof_log_init(void);
+/* Close the iof log */
 void iof_log_close(void);
 
 #endif /* __LOG_H__ */

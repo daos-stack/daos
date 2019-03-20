@@ -51,6 +51,7 @@
 
 #include <fuse3/fuse_lowlevel.h>
 
+#define D_LOGFAC DD_FAC(ion)
 #include "version.h"
 #include "log.h"
 #include "iof_common.h"
@@ -67,6 +68,9 @@
 		IOF_PROTO_SERVER_VER,		\
 		0)
 
+#if GURT_NEW_FI
+static struct d_fault_attr_t *fault_attr_shutdown;
+#endif
 static int shutdown;
 static ATOMIC unsigned int cnss_count;
 
@@ -1642,7 +1646,7 @@ iof_readlink_handler(crt_rpc_t *rpc)
 	struct iof_gah_in *in = crt_req_get(rpc);
 	struct iof_string_out *out = crt_reply_get(rpc);
 	struct ionss_file_handle *file = NULL;
-	char reply[128] = {0};
+	char reply[IOF_MAX_PATH_LEN] = {0};
 	int rc;
 
 	VALIDATE_ARGS_GAH_FILE(rpc, in, out, file);
@@ -1650,7 +1654,7 @@ iof_readlink_handler(crt_rpc_t *rpc)
 		goto out;
 
 	errno = 0;
-	rc = readlinkat(file->fd, "", reply, 128);
+	rc = readlinkat(file->fd, "", reply, IOF_MAX_PATH_LEN);
 
 	if (rc < 0)
 		out->rc = errno;
@@ -2679,7 +2683,7 @@ int main(int argc, char **argv)
 
 	char *version = iof_get_version();
 
-	iof_log_init("ION", "IONSS", NULL);
+	iof_log_init();
 	IOF_LOG_INFO("IONSS version: %s", version);
 
 	D_RWLOCK_INIT(&base.gah_rwlock, NULL);
@@ -2772,6 +2776,10 @@ int main(int argc, char **argv)
 	IOF_LOG_INFO("Primary Group: %s", base.primary_group->cg_grpid);
 	crt_group_rank(base.primary_group, &base.my_rank);
 	crt_group_size(base.primary_group, &base.num_ranks);
+
+#if GURT_NEW_FI
+	fault_attr_shutdown = d_fault_attr_lookup(100);
+#endif
 
 	base.gs = ios_gah_init(base.my_rank);
 	if (!base.gs) {
@@ -3002,9 +3010,15 @@ int main(int argc, char **argv)
 
 	shutdown = 0;
 
+#if GURT_NEW_FI
+	if (D_SHOULD_FAIL(fault_attr_shutdown)) {
+		D_GOTO(shutdown, exit_rc = -DER_SHUTDOWN);
+	}
+#else
 	if (D_SHOULD_FAIL(100)) {
 		D_GOTO(shutdown, exit_rc = -DER_SHUTDOWN);
 	}
+#endif
 
 	if (base.thread_count == 1) {
 		int rc;

@@ -75,7 +75,7 @@ import iof_cart_logtest
 
 jdata = None
 
-sys.path.append('install/Linux/TESTING/scripts')
+sys.path.append('install/TESTING/scripts')
 try:
     #Python/C Shim
     #pylint: disable=import-error

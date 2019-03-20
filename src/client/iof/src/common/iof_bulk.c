@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,8 +39,8 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
-#include "iof_bulk.h"
 #include "log.h"
+#include "iof_bulk.h"
 
 bool iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 		    bool read_only)

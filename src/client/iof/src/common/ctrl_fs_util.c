@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,10 +49,9 @@
 #include <libgen.h>
 #include <stdarg.h>
 
-#include "iof_common.h"
-
-#include "iof_atomic.h"
+#define D_LOGFAC DD_FAC(cli)
 #include "log.h"
+#include "iof_atomic.h"
 #include "iof_mntent.h"
 #include "iof_ctrl_util.h"
 
@@ -337,8 +336,6 @@ cleanup:
 static void init_fs_util(void)
 {
 	char *cnss_env;
-
-	iof_log_init("CLI", "CLIENT", NULL);
 
 	cnss_env = getenv("CNSS_PREFIX");
 

@@ -42,7 +42,6 @@
 #include <string.h>
 
 #include "log.h"
-
 #include <gurt/common.h>
 
 #include "iof_pool.h"

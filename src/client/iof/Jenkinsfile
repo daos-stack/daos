@@ -37,7 +37,6 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-def arch="-Linux"
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 pipeline {
@@ -94,8 +93,8 @@ pipeline {
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
-	     * do want complete results in the case of partial failure
-	     */
+             * do want complete results in the case of partial failure
+             */
             //failFast true
             parallel {
                 stage('Build on CentOS 7') {
@@ -108,9 +107,9 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}"
+                        sconsBuild(clean: '_build.external iof.conf')
                         stash name: 'CentOS-install', includes: 'install/**'
-                        stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
+                        stash name: 'CentOS-build-vars', includes: '.build_vars.*'
                     }
                     post {
                         always {
@@ -119,16 +118,17 @@ pipeline {
                                              aggregatingResults: true,
                                              id: "analysis-centos7",
                                              tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile(".*\\/_build\\.external${arch}\\/.*"),
-                                                       excludeFile("_build\\.external${arch}\\/.*")]
+                                             filters: [excludeFile(".*\\/_build\\.external\\/.*"),
+                                                       excludeFile("_build\\.external\\/.*")]
                             }
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                     }
                 }
                 stage('Build master CentOS 7') {
+                    when { branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos:7'
@@ -138,10 +138,10 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild(clean: "_build.external${arch}",
+                        sconsBuild(clean: '_build.external iof.conf',
                                    scons_args: '--build-config=utils/build-master.config')
                         stash name: 'CentOS-master-install', includes: 'install/**'
-                        stash name: 'CentOS-master-build-vars', includes: ".build_vars${arch}.*"
+                        stash name: 'CentOS-master-build-vars', includes: ".build_vars.*"
                     }
                     post {
                         always {
@@ -150,13 +150,13 @@ pipeline {
                                              aggregatingResults: true,
                                              id: "analysis-master-centos7",
                                              tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external-Linux\\/.*'),
-                                                       excludeFile('_build\\.external-Linux\\/.*')]
+                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                       excludeFile('_build\\.external\\/.*')]
                             }
                             archiveArtifacts artifacts: '**/*.log', allowEmptyArchive: true
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                     }
                 }
@@ -170,7 +170,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}"
+                        sconsBuild(clean: '_build.external iof.conf')
                     }
                     post {
                         always {
@@ -179,12 +179,12 @@ pipeline {
                                              aggregatingResults: true,
                                              id: "analysis-ubuntu18",
                                              tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile(".*\\/_build\\.external${arch}\\/.*"),
-                                                       excludeFile("_build\\.external${arch}\\/.*")]
+                                             filters: [excludeFile(".*\\/_build\\.external\\/.*"),
+                                                       excludeFile("_build\\.external\\/.*")]
                             }
                         }
                         success {
-                            sh "rm -rf _build.external${arch}"
+                            sh "rm -rf _build.external"
                         }
                     }
                 }
@@ -205,17 +205,17 @@ pipeline {
                            snapshot: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: """set -x
-                                    . ./.build_vars-Linux.sh
-                                    CART_BASE=\${SL_PREFIX%/install*}
+                                    . ./.build_vars.sh
+                                    IOF_BASE=\${SL_PREFIX%/install*}
                                     NODELIST=$nodelist
                                     NODE=\${NODELIST%%,*}
-                                    trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
+                                    trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$IOF_BASE"' EXIT
                                     ssh -i ci_key jenkins@\$NODE "set -x
                                         set -e
-                                        sudo mkdir -p \$CART_BASE
-                                        sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
-                                        cd \$CART_BASE
-                                        ln -s /usr/bin/fusermount install/Linux/bin/fusermount3
+                                        sudo mkdir -p \$IOF_BASE
+                                        sudo mount -t nfs \$HOSTNAME:\$PWD \$IOF_BASE
+                                        cd \$IOF_BASE
+                                        ln -s /usr/bin/fusermount install/bin/fusermount3
                                         pip3.4 install --user tabulate
                                         export TR_USE_VALGRIND=none
                                         export IOF_TESTLOG=test/output-centos
@@ -237,29 +237,33 @@ pipeline {
                     }
                 }
                 stage('Single node cart-master') {
+                    when { branch 'master' }
                     agent {
                         label 'ci_vm1'
                     }
                     options {
                         timeout(time: 60, unit: 'MINUTES')
                     }
+                    /* To run a single test use this command:
+                     * nosetests-3.4 --with-xunit --xunit-testsuite-name=master --xunit-file=nosetests-master.xml test/iof_test_local.py:Testlocal.test_use_ino"
+                     */
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                            node_count: 1,
                            snapshot: true
                         runTest stashes: [ 'CentOS-master-install', 'CentOS-master-build-vars' ],
                                 script: """set -x
-                                    . ./.build_vars-Linux.sh
-                                    CART_BASE=\${SL_PREFIX%/install*}
+                                    . ./.build_vars.sh
+                                    IOF_BASE=\${SL_PREFIX%/install*}
                                     NODELIST=$nodelist
                                     NODE=\${NODELIST%%,*}
-                                    trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
+                                    trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$IOF_BASE"' EXIT
                                     ssh -i ci_key jenkins@\$NODE "set -x
                                         set -e
-                                        sudo mkdir -p \$CART_BASE
-                                        sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
-                                        cd \$CART_BASE
-                                        ln -s /usr/bin/fusermount install/Linux/bin/fusermount3
+                                        sudo mkdir -p \$IOF_BASE
+                                        sudo mount -t nfs \$HOSTNAME:\$PWD \$IOF_BASE
+                                        cd \$IOF_BASE
+                                        ln -s /usr/bin/fusermount install/bin/fusermount3
                                         pip3.4 install --user tabulate
                                         export TR_USE_VALGRIND=none
                                         export IOF_TESTLOG=test/output-master
@@ -279,7 +283,7 @@ pipeline {
                             }
                         }
                     }
-		}
+                }
                 stage('Single node valgrind') {
                     agent {
                         label 'ci_vm1'
@@ -293,17 +297,17 @@ pipeline {
                            snapshot: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: """set -x
-                                    . ./.build_vars-Linux.sh
-                                    CART_BASE=\${SL_PREFIX%/install*}
+                                    . ./.build_vars.sh
+                                    IOF_BASE=\${SL_PREFIX%/install*}
                                     NODELIST=$nodelist
                                     NODE=\${NODELIST%%,*}
-                                    trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
+                                    trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$IOF_BASE"' EXIT
                                     ssh -i ci_key jenkins@\$NODE "set -x
                                         set -e
-                                        sudo mkdir -p \$CART_BASE
-                                        sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
-                                        cd \$CART_BASE
-                                        ln -s /usr/bin/fusermount install/Linux/bin/fusermount3
+                                        sudo mkdir -p \$IOF_BASE
+                                        sudo mount -t nfs \$HOSTNAME:\$PWD \$IOF_BASE
+                                        cd \$IOF_BASE
+                                        ln -s /usr/bin/fusermount install/bin/fusermount3
                                         pip3.4 install --user tabulate
                                         export TR_USE_VALGRIND=memcheck
                                         export IOF_TESTLOG=test/output-memcheck
@@ -351,17 +355,17 @@ pipeline {
                         snapshot: true
                     runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                         script: """set -x
-                            . ./.build_vars-Linux.sh
-                            CART_BASE=\${SL_PREFIX%/install*}
+                            . ./.build_vars.sh
+                            IOF_BASE=\${SL_PREFIX%/install*}
                             NODELIST=$nodelist
                             NODE=\${NODELIST%%,*}
-                            trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
+                            trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$IOF_BASE"' EXIT
                             ssh -i ci_key jenkins@\$NODE "set -x
                                 set -e
-                                sudo mkdir -p \$CART_BASE
-                                sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
-                                cd \$CART_BASE
-                                ln -s /usr/bin/fusermount install/Linux/bin/fusermount3
+                                sudo mkdir -p \$IOF_BASE
+                                sudo mount -t nfs \$HOSTNAME:\$PWD \$IOF_BASE
+                                cd \$IOF_BASE
+                                ln -s /usr/bin/fusermount install/bin/fusermount3
                                 pip3.4 install --user tabulate
                                 ./test/iof_test_alloc_fail.py"
                             """

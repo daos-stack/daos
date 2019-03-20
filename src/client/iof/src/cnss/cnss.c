@@ -42,8 +42,8 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
+#define D_LOGFAC DD_FAC(cn)
 #include "log.h"
-
 #include <cart/api.h>
 #include <gurt/common.h>
 #include <signal.h>
@@ -708,7 +708,7 @@ int main(int argc, char **argv)
 	char *ctrl_prefix;
 	bool rcb;
 
-	iof_log_init("CN", "CNSS", NULL);
+	iof_log_init();
 
 	IOF_LOG_INFO("CNSS version: %s", version);
 

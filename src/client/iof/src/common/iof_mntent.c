@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,7 @@
 #include <errno.h>
 #include <mntent.h>
 
+#include "log.h"
 #include <gurt/common.h>
 
 #include "iof_mntent.h"

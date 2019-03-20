@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,25 +37,23 @@
  */
 
 #include <pthread.h>
-
 #include "log.h"
-
 #include <gurt/common.h>
 
-int iof_log_handle;
 
-void iof_log_init(const char *shortname, const char *longname, int *handle)
+IOF_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, D_NOOP)
+
+void iof_log_init(void)
 {
-	int new_handle;
+	int rc;
 
 	d_log_init();
-	new_handle = d_log_allocfacility(shortname, longname);
-	d_log_sync_mask();
-	
-	if (handle == NULL) {
-		iof_log_handle = new_handle;
-	} else {
-		*handle = new_handle;
+
+	rc = D_LOG_REGISTER_FAC(IOF_FOREACH_LOG_FAC);
+	if (rc != 0) {
+		D_PRINT_ERR("Could not register iof log facilities: rc = %d\n",
+			    rc);
+		return;
 	}
 }
 

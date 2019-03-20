@@ -38,8 +38,8 @@
 
 #include <sys/ioctl.h>
 
-#include "iof_common.h"
 #include <gurt/common.h>
+#include "iof_common.h"
 #include "ioc.h"
 #include "log.h"
 #include "iof_ioctl.h"

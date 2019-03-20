@@ -45,7 +45,7 @@ extern "C" {
 #endif
 
 /* Maximum length of a CTRL string with NULL character */
-#define IOF_CTRL_MAX_LEN 128
+#define IOF_CTRL_MAX_LEN 4096
 
 #define IOF_CTRL_MAX_CONSTANT_LEN 128
 

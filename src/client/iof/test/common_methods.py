@@ -850,8 +850,7 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
 
         self_test = find_executable('self_test')
         if not self_test:
-            cart_prefix = os.getenv("IOF_CART_PREFIX",
-                                    iofcommontestsuite.CART_PREFIX)
+            cart_prefix = os.getenv("IOF_CART_PREFIX", None)
             if not cart_prefix:
                 self.skipTest('Could not find self_test binary')
             self_test = os.path.join(cart_prefix, 'bin', 'self_test')
@@ -862,7 +861,7 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
         environ['OFI_INTERFACE'] = self.ofi_interface
         cmd = [self_test, '--singleton', '--path', self.cnss_prefix,
                '--group-name', 'IONSS', '-e' '0:0',
-               '-r', '50', '-s' '0 0,0 128,128 0']
+               '-r', '1000', '-s' '0 0,0 128,128 0']
 
         log_top_dir = os.getenv("IOF_TESTLOG",
                                 os.path.join(os.path.dirname(
@@ -871,9 +870,8 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
 
         if not os.path.exists(log_path):
             os.makedirs(log_path)
-        cmdfileout = os.path.join(log_path, "self_test.out.log")
-        cmdfileerr = os.path.join(log_path, "self_test.err.log")
-        environ['D_LOG_FILE'] = os.path.join(log_path, 'self_test_cart.log')
+        cmdfileout = os.path.join(log_path, "self_test.out")
+        cmdfileerr = os.path.join(log_path, "self_test.err")
         procrtn = -1
         try:
             with open(cmdfileout, mode='w') as outfile, \
@@ -881,7 +879,7 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
                 outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                     ("=" * 40), (" ".join(cmd)), ("=" * 40)))
                 outfile.flush()
-                procrtn = subprocess.call(cmd, timeout=5 * 60, env=environ,
+                procrtn = subprocess.call(cmd, timeout=180, env=environ,
                                           stdout=outfile, stderr=errfile)
         except (FileNotFoundError) as e:
             self.logger.info("Testnss: %s", \
@@ -889,12 +887,6 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
         except (IOError) as e:
             self.logger.info("Testnss: Error opening the log files: %s", \
                              e.errno)
-
-        with open(cmdfileout, "r") as fd:
-            for line in fd.readlines():
-                print(line.strip())
-        fd.close()
-
         if procrtn != 0:
             self.fail("cart self test failed: %s" % procrtn)
 

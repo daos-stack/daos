@@ -173,7 +173,7 @@ def scons():
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     tenv.AppendUnique(CPPPATH=['common/include'])
     tenv.AppendUnique(CPPPATH=['include'])
-    tenv.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
+    tenv.AppendUnique(LIBS='pthread')
 
     prereqs.require(tenv, 'cart')
 
@@ -230,6 +230,8 @@ def scons():
     for header in HEADERS:
         tenv.Install(os.path.join("$PREFIX", 'include'), 'include/%s' % header)
 
+
+    SConscript('utest/SConscript')
     SConscript('test/SConscript')
 #pylint: enable=too-many-statements
 
