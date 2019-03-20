@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import traceback
@@ -75,6 +76,7 @@ class CreateContainerTest(Test):
         """
 
         pool = None
+        contuuid = None
         expected_results = []
 
         try:

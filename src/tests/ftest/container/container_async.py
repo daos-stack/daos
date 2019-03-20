@@ -313,7 +313,7 @@ class ContainerAsync(Test):
             self.pool = DaosPool(self.context)
 
             self.pool.create(createmode, createuid, creategid,
-                            createsize, createsetid, None)
+                             createsize, createsetid, None)
 
 
             poh = self.pool.handle
@@ -397,7 +397,7 @@ class ContainerAsync(Test):
 
             self.container1.create(poh)
 
-            str_cuuid = self.container1.get_uuid_str()
+            dummy_str_cuuid = self.container1.get_uuid_str()
 
             # Open container
             self.container1.open(poh, None, 2, None)

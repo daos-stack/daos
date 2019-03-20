@@ -56,12 +56,12 @@ class DeleteContainerTest(Test):
         # parameters used in pool create
         self.createmode = self.params.get("mode",
                                           '/run/createtests/createmode/')
-        self.createuid  = os.geteuid()
-        self.creategid  = os.getegid()
+        self.createuid = os.geteuid()
+        self.creategid = os.getegid()
         self.createsetid = self.params.get("setname",
                                            '/run/createtests/createset/')
-        self.createsize  = self.params.get("size",
-                                           '/run/createtests/createsize/')
+        self.createsize = self.params.get("size",
+                                          '/run/createtests/createsize/')
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -83,8 +83,8 @@ class DeleteContainerTest(Test):
         :avocado: tags=regression,cont,vm,contdelete
         """
         expected_for_param = []
-        uuidlist  = self.params.get("uuid",
-                                    '/run/createtests/ContainerUUIDS/*/')
+        uuidlist = self.params.get("uuid",
+                                   '/run/createtests/ContainerUUIDS/*/')
         cont_uuid = uuidlist[0]
         expected_for_param.append(uuidlist[1])
 

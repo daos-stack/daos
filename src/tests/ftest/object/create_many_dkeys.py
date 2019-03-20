@@ -51,14 +51,13 @@ class CreateManyDkeys(Test):
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
         server_group = self.params.get("server_group",
                                        '/server/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.container = None
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 

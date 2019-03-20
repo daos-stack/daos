@@ -124,7 +124,7 @@ class BasicTxTest(Test):
             akey = "this is the akey"
 
             oid, txn = container.write_an_obj(thedata, thedatasize,
-                                             dkey, akey, None, None, 2)
+                                              dkey, akey, None, None, 2)
 
             # read the data back and make sure its correct
             thedata2 = container.read_an_obj(thedatasize, dkey, akey,

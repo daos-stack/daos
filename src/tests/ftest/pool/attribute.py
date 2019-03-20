@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import traceback
@@ -37,8 +38,8 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
-import GeneralUtils
 
+from GeneralUtils import DaosTestError
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 GLOB_SIGNAL = None
@@ -51,7 +52,7 @@ def cb_func(event):
     GLOB_RC = event.event.ev_error
     GLOB_SIGNAL.set()
 
-def verify_list_attr(indata, size, buffer, mode):
+def verify_list_attr(indata, size, buff):
     """
     verify the length of the Attribute names
     """
@@ -62,14 +63,14 @@ def verify_list_attr(indata, size, buffer, mode):
 
     if aggregate_len != size:
         raise DaosTestError("FAIL: Size is not matching for Names in list"
-                         "attr, Expected len={0} and received len = {1}"
-                         .format(aggregate_len, size))
+                            "attr, Expected len={0} and received len = {1}"
+                            .format(aggregate_len, size))
     #verify the Attributes names in list_attr retrieve
     for key in indata.keys():
-        if key not in buffer:
+        if key not in buff:
             raise DaosTestError("FAIL: Name does not match after list attr,"
-                             " Expected buf={0} and received buf = {1}"
-                             .format(key, buffer))
+                                " Expected buf={0} and received buf = {1}"
+                                .format(key, buff))
 
 def verify_get_attr(indata, outdata):
     """
@@ -78,7 +79,7 @@ def verify_get_attr(indata, outdata):
     for attr, value in indata.iteritems():
         if value != outdata[attr]:
             raise DaosTestError("FAIL: Value does not match after get attr,"
-                             " Expected val={0} and received val = {1}"
+                                " Expected val={0} and received val = {1}"
                                 .format(value, outdata[attr]))
 
 class PoolAttributeTest(Test):
@@ -89,9 +90,9 @@ class PoolAttributeTest(Test):
         try:
             self.pool = None
             self.hostlist = None
-            with open('../../../.build_vars.json') as f:
-                build_paths = json.load(f)
-                basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+            with open('../../../.build_vars.json') as build_file:
+                build_paths = json.load(build_file)
+                basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
                 server_group = self.params.get("server_group",
                                                '/server/',
                                                'daos_server')
@@ -105,12 +106,12 @@ class PoolAttributeTest(Test):
 
                 createmode = self.params.get("mode",
                                              '/run/attrtests/createmode/')
-                createuid  = os.geteuid()
-                creategid  = os.getgid()
+                createuid = os.geteuid()
+                creategid = os.getgid()
                 createsetid = self.params.get("setname",
                                               '/run/attrtests/createset/')
-                createsize  = self.params.get("size",
-                                              '/run/attrtests/createsize/')
+                createsize = self.params.get("size",
+                                             '/run/attrtests/createsize/')
 
                 self.pool = DaosPool(context)
                 self.pool.create(createmode, createuid, creategid, createsize,
@@ -118,10 +119,10 @@ class PoolAttributeTest(Test):
                 self.pool.connect(1 << 1)
                 self.large_data_set = {}
 
-        except Exception as e:
-            print ("In the setup exception handler\n")
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print("In the setup exception handler\n")
+            print(excep)
+            print(traceback.format_exc())
 
     def tearDown(self):
         try:
@@ -137,8 +138,9 @@ class PoolAttributeTest(Test):
         """
         allchar = string.ascii_letters + string.digits
         for i in range(1024):
-            self.large_data_set[str(i)] = "".join(random.choice(allchar)
-                 for x in range(random.randint(1, 100)))
+            self.large_data_set[str(i)] = (
+                "".join(random.choice(allchar)
+                for x in range(random.randint(1, 100))))
 
     def test_pool_attributes(self):
         """
@@ -171,7 +173,7 @@ class PoolAttributeTest(Test):
             self.pool.set_attr(data=attr_dict)
             size, buf = self.pool.list_attr()
 
-            verify_list_attr(attr_dict, size.value, buf, "sync")
+            verify_list_attr(attr_dict, size.value, buf)
 
             if name[0] is not None:
                 # Request something that doesn't exist
@@ -186,11 +188,10 @@ class PoolAttributeTest(Test):
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
-            pass
 
-        except DaosApiError as e:
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
 
@@ -239,8 +240,8 @@ class PoolAttributeTest(Test):
                 self.fail("RC not as expected after set_attr {0}"
                           .format(GLOB_RC))
 
-        except DaosApiError as e:
-            print (e)
+        except DaosApiError as excep:
+            print (excep)
             print (traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")

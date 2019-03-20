@@ -118,10 +118,9 @@ class GlobalHandle(Test):
                                        'daos_server')
 
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
-        tmp = self.build_paths['PREFIX'] + '/tmp'
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
@@ -168,7 +167,7 @@ class GlobalHandle(Test):
             buftype = ctypes.c_byte * buf_len
             c_buf = buftype.from_buffer(buf)
             sct_pool_handle = (
-                sharedctypes.RawValue(IOV, 
+                sharedctypes.RawValue(IOV,
                                       ctypes.cast(c_buf, ctypes.c_void_p),
                                       buf_len, iov_len))
 
@@ -182,7 +181,7 @@ class GlobalHandle(Test):
             buftype = ctypes.c_byte * buf_len
             c_buf = buftype.from_buffer(buf)
             sct_cont_handle = (
-                sharedctypes.RawValue(IOV, 
+                sharedctypes.RawValue(IOV,
                                       ctypes.cast(c_buf, ctypes.c_void_p),
                                       buf_len, iov_len))
 

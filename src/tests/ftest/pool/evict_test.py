@@ -48,15 +48,14 @@ class EvictTest(Test):
         # in the repo
         with open('../../../.build_vars.json') as build_file:
             build_paths = json.load(build_file)
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
+        self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostlist = self.params.get("test_machines", '/run/hosts/')
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
-        server_group = self.params.get("server_group",'/server/',
+        server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, self.basepath)
@@ -87,7 +86,7 @@ class EvictTest(Test):
                 "-g {3} "
                 "-s {4} "
                 "-z {5} {6} "
-                "-l 0".format(self.daosctl, "0731", uid, gid, setid, size, 
+                "-l 0".format(self.daosctl, "0731", uid, gid, setid, size,
                               connectperm))
             process.system(create_connect_evict)
 
@@ -135,7 +134,7 @@ class EvictTest(Test):
 
         except Exception as excep:
             # this section of the test should fail and throw an exception
-            pass
+            print("command expected to fail")
 
         try:
             # use the wrong server group name but the correct uuid
@@ -150,7 +149,7 @@ class EvictTest(Test):
 
         except Exception as excep:
             # this section of the test should fail and throw an exception
-            pass
+            print("command expected to fail")
 
         try:
             # evict for real, there are no client connections so not

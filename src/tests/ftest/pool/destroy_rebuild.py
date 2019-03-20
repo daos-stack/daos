@@ -64,8 +64,7 @@ class DestroyRebuild(Test):
 
         # generate a hostfile
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        tmp = build_paths['PREFIX'] + '/tmp'
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         # fire up the DAOS servers
         self.server_group = self.params.get("server_group", '/run/server/',

@@ -49,11 +49,10 @@ class CartSelfTest(Test):
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                "../../../../.build_vars.json")) as build_file:
             build_paths = json.load(build_file)
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        tmp = build_paths['PREFIX'] + '/tmp'
+        self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(context)

@@ -46,7 +46,6 @@ class InfoTests(Test):
                                "../../../../.build_vars.json")) as build_file:
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
         self.server_group = self.params.get("server_group", '/server/',
                                             'daos_server')
 
@@ -55,7 +54,7 @@ class InfoTests(Test):
         self.pool = DaosPool(context)
         self.d_log = DaosLog(context)
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -74,9 +73,9 @@ class InfoTests(Test):
         :avocado: tags=pool,poolquery,infotest
         """
         # create pool
-        mode = self.params.get("mode", '/run/testparams/modes/*', 0731)
+        mode = self.params.get("mode", '/run/testparams/modes/*', "0731")
         if mode == 73:
-             self.cancel('Cancel the mode test 73 because of DAOS-1877')
+            self.cancel('Cancel the mode test 73 because of DAOS-1877')
 
         uid = os.geteuid()
         gid = os.getegid()
@@ -99,7 +98,6 @@ class InfoTests(Test):
             self.d_log.error("UUID str does not match expected string")
             self.fail("UUID str does not match expected string")
 
-        
         # validate size of pool is what we expect
         # This check is currently disabled, as space is not implemented in
         # DAOS C API yet.

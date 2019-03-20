@@ -54,7 +54,7 @@ class FullPoolContainerCreate(Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.cont = None
-        self.con2 = None
+        self.cont2 = None
         self.pool = DaosPool(self.context)
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines1", '/hosts/')
@@ -120,13 +120,13 @@ class FullPoolContainerCreate(Test):
 
         # generate random dkey, akey each time
         # write 1mb until no space, then 1kb, etc. to fill pool quickly
-        for x in [1048576, 1024, 1]:
+        for obj_sz in [1048576, 1024, 1]:
             write_count = 0
             while True:
                 self.d_log.debug("writing obj {0}, sz {1} to "
-                                 "container".format(write_count, x))
-                my_str = "a" * x
-                my_str_sz = x
+                                 "container".format(write_count, obj_sz))
+                my_str = "a" * obj_sz
+                my_str_sz = obj_sz
                 dkey = (
                     ''.join(random.choice(string.lowercase) for i in range(5)))
                 akey = (
@@ -137,7 +137,7 @@ class FullPoolContainerCreate(Test):
                                                                  dkey, akey,
                                                                  obj_cls=1)
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
-                                                                    x))
+                                                                    obj_sz))
                     write_count += 1
                 except DaosApiError as excep:
                     if not (err in repr(excep) or err2 in repr(excep)):
@@ -147,7 +147,7 @@ class FullPoolContainerCreate(Test):
                                   .format(repr(excep)))
                     else:
                         self.d_log.debug("pool is too full for {0} byte "
-                                         "objects".format(x))
+                                         "objects".format(obj_sz))
                         break
 
         self.d_log.debug("closing container")

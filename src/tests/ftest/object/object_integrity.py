@@ -37,7 +37,7 @@ import ServerUtils
 import WriteHostFile
 
 from daos_api import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
-    DaosApiError, DaosLog)
+                      DaosApiError, DaosLog)
 
 class ObjectDataValidation(avocado.Test):
     """
@@ -139,7 +139,7 @@ class ObjectDataValidation(avocado.Test):
         transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) 
+                indata = ("{0}".format(str(akey)[0])
                           * self.record_length[record_index])
                 c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
                 c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
@@ -243,7 +243,7 @@ class ObjectDataValidation(avocado.Test):
                         self.d_log.error("ERROR:Data mismatch for "
                                          "dkey = {0}, "
                                          "akey = {1}".format(
-                                             "dkey {0}".format(dkey), 
+                                             "dkey {0}".format(dkey),
                                              "akey {0}".format(akey)))
                         self.fail("ERROR:Data mismatch for dkey = {0}, akey={1}"
                                   .format("dkey {0}".format(dkey),
