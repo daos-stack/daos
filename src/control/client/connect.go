@@ -32,15 +32,15 @@ import (
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
 type Addresses []string
 
-// result is a container for output of any type of client request.
-type result struct {
-	address string
-	value   interface{}
-	err     error
+// ChanResult is a container for output of any type of client request.
+type ChanResult struct {
+	Address string
+	Value   interface{}
+	Err     error
 }
 
-// ResultMap map client addresses to method call results
-type ResultMap map[string]result
+// ResultMap map client addresses to method call ChanResults
+type ResultMap map[string]ChanResult
 
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {
@@ -83,30 +83,30 @@ type connList struct {
 // controllers for any server addresses that are connectable.
 func (c *connList) ConnectClients(addresses Addresses) (Addresses, ResultMap) {
 	errors := make(ResultMap)
-	ch := make(chan result)
+	ch := make(chan ChanResult)
 
 	for _, address := range addresses {
-		go func(f ControllerFactory, addr string, ch chan result) {
+		go func(f ControllerFactory, addr string, ch chan ChanResult) {
 			c, err := f.create(addr)
-			ch <- result{addr, c, err}
+			ch <- ChanResult{addr, c, err}
 		}(c.factory, address, ch)
 	}
 
 	for range addresses {
 		res := <-ch
 
-		if res.err != nil {
-			errors[res.address] = res
+		if res.Err != nil {
+			errors[res.Address] = res
 			continue
 		}
 
-		controller, ok := res.value.(Control)
+		controller, ok := res.Value.(Control)
 		if !ok {
-			res.err = fmt.Errorf(
+			res.Err = fmt.Errorf(
 				"type assertion failed, wanted %+v got %+v",
-				control{}, res.value)
+				control{}, res.Value)
 
-			errors[res.address] = res
+			errors[res.Address] = res
 			continue
 		}
 
@@ -140,7 +140,7 @@ func (c *connList) GetActiveConns(errors ResultMap) (Addresses, ResultMap) {
 			continue
 		}
 
-		errors[address] = result{
+		errors[address] = ChanResult{
 			address, state,
 			fmt.Errorf(
 				"socket connection is not active (%s)", state),
@@ -154,20 +154,20 @@ func (c *connList) GetActiveConns(errors ResultMap) (Addresses, ResultMap) {
 // ClearConns clears all stored connections.
 func (c *connList) ClearConns() ResultMap {
 	errors := make(ResultMap)
-	ch := make(chan result)
+	ch := make(chan ChanResult)
 
 	for _, controller := range c.controllers {
-		go func(c Control, ch chan result) {
+		go func(c Control, ch chan ChanResult) {
 			err := c.disconnect()
-			ch <- result{c.getAddress(), nil, err}
+			ch <- ChanResult{c.getAddress(), nil, err}
 		}(controller, ch)
 	}
 
 	for range c.controllers {
 		res := <-ch
 
-		if res.err != nil {
-			errors[res.address] = res
+		if res.Err != nil {
+			errors[res.Address] = res
 		}
 	}
 	c.controllers = nil
@@ -178,10 +178,10 @@ func (c *connList) ClearConns() ResultMap {
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
 func (c *connList) makeRequests(
-	requestFn func(Control, chan result)) ResultMap {
+	requestFn func(Control, chan ChanResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
-	ch := make(chan result)
+	ch := make(chan ChanResult)
 
 	for _, mc := range c.controllers {
 		go requestFn(mc, ch)
@@ -189,7 +189,7 @@ func (c *connList) makeRequests(
 
 	for range c.controllers {
 		res := <-ch
-		cMap[res.address] = res
+		cMap[res.Address] = res
 	}
 
 	return cMap

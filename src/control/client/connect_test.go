@@ -95,7 +95,7 @@ func TestConnectClients(t *testing.T) {
 		AssertEqual(t, len(eMap), len(tt.addrsIn), "unexpected failure map")
 		for _, addr := range tt.addrsIn {
 			AssertEqual(
-				t, eMap[addr].err,
+				t, eMap[addr].Err,
 				fmt.Errorf("socket connection is not active (%s)", tt.state),
 				"unexpected failure in map")
 		}

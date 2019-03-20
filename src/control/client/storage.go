@@ -111,7 +111,7 @@ func (c *control) listScmModules() (mms ScmModules, err error) {
 
 // listStorageRequest is to be called as a goroutine and returns result
 // containing locally attached NVMe and SCM storage devices over channel.
-func listStorageRequest(mc Control, ch chan result) {
+func listStorageRequest(mc Control, ch chan ChanResult) {
 	sRes := storageResult{}
 
 	ctrlrs, err := mc.listNvmeCtrlrs()
@@ -120,7 +120,7 @@ func listStorageRequest(mc Control, ch chan result) {
 	mms, err := mc.listScmModules()
 	sRes.scm = scmResult{mms, err}
 
-	ch <- result{mc.getAddress(), sRes, nil} // result.err is ignored
+	ch <- ChanResult{mc.getAddress(), sRes, nil} // result.Err is ignored
 }
 
 // ListStorage returns locally-attached nonvolatile storage devices for each
@@ -132,20 +132,20 @@ func (c *connList) ListStorage() (cNvmeMap, cScmMap) {
 
 	for _, res := range cResults {
 		// we want to extract obj regardless of error as may only refer
-		// to one of the subsystems, ignore res.err
-		storageRes, ok := res.value.(storageResult)
+		// to one of the subsystems, ignore res.Err
+		storageRes, ok := res.Value.(storageResult)
 		if !ok {
 			err := fmt.Errorf(
 				"type assertion failed, wanted %+v got %+v",
-				storageResult{}, res.value)
+				storageResult{}, res.Value)
 
-			cCtrlrs[res.address] = nvmeResult{nil, err}
-			cModules[res.address] = scmResult{nil, err}
+			cCtrlrs[res.Address] = nvmeResult{nil, err}
+			cModules[res.Address] = scmResult{nil, err}
 			continue
 		}
 
-		cCtrlrs[res.address] = storageRes.nvme
-		cModules[res.address] = storageRes.scm
+		cCtrlrs[res.Address] = storageRes.nvme
+		cModules[res.Address] = storageRes.scm
 	}
 
 	return cCtrlrs, cModules

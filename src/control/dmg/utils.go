@@ -50,7 +50,7 @@ func sprintConns(addrs client.Addresses, eMap client.ResultMap) (out string) {
 
 	for _, key := range keys {
 		out = fmt.Sprintf(
-			"%sfailed to connect to %s (%s)\n", out, key, eMap[key])
+			"%sfailed to connect to %s (%s)\n", out, key, eMap[key].Err)
 	}
 
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)

@@ -26,7 +26,7 @@ package common
 import (
 	"fmt"
 	"reflect"
-	. "sort"
+	"sort"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/log"
@@ -70,12 +70,12 @@ func AssertEqual(
 	t.FailNow()
 }
 
-// AssertStringsEqual attempts to sort both string slices before comparing.
+// AssertStringsEqual sorts string slices before comparing.
 func AssertStringsEqual(
 	t *testing.T, a []string, b []string, message string) {
 
-	Strings(a)
-	Strings(b)
+	sort.Strings(a)
+	sort.Strings(b)
 
 	if reflect.DeepEqual(a, b) {
 		return

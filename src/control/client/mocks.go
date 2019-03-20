@@ -27,7 +27,51 @@ import (
 	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"google.golang.org/grpc/connectivity"
 )
+
+// implement mock/stub behaviour for Control
+type mockControl struct {
+	address   string
+	connState connectivity.State
+	features  []*pb.Feature
+	ctrlrs    NvmeControllers
+	modules   ScmModules
+}
+
+func (m *mockControl) connect(addr string) error {
+	m.address = addr
+	return nil
+}
+func (m *mockControl) disconnect() error { return nil }
+func (m *mockControl) connected() (connectivity.State, bool) {
+	return m.connState, checkState(m.connState)
+}
+func (m *mockControl) getAddress() string { return m.address }
+func (m *mockControl) listAllFeatures() (FeatureMap, error) {
+	fm := make(FeatureMap)
+	for _, f := range m.features {
+		fm[f.Fname.Name] = fmt.Sprintf(
+			"category %s, %s", f.Category.Category, f.Description)
+	}
+	return fm, nil
+}
+func (m *mockControl) listNvmeCtrlrs() (NvmeControllers, error) {
+	return m.ctrlrs, nil
+}
+func (m *mockControl) listScmModules() (ScmModules, error) {
+	return m.modules, nil
+}
+func (m *mockControl) killRank(uuid string, rank uint32) error {
+	return nil
+}
+
+func newMockControl(
+	address string, state connectivity.State, features []*pb.Feature,
+	ctrlrs NvmeControllers, modules ScmModules) (Control, error) {
+
+	return &mockControl{address, state, features, ctrlrs, modules}, nil
+}
 
 // NewClientFM provides a mock cFeatureMap for testing.
 func NewClientFM(features []*pb.Feature, addrs Addresses) cFeatureMap {

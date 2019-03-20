@@ -26,11 +26,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 var (
@@ -39,6 +41,10 @@ var (
 	ctrlrs    = NvmeControllers{MockControllerPB("")}
 	modules   = ScmModules{MockModulePB()}
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "utils_test: ", os.Stderr)
+}
 
 func TestHasConnection(t *testing.T) {
 	var shelltests = []struct {
@@ -53,12 +59,12 @@ func TestHasConnection(t *testing.T) {
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": result{"1.2.3.4:10000", nil, errors.New("test")}},
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ResultMap{"1.2.3.4:10000": client.result{"1.2.3.4:10000", nil, errors.New("test")}, "1.2.3.5:10001": client.result{"1.2.3.5:10001", nil, errors.New("test")}},
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\nNo active connections!",
 		},
 	}
@@ -80,12 +86,12 @@ func TestSprintConns(t *testing.T) {
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": result{"1.2.3.4:10000", nil, errors.New("test")}},
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ResultMap{"1.2.3.4:10000": errors.New("test"), "1.2.3.5:10001": errors.New("test")},
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, errors.New("test")}},
 			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\n",
 		},
 	}
@@ -102,37 +108,28 @@ func marshal(i interface{}) string {
 func TestCheckSprint(t *testing.T) {
 	var shelltests = []struct {
 		m   interface{}
-		err error
 		out string
 	}{
 		{
 			NewClientFM(features, addresses),
-			errors.New("test"),
-			"Unable to retrieve %[1]ss (test)\n",
-		},
-		{
-			NewClientFM(features, addresses),
-			nil,
 			fmt.Sprintf(
 				"Listing %%[1]ss on connected storage servers:\n%s\n",
 				marshal(NewClientFM(features, addresses))),
 		},
 		{
 			NewClientNvme(ctrlrs, addresses),
-			nil,
 			fmt.Sprintf(
 				"Listing %%[1]ss on connected storage servers:\n%s\n",
 				marshal(NewClientNvme(ctrlrs, addresses))),
 		},
 		{
 			NewClientScm(modules, addresses),
-			nil,
 			fmt.Sprintf(
 				"Listing %%[1]ss on connected storage servers:\n%s\n",
 				marshal(NewClientScm(modules, addresses))),
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, checkAndFormat(tt.m, tt.err), tt.out, "bad output")
+		AssertEqual(t, checkAndFormat(tt.m), tt.out, "bad output")
 	}
 }
