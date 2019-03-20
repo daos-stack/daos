@@ -42,7 +42,7 @@ import WriteHostFile
 #This needs to be changed after configuration file integration on client tools.
 #As per current implementation control plane API will not use the D_LOF_FILE
 #Env variable, if OFI_INTERFACE and CRT_PHY_ADDR_STR. DAOS-2178
-DEFAULT_LOG="/tmp/daos.log"
+DEFAULT_LOG = "/tmp/daos.log"
 
 class DaosCoreTest(Test):
     """
