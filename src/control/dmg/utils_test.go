@@ -59,12 +59,12 @@ func TestHasConnection(t *testing.T) {
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}},
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}},
 			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, exampleErr}},
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, exampleErr}},
 			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\nNo active connections!",
 		},
 	}
@@ -86,12 +86,12 @@ func TestSprintConns(t *testing.T) {
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}},
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}},
 			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, exampleErr}},
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, exampleErr}},
 			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\n",
 		},
 	}
@@ -123,7 +123,7 @@ func TestCheckSprint(t *testing.T) {
 			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n1.2.3.5:10001:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n\n\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, exampleErr}},
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, exampleErr}},
 			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
 		},
 	}

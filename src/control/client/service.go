@@ -51,11 +51,11 @@ func (c *control) killRank(uuid string, rank uint32) error {
 // uuid.
 func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	errors := make(ResultMap)
-	ch := make(chan ChanResult)
+	ch := make(chan ClientResult)
 
 	for _, mc := range c.controllers {
-		go func(mc Control, u string, r uint32, ch chan ChanResult) {
-			ch <- ChanResult{
+		go func(mc Control, u string, r uint32, ch chan ClientResult) {
+			ch <- ClientResult{
 				mc.getAddress(), nil, mc.killRank(u, r),
 			}
 		}(mc, uuid, rank, ch)

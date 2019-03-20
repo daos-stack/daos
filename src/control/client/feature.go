@@ -110,9 +110,9 @@ func (c *control) listFeatures(category string) (
 
 // listFeaturesRequest is to be called as a goroutine and returns result
 // containing supported server features over channel.
-func listFeaturesRequest(controller Control, ch chan ChanResult) {
+func listFeaturesRequest(controller Control, ch chan ClientResult) {
 	fMap, err := controller.listAllFeatures()
-	ch <- ChanResult{controller.getAddress(), fMap, err}
+	ch <- ClientResult{controller.getAddress(), fMap, err}
 }
 
 // ListFeatures returns supported management features for each server connected.
@@ -127,7 +127,7 @@ func (c *connList) ListFeatures() ClientFeatureMap {
 			continue
 		}
 
-		// extract obj from generic ChanResult type returned over channel
+		// extract obj from generic ClientResult type returned over channel
 		fMap, ok := res.Value.(FeatureMap)
 		if !ok {
 			err = fmt.Errorf(

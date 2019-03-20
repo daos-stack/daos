@@ -111,7 +111,7 @@ func (c *control) listScmModules() (mms ScmModules, err error) {
 
 // listStorageRequest is to be called as a goroutine and returns result
 // containing locally attached NVMe and SCM storage devices over channel.
-func listStorageRequest(mc Control, ch chan ChanResult) {
+func listStorageRequest(mc Control, ch chan ClientResult) {
 	sRes := storageResult{}
 
 	ctrlrs, err := mc.listNvmeCtrlrs()
@@ -120,7 +120,7 @@ func listStorageRequest(mc Control, ch chan ChanResult) {
 	mms, err := mc.listScmModules()
 	sRes.scm = ScmResult{mms, err}
 
-	ch <- ChanResult{mc.getAddress(), sRes, nil} // result.Err is ignored
+	ch <- ClientResult{mc.getAddress(), sRes, nil} // result.Err is ignored
 }
 
 // ListStorage returns locally-attached nonvolatile storage devices for each

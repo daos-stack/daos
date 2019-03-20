@@ -76,13 +76,7 @@ func setupShell() *ishell.Shell {
 		Func: func(c *ishell.Context) {
 			c.Println(hasConns(conns.GetActiveConns(nil)))
 
-			cCtrlrs, cModules := conns.ListStorage()
-
-			c.Printf(
-				unpackFormat(cCtrlrs),
-				"NVMe SSD controller and constituent namespace")
-
-			c.Printf(unpackFormat(cModules), "SCM module")
+			listStor()
 		},
 	})
 
@@ -108,16 +102,7 @@ func setupShell() *ishell.Shell {
 				return
 			}
 
-			errors := conns.KillRank(poolUUID, uint32(rank))
-
-			if len(errors) == 0 {
-				c.Println(
-					"Kill Rank succeeding on all active connections!")
-			} else {
-				c.Printf(
-					unpackFormat(errors),
-					"Kill Rank command failures")
-			}
+			killRankSvc(poolUUID, uint32(rank))
 		},
 	})
 

@@ -42,20 +42,24 @@ type KillRankSvcCmd struct {
 	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to"`
 }
 
-// Execute is run when KillRankSvcCmd activates
-func (k *KillRankSvcCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.WithMessage(err, "unable to connect to hosts")
-	}
-
-	// run kill rank command with specified parameters on all connected servers
-	errors := conns.KillRank(k.PoolUUID, k.Rank)
+// run kill rank command with specified parameters on all connected servers
+func killRankSvc(uuid string, rank uint32) {
+	errors := conns.KillRank(uuid, rank)
 
 	if len(errors) == 0 {
 		fmt.Println("Kill Rank succeeding on all active connections!")
 	} else {
 		fmt.Printf(unpackFormat(errors), "Kill Rank command failures")
 	}
+}
+
+// Execute is run when KillRankSvcCmd activates
+func (k *KillRankSvcCmd) Execute(args []string) error {
+	if err := connectHosts(); err != nil {
+		return errors.WithMessage(err, "unable to connect to hosts")
+	}
+
+	killRankSvc(k.PoolUUID, k.Rank)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
