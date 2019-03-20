@@ -1,0 +1,52 @@
+name: daos_server
+servers:
+- rank: null
+  cpus:
+  - 0-7
+  fabric_iface: eth0
+  fabric_iface_port: 31416
+  log_mask: ERR
+  log_file: /tmp/server.log
+  env_vars: []
+  scm_mount: /mnt/daos
+  bdev_class: ""
+  bdev_list:
+  - 0000:81:00.0
+  bdev_number: 0
+  bdev_size: 0
+  cliopts:
+  - -c
+  - "8"
+  - -g
+  - daos_server
+  - -s
+  - /mnt/daos
+  - -a
+  - /home/samirrav/daos/install/tmp
+  - -d
+  - /tmp/daos_sockets
+  - -i
+  - "928495565"
+provider: ofi+sockets
+socket_dir: /tmp/daos_sockets
+access_points:
+- localhost
+port: 10001
+ca_cert: ""
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+fault_path: ""
+fault_cb: ""
+fabric_ifaces: []
+scm_mount_path: /mnt/daos
+bdev_include: []
+bdev_exclude: []
+hyperthreads: false
+nr_hugepages: 4096
+control_log_mask: DEBUG
+control_log_file: /tmp/daos_control.log
+modules: ""
+attach: /home/samirrav/daos/install/tmp
+systemmap: ""
+path: /home/samirrav/daos/src/tests/ftest/data/daos_avocado_test.yml
+nvmeshmid: 928495565
