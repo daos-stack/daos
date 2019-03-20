@@ -74,6 +74,7 @@ pipeline {
         stage('Pre-build') {
             parallel {
                 stage('checkpatch') {
+                    when { branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos:7'

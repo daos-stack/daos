@@ -78,7 +78,7 @@ def load_config():
     global CART_PREFIX
     global SELF_PREFIX
 
-    fd = open('.build_vars-Linux.json')
+    fd = open('.build_vars.json')
     data = json.load(fd)
     fd.close()
     CART_PREFIX = data['CART_PREFIX']
