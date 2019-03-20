@@ -81,15 +81,3 @@ def write_fault_file(path, fault_list=None, on_the_fly_fault=None):
                   default_flow_style=False, allow_unicode=True)
 
     return fi_config
-
-# just for testing above function
-def main():
-    on_the_fly = {'id': '52',
-                  'probability': '100',
-                  'interval': '1',
-                  'max_faults': '50'
-    }
-    print(write_fault_file('.', ['obj_update_timeout'], on_the_fly))
-
-if __name__ == "__main__":
-    main()
