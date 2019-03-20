@@ -36,15 +36,15 @@ import (
 // FeatureMap is an alias for mgmt features supported by gRPC server.
 type FeatureMap map[string]string
 
-// featureResult contains results and error of a request
-type featureResult struct {
-	fm FeatureMap
-	e  error
+// FeatureResult contains results and error of a request
+type FeatureResult struct {
+	Fm  FeatureMap
+	Err error
 }
 
-// cFeatureMap is an alias for management features supported on server
+// ClientFeatureMap is an alias for management features supported on server
 // connected to given client.
-type cFeatureMap map[string]featureResult
+type ClientFeatureMap map[string]FeatureResult
 
 // getFeature returns a feature from a requested name.
 func (c *control) getFeature(name string) (*pb.Feature, error) {
@@ -116,14 +116,14 @@ func listFeaturesRequest(controller Control, ch chan ChanResult) {
 }
 
 // ListFeatures returns supported management features for each server connected.
-func (c *connList) ListFeatures() cFeatureMap {
+func (c *connList) ListFeatures() ClientFeatureMap {
 	var err error
 	cResults := c.makeRequests(listFeaturesRequest)
-	cFeatures := make(cFeatureMap) // mapping of server addresses to features
+	cFeatures := make(ClientFeatureMap) // mapping of server addresses to features
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cFeatures[res.Address] = featureResult{nil, res.Err}
+			cFeatures[res.Address] = FeatureResult{nil, res.Err}
 			continue
 		}
 
@@ -135,7 +135,7 @@ func (c *connList) ListFeatures() cFeatureMap {
 				FeatureMap{}, res.Value)
 		}
 
-		cFeatures[res.Address] = featureResult{fMap, err}
+		cFeatures[res.Address] = FeatureResult{fMap, err}
 	}
 
 	return cFeatures

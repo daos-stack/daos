@@ -56,8 +56,53 @@ func sprintConns(addrs client.Addresses, eMap client.ResultMap) (out string) {
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
-func checkAndFormat(i interface{}) string {
-	s, err := common.StructsToString(i)
+// unpackFormat takes a map of addresses to result type and prints either
+// decoded struct or provided error.
+func unpackFormat(i interface{}) string {
+	decoded := make(map[string]interface{})
+
+	switch v := i.(type) {
+	case client.ClientFeatureMap:
+		for addr, res := range v {
+			if res.Err != nil {
+				decoded[addr] = res.Err.Error()
+				continue
+			}
+
+			decoded[addr] = res.Fm
+		}
+	case client.ClientNvmeMap:
+		for addr, res := range v {
+			if res.Err != nil {
+				decoded[addr] = res.Err.Error()
+				continue
+			}
+
+			decoded[addr] = res.Ctrlrs
+		}
+	case client.ClientScmMap:
+		for addr, res := range v {
+			if res.Err != nil {
+				decoded[addr] = res.Err.Error()
+				continue
+			}
+
+			decoded[addr] = res.Mms
+		}
+	case client.ResultMap:
+		for addr, res := range v {
+			if res.Err != nil {
+				decoded[addr] = res.Err.Error()
+				continue
+			}
+
+			decoded[addr] = "Success!"
+		}
+	default:
+		fmt.Printf("unknown format %#v\n", i)
+	}
+
+	s, err := common.StructsToString(decoded)
 	if err != nil {
 		return fmt.Sprintf(
 			"Unable to YAML encode response for %%[1]ss! (%s)\n", err)

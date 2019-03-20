@@ -54,7 +54,7 @@ func (k *KillRankSvcCmd) Execute(args []string) error {
 	if len(errors) == 0 {
 		fmt.Println("Kill Rank succeeding on all active connections!")
 	} else {
-		fmt.Printf(checkAndFormat(errors), "Kill Rank command failures")
+		fmt.Printf(unpackFormat(errors), "Kill Rank command failures")
 	}
 
 	// exit immediately to avoid continuation of main

@@ -65,8 +65,8 @@ type Connect interface {
 	// from stored. Adds failure to failure map and returns active.
 	GetActiveConns(ResultMap) (Addresses, ResultMap)
 	ClearConns() ResultMap
-	ListFeatures() cFeatureMap
-	ListStorage() (cNvmeMap, cScmMap)
+	ListFeatures() ClientFeatureMap
+	ListStorage() (ClientNvmeMap, ClientScmMap)
 	KillRank(uuid string, rank uint32) ResultMap
 }
 

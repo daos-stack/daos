@@ -25,7 +25,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 
@@ -36,10 +35,11 @@ import (
 )
 
 var (
-	addresses = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features  = []*pb.Feature{MockFeaturePB()}
-	ctrlrs    = NvmeControllers{MockControllerPB("")}
-	modules   = ScmModules{MockModulePB()}
+	addresses  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
+	features   = []*pb.Feature{MockFeaturePB()}
+	ctrlrs     = NvmeControllers{MockControllerPB("")}
+	modules    = ScmModules{MockModulePB()}
+	exampleErr = errors.New("something went wrong")
 )
 
 func init() {
@@ -59,13 +59,13 @@ func TestHasConnection(t *testing.T) {
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}},
-			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, errors.New("test")}},
-			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\nNo active connections!",
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\nNo active connections!",
 		},
 	}
 	for _, tt := range shelltests {
@@ -86,13 +86,13 @@ func TestSprintConns(t *testing.T) {
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}},
-			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, errors.New("test")}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, errors.New("test")}},
-			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\n",
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\n",
 		},
 	}
 	for _, tt := range shelltests {
@@ -112,24 +112,22 @@ func TestCheckSprint(t *testing.T) {
 	}{
 		{
 			NewClientFM(features, addresses),
-			fmt.Sprintf(
-				"Listing %%[1]ss on connected storage servers:\n%s\n",
-				marshal(NewClientFM(features, addresses))),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n  burn-name: category nvme, run workloads on device to test\n1.2.3.5:10001:\n  burn-name: category nvme, run workloads on device to test\n\n\n",
 		},
 		{
 			NewClientNvme(ctrlrs, addresses),
-			fmt.Sprintf(
-				"Listing %%[1]ss on connected storage servers:\n%s\n",
-				marshal(NewClientNvme(ctrlrs, addresses))),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- id: 12345\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- id: 12345\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n\n\n",
 		},
 		{
 			NewClientScm(modules, addresses),
-			fmt.Sprintf(
-				"Listing %%[1]ss on connected storage servers:\n%s\n",
-				marshal(NewClientScm(modules, addresses))),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n1.2.3.5:10001:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n\n\n",
+		},
+		{
+			ResultMap{"1.2.3.4:10000": ChanResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ChanResult{"1.2.3.5:10001", nil, exampleErr}},
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, checkAndFormat(tt.m), tt.out, "bad output")
+		AssertEqual(t, unpackFormat(tt.m), tt.out, "bad output")
 	}
 }

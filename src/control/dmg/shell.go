@@ -66,7 +66,7 @@ func setupShell() *ishell.Shell {
 		Help: "Command to retrieve supported management features on connected servers",
 		Func: func(c *ishell.Context) {
 			c.Println(hasConns(conns.GetActiveConns(nil)))
-			c.Printf(checkAndFormat(conns.ListFeatures()), "management feature")
+			c.Printf(unpackFormat(conns.ListFeatures()), "management feature")
 		},
 	})
 
@@ -79,10 +79,10 @@ func setupShell() *ishell.Shell {
 			cCtrlrs, cModules := conns.ListStorage()
 
 			c.Printf(
-				checkAndFormat(cCtrlrs),
+				unpackFormat(cCtrlrs),
 				"NVMe SSD controller and constituent namespace")
 
-			c.Printf(checkAndFormat(cModules), "SCM module")
+			c.Printf(unpackFormat(cModules), "SCM module")
 		},
 	})
 
@@ -115,7 +115,7 @@ func setupShell() *ishell.Shell {
 					"Kill Rank succeeding on all active connections!")
 			} else {
 				c.Printf(
-					checkAndFormat(errors),
+					unpackFormat(errors),
 					"Kill Rank command failures")
 			}
 		},

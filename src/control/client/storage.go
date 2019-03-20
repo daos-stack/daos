@@ -33,31 +33,31 @@ import (
 	"golang.org/x/net/context"
 )
 
-// nvmeResult contains results and error of a request
-type nvmeResult struct {
-	cs NvmeControllers
-	e  error
+// NvmeResult contains results and error of a request
+type NvmeResult struct {
+	Ctrlrs NvmeControllers
+	Err    error
 }
 
-// scmResult contains results and error of a request
-type scmResult struct {
-	mms ScmModules
-	e   error
+// ScmResult contains results and error of a request
+type ScmResult struct {
+	Mms ScmModules
+	Err error
 }
 
 // storageResult container for results from multiple storage subsystems queries.
 type storageResult struct {
-	nvme nvmeResult
-	scm  scmResult
+	nvme NvmeResult
+	scm  ScmResult
 }
 
-// cNvmeMap is an alias for query results of NVMe controllers (and
+// ClientNvmeMap is an alias for query results of NVMe controllers (and
 // any residing namespaces) on connected servers keyed on address.
-type cNvmeMap map[string]nvmeResult
+type ClientNvmeMap map[string]NvmeResult
 
-// cScmMap is an alias for query results of SCM modules installed
+// ClientScmMap is an alias for query results of SCM modules installed
 // on connected servers keyed on address.
-type cScmMap map[string]scmResult
+type ClientScmMap map[string]ScmResult
 
 // listNvmeCtrlrs returns NVMe controllers in protobuf format.
 func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
@@ -115,20 +115,20 @@ func listStorageRequest(mc Control, ch chan ChanResult) {
 	sRes := storageResult{}
 
 	ctrlrs, err := mc.listNvmeCtrlrs()
-	sRes.nvme = nvmeResult{ctrlrs, err}
+	sRes.nvme = NvmeResult{ctrlrs, err}
 
 	mms, err := mc.listScmModules()
-	sRes.scm = scmResult{mms, err}
+	sRes.scm = ScmResult{mms, err}
 
 	ch <- ChanResult{mc.getAddress(), sRes, nil} // result.Err is ignored
 }
 
 // ListStorage returns locally-attached nonvolatile storage devices for each
 // connected server.
-func (c *connList) ListStorage() (cNvmeMap, cScmMap) {
+func (c *connList) ListStorage() (ClientNvmeMap, ClientScmMap) {
 	cResults := c.makeRequests(listStorageRequest)
-	cCtrlrs := make(cNvmeMap) // mapping of server address to NVMe SSDs
-	cModules := make(cScmMap) // mapping of server address to SCM modules
+	cCtrlrs := make(ClientNvmeMap) // mapping of server address to NVMe SSDs
+	cModules := make(ClientScmMap) // mapping of server address to SCM modules
 
 	for _, res := range cResults {
 		// we want to extract obj regardless of error as may only refer
@@ -139,8 +139,8 @@ func (c *connList) ListStorage() (cNvmeMap, cScmMap) {
 				"type assertion failed, wanted %+v got %+v",
 				storageResult{}, res.Value)
 
-			cCtrlrs[res.Address] = nvmeResult{nil, err}
-			cModules[res.Address] = scmResult{nil, err}
+			cCtrlrs[res.Address] = NvmeResult{nil, err}
+			cModules[res.Address] = ScmResult{nil, err}
 			continue
 		}
 

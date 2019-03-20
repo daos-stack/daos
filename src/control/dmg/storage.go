@@ -48,10 +48,10 @@ func (s *ListStorCmd) Execute(args []string) error {
 	cCtrlrs, cModules := conns.ListStorage()
 
 	fmt.Printf(
-		checkAndFormat(cCtrlrs),
+		unpackFormat(cCtrlrs),
 		"NVMe SSD controller and constituent namespace")
 
-	fmt.Printf(checkAndFormat(cModules), "SCM module")
+	fmt.Printf(unpackFormat(cModules), "SCM module")
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)

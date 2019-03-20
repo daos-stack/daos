@@ -73,34 +73,34 @@ func newMockControl(
 	return &mockControl{address, state, features, ctrlrs, modules}, nil
 }
 
-// NewClientFM provides a mock cFeatureMap for testing.
-func NewClientFM(features []*pb.Feature, addrs Addresses) cFeatureMap {
-	cf := make(cFeatureMap)
+// NewClientFM provides a mock ClientFeatureMap for testing.
+func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
+	cf := make(ClientFeatureMap)
 	for _, addr := range addrs {
 		fMap := make(FeatureMap)
 		for _, f := range features {
 			fMap[f.Fname.Name] = fmt.Sprintf(
 				"category %s, %s", f.Category.Category, f.Description)
 		}
-		cf[addr] = featureResult{fMap, nil}
+		cf[addr] = FeatureResult{fMap, nil}
 	}
 	return cf
 }
 
-// NewClientNvme provides a mock cNvmeMap for testing.
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) cNvmeMap {
-	cMap := make(cNvmeMap)
+// NewClientNvme provides a mock ClientNvmeMap for testing.
+func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
+	cMap := make(ClientNvmeMap)
 	for _, addr := range addrs {
-		cMap[addr] = nvmeResult{ctrlrs, nil}
+		cMap[addr] = NvmeResult{ctrlrs, nil}
 	}
 	return cMap
 }
 
-// NewClientScm provides a mock cScmMap for testing.
-func NewClientScm(mms ScmModules, addrs Addresses) cScmMap {
-	cMap := make(cScmMap)
+// NewClientScm provides a mock ClientScmMap for testing.
+func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
+	cMap := make(ClientScmMap)
 	for _, addr := range addrs {
-		cMap[addr] = scmResult{mms, nil}
+		cMap[addr] = ScmResult{mms, nil}
 	}
 	return cMap
 }
