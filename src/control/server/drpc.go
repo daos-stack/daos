@@ -33,7 +33,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var sockFileName = "daos_server.sock"
+const sockFileName = "daos_server.sock"
 
 func getDrpcClientSocket(sockDir string) string {
 	return filepath.Join(sockDir, "daos_io_server.sock")

@@ -95,13 +95,13 @@ Operations on NVMe SSD devices are performed using [go-spdk bindings](./go-spdk/
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
 
-![Demo: List NVMe Controllers and Namespaces](./media/daosshellnamespaces.svg)
+![Demo: List NVMe Controllers and Namespaces](/doc/graph/daosshellnamespaces.svg)
 
 ### NVMe Controller Firmware Update
 
 The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
 
-![Demo: Updating NVMe Controller Firmware](./media/daosshellfwupdate.svg)
+![Demo: Updating NVMe Controller Firmware](/doc/graph/daosshellfwupdate.svg)
 
 ### NVMe Controller Burn-in Validation
 
@@ -119,35 +119,35 @@ Burn-in validation is performed using the [fio tool](https://github.com/axboe/fi
 
 First a view of software component architecture:
 
-![Architecture diagram](./media/control_architecture.PNG)
+![Architecture diagram](/doc/graph/system_architecture.png)
 
 Then communication interfaces:
 
 ```
-    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-    в”‚  Go Shell     в”‚ в”‚ Other Client  в”‚
-    в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв” в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-            в”‚                 в”‚
-            в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-                     в–ј
-          в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-          в”‚    Go daos_server   в”‚----|
-          в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”    |
-                     в”‚               |
-                     в–ј               |
-       в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ |
-       в”‚     Unix Domain Socket    в”‚ |
-       в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв” |
-                     в”‚               |
-                     в–ј               |
-          в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ    |
-          в”‚   C daos_io_server  в”‚    |
-          в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”    |
-                     в”‚               |
-                     в–ј               |
-           в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ    |
-           в”‚ Persistent Storage в”‚<---|
-           в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+    ввввввввввввввввв ввввввввввввввввв
+    в  Go Shell     в в Other Client  в
+    ввввввввввввввввв ввввввввввввввввв
+            в                 в
+            вввввввввв¬ввввввввв
+                     вј
+          ввввввввввввввввввввввв
+          в    Go daos_server   в----|
+          ввввввввввввввввввввввв    |
+                     в               |
+                     вј               |
+       ввввввввввввввввввввввввввввв |
+       в     Unix Domain Socket    в |
+       ввввввввввввввввввввввввввввв |
+                     в               |
+                     вј               |
+          ввввввввввввввввввввввв    |
+          в   C daos_io_server  в    |
+          ввввввввввввввввввввввв    |
+                     в               |
+                     вј               |
+           вввввввввввввввввввввв    |
+           в Persistent Storage в<---|
+           вввввввввввввввввввввв
 ```
 TODO: include details of `daos_agent` interaction
 
