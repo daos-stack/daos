@@ -41,15 +41,12 @@ import (
 )
 
 func main() {
-	var err error
-	defer func() {
-		status := 0
-		if err != nil {
-			status = 1
-		}
-		os.Exit(status)
-	}()
+	if serverMain() != nil {
+		os.Exit(1)
+	}
+}
 
+func serverMain() error {
 	runtime.GOMAXPROCS(1)
 
 	// Bootstrap default logger before config options get set.
@@ -61,16 +58,16 @@ func main() {
 	p.SubcommandsOptional = true
 
 	// Parse commandline flags which override options loaded from config.
-	_, err = p.Parse()
+	_, err := p.Parse()
 	if err != nil {
-		return
+		return err
 	}
 
 	// Parse configuration file and load values.
 	config, err := loadConfigOpts(opts)
 	if err != nil {
 		log.Errorf("Failed to load config options: %s", err)
-		return
+		return err
 	}
 
 	// Set log level mask for default logger from config.
@@ -88,7 +85,7 @@ func main() {
 		f, err := common.AppendFile(config.ControlLogFile)
 		if err != nil {
 			log.Errorf("Failure creating log file: %s", err)
-			return
+			return err
 		}
 		defer f.Close()
 
@@ -115,7 +112,7 @@ func main() {
 		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		log.Errorf("Failed to init ControlService: %s", err)
-		return
+		return err
 	}
 	mgmtControlServer.Setup()
 	defer mgmtControlServer.Teardown()
@@ -125,7 +122,7 @@ func main() {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Errorf("Unable to listen on management interface: %s", err)
-		return
+		return err
 	}
 
 	// TODO: This will need to be extended to take certificate information for
@@ -145,7 +142,7 @@ func main() {
 	// Format the unformatted servers.
 	if err = formatIosrvs(&config, false); err != nil {
 		log.Errorf("Failed to format servers: %s", err)
-		return
+		return err
 	}
 
 	// Create a channel to retrieve signals.
@@ -159,7 +156,7 @@ func main() {
 	// Process configurations parameters for Nvme.
 	if err = config.parseNvme(); err != nil {
 		log.Errorf("NVMe config could not be processed: %s", err)
-		return
+		return err
 	}
 
 	// Only start single io_server for now.
@@ -167,15 +164,15 @@ func main() {
 	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
 		log.Errorf("Failed to load server: %s", err)
-		return
+		return err
 	}
 	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
 		log.Errorf("Failed to set up dRPC: %s", err)
-		return
+		return err
 	}
 	if err = iosrv.start(); err != nil {
 		log.Errorf("Failed to start server: %s", err)
-		return
+		return err
 	}
 
 	extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
@@ -183,7 +180,7 @@ func main() {
 		log.Errorf(
 			"Unable to determine if management service replica: %s",
 			err)
-		return
+		return err
 	}
 	log.Debugf("DAOS server listening on %s%s", addr, extraText)
 
@@ -192,4 +189,6 @@ func main() {
 	if err != nil {
 		log.Errorf("DAOS I/O server exited with error: %s", err)
 	}
+
+	return err
 }
