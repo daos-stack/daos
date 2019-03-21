@@ -59,7 +59,8 @@ type ClientNvmeMap map[string]NvmeResult
 // on connected servers keyed on address.
 type ClientScmMap map[string]ScmResult
 
-// listNvmeCtrlrs returns NVMe controllers in protobuf format.
+// listNvmeCtrlrs returns a list of all discovered NVMe controllers installed on
+// a remote server, in protobuf message format.
 func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -84,7 +85,8 @@ func (c *control) listNvmeCtrlrs() (ctrlrs NvmeControllers, err error) {
 	return
 }
 
-// listScmModules prints all discovered Storage Class Memory modules installed.
+// listScmModules returns a list of all discovered Storage Class Memory modules
+// installed a the remote server, in protobuf message format.
 func (c *control) listScmModules() (mms ScmModules, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -110,7 +112,7 @@ func (c *control) listScmModules() (mms ScmModules, err error) {
 }
 
 // listStorageRequest is to be called as a goroutine and returns result
-// containing locally attached NVMe and SCM storage devices over channel.
+// containing remote server's storage device details over channel.
 func listStorageRequest(mc Control, ch chan ClientResult) {
 	sRes := storageResult{}
 
@@ -123,8 +125,8 @@ func listStorageRequest(mc Control, ch chan ClientResult) {
 	ch <- ClientResult{mc.getAddress(), sRes, nil} // result.Err is ignored
 }
 
-// ListStorage returns locally-attached nonvolatile storage devices for each
-// connected server.
+// ListStorage returns details of nonvolatile storage devices attached to each
+// remote server.
 func (c *connList) ListStorage() (ClientNvmeMap, ClientScmMap) {
 	cResults := c.makeRequests(listStorageRequest)
 	cCtrlrs := make(ClientNvmeMap) // mapping of server address to NVMe SSDs
