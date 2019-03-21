@@ -43,7 +43,12 @@
 #include <fuse3/fuse_lowlevel.h>
 
 #define D_LOGFAC DD_FAC(cn)
+
 #include "log.h"
+
+#include "daos_fs.h"
+#include "daos_api.h"
+
 #include <cart/api.h>
 #include <gurt/common.h>
 #include <signal.h>
@@ -694,7 +699,6 @@ static void show_help(const char *prog)
 
 int main(int argc, char **argv)
 {
-	char *cnss = "CNSS";
 	char *plugin_file = NULL;
 	const char *prefix = NULL;
 	char *version = iof_get_version();
@@ -854,7 +858,7 @@ int main(int argc, char **argv)
 		       service_process_set ? "service" : "client");
 
 	/*initialize CaRT*/
-	ret = crt_init(cnss, service_process_set ? CRT_FLAG_BIT_SERVER : 0);
+	ret = daos_init();
 	if (ret) {
 		IOF_TRACE_ERROR(cnss_info,
 				"crt_init failed with ret = %d", ret);

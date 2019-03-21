@@ -37,6 +37,8 @@
 extern "C" {
 #endif
 
+#include <dirent.h>
+
 #define DFS_MAX_PATH 128
 #define DFS_MAX_FSIZE (~0ULL)
 

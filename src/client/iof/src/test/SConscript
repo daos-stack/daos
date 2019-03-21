@@ -130,9 +130,9 @@ def scons():
     il_test += build_static_tests(lfenv)
 
     tenv.AppendUnique(OBJPREFIX='s_')
-    tenv.AppendUnique(LIBS=['ioil'])
+    tenv.AppendUnique(LIBS=['ioil', 'daos'])
     lfenv.AppendUnique(OBJPREFIX='s_')
-    lfenv.AppendUnique(LIBS=['ioil'])
+    lfenv.AppendUnique(LIBS=['ioil', 'daos'])
 
     for test in IOIL_TEST_SRC:
         il_test += tenv.Program(test)

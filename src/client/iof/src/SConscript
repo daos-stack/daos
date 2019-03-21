@@ -173,7 +173,7 @@ def scons():
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     tenv.AppendUnique(CPPPATH=['common/include'])
     tenv.AppendUnique(CPPPATH=['include'])
-    tenv.AppendUnique(LIBS='pthread')
+    tenv.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
     prereqs.require(tenv, 'cart')
 
@@ -200,9 +200,8 @@ def scons():
     cenv.AppendUnique(CPPPATH=['cnss'])
     cenv.AppendUnique(CPPPATH=['ioc'])
 
-    if env.get('PLATFORM') != 'darwin':
-        cenv.AppendUnique(LIBS='dl')
-
+    cenv.AppendUnique(LIBS=['dfs', 'dl'])
+    
     prereqs.require(cenv, 'fuse')
 
     cnss_obj = []

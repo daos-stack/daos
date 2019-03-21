@@ -42,26 +42,7 @@
 
 #include <inttypes.h>
 
-#define D_LOG_USE_V2
-#ifndef DD_FAC
-#define DD_FAC(name) iof_##name##_logfac
-#endif
-#ifndef D_LOGFAC
-#define D_LOGFAC DD_FAC(iof)
-#endif
-
-#include <gurt/debug_setup.h>
-
-#define IOF_FOREACH_LOG_FAC(ACTION, arg) \
-	ACTION(iof, iof, arg)            \
-	ACTION(il,  ioil, arg)           \
-	ACTION(cli, client, arg)         \
-	ACTION(cn, cnss, arg)            \
-	ACTION(ctrl, ctrlfs, arg)        \
-	ACTION(ion, ionss, arg)          \
-	ACTION(test,  test, arg)
-
-IOF_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, D_NOOP)
+#include <daos/common.h>
 
 #include <gurt/debug.h>
 

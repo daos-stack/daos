@@ -45,7 +45,7 @@
 #define SHOW_FLAG(HANDLE, FLAGS, FLAG)					\
 	do {								\
 		IOF_TRACE_INFO(HANDLE, "Flag " #FLAG " %s",		\
-			FLAGS & FLAG ? "enabled" : "disabled");		\
+			(FLAGS & FLAG) ? "enabled" : "disabled");	\
 		FLAGS &= ~FLAG;						\
 	} while (0)
 

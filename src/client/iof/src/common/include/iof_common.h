@@ -38,6 +38,8 @@
 #ifndef IOF_COMMON_H
 #define IOF_COMMON_H
 
+#include "log.h"
+
 #include <sys/stat.h>
 #include <cart/api.h>
 #include <gurt/common.h>

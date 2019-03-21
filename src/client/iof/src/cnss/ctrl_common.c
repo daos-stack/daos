@@ -39,6 +39,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+
+#include <daos/common.h>
+
 #include <gurt/dlog.h>
 #include <gurt/common.h>
 #include "ctrl_common.h"

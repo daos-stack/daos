@@ -40,21 +40,8 @@
 #include "log.h"
 #include <gurt/common.h>
 
-
-IOF_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, D_NOOP)
-
 void iof_log_init(void)
 {
-	int rc;
-
-	d_log_init();
-
-	rc = D_LOG_REGISTER_FAC(IOF_FOREACH_LOG_FAC);
-	if (rc != 0) {
-		D_PRINT_ERR("Could not register iof log facilities: rc = %d\n",
-			    rc);
-		return;
-	}
 }
 
 void iof_log_close(void)
