@@ -96,15 +96,17 @@ static int check_destroy_foo(void *arg)
 	return 0;
 }
 
+#define TEST_READ_LEN 128
+
 static int check_file_read(const char *fname, const char *expected,
 			   const char *source, int line)
 {
-	char buf[IOF_CTRL_MAX_LEN];
+	char buf[TEST_READ_LEN];
 	int rc;
 
 	IOF_LOG_INFO("Run check at %s:%d\n", source, line);
 
-	rc = iof_ctrl_read_str(buf, IOF_CTRL_MAX_LEN, fname);
+	rc = iof_ctrl_read_str(buf, TEST_READ_LEN, fname);
 
 	if (rc != 0) {
 		printf("Error reading %s at %s:%d.  (rc = %d, errno = %s)\n",

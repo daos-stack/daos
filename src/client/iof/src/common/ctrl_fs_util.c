@@ -123,7 +123,7 @@ static int open_stream_for_write(FILE **fp, const char *path)
 int iof_ctrl_read_str(char *str, int len, const char *path)
 {
 	char *last;
-	char buf[IOF_CTRL_MAX_LEN];
+	char *buf;
 	ssize_t bytes_read;
 	int fd;
 	int ret;
@@ -133,10 +133,17 @@ int iof_ctrl_read_str(char *str, int len, const char *path)
 	if (ret != 0)
 		return ret;
 
+	buf = malloc(IOF_CTRL_MAX_LEN);
+	if (!buf) {
+		return -IOF_CTRL_IO_FAILED;
+	}
+
 	bytes_read = read(fd, buf, IOF_CTRL_MAX_LEN);
 
-	if (bytes_read == -1)
+	if (bytes_read == -1) {
+		free(buf);
 		return -IOF_CTRL_IO_FAILED;
+	}
 	buflen = IOF_CTRL_MAX_LEN;
 	buf[buflen - 1] = 0;
 
@@ -162,6 +169,7 @@ int iof_ctrl_read_str(char *str, int len, const char *path)
 
 	close(fd);
 
+	free(buf);
 	return ret;
 }
 

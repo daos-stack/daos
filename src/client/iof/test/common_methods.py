@@ -753,7 +753,7 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
 
         test_dir = os.path.join(self.import_dir, 'many')
         files = []
-        for x in range(0, 100):
+        for x in range(0, 15):
             this_file = 'file_%d' % x
             filename = os.path.join(test_dir, this_file)
             fd = open(filename, 'w')
@@ -817,6 +817,11 @@ class CnssChecks(iof_ionss_verify.IonssVerify,
         """Test mdtest"""
         icount = 10
         iiters = 3
+
+        # This test is resource constrained and test VMs are small so do not
+        # run under valgrind.
+        if self.cnss_valgrind:
+            self.skipTest("Does not like valgrind")
 
         self.htable_bug = True
 

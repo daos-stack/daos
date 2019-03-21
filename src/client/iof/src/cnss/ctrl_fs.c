@@ -835,7 +835,7 @@ static void cleanup_ctrl_fs(void)
 
 static int find_path_node(const char *path, struct ctrl_node **node)
 {
-	char buf[PATH_MAX];
+	char *buf;
 	char *token;
 	char *cursor;
 	struct ctrl_node *current_node;
@@ -848,8 +848,13 @@ static int find_path_node(const char *path, struct ctrl_node **node)
 
 	current_node = &ctrl_fs.root;
 
-	strncpy(buf, path, PATH_MAX);
-	buf[PATH_MAX - 1] = 0;
+	D_STRNDUP(buf, path, PATH_MAX);
+	if (!buf) {
+		/* It seems that this code mixes errno and d_errno so use a
+		 * propper errno in this case.
+		 */
+		return -ENOMEM;
+	}
 
 	token = strtok_r(buf, "/", &cursor);
 
@@ -857,14 +862,17 @@ static int find_path_node(const char *path, struct ctrl_node **node)
 	while (token != NULL) {
 		rc = find_node(current_node, &current_node, token, false);
 
-		if (rc != 0)
+		if (rc != 0) {
+			D_FREE(buf);
 			return rc;
+		}
 
 		token = strtok_r(NULL, "/", &cursor);
 	}
 
 	*node = current_node;
 
+	D_FREE(buf);
 	return 0;
 }
 
@@ -1072,7 +1080,7 @@ static int ctrl_read(const char *fname,
 {
 	struct open_handle *handle = (struct open_handle *)finfo->fh;
 	struct ctrl_node *node = handle->node;
-	char mybuf[IOF_CTRL_MAX_LEN];
+	char *mybuf = NULL;
 	const char *payload;
 	size_t len;
 	int rc;
@@ -1097,6 +1105,10 @@ static int ctrl_read(const char *fname,
 			IOF_LOG_ERROR("No callback reading ctrl variable");
 			return -EIO;
 		}
+		D_ALLOC(mybuf, IOF_CTRL_MAX_LEN);
+		if (!mybuf) {
+			return -ENOENT;
+		}
 		rc = read_cb(mybuf, IOF_CTRL_MAX_LEN, cb_arg);
 		if (rc != CNSS_SUCCESS) {
 			IOF_LOG_ERROR("Error reading ctrl variable");
@@ -1104,7 +1116,10 @@ static int ctrl_read(const char *fname,
 		}
 		payload = mybuf;
 	} else if (node->ctrl_type == CTRL_TRACKER) {
-		sprintf(mybuf, "%d", handle->value);
+		D_ASPRINTF(mybuf, "%d", handle->value);
+		if (!mybuf) {
+			return -ENOENT;
+		}
 		payload = mybuf;
 	} else {
 		IOF_LOG_WARNING("Read not supported for ctrl node %s",
@@ -1127,6 +1142,7 @@ static int ctrl_read(const char *fname,
 		handle->st_size = len;
 	}
 
+	D_FREE(mybuf);
 	return len;
 }
 
@@ -1138,7 +1154,7 @@ static int ctrl_write(const char *fname,
 {
 	struct open_handle *handle = (struct open_handle *)finfo->fh;
 	struct ctrl_node *node = handle->node;
-	char mybuf[IOF_CTRL_MAX_LEN];
+	char *mybuf;
 	int rc;
 
 	IOF_LOG_INFO("ctrl fs write called for %s", node->name);
@@ -1174,9 +1190,14 @@ static int ctrl_write(const char *fname,
 			if (len > (IOF_CTRL_MAX_LEN - 1))
 				mylen = IOF_CTRL_MAX_LEN - 1;
 
+			D_ALLOC(mybuf, mylen + 1);
+			if (!mybuf) {
+				return -ENOMEM;
+			}
 			memcpy(mybuf, buf, mylen);
 			mybuf[mylen] = 0;
 			rc = write_cb(mybuf, cb_arg);
+			D_FREE(mybuf);
 			if (rc != CNSS_SUCCESS) {
 				IOF_LOG_ERROR("Error writing ctrl variable");
 				return -rc;

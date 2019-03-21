@@ -50,7 +50,7 @@ except ImportError:
 
 IOF_VERSION = "0.0.1"
 
-# Desired compiler flags that will be used if the compiler supports them.
+# Desired compiler flags that will be used if the compiler supports them
 DESIRED_FLAGS = ['-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wunknown-warning-option',
@@ -58,49 +58,20 @@ DESIRED_FLAGS = ['-Wno-missing-braces',
                  '-Wshadow',
                  '-Wno-gnu-zero-variadic-macro-arguments']
 
-def save_build_info(env, prereqs, platform):
-    """Save the build information"""
-
-    build_info = prereqs.get_build_info()
-
-    #Save the build info locally
-    json_build_vars = '.build_vars-%s.json' % platform
-    sh_build_vars = '.build_vars-%s.sh' % platform
-    build_info.gen_script(sh_build_vars)
-    build_info.save(json_build_vars)
-
-    #Install the build info to the testing directory
-    env.InstallAs('$PREFIX/TESTING/.build_vars.sh',
-                  sh_build_vars)
-    env.InstallAs('$PREFIX/TESTING/.build_vars.json',
-                  json_build_vars)
-
-def run_checks(env, prereqs, platform):
+def run_checks(env, prereqs):
     """Run all configure time checks"""
 
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
     config = Configure(cenv)
-    try:
-        cmd = 'setfattr'
-        if platform == 'Darwin':
-            cmd = 'xattr'
 
-        if not config.CheckProg(cmd):
-            print('%s command not installed, extended attribute test ' \
-               'will not work' % cmd)
-
-    except AttributeError:
-        print('CheckProg not present')
+    if not config.CheckProg('setfattr'):
+        print('%s command not installed, extended attribute test ' \
+              'will not work' % cmd)
 
     if config.CheckHeader('stdatomic.h'):
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
 
-    if not config.CheckHeader('yaml.h'):
-        print('libyaml-dev package required')
-        Exit(2)
-
-    prereqs.require(cenv, 'cart')
     config.Finish()
 
     env.AppendIfSupported(CFLAGS=DESIRED_FLAGS)
@@ -110,26 +81,24 @@ def run_checks(env, prereqs, platform):
 
 def scons():
     """Scons function"""
-    platform = os.uname()[0]
 
     Import('env', 'prereqs')
 
-    arch_dir = 'build/%s' % platform
-    VariantDir(arch_dir, '.', duplicate=0)
+    VariantDir('build', '.', duplicate=0)
 
     prereqs.require(["cart", "fuse", "ompi"])
-    
-    Export('env prereqs IOF_VERSION')
 
+    Export('env prereqs IOF_VERSION')
+    
     env.Append(CFLAGS=['-g', '-Wall'])
 
     if not env.GetOption('clean'):
-        run_checks(env, prereqs, platform)
+        run_checks(env, prereqs)
 
     env.Alias('install', "$PREFIX")
 
-    SConscript('%s/src/SConscript' % arch_dir)
-    SConscript('%s/test/SConscript' % arch_dir)
+    SConscript('build/src/SConscript')
+    SConscript('build/test/SConscript')
 
     env.Install('$PREFIX/etc', ['utils/memcheck-iof.supp'])
 

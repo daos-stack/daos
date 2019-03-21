@@ -121,7 +121,7 @@ int ioil_initialize_fd_table(int max_fds)
 static int find_projections(void)
 {
 	struct iof_service_group *grp_info = &ionss_grp;
-	char buf[IOF_CTRL_MAX_LEN];
+	char *buf;
 	char tmp[BUFSIZE];
 	int rc;
 	int i = 0;
@@ -149,9 +149,15 @@ static int find_projections(void)
 
 	snprintf(tmp, BUFSIZE, "iof/ionss/%d/name", i);
 
+	D_ALLOC(buf, IOF_CTRL_MAX_LEN);
+	if (!buf) {
+		return 1;
+	}
+
 	rc = iof_ctrl_read_str(buf, IOF_CTRL_MAX_LEN, tmp);
 	if (rc != 0) {
 		IOF_LOG_INFO("Could not get ionss name, rc = %d", rc);
+		D_FREE(buf);
 		return 1;
 	}
 
@@ -162,6 +168,7 @@ static int find_projections(void)
 	if (rc != 0) {
 		IOF_LOG_INFO("Could not attach to ionss %s, rc = %d",
 			     buf, rc);
+		D_FREE(buf);
 		return 1;
 	}
 
@@ -169,6 +176,7 @@ static int find_projections(void)
 	if (rc != 0) {
 		IOF_LOG_ERROR("Could not initialize failover, rc = %d",
 			      rc);
+		D_FREE(buf);
 		return 1;
 	}
 
@@ -178,6 +186,7 @@ static int find_projections(void)
 	rc = iof_ctrl_read_uint32(&rank, tmp);
 	if (rc != 0) {
 		IOF_LOG_ERROR("Could not read psr_rank, rc = %d", rc);
+		D_FREE(buf);
 		return 1;
 	}
 
@@ -187,6 +196,7 @@ static int find_projections(void)
 	rc = iof_ctrl_read_uint32(&tag, tmp);
 	if (rc != 0) {
 		IOF_LOG_ERROR("Could not read psr_tag, rc = %d", rc);
+		D_FREE(buf);
 		return 1;
 	}
 	grp_info->psr_ep.ep_tag = tag;
@@ -196,12 +206,14 @@ static int find_projections(void)
 	rc = iof_ctrl_read_uint32(&projection_count, "iof/projection_count");
 	if (rc != 0) {
 		IOF_LOG_ERROR("Could not read projection count, rc = %d", rc);
+		D_FREE(buf);
 		return 1;
 	}
 
 	projections = calloc(projection_count, sizeof(*projections));
 	if (projections == NULL) {
 		IOF_LOG_ERROR("Could not allocate memory");
+		D_FREE(buf);
 		return 1;
 	}
 
@@ -216,6 +228,7 @@ static int find_projections(void)
 		rc = iof_ctrl_read_uint32(&proj->max_iov_write, tmp);
 		if (rc != 0) {
 			IOF_LOG_ERROR("Could not max_iov_write, rc = %d", rc);
+			D_FREE(buf);
 			return 1;
 		}
 
@@ -223,6 +236,7 @@ static int find_projections(void)
 		rc = iof_ctrl_read_uint32(&proj->max_write, tmp);
 		if (rc != 0) {
 			IOF_LOG_ERROR("Could not max_write, rc = %d", rc);
+			D_FREE(buf);
 			return 1;
 		}
 
@@ -230,6 +244,7 @@ static int find_projections(void)
 		proj->enabled = true;
 	}
 
+	D_FREE(buf);
 	return 0;
 }
 
@@ -301,7 +316,7 @@ static void init_links(void)
 
 static __attribute__((constructor)) void ioil_init(void)
 {
-	char buf[IOF_CTRL_MAX_LEN];
+	char *buf;
 	struct rlimit rlimit;
 	int rc;
 
@@ -332,9 +347,15 @@ static __attribute__((constructor)) void ioil_init(void)
 		return;
 	}
 
+	D_ALLOC(buf, IOF_CTRL_MAX_LEN);
+	if (!buf) {
+		return;
+	}
+
 	rc = iof_ctrl_read_str(buf, IOF_CTRL_MAX_LEN, "crt_protocol");
 	if (rc == 0)
 		setenv("CRT_PHY_ADDR_STR", buf, 1);
+	D_FREE(buf);
 
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	if (rc != 0) {

@@ -67,6 +67,8 @@ WARN_FUNCTIONS = ['crt_grp_lc_addr_insert',
                   'crt_ctx_epi_abort',
                   'crt_rpc_complete',
                   'crt_req_timeout_hdlr',
+                  'crt_req_hg_addr_lookup_cb',
+                  'crt_progress',
                   'crt_context_timeout_check']
 
 # Use a global variable here so show_line can remember previously reported

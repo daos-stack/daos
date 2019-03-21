@@ -268,13 +268,13 @@ class CommonTestSuite():
     def common_stop_process(self, proc):
         """wait for processes to terminate
 
-        Wait for up to 60 seconds for the process to die on it's own, then if
+        Wait for up to 120 seconds for the process to die on it's own, then if
         still running attept to kill it.
 
         Return the error code of the process, or -1 if the process was killed.
         """
         self.logger.info("Test: stopping processes :%s", proc.pid)
-        i = 60
+        i = 120
         procrtn = None
         while i:
             proc.poll()

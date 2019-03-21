@@ -71,8 +71,8 @@ char big_string[BUF_SIZE];
 
 static int init_suite(void)
 {
-	char buf1[IOF_CTRL_MAX_LEN];
-	char buf2[IOF_CTRL_MAX_LEN];
+	static char buf1[IOF_CTRL_MAX_LEN];
+	static char buf2[IOF_CTRL_MAX_LEN];
 	FILE *fp;
 	int mnt_num = 0;
 	int rc = CUE_SUCCESS;
@@ -142,16 +142,16 @@ static int clean_suite(void)
 
 static void gah_test(void)
 {
-	char buf[BUF_SIZE];
+	char *buf;
 	struct iof_gah_info gah_info;
 	int fd;
 	int rc;
 
 	WRITE_LOG("starting gah_test");
-	snprintf(buf, BUF_SIZE, "%s/ioil_test_file", mount_dir);
-	buf[BUF_SIZE - 1] = 0;
+	asprintf(&buf, "%s/ioil_test_file", mount_dir);
 
 	fd = open(buf, O_RDONLY);
+	free(buf);
 
 	CU_ASSERT_NOT_EQUAL(fd, -1);
 	if (fd == -1) {
@@ -237,7 +237,7 @@ static void do_write_tests(int fd, char *buf, size_t len)
 
 static void do_read_tests(const char *fname, size_t len)
 {
-	char buf[BUF_SIZE * 2];
+	char *buf;
 	char buf2[len + 1];
 	struct iovec iov[2];
 	ssize_t bytes;
@@ -247,8 +247,8 @@ static void do_read_tests(const char *fname, size_t len)
 	int rc;
 
 	WRITE_LOG("starting read test");
-	memset(buf, 0, sizeof(buf));
-	memset(buf2, 0, sizeof(buf2));
+	buf = calloc(2, BUF_SIZE);
+	CU_ASSERT_PTR_NOT_NULL(buf);
 
 	fd = open(fname, O_RDONLY);
 	printf("Opened %s, fd = %d\n", fname, fd);
@@ -274,7 +274,7 @@ static void do_read_tests(const char *fname, size_t len)
 	printf("Seek offset is %zd, expected 0\n", offset);
 	CU_ASSERT_EQUAL(offset, 0);
 
-	memset(buf, 0, sizeof(buf));
+	memset(buf, 0, BUF_SIZE * 2);
 
 	bytes = pread(fd, buf, len, len);
 	printf("Read %zd bytes, expected %zu\n", bytes, len);
@@ -286,7 +286,7 @@ static void do_read_tests(const char *fname, size_t len)
 	printf("Seek offset is %zd, expected 0\n", offset);
 	CU_ASSERT_EQUAL(offset, 0);
 
-	memset(buf, 0, sizeof(buf));
+	memset(buf, 0, BUF_SIZE * 2);
 
 	iov[0].iov_len = len;
 	iov[0].iov_base = buf2;
@@ -299,6 +299,8 @@ static void do_read_tests(const char *fname, size_t len)
 
 	CU_ASSERT_STRING_EQUAL(fname, buf);
 	CU_ASSERT_STRING_EQUAL(fname, buf2);
+
+	free(buf);
 
 	rc = close(fd);
 	printf("Closed file, rc = %d\n", rc);
@@ -386,7 +388,6 @@ static void do_misc_tests(const char *fname, size_t len)
 {
 	struct stat stat_info;
 	void *address;
-	char buf[BUF_SIZE];
 	FILE *fp = NULL;
 	size_t items;
 	int rc;
@@ -395,8 +396,6 @@ static void do_misc_tests(const char *fname, size_t len)
 	int status;
 
 	WRITE_LOG("starting misc test");
-
-	memset(buf, 0, sizeof(buf));
 
 	rc = stat(fname, &stat_info);
 	CU_ASSERT_EQUAL_FATAL(rc, 0);
@@ -523,6 +522,8 @@ skip_mmap:
 	CU_ASSERT_EQUAL(status, IOF_IO_DIS_STREAM);
 
 	if (fp != NULL) {
+		char buf[16];
+
 		items = fread(buf, 1, 8, fp);
 		printf("Read %zd items, expected 8\n", items);
 		CU_ASSERT_EQUAL(items, 8);
@@ -573,14 +574,14 @@ skip_mmap:
 /* Simple sanity test to ensure low-level POSIX APIs work */
 void sanity(void)
 {
-	char buf[BUF_SIZE];
+	char *buf;
 	size_t len;
 	int fd;
 
 	fflush(stdout);
 	len = strlen(mount_dir);
-	snprintf(buf, BUF_SIZE - len, "%s/sanity", mount_dir);
-	buf[BUF_SIZE - 1] = 0;
+	asprintf(&buf, "%s/sanity", mount_dir);
+	CU_ASSERT_PTR_NOT_NULL(buf);
 
 	unlink(buf);
 	len = strlen(buf);
@@ -591,6 +592,7 @@ void sanity(void)
 	do_read_tests(buf, len);
 	do_misc_tests(buf, len);
 	do_large_io_test(buf, len);
+	free(buf);
 }
 
 int main(int argc, char **argv)

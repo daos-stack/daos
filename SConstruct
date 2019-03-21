@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
                  '-Wno-gnu-zero-variadic-macro-arguments',
-                 '-Wno-tautological-constant-out-of-range-compare']
+                 '-Wno-tautological-constant-out-of-range-compare',
+                 '-Wframe-larger-than=4096']
 
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
@@ -35,7 +36,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
-    env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    env.AppendIfSupported(CFLAGS=DESIRED_FLAGS)
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
