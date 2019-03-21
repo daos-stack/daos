@@ -39,15 +39,6 @@
 import os
 import sys
 
-# pylint: disable=no-member
-
-sys.path.insert(0, os.path.join(Dir('#').abspath, "scons_local"))
-try:
-    from prereq_tools import PreReqComponent
-except ImportError:
-    raise ImportError \
-          ("\'prereq_tools\' module not found; run \'git submodule update\'")
-
 IOF_VERSION = "0.0.1"
 
 # Desired compiler flags that will be used if the compiler supports them
@@ -58,14 +49,16 @@ DESIRED_FLAGS = ['-Wno-missing-braces',
                  '-Wshadow',
                  '-Wno-gnu-zero-variadic-macro-arguments']
 
-def run_checks(env, prereqs):
+def run_checks(env):
     """Run all configure time checks"""
 
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
     config = Configure(cenv)
 
-    if not config.CheckProg('setfattr'):
+    cmd = 'setfattr'
+
+    if not config.CheckProg(cmd):
         print('%s command not installed, extended attribute test ' \
               'will not work' % cmd)
 
@@ -89,11 +82,11 @@ def scons():
     prereqs.require(["cart", "fuse", "ompi"])
 
     Export('env prereqs IOF_VERSION')
-    
+
     env.Append(CFLAGS=['-g', '-Wall'])
 
     if not env.GetOption('clean'):
-        run_checks(env, prereqs)
+        run_checks(env)
 
     env.Alias('install', "$PREFIX")
 
