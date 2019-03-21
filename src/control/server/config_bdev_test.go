@@ -139,7 +139,7 @@ func TestParseBdev(t *testing.T) {
 		server.BdevList = tt.bdevList
 		server.BdevSize = tt.bdevSize
 		server.BdevNumber = tt.bdevNumber
-		config := newMockConfig(nil, "", tt.fileExists)
+		config := newMockConfig(nil, "", tt.fileExists, nil, nil, nil)
 		config.Servers = append(config.Servers, server)
 		err := config.parseNvme()
 		if tt.errMsg != "" {

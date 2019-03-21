@@ -42,10 +42,11 @@ type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
 	supportedFeatures FeatureMap
+	config            *configuration
 	drpc              drpc.DomainSocketClient
 }
 
-// Setup delegates to Storage implementation's Setup methods
+// Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
 	if err := c.nvme.Setup(); err != nil {
 		log.Debugf(
@@ -58,7 +59,7 @@ func (c *controlService) Setup() {
 	}
 }
 
-// Teardown delegates to Storage implementation's Teardown methods
+// Teardown delegates to Storage implementation's Teardown methods.
 func (c *controlService) Teardown() {
 	if err := c.nvme.Teardown(); err != nil {
 		log.Debugf(
@@ -69,6 +70,35 @@ func (c *controlService) Teardown() {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
+}
+
+// Format delegates to Storage implementation's Format methods.
+func (c *controlService) Format() error {
+	if c.config.FormatOverride {
+		return errors.New(
+			"Format() call unsupported when " +
+				"format_override set in server config file, ")
+	}
+
+	// TODO: execute in parallel across servers
+	for i, s := range c.config.Servers {
+		// wait for lock to be released when main is ready
+		s.FormatCond.L.Lock()
+		if err := c.nvme.Format(i); err != nil {
+			return errors.WithStack(err)
+		}
+
+		// pass external interface and relevant config params
+		if err := c.scm.Format(i); err != nil {
+			return errors.WithStack(err)
+		}
+
+		// storage subsystem format successful, signal to alert main.
+		s.FormatCond.Signal()
+		s.FormatCond.L.Unlock()
+	}
+
+	return nil
 }
 
 // loadInitData retrieves initial data from relative file path.
@@ -107,16 +137,16 @@ func newControlService(
 		return
 	}
 
-	nvmeStorage, err := newNvmeStorage(
-		config.NvmeShmID, config.NrHugepages)
+	nvmeStorage, err := newNvmeStorage(config)
 	if err != nil {
 		return
 	}
 
 	cs = &controlService{
 		nvme:              nvmeStorage,
-		scm:               newScmStorage(),
+		scm:               newScmStorage(config),
 		supportedFeatures: fMap,
+		config:            config,
 		drpc:              client,
 	}
 	return

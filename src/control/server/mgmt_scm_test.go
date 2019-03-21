@@ -26,12 +26,9 @@ package main
 import (
 	"testing"
 
-	. "github.com/daos-stack/go-ipmctl/ipmctl"
-	"google.golang.org/grpc"
-
 	. "github.com/daos-stack/daos/src/control/common"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"google.golang.org/grpc"
 )
 
 type mockListScmModulesServer struct {
@@ -49,11 +46,10 @@ func mockScmCS(ss *scmStorage) *controlService {
 }
 
 func TestListScmModules(t *testing.T) {
-	s := mockScmCS(
-		newMockScmStorage([]DeviceDiscovery{MockModule()}, true))
+	s := mockScmCS(defaultMockScmStorage())
 	m := MockModulePB()
-
 	mock := &mockListScmModulesServer{}
+
 	s.ListScmModules(nil, mock)
 
 	AssertEqual(t, len(s.scm.modules), 1, "unexpected number of modules")

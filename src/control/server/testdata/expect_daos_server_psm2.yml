@@ -15,6 +15,9 @@ servers:
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
   scm_mount: /mnt/daos
+  scm_class: ram
+  scm_list: []
+  scm_size: 6
   bdev_class: nvme
   bdev_list:
   - 0000:81:00.0
@@ -44,3 +47,5 @@ attach: ""
 systemmap: ""
 path: ../../../utils/config/examples/daos_server_psm2.yml
 nvmeshmid: 0
+formatcond:
+  l: {}

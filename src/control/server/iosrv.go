@@ -68,7 +68,19 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	return nil
 }
 
-func formatIosrv(config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+// formatIosrv will prepare DAOS IO servers and store relevant metadata.
+//
+// If superblock exists and reformat not explicitly requested, no
+// formatting of storage is required.
+//
+// If superblock does not exist, executing thread wait until administrator
+// takes action to format storage via client API over gRPC channel.
+//
+// If format_override has been set in config and superblock does not exist,
+// continue to create a new superblock without formatting.
+func formatIosrv(
+	config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+
 	op := "format"
 	if reformat {
 		op = "reformat"
@@ -85,6 +97,11 @@ func formatIosrv(config *configuration, i int, reformat, createMS, bootstrapMS b
 	}
 
 	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
+
+	if !config.FormatOverride {
+		// wait on format storage grpc call before creating superblock
+		config.Servers[i].FormatCond.Wait()
+	}
 
 	if err := createIosrvSuper(config, i, reformat, createMS, bootstrapMS); err != nil {
 		return errors.WithMessage(err, op)
@@ -232,6 +249,16 @@ func (srv *iosrv) wait() error {
 }
 
 func (srv *iosrv) startCmd() error {
+	// sanity check scm has been mounted (CliOpts will provide this path)
+	mntpt := srv.config.Servers[srv.index].ScmMount
+	if err := srv.config.checkMount(mntpt); err != nil {
+		return errors.WithMessage(
+			err,
+			fmt.Sprintf(
+				"server%d scm mount path (%s) not mounted",
+				srv.index, mntpt))
+	}
+
 	// Exec io_server with generated cli opts from config context.
 	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
 	srv.cmd.Stdout = os.Stdout

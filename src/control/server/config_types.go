@@ -1,3 +1,4 @@
+//
 // (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,17 +26,13 @@ package main
 import (
 	"fmt"
 	"math"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
-
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -44,6 +41,9 @@ const (
 
 	cLogDebug ControlLogLevel = "DEBUG"
 	cLogError ControlLogLevel = "ERROR"
+
+	scmDCPM ScmClass = "dcpm"
+	scmRAM  ScmClass = "ram"
 
 	bdNvme   BdClass = "nvme"
 	bdMalloc BdClass = "malloc"
@@ -87,7 +87,7 @@ func (r *rank) UnmarshalFlag(value string) error {
 
 func checkRank(r rank) error {
 	if r == nilRank {
-		return fmt.Errorf("rank %d out of range [0, %d]", r, maxRank)
+		return errors.Errorf("rank %d out of range [0, %d]", r, maxRank)
 	}
 	return nil
 }
@@ -106,9 +106,31 @@ func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error
 	case cLogDebug, cLogError:
 		*c = logLevel
 	default:
-		return fmt.Errorf(
+		return errors.Errorf(
 			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
 			logLevel)
+	}
+	return nil
+}
+
+// ScmClass enum specifing device type for Storage Class Memoryo
+type ScmClass string
+
+// UnmarshalYAML implements yaml.Unmarshaler on ScmClass struct
+func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var class string
+	if err := unmarshal(&class); err != nil {
+		return err
+	}
+
+	scmClass := ScmClass(class)
+	switch scmClass {
+	case scmDCPM, scmRAM:
+		*s = scmClass
+	default:
+		return errors.Errorf(
+			"scm_class value %v not supported in config (dcpm/ram)",
+			scmClass)
 	}
 	return nil
 }
@@ -127,7 +149,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	case bdNvme, bdMalloc, bdKdev, bdFile:
 		*b = bdevClass
 	default:
-		return fmt.Errorf(
+		return errors.Errorf(
 			"bdev_class value %v not supported in config (nvme/malloc/kdev/file)",
 			bdevClass)
 	}
@@ -146,6 +168,9 @@ type server struct {
 	LogFile         string   `yaml:"log_file"`
 	EnvVars         []string `yaml:"env_vars"`
 	ScmMount        string   `yaml:"scm_mount"`
+	ScmClass        ScmClass `yaml:"scm_class"`
+	ScmList         []string `yaml:"scm_list"`
+	ScmSize         int      `yaml:"scm_size"`
 	BdevClass       BdClass  `yaml:"bdev_class"`
 	BdevList        []string `yaml:"bdev_list"`
 	BdevNumber      int      `yaml:"bdev_number"`
@@ -153,68 +178,21 @@ type server struct {
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
 	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]
+	// Condition variable to announce formatting of storage
+	FormatCond *sync.Cond
 }
 
 // newDefaultServer creates a new instance of server struct
 // populated with defaults.
 func newDefaultServer() server {
+	c := sync.NewCond(&sync.Mutex{})
+	c.L.Lock()
+
 	return server{
-		BdevClass: bdNvme,
+		ScmClass:   scmDCPM,
+		BdevClass:  bdNvme,
+		FormatCond: c,
 	}
-}
-
-// External interface provides methods to support various os operations.
-type External interface {
-	getenv(string) string
-	runCommand(string) error
-	writeToFile(string, string) error
-	createEmpty(string, int64) error
-}
-
-type ext struct{}
-
-// runCommand executes command in subshell (to allow redirection) and returns
-// error result.
-func (e *ext) runCommand(cmd string) error {
-	return exec.Command("sh", "-c", cmd).Run()
-}
-
-// getEnv wraps around os.GetEnv and implements External.getEnv().
-func (e *ext) getenv(key string) string {
-	return os.Getenv(key)
-}
-
-// writeToFile wraps around common.WriteString and writes input
-// string to given file pathk.
-func (e *ext) writeToFile(in string, outPath string) error {
-	return common.WriteString(outPath, in)
-}
-
-// createEmpty creates a file (if it doesn't exist) of specified size in bytes
-// at the given path.
-// If Fallocate not supported by kernel or backing fs, fall back to Truncate.
-func (e *ext) createEmpty(path string, size int64) (err error) {
-	if !filepath.IsAbs(path) {
-		return fmt.Errorf("please specify absolute path (%s)", path)
-	}
-	if _, err = os.Stat(path); !os.IsNotExist(err) {
-		return
-	}
-	file, err := common.TruncFile(path)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	err = syscall.Fallocate(int(file.Fd()), 0, 0, size)
-	if err != nil {
-		e, ok := err.(syscall.Errno)
-		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
-			log.Debugf(
-				"Warning: Fallocate not supported, attempting Truncate: ", e)
-			err = file.Truncate(size)
-		}
-	}
-	return
 }
 
 type configuration struct {
@@ -230,6 +208,7 @@ type configuration struct {
 	FaultPath      string          `yaml:"fault_path"`
 	FaultCb        string          `yaml:"fault_cb"`
 	FabricIfaces   []string        `yaml:"fabric_ifaces"`
+	FormatOverride bool            `yaml:"format_override"`
 	ScmMountPath   string          `yaml:"scm_mount_path"`
 	BdevInclude    []string        `yaml:"bdev_include"`
 	BdevExclude    []string        `yaml:"bdev_exclude"`
@@ -242,7 +221,7 @@ type configuration struct {
 	Attach    string
 	SystemMap string
 	Path      string
-	ext       External
+	ext       External // interface to os utilities
 	// Shared memory segment ID to enable SPDK multiprocess mode,
 	// SPDK application processes can then access the same shared
 	// memory and therefore NVMe controllers.

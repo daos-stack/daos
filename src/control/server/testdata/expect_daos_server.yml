@@ -23,3 +23,5 @@ attach: ""
 systemmap: ""
 path: ../../../utils/config/daos_server.yml
 nvmeshmid: 0
+formatcond:
+  l: {}

@@ -16,6 +16,9 @@ servers:
   - FI_SOCKETS_MAX_CONN_RETRY=1
   - FI_SOCKETS_CONN_TIMEOUT=2000
   scm_mount: /mnt/daos
+  scm_class: ram
+  scm_list: []
+  scm_size: 6
   bdev_class: nvme
   bdev_list:
   - 0000:81:00.0
@@ -45,3 +48,5 @@ attach: ""
 systemmap: ""
 path: ../../../utils/config/examples/daos_server_sockets.yml
 nvmeshmid: 0
+formatcond:
+  l: {}

@@ -25,13 +25,19 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 	. "github.com/daos-stack/go-spdk/spdk"
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "storage_nvme_test: ", os.Stderr)
+}
 
 // MockController is a mock NVMe SSD controller of type exported from go-spdk.
 func MockController(fwrev string) Controller {
@@ -99,21 +105,24 @@ func (m *mockSpdkSetup) reset() error           { return nil }
 
 // mockNvmeStorage factory
 func newMockNvmeStorage(spdkNvme NVME, inited bool) *nvmeStorage {
+	config := newDefaultMockConfig()
 	return &nvmeStorage{
 		env:         &mockSpdkEnv{},
 		nvme:        spdkNvme,
 		spdk:        &mockSpdkSetup{},
+		config:      &config,
 		initialized: inited,
 	}
 }
 
 // defaultMockNvmeStorage factory
 func defaultMockNvmeStorage() *nvmeStorage {
+	config := newDefaultMockConfig()
 	return &nvmeStorage{
-		env:         &mockSpdkEnv{},
-		nvme:        defaultMockSpdkNvme(),
-		spdk:        &mockSpdkSetup{},
-		initialized: false,
+		env:    &mockSpdkEnv{},
+		nvme:   defaultMockSpdkNvme(),
+		spdk:   &mockSpdkSetup{},
+		config: &config,
 	}
 }
 

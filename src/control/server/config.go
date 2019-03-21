@@ -316,13 +316,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		// avoid mutating subject during iteration, instead access through
 		// config/parent object
 		server := &c.Servers[i]
-		// verify scm mount path is valid
-		mntpt := server.ScmMount
-		if err = c.checkMount(mntpt); err != nil {
-			return fmt.Errorf(
-				"server%d scm mount path (%s) not mounted: %s",
-				i, mntpt, err)
-		}
+
 		if err = c.populateCliOpts(i); err != nil {
 			return err
 		}
@@ -338,6 +332,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			continue
 		}
 		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
+
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
 		log.Errorf(

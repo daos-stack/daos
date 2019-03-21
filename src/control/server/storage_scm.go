@@ -24,11 +24,12 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/daos-stack/go-ipmctl/ipmctl"
+	"strconv"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/go-ipmctl/ipmctl"
+	"github.com/pkg/errors"
 )
 
 // ScmmMap is a type alias for info on Storage Class Memory Modules
@@ -40,9 +41,11 @@ type ScmmMap map[int32]*pb.ScmModule
 // IpmCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
-	ipmCtl      ipmctl.IpmCtl // ipmctl NVM API interface
+	ipmCtl      ipmctl.IpmCtl  // ipmctl NVM API interface
+	config      *configuration // server configuration structure
 	modules     ScmmMap
 	initialized bool
+	formatted   bool
 }
 
 func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
@@ -61,7 +64,7 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
 		}
 	}
 	if len(pbMms) != len(mms) {
-		return nil, fmt.Errorf("loadModules: input contained duplicate keys")
+		return nil, errors.Errorf("loadModules: input contained duplicate keys")
 	}
 	return pbMms, nil
 }
@@ -80,7 +83,7 @@ func (s *scmStorage) Discover() error {
 		s.modules = pbMms
 		return nil
 	}
-	return fmt.Errorf("scm storage not initialized")
+	return errors.Errorf("scm storage not initialized")
 }
 
 // todo: implement remaining methods for scmStorage
@@ -101,9 +104,59 @@ func (s *scmStorage) Teardown() error {
 	return nil
 }
 
+// Format attempts to format (forcefully) SCM devices on a given server
+// as specified in config file.
+func (s *scmStorage) Format(idx int) error {
+	var devType, devPath, mntOpts string
+
+	srv := s.config.Servers[idx]
+	mntPoint := srv.ScmMount
+
+	if err := s.config.ext.clearMount(mntPoint); err != nil {
+		return err
+	}
+
+	switch srv.ScmClass {
+	case scmDCPM:
+		if len(srv.ScmList) != 1 {
+			return errors.New(
+				"expecting one scm pmem device per-server in config")
+		}
+		devPath = srv.ScmList[0]
+		mntOpts = "dax"
+
+		if err := s.config.ext.reFormat(devPath); err != nil {
+			return err
+		}
+	case scmRAM:
+		devPath = "tmpfs"
+		devType = "tmpfs"
+
+		if srv.ScmSize >= 0 {
+			mntOpts = "size=" + strconv.Itoa(srv.ScmSize) + "GB"
+			break
+		}
+		log.Debugf("no scm_size specified in config for ram tmpfs")
+	default:
+		return errors.New("unsupported ScmClass")
+	}
+
+	if err := s.config.ext.makeMount(
+		devPath, mntPoint, devType, mntOpts); err != nil {
+
+		return err
+	}
+
+	s.formatted = true
+	return nil
+}
+
 // newScmStorage creates a new instance of ScmStorage struct.
 //
 // NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
-func newScmStorage() *scmStorage {
-	return &scmStorage{ipmCtl: &ipmctl.NvmMgmt{}}
+func newScmStorage(config *configuration) *scmStorage {
+	return &scmStorage{
+		ipmCtl: &ipmctl.NvmMgmt{},
+		config: config,
+	}
 }

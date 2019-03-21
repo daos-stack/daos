@@ -67,12 +67,13 @@ type spdkSetup struct {
 // for accessing Nvme devices (API) as well as storing device
 // details.
 type nvmeStorage struct {
-	env         spdk.ENV  // SPDK ENV interface
-	nvme        spdk.NVME // SPDK NVMe interface
-	spdk        SpdkSetup // SPDK shell configuration interface
-	shmID       int       // SPDK init opts param to enable multi-process mode
+	env         spdk.ENV       // SPDK ENV interface
+	nvme        spdk.NVME      // SPDK NVMe interface
+	spdk        SpdkSetup      // SPDK shell configuration interface
+	config      *configuration // server configuration structure
 	controllers []*pb.NvmeController
 	initialized bool
+	formatted   bool
 }
 
 // prep executes setup script to allocate hugepages and bind PCI devices
@@ -143,6 +144,13 @@ func (n *nvmeStorage) Teardown() (err error) {
 	return
 }
 
+// Format attempts to format (forcefully) NVMe devices on a given server
+// as specified in config file.
+func (n *nvmeStorage) Format(idx int) error {
+	// TODO: add implementation
+	return nil
+}
+
 // Discover method implementation for nvmeStorage.
 //
 // Initialise SPDK environment before probing controllers then retrieve
@@ -161,7 +169,7 @@ func (n *nvmeStorage) Discover() error {
 		return nil
 	}
 	// specify shmID to be set as opt in SPDK env init
-	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
+	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
 		return errors.WithMessage(err, "SPDK env init, has setup been run?")
 	}
 	cs, ns, err := n.nvme.Discover()
@@ -264,16 +272,16 @@ func loadNamespaces(
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(shmID int, nrHugePages int) (*nvmeStorage, error) {
+func newNvmeStorage(config *configuration) (*nvmeStorage, error) {
 
 	scriptPath, err := common.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}
 	return &nvmeStorage{
-		env:   &spdk.Env{},
-		nvme:  &spdk.Nvme{},
-		spdk:  &spdkSetup{scriptPath, nrHugePages},
-		shmID: shmID, // required to enable SPDK multi-process mode
+		env:    &spdk.Env{},
+		nvme:   &spdk.Nvme{},
+		spdk:   &spdkSetup{scriptPath, config.NrHugepages},
+		config: config,
 	}, nil
 }

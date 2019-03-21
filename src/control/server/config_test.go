@@ -97,50 +97,26 @@ func uncommentServerConfig() {
 	}
 }
 
-type mockExt struct {
-	// return error if cmd in shell fails
-	cmdRet error
-	// return empty string if os env not set/set empty
-	getenvRet string
-	// return true if file already exists
-	existsRet bool
-}
-
-func (m *mockExt) runCommand(cmd string) error {
-	commands = append(commands, cmd)
-	return m.cmdRet
-}
-func (m *mockExt) getenv(key string) string { return m.getenvRet }
-func (m *mockExt) writeToFile(in string, outPath string) error {
-	files = append(files, fmt.Sprint(outPath, ":", in))
-	return nil
-}
-func (m *mockExt) createEmpty(path string, size int64) error {
-	if !m.existsRet {
-		files = append(files, fmt.Sprint(path, ":empty size ", size))
-	}
-	return nil
-}
-
 // newMockConfig returns default configuration with mocked external interface
 func newMockConfig(
-	cmdRet error, getenvRet string, existsRet bool) configuration {
+	cmdRet error, getenvRet string, existsRet bool, clearMountRet error,
+	reFormatRet error, makeMountRet error) configuration {
+
 	return newDefaultConfiguration(
-		&mockExt{cmdRet, getenvRet, existsRet})
+		&mockExt{
+			cmdRet, getenvRet, existsRet, clearMountRet,
+			reFormatRet, makeMountRet})
 }
 
 // newDefaultMockConfig returns MockConfig with default mock return values
 func newDefaultMockConfig() configuration {
-	return newMockConfig(nil, "", false)
+	return newMockConfig(nil, "", false, nil, nil, nil)
 }
 func cmdFailsConfig() configuration {
-	return newMockConfig(errors.New("exit status 1"), "", false)
+	return newMockConfig(errors.New("exit status 1"), "", false, nil, nil, nil)
 }
 func envExistsConfig() configuration {
-	return newMockConfig(nil, "somevalue", false)
-}
-func fileExistsConfig() configuration {
-	return newMockConfig(nil, "", true)
+	return newMockConfig(nil, "somevalue", false, nil, nil, nil)
 }
 
 func populateMockConfig(t *testing.T, c configuration, path string) configuration {
@@ -424,10 +400,8 @@ func TestCmdlineOverride(t *testing.T) {
 		inCliOpts  cliOptions
 		inConfig   configuration
 		outCliOpts [][]string
-		expNumCmds int // number of commands expected to have been run as side effect
 		desc       string
 		errMsg     string
-		expCmds    []string // list of expected commands to have been run
 	}{
 		{
 			inConfig: newC(t),
@@ -447,18 +421,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "None",
-		},
-		{
-			inConfig:   populateMockConfig(t, cmdFailsConfig(), sConfigUncomment),
-			expNumCmds: 2,
-			desc:       "None, mount check fails",
-			errMsg:     "server0 scm mount path (/mnt/daos/1) not mounted: exit status 1",
-			expCmds: []string{
-				"mount | grep ' /mnt/daos/1 '",
-				"mount | grep ' /mnt/daos '",
-			},
+			desc: "None",
 		},
 		{
 			inCliOpts: cliOptions{MountPath: "/foo/bar"},
@@ -479,8 +442,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "MountPath",
+			desc: "MountPath",
 		},
 		{
 			inCliOpts: cliOptions{Group: "testing123"},
@@ -501,8 +463,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "Group",
+			desc: "Group",
 		},
 		{
 			inCliOpts: cliOptions{Cores: 2},
@@ -523,8 +484,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "Cores",
+			desc: "Cores",
 		},
 		{
 			inCliOpts: cliOptions{Rank: &r},
@@ -545,8 +505,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "Rank",
+			desc: "Rank",
 		},
 		{
 			// currently not provided as config or cli option, set
@@ -574,8 +533,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-i", "1",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "NvmeShmID",
+			desc: "NvmeShmID",
 		},
 		{
 			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
@@ -602,8 +560,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "/tmp/Jeremy",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "SocketDir Modules Attach Map",
+			desc: "SocketDir Modules Attach Map",
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
@@ -616,8 +573,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "/var/run/daos_server",
 				},
 			},
-			expNumCmds: 1,
-			desc:       "use defaults, no Provider set but provider env exists",
+			desc: "use defaults, no Provider set but provider env exists",
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
@@ -636,8 +592,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "/tmp/Jeremy",
 				},
 			},
-			expNumCmds: 1,
-			desc:       "override defaults, no Provider set but provider env exists",
+			desc: "override defaults, no Provider set but provider env exists",
 		},
 		{
 			// no provider set and no os env set mock getenv returns empty string
@@ -648,29 +603,6 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:     "override defaults, no Provider set and no provider env exists",
 			errMsg:   "required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
 		},
-		{
-			// no provider set but os env set mock getenv returns not empty string
-			// mount not set and returns invalid
-			inConfig: newMockConfig(errors.New("exit status 1"), "somevalue", false),
-			desc:     "use defaults, mount check fails with default",
-			errMsg:   "server0 scm mount path (/mnt/daos) not mounted: exit status 1",
-			expCmds: []string{
-				"mount | grep ' /mnt/daos '",
-				"mount | grep ' /mnt '",
-			},
-		},
-		{
-			// no provider set but os env set mock getenv returns not empty string
-			// mount set and returns invalid
-			inCliOpts: cliOptions{MountPath: "/foo/bar"},
-			inConfig:  newMockConfig(errors.New("exit status 1"), "somevalue", false),
-			desc:      "override MountPath, mount check fails with new value",
-			errMsg:    "server0 scm mount path (/foo/bar) not mounted: exit status 1",
-			expCmds: []string{
-				"mount | grep ' /foo/bar '",
-				"mount | grep ' /foo '",
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -679,17 +611,6 @@ func TestCmdlineOverride(t *testing.T) {
 		err := config.getIOParams(&tt.inCliOpts)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
-			// when mount check fails, verify looking in parent dir,
-			// verify captured commands match those expected
-			if len(tt.expCmds) != len(commands) {
-				t.Fatalf(
-					"%s: unexpected commands got %#v, want %#v",
-					tt.desc, commands, tt.expCmds)
-			}
-			if len(commands) != 0 {
-				AssertEqual(
-					t, commands, tt.expCmds, tt.desc+": cmds don't match "+tt.errMsg)
-			}
 			continue
 		}
 		if err != nil {
@@ -706,11 +627,6 @@ func TestCmdlineOverride(t *testing.T) {
 				fmt.Sprintf(
 					"cli options for io_server %d unexpected (changed: %s)",
 					i, tt.desc))
-		}
-		if len(commands) != tt.expNumCmds {
-			t.Fatalf(
-				"%s: unexpected commands (%#v), expecting %d cmds",
-				tt.desc, commands, tt.expNumCmds)
 		}
 	}
 }

@@ -24,11 +24,17 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "storage_scm_test: ", os.Stderr)
+}
 
 // MockModule returns a mock SCM module of type exported from go-ipmctl.
 func MockModule() DeviceDiscovery {
@@ -51,12 +57,55 @@ func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 	return m.modules, nil
 }
 
+// build config with mock external method behaviour relevant to this file
+func mockScmConfig(clearRet error, formatRet error, mountRet error) configuration {
+	config := newDefaultConfiguration(
+		&mockExt{nil, "", false, clearRet, formatRet, mountRet})
+
+	if len(config.Servers) == 0 {
+		server := newDefaultServer()
+		config.Servers = append(config.Servers, server)
+	}
+
+	return config
+}
+
+// return config reference with default successful behaviour
+func defaultMockScmConfig() *configuration {
+	c := mockScmConfig(nil, nil, nil)
+	return &c
+}
+
+// return config reference with specified external method behaviour and scm config params
+func newMockScmConfig(
+	clearRet error, formatRet error, mountRet error,
+	mount string, class ScmClass, devs []string, size int) *configuration {
+
+	c := mockScmConfig(clearRet, formatRet, mountRet)
+	c.Servers[0].ScmMount = mount
+	c.Servers[0].ScmClass = class
+	c.Servers[0].ScmList = devs
+	c.Servers[0].ScmSize = size
+
+	return &c
+}
+
 // mockScmStorage factory
-func newMockScmStorage(mms []DeviceDiscovery, inited bool) *scmStorage {
+func newMockScmStorage(
+	mms []DeviceDiscovery, inited bool, c *configuration) *scmStorage {
+
 	return &scmStorage{
 		ipmCtl:      &mockIpmCtl{modules: mms},
 		initialized: inited,
+		config:      c,
 	}
+}
+
+func defaultMockScmStorage() *scmStorage {
+	m := MockModule()
+	config := defaultMockScmConfig()
+
+	return newMockScmStorage([]DeviceDiscovery{m}, true, config)
 }
 
 func TestDiscoveryScm(t *testing.T) {
@@ -76,9 +125,10 @@ func TestDiscoveryScm(t *testing.T) {
 
 	mPB := MockModulePB()
 	m := MockModule()
+	config := newDefaultMockConfig()
 
 	for _, tt := range tests {
-		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited)
+		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited, &config)
 
 		if err := ss.Discover(); err != nil {
 			if tt.errMsg != "" {
@@ -90,5 +140,43 @@ func TestDiscoveryScm(t *testing.T) {
 
 		AssertEqual(t, len(ss.modules), 1, "unexpected number of modules")
 		AssertEqual(t, ss.modules[int32(mPB.Physicalid)], mPB, "unexpected module values")
+	}
+}
+
+func TestFormatScm(t *testing.T) {
+	tests := []struct {
+		clearRet  error
+		formatRet error
+		mountRet  error
+		mount     string
+		class     ScmClass
+		devs      []string
+		size      int
+		expArgs   []string
+		desc      string
+		errMsg    string
+	}{
+		{
+			desc:   "zero values",
+			errMsg: "unsupported ScmClass",
+		},
+	}
+
+	server_idx := 0
+
+	for _, tt := range tests {
+		config := newMockScmConfig(
+			tt.clearRet, tt.formatRet, tt.mountRet,
+			tt.mount, tt.class, tt.devs, tt.size)
+
+		ss := newMockScmStorage([]DeviceDiscovery{}, true, config)
+
+		if err := ss.Format(server_idx); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err)
+		}
 	}
 }
