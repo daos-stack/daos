@@ -7,7 +7,7 @@ DAOS object in DAOS storage model is shown in the diagram -
 ![../../doc/graph/Fig_002.png](../../doc/graph/Fig_002.png "object in storage model")
 The object module implements the object I/O stack.
 
-## KV sotre, dkey and akey
+## KV store, dkey and akey
 
 Each DAOS object is a Key-Value store with locality feature. The key is split
 into a <b>dkey</b> (distribution key) and an <b>akey</b> (attribute key). All
