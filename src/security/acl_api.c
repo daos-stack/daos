@@ -551,7 +551,7 @@ validate_aces(struct daos_acl *acl)
 
 	current = daos_acl_get_next_ace(acl, NULL);
 	while (current != NULL) {
-		if (!daos_ace_validate(current)) {
+		if (!daos_ace_is_valid(current)) {
 			return false;
 		}
 
@@ -562,7 +562,7 @@ validate_aces(struct daos_acl *acl)
 }
 
 bool
-daos_acl_validate(struct daos_acl *acl)
+daos_acl_is_valid(struct daos_acl *acl)
 {
 	if (acl == NULL) {
 		return false;
@@ -991,7 +991,7 @@ access_matches_flags(struct daos_ace *ace)
 }
 
 bool
-daos_ace_validate(struct daos_ace *ace)
+daos_ace_is_valid(struct daos_ace *ace)
 {
 	if (ace == NULL) {
 		return false;

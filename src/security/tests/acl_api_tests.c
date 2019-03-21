@@ -1343,9 +1343,9 @@ test_acl_remove_ace_not_found(void **state)
 }
 
 static void
-test_ace_validate_null(void **state)
+test_ace_is_valid_null(void **state)
 {
-	assert_false(daos_ace_validate(NULL));
+	assert_false(daos_ace_is_valid(NULL));
 }
 
 static void
@@ -1355,13 +1355,13 @@ expect_ace_valid(enum daos_acl_principal_type type, const char *principal)
 
 	ace = daos_ace_create(type, principal);
 
-	assert_true(daos_ace_validate(ace));
+	assert_true(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_valid_types(void **state)
+test_ace_is_valid_valid_types(void **state)
 {
 	expect_ace_valid(DAOS_ACL_OWNER, NULL);
 	expect_ace_valid(DAOS_ACL_USER, "myuser");
@@ -1371,7 +1371,7 @@ test_ace_validate_valid_types(void **state)
 }
 
 static void
-test_ace_validate_invalid_owner(void **state)
+test_ace_is_valid_invalid_owner(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1379,13 +1379,13 @@ test_ace_validate_invalid_owner(void **state)
 	ace = daos_ace_create(DAOS_ACL_USER, "name@notwanted.tld");
 	ace->dae_principal_type = DAOS_ACL_OWNER;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_invalid_user(void **state)
+test_ace_is_valid_invalid_user(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1393,13 +1393,13 @@ test_ace_validate_invalid_user(void **state)
 	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
 	ace->dae_principal_type = DAOS_ACL_USER;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_invalid_owner_group(void **state)
+test_ace_is_valid_invalid_owner_group(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1407,13 +1407,13 @@ test_ace_validate_invalid_owner_group(void **state)
 	ace = daos_ace_create(DAOS_ACL_GROUP, "group@");
 	ace->dae_principal_type = DAOS_ACL_OWNER_GROUP;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_invalid_group(void **state)
+test_ace_is_valid_invalid_group(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1421,13 +1421,13 @@ test_ace_validate_invalid_group(void **state)
 	ace = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
 	ace->dae_principal_type = DAOS_ACL_GROUP;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_invalid_everyone(void **state)
+test_ace_is_valid_invalid_everyone(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1435,7 +1435,7 @@ test_ace_validate_invalid_everyone(void **state)
 	ace = daos_ace_create(DAOS_ACL_USER, "somejunk");
 	ace->dae_principal_type = DAOS_ACL_EVERYONE;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
@@ -1449,13 +1449,13 @@ expect_ace_invalid_without_group_flag(enum daos_acl_principal_type type,
 	ace = daos_ace_create(type, principal);
 	ace->dae_access_flags &= ~DAOS_ACL_FLAG_GROUP;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_group_needs_flag(void **state)
+test_ace_is_valid_group_needs_flag(void **state)
 {
 	expect_ace_invalid_without_group_flag(DAOS_ACL_GROUP, "mygroup");
 	expect_ace_invalid_without_group_flag(DAOS_ACL_OWNER_GROUP, NULL);
@@ -1471,13 +1471,13 @@ expect_ace_invalid_with_group_flag(enum daos_acl_principal_type type,
 	ace = daos_ace_create(type, principal);
 	ace->dae_access_flags |= DAOS_ACL_FLAG_GROUP;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_non_group_needs_no_flag(void **state)
+test_ace_is_valid_non_group_needs_no_flag(void **state)
 {
 	expect_ace_invalid_with_group_flag(DAOS_ACL_OWNER, NULL);
 	expect_ace_invalid_with_group_flag(DAOS_ACL_USER, "user@domain.tld");
@@ -1485,20 +1485,20 @@ test_ace_validate_non_group_needs_no_flag(void **state)
 }
 
 static void
-test_ace_validate_principal_len_not_aligned(void **state)
+test_ace_is_valid_principal_len_not_aligned(void **state)
 {
 	struct daos_ace *ace;
 
 	ace = daos_ace_create(DAOS_ACL_USER, "myuser@");
 	ace->dae_principal_len = 9; /* bad - would expect aligned to 8 bytes */
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_principal_not_terminated(void **state)
+test_ace_is_valid_principal_not_terminated(void **state)
 {
 	struct daos_ace	*ace;
 	uint16_t	i;
@@ -1509,26 +1509,26 @@ test_ace_validate_principal_not_terminated(void **state)
 		ace->dae_principal[i] = 'a';
 	}
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_undefined_flags(void **state)
+test_ace_is_valid_undefined_flags(void **state)
 {
 	struct daos_ace *ace;
 
 	ace = daos_ace_create(DAOS_ACL_GROUP, "mygroup@");
 	ace->dae_access_flags |= (1 << 15); /* nonexistent flag */
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_valid_flags(void **state)
+test_ace_is_valid_valid_flags(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1538,7 +1538,7 @@ test_ace_validate_valid_flags(void **state)
 			DAOS_ACL_FLAG_ACCESS_SUCCESS |
 			DAOS_ACL_FLAG_POOL_INHERIT;
 
-	assert_true(daos_ace_validate(ace));
+	assert_true(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
@@ -1576,13 +1576,13 @@ expect_ace_invalid_with_bad_perms(enum daos_acl_access_type type)
 	assert_non_null(perms);
 	*perms = (uint64_t)1 << 63;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_undefined_perms(void **state)
+test_ace_is_valid_undefined_perms(void **state)
 {
 	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_ALLOW);
 	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_AUDIT);
@@ -1605,13 +1605,13 @@ expect_ace_valid_with_good_perms(enum daos_acl_access_type type)
 	assert_non_null(perms);
 	*perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 
-	assert_true(daos_ace_validate(ace));
+	assert_true(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_valid_perms(void **state)
+test_ace_is_valid_valid_perms(void **state)
 {
 	expect_ace_valid_with_good_perms(DAOS_ACL_ACCESS_ALLOW);
 	expect_ace_valid_with_good_perms(DAOS_ACL_ACCESS_AUDIT);
@@ -1619,20 +1619,20 @@ test_ace_validate_valid_perms(void **state)
 }
 
 static void
-test_ace_validate_undefined_access_type(void **state)
+test_ace_is_valid_undefined_access_type(void **state)
 {
 	struct daos_ace *ace;
 
 	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
 	ace->dae_access_types |= (1 << 7); /* nonexistent type */
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_valid_access_types(void **state)
+test_ace_is_valid_valid_access_types(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1642,7 +1642,7 @@ test_ace_validate_valid_access_types(void **state)
 			DAOS_ACL_ACCESS_AUDIT |
 			DAOS_ACL_ACCESS_ALARM;
 
-	assert_true(daos_ace_validate(ace));
+	assert_true(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
@@ -1665,13 +1665,13 @@ expect_ace_invalid_when_perms_set_for_unset_type(
 	assert_non_null(perms);
 	*perms = DAOS_ACL_PERM_READ;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_perms_for_unset_type(void **state)
+test_ace_is_valid_perms_for_unset_type(void **state)
 {
 	expect_ace_invalid_when_perms_set_for_unset_type(DAOS_ACL_ACCESS_ALLOW);
 	expect_ace_invalid_when_perms_set_for_unset_type(DAOS_ACL_ACCESS_AUDIT);
@@ -1687,13 +1687,13 @@ expect_ace_invalid_with_flag_with_only_allow(enum daos_acl_flags flag)
 	ace->dae_access_flags = flag;
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_ace_validate_audit_flags_with_only_allow(void **state)
+test_ace_is_valid_audit_flags_with_only_allow(void **state)
 {
 	expect_ace_invalid_with_flag_with_only_allow(DAOS_ACL_FLAG_ACCESS_FAIL);
 	expect_ace_invalid_with_flag_with_only_allow(
@@ -1701,7 +1701,7 @@ test_ace_validate_audit_flags_with_only_allow(void **state)
 }
 
 static void
-test_ace_validate_audit_without_flags(void **state)
+test_ace_is_valid_audit_without_flags(void **state)
 {
 	struct daos_ace *ace;
 
@@ -1710,25 +1710,25 @@ test_ace_validate_audit_without_flags(void **state)
 					DAOS_ACL_FLAG_ACCESS_SUCCESS);
 	ace->dae_access_types = DAOS_ACL_ACCESS_AUDIT;
 
-	assert_false(daos_ace_validate(ace));
+	assert_false(daos_ace_is_valid(ace));
 
 	daos_ace_free(ace);
 }
 
 static void
-test_acl_validate_null(void **state)
+test_acl_is_valid_null(void **state)
 {
-	assert_false(daos_acl_validate(NULL));
+	assert_false(daos_acl_is_valid(NULL));
 }
 
 static void
-test_acl_validate_empty(void **state)
+test_acl_is_valid_empty(void **state)
 {
 	struct daos_acl *acl;
 
 	acl = daos_acl_create(NULL, 0);
 
-	assert_true(daos_acl_validate(acl));
+	assert_true(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 }
@@ -1741,20 +1741,20 @@ expect_acl_invalid_with_version(uint16_t version)
 	acl = daos_acl_create(NULL, 0);
 	acl->dal_ver = version;
 
-	assert_false(daos_acl_validate(acl));
+	assert_false(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 }
 
 static void
-test_acl_validate_bad_version(void **state)
+test_acl_is_valid_bad_version(void **state)
 {
 	expect_acl_invalid_with_version(0);
 	expect_acl_invalid_with_version(DAOS_ACL_VERSION + 1);
 }
 
 static void
-test_acl_validate_len_too_small(void **state)
+test_acl_is_valid_len_too_small(void **state)
 {
 	struct daos_acl *acl;
 	struct daos_ace *ace;
@@ -1763,14 +1763,14 @@ test_acl_validate_len_too_small(void **state)
 	acl = daos_acl_create(&ace, 1);
 	acl->dal_len = sizeof(struct daos_ace) - 8; /* still aligned */
 
-	assert_false(daos_acl_validate(acl));
+	assert_false(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
 }
 
 static void
-test_acl_validate_len_unaligned(void **state)
+test_acl_is_valid_len_unaligned(void **state)
 {
 	struct daos_acl *acl;
 	struct daos_ace *ace;
@@ -1779,14 +1779,14 @@ test_acl_validate_len_unaligned(void **state)
 	acl = daos_acl_create(&ace, 1);
 	acl->dal_len = sizeof(struct daos_ace) + 1;
 
-	assert_false(daos_acl_validate(acl));
+	assert_false(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
 }
 
 static void
-test_acl_validate_one_invalid_ace(void **state)
+test_acl_is_valid_one_invalid_ace(void **state)
 {
 	struct daos_acl *acl;
 	struct daos_ace *ace;
@@ -1795,14 +1795,14 @@ test_acl_validate_one_invalid_ace(void **state)
 	ace->dae_access_types = 1 << 7; /* invalid access type */
 	acl = daos_acl_create(&ace, 1);
 
-	assert_false(daos_acl_validate(acl));
+	assert_false(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
 }
 
 static void
-test_acl_validate_valid_aces(void **state)
+test_acl_is_valid_valid_aces(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
@@ -1811,14 +1811,14 @@ test_acl_validate_valid_aces(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_true(daos_acl_validate(acl));
+	assert_true(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
 }
 
 static void
-test_acl_validate_later_ace_invalid(void **state)
+test_acl_is_valid_later_ace_invalid(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
@@ -1828,7 +1828,7 @@ test_acl_validate_later_ace_invalid(void **state)
 	ace[num_aces - 1]->dae_access_types = 1 << 7; /* invalid access type */
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_false(daos_acl_validate(acl));
+	assert_false(daos_acl_is_valid(acl));
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1899,34 +1899,34 @@ main(void)
 		cmocka_unit_test(test_acl_remove_ace_last),
 		cmocka_unit_test(test_acl_remove_ace_with_name),
 		cmocka_unit_test(test_acl_remove_ace_not_found),
-		cmocka_unit_test(test_ace_validate_null),
-		cmocka_unit_test(test_ace_validate_valid_types),
-		cmocka_unit_test(test_ace_validate_invalid_owner),
-		cmocka_unit_test(test_ace_validate_invalid_user),
-		cmocka_unit_test(test_ace_validate_invalid_owner_group),
-		cmocka_unit_test(test_ace_validate_invalid_group),
-		cmocka_unit_test(test_ace_validate_invalid_everyone),
-		cmocka_unit_test(test_ace_validate_group_needs_flag),
-		cmocka_unit_test(test_ace_validate_non_group_needs_no_flag),
-		cmocka_unit_test(test_ace_validate_principal_len_not_aligned),
-		cmocka_unit_test(test_ace_validate_principal_not_terminated),
-		cmocka_unit_test(test_ace_validate_undefined_flags),
-		cmocka_unit_test(test_ace_validate_valid_flags),
-		cmocka_unit_test(test_ace_validate_undefined_perms),
-		cmocka_unit_test(test_ace_validate_valid_perms),
-		cmocka_unit_test(test_ace_validate_undefined_access_type),
-		cmocka_unit_test(test_ace_validate_valid_access_types),
-		cmocka_unit_test(test_ace_validate_perms_for_unset_type),
-		cmocka_unit_test(test_ace_validate_audit_flags_with_only_allow),
-		cmocka_unit_test(test_ace_validate_audit_without_flags),
-		cmocka_unit_test(test_acl_validate_null),
-		cmocka_unit_test(test_acl_validate_empty),
-		cmocka_unit_test(test_acl_validate_bad_version),
-		cmocka_unit_test(test_acl_validate_len_too_small),
-		cmocka_unit_test(test_acl_validate_len_unaligned),
-		cmocka_unit_test(test_acl_validate_one_invalid_ace),
-		cmocka_unit_test(test_acl_validate_valid_aces),
-		cmocka_unit_test(test_acl_validate_later_ace_invalid)
+		cmocka_unit_test(test_ace_is_valid_null),
+		cmocka_unit_test(test_ace_is_valid_valid_types),
+		cmocka_unit_test(test_ace_is_valid_invalid_owner),
+		cmocka_unit_test(test_ace_is_valid_invalid_user),
+		cmocka_unit_test(test_ace_is_valid_invalid_owner_group),
+		cmocka_unit_test(test_ace_is_valid_invalid_group),
+		cmocka_unit_test(test_ace_is_valid_invalid_everyone),
+		cmocka_unit_test(test_ace_is_valid_group_needs_flag),
+		cmocka_unit_test(test_ace_is_valid_non_group_needs_no_flag),
+		cmocka_unit_test(test_ace_is_valid_principal_len_not_aligned),
+		cmocka_unit_test(test_ace_is_valid_principal_not_terminated),
+		cmocka_unit_test(test_ace_is_valid_undefined_flags),
+		cmocka_unit_test(test_ace_is_valid_valid_flags),
+		cmocka_unit_test(test_ace_is_valid_undefined_perms),
+		cmocka_unit_test(test_ace_is_valid_valid_perms),
+		cmocka_unit_test(test_ace_is_valid_undefined_access_type),
+		cmocka_unit_test(test_ace_is_valid_valid_access_types),
+		cmocka_unit_test(test_ace_is_valid_perms_for_unset_type),
+		cmocka_unit_test(test_ace_is_valid_audit_flags_with_only_allow),
+		cmocka_unit_test(test_ace_is_valid_audit_without_flags),
+		cmocka_unit_test(test_acl_is_valid_null),
+		cmocka_unit_test(test_acl_is_valid_empty),
+		cmocka_unit_test(test_acl_is_valid_bad_version),
+		cmocka_unit_test(test_acl_is_valid_len_too_small),
+		cmocka_unit_test(test_acl_is_valid_len_unaligned),
+		cmocka_unit_test(test_acl_is_valid_one_invalid_ace),
+		cmocka_unit_test(test_acl_is_valid_valid_aces),
+		cmocka_unit_test(test_acl_is_valid_later_ace_invalid)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

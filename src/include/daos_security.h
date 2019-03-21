@@ -256,7 +256,7 @@ daos_acl_dump(struct daos_acl *acl);
  * \return	True if the ACL is valid, false otherwise
  */
 bool
-daos_acl_validate(struct daos_acl *acl);
+daos_acl_is_valid(struct daos_acl *acl);
 
 /**
  * Allocate a new Access Control Entry with an appropriately aligned principal
@@ -313,7 +313,7 @@ daos_ace_dump(struct daos_ace *ace, uint tabs);
  * \return	True if the ACE is valid, false otherwise
  */
 bool
-daos_ace_validate(struct daos_ace *ace);
+daos_ace_is_valid(struct daos_ace *ace);
 
 #if defined(__cplusplus)
 }
