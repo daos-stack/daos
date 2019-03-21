@@ -102,6 +102,17 @@ static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
 	csum_buf->cs_chunksize = chunksize;
 }
 
+static inline bool
+daos_csum_isvalid(daos_csum_buf_t *csum)
+{
+	return csum != NULL &&
+	       csum->cs_len > 0 &&
+	       csum->cs_buf_len > 0 &&
+	       csum->cs_csum != NULL &&
+	       csum->cs_chunksize > 0 &&
+	       csum->cs_nr > 0;
+}
+
 static inline void
 daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 {
