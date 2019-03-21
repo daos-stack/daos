@@ -1362,13 +1362,15 @@ out:
  * tree depth to one.
  */
 static int
-evt_root_activate(struct evt_context *tcx, uint32_t inob)
+evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
 	struct evt_root		*root;
 	uint64_t		 nd_off;
 	int			 rc;
 
 	root = tcx->tc_root;
+	uint32_t inob = ent->ei_inob;
+	const daos_csum_buf_t *csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
 	D_ASSERT(root->tr_node == 0);
@@ -1386,6 +1388,16 @@ evt_root_activate(struct evt_context *tcx, uint32_t inob)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
+	if (daos_csum_isvalid(csum)) {
+		/**
+		 * csum len, type, and chunksize will be a configuration stored
+		 * in the container meta data. for now trust the entity checksum
+		 * to have correct values.
+		 */
+		tcx->tc_root->tr_csum_len		= csum->cs_len;
+		tcx->tc_root->tr_csum_type		= csum->cs_type;
+		tcx->tc_root->tr_csum_chunk_size	= csum->cs_chunksize;
+	}
 
 	evt_tcx_set_dep(tcx, root->tr_depth);
 	evt_tcx_set_trace(tcx, 0, nd_off, 0);
@@ -1743,7 +1755,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		return rc;
 
 	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx, entry->ei_inob);
+		rc = evt_root_activate(tcx, entry);
 		if (rc != 0)
 			goto out;
 	} else if (tcx->tc_inob == 0 && entry->ei_inob != 0) {
@@ -2407,16 +2419,6 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		TMMID(struct evt_desc)	 desc_mmid;
 		struct evt_desc		*desc;
 
-		/**
-		 * csum len, type, and chunksize will be a configuration stored
-		 * in the container meta data. for now trust the entity checksum
-		 * to have correct values.
-		 */
-		const daos_csum_buf_t *csum = &ent->ei_csum;
-
-		tcx->tc_root->tr_csum_len		= csum->cs_len;
-		tcx->tc_root->tr_csum_type		= csum->cs_type;
-		tcx->tc_root->tr_csum_chunk_size	= csum->cs_chunksize;
 		uint32_t csum_buf_size =
 			evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
 
