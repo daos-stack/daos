@@ -40,8 +40,11 @@ def WriteHostFile(hostlist, path='/tmp', slots=1):
     f = open(hostfile, 'w')
 
     for host in hostlist:
-        f.write("{0} slots={1}\n".format(host, slots))
-        #f.write("{0}\n".format(host))
-
+        if slots is None:
+            print "<<{}>>".format(slots)
+            f.write("{0}\n".format(host))
+        else:
+            print "<<{}>>".format(slots)
+            f.write("{0} slots={1}\n".format(host, slots))
     f.close()
     return hostfile

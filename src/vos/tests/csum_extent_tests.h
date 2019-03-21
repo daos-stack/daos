@@ -46,4 +46,7 @@ csum_extent_not_chunk_aligned(void **state);
 void
 evt_csum_helper_functions_tests(void **state);
 
+void
+csum_invalid_input_tests(void **state);
+
 #endif

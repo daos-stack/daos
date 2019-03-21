@@ -48,8 +48,8 @@ struct evt_iterator {
 	unsigned int			it_state;
 	/** options for iterator */
 	unsigned int			it_options;
-	/** true if forward iterator */
-	bool				it_forward;
+	unsigned int			it_forward:1,
+					it_skip_move:1;
 	/** index */
 	int				it_index;
 	/** For sorted iterators */

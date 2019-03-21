@@ -692,7 +692,7 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_lock(rpt->rt_lock);
 	map = rebuild_pool_map_get(rpt->rt_pool);
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rpt->rt_pool_uuid, map, true);
+	rc = pl_map_update(rpt->rt_pool_uuid, map, false, true);
 	if (rc != 0) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out_map, rc = -DER_NOMEM);
@@ -704,7 +704,7 @@ rebuild_scan_leader(void *data)
 
 	rc = dss_thread_collective(rebuild_scanner, &iter_arg, 0);
 	if (rc)
-		D_GOTO(put_plmap, rc);
+		D_GOTO(out_map, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));
@@ -717,7 +717,7 @@ rebuild_scan_leader(void *data)
 		rc = dbtree_iterate(arg->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
 				    false, rebuild_tgt_fini_obj_send_cb, arg);
 		if (rc)
-			D_GOTO(put_plmap, rc);
+			D_GOTO(out_map, rc);
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
@@ -726,14 +726,12 @@ rebuild_scan_leader(void *data)
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		D_GOTO(put_plmap, rc);
+		D_GOTO(out_map, rc);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
 
-put_plmap:
-	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
 	rebuild_pool_map_put(map);
 	dbtree_destroy(arg->rebuild_tree_hdl);

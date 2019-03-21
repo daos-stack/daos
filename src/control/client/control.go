@@ -45,10 +45,10 @@ type ScmModules []*pb.ScmModule
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*pb.NvmeController
 
-// Control interface specifies gRPC client functionality.
+// Control interface accesses gRPC client functionality.
 type Control interface {
 	connect(string) error
-	close() error
+	disconnect() error
 	connected() (connectivity.State, bool)
 	getAddress() string
 	listAllFeatures() (FeatureMap, error)
@@ -91,15 +91,12 @@ func (c *control) connect(addr string) (err error) {
 	return
 }
 
-// close terminates the underlying channel used by the grpc client service.
-func (c *control) close() error {
-	return c.gconn.Close()
-}
+// disconnect terminates the underlying channel used by the grpc
+// client service.
+func (c *control) disconnect() error { return c.gconn.Close() }
 
 // getAddress returns the target address of the connection.
-func (c *control) getAddress() string {
-	return c.gconn.Target()
-}
+func (c *control) getAddress() string { return c.gconn.Target() }
 
 func checkState(state connectivity.State) bool {
 	return (state == connectivity.Idle || state == connectivity.Ready)

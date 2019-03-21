@@ -54,6 +54,11 @@ extern struct dss_module_key vos_module_key;
 
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
+/*
+ * When aggregate merge window reaches this size threshold, it will stop
+ * growing and trigger window flush immediately.
+ */
+#define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -851,6 +856,36 @@ vos_hdl2iter(daos_handle_t hdl)
 	return (struct vos_iterator *)hdl.cookie;
 }
 
+/** iterator for dkey/akey/recx */
+struct vos_obj_iter {
+	/* public part of the iterator */
+	struct vos_iterator	 it_iter;
+	/** handle of iterator */
+	daos_handle_t		 it_hdl;
+	/** condition of the iterator: epoch logic expression */
+	vos_it_epc_expr_t	 it_epc_expr;
+	/** iterator flags */
+	uint32_t		 it_flags;
+	/** condition of the iterator: epoch range */
+	daos_epoch_range_t	 it_epr;
+	/** condition of the iterator: attribute key */
+	daos_key_t		 it_akey;
+	/* reference on the object */
+	struct vos_object	*it_obj;
+};
+
+static inline struct vos_obj_iter *
+vos_iter2oiter(struct vos_iterator *iter)
+{
+	return container_of(iter, struct vos_obj_iter, it_iter);
+}
+
+static inline struct vos_obj_iter *
+vos_hdl2oiter(daos_handle_t hdl)
+{
+	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound key.
@@ -890,6 +925,13 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	       daos_iov_t *val_iov, int flags);
+
+/* vos_io.c */
+uint16_t
+vos_media_select(struct vos_object *obj, daos_iod_type_t type,
+		 daos_size_t size);
+int
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be
  * contiguous in the struct being updated.  This is ensured at present by

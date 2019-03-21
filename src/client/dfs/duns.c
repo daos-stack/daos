@@ -38,8 +38,8 @@
 #include "daos_uns.h"
 
 #define DUNS_XATTR_NAME		"user.daos"
-#define DUNS_MAX_XATTR_LEN	150
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/"
+#define DUNS_MAX_XATTR_LEN	170
+#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
 
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
@@ -95,6 +95,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	t = strtok_r(NULL, "/", &saveptr);
 	daos_parse_oclass(t, &attr->da_oclass);
+
+	t = strtok_r(NULL, "/", &saveptr);
+	attr->da_chunk_size = strtoull(t, NULL, 10);
 
 	return 0;
 }
@@ -184,7 +187,8 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 		uuid_unparse(attr.da_cuuid, cont);
 
 		/** store the daos attributes in the path xattr */
-		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass);
+		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
+			      attr.da_chunk_size);
 		if (len < 90) {
 			D_ERROR("Failed to create xattr value\n");
 			D_GOTO(err_pool, rc = -DER_INVAL);

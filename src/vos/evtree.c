@@ -304,6 +304,11 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		if (rc != 0)
 			return rc;
 
+		D_ASSERTF(ent_array->ea_ent_nr < ent_array->ea_size,
+			  "%u >= %u, depth:%u, order:%u\n",
+			  ent_array->ea_ent_nr, ent_array->ea_size,
+			  tcx->tc_depth, tcx->tc_order);
+
 		if (notify_realloc)
 			return -DER_AGAIN; /* Invalidate any cached state */
 	}
@@ -2838,7 +2843,8 @@ void
 evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		    struct evt_entry *entry)
 {
-	if (tcx->tc_root->tr_csum_len > 0) {
+	if (tcx->tc_root->tr_csum_len > 0 &&
+		tcx->tc_root->tr_csum_chunk_size) {
 		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 		daos_off_t lo_offset = evt_entry_selected_offset(entry);
 		uint32_t csum_count = evt_csum_count(tcx, &entry->en_ext);

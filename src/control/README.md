@@ -22,15 +22,26 @@ The [shell](dmg/daos_shell) is an example client application which can connect t
 
 ## Configuration
 
-`daos_server` configuration file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`daos_server -h` for usage) or default location (`<daos install dir>/install/etc/daos_server.yml`).
+`daos_server` config file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`-o` option) or default location (`<daos install dir>/install/etc/daos_server.yml`).
 
-Parameters will be parsed and populated with defaults (located in `config_types.go`) if not present in configuration.
+Example config files can be found in the [examples folder](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
 
-Commandline parameters take precedence over configuration file values but if not specified on commandline, configuration file values will be applied (or parsed defaults).
+Some parameters will be parsed and populated with defaults as documented in the [default daos server config](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml) if not present in config file.
 
-For convenience, active parsed config values are written to either directory where config file was read from or `/tmp/` if that fails.
+Parameters passed to `daos_server` on the commandline as application options (excluding environment variables) take precedence over values specified in config file.
 
-If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation a "Warning: using os env vars..." message will be printed to the console and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
+For convenience, active parsed config values are written to the directory where the server config file was read from or `/tmp/` if that fails.
+
+If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation an error message beginning "using os env vars..." will be printed and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
+
+It is strongly recommended to specify all parameters and environment for running DAOS servers in the [server config file](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml).
+
+To clarify with respect to environment variables affecting the behaviour of `daos_io_server` instances:
+
+* If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell.
+The config file will be ignored.
+
+* If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
 
 ## Subcommands
 
@@ -84,13 +95,13 @@ Operations on NVMe SSD devices are performed using [go-spdk bindings](./go-spdk/
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
 
-![Demo: List NVMe Controllers and Namespaces](./media/daosshellnamespaces.svg)
+![Demo: List NVMe Controllers and Namespaces](/doc/graph/daosshellnamespaces.svg)
 
 ### NVMe Controller Firmware Update
 
 The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
 
-![Demo: Updating NVMe Controller Firmware](./media/daosshellfwupdate.svg)
+![Demo: Updating NVMe Controller Firmware](/doc/graph/daosshellfwupdate.svg)
 
 ### NVMe Controller Burn-in Validation
 
@@ -108,35 +119,35 @@ Burn-in validation is performed using the [fio tool](https://github.com/axboe/fi
 
 First a view of software component architecture:
 
-![Architecture diagram](./media/control_architecture.PNG)
+![Architecture diagram](/doc/graph/system_architecture.png)
 
 Then communication interfaces:
 
 ```
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚  Go Shell     â”‚ â”‚ Other Client  â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-            â”‚                 â”‚
-            â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                     â–¼
-          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-          â”‚    Go daos_server   â”‚----|
-          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    |
-                     â”‚               |
-                     â–¼               |
-       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” |
-       â”‚     Unix Domain Socket    â”‚ |
-       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ |
-                     â”‚               |
-                     â–¼               |
-          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    |
-          â”‚   C daos_io_server  â”‚    |
-          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    |
-                     â”‚               |
-                     â–¼               |
-           â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    |
-           â”‚ Persistent Storage â”‚<---|
-           â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+    âââââââââââââââââ âââââââââââââââââ
+    â  Go Shell     â â Other Client  â
+    âââââââââââââââââ âââââââââââââââââ
+            â                 â
+            ââââââââââ¬âââââââââ
+                     â¼
+          âââââââââââââââââââââââ
+          â    Go daos_server   â----|
+          âââââââââââââââââââââââ    |
+                     â               |
+                     â¼               |
+       âââââââââââââââââââââââââââââ |
+       â     Unix Domain Socket    â |
+       âââââââââââââââââââââââââââââ |
+                     â               |
+                     â¼               |
+          âââââââââââââââââââââââ    |
+          â   C daos_io_server  â    |
+          âââââââââââââââââââââââ    |
+                     â               |
+                     â¼               |
+           ââââââââââââââââââââââ    |
+           â Persistent Storage â<---|
+           ââââââââââââââââââââââ
 ```
 TODO: include details of `daos_agent` interaction
 
@@ -166,4 +177,4 @@ TODO: include details of `daos_agent` interaction
 
 ### daos_server and daos_agent
 
-* Avoid calling `os.Exit` (or `log.Fatal`, `log.Fatalf`, etc.), except for assertion purposes. Fatal errors shall be returned back to `main`, who determines the exit status based on its `err` and calls `os.Exit`, in its last deferred function call.
+* Avoid calling `os.Exit` (or function with equivalent effects), except for assertion purposes. Fatal errors shall be returned back to `main`, who calls `os.Exit` accordingly.

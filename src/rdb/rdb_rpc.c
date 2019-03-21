@@ -231,7 +231,7 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *p)
 	rc = crt_proc_uint16_t(proc, &p->da_shard);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->da_padding);
+	rc = crt_proc_uint32_t(proc, &p->da_flags);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_memcpy(proc, &p->da_buf, sizeof(p->da_buf));
