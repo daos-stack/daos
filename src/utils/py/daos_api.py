@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -88,8 +88,9 @@ class DaosPool(object):
         # create synchronously, if its there then run it in a thread
         if cb_func == None:
             rc = func(c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_scm_size, c_nvme_size, None,
-                      ctypes.byref(self.svc), self.uuid, None)
+                      c_whatever, c_scm_size, c_nvme_size,
+                      None, ctypes.byref(self.svc),
+                      self.uuid, None)
             if rc != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError("Pool create returned non-zero. RC: {0}"
@@ -124,6 +125,7 @@ class DaosPool(object):
         if cb_func is None:
             rc = func(self.uuid, self.group, ctypes.byref(self.svc), c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), None)
+
             if rc != 0:
                 self.handle = 0
                 raise DaosApiError("Pool connect returned non-zero. RC: {0}".format(rc))
@@ -351,7 +353,8 @@ class DaosPool(object):
         func = self.context.get_function('query-pool')
 
         if cb_func is None:
-            rc = func(self.handle, None, ctypes.byref(self.pool_info), None, None)
+            rc = func(self.handle, None, ctypes.byref(self.pool_info),
+                      None, None)
             if rc != 0:
                 raise DaosApiError("Pool query returned non-zero. RC: {0}"
                                    .format(rc))
@@ -405,6 +408,160 @@ class DaosPool(object):
         svc_rank = ctypes.c_uint(rank)
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(svc_rank)
         self.svc = RankList(rl_ranks, 1)
+
+    def list_attr(self, poh=None, cb_func=None):
+        """
+        Retrieve a list of user-defined pool attribute values.
+        Args:
+            poh [Optional]:     Pool Handler.
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            total_size[int]: Total aggregate size of attributes names.
+            buffer[String]: Complete aggregated attributes names.
+        """
+
+        # in odd test scenarios might want to override the handle
+        if poh is not None:
+            self.handle = poh
+
+        '''
+        This is for getting the Aggregate size of all attributes names first
+        if it's not passed as a dictionary.
+        '''
+        sbuf = ctypes.create_string_buffer(5000).raw
+        t_size = ctypes.pointer(ctypes.c_size_t(5000))
+
+        func = self.context.get_function('list-pool-attr')
+        rc = func(self.handle, sbuf, t_size)
+        if rc != 0:
+            raise DaosApiError("Pool List-attr returned non-zero. RC:{0}"
+                             .format(rc))
+        buf = t_size[0]
+
+        buffer = ctypes.create_string_buffer(buf  + 1).raw
+        total_size = ctypes.pointer(ctypes.c_size_t(buf + 1))
+
+        # the async version
+        if cb_func is None:
+            rc = func(self.handle, buffer, total_size, None)
+            if rc != 0:
+                raise DaosApiError("Pool List Attribute returned non-zero.\
+                RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.handle, buffer, total_size, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+        return total_size.contents, buffer
+
+    def set_attr(self, data, poh=None, cb_func=None):
+        """
+        Set a list of user-defined container attributes.
+        Args:
+            data[Required]:     Dictionary of Attribute name and value.
+            poh [Optional]:     Pool Handler
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            None
+        """
+        if poh is not None:
+            self.handle = poh
+
+        func = self.context.get_function('set-pool-attr')
+
+        att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
+        names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
+
+        no_of_att = ctypes.c_int(len(data))
+
+        att_values = (ctypes.c_char_p * len(data))(*list(data.values()))
+        values = ctypes.cast(att_values, ctypes.POINTER(ctypes.c_char_p))
+
+        size_of_att_val = []
+        for key in data.keys():
+            if data[key] is not None:
+                size_of_att_val.append(len(data[key]))
+            else:
+                size_of_att_val.append(0)
+        sizes = (ctypes.c_size_t * len(data))(*size_of_att_val)
+
+        # the callback function is optional, if not supplied then run the
+        # create synchronously, if its there then run it in a thread
+        if cb_func is None:
+            rc = func(self.handle, no_of_att, names, values, sizes, None)
+            if rc != 0:
+                raise DaosApiError("Pool Set Attribute returned non-zero"
+                                 "RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.handle, no_of_att, names, values, sizes, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+
+    def get_attr(self, attr_names, poh=None, cb_func=None):
+        """
+        Retrieve a list of user-defined container attribute values.
+        Args:
+            attr_names:         list of attributes to retrieve
+            poh [Optional]:     Pool Handle if you really want to override it
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            Requested Attributes as a dictionary.
+        """
+        if not attr_names:
+            raise DaosApiError("Attribute list should not be blank")
+
+        # for some unusual test cases you might want to override handle
+        if poh is not None:
+            self.handle = poh
+
+        attr_count = len(attr_names)
+        attr_names_c = (ctypes.c_char_p * attr_count)(*attr_names)
+
+        no_of_att = ctypes.c_int(attr_count)
+        buffers = ctypes.c_char_p * attr_count
+        buffer = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
+                           for i in xrange(attr_count)])
+
+        size_of_att_val = [100] * attr_count
+        sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
+
+        func = self.context.get_function('get-pool-attr')
+        if cb_func is None:
+            rc = func(self.handle, no_of_att, ctypes.byref(attr_names_c),
+                      ctypes.byref(buffer), sizes, None)
+            if rc != 0:
+                raise DaosApiError("Pool Get Attribute returned non-zero.\
+                RC: {0}".format(rc))
+        else:
+            event = DaosEvent()
+            params = [self.handle, no_of_att, ctypes.byref(attr_names_c),
+                      ctypes.byref(buffer), sizes, event]
+            t = threading.Thread(target=AsyncWorker1,
+                                 args=(func,
+                                       params,
+                                       self.context,
+                                       cb_func,
+                                       self))
+            t.start()
+
+        results = {}
+        i = 0
+        for attr in attr_names:
+            results[attr] = buffer[i]
+            i += 1
+
+        return results
 
     @staticmethod
     def __pylist_to_array(pylist):
@@ -679,7 +836,8 @@ class IORequest(object):
         ctypes.memset(ctypes.byref(self.iod.iod_kcsum), 0, 16)
 
         # epoch range still in IOD for some reason
-        self.epoch_range = EpochRange()
+	# Commenting epoch_range because it was creating issue DAOS-2028.
+        # self.epoch_range = EpochRange()
         self.tx = 0
 
         cs = CheckSum()
@@ -713,8 +871,8 @@ class IORequest(object):
         self.sgl.sg_nr = len(c_data)
         self.sgl.sg_nr_out = len(c_data)
 
-        self.epoch_range.epr_lo = 0
-        self.epoch_range.epr_hi = ~0
+        #self.epoch_range.epr_lo = 0
+        #self.epoch_range.epr_hi = ~0
 
         self.tx = tx
         c_tx = ctypes.c_uint64(tx)
@@ -731,8 +889,7 @@ class IORequest(object):
         self.iod.iod_size = c_data[0][1]
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
-        self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                        ctypes.c_void_p)
+        #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range), ctypes.c_void_p)
 
         # now do it
         func = self.context.get_function('update-obj')
@@ -830,8 +987,8 @@ class IORequest(object):
         self.sgl.sg_nr = 1
         self.sgl.sg_nr_out = 1
 
-        self.epoch_range.epr_lo = 0
-        self.epoch_range.epr_hi = ~0
+        #self.epoch_range.epr_lo = 0
+        #self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
         if akey is not None:
@@ -841,8 +998,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = size
             self.iod.iod_nr = 1
-            self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                            ctypes.c_void_p)
+            #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range), ctypes.c_void_p)
             iod_ptr = ctypes.pointer(self.iod)
         else:
             iod_ptr = None
@@ -893,8 +1049,8 @@ class IORequest(object):
 
             sgl_ptr = ctypes.pointer(self.sgl)
 
-        self.epoch_range.epr_lo = 0
-        self.epoch_range.epr_hi = ~0
+        #self.epoch_range.epr_lo = 0
+        #self.epoch_range.epr_hi = ~0
 
         # setup the descriptor
 
@@ -907,8 +1063,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = ctypes.c_size_t(size)
             self.iod.iod_nr = 1
-            self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-                                            ctypes.c_void_p)
+            #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range), ctypes.c_void_p)
             iod_ptr = ctypes.pointer(self.iod)
 
         if dkey is not None:
@@ -1261,7 +1416,9 @@ class DaosContainer(object):
             raise DaosApiError("TX commit returned non-zero. RC: {0}"
                                .format(rc))
 
-    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None, obj_cls=13):
+    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
+                             obj_cls=13):
+
         """
         Write an array of data to an object.  If an object is not supplied
         a new one is created.  The update occurs in its own epoch and the epoch
@@ -1489,7 +1646,7 @@ class DaosContainer(object):
         """
         if coh is not None:
             self.coh = coh
-        func = self.context.get_function('list-attr')
+        func = self.context.get_function('list-cont-attr')
 
         '''
         This is for getting the Aggregate size of all attributes names first
@@ -1499,8 +1656,9 @@ class DaosContainer(object):
         t_size = ctypes.pointer(ctypes.c_size_t(100))
         rc = func(self.coh, sbuf, t_size)
         if rc != 0:
-            raise DaosApiError("Container List-attr returned non-zero. RC:{0}"
-                               .format(rc))
+            raise DaosApiError(
+                "Container list-cont-attr returned non-zero. RC:{0}"
+                             .format(rc))
         buf = t_size[0]
 
         buffer = ctypes.create_string_buffer(buf  + 1).raw
@@ -1537,7 +1695,7 @@ class DaosContainer(object):
         if coh is not None:
             self.coh = coh
 
-        func = self.context.get_function('set-attr')
+        func = self.context.get_function('set-cont-attr')
 
         att_names = (ctypes.c_char_p * len(data))(*list(data.keys()))
         names = ctypes.cast(att_names, ctypes.POINTER(ctypes.c_char_p))
@@ -1602,7 +1760,7 @@ class DaosContainer(object):
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
 
-        func = self.context.get_function('get-attr')
+        func = self.context.get_function('get-cont-attr')
         if cb_func is None:
             rc = func(self.coh, no_of_att, ctypes.byref(attr_names_c),
                       ctypes.byref(buffer), sizes, None)
@@ -1628,6 +1786,86 @@ class DaosContainer(object):
             i += 1
 
         return results
+
+class DaosSnapshot(object):
+    """ A python object that can represent a DAOS snapshot. We do not save the
+    coh in the snapshot since it is different each time the container is opened.
+    """
+    def __init__(self, context, name=None):
+        """The epoch is represented as a Python integer so when sending it to
+        libdaos we know to always convert it to a ctype.
+        """
+        self.context = context
+        self.name = name # currently unused
+        self.epoch = 0
+
+    def create(self, coh, epoch):
+        """ Send a snapshot creation request and store the info in the
+        DaosSnapshot object.
+        coh     --ctype.u_long handle on an open container
+        epoch   --the epoch number of the obj to be snapshotted
+        """
+        func = self.context.get_function('create-snap')
+        epoch = ctypes.c_uint64(epoch)
+        retcode = func(coh, ctypes.byref(epoch), None, None)
+        self.epoch = epoch.value
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+
+    # TODO Generalize this function to accept and return the number of
+    #  snapshots and the epochs and names lists. See description of
+    #  daos_cont_list_snap in src/include/daos_api.h. This must be done for
+    #  DAOS-1336 Verify container snapshot info.
+    def list(self, coh):
+        """ Call daos_cont_snap_list and make sure there is a snapshot in the
+        list.
+        coh --ctype.u_long handle on an open container
+        Returns the value of the epoch for this DaosSnapshot object.
+        """
+        func = self.context.get_function('list-snap')
+        num = ctypes.c_uint64(1)
+        epoch = ctypes.c_uint64(self.epoch)
+        anchor = Anchor()
+        retcode = func(coh, ctypes.byref(num), ctypes.byref(epoch), None,
+                       ctypes.byref(anchor), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+        return epoch.value
+
+    def open(self, coh):
+        """ Get a tx handle for the snapshot and return it.
+        coh --ctype.u_long handle on an open container
+        returns a handle on the snapshot represented by this DaosSnapshot
+        object.
+        """
+        func = self.context.get_function('open-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        txhndl = ctypes.c_uint64(0)
+        retcode = func(coh, epoch, ctypes.byref(txhndl), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}"
+                               .format(retcode))
+        return txhndl
+
+    def destroy(self, coh, evnt=None):
+        """ Destroy the snapshot. The "epoch range" is a struct with the lowest
+        epoch and the highest epoch to destroy. We have only one epoch for this
+        single snapshot object.
+        coh     --ctype.u_long open container handle
+        evnt    --event (may be None)
+        # need container handle coh, and the epoch range
+        """
+        func = self.context.get_function('destroy-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        epr = EpochRange()
+        epr.epr_lo = epoch
+        epr.epr_hi = epoch
+        retcode = func(coh, epr, evnt)
+        if retcode != 0:
+            raise Exception("Failed to destroy the snapshot. RC: {0}"
+                            .format(retcode))
 
 class DaosServer(object):
     """Represents a DAOS Server"""
@@ -1679,10 +1917,12 @@ class DaosContext(object):
             'create-cont'    : self.libdaos.daos_cont_create,
             'create-eq'      : self.libdaos.daos_eq_create,
             'create-pool'    : self.libdaos.daos_pool_create,
+            'create-snap'    : self.libdaos.daos_cont_create_snap,
             'd_log'          : self.libtest.dts_log,
             'destroy-cont'   : self.libdaos.daos_cont_destroy,
             'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
+            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
             'destroy-tx'     : self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
@@ -1690,14 +1930,19 @@ class DaosContext(object):
             'extend-pool'    : self.libdaos.daos_pool_extend,
             'fetch-obj'      : self.libdaos.daos_obj_fetch,
             'generate-oid'   : self.libtest.dts_oid_gen,
-            'get-attr'       : self.libdaos.daos_cont_get_attr,
+            'get-cont-attr'  : self.libdaos.daos_cont_get_attr,
+            'get-pool-attr'  : self.libdaos.daos_pool_get_attr,
             'get-layout'     : self.libdaos.daos_obj_layout_get,
             'init-event'     : self.libdaos.daos_event_init,
             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
             'kill-target'    : self.libdaos.daos_pool_tgt_exclude_out,
             'list-attr'      : self.libdaos.daos_cont_list_attr,
+            'list-cont-attr' : self.libdaos.daos_cont_list_attr,
+            'list-pool-attr' : self.libdaos.daos_pool_list_attr,
+            'list-snap'      : self.libdaos.daos_cont_list_snap,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
+            'open-snap'      : self.libdaos.daos_tx_open_snap,
             'open-tx'        : self.libdaos.daos_tx_open,
             'poll-eq'        : self.libdaos.daos_eq_poll,
             'punch-akeys'    : self.libdaos.daos_obj_punch_akeys,
@@ -1707,7 +1952,8 @@ class DaosContext(object):
             'query-obj'      : self.libdaos.daos_obj_query,
             'query-pool'     : self.libdaos.daos_pool_query,
             'query-target'   : self.libdaos.daos_pool_query_target,
-            'set-attr'       : self.libdaos.daos_cont_set_attr,
+            'set-cont-attr'  : self.libdaos.daos_cont_set_attr,
+            'set-pool-attr'  : self.libdaos.daos_pool_set_attr,
             'stop-service'   : self.libdaos.daos_pool_stop_svc,
             'test-event'     : self.libdaos.daos_event_test,
             'update-obj'     : self.libdaos.daos_obj_update}
@@ -1811,11 +2057,13 @@ if __name__ == '__main__':
         print "Storage Pool Space information"
         for i in range(2):
             print "-----------------{}".format(i)
-            print "Total size: {}".format(pool_info.pi_space.ps_space.s_total[i])
-            print "Free:{}, min:{}, max:{}, mean:{}".format(pool_info.pi_space.ps_space.s_free[i],
-                                                            pool_info.pi_space.ps_free_min[i],
-                                                            pool_info.pi_space.ps_free_max[i],
-                                                            pool_info.pi_space.ps_free_mean[i])
+            print "Total size: {}".format(
+               pool_info.pi_space.ps_space.s_total[i])
+            print "Free:{}, min:{}, max:{}, mean:{}".format(
+               pool_info.pi_space.ps_space.s_free[i],
+               pool_info.pi_space.ps_free_min[i],
+               pool_info.pi_space.ps_free_max[i],
+               pool_info.pi_space.ps_free_mean[i])
 
         time.sleep(5)
 

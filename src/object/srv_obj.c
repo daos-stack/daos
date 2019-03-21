@@ -230,7 +230,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				break;
 		}
 
-		if (srv_bypass_bulk) {
+		if (daos_io_bypass & IOBP_SRV_BULK) {
 			/* this mode will bypass network bulk transfer and
 			 * only copy data from/to dummy buffer. This is for
 			 * performance evaluation on low bandwidth network.
@@ -574,7 +574,7 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 		bulk_op = CRT_BULK_GET;
 	}
 
-	bulk_bind = orw->orw_flags & ORW_FLAG_BULK_BIND;
+	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 	rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays,
 			      DAOS_HDL_INVAL, &p_sgl, orw->orw_nr);
 
@@ -612,7 +612,7 @@ obj_update_prefw(crt_rpc_t *req, uint32_t shard, void *arg)
 	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
 	orw->orw_shard_tgts.ca_count	= 0;
 	orw->orw_shard_tgts.ca_arrays	= NULL;
-	orw->orw_flags			= ORW_FLAG_BULK_BIND;
+	orw->orw_flags			= ORF_BULK_BIND;
 
 	return 0;
 }
@@ -629,7 +629,8 @@ ds_obj_rw_local_hdlr(crt_rpc_t *rpc, uint32_t tag, struct ds_cont_hdl *cont_hdl,
 	bool			 bulk_bind;
 	int			 rc, err;
 
-	if (daos_oc_echo_type(daos_obj_id2class(orw->orw_oid.id_pub))) {
+	if (daos_oc_echo_type(daos_obj_id2class(orw->orw_oid.id_pub)) ||
+	    (daos_io_bypass & IOBP_TARGET)) {
 		ds_obj_rw_echo_handler(rpc);
 		return 0;
 	}
@@ -692,7 +693,7 @@ ds_obj_rw_local_hdlr(crt_rpc_t *rpc, uint32_t tag, struct ds_cont_hdl *cont_hdl,
 	}
 
 	if (rma) {
-		bulk_bind = orw->orw_flags & ORW_FLAG_BULK_BIND;
+		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind,
 			orw->orw_bulks.ca_arrays, *ioh, NULL, orw->orw_nr);
 	} else if (orw->orw_sgls.ca_arrays != NULL) {

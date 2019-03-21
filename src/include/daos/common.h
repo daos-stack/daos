@@ -352,6 +352,7 @@ enum {
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
+#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -420,5 +421,78 @@ bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+
+static inline void
+daos_parse_oclass(const char *string, daos_oclass_id_t *objectClass)
+{
+	if (strcasecmp(string, "tiny") == 0)
+		*objectClass = DAOS_OC_TINY_RW;
+	else if (strcasecmp(string, "small") == 0)
+		*objectClass = DAOS_OC_SMALL_RW;
+	else if (strcasecmp(string, "large") == 0)
+		*objectClass = DAOS_OC_LARGE_RW;
+	else if (strcasecmp(string, "R2") == 0)
+		*objectClass = DAOS_OC_R2_RW;
+	else if (strcasecmp(string, "R2S") == 0)
+		*objectClass = DAOS_OC_R2S_RW;
+	else if (strcasecmp(string, "repl_max") == 0)
+		*objectClass = DAOS_OC_REPL_MAX_RW;
+	else
+		*objectClass = DAOS_OC_UNKNOWN;
+}
+
+static inline void
+daos_unparse_oclass(daos_oclass_id_t objectClass, char *string)
+{
+	switch (objectClass) {
+	case DAOS_OC_TINY_RW:
+		strcpy(string, "tiny");
+		break;
+	case DAOS_OC_SMALL_RW:
+		strcpy(string, "small");
+		break;
+	case DAOS_OC_LARGE_RW:
+		strcpy(string, "large");
+		break;
+	case DAOS_OC_R2_RW:
+		strcpy(string, "R2");
+		break;
+	case DAOS_OC_R2S_RW:
+	       strcpy(string, "R2S");
+	       break;
+	case DAOS_OC_REPL_MAX_RW:
+	       strcpy(string, "repl_max");
+	       break;
+	default:
+		strcpy(string, "unknown");
+		break;
+	}
+}
+
+static inline void
+daos_parse_ctype(const char *string, daos_cont_layout_t *type)
+{
+	if (strcasecmp(string, "HDF5") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_HDF5;
+	else if (strcasecmp(string, "POSIX") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_POSIX;
+	else
+		*type = DAOS_PROP_CO_LAYOUT_UNKOWN;
+}
+
+static inline void
+daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
+{
+	switch (ctype) {
+	case DAOS_PROP_CO_LAYOUT_POSIX:
+		strcpy(string, "POSIX");
+		break;
+	case DAOS_PROP_CO_LAYOUT_HDF5:
+		strcpy(string, "HDF5");
+		break;
+	default:
+		D_ASSERT(0);
+	}
+}
 
 #endif /* __DAOS_COMMON_H__ */

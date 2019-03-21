@@ -28,7 +28,7 @@ RUN zypper install -y                                        \
            cunit-devel libaio-devel clang sg3_utils          \
            libiscsi-devel libnuma-devel graphviz             \
            libyaml-devel                                     \
-           mscgen python2-pip curl which man
+           python2-pip curl which man
 
 RUN pip install --upgrade pip
 RUN pip install -U setuptools

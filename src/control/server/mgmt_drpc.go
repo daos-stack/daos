@@ -23,57 +23,64 @@
 
 package main
 
-import (
-	"os"
-	"path/filepath"
+// #cgo CFLAGS: -I${SRCDIR}/../../include
+// #include <daos/drpc_modules.h>
+import "C"
 
+import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/pkg/errors"
 )
 
-var sockFileName = "daos_server.sock"
+const (
+	mgmtModuleID = C.DRPC_MODULE_MGMT
+	killRank     = C.DRPC_METHOD_MGMT_KILL_RANK
 
-func getDrpcClientSocket(sockDir string) string {
-	return filepath.Join(sockDir, "daos_io_server.sock")
+	srvModuleID = C.DRPC_MODULE_SRV
+	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+)
+
+// mgmtModule is the management drpc module struct
+// mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
+// the daos_io_server iosrv module (src/iosrv).
+type mgmtModule struct{}
+
+// HandleCall is the handler for calls to the mgmtModule
+func (m *mgmtModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+	return nil, errors.New("mgmt module handler is not implemented")
 }
 
-func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
-	clientSock := getDrpcClientSocket(sockDir)
-	return drpc.NewClientConnection(clientSock)
+// InitModule is empty for this module
+func (m *mgmtModule) InitModule(state drpc.ModuleState) {}
+
+// ID will return Mgmt module ID
+func (m *mgmtModule) ID() int32 {
+	return mgmtModuleID
 }
 
-// drpcSetup creates socket directory, specifies socket path and then
-// starts drpc server.
-func drpcSetup(sockDir string) error {
-	// Create our socket directory if it doesn't exist
-	_, err := os.Stat(sockDir)
-	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
-	} else if err != nil && os.IsNotExist(err) {
-		err = os.MkdirAll(sockDir, 0755)
-		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
-		}
+// srvModule represents the daos_server dRPC module. It handles dRPCs sent by
+// the daos_io_server iosrv module (src/iosrv).
+type srvModule struct {
+	iosrv *iosrv
+}
+
+// HandleCall is the handler for calls to the srvModule
+func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+	switch method {
+	case notifyReady:
+		mod.handleNotifyReady()
+		return nil, nil
+	default:
+		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
+}
 
-	sockPath := filepath.Join(sockDir, sockFileName)
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
-	if err != nil {
-		return errors.Wrap(err, "unable to create socket server")
-	}
+func (mod *srvModule) InitModule(state drpc.ModuleState) {}
 
-	// Create and add our modules
-	secmodule := &SecurityModule{}
-	drpcServer.RegisterRPCModule(secmodule)
+func (mod *srvModule) ID() int32 {
+	return srvModuleID
+}
 
-	err = drpcServer.Start()
-	if err != nil {
-		return errors.Wrap(
-			err, "unable to start socket server on "+sockPath)
-	}
-
-	return nil
+func (mod *srvModule) handleNotifyReady() {
+	mod.iosrv.ready <- struct{}{}
 }

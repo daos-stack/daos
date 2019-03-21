@@ -71,22 +71,77 @@ daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
 
-/** buffer to store checksum */
+/** buffer to store an array of checksums */
 typedef struct {
-	/* TODO: typedef enum for it */
-	unsigned int	 cs_type;
-	unsigned short	 cs_len;
-	unsigned short	 cs_buf_len;
-	void		*cs_csum;
+	/** buffer to store the checksums */
+	uint8_t		*cs_csum;
+	/** number of checksums stored in buffer */
+	uint32_t	 cs_nr;
+	/** type of checksum */
+	uint16_t	 cs_type;
+	/** length of each checksum in bytes*/
+	uint16_t	 cs_len;
+	/** length of entire buffer (cs_csum). buf_len can be larger than
+	 *  nr * len, but never smaller
+	 */
+	uint32_t	 cs_buf_len;
+	/** bytes of data each checksum verifies (if value type is array) */
+	uint32_t	 cs_chunksize;
 } daos_csum_buf_t;
+
+static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
+					  uint32_t csum_buf_size,
+					  uint16_t csum_size,
+					  uint32_t csum_count,
+					  uint32_t chunksize)
+{
+	csum_buf->cs_csum = buf;
+	csum_buf->cs_len = csum_size;
+	csum_buf->cs_buf_len = csum_buf_size;
+	csum_buf->cs_nr = csum_count;
+	csum_buf->cs_chunksize = chunksize;
+}
+
+static inline bool
+daos_csum_isvalid(daos_csum_buf_t *csum)
+{
+	return csum != NULL &&
+	       csum->cs_len > 0 &&
+	       csum->cs_buf_len > 0 &&
+	       csum->cs_csum != NULL &&
+	       csum->cs_chunksize > 0 &&
+	       csum->cs_nr > 0;
+}
 
 static inline void
 daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 {
-	csum->cs_csum = buf;
-	csum->cs_len = csum->cs_buf_len = size;
+	daos_csum_set_multiple(csum, buf, size, size, 1, 0);
 }
 
+static inline uint32_t
+daos_csum_idx_from_off(daos_csum_buf_t *csum, uint32_t offset_bytes)
+{
+	return offset_bytes / csum->cs_chunksize;
+}
+
+static inline uint8_t *
+daos_csum_from_idx(daos_csum_buf_t *csum, uint32_t idx)
+{
+	return csum->cs_csum + csum->cs_len * idx;
+}
+
+static inline uint8_t *
+daos_csum_from_offset(daos_csum_buf_t *csum, uint32_t offset_bytes)
+{
+	return daos_csum_from_idx(csum,
+				  daos_csum_idx_from_off(csum, offset_bytes));
+}
+
+enum daos_anchor_flags {
+	/* The RPC will be sent to leader replica. */
+	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,
+};
 
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
@@ -100,10 +155,21 @@ typedef enum {
 typedef struct {
 	uint16_t	da_type; /** daos_anchor_type_t */
 	uint16_t	da_shard;
-	uint32_t	da_padding;
+	uint32_t	da_flags; /** see enum daos_anchor_flags */
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
+static inline void
+daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
+{
+	anchor->da_flags |= flags;
+}
+
+static inline uint32_t
+daos_anchor_get_flags(daos_anchor_t *anchor)
+{
+	return anchor->da_flags;
+}
 
 static inline void
 daos_anchor_set_zero(daos_anchor_t *anchor)
@@ -638,6 +704,13 @@ typedef struct {
 	daos_epoch_range_t	*iod_eprs;
 } daos_iod_t;
 
+/** Get a specific checksum given an index */
+static inline daos_csum_buf_t *
+daos_iod_csum(daos_iod_t *iod, int csum_index)
+{
+	return iod->iod_csums ? &iod->iod_csums[csum_index] : NULL;
+}
+
 /**
  * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
@@ -791,9 +864,9 @@ enum daos_pool_prop_type {
 	DAOS_PROP_PO_LABEL,
 	/**
 	 * ACL: access control list for pool
-	 * A list of uid/gid that can access the pool RO
-	 * A list of uid/gid that can access the pool RW
-	 * default RW gid = gid of pool create invoker
+	 * An ordered list of access control entries detailing user and group
+	 * access privileges.
+	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
 	 */
 	DAOS_PROP_PO_ACL,
 	/**
@@ -827,46 +900,6 @@ enum {
 /** self headling strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
-
-/** bits of ae_tag entry in struct daos_acl_entry */
-enum {
-	/** access rights for the pool/container/obj's owner */
-	DAOS_ACL_USER_OBJ	= (1U << 0),
-	/** access rights for user identified by the entry's ae_id */
-	DAOS_ACL_USER		= (1U << 1),
-	/** access rights for the pool/container/obj's group */
-	DAOS_ACL_GROUP_OBJ	= (1U << 2),
-	/** access rights for group identified by the entry's ae_id */
-	DAOS_ACL_GROUP		= (1U << 3),
-	/**
-	 * the maximum access rights that can be granted by entries of ae_tag
-	 * DAOS_ACL_USER, DAOS_ACL_GROUP_OBJ, or DAOS_ACL_GROUP.
-	 */
-	DAOS_ACL_MASK		= (1U << 4),
-	/**
-	 * access rights for processes that do not match any other entry
-	 * in the ACL.
-	 */
-	DAOS_ACL_OTHER		= (1U << 5),
-};
-
-struct daos_acl_entry {
-	/** DAOS_ACL_USER/GROUP/MASK/OTHER */
-	uint16_t		ae_tag;
-	/** permissions DAOS_PC_RO/RW */
-	uint16_t		ae_perm;
-	/** uid or gid, meaningful only when ae_tag is DAOS_ACL_USER/GROUP */
-	uint32_t		ae_id;
-};
-
-struct daos_acl {
-	/** number of acl entries */
-	uint32_t		 da_nr;
-	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 da_reserv;
-	/** acl entries array */
-	struct daos_acl_entry	*da_entries;
-};
 
 /**
  * DAOS container property types
@@ -919,13 +952,13 @@ enum daos_cont_prop_type {
 	DAOS_PROP_CO_MAX,
 };
 
+typedef uint16_t daos_cont_layout_t;
+
 /** container layout type */
 enum {
 	DAOS_PROP_CO_LAYOUT_UNKOWN,
 	DAOS_PROP_CO_LAYOUT_POSIX,
-	DAOS_PROP_CO_LAYOUT_MPIIO,
 	DAOS_PROP_CO_LAYOUT_HDF5,
-	DAOS_PROP_CO_LAYOUT_ARROW,
 };
 
 /** container checksum type */

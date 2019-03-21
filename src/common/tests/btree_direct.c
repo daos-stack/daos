@@ -161,7 +161,6 @@ sk_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		umem_id_t *rec_ret = (umem_id_t *) args;
 		 /** Provide the buffer to user */
 		*rec_ret	= rec->rec_mmid;
-		rec->rec_mmid	= UMMID_NULL;
 		return 0;
 	}
 	umem_free(umm, srec->sr_val_mmid);

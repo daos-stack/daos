@@ -73,6 +73,8 @@ typedef enum {
 	UMEM_CLASS_VMEM,
 	/** persistent memory */
 	UMEM_CLASS_PMEM,
+	/** persistent memory but ignore PMDK snapshot */
+	UMEM_CLASS_PMEM_NO_SNAP,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;

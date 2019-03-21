@@ -21,14 +21,16 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 
 	"google.golang.org/grpc/connectivity"
 )
@@ -40,22 +42,26 @@ var (
 	modules   = ScmModules{MockModulePB()}
 )
 
-type mockConnFactory struct {
+func init() {
+	log.NewDefaultLogger(log.Error, "connect_test: ", os.Stderr)
+}
+
+type mockControllerFactory struct {
 	state    connectivity.State
 	features []*pb.Feature
 	ctrlrs   NvmeControllers
 	modules  ScmModules
 }
 
-func (m *mockConnFactory) createConn(address string) MgmtClient {
-	return newMockMgmtClient(address, m.state, m.features, m.ctrlrs, m.modules)
+func (m *mockControllerFactory) create(address string) Control {
+	return newMockControl(address, m.state, m.features, m.ctrlrs, m.modules)
 }
 
-func newMockConnections(
+func newMockConnect(
 	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
-	modules ScmModules) Connections {
+	modules ScmModules) Connect {
 
-	return &connList{factory: &mockConnFactory{state, features, ctrlrs, modules}}
+	return &connList{factory: &mockControllerFactory{state, features, ctrlrs, modules}}
 }
 
 func TestConnectClients(t *testing.T) {
@@ -72,7 +78,7 @@ func TestConnectClients(t *testing.T) {
 		{addresses, Addresses{}, connectivity.Shutdown, false},
 	}
 	for _, tt := range conntests {
-		cc := newMockConnections(tt.state, features, ctrlrs, modules)
+		cc := newMockConnect(tt.state, features, ctrlrs, modules)
 
 		addrs, eMap := cc.ConnectClients(tt.addrsIn)
 
@@ -94,15 +100,15 @@ func TestConnectClients(t *testing.T) {
 
 func clientSetup(
 	t *testing.T, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules) Connections {
+	ctrlrs NvmeControllers, modules ScmModules) Connect {
 
-	cc := newMockConnections(state, features, ctrlrs, modules)
+	cc := newMockConnect(state, features, ctrlrs, modules)
 	_, _ = cc.ConnectClients(addresses)
 	return cc
 }
 
 func TestDuplicateConns(t *testing.T) {
-	cc := newMockConnections(connectivity.Ready, features, ctrlrs, modules)
+	cc := newMockConnect(connectivity.Ready, features, ctrlrs, modules)
 	addrs, eMap := cc.ConnectClients(append(addresses, addresses...))
 
 	// verify duplicates are removed and failed attempts recorded.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,8 +106,6 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 int
 rdb_tx_commit(struct rdb_tx *tx)
 {
-	struct rdb     *db = tx->dt_db;
-	msg_entry_t	entry = {};
 	int		result;
 	int		rc;
 
@@ -118,10 +116,8 @@ rdb_tx_commit(struct rdb_tx *tx)
 	if (rc != 0)
 		return rc;
 
-	entry.type = RAFT_LOGTYPE_NORMAL;
-	entry.data.buf = tx->dt_entry;
-	entry.data.len = tx->dt_entry_len;
-	rc = rdb_raft_append_apply(db, &entry, &result);
+	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
+				   &result);
 	if (rc != 0)
 		return rc;
 	return result;

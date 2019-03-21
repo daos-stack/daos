@@ -144,10 +144,12 @@ class DaosObjLayout(ctypes.Structure):
                 ("ol_shards", ctypes.POINTER(DaosObjShard * 5))]
 
 class CheckSum(ctypes.Structure):
-    _fields_ = [("cs_type", ctypes.c_uint),
-                ("cs_len", ctypes.c_ushort),
-                ("cs_buf_len", ctypes.c_ushort),
-                ("cs_csum", ctypes.c_void_p)]
+    _fields_ = [("cs_csum", ctypes.c_char_p),
+                ("cs_nr", ctypes.c_uint32),
+                ("cs_type", ctypes.c_uint16),
+                ("cs_len", ctypes.c_uint16),
+                ("cs_buf_len", ctypes.c_uint32),
+                ("cs_chunksize", ctypes.c_uint32)]
 
 class Extent(ctypes.Structure):
     _fields_ = [("rx_idx", ctypes.c_uint64),
@@ -162,6 +164,13 @@ class DaosIODescriptor(ctypes.Structure):
                 ("iod_recxs", ctypes.POINTER(Extent)),
                 ("iod_csums", ctypes.POINTER(CheckSum)),
                 ("iod_eprs", ctypes.c_void_p)]
+
+class Anchor(ctypes.Structure):
+    """ Class to represent a C daos_anchor_t struct. """
+    _fields_ = [('da_type', ctypes.c_uint16),
+                ('da_shard', ctypes.c_uint16),
+                ('da_padding', ctypes.c_uint32),
+                ('da_buff', ctypes.c_uint8*128)]
 
 class CallbackEvent(object):
     def __init__(self, obj, event):

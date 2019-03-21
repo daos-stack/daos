@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,6 +103,10 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  * \param[in]	flags	Access flags (O_RDONLY, O_RDWR, O_EXCL, O_CREAT).
  * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *			Valid on create only; ignored otherwise.
+ * \param[in]	chunk_size
+ *			Chunk size of the array object to be created.
+ *			(pass 0 for default 1 MiB chunk size).
+ *			Valid on file create only; ignored otherwise.
  * \param[in]	value	Symlink value (NULL if not syml).
  * \param[out]	obj	Pointer to object opened.
  *
@@ -110,7 +114,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  */
 int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	 int flags, daos_oclass_id_t cid, const char *value, dfs_obj_t **obj);
+	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	 const char *value, dfs_obj_t **obj);
 
 /*
  * Close/release open object.
@@ -461,6 +466,28 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
+
+/**
+ * Mount a DFS namespace in a special container designated as the root
+ * container. If the root container does not exist, this call creates it.
+ *
+ * \param[in]   poh     Pool connection handle
+ * \param[out]  dfs     Pointer to the root DFS created.
+ *
+ * \return              0 on Success. Negative on Failure.
+ */
+int
+dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
+
+/**
+ * Unmount the root DFS.
+ *
+ * \param[in]	dfs	Pointer to the root DFS file system.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_umount_root_cont(dfs_t *dfs);
 
 #if defined(__cplusplus)
 }
