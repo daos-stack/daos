@@ -34,19 +34,25 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // ListNvmeCtrlrs lists all NVMe controllers.
 func (c *controlService) ListNvmeCtrlrs(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListNvmeCtrlrsServer) error {
+
+	log.Debugf("ControlService.ListNvmeCtrlrs dispatch")
+
 	if err := c.nvme.Discover(); err != nil {
 		return err
 	}
+
 	for _, ctrlr := range c.nvme.controllers {
 		if err := stream.Send(ctrlr); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
