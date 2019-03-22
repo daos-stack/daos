@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import time
@@ -28,7 +29,7 @@ import traceback
 import sys
 import json
 import threading
-from avocado       import Test, main
+from avocado import Test
 from avocado.utils import process
 
 sys.path.append('./util')
@@ -46,6 +47,9 @@ GLOB_SIGNAL = None
 GLOB_RC = -99000000
 
 def cb_func(event):
+    """
+    Callback function for asynchronous pool destroy.
+    """
     global GLOB_SIGNAL
     global GLOB_RC
 
@@ -60,8 +64,8 @@ class DestroyTests(Test):
     def setUp(self):
         # there is a presumption that this test lives in a specific
         # spot in the repo
-        with open('../../../.build_vars.json') as f:
-            build_paths = json.load(f)
+        with open('../../../.build_vars.json') as build_file:
+            build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.tmp = build_paths['PREFIX'] + '/tmp'
 
@@ -71,6 +75,10 @@ class DestroyTests(Test):
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+
+        self.hostlist = None
+        self.hostlist1 = None
+        self.hostlist2 = None
 
     def tearDown(self):
         pass
@@ -120,9 +128,9 @@ class DestroyTests(Test):
                 self.fail("Pool {0} found on host {1} when not expected.\n"
                           .format(uuid_str, host))
 
-        except Exception as e:
-            print (e)
-            print (traceback.format_exc())
+        except Exception as excep:
+            print(excep)
+            print(traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")
 
         # no matter what happens shutdown the server
@@ -145,7 +153,7 @@ class DestroyTests(Test):
 
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
-
+        host = self.hostlist[0]
         try:
             # randomly selected uuid, that is exceptionally unlikely to exist
             bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
@@ -162,9 +170,9 @@ class DestroyTests(Test):
             # the above command should fail resulting in an exception so if
             # we get here the test has failed
             self.fail("Pool {0} found on host {1} when not expected.\n"
-                      .format(uuid_str, host))
+                      .format(bogus_uuid, host))
 
-        except Exception as e:
+        except Exception as _e:
             # expecting an exception so catch and pass the test
             pass
 
@@ -194,7 +202,7 @@ class DestroyTests(Test):
                                    '/run/setnames/badsetname/')
 
         uuid_str = ""
-
+        host = self.hostlist[0]
         # TODO make these params in the yaml
         daosctl = self.basepath + '/install/bin/daosctl'
 
@@ -225,7 +233,7 @@ class DestroyTests(Test):
             self.fail("Pool {0} found on host {1} when not expected.\n"
                       .format(uuid_str, host))
 
-        except Exception as e:
+        except Exception as _e:
             # expecting an exception, but now need to
             # clean up the pool for real
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
@@ -275,7 +283,7 @@ class DestroyTests(Test):
                 exists = CheckForPool.checkForPool(self.hostlist[1], uuid_str)
                 if exists != 0:
                     self.fail("Pool {0} not found on host {1}.\n"
-                              .format(uuid_str, host2))
+                              .format(uuid_str, self.hostlist[1]))
 
                 delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                               .format(daosctl, uuid_str, setid))
@@ -290,9 +298,9 @@ class DestroyTests(Test):
                     self.fail("Pool {0} found on host {1} when not "
                               "expected.\n".format(uuid_str, self.hostlist[1]))
 
-        except Exception as e:
-            print (e)
-            print (traceback.format_exc())
+        except Exception as excep:
+            print(excep)
+            print(traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")
 
         # no matter what happens shutdown the server
@@ -357,7 +365,7 @@ class DestroyTests(Test):
                 self.fail("Pool {0} not found on host {1} but delete "
                           "should have failed.\n".format(uuid_str, host))
 
-        except Exception as e:
+        except Exception as _e:
             # now issue a good delete command so we clean-up after this test
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                           .format(daosctl, uuid_str, self.server_group))
@@ -383,7 +391,7 @@ class DestroyTests(Test):
 
         :avocado: tags=pool,pooldestroy,x
         """
-
+        host = self.hostlist[0]
         try:
 
             # write out a hostfile and start the servers with it
@@ -415,12 +423,12 @@ class DestroyTests(Test):
             # should throw an exception and not hit this
             self.fail("Shouldn't hit this line.\n")
 
-        except DaosApiError as e:
-            print ("got exception which is expected so long as it is BUSY")
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print("got exception which is expected so long as it is BUSY")
+            print(excep)
+            print(traceback.format_exc())
             # pool should still be there
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = CheckForPool.checkForPool(host, pool.get_uuid_str)
             if exists != 0:
                 self.fail("Pool gone, but destroy should have failed.\n")
 
@@ -475,13 +483,13 @@ class DestroyTests(Test):
             # blow it away immediately
             pool.destroy(1)
 
-        except DaosApiError as e:
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
             self.fail("create/destroy/create/destroy test failed.\n")
 
-        except Exception as e:
-            self.fail("Daos code segfaulted most likely.  Error: %s" % e)
+        except Exception as excep:
+            self.fail("Daos code segfaulted most likely.  Error: %s" % excep)
 
         # no matter what happens cleanup
         finally:
@@ -520,13 +528,13 @@ class DestroyTests(Test):
             # okay, get rid of it
             pool.destroy(1)
 
-        except DaosApiError as e:
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
             self.fail("6 server test failed.\n")
 
-        except Exception as e:
-            self.fail("Daos code segfaulted most likely.  Error: %s" % e)
+        except Exception as excep:
+            self.fail("Daos code segfaulted most likely.  Error: %s" % excep)
 
         # no matter what happens cleanup
         finally:
@@ -581,13 +589,13 @@ class DestroyTests(Test):
             # blow it away
             pool.destroy(1)
 
-        except DaosApiError as e:
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
             self.fail("create/destroy/create/destroy test failed.\n")
 
-        except Exception as e:
-            self.fail("Daos code segfaulted most likely.  Error: %s" % e)
+        except Exception as excep:
+            self.fail("Daos code segfaulted most likely.  Error: %s" % excep)
 
         # no matter what happens cleanup
         finally:
@@ -650,13 +658,13 @@ class DestroyTests(Test):
             if GLOB_RC != -1011:
                 self.fail("RC not as expected in async test")
 
-        except DaosApiError as e:
-            print (e)
-            print (traceback.format_exc())
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
             self.fail("destroy async test failed.\n")
 
-        except Exception as e:
-            self.fail("Daos code segfaulted most likely. Error: %s" % e)
+        except Exception as excep:
+            self.fail("Daos code segfaulted most likely. Error: %s" % excep)
 
         # no matter what happens cleanup
         finally:

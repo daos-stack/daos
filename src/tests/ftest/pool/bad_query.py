@@ -89,7 +89,7 @@ class BadQueryTest(Test):
         expected_for_param.append(handlelist[1])
 
         infolist = self.params.get("info", '/run/querytests/infoptr/*/')
-        infoptr = infolist[0]
+        dummy_infoptr = infolist[0]
         expected_for_param.append(infolist[1])
 
         # if any parameter is FAIL then the test should FAIL, in this test

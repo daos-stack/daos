@@ -131,14 +131,14 @@ class ArrayObjTest(Test):
                                                dkey, akey, oid, epoch)
             if thedata[0][0:length-1] != thedata2[0][0:length-1]:
                 self.plog.error("Data mismatch")
-                self.plog.error("Wrote: >{0}<".format(thedata[0]))
-                self.plog.error("Read: >{0}<".format(thedata2[0]))
+                self.plog.error("Wrote: >%s<", thedata[0])
+                self.plog.error("Read: >%s<", thedata2[0])
                 self.fail("Write data, read it back, didn't match\n")
 
             if thedata[2][0:length-1] != thedata2[2][0:length-1]:
                 self.plog.error("Data mismatch")
-                self.plog.error("Wrote: >{0}<".format(thedata[2]))
-                self.plog.error("Read: >{0}<".format(thedata2[2]))
+                self.plog.error("Wrote: >%s<", thedata[2])
+                self.plog.error("Read: >%s<", thedata2[2])
                 self.fail("Write data, read it back, didn't match\n")
 
             container.close()

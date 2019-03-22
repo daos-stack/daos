@@ -100,9 +100,9 @@ class PoolSvc(Test):
             # checking returned rank list for server more than 1
             i = 0
             while (
-                int(self.pool.svc.rl_ranks[i]) > 0 and
-                int(self.pool.svc.rl_ranks[i]) <= createsvc[0] and
-                int(self.pool.svc.rl_ranks[i]) != 999999
+                    int(self.pool.svc.rl_ranks[i]) > 0 and
+                    int(self.pool.svc.rl_ranks[i]) <= createsvc[0] and
+                    int(self.pool.svc.rl_ranks[i]) != 999999
             ):
                 i += 1
             if i != createsvc[0]:

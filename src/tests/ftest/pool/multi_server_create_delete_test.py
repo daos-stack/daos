@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import traceback
@@ -50,7 +51,8 @@ class MultiServerCreateDeleteTest(Test):
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        server_group = self.params.get("server_group", '/server/', 'daos_server')
+        server_group = self.params.get("server_group", '/server/',
+                                       'daos_server')
 
         ServerUtils.runServer(self.hostfile, server_group, basepath)
         self.dmg = basepath + '/install/bin/dmg'
@@ -106,35 +108,47 @@ class MultiServerCreateDeleteTest(Test):
         host2 = self.hostlist[1]
 
         try:
-            cmd = ('{} create --mode={} --uid={} --gid={} --group={} --target={}'
-                   .format(self.dmg, mode, uid, gid, setid, tgtlist))
+            cmd = (
+                "{} create "
+                "--mode={} "
+                "--uid={} "
+                "--gid={} "
+                "--group={} "
+                "--target={}".format(self.dmg, mode, uid, gid, setid, tgtlist))
 
-            uuid_str = """{0}""".format(process.system_output(cmd)).split(" ")[0]
+            uuid_str = (
+                """{0}""".format(process.system_output(cmd)).split(" ")[0])
             print("uuid is {0}\n".format(uuid_str))
 
             if '0' in tgtlist:
                 exists = CheckForPool.checkForPool(host1, uuid_str)
                 if exists != 0:
-                    self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, host1))
+                    self.fail("Pool {0} not found on host {1}.\n"
+                              .format(uuid_str, host1))
             if '1' in tgtlist:
                 exists = CheckForPool.checkForPool(host2, uuid_str)
                 if exists != 0:
-                    self.fail("Pool {0} not found on host {1}.\n".format(uuid_str, host2))
+                    self.fail("Pool {0} not found on host {1}.\n"
+                              .format(uuid_str, host2))
 
-            delete_cmd = ('{0} destroy --pool={1} --group={2} --force'.format(self.dmg,
-                                                                              uuid_str,
-                                                                              setid))
+            delete_cmd = (
+                "{0} destroy "
+                "--pool={1} "
+                "--group={2} "
+                "--force".format(self.dmg, uuid_str, setid))
 
             process.system(delete_cmd)
 
             if '0' in tgtlist:
                 exists = CheckForPool.checkForPool(host1, uuid_str)
                 if exists == 0:
-                    self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str, host1))
+                    self.fail("Pool {0} found on host {1} after destroy.\n"
+                              .format(uuid_str, host1))
             if '1' in tgtlist:
                 exists = CheckForPool.checkForPool(host2, uuid_str)
                 if exists == 0:
-                    self.fail("Pool {0} found on host {1} after destroy.\n".format(uuid_str, host2))
+                    self.fail("Pool {0} found on host {1} after destroy.\n"
+                              .format(uuid_str, host2))
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")

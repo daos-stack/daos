@@ -130,14 +130,14 @@ class InfoTests(Test):
 
         # uid
         if pool_info.pi_uid != uid:
-            self.d_log.error("found actual pool uid {0} does not match expected "
+            self.d_log.error("found actual pool uid {0} doesn't match expected "
                              "uid {1}".format(pool_info.pi_uid, uid))
             self.fail("found actual pool uid {0} does not match expected uid "
                       "{1}".format(pool_info.pi_uid, uid))
 
         # gid
         if pool_info.pi_gid != gid:
-            self.d_log.error("found actual pool gid {0} does not match expected "
+            self.d_log.error("found actual pool gid {0} doesn't match expected "
                              "gid {1}".format(pool_info.pi_gid, gid))
             self.fail("found actual pool gid {0} does not match expected gid "
                       "{1}".format(pool_info.pi_gid, gid))

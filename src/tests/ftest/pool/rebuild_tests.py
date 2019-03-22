@@ -40,7 +40,9 @@ sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
 import CheckForPool
-from daos_api import DaosContext, DaosPool, DaosServer, DaosContainer, DaosApiError
+from daos_api import (
+    DaosContext, DaosPool, DaosServer, DaosContainer, DaosApiError
+)
 
 class RebuildTests(Test):
     """
@@ -60,11 +62,15 @@ class RebuildTests(Test):
         self.creategid = os.getegid()
         # parameters used in pool create that are in yaml
         self.createmode = self.params.get("mode", '/run/testparams/createmode/')
-        self.createsetid = self.params.get("setname", '/run/testparams/createset/')
-        self.createsize = self.params.get("size", '/run/testparams/createsize/')
+        self.createsetid = self.params.get("setname",
+                                           '/run/testparams/createset/')
+        self.createsize = self.params.get("size",
+                                          '/run/testparams/createsize/')
         # how many objects and records are we creating
-        self.objcount = self.params.get("objcount", '/run/testparams/numobjects/*')
-        self.reccount = self.params.get("reccount", '/run/testparams/numrecords/*')
+        self.objcount = self.params.get("objcount",
+                                        '/run/testparams/numobjects/*')
+        self.reccount = self.params.get("reccount",
+                                        '/run/testparams/numrecords/*')
         if self.objcount == 0:
             self.reccount = 0
         # which rank to write to and kill
@@ -72,8 +78,9 @@ class RebuildTests(Test):
         # how much data to write with each key
         self.size = self.params.get("size", '/run/testparams/datasize/*')
         #Start the server
-        self.server_group = self.params.get("server_group", '/server/', 'daos_server')
-        basepath = os.path.normpath(self.build_paths['PREFIX']  + "/../")
+        self.server_group = self.params.get("server_group", '/server/',
+                                            'daos_server')
+        basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
         hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         ServerUtils.runServer(hostfile, self.server_group, basepath)
@@ -102,8 +109,8 @@ class RebuildTests(Test):
             # initialize a python pool object then create the underlying
             # daos storage
             pool = DaosPool(self.context)
-            pool.create(self.createmode, self.createuid, self.creategid, self.createsize,
-                        self.createsetid)
+            pool.create(self.createmode, self.createuid, self.creategid,
+                        self.createsize, self.createsetid)
 
             # want an open connection during rebuild
             pool.connect(1 << 1)
@@ -133,20 +140,24 @@ class RebuildTests(Test):
                 obj = None
                 for _recc in range(self.reccount):
                     # make some stuff up and write
-                    dkey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                                   for _ in range(5))
-                    akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                                   for _ in range(5))
-                    data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                                   for _ in range(self.size))
+                    dkey = (
+                        ''.join(random.choice(string.ascii_uppercase +
+                        string.digits) for _ in range(5)))
+                    akey = (
+                        ''.join(random.choice(string.ascii_uppercase +
+                        string.digits) for _ in range(5)))
+                    data = (''.join(random.choice(string.ascii_uppercase +
+                    string.digits) for _ in range(self.size)))
 
-                    obj, txn = container.write_an_obj(data, len(data), dkey, akey, obj, self.rank,
-                                                     obj_cls=16)
+                    obj, txn = container.write_an_obj(data, len(data), dkey,
+                                                      akey, obj, self.rank,
+                                                      obj_cls=16)
 
                     saved_data.append((obj, dkey, akey, data, txn))
 
                     # read the data back and make sure its correct
-                    data2 = container.read_an_obj(self.size, dkey, akey, obj, txn)
+                    data2 = container.read_an_obj(self.size, dkey, akey, obj,
+                                                  txn)
                     if data != data2.value:
                         self.fail("Write data 1, read it back, didn't match\n")
 
@@ -173,15 +184,18 @@ class RebuildTests(Test):
                           .format(pool.pool_info.pi_rebuild_st.rs_errno))
             if pool.pool_info.pi_rebuild_st.rs_obj_nr != self.objcount:
                 self.fail("Rebuilt objs not as expected: {0} {1}"
-                          .format(pool.pool_info.pi_rebuild_st.rs_obj_nr, self.objcount))
-            if pool.pool_info.pi_rebuild_st.rs_rec_nr != (self.reccount*self.objcount):
+                          .format(pool.pool_info.pi_rebuild_st.rs_obj_nr, 
+                                  self.objcount))
+            if (pool.pool_info.pi_rebuild_st.rs_rec_nr !=
+                (self.reccount*self.objcount)):
                 self.fail("Rebuilt recs not as expected: {0} {1}"
                           .format(pool.pool_info.pi_rebuild_st.rs_rec_nr,
                                   self.reccount*self.objcount))
 
             # now that the rebuild finished verify the records are correct
             for tup in saved_data:
-                data2 = container.read_an_obj(len(tup[3]), tup[1], tup[2], tup[0], tup[4])
+                data2 = container.read_an_obj(len(tup[3]), tup[1], tup[2],
+                                              tup[0], tup[4])
                 if tup[3] != data2.value:
                     self.fail("after rebuild data didn't check out")
 
@@ -207,10 +221,10 @@ class RebuildTests(Test):
             # on the same storage and have the same service leader
             pool1 = DaosPool(self.context)
             pool2 = DaosPool(self.context)
-            pool1.create(self.createmode, self.createuid, self.creategid, self.createsize,
-                         self.createsetid)
-            pool2.create(self.createmode, self.createuid, self.creategid, self.createsize,
-                         self.createsetid)
+            pool1.create(self.createmode, self.createuid, self.creategid,
+                         self.createsize, self.createsetid)
+            pool2.create(self.createmode, self.createuid, self.creategid,
+                         self.createsize, self.createsetid)
 
             # want an open connection during rebuild
             pool1.connect(1 << 1)
@@ -234,25 +248,33 @@ class RebuildTests(Test):
                 for _recc in range(self.reccount):
 
                     # make some stuff up and write
-                    dkey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                                   for _ in range(5))
-                    akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                                   for _ in range(5))
-                    data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                                   for _ in range(self.size))
+                    dkey = (
+                        ''.join(random.choice(string.ascii_uppercase +
+                        string.digits) for _ in range(5)))
+                    akey = (
+                        ''.join(random.choice(string.ascii_uppercase +
+                        string.digits) for _ in range(5)))
+                    data = (
+                        ''.join(random.choice(string.ascii_uppercase +
+                        string.digits) for _ in range(self.size)))
 
-                    #Used DAOS_OC_R1S_SPEC_RANK,    /* 1 replica with specified rank */
-                    obj, txn = container1.write_an_obj(data, len(data), dkey, akey, obj, self.rank,
-                                                      obj_cls=15)
-                    obj, txn = container2.write_an_obj(data, len(data), dkey, akey, obj, self.rank,
-                                                      obj_cls=15)
+                    # Used DAOS_OC_R1S_SPEC_RANK
+                    # 1 replica with specified rank
+                    obj, txn = container1.write_an_obj(data, len(data), dkey,
+                                                       akey, obj, self.rank,
+                                                       obj_cls=15)
+                    obj, txn = container2.write_an_obj(data, len(data), dkey,
+                                                       akey, obj, self.rank,
+                                                       obj_cls=15)
                     saved_data.append((obj, dkey, akey, data, txn))
 
                     # read the data back and make sure its correct containers
-                    data2 = container1.read_an_obj(self.size, dkey, akey, obj, txn)
+                    data2 = container1.read_an_obj(self.size, dkey, akey, obj,
+                                                   txn)
                     if data != data2.value:
                         self.fail("Wrote data P1, read it back, didn't match\n")
-                    data2 = container2.read_an_obj(self.size, dkey, akey, obj, txn)
+                    data2 = container2.read_an_obj(self.size, dkey, akey, obj,
+                                                   txn)
                     if data != data2.value:
                         self.fail("Wrote data P2, read it back, didn't match\n")
 
@@ -286,14 +308,16 @@ class RebuildTests(Test):
                 self.fail("P1 rebuilt objs not as expected: {0} {1}"
                           .format(pool1.pool_info.pi_rebuild_st.rs_obj_nr,
                                   self.objcount))
-            if pool1.pool_info.pi_rebuild_st.rs_rec_nr != (self.reccount*self.objcount):
+            if (pool1.pool_info.pi_rebuild_st.rs_rec_nr !=
+                (self.reccount*self.objcount)):
                 self.fail("P1 rebuilt recs not as expected: {0} {1}"
                           .format(pool1.pool_info.pi_rebuild_st.rs_rec_nr,
                                   self.reccount*self.objcount))
 
             # now that the rebuild finished verify the records are correct
             for tup in saved_data:
-                data2 = container1.read_an_obj(len(tup[3]), tup[1], tup[2], tup[0], tup[4])
+                data2 = container1.read_an_obj(len(tup[3]), tup[1], tup[2],
+                                               tup[0], tup[4])
                 if tup[3] != data2.value:
                     self.fail("after rebuild data didn't check out")
 
@@ -315,15 +339,18 @@ class RebuildTests(Test):
                           .format(pool2.pool_info.pi_rebuild_st.rs_errno))
             if pool2.pool_info.pi_rebuild_st.rs_obj_nr != self.objcount:
                 self.fail("Rebuilt objs not as expected: {0} {1}"
-                          .format(pool2.pool_info.pi_rebuild_st.rs_obj_nr, self.objcount))
-            if pool2.pool_info.pi_rebuild_st.rs_rec_nr != (self.reccount*self.objcount):
+                          .format(pool2.pool_info.pi_rebuild_st.rs_obj_nr,
+                                  self.objcount))
+            if (pool2.pool_info.pi_rebuild_st.rs_rec_nr !=
+                (self.reccount*self.objcount)):
                 self.fail("Rebuilt recs not as expected: {0} {1}".
                           format(pool2.pool_info.pi_rebuild_st.rs_rec_nr,
                                  (self.reccount*self.objcount)))
 
             # now that the rebuild finished verify the records are correct
             for tup in saved_data:
-                data2 = container2.read_an_obj(len(tup[3]), tup[1], tup[2], tup[0], tup[4])
+                data2 = container2.read_an_obj(len(tup[3]), tup[1], tup[2],
+                                               tup[0], tup[4])
                 if tup[3] != data2.value:
                     self.fail("after rebuild data didn't check out")
 

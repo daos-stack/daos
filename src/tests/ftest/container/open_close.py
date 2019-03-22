@@ -75,7 +75,7 @@ class OpenClose(Test):
         finally:
             try:
                 ServerUtils.stopServer(hosts=self.hostlist)
-            except ServerFailed:
+            except ServerUtils.ServerFailed:
                 pass
 
     def test_closehandle(self):

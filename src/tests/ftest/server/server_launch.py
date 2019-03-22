@@ -73,16 +73,17 @@ class ServerLaunch(Test):
         try:
             session = aexpect.ShellSession(get_prompt)
             if session.is_responsive():
-                  session.sendline(launch_cmd)
-                  session.read_until_any_line_matches(
-                      "XDAOS server (v0.0.2) started on rank *",
-                      timeout=5.0,
-                      print_func=print_helper)
+                session.sendline(launch_cmd)
+                session.read_until_any_line_matches(
+                    "XDAOS server (v0.0.2) started on rank *",
+                    timeout=5.0,
+                    print_func=print_helper)
             else:
                 self.fail("Server did not start.\n")
-        except (ExpectError, ExpectProcessTerminatedError, ExpectTimeoutError,
-                ShellCmdError, ShellError, ShellProcessTerminatedError,
-                ShellStatusError, ShellTimeoutError) as dummy_e:
+        except (aexpect.ExpectError, aexpect.ExpectProcessTerminatedError,
+                aexpect.ExpectTimeoutError, aexpect.ShellCmdError,
+                aexpect.ShellError, aexpect.ShellProcessTerminatedError,
+                aexpect.ShellStatusError, aexpect.ShellTimeoutError) as dummy_e:
             self.fail("Server did not start.\n")
 
         session.sendcontrol("c")

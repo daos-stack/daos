@@ -78,7 +78,7 @@ class BadEvictTest(Test):
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/evicttests/createmode/')
         createsetid = self.params.get("setname", '/run/evicttests/createset/')
-        createsize  = self.params.get("size", '/run/evicttests/createsize/')
+        createsize = self.params.get("size", '/run/evicttests/createsize/')
 
         createuid = os.geteuid()
         creategid = os.getegid()

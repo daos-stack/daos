@@ -64,6 +64,8 @@ class Permission(Test):
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
         print ("Host file is: {}".format(self.hostfile))
 
+        self.container = None
+
         # starting server
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 

@@ -140,7 +140,7 @@ class PoolAttributeTest(Test):
         for i in range(1024):
             self.large_data_set[str(i)] = (
                 "".join(random.choice(allchar)
-                for x in range(random.randint(1, 100))))
+                        for x in range(random.randint(1, 100))))
 
     def test_pool_attributes(self):
         """

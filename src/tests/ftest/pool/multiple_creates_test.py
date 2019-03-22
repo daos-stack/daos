@@ -127,7 +127,7 @@ class MultipleCreatesTest(Test):
             exists = CheckForPool.checkForPool(host, uuid_str)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
-                    .format(uuid_str, host))
+                          .format(uuid_str, host))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")
@@ -208,11 +208,11 @@ class MultipleCreatesTest(Test):
             exists = CheckForPool.checkForPool(host, uuid_str_1)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
-                    .format(uuid_str_1, host))
+                          .format(uuid_str_1, host))
             exists = CheckForPool.checkForPool(host, uuid_str_2)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
-                    .format(uuid_str_2, host))
+                          .format(uuid_str_2, host))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")
@@ -309,11 +309,11 @@ class MultipleCreatesTest(Test):
             exists = CheckForPool.checkForPool(host, uuid_str_2)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
-                    .format(uuid_str_2, host))
+                          .format(uuid_str_2, host))
             exists = CheckForPool.checkForPool(host, uuid_str_3)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
-                    .format(uuid_str_3, host))
+                          .format(uuid_str_3, host))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")

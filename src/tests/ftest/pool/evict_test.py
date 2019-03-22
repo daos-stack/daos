@@ -70,8 +70,8 @@ class EvictTest(Test):
 
         :avocado: tags=pool,poolevict,quick
         """
-        size = self.params.get("size",'/run/tests/sizes/size1gb/*')
-        setid = self.params.get("setname",'/run/tests/setnames/validsetname/*')
+        size = self.params.get("size", '/run/tests/sizes/size1gb/*')
+        setid = self.params.get("setname", '/run/tests/setnames/validsetname/*')
         connectperm = self.params.get("perms",
                                       '/run/tests/connectperms/permro/*')
 
@@ -103,8 +103,8 @@ class EvictTest(Test):
         :avocado: tags=pool,poolevict
         """
         # test parameters are in the EvictTest.yaml
-        setid = self.params.get("setname",'/run/tests/setnames/validsetname/*')
-        mode =  self.params.get("mode",'/run/tests/modes/modeall/*')
+        setid = self.params.get("setname", '/run/tests/setnames/validsetname/*')
+        mode = self.params.get("mode", '/run/tests/modes/modeall/*')
         uid = os.geteuid()
         gid = os.getegid()
 
