@@ -36,10 +36,6 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build ping test"""
 
-#pylint: disable=import-error
-import distutils.sysconfig
-#pylint: enable=import-error
-
 IOIL_TEST_SRC = ['test_ioil.c']
 IOIL_BUILD_STATIC = False
 
