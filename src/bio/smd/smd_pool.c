@@ -44,7 +44,7 @@ struct pool_tab_key {
 };
 
 static int
-ptab_df_hkey_size(struct btr_instance *tins)
+ptab_df_hkey_size(void)
 {
 	return sizeof(struct pool_tab_key);
 }

@@ -869,4 +869,20 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
 		  daos_recx_t *recx);
 
+/** Return constants that can be used to estimate the metadata overhead
+ *  in persistent memory on-disk format.
+ *
+ *  \param alloc_overhead[IN]	Expected allocation overhead
+ *  \param tclass[IN]		The type of tree to query
+ *  \param ofeat[IN]		Relevant object features
+ *  \param ovhd[IN,OUT]		Returned overheads
+ *
+ *  \return 0 on success, error otherwise.
+ */
+int vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
+			  uint64_t ofeat, struct daos_tree_overhead *ovhd);
+
+/** Return the size of the pool metadata in persistent memory on-disk format */
+int vos_pool_get_msize(void);
+
 #endif /* __VOS_API_H */
