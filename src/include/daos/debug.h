@@ -59,15 +59,11 @@
 	ACTION(duns,      duns,      arg)	\
 	ACTION(drpc,      drpc,      arg)	\
 	ACTION(security,  security,  arg)	\
-	ACTION(dtx,       dtx,       arg) \
-	ACTION(iof, iof, arg)            \
-	ACTION(il,  ioil, arg)           \
-	ACTION(cli, client, arg)         \
-	ACTION(cn, cnss, arg)            \
-	ACTION(ctrl, ctrlfs, arg)        \
-	ACTION(ion, ionss, arg)          \
-	ACTION(test,  test, arg)
-
+	ACTION(dtx,       dtx,       arg)	\
+	ACTION(cn,        cnss,      arg)	\
+	ACTION(cli,       cli,       arg)	\
+	ACTION(ctrl,      ctrlfs,    arg)	\
+	ACTION(il,        il,        arg)
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\

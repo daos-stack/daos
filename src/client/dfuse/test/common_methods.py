@@ -55,8 +55,8 @@ import json
 from socket import gethostname
 from decimal import Decimal
 import time
-import iof_ionss_setup
-import iof_ionss_verify
+#import iof_ionss_setup
+#import iof_ionss_verify
 import iofcommontestsuite
 #pylint: disable=import-error
 #pylint: disable=no-name-in-module
@@ -347,9 +347,7 @@ class InternalsPathFramework(ColorizedOutput):
                     self.error_output('IOF projection:{} and backend '
                                       'fs:{} differ.'.format(mount_dir, idir))
 
-class CnssChecks(iof_ionss_verify.IonssVerify,
-                 iofcommontestsuite.CommonTestSuite,
-                 iof_ionss_setup.IonssExport):
+class CnssChecks(iofcommontestsuite.CommonTestSuite):                
     """A object purely to define test methods.
 
     These methods are invoked on a node where projections are being imported,

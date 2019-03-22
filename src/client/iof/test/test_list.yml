@@ -1,5 +1,0 @@
-# default list of test description files to execute for IOF.
-# the file path is relative the TESTING direcory
-
-test_list:
-  - "scripts/iof_test_local.yml"

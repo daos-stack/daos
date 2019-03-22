@@ -36,7 +36,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
-    env.AppendIfSupported(CFLAGS=DESIRED_FLAGS)
+    env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)

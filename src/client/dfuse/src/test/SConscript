@@ -69,31 +69,6 @@ def build_static_tests(env):
 
     return []
 
-def build_shim(env, pdevel_ver):
-    """build the python/C shim"""
-    # Python wrapper
-    svars = {}
-    for item in ['CC', 'OPT', 'BASECFLAGS', 'LDSHARED', 'SO']:
-        svars[item] = distutils.sysconfig.get_config_var(item)
-        if svars[item] is None:
-            svars[item] = ""
-
-    defines = ""
-    if pdevel_ver == "3.5":
-        defines = "IOF_PYTHON_35"
-
-    lib = env.SharedLibrary(target='iofmod', source=['iof_module.c'],
-                            CC=svars["CC"], SHLINK=svars["LDSHARED"],
-                            CPPDEFINES=[defines],
-                            SHLINKFLAGS=[], SHLIBPREFIX="",
-                            SHLIBSUFFIX=svars["SO"],
-                            CPPPATH=["$CPPPATH",
-                                     distutils.sysconfig.get_python_inc()],
-                            CPPFLAGS=svars["BASECFLAGS"] + " " + \
-                            svars["OPT"], CFLAGS=[])
-    env.Install('$PREFIX/TESTING/scripts', lib)
-    Default(lib)
-
 def scons():
     """Scons function"""
 
@@ -141,22 +116,6 @@ def scons():
     Default(il_test)
 
     tenv.Install('$PREFIX/TESTING/tests', il_test)
-
-    prereqs.define('python35_devel', headers=['python3.5m/Python.h'],
-                   package='python35-devel')
-
-    pdevel_ver = "3.5"
-
-    if not prereqs.check_component('python35_devel'):
-        pdevel_ver = "3.4"
-        if not prereqs.check_component('python34_devel'):
-            print("\n********************************************************")
-            print("Python/C Shim not enabled - needs python34-devel package")
-            print("********************************************************\n")
-            return
-
-    menv = env.Clone()
-    build_shim(menv, pdevel_ver)
 
 if __name__ == "SCons.Script":
     scons()

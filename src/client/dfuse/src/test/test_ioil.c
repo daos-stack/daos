@@ -48,7 +48,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <CUnit/Basic.h>
-#define D_LOGFAC DD_FAC(test)
+#define D_LOGFAC DD_FAC(il)
 #include "log.h"
 #include "iof_ctrl_util.h"
 #include "iof_ioctl.h"
