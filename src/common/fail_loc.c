@@ -44,7 +44,8 @@ daos_reset_fail_loc()
 int
 daos_fail_check(uint64_t fail_loc)
 {
-	int	grp;
+	int			 grp;
+	struct d_fault_attr_t	*grp_ft_attr;
 
 	if (daos_fail_loc == 0)
 		return 0;
@@ -58,7 +59,8 @@ daos_fail_check(uint64_t fail_loc)
 	 * current fail_loc finish the job.
 	 */
 	grp = DAOS_FAIL_GROUP_GET(fail_loc);
-	if (d_should_fail(grp)) {
+	grp_ft_attr = d_fault_attr_lookup(grp);
+	if (d_should_fail(grp_ft_attr)) {
 		D_DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64
 			", input_loc ="DF_X64" idx %d\n", daos_fail_loc,
 			daos_fail_value, fail_loc, grp);
