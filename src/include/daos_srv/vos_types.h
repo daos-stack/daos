@@ -32,6 +32,8 @@ enum vos_oi_attr {
 	VOS_OI_FAILED		= (1U << 0),
 	/** Marks object as punched */
 	VOS_OI_PUNCHED		= (1U << 1),
+	/** Marks object has been (or will be) removed */
+	VOS_OI_REMOVED		= (1U << 2),
 	/** TODO: Additional attributes to support metadata storage for SR */
 };
 
@@ -213,6 +215,7 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 enum {
 	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
 	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
+	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
 };
 
 /**

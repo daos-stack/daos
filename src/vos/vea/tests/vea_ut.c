@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1149,7 +1149,7 @@ ut_fragmentation(void **state)
 {
 	struct vea_ut_args args;
 	struct vea_unmap_context unmap_ctxt;
-	struct vea_resrvd_ext *ext;
+	struct vea_resrvd_ext *ext, *copy;
 	struct vea_resrvd_ext *tmp_ext;
 	d_list_t *r_list;
 	d_list_t persist_list;
@@ -1191,8 +1191,17 @@ ut_fragmentation(void **state)
 	d_list_for_each_entry_safe(ext, tmp_ext, r_list, vre_link) {
 		/* Copy the extents to keep to persist_list */
 		/* Remove about every other fragment */
-		if (rand() % 2 == 0)
+		if (rand() % 2 == 0) {
 			d_list_move_tail(&ext->vre_link, &persist_list);
+
+			D_ALLOC_PTR(copy);
+			assert_ptr_not_equal(copy, NULL);
+
+			D_INIT_LIST_HEAD(&copy->vre_link);
+			copy->vre_blk_off = ext->vre_blk_off;
+			copy->vre_blk_cnt = ext->vre_blk_cnt;
+			d_list_add(&copy->vre_link, &args.vua_alloc_list);
+		}
 	}
 
 	/* Publish the ones to persist */
@@ -1229,6 +1238,23 @@ ut_fragmentation(void **state)
 	}
 	print_message("Fragments after more reservations:\n");
 	print_stats(&args, false);
+
+	/* Free allocated extents */
+	r_list = &args.vua_alloc_list;
+	d_list_for_each_entry(ext, r_list, vre_link) {
+		uint64_t blk_off = ext->vre_blk_off;
+		uint32_t blk_cnt = ext->vre_blk_cnt;
+
+		rc = vea_free(args.vua_vsi, blk_off, blk_cnt);
+		assert_int_equal(rc, 0);
+
+		/* not immediately visual for allocation */
+		rc = vea_verify_alloc(args.vua_vsi, true, blk_off, blk_cnt);
+		assert_int_equal(rc, 0);
+
+		rc = vea_verify_alloc(args.vua_vsi, false, blk_off, blk_cnt);
+		assert_int_equal(rc, 1);
+	}
 
 	vea_unload(args.vua_vsi);
 	ut_teardown(&args);

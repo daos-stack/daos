@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,7 @@ pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	map->pl_connects = 0;
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
+	map->pl_ignore_connects = 0;
 	D_INIT_LIST_HEAD(&map->pl_link);
 
 	*pl_mapp = map;
@@ -406,9 +407,11 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
  * \param	uuid [IN]	uuid of \a pool_map
  * \param	pool_map [IN]	pool_map
  * \param	connect [IN]	from pool connect or not
+ * \param	ignore_connects [IN] Ignore the @connect parameter if true
  */
 int
-pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
+pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
+	      bool ignore_connects)
 {
 	d_list_t		*link;
 	struct pl_map		*map;
@@ -432,13 +435,27 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0)
 			D_GOTO(out, rc);
+
+		if (ignore_connects)
+			map->pl_ignore_connects = 1;
 	} else {
 		struct pl_map	*tmp;
 
 		tmp = container_of(link, struct pl_map, pl_link);
+		if (ignore_connects) {
+			if (tmp->pl_connects > 0) {
+				D_WARN("NOT allow to update pl map for pool"
+				       DF_UUID" with connection ignored.\n",
+				       DP_UUID(uuid));
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+
+			tmp->pl_ignore_connects = 1;
+		}
+
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
 			d_hash_rec_decref(&pl_htable, link);
-			if (connect)
+			if (connect && !tmp->pl_ignore_connects)
 				tmp->pl_connects++;
 			D_GOTO(out, rc = 0);
 		}
@@ -450,14 +467,18 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 			D_GOTO(out, rc);
 		}
 
-		/* transfer the pool connection count */
-		map->pl_connects = tmp->pl_connects;
+		if (ignore_connects)
+			map->pl_ignore_connects = 1;
+		else
+			/* transfer the pool connection count */
+			map->pl_connects = tmp->pl_connects;
+
 		/* evict the old placement map for this pool */
 		d_hash_rec_delete_at(&pl_htable, link);
 		d_hash_rec_decref(&pl_htable, link);
 	}
 
-	if (connect)
+	if (connect && !map->pl_ignore_connects)
 		map->pl_connects++;
 
 	/* insert the new placement map into hash table */
@@ -486,12 +507,18 @@ pl_map_disconnect(uuid_t uuid)
 		struct pl_map	*map;
 
 		map = container_of(link, struct pl_map, pl_link);
-		D_ASSERT(map->pl_connects > 0);
-		map->pl_connects--;
-		if (map->pl_connects == 0) {
-			d_hash_rec_delete_at(&pl_htable, link);
-			d_hash_rec_decref(&pl_htable, link);
+		if (!map->pl_ignore_connects) {
+			D_ASSERT(map->pl_connects > 0);
+			map->pl_connects--;
+		} else {
+			D_ASSERT(map->pl_connects == 0);
 		}
+
+		if (map->pl_connects == 0)
+			d_hash_rec_delete_at(&pl_htable, link);
+
+		/* Drop the reference held by above d_hash_rec_find(). */
+		d_hash_rec_decref(&pl_htable, link);
 	}
 	D_RWLOCK_UNLOCK(&pl_rwlock);
 }
@@ -526,4 +553,102 @@ uint32_t
 pl_map_version(struct pl_map *map)
 {
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
+}
+
+/**
+ * Select leader replica for the given object's shard.
+ *
+ * \param [IN]	oid		The object identifier.
+ * \param [IN]	shard_idx	The shard index.
+ * \param [IN]	shards_ns	Total count of the object's shards.
+ * \param [IN]	for_tgt_id	Require leader target id or leader shard index.
+ * \param [IN]	pl_get_shard	The callback function to parse out pl_obj_shard
+ *				from the given @data.
+ * \param [IN]	data		The parameter used by the @pl_get_shard.
+ *
+ * \return			The selected leader on success: its tgt_id or
+ *				shard index. Negative value if error.
+ */
+int
+pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
+{
+	struct pl_obj_shard		*shard;
+	struct daos_oclass_attr		*oc_attr;
+	uint32_t			 replicas;
+	int				 preferred;
+	int				 rdg_idx;
+	int				 start;
+	int				 pos;
+	int				 off;
+	int				 i;
+
+	if (shards_nr <= shard_idx)
+		return -DER_INVAL;
+
+	oc_attr = daos_oclass_attr_find(oid);
+	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		/* For non-replicated object, elect current shard as leader. */
+		shard = pl_get_shard(data, shard_idx);
+		if (for_tgt_id)
+			return shard->po_target;
+
+		return shard->po_shard;
+	}
+
+	replicas = oc_attr->u.repl.r_num;
+	if (replicas == DAOS_OBJ_REPL_MAX)
+		replicas = shards_nr;
+
+	if (replicas < 1)
+		return -DER_INVAL;
+
+	if (replicas == 1) {
+		shard = pl_get_shard(data, shard_idx);
+		if (shard->po_target == -1)
+			return -DER_NONEXIST;
+
+		/* Single replicated object will not rebuild. */
+		D_ASSERT(!shard->po_rebuilding);
+		D_ASSERT(shard->po_shard == shard_idx);
+
+		if (for_tgt_id)
+			return shard->po_target;
+
+		return shard->po_shard;
+	}
+
+	/* XXX: The shards within [start, start + replicas) will search from
+	 *	the same @preferred position, then they will have the same
+	 *	leader. The shards (belonging to the same object) in
+	 *	other redundancy group may get different leader node.
+	 *
+	 *	The one with the lowest f_seq will be elected as the leader
+	 *	to avoid leader switch.
+	 */
+	rdg_idx = shard_idx / replicas;
+	start = rdg_idx * replicas;
+	preferred = start + (oid.lo + rdg_idx) % replicas;
+	for (i = 0, off = preferred, pos = -1; i < replicas;
+	     i++, off = (off + 1) % replicas + start) {
+		shard = pl_get_shard(data, off);
+		if (shard->po_target == -1 || shard->po_rebuilding)
+			continue;
+
+		if (pos == -1 ||
+		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
+			pos = off;
+	}
+
+	if (pos != -1) {
+		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
+
+		if (for_tgt_id)
+			return pl_get_shard(data, pos)->po_target;
+
+		return pl_get_shard(data, pos)->po_shard;
+	}
+
+	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */
+	return -DER_NONEXIST;
 }

@@ -35,38 +35,19 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ShowStorageCommand is the struct representing the command to list storage.
-type ShowStorageCommand struct{}
-
-// Execute is run when ShowStorageCommand activates
-func (s *ShowStorageCommand) Execute(args []string) error {
-	// TODO: implement configuration file parsing
-	if opts.ConfigPath != "" {
-		return errors.New("config-path option not implemented")
-	}
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
-	}
-	fmt.Printf(
-		checkAndFormat(conns.ListNvme()),
-		"NVMe SSD controller and constituent namespace")
-	fmt.Printf(checkAndFormat(conns.ListScm()), "SCM module")
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
-	return nil
-}
-
 type cliOptions struct {
-	Hostlist    string             `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
-	Hostfile    string             `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	Hostlist string `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	// TODO: implement host file parsing
+	Hostfile string `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	// TODO: implement client side configuration file parsing
 	ConfigPath  string             `short:"o" long:"config-path" description:"Client config file path"`
 	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+	KillRank    KillRankCommand    `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
 }
 
 var (
 	opts  = new(cliOptions)
-	conns = mgmtclient.NewConnections()
+	conns = client.NewConnect()
 )
 
 func connectHosts() error {
@@ -82,15 +63,12 @@ func connectHosts() error {
 }
 
 func main() {
-	var err error
-	defer func() {
-		status := 0
-		if err != nil {
-			status = 1
-		}
-		os.Exit(status)
-	}()
+	if dmgMain() != nil {
+		os.Exit(1)
+	}
+}
 
+func dmgMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
@@ -98,21 +76,21 @@ func main() {
 	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
 
-	_, err = p.Parse()
+	_, err := p.Parse()
 	if err != nil {
-		return
+		return err
 	}
 
 	// TODO: implement configuration file parsing
 	if opts.ConfigPath != "" {
 		err = errors.New("config-path option not implemented")
 		log.Errorf(err.Error())
-		return
+		return err
 	}
 	err = connectHosts()
 	if err != nil {
 		log.Errorf("unable to connect to hosts: %v", err)
-		return
+		return err
 	}
 
 	// If no subcommand is specified, interactive shell is started
@@ -120,4 +98,6 @@ func main() {
 	shell := setupShell()
 	shell.Println("DAOS Management Shell")
 	shell.Run()
+
+	return nil
 }

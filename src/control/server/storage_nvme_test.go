@@ -94,8 +94,8 @@ func defaultMockSpdkNvme() NVME {
 // mock external interface implementations for spdk setup script
 type mockSpdkSetup struct{}
 
-func (m *mockSpdkSetup) prep() error  { return nil }
-func (m *mockSpdkSetup) reset() error { return nil }
+func (m *mockSpdkSetup) prep(int, string) error { return nil }
+func (m *mockSpdkSetup) reset() error           { return nil }
 
 // mockNvmeStorage factory
 func newMockNvmeStorage(spdkNvme NVME, inited bool) *nvmeStorage {

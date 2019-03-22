@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -351,42 +351,15 @@ rdb_stop(struct rdb *db)
 int
 rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	msg_entry_t	 entry = {};
-	int		 i;
-	int		 result;
-	int		 rc = -DER_INVAL;
+	int i;
+	int rc = -DER_INVAL;
 
 	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
-
 	for (i = 0; i < replicas->rl_nr; ++i) {
-		D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n",
-			DP_DB(db), replicas->rl_ranks[i]);
-
-		/* TODO: Check if rank exists and not a replica before adding */
-		/* Phase 1: Add non voting rank */
-		entry.type = RAFT_LOGTYPE_ADD_NONVOTING_NODE;
-		entry.data.buf = &replicas->rl_ranks[i];
-		entry.data.len = sizeof(d_rank_t);
-		rc = rdb_raft_append_apply(db, &entry, &result);
-		rc = (rc != 0) ? rc : result;
+		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
 		if (rc != 0)
 			break;
-
-		/* Phase 2: Promote to voting rank */
-		entry.type = RAFT_LOGTYPE_ADD_NODE;
-		rc = rdb_raft_append_apply(db, &entry, NULL);
-		if (rc != 0) {
-			/*
-			 * Rank was successfully added, and will get promoted
-			 * automatically when a new leader steps up.
-			 */
-			++i;
-			break;
-		}
-
-		/* Can't make voting cfg change before applying previous one */
-		raft_apply_all(db->d_raft);
 	}
 
 	/* Update list to only contain ranks which could not be added. */
@@ -400,29 +373,15 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 int
 rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	msg_entry_t	 entry = {};
-	int		 i;
-	int		 result;
-	int		 rc = -DER_INVAL;
+	int i;
+	int rc = -DER_INVAL;
 
 	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
-
 	for (i = 0; i < replicas->rl_nr; ++i) {
-		D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n",
-			DP_DB(db), replicas->rl_ranks[i]);
-
-		/* TODO: Check if replica with rank exists before removing */
-		entry.type = RAFT_LOGTYPE_REMOVE_NODE;
-		entry.data.buf = &replicas->rl_ranks[i];
-		entry.data.len = sizeof(d_rank_t);
-		rc = rdb_raft_append_apply(db, &entry, &result);
-		rc = (rc != 0) ? rc : result;
+		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
 		if (rc != 0)
 			break;
-
-		/* Can't make voting cfg change before applying previous one */
-		raft_apply_all(db->d_raft);
 	}
 
 	/* Update list to only contain ranks which could not be removed. */

@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"syscall"
@@ -40,27 +39,6 @@ import (
 	"github.com/daos-stack/daos/src/control/log"
 	secpb "github.com/daos-stack/daos/src/control/security/proto"
 )
-
-// ShowStorageCommand is the struct representing the command to list storage.
-type ShowStorageCommand struct{}
-
-// Execute is run when ShowStorageCommand activates
-//
-// Perform task then exit immediately. No config parsing performed.
-func (s *ShowStorageCommand) Execute(args []string) error {
-	config := newConfiguration()
-	mgmtControlServer, err := newControlService(&config)
-	if err != nil {
-		return log.WrapAndLogErr(err, "initialising ControlService")
-	}
-	mgmtControlServer.Setup()
-	mgmtControlServer.showLocalStorage()
-	mgmtControlServer.Teardown()
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
-	return nil
-}
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
 type cliOptions struct {
@@ -75,18 +53,16 @@ type cliOptions struct {
 	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+	PrepNvme    PrepNvmeCommand    `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
 }
 
 func main() {
-	var err error
-	defer func() {
-		status := 0
-		if err != nil {
-			status = 1
-		}
-		os.Exit(status)
-	}()
+	if serverMain() != nil {
+		os.Exit(1)
+	}
+}
 
+func serverMain() error {
 	runtime.GOMAXPROCS(1)
 
 	// Set default global logger for application.
@@ -98,23 +74,25 @@ func main() {
 	p.SubcommandsOptional = true
 
 	// Parse commandline flags which override options loaded from config.
-	_, err = p.Parse()
+	_, err := p.Parse()
 	if err != nil {
-		return
+		return err
 	}
 
 	// Parse configuration file and load values.
 	config, err := loadConfigOpts(opts)
 	if err != nil {
 		log.Errorf("Failed to load config options: %s", err)
-		return
+		return err
 	}
 
 	// Set log level mask for default logger from config.
 	switch config.ControlLogMask {
 	case cLogDebug:
+		log.Debugf("Switching control log level to DEBUG")
 		log.SetLevel(log.Debug)
 	case cLogError:
+		log.Debugf("Switching control log level to ERROR")
 		log.SetLevel(log.Error)
 	}
 
@@ -122,20 +100,26 @@ func main() {
 	if config.ControlLogFile != "" {
 		f, err := common.AppendFile(config.ControlLogFile)
 		if err != nil {
-			err = log.WrapAndLogErr(err, "creating log file")
-			return
+			log.Errorf("Failure creating log file: %s", err)
+			return err
 		}
 		defer f.Close()
+
+		log.Debugf(
+			"%s logging to file %s",
+			os.Args[0], config.ControlLogFile)
+
 		log.SetOutput(f)
 	}
 
 	// Backup active config.
 	saveActiveConfig(&config)
 
-	mgmtControlServer, err := newControlService(&config)
+	mgmtControlServer, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		log.Errorf("Failed to init ControlService: %s", err)
-		return
+		return err
 	}
 	mgmtControlServer.Setup()
 	defer mgmtControlServer.Teardown()
@@ -145,7 +129,7 @@ func main() {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Errorf("Unable to listen on management interface: %s", err)
-		return
+		return err
 	}
 
 	// TODO: This will need to be extended to take certificate information for
@@ -165,13 +149,7 @@ func main() {
 	// Format the unformatted servers.
 	if err = formatIosrvs(&config, false); err != nil {
 		log.Errorf("Failed to format servers: %s", err)
-		return
-	}
-
-	// Init socket and start drpc server to communicate with DAOS I/O servers.
-	if err = drpcSetup(config.SocketDir); err != nil {
-		log.Errorf("Failed to set up dRPC: %s", err)
-		return
+		return err
 	}
 
 	// Create a channel to retrieve signals.
@@ -185,46 +163,39 @@ func main() {
 	// Process configurations parameters for Nvme.
 	if err = config.parseNvme(); err != nil {
 		log.Errorf("NVMe config could not be processed: %s", err)
-		return
+		return err
 	}
 
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
-	ioIdx := 0
-
-	// Exec io_server with generated cli opts from config context.
-	srv := exec.Command("daos_io_server", config.Servers[ioIdx].CliOpts...)
-	srv.Stdout = os.Stdout
-	srv.Stderr = os.Stderr
-	srv.Env = os.Environ()
-
-	// Populate I/O server environment with values from config before starting.
-	config.populateEnv(ioIdx, &srv.Env)
-
-	// I/O server should get a SIGKILL if this process dies.
-	srv.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGKILL,
-	}
-
-	// Start the DAOS I/O server.
-	err = srv.Start()
+	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
-		log.Errorf("DAOS I/O server failed to start: %s", err)
-		return
+		log.Errorf("Failed to load server: %s", err)
+		return err
+	}
+	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
+		log.Errorf("Failed to set up dRPC: %s", err)
+		return err
+	}
+	if err = iosrv.start(); err != nil {
+		log.Errorf("Failed to start server: %s", err)
+		return err
 	}
 
-	extraText, err := CheckReplica(lis, config.AccessPoints, srv)
+	extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
 	if err != nil {
 		log.Errorf(
 			"Unable to determine if management service replica: %s",
 			err)
-		return
+		return err
 	}
 	log.Debugf("DAOS server listening on %s%s", addr, extraText)
 
 	// Wait for I/O server to return.
-	err = srv.Wait()
+	err = iosrv.wait()
 	if err != nil {
 		log.Errorf("DAOS I/O server exited with error: %s", err)
 	}
+
+	return err
 }

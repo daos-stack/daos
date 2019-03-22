@@ -25,8 +25,10 @@ package drpc
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"net"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // DomainSocketClient is the interface to a dRPC client communicating over a
@@ -56,6 +58,7 @@ type ClientConnection struct {
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
 	conn       domainSocketConn   // UDS connection
+	sequence   int64              // Increment each time we send
 }
 
 // IsConnected indicates whether the client connection is currently active
@@ -76,6 +79,7 @@ func (c *ClientConnection) Connect() error {
 	}
 
 	c.conn = conn
+	c.sequence = 0 // reset message sequence number on connect
 	return nil
 }
 
@@ -96,6 +100,10 @@ func (c *ClientConnection) Close() error {
 }
 
 func (c *ClientConnection) sendCall(msg *Call) error {
+	// increment sequence every call, always nonzero
+	c.sequence++
+	msg.Sequence = c.sequence
+
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshall dRPC call: %v", err)
@@ -103,7 +111,7 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 
 	_, _, err = c.conn.WriteMsgUnix(callBytes, nil, nil)
 	if err != nil {
-		return fmt.Errorf("dRPC send: %v", err)
+		return errors.Wrap(err, "dRPC send")
 	}
 
 	return nil
@@ -113,7 +121,7 @@ func (c *ClientConnection) recvResponse() (*Response, error) {
 	respBytes := make([]byte, MAXMSGSIZE)
 	numBytes, _, _, _, err := c.conn.ReadMsgUnix(respBytes, nil)
 	if err != nil {
-		return nil, fmt.Errorf("dRPC recv: %v", err)
+		return nil, errors.Wrap(err, "dRPC recv")
 	}
 
 	resp := &Response{}
@@ -139,7 +147,7 @@ func (c *ClientConnection) SendMsg(msg *Call) (*Response, error) {
 
 	err := c.sendCall(msg)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	return c.recvResponse()

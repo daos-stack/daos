@@ -29,7 +29,9 @@ RUN yum install -y \
         libiscsi-devel numactl-devel graphviz                 \
         libyaml-devel                                         \
         scons pylint file ShellCheck python-pep8 lcov python  \
-        python2-pygithub yum-plugin-copr
+        python2-pygithub yum-plugin-copr python2-avocado      \
+        python2-avocado-plugins-output-html                   \
+        python2-avocado-plugins-varianter-yaml-to-mux
 
 RUN yum copr -y enable jhli/ipmctl
 RUN yum copr -y enable jhli/safeclib

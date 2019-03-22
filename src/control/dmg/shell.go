@@ -24,6 +24,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/daos-stack/ishell"
 )
 
@@ -63,7 +65,7 @@ func setupShell() *ishell.Shell {
 		Name: "listmgmtfeatures",
 		Help: "Command to retrieve all supported management features from any client connections",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListFeatures()), "management feature")
 		},
 	})
@@ -72,7 +74,7 @@ func setupShell() *ishell.Shell {
 		Name: "listnvmecontrollers",
 		Help: "Command to list NVMe SSD controllers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(
 				checkAndFormat(conns.ListNvme()),
 				"NVMe SSD controller and constituent namespace")
@@ -83,12 +85,43 @@ func setupShell() *ishell.Shell {
 		Name: "listscmmodules",
 		Help: "Command to list installed SCM modules",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
+			c.Println(hasConns(conns.GetActiveConns(nil)))
 			c.Printf(checkAndFormat(conns.ListScm()), "SCM module")
 		},
 	})
 
-	// todo: implement shell commands for features other than discovery on
+	shell.AddCmd(&ishell.Cmd{
+		Name: "killrank",
+		Help: "Command to terminate server running as specific rank on a DAOS pool",
+		Func: func(c *ishell.Context) {
+			// disable the '>>>' for cleaner same line input.
+			c.ShowPrompt(false)
+			defer c.ShowPrompt(true) // revert after command.
+
+			c.Print("Pool uuid: ")
+			poolUUID := c.ReadLine()
+
+			c.Print("Rank: ")
+			rankIn := c.ReadLine()
+
+			c.Println(hasConns(conns.GetActiveConns(nil)))
+
+			rank, err := strconv.Atoi(rankIn)
+			if err != nil {
+				c.Println("bad rank")
+				return
+			}
+
+			if err := conns.KillRank(poolUUID, uint32(rank)); err != nil {
+				c.Printf("Kill Rank failed: %s\n", err)
+				return
+			}
+
+			c.Print("Kill Rank succeeding on all active connections!\n")
+		},
+	})
+
+	// todo: implement shell commands for feature other than discovery on
 	// multiple nodes
 
 	//			// record strings that make up the option list

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
+#include <daos/dtx.h>
 #include <daos_srv/daos_server.h>
 #include <daos_types.h>
 
@@ -52,13 +53,6 @@ extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern bool	srv_io_dispatch;
 
-/**
- * Bypass bulk transfer on server side, instead data will be copy from/to
- * dummy buffer.
- * this mode is for performance evaluation on low bandwidth network.
- */
-extern bool	srv_bypass_bulk;
-
 /** client object shard */
 struct dc_obj_shard {
 	/* Metadata for this shard */
@@ -74,14 +68,17 @@ struct dc_obj_shard {
 	daos_handle_t		do_co_hdl;
 	/** list to the container */
 	d_list_t		do_co_list;
-	uint32_t		do_shard;	/* shard index */
-	uint32_t		do_target_id;	/* target id (unique in pool) */
 	uint32_t		do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
-	uint32_t		do_rebuilding:1;
+	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
 };
+
+#define do_shard	do_pl_shard.po_shard
+#define do_target_id	do_pl_shard.po_target
+#define do_fseq		do_pl_shard.po_fseq
+#define do_rebuilding	do_pl_shard.po_rebuilding
 
 /** Client stack object */
 struct dc_object {
@@ -129,7 +126,9 @@ int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
 			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
-			uint32_t fw_cnt, tse_task_t *task);
+			uint32_t fw_cnt, tse_task_t *task,
+			struct daos_tx_id *dti, uint32_t flags);
+
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
@@ -151,7 +150,8 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       daos_key_t *akeys, unsigned int akey_nr,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
-		       uint32_t fw_cnt, tse_task_t *task);
+		       uint32_t fw_cnt, tse_task_t *task,
+		       struct daos_tx_id *dti, uint32_t flags);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
@@ -163,7 +163,7 @@ static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       daos_crt_network_error(err);
+	       err == -DER_INPROGRESS || daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
