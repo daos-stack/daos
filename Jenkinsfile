@@ -74,7 +74,6 @@ pipeline {
         stage('Pre-build') {
             parallel {
                 stage('checkpatch') {
-                    when { branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos:7'
@@ -523,7 +522,6 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15 with Intel-C') {
-                    when { branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap:15'

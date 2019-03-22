@@ -7,8 +7,9 @@ def scons():
     SConscript('api/SConscript')
     SConscript('dfs/SConscript')
 
-    # Do not enable the dfuse build for now as it still throws warnings.
-    SConscript('dfuse/SConscript')
+    # Do not enable the dfuse build yet, it does build however throws
+    # compiler warnings on some systems.
+    # SConscript('dfuse/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
