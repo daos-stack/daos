@@ -401,7 +401,7 @@ typedef struct {
  */
 
 /**
- * ID of an object, 192 bits
+ * ID of an object, 128 bits
  * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
  * provided by the user and assumed to be unique inside a container.
  */
