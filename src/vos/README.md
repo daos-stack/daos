@@ -1,7 +1,7 @@
 
 # Versioning Object Store
 
-The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="../../doc/storage_model.md">DAOS pool</a>.
+The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/doc/storage_model.md#DAOS_Pool">DAOS pool</a>.
 It maintains its own metadata in persistent memory and may store data either in persistent memory or on block storage, depending on available storage and performance requirements.
 It must provide this functionality with minimum overhead so that performance can approach the theoretical performance of the underlying hardware as closely as possible, both with respect to latency and bandwidth.
 Its internal data structures, in both persistent and non-persistent memory, must also support the highest levels of concurrency so that throughput scales over the cores of modern processor architectures.
@@ -152,7 +152,7 @@ VOS provides a generic iterator that can be used to iterate through containers, 
 The iteration API is shown in the <a href="#7b">figure</a> below.
 
 <a id="7b"></a>
-```
+```C
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -389,8 +389,8 @@ Originally, the DAOS design called for splitting such in-tree rectangles on inse
 3. Walk through the sorted array, splitting extents if necessary and marking them as visible as applicable
 4. Re-sort the array.  This final sort can optionally keep or discard holes and covered extents, depending on the use case.
 
-<a id="7k"></a>
 TODO: Create a new figure
+<a id="7k"></a>
 <b>Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table <a href="#7g">above</a></b>
 
 ![../../doc/graph/Fig_016.png](../../doc/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
@@ -438,8 +438,11 @@ To compact epochs, VOS allows all epochs between snapshots to be aggregated, i.e
 This also ensures that merging history does not cause loss of exclusive updates/writes made to an epoch.
 To rollback history VOS provides the discard operation.
 
-<a id="7p"></a>
-![../../doc/graph/Fig_021.png](../../doc/graph/Fig_021.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools")
+```C
+int vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
+int vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
+int vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
+```
 
 Aggregate and discard operations in VOS accept a range of epochs to be aggregated normally corresponding to ranges between persistent snapshots.
 
@@ -469,9 +472,8 @@ A special aggregation ULT processes aggregation, yielding frequently to avoid bl
 
 <a id="79"></a>
 
-## VOS Checksum Management
+## VOS Checksum Management (to be updated)
 
-TODO: Edit this section
 One of the guarantees that VOS provides is end-to-end data integrity.
 Data corruption in VOS can happen while reading or writing data due to a various
 reasons, including leaks or failures in persistent memory, or during data
@@ -504,6 +506,7 @@ Intel&#174; Storage acceleration library</a>.
 ## Metadata Overhead
 
 VOS provides a tool vos_stats.py that can take a set of assumptions about how many keys and objects and VOS pools are in use and provide an estimate of metadata overhead.
+
 TODO: Provide more discussion
 
 To run an example, first setup the paths
