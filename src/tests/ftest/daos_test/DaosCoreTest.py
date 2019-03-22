@@ -35,8 +35,8 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 # pylint: disable=wrong-import-position,import-error
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 # pylint: enable=wrong-import-position,import-error
 
 class DaosCoreTest(Test):
@@ -61,11 +61,12 @@ class DaosCoreTest(Test):
         self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
 
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
+        server_utils.stop_server(hosts=self.hostlist)
 
         # collect up a debug log so that we have a separate one for each
         # subtest

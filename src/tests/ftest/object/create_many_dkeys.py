@@ -34,8 +34,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 
 from daos_api import DaosContext, DaosPool, DaosContainer, IORequest
 from daos_api import DaosApiError
@@ -57,9 +57,10 @@ class CreateManyDkeys(Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.container = None
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -77,7 +78,7 @@ class CreateManyDkeys(Test):
             if self.pool:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def write_a_bunch_of_values(self, how_many):
         """

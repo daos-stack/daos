@@ -33,8 +33,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 
 from daos_api import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
                       DaosApiError, DaosLog)
@@ -68,13 +68,14 @@ class ObjectDataValidation(avocado.Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -105,7 +106,7 @@ class ObjectDataValidation(avocado.Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def reconnect(self):
         '''

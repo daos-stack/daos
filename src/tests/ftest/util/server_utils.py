@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import traceback
 import sys
@@ -41,30 +42,25 @@ sessions = {}
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
 
-# a callback function used when there is cmd line I/O, not intended
-# to be used outside of this file
-def printFunc(thestring):
-        print("<SERVER>" + thestring)
-
-def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
+def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     Launches DAOS servers in accordance with the supplied hostfile.
 
     """
     global sessions
     try:
-        servers = [line.split(' ')[0]
-                   for line in genio.read_all_lines(hostfile)]
+        servers = (
+            [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
         server_count = len(servers)
 
         # first make sure there are no existing servers running
-        killServer(servers)
+        kill_server(servers)
 
         # clean the tmpfs on the servers
         for server in servers:
             subprocess.check_call(['ssh', server,
-                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-                "xargs -0r rm -rf"])
+                                   ("find /mnt/daos -mindepth 1 -maxdepth 1 "
+                                    "-print0 | xargs -0r rm -rf")])
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
@@ -75,8 +71,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         # before any set in env are added to env_args, add any user supplied
         # envirables to environment first
         if env_dict is not None:
-            for k, v in env_dict.items():
-                os.environ[k] = v
+            for key, val in env_dict.items():
+                os.environ[key] = val
 
         env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
                     'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*']
@@ -95,7 +91,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         server_cmd.extend([daos_srv_bin, "-g", setname, "-c", "1",
                            "-a", os.path.join(basepath, "install", "tmp"),
                            "-d", os.path.join(os.sep, "var", "run", "user",
-                           str(os.geteuid()))])
+                                              str(os.geteuid()))])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
@@ -106,9 +102,9 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         sessions[setname] = subprocess.Popen(server_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=subprocess.PIPE)
-        fd = sessions[setname].stdout.fileno()
-        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        fdesc = sessions[setname].stdout.fileno()
+        flags = fcntl.fcntl(fdesc, fcntl.F_GETFL)
+        fcntl.fcntl(fdesc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         timeout = 600
         start_time = time.time()
         result = 0
@@ -151,7 +147,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
             pass
         raise ServerFailed("Server didn't start!")
 
-def stopServer(setname=None, hosts=None):
+def stop_server(setname=None, hosts=None):
     """
     orterun says that if you send a ctrl-c to it, it will
     initiate an orderly shutdown of all the processes it
@@ -160,22 +156,22 @@ def stopServer(setname=None, hosts=None):
 
     global sessions
     try:
-        if setname == None:
-            for k, v in sessions.items():
-                v.send_signal(signal.SIGINT)
+        if setname is None:
+            for _key, val in sessions.items():
+                val.send_signal(signal.SIGINT)
                 time.sleep(5)
-                if v.poll() == None:
-                    v.kill()
-                v.wait()
+                if val.poll() is None:
+                    val.kill()
+                val.wait()
         else:
             sessions[setname].send_signal(signal.SIGINT)
             time.sleep(5)
-            if sessions[setname].poll() == None:
+            if sessions[setname].poll() is None:
                 sessions[setname].kill()
             sessions[setname].wait()
         print("<SERVER> server stopped")
-    except Exception as e:
-        print("<SERVER> Exception occurred: {0}".format(str(e)))
+    except Exception as excep:
+        print("<SERVER> Exception occurred: {0}".format(str(excep)))
         raise ServerFailed("Server didn't stop!")
 
     if not hosts:
@@ -196,18 +192,18 @@ def stopServer(setname=None, hosts=None):
             found_hosts.append(host)
 
     if found_hosts:
-        killServer(found_hosts)
+        kill_server(found_hosts)
         raise ServerFailed("daos processes {} found on hosts "
-                           "{} after stopServer() were "
+                           "{} after stop_server() were "
                            "killed".format(', '.join(stdout.splitlines()),
-                           found_hosts))
+                                           found_hosts))
 
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously
     # reboots
     subprocess.call(["pkill", "^ssh$"])
 
-def killServer(hosts):
+def kill_server(hosts):
     """
     Sometimes stop doesn't get everything.  Really whack everything
     with this.
@@ -218,4 +214,5 @@ def killServer(hosts):
                  "sleep 5",
                  "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
-        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
+                        shell=True)

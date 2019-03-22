@@ -35,8 +35,8 @@ sys.path.append('../util')
 sys.path.append('./../../utils/py')
 sys.path.append('../../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
 
 class DestroyRebuild(Test):
@@ -64,13 +64,14 @@ class DestroyRebuild(Test):
 
         # generate a hostfile
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         # fire up the DAOS servers
         self.server_group = self.params.get("server_group", '/run/server/',
                                             'daos_server')
-        ServerUtils.runServer(self.hostfile, self.server_group,
-                              build_paths['PREFIX'] + '/../')
+        server_utils.run_server(self.hostfile, self.server_group,
+                                build_paths['PREFIX'] + '/../')
 
         # create a pool to test with
         createmode = self.params.get("mode", '/run/pool/createmode/')
@@ -93,7 +94,7 @@ class DestroyRebuild(Test):
             if self.pool:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
 
     def test_destroy_while_rebuilding(self):

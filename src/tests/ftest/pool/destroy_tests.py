@@ -37,9 +37,9 @@ sys.path.append('../util')
 sys.path.append('./../../utils/py')
 sys.path.append('../../../utils/py')
 
-import ServerUtils
-import CheckForPool
-import WriteHostFile
+import server_utils
+import check_for_pool
+import write_host_file
 from daos_api import DaosContainer, DaosContext, DaosPool, DaosApiError
 from conversion import c_uuid_to_str
 
@@ -91,9 +91,9 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy,quick
         """
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
@@ -114,7 +114,7 @@ class DestroyTests(Test):
             print ("uuid is {0}\n".format(uuid_str))
 
             host = self.hostlist[0]
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n"
                           .format(uuid_str, host))
@@ -123,7 +123,7 @@ class DestroyTests(Test):
                           .format(daosctl, uuid_str, setid))
             process.system(delete_cmd)
 
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} when not expected.\n"
                           .format(uuid_str, host))
@@ -138,7 +138,7 @@ class DestroyTests(Test):
             try:
                 os.remove(hostfile)
             finally:
-                ServerUtils.stopServer(hosts=self.hostlist)
+                server_utils.stop_server(hosts=self.hostlist)
 
     def test_delete_doesnt_exist(self):
         """
@@ -147,9 +147,9 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy
         """
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
@@ -172,13 +172,13 @@ class DestroyTests(Test):
             self.fail("Pool {0} found on host {1} when not expected.\n"
                       .format(bogus_uuid, host))
 
-        except Exception as _e:
+        except Exception as _excep:
             # expecting an exception so catch and pass the test
             pass
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
 
@@ -190,9 +190,9 @@ class DestroyTests(Test):
         """
 
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         # need both a good and bad set
         goodsetid = self.params.get("setname",
@@ -217,7 +217,7 @@ class DestroyTests(Test):
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print ("uuid is {0}\n".format(uuid_str))
 
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n"
                           .format(uuid_str, host))
@@ -233,7 +233,7 @@ class DestroyTests(Test):
             self.fail("Pool {0} found on host {1} when not expected.\n"
                       .format(uuid_str, host))
 
-        except Exception as _e:
+        except Exception as _excep:
             # expecting an exception, but now need to
             # clean up the pool for real
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
@@ -242,7 +242,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
 
@@ -255,9 +255,9 @@ class DestroyTests(Test):
         :avocado: tags=pool,pooldestroy,multiserver
         """
         self.hostlist = self.params.get("test_machines2", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         setid = self.params.get("setname",
                                 '/run/setnames/validsetname/')
@@ -276,11 +276,12 @@ class DestroyTests(Test):
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print ("uuid is {0}\n".format(uuid_str))
 
-            exists = CheckForPool.checkForPool(self.hostlist[0], uuid_str)
+            exists = check_for_pool.check_for_pool(self.hostlist[0], uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n"
                           .format(uuid_str, self.hostlist[0]))
-                exists = CheckForPool.checkForPool(self.hostlist[1], uuid_str)
+                exists = check_for_pool.check_for_pool(self.hostlist[1],
+                                                       uuid_str)
                 if exists != 0:
                     self.fail("Pool {0} not found on host {1}.\n"
                               .format(uuid_str, self.hostlist[1]))
@@ -289,11 +290,13 @@ class DestroyTests(Test):
                               .format(daosctl, uuid_str, setid))
                 process.system(delete_cmd)
 
-                exists = CheckForPool.checkForPool(self.hostlist[0], uuid_str)
+                exists = check_for_pool.check_for_pool(self.hostlist[0],
+                                                       uuid_str)
                 if exists == 0:
                     self.fail("Pool {0} found on host {1} when not"
                               " expected.\n".format(uuid_str, self.hostlist[0]))
-                exists = CheckForPool.checkForPool(self.hostlist[1], uuid_str)
+                exists = check_for_pool.check_for_pool(self.hostlist[1],
+                                                       uuid_str)
                 if exists == 0:
                     self.fail("Pool {0} found on host {1} when not "
                               "expected.\n".format(uuid_str, self.hostlist[1]))
@@ -305,7 +308,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_bad_server_group(self):
@@ -320,18 +323,18 @@ class DestroyTests(Test):
                                                  '/run/setnames/othersetname/')
 
         self.hostlist1 = self.params.get("test_machines1", '/run/hosts/')
-        hostfile1 = WriteHostFile.WriteHostFile(self.hostlist1, self.tmp)
+        hostfile1 = write_host_file.write_host_file(self.hostlist1, self.tmp)
 
         self.hostlist2 = self.params.get("test_machines2a", '/run/hosts/')
-        hostfile2 = WriteHostFile.WriteHostFile(self.hostlist2, self.tmp)
+        hostfile2 = write_host_file.write_host_file(self.hostlist2, self.tmp)
 
 
         # TODO make these params in the yaml
         daosctl = self.basepath + '/install/bin/daosctl'
 
         # start 2 different sets of servers,
-        ServerUtils.runServer(hostfile1, self.server_group, self.basepath)
-        ServerUtils.runServer(hostfile2, setid2, self.basepath)
+        server_utils.run_server(hostfile1, self.server_group, self.basepath)
+        server_utils.run_server(hostfile2, setid2, self.basepath)
 
         host = self.hostlist1[0]
 
@@ -349,7 +352,7 @@ class DestroyTests(Test):
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print ("uuid is {0}\n".format(uuid_str))
 
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n"
                           .format(uuid_str, host))
@@ -360,19 +363,19 @@ class DestroyTests(Test):
 
             process.system(delete_cmd)
 
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1} but delete "
                           "should have failed.\n".format(uuid_str, host))
 
-        except Exception as _e:
+        except Exception as _excep:
             # now issue a good delete command so we clean-up after this test
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                           .format(daosctl, uuid_str, self.server_group))
 
             process.system(delete_cmd)
 
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists == 0:
                 self.fail("Pool {0} ound on host {1} but delete"
                           "should have removed it.\n"
@@ -380,7 +383,7 @@ class DestroyTests(Test):
 
         # no matter what happens shutdown the server
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile1)
             os.remove(hostfile2)
 
@@ -396,9 +399,9 @@ class DestroyTests(Test):
 
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -428,13 +431,13 @@ class DestroyTests(Test):
             print(excep)
             print(traceback.format_exc())
             # pool should still be there
-            exists = CheckForPool.checkForPool(host, pool.get_uuid_str)
+            exists = check_for_pool.check_for_pool(host, pool.get_uuid_str)
             if exists != 0:
                 self.fail("Pool gone, but destroy should have failed.\n")
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_destroy_recreate(self):
@@ -448,9 +451,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -493,7 +496,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_many_servers(self):
@@ -505,9 +508,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines6", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -538,7 +541,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_destroy_withdata(self):
@@ -551,9 +554,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -599,7 +602,7 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
     def test_destroy_async(self):
@@ -615,9 +618,9 @@ class DestroyTests(Test):
         try:
             # write out a hostfile and start the servers with it
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-            hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.tmp)
+            hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/poolparams/createmode/')
@@ -650,7 +653,7 @@ class DestroyTests(Test):
                         createsize, createsetid, None)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             pool.destroy(1, cb_func)
 
             # wait for callback, expecting a timeout since servers are down
@@ -668,5 +671,5 @@ class DestroyTests(Test):
 
         # no matter what happens cleanup
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)

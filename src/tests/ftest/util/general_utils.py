@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@
 '''
 import os
 import json
-from pathlib       import Path
-from errno         import ENOENT
+from pathlib import Path
+from errno import ENOENT
 
 def get_file_path(bin_name, dir_path=""):
     """
@@ -40,7 +40,7 @@ def get_file_path(bin_name, dir_path=""):
     """
     with open('../../../.build_vars.json') as json_file:
         build_paths = json.load(json_file)
-    basepath = os.path.normpath(build_paths['PREFIX']  + "/../{0}"
+    basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
                                 .format(dir_path))
 
     file_path = list(Path(basepath).glob('**/{0}'.format(bin_name)))

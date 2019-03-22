@@ -35,8 +35,8 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 from conversion import c_uuid_to_str
 
@@ -71,9 +71,10 @@ class SimpleCreateDeleteTest(Test):
 
         try:
             hostlist = self.params.get("test_machines", '/run/hosts/*')
-            hostfile = WriteHostFile.WriteHostFile(hostlist, self.workdir)
+            hostfile = write_host_file.write_host_file(hostlist,
+                                                       self.workdir)
 
-            ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+            server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # give it time to start
             time.sleep(2)
@@ -128,7 +129,7 @@ class SimpleCreateDeleteTest(Test):
                 pool.disconnect()
                 pool.destroy(1)
 
-            ServerUtils.stopServer(hosts=hostlist)
+            server_utils.stop_server(hosts=hostlist)
 
 if __name__ == "__main__":
     main()

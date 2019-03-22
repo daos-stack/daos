@@ -38,7 +38,7 @@ def filelist(directory):
     random directory trees of tests.
     """
 
-    test_files = []
+    local_test_files = []
     test_pattern = "*.py"
 
     for path, _dirs, files in os.walk(directory):
@@ -46,8 +46,8 @@ def filelist(directory):
                                                           'util')):
             for test_file in files:
                 if fnmatch.fnmatch(test_file, test_pattern):
-                    test_files.append(os.path.join(path, test_file))
-    return test_files
+                    local_test_files.append(os.path.join(path, test_file))
+    return local_test_files
 
 def yamlforpy(path):
     """
@@ -85,6 +85,9 @@ def printhelp():
     exit()
 
 def run_test(_file, use_tags=True):
+    """
+    Launch a given test.
+    """
     param_file = yamlforpy(_file)
     params = ' --mux-yaml ' + param_file
     test_cmd = avocado + ignore_errors + output_options

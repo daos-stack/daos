@@ -32,8 +32,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 import IorUtils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
@@ -59,18 +59,20 @@ class MultipleClients(Test):
         self.hostlist_servers = self.params.get("test_servers",
                                                 '/run/hosts/test_machines/*')
         self.hostfile_servers = (
-            WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir))
+            write_host_file.write_host_file(self.hostlist_servers,
+                                            self.workdir))
         print("Host file servers is: {}".format(self.hostfile_servers))
 
         self.hostlist_clients = (
             self.params.get("clients",
-            '/run/hosts/test_machines/test_clients/*'))
+                            '/run/hosts/test_machines/test_clients/*'))
         self.hostfile_clients = (
-            WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir))
+            write_host_file.write_host_file(self.hostlist_clients,
+                                            self.workdir))
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
-        ServerUtils.runServer(self.hostfile_servers, self.server_group,
-                              self.basepath)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
         if int(str(self.name).split("-")[0]) == 1:
             IorUtils.build_ior(self.basepath)
@@ -84,7 +86,7 @@ class MultipleClients(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist_servers)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_multipleclients(self):
         """

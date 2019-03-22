@@ -33,8 +33,8 @@ sys.path.append('../../../utils/py')
 sys.path.append('./util')
 sys.path.append('./../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosLog
 
 class CartSelfTest(Test):
@@ -52,7 +52,8 @@ class CartSelfTest(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(context)
@@ -83,15 +84,15 @@ class CartSelfTest(Test):
         self.server_group = self.params.get("server", 'server_group',
                                             'daos_server')
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath,
-                              uri_path=self.uri_file, env_dict=self.env_dict)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath,
+                                uri_path=self.uri_file, env_dict=self.env_dict)
 
     def tearDown(self):
         try:
             os.remove(self.hostfile)
             os.remove(self.uri_file)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_self_test(self):
         """

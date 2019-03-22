@@ -32,9 +32,9 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
-from MpioUtils import MpioUtils, MpioFailed
+import server_utils
+import write_host_file
+from mpio_utils import MpioUtils, MpioFailed
 from daos_api import DaosContext
 
 class Romio(Test):
@@ -68,22 +68,24 @@ class Romio(Test):
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile_servers = (
-            WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir))
+            write_host_file.write_host_file(self.hostlist_servers,
+                                            self.workdir))
         print("Host file servers is: {}".format(self.hostfile_servers))
 
         self.hostlist_clients = self.params.get("test_clients", '/run/hosts/')
         self.hostfile_clients = (
-            WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir))
+            write_host_file.write_host_file(self.hostlist_clients,
+                                            self.workdir))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         # start servers
-        ServerUtils.runServer(self.hostfile_servers, self.server_group,
-                              self.basepath)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
         self.mpio = None
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist_servers)
+        server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_romio(self):
         """
@@ -124,7 +126,8 @@ class Romio(Test):
             for line in searchfile:
                 for i in xrange(len(error_message)):
                     if error_message[i] in line:
-                        self.fail("Romio Test Failed with error_message: {}".format(error_message[i]))
+                        self.fail("Romio Test Failed with error_message: "
+                                  "{}".format(error_message[i]))
 
         except (MpioFailed) as excep:
             self.fail("<Romio Test Failed> \n{}".format(excep))

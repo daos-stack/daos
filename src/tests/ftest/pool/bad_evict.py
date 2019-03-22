@@ -35,8 +35,8 @@ sys.path.append('../../../utils/py')
 sys.path.append('./util')
 sys.path.append('./../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosApiError
 from daos_cref import RankList
 
@@ -57,15 +57,16 @@ class BadEvictTest(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        ServerUtils.runServer(self.hostfile, server_group, self.basepath)
+        server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
+        server_utils.stop_server(hosts=self.hostlist)
 
     def test_evict(self):
         """

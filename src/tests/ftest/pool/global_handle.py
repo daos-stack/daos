@@ -34,9 +34,9 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
-import CheckForPool
+import server_utils
+import write_host_file
+import check_for_pool
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 def check_handle(buf_len, iov_len, buf, uuidstr, rank):
@@ -95,17 +95,18 @@ class GlobalHandle(Test):
 
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
 
-        self.hostlist = self.params.get("test_machines",'/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostlist = self.params.get("test_machines", '/run/hosts/')
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        server_utils.run_server(self.hostfile, server_group, basepath)
 
     def tearDown(self):
         try:
             # really make sure everything is gone
-            CheckForPool.CleanupPools(self.hostlist)
+            check_for_pool.cleanup_pools(self.hostlist)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_global_handle(self):
         """

@@ -32,9 +32,9 @@ from avocado import Test
 from avocado.utils import process
 
 sys.path.append('./util')
-import ServerUtils
-import CheckForPool
-import WriteHostFile
+import server_utils
+import check_for_pool
+import write_host_file
 
 class ConnectTest(Test):
     """
@@ -52,15 +52,16 @@ class ConnectTest(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        ServerUtils.runServer(self.hostfile, server_group, self.basepath)
+        server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
+        server_utils.stop_server(hosts=self.hostlist)
 
     def test_connect(self):
         """
@@ -104,11 +105,11 @@ class ConnectTest(Test):
             uuid_str = """{0}""".format(process.system_output(create_cmd))
             print("uuid is {0}\n".format(uuid_str))
 
-            exists = CheckForPool.checkForPool(host1, uuid_str)
+            exists = check_for_pool.check_for_pool(host1, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".
                           format(uuid_str, host1))
-            exists = CheckForPool.checkForPool(host2, uuid_str)
+            exists = check_for_pool.check_for_pool(host2, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".
                           format(uuid_str, host2))

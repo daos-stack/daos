@@ -32,8 +32,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer
 from daos_api import DaosApiError, DaosLog
 
@@ -58,8 +58,9 @@ class FullPoolContainerCreate(Test):
         self.pool = DaosPool(self.context)
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines1", '/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         # shut 'er down
@@ -70,7 +71,7 @@ class FullPoolContainerCreate(Test):
         try:
             self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_no_space_cont_create(self):
         """

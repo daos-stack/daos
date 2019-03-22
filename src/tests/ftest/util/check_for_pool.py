@@ -25,7 +25,7 @@ from __future__ import print_function
 
 import subprocess
 
-def checkForPool(host, uuid):
+def check_for_pool(host, uuid):
     """
     Function to check if pool folder exist on server
     Args:
@@ -42,7 +42,7 @@ def checkForPool(host, uuid):
         print ('%s does not exist' %uuid)
     return resp
 
-def CleanupPools(hosts):
+def cleanup_pools(hosts):
     """
     To cleanup the pool and content from /mnt/daps/
     Args:

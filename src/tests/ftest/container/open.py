@@ -37,8 +37,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
@@ -69,7 +69,8 @@ class OpenContainerTest(Test):
 
         self.hostfile = None
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         # common parameters used in pool create
         self.createmode = self.params.get("mode",
@@ -87,7 +88,7 @@ class OpenContainerTest(Test):
         self.createuid2 = self.params.get("uid", '/run/createtests/createuid2/')
         self.creategid2 = self.params.get("gid", '/run/createtests/creategid2/')
 
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         try:
@@ -100,7 +101,7 @@ class OpenContainerTest(Test):
             if self.pool2 is not None and self.pool2.attached:
                 self.pool2.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_container_open(self):
         """

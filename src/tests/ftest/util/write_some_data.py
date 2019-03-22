@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
-import os
 import sys
 import numpy as np
 
@@ -33,7 +31,7 @@ from daos_io import DaosFile
 class DaosIOFailed(Exception):
     """ DAOS I/O failure of some sort. """
 
-def WriteSomeData():
+def write_some_data():
 
     sizeinbytes = long(sys.argv[1])
     filename = sys.argv[2]
@@ -42,22 +40,22 @@ def WriteSomeData():
     data = np.arange(sizeinbytes, dtype=np.int8)
 
     # create a file
-    fh = DaosFile.open(filename, DaosFile.MODE_RDWR_CREATE)
+    file_handle = DaosFile.open(filename, DaosFile.MODE_RDWR_CREATE)
 
     # dump some data into it and close
-    fh.write(data)
-    fh.close()
+    file_handle.write(data)
+    file_handle.close()
 
     # reopen and read the last byte back
-    fh = DaosFile.open(filename, DaosFile.MODE_RDWR_CREATE)
+    file_handle = DaosFile.open(filename, DaosFile.MODE_RDWR_CREATE)
     rdata1 = np.zeros(1, dtype=np.uint8)
-    fh.read_at(sizeinbytes-10, rdata1)
-    fh.close()
+    file_handle.read_at(sizeinbytes-10, rdata1)
+    file_handle.close()
 
     # we know what it should be
     if not rdata1 == ((sizeinbytes-10) % 256):
-        print "value is {0}".format(rdata1)
-        raise DaosIOFailed;
+        print("value is {0}".format(rdata1))
+        raise DaosIOFailed
 
 if __name__ == "__main__":
-    WriteSomeData()
+    write_some_data()

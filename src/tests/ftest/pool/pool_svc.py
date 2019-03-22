@@ -35,8 +35,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
 
 class PoolSvc(Test):
@@ -60,17 +60,18 @@ class PoolSvc(Test):
 
         self.hostfile = None
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
         print("Host file is: {}".format(self.hostfile))
 
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         try:
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_poolsvc(self):
         """

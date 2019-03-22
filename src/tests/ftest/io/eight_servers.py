@@ -33,8 +33,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 import IorUtils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
@@ -72,19 +72,20 @@ class EightServers(Test):
         self.hostlist_servers = self.params.get("test_servers",
                                                 '/run/hosts/test_machines/*')
         self.hostfile_servers = (
-            WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir))
+            write_host_file.write_host_file(self.hostlist_servers,
+                                            self.workdir))
         print("Host file servers is: {}".format(self.hostfile_servers))
 
         self.hostlist_clients = self.params.get("test_clients",
                                                 '/run/hosts/test_machines/*')
         self.slots = self.params.get("slots", '/run/ior/clientslots/*')
         self.hostfile_clients = (
-            WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir,
-                                        self.slots))
+            write_host_file.write_host_file(self.hostlist_clients, self.workdir,
+                                            self.slots))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
-        ServerUtils.runServer(self.hostfile_servers, self.server_group,
-                              self.basepath)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
         if not distutils.spawn.find_executable("ior") and \
            int(str(self.name).split("-")[0]) == 1:
@@ -95,7 +96,7 @@ class EightServers(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist_servers)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def executable(self, iorflags=None):
         """

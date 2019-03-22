@@ -35,8 +35,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class CreateContainerTest(Test):
@@ -59,12 +59,12 @@ class CreateContainerTest(Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.workdir)
 
-        ServerUtils.runServer(hostfile, self.server_group, self.basepath)
+        server_utils.run_server(hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-        ServerUtils.stopServer(None, self.hostlist)
+        server_utils.stop_server(None, self.hostlist)
 
     def test_container_create(self):
         """

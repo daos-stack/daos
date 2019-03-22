@@ -36,8 +36,8 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
 
 class RebuildNoCap(Test):
@@ -57,13 +57,14 @@ class RebuildNoCap(Test):
 
         # generate a hostfile
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         # fire up the DAOS servers
         self.server_group = self.params.get("server_group", '/run/server/',
                                             'daos_server')
-        ServerUtils.runServer(self.hostfile, self.server_group,
-                              build_paths['PREFIX'] + '/../')
+        server_utils.run_server(self.hostfile, self.server_group,
+                                build_paths['PREFIX'] + '/../')
 
         # create a pool to test with
         createmode = self.params.get("mode", '/run/pool/createmode/')
@@ -82,7 +83,7 @@ class RebuildNoCap(Test):
         how_many_bytes = long(self.params.get("datasize",
                                               '/run/testparams/datatowrite/'))
         exepath = os.path.join(build_paths['PREFIX'],
-                               "/../src/tests/ftest/util/WriteSomeData.py")
+                               "/../src/tests/ftest/util/write_some_data.py")
         cmd = "export DAOS_POOL={0}; export DAOS_SVCL=1; mpirun"\
               " --np 1 --host {1} {2} {3} testfile".format(
                   uuid, self.hostlist[0], exepath, how_many_bytes)
@@ -96,7 +97,7 @@ class RebuildNoCap(Test):
             if self.pool:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
 
     def test_rebuild_no_capacity(self):

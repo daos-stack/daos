@@ -34,8 +34,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class OpenClose(Test):
@@ -64,9 +64,10 @@ class OpenClose(Test):
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         try:
@@ -74,8 +75,8 @@ class OpenClose(Test):
                 self.pool.destroy(1)
         finally:
             try:
-                ServerUtils.stopServer(hosts=self.hostlist)
-            except ServerUtils.ServerFailed:
+                server_utils.stop_server(hosts=self.hostlist)
+            except server_utils.ServerFailed:
                 pass
 
     def test_closehandle(self):

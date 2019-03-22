@@ -32,10 +32,10 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 import IorUtils
-from MpioUtils import MpioUtils, MpioFailed
+from mpio_utils import MpioUtils, MpioFailed
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class EightServers(Test):
@@ -73,26 +73,27 @@ class EightServers(Test):
         self.hostlist_servers = self.params.get("test_servers",
                                                 '/run/hosts/test_machines/*')
         self.hostfile_servers = (
-            WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir))
+            write_host_file.write_host_file(self.hostlist_servers,
+                                            self.workdir))
         print("Host file servers is: {}".format(self.hostfile_servers))
 
         self.hostlist_clients = self.params.get("test_clients",
                                                 '/run/hosts/test_machines/*')
         self.num_procs = self.params.get("np", '/run/ior/client_processes/*')
         self.hostfile_clients = (
-            WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir, 
-                                        None))
+            write_host_file.write_host_file(self.hostlist_clients, self.workdir,
+                                            None))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
-        ServerUtils.runServer(self.hostfile_servers, self.server_group,
-                              self.basepath)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
     def tearDown(self):
         try:
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist_servers)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def executable(self, iorflags=None):
         """
@@ -109,7 +110,7 @@ class EightServers(Test):
         createsvc = self.params.get("svcn", '/run/pool/createsvc/')
         iteration = self.params.get("iter", '/run/ior/iteration/')
         block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
-        transfer_size = self.params.get("t", 
+        transfer_size = self.params.get("t",
                                         '/run/ior/transfersize_blocksize/*/')
 
         try:

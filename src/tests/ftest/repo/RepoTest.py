@@ -18,7 +18,7 @@ class RepoTest(Test):
         # not used at present
         pass
 
-        #self.runServer()
+        # self.run_server()
 
     def tearDown(self):
         # not used at present

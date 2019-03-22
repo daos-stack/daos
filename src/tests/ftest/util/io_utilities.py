@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import time
 import random
 import string
 
-def ContinousIo(container, seconds):
+def continuous_io(container, seconds):
     """ Perform a combination of reads/writes for the specified time period """
 
     finish_time = time.time() + seconds
@@ -58,14 +58,14 @@ def ContinousIo(container, seconds):
 
     return total_written
 
-def WriteUntilFull(container):
-    """ write until we get enospace back
-
+def write_until_full(container):
+    """
+    write until we get enospace back
     """
 
     total_written = 0
     size = 2048
-    oid = None
+    _oid = None
 
     try:
         while True:
@@ -77,7 +77,7 @@ def WriteUntilFull(container):
             data = ''.join(random.choice(string.ascii_uppercase + string.digits)
                            for _ in range(size))
 
-            oid, epoch = container.write_an_obj(data, size, dkey, akey)
+            _oid, _epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
             # collapse down the commited epochs
@@ -85,11 +85,11 @@ def WriteUntilFull(container):
 
 
     except ValueError as exp:
-        print exp
+        print(exp)
 
     return total_written
 
-def WriteQuantity(container,size_in_bytes):
+def write_quantity(container, size_in_bytes):
     """ Write a specific number of bytes.  Note the minimum amount
         that will be written is 2048 bytes.
 
@@ -101,7 +101,7 @@ def WriteQuantity(container,size_in_bytes):
 
     total_written = 0
     size = 2048
-    oid = None
+    _oid = None
 
     try:
         while total_written < size_in_bytes:
@@ -114,14 +114,13 @@ def WriteQuantity(container,size_in_bytes):
             data = ''.join(random.choice(string.ascii_uppercase + string.digits)
                            for _ in range(size))
 
-            oid, epoch = container.write_an_obj(data, size, dkey, akey)
+            _oid, _epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
             # collapse down the commited epochs
             container.slip_epoch()
 
-
     except ValueError as exp:
-        print exp
+        print(exp)
 
     return total_written

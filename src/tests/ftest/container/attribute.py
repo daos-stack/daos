@@ -36,9 +36,9 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
-from GeneralUtils import DaosTestError
+import server_utils
+import write_host_file
+from general_utils import DaosTestError
 
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
@@ -99,9 +99,10 @@ class ContainerAttributeTest(Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/attrtests/createmode/*'),
@@ -122,7 +123,7 @@ class ContainerAttributeTest(Test):
             if self.container:
                 self.container.close()
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def create_data_set(self):
         """

@@ -21,30 +21,26 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
-import sys
-import random
 
-def WriteHostFile(hostlist, path='/tmp', slots=1):
-    """ write out a hostfile suitable for orterun """
+def get_hosts_from_file(hostfile):
+    """
+    Return the list of hosts from a given host file.
+    """
+    hosts = []
+    if os.path.exists(hostfile):
+        for line in open(hostfile, "r").readlines():
+            hosts.append(line.split(' ', 1)[0])
 
-    unique = random.randint(1,100000)
+    return hosts
 
-    if not os.path.exists(path):
-        os.makedirs(path)
-    hostfile = path + '/hostfile' + str(unique)
+def main():
+    """
+    Entry point for standalone run.
+    """
+    print(get_hosts_from_file('/tmp/hostfile'))
 
-    if hostlist is None:
-        raise ValueError("host list parameter must be provided.")
-    f = open(hostfile, 'w')
-
-    for host in hostlist:
-        if slots is None:
-            print "<<{}>>".format(slots)
-            f.write("{0}\n".format(host))
-        else:
-            print "<<{}>>".format(slots)
-            f.write("{0} slots={1}\n".format(host, slots))
-    f.close()
-    return hostfile
+if __name__ == "__main__":
+    main()

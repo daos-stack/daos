@@ -31,8 +31,8 @@ sys.path.append('../util')
 sys.path.append('./../../utils/py')
 sys.path.append('../../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosLog
 from conversion import c_uuid_to_str
 
@@ -54,8 +54,9 @@ class InfoTests(Test):
         self.pool = DaosPool(context)
         self.d_log = DaosLog(context)
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         # shut 'er down
@@ -64,7 +65,7 @@ class InfoTests(Test):
                 self.pool.destroy(1)
             os.remove(self.hostfile)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_simple_query(self):
         """

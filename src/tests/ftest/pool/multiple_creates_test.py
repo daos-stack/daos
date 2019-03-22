@@ -32,9 +32,9 @@ from avocado import Test
 from avocado.utils import process
 
 sys.path.append('./util')
-import ServerUtils
-import CheckForPool
-import WriteHostFile
+import server_utils
+import check_for_pool
+import write_host_file
 
 class MultipleCreatesTest(Test):
     """
@@ -53,12 +53,13 @@ class MultipleCreatesTest(Test):
         basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        ServerUtils.runServer(self.hostfile, server_group, basepath)
+        server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.daosctl = basepath + '/install/bin/daosctl'
 
@@ -67,7 +68,7 @@ class MultipleCreatesTest(Test):
         try:
             os.remove(self.hostfile)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_create_one(self):
         """
@@ -111,7 +112,7 @@ class MultipleCreatesTest(Test):
             print("uuid is {0}\n".format(uuid_str))
 
             host = self.hostlist[0]
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str,
                                                                      host))
@@ -124,7 +125,7 @@ class MultipleCreatesTest(Test):
 
             process.system(delete_cmd)
 
-            exists = CheckForPool.checkForPool(host, uuid_str)
+            exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
                           .format(uuid_str, host))
@@ -181,11 +182,11 @@ class MultipleCreatesTest(Test):
             uuid_str_2 = """{0}""".format(process.system_output(cmd))
 
             host = self.hostlist[0]
-            exists = CheckForPool.checkForPool(host, uuid_str_1)
+            exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
                                                                      host))
-            exists = CheckForPool.checkForPool(host, uuid_str_2)
+            exists = check_for_pool.check_for_pool(host, uuid_str_2)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
                                                                      host))
@@ -205,11 +206,11 @@ class MultipleCreatesTest(Test):
             process.system(delete_cmd_1)
             process.system(delete_cmd_2)
 
-            exists = CheckForPool.checkForPool(host, uuid_str_1)
+            exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
                           .format(uuid_str_1, host))
-            exists = CheckForPool.checkForPool(host, uuid_str_2)
+            exists = check_for_pool.check_for_pool(host, uuid_str_2)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
                           .format(uuid_str_2, host))
@@ -267,15 +268,15 @@ class MultipleCreatesTest(Test):
             uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
             host = self.hostlist[0]
-            exists = CheckForPool.checkForPool(host, uuid_str_1)
+            exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
                                                                      host))
-            exists = CheckForPool.checkForPool(host, uuid_str_2)
+            exists = check_for_pool.check_for_pool(host, uuid_str_2)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
                                                                      host))
-            exists = CheckForPool.checkForPool(host, uuid_str_3)
+            exists = check_for_pool.check_for_pool(host, uuid_str_3)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_3,
                                                                      host))
@@ -302,15 +303,15 @@ class MultipleCreatesTest(Test):
             process.system(delete_cmd_2)
             process.system(delete_cmd_3)
 
-            exists = CheckForPool.checkForPool(host, uuid_str_1)
+            exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
-                    .format(uuid_str_1, host))
-            exists = CheckForPool.checkForPool(host, uuid_str_2)
+                          .format(uuid_str_1, host))
+            exists = check_for_pool.check_for_pool(host, uuid_str_2)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
                           .format(uuid_str_2, host))
-            exists = CheckForPool.checkForPool(host, uuid_str_3)
+            exists = check_for_pool.check_for_pool(host, uuid_str_3)
             if exists == 0:
                 self.fail("Pool {0} found on host {1} after destroy.\n"
                           .format(uuid_str_3, host))

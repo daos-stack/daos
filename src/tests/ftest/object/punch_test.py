@@ -35,8 +35,8 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 class PunchTest(Test):
@@ -58,11 +58,11 @@ class PunchTest(Test):
                 self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
                 self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-                self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
-                                                            self.workdir)
+                self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                                self.workdir)
 
-                ServerUtils.runServer(self.hostfile, self.server_group,
-                                      self.basepath)
+                server_utils.run_server(self.hostfile, self.server_group,
+                                        self.basepath)
 
                 # parameters used in pool create
                 createmode = self.params.get("mode", '/run/pool/createmode/')
@@ -116,7 +116,7 @@ class PunchTest(Test):
             self.fail("Test failed during teardown.\n")
 
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_dkey_punch(self):
         """

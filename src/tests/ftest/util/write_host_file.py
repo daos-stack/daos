@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,24 +23,27 @@
 '''
 
 import os
-import sys
-import subprocess
-import pipes
+import random
 
+def write_host_file(hostlist, path='/tmp', slots=1):
+    """ write out a hostfile suitable for orterun """
 
-def getHostsFromFile(hostfile):
+    unique = random.randint(1, 100000)
 
-    hosts = []
-    if os.path.exists(hostfile):
-        for line in open(hostfile,"r").readlines():
-            hosts.append(line.split(' ', 1)[0])
+    if not os.path.exists(path):
+        os.makedirs(path)
+    hostfile = path + '/hostfile' + str(unique)
 
-    return hosts
+    if hostlist is None:
+        raise ValueError("host list parameter must be provided.")
+    hostfile_handle = open(hostfile, 'w')
 
-
-def main():
-    print(getHostsFromFile('/tmp/hostfile'))
-
-
-if __name__ == "__main__":
-    main()
+    for host in hostlist:
+        if slots is None:
+            print("<<{}>>".format(slots))
+            hostfile_handle.write("{0}\n".format(host))
+        else:
+            print("<<{}>>".format(slots))
+            hostfile_handle.write("{0} slots={1}\n".format(host, slots))
+    hostfile_handle.close()
+    return hostfile

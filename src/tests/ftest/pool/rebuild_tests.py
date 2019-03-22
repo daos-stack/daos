@@ -37,9 +37,9 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
-import ServerUtils
-import WriteHostFile
-import CheckForPool
+import server_utils
+import write_host_file
+import check_for_pool
 from daos_api import (
     DaosContext, DaosPool, DaosServer, DaosContainer, DaosApiError
 )
@@ -82,15 +82,15 @@ class RebuildTests(Test):
                                             'daos_server')
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
-        ServerUtils.runServer(hostfile, self.server_group, basepath)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.workdir)
+        server_utils.run_server(hostfile, self.server_group, basepath)
 
     def tearDown(self):
         try:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
         finally:
             # really make sure everything is gone
-            CheckForPool.CleanupPools(self.hostlist)
+            check_for_pool.cleanup_pools(self.hostlist)
 
     def test_simple_rebuild(self):
         """
@@ -142,12 +142,13 @@ class RebuildTests(Test):
                     # make some stuff up and write
                     dkey = (
                         ''.join(random.choice(string.ascii_uppercase +
-                        string.digits) for _ in range(5)))
+                                              string.digits) for _ in range(5)))
                     akey = (
                         ''.join(random.choice(string.ascii_uppercase +
-                        string.digits) for _ in range(5)))
+                                              string.digits) for _ in range(5)))
                     data = (''.join(random.choice(string.ascii_uppercase +
-                    string.digits) for _ in range(self.size)))
+                                                  string.digits)
+                                                  for _ in range(self.size)))
 
                     obj, txn = container.write_an_obj(data, len(data), dkey,
                                                       akey, obj, self.rank,
@@ -184,10 +185,10 @@ class RebuildTests(Test):
                           .format(pool.pool_info.pi_rebuild_st.rs_errno))
             if pool.pool_info.pi_rebuild_st.rs_obj_nr != self.objcount:
                 self.fail("Rebuilt objs not as expected: {0} {1}"
-                          .format(pool.pool_info.pi_rebuild_st.rs_obj_nr, 
+                          .format(pool.pool_info.pi_rebuild_st.rs_obj_nr,
                                   self.objcount))
             if (pool.pool_info.pi_rebuild_st.rs_rec_nr !=
-                (self.reccount*self.objcount)):
+                    (self.reccount*self.objcount)):
                 self.fail("Rebuilt recs not as expected: {0} {1}"
                           .format(pool.pool_info.pi_rebuild_st.rs_rec_nr,
                                   self.reccount*self.objcount))
@@ -250,13 +251,14 @@ class RebuildTests(Test):
                     # make some stuff up and write
                     dkey = (
                         ''.join(random.choice(string.ascii_uppercase +
-                        string.digits) for _ in range(5)))
+                                              string.digits) for _ in range(5)))
                     akey = (
                         ''.join(random.choice(string.ascii_uppercase +
-                        string.digits) for _ in range(5)))
+                                              string.digits) for _ in range(5)))
                     data = (
                         ''.join(random.choice(string.ascii_uppercase +
-                        string.digits) for _ in range(self.size)))
+                                              string.digits) for _ in 
+                                              range(self.size)))
 
                     # Used DAOS_OC_R1S_SPEC_RANK
                     # 1 replica with specified rank
@@ -309,7 +311,7 @@ class RebuildTests(Test):
                           .format(pool1.pool_info.pi_rebuild_st.rs_obj_nr,
                                   self.objcount))
             if (pool1.pool_info.pi_rebuild_st.rs_rec_nr !=
-                (self.reccount*self.objcount)):
+                    (self.reccount*self.objcount)):
                 self.fail("P1 rebuilt recs not as expected: {0} {1}"
                           .format(pool1.pool_info.pi_rebuild_st.rs_rec_nr,
                                   self.reccount*self.objcount))
@@ -342,7 +344,7 @@ class RebuildTests(Test):
                           .format(pool2.pool_info.pi_rebuild_st.rs_obj_nr,
                                   self.objcount))
             if (pool2.pool_info.pi_rebuild_st.rs_rec_nr !=
-                (self.reccount*self.objcount)):
+                    (self.reccount*self.objcount)):
                 self.fail("Rebuilt recs not as expected: {0} {1}".
                           format(pool2.pool_info.pi_rebuild_st.rs_rec_nr,
                                  (self.reccount*self.objcount)))

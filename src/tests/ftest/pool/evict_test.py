@@ -32,8 +32,8 @@ from avocado import Test
 from avocado.utils import process
 
 sys.path.append('./util')
-import ServerUtils
-import WriteHostFile
+import server_utils
+import write_host_file
 
 class EvictTest(Test):
     """
@@ -51,17 +51,18 @@ class EvictTest(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
 
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        ServerUtils.runServer(self.hostfile, server_group, self.basepath)
+        server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist)
+        server_utils.stop_server(hosts=self.hostlist)
         os.remove(self.hostfile)
 
     def test_evict(self):

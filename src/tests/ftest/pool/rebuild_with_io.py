@@ -35,10 +35,10 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
-import CheckForPool
-import IoUtilities
+import server_utils
+import write_host_file
+import check_for_pool
+import io_utilities
 from daos_api import (
     DaosContext, DaosPool, DaosServer, DaosContainer, DaosApiError)
 
@@ -78,13 +78,12 @@ class RebuildWithIO(Test):
                                        'daos_server')
 
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
-        tmp = self.build_paths['PREFIX'] + '/tmp'
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, tmp)
+        hostfile = write_host_file.write_host_file(self.hostlist, self.workdir)
 
         try:
-            ServerUtils.runServer(hostfile, server_group, basepath)
+            server_utils.run_server(hostfile, server_group, basepath)
 
             # use the uid/gid of the user running the test, these should
             # be perfectly valid
@@ -122,7 +121,7 @@ class RebuildWithIO(Test):
             dummy_pool_version = pool.pool_info.pi_rebuild_st.rs_version
 
             # do I/O for 30 seconds
-            dummy_bw = IoUtilities.ContinousIo(container, 30)
+            dummy_bw = io_utilities.continuous_io(container, 30)
 
             # trigger the rebuild
             rank = self.params.get("rank", '/run/testparams/ranks/*')
@@ -134,7 +133,7 @@ class RebuildWithIO(Test):
             # waiting for some improvements in server bootstrap
             # at which point we can move the I/O to a separate client and
             # really pound it with I/O
-            dummy_bw = IoUtilities.ContinousIo(container, 30)
+            dummy_bw = io_utilities.continuous_io(container, 30)
 
             # wait for the rebuild to finish
             while True:
@@ -164,9 +163,9 @@ class RebuildWithIO(Test):
         finally:
             # wait for the I/O process to finish
             try:
-                ServerUtils.stopServer(hosts=self.hostlist)
+                server_utils.stop_server(hosts=self.hostlist)
                 os.remove(hostfile)
                 # really make sure everything is gone
-                CheckForPool.CleanupPools(self.hostlist)
+                check_for_pool.cleanup_pools(self.hostlist)
             finally:
-                ServerUtils.killServer(self.hostlist)
+                server_utils.kill_server(self.hostlist)
