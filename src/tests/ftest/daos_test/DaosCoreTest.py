@@ -39,10 +39,6 @@ import ServerUtils
 import WriteHostFile
 # pylint: enable=wrong-import-position,import-error
 
-#This needs to be changed after configuration file integration on client tools.
-#As per current implementation control plane API will not use the D_LOF_FILE
-#Env variable, if OFI_INTERFACE and CRT_PHY_ADDR_STR. DAOS-2178
-
 class DaosCoreTest(Test):
     """
     Runs the daos_test subtests with multiple servers.
