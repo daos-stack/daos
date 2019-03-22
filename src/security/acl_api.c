@@ -875,26 +875,6 @@ daos_ace_dump(struct daos_ace *ace, uint tabs)
 }
 
 static bool
-type_matches_principal_len(struct daos_ace *ace)
-{
-	bool len_exists;
-
-	len_exists = ace->dae_principal_len != 0;
-
-	return type_needs_name(ace->dae_principal_type) == len_exists;
-}
-
-static bool
-type_matches_flags(struct daos_ace *ace)
-{
-	bool flag_exists;
-
-	flag_exists = (ace->dae_access_flags & DAOS_ACL_FLAG_GROUP) != 0;
-
-	return type_is_group(ace->dae_principal_type) == flag_exists;
-}
-
-static bool
 principal_is_null_terminated(struct daos_ace *ace)
 {
 	uint16_t i;
@@ -906,36 +886,6 @@ principal_is_null_terminated(struct daos_ace *ace)
 	}
 
 	return false;
-}
-
-static bool
-flags_invalid(struct daos_ace *ace)
-{
-	uint16_t valid_flags =	DAOS_ACL_FLAG_GROUP |
-				DAOS_ACL_FLAG_POOL_INHERIT |
-				DAOS_ACL_FLAG_ACCESS_FAIL |
-				DAOS_ACL_FLAG_ACCESS_SUCCESS;
-
-	return ace->dae_access_flags & ~valid_flags;
-}
-
-static bool
-permissions_invalid(uint64_t perms)
-{
-	uint64_t valid_perms =	DAOS_ACL_PERM_READ |
-				DAOS_ACL_PERM_WRITE;
-
-	return perms & ~valid_perms;
-}
-
-static bool
-access_types_invalid(struct daos_ace *ace)
-{
-	uint8_t valid_types =	DAOS_ACL_ACCESS_ALLOW |
-				DAOS_ACL_ACCESS_AUDIT |
-				DAOS_ACL_ACCESS_ALARM;
-
-	return ace->dae_access_types & ~valid_types;
 }
 
 static uint64_t
@@ -966,7 +916,7 @@ permissions_match_access_type(struct daos_ace *ace,
 	uint64_t perms;
 
 	perms = get_permissions(ace, type);
-	if (!(ace->dae_access_types & type) && perms) {
+	if (!(ace->dae_access_types & type) && (perms != 0)) {
 		return false;
 	}
 
@@ -993,29 +943,46 @@ access_matches_flags(struct daos_ace *ace)
 bool
 daos_ace_is_valid(struct daos_ace *ace)
 {
+	uint8_t		valid_types =	DAOS_ACL_ACCESS_ALLOW |
+					DAOS_ACL_ACCESS_AUDIT |
+					DAOS_ACL_ACCESS_ALARM;
+	uint16_t	valid_flags =	DAOS_ACL_FLAG_GROUP |
+					DAOS_ACL_FLAG_POOL_INHERIT |
+					DAOS_ACL_FLAG_ACCESS_FAIL |
+					DAOS_ACL_FLAG_ACCESS_SUCCESS;
+	uint64_t	valid_perms =	DAOS_ACL_PERM_READ |
+					DAOS_ACL_PERM_WRITE;
+	bool		name_exists;
+	bool		flag_exists;
+
 	if (ace == NULL) {
 		return false;
 	}
 
-	if (access_types_invalid(ace)) {
+	/* Check for invalid bits in bit fields */
+	if (ace->dae_access_types & ~valid_types) {
 		return false;
 	}
 
-	if (flags_invalid(ace)) {
+	if (ace->dae_access_flags & ~valid_flags) {
 		return false;
 	}
 
-	if (permissions_invalid(ace->dae_allow_perms) ||
-	    permissions_invalid(ace->dae_audit_perms) ||
-	    permissions_invalid(ace->dae_alarm_perms)) {
+	if ((ace->dae_allow_perms & ~valid_perms) ||
+	    (ace->dae_audit_perms & ~valid_perms) ||
+	    (ace->dae_alarm_perms & ~valid_perms)) {
 		return false;
 	}
 
-	if (!type_matches_principal_len(ace)) {
+	/* Name should only exist for types that require it */
+	name_exists = ace->dae_principal_len != 0;
+	if (type_needs_name(ace->dae_principal_type) != name_exists) {
 		return false;
 	}
 
-	if (!type_matches_flags(ace)) {
+	/* Only principal types that are groups should have the group flag */
+	flag_exists = (ace->dae_access_flags & DAOS_ACL_FLAG_GROUP) != 0;
+	if (type_is_group(ace->dae_principal_type) != flag_exists) {
 		return false;
 	}
 
