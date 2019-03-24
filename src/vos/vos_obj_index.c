@@ -118,11 +118,20 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct oi_key		 *key;
 	struct oi_hkey		 *hkey;
 	TMMID(struct vos_obj_df)  obj_mmid;
+	int			  rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
 	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj_df);
 	if (TMMID_IS_NULL(obj_mmid))
 		return -DER_NOMEM;
+
+	rc = vos_dtx_register_record(&tins->ti_umm, umem_id_t2u(obj_mmid),
+				     DTX_RT_OBJ, 0);
+	if (rc != 0)
+		/* It is unnecessary to free the PMEM that will be dropped
+		 * automatically when the PMDK transaction is aborted.
+		 */
+		return rc;
 
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
@@ -158,6 +167,13 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj_df);
 	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+
+	vos_dtx_degister_record(umm, obj->vo_dtx, rec->rec_mmid, DTX_RT_OBJ);
+	if (obj->vo_dtx_shares > 0) {
+		D_ERROR("There are some unknown DTXs (%d) share the obj rec\n",
+			obj->vo_dtx_shares);
+		return -DER_BUSY;
+	}
 
 	/** Free the KV tree within this object */
 	if (obj->vo_tree.tr_class != 0) {
@@ -297,7 +313,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	struct oi_key	 key;
 	daos_iov_t	 key_iov;
 	daos_iov_t	 val_iov;
-	int		 rc;
+	int		 rc = 0;
 	bool		 replay = (flags & VOS_OF_REPLAY_PC);
 
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
@@ -313,7 +329,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 		D_ERROR("Underwrite is allowed only for replaying punch "
 			DF_U64" >= "DF_U64"\n", obj->vo_latest, epoch);
 		rc = -DER_NO_PERM;
-		goto failed;
+		goto out;
 	}
 
 	/* create a new incarnation for the punch */
@@ -326,10 +342,10 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PUNCH,
 			   &key_iov, &val_iov);
-	if (rc != 0)
+	if (rc != 0 || replay)
 		goto out;
 
-	if (!replay) {
+	if (vos_dth_get() == NULL) {
 		struct vos_obj_df *tmp;
 
 		D_ASSERT((obj->vo_oi_attr & VOS_OI_PUNCHED) == 0);
@@ -349,11 +365,16 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 		obj->vo_latest = 0;
 		obj->vo_earliest = DAOS_EPOCH_MAX;
 		obj->vo_incarnation++; /* cache should be revalidated */
+	} else {
+		struct umem_instance	*umm = btr_hdl2umm(cont->vc_btr_hdl);
+
+		rc = vos_dtx_register_record(umm, umem_ptr2id(umm, obj),
+					     DTX_RT_OBJ, DTX_RF_EXCHANGE_SRC);
 	}
- out:
-	return 0;
- failed:
-	D_ERROR("Failed to punch object, rc=%d\n", rc);
+
+out:
+	if (rc != 0)
+		D_ERROR("Failed to punch object, rc=%d\n", rc);
 	return rc;
 }
 

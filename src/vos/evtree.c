@@ -955,6 +955,26 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 	return rc;
 }
 
+static int
+evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
+{
+	struct evt_desc	*desc;
+	int		 rc;
+
+	if (ne->ne_child == 0)
+		return 0;
+
+	desc = evt_off2desc(tcx, ne->ne_child);
+	vos_dtx_degister_record(evt_umm(tcx), desc->dc_dtx,
+				umem_ptr2id(evt_umm(tcx), desc), DTX_RT_EVT);
+	rc = evt_desc_free(tcx, desc,
+			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+	if (rc == 0)
+		rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, ne->ne_child));
+
+	return rc;
+}
+
 /** check if a node is full */
 static bool
 evt_node_is_full(struct evt_context *tcx, struct evt_node *nd)
@@ -1122,7 +1142,6 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 {
 	struct evt_node_entry	*ne;
 	struct evt_node		*nd;
-	struct evt_rect		*rect;
 	bool			 leaf;
 	int			 i;
 	int			 rc = 0;
@@ -1135,22 +1154,13 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 
 	for (i = 0; i < nd->tn_nr; i++) {
 		ne = evt_node_entry_at(tcx, nd, i);
-		rect = evt_node_rect_at(tcx, nd, i);
-		if (leaf) {
+		if (leaf)
 			/* NB: This will be replaced with a callback */
-			rc = evt_desc_free(tcx, evt_off2desc(tcx, ne->ne_child),
-					   tcx->tc_inob * evt_rect_width(rect));
-			if (rc != 0)
-				return rc;
-			rc = umem_free(evt_umm(tcx),
-				       evt_off2mmid(tcx, ne->ne_child));
-			if (rc != 0)
-				return rc;
-		} else {
+			rc = evt_node_entry_free(tcx, ne);
+		else
 			rc = evt_node_destroy(tcx, ne->ne_child, level + 1);
-			if (rc != 0)
-				return rc;
-		}
+		if (rc != 0)
+			return rc;
 	}
 	return evt_node_free(tcx, nd_off);
 }
@@ -2433,6 +2443,16 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 			return -DER_NOMEM;
 		ne->ne_child = desc_mmid.oid.off;
 		desc = evt_tmmid2ptr(tcx, desc_mmid);
+		rc = vos_dtx_register_record(evt_umm(tcx),
+					     umem_ptr2id(evt_umm(tcx), desc),
+					     DTX_RT_EVT, 0);
+		if (rc != 0)
+			/* It is unnecessary to free the PMEM that will be
+			 * dropped automatically when the PMDK transaction
+			 * is aborted.
+			 */
+			return rc;
+
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
 		evt_desc_csum_fill(tcx, desc, ent);
