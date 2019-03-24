@@ -28,8 +28,11 @@ package main
 import "C"
 
 import (
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 const (
@@ -68,8 +71,7 @@ type srvModule struct {
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case notifyReady:
-		mod.handleNotifyReady()
-		return nil, nil
+		return nil, mod.handleNotifyReady(req)
 	default:
 		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
@@ -81,6 +83,13 @@ func (mod *srvModule) ID() int32 {
 	return srvModuleID
 }
 
-func (mod *srvModule) handleNotifyReady() {
-	mod.iosrv.ready <- struct{}{}
+func (mod *srvModule) handleNotifyReady(reqb []byte) error {
+	req := &srvpb.NotifyReadyReq{}
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return errors.Wrap(err, "unmarshal NotifyReady request")
+	}
+
+	mod.iosrv.ready <- req
+
+	return nil
 }
