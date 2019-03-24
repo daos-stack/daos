@@ -92,7 +92,6 @@ pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	map->pl_connects = 0;
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
-	map->pl_ignore_connects = 0;
 	D_INIT_LIST_HEAD(&map->pl_link);
 
 	*pl_mapp = map;
@@ -149,6 +148,7 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param  tgt_rank [OUT]	spare target ranks
  * \param  shard_id [OUT]	shard ids to be rebuilt
  * \param  array_size [IN]	array size of tgt_rank & shard_id
+ * \prarm  myrank [IN]		rank of current server in communication group
 
  * \return	> 0	the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
@@ -159,7 +159,7 @@ int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size)
+		    uint32_t *shard_id, unsigned int array_size, int myrank)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -167,7 +167,8 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
-					       tgt_rank, shard_id, array_size);
+					       tgt_rank, shard_id, array_size,
+					       myrank);
 }
 
 /**
@@ -407,11 +408,9 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
  * \param	uuid [IN]	uuid of \a pool_map
  * \param	pool_map [IN]	pool_map
  * \param	connect [IN]	from pool connect or not
- * \param	ignore_connects [IN] Ignore the @connect parameter if true
  */
 int
-pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
-	      bool ignore_connects)
+pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 {
 	d_list_t		*link;
 	struct pl_map		*map;
@@ -435,28 +434,14 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0)
 			D_GOTO(out, rc);
-
-		if (ignore_connects)
-			map->pl_ignore_connects = 1;
 	} else {
 		struct pl_map	*tmp;
 
 		tmp = container_of(link, struct pl_map, pl_link);
-		if (ignore_connects) {
-			if (tmp->pl_connects > 0) {
-				D_WARN("NOT allow to update pl map for pool"
-				       DF_UUID" with connection ignored.\n",
-				       DP_UUID(uuid));
-				D_GOTO(out, rc = -DER_INVAL);
-			}
-
-			tmp->pl_ignore_connects = 1;
-		}
-
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
-			d_hash_rec_decref(&pl_htable, link);
-			if (connect && !tmp->pl_ignore_connects)
+			if (connect)
 				tmp->pl_connects++;
+			d_hash_rec_decref(&pl_htable, link);
 			D_GOTO(out, rc = 0);
 		}
 
@@ -467,18 +452,15 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
 			D_GOTO(out, rc);
 		}
 
-		if (ignore_connects)
-			map->pl_ignore_connects = 1;
-		else
-			/* transfer the pool connection count */
-			map->pl_connects = tmp->pl_connects;
+		/* transfer the pool connection count */
+		map->pl_connects = tmp->pl_connects;
 
 		/* evict the old placement map for this pool */
 		d_hash_rec_delete_at(&pl_htable, link);
 		d_hash_rec_decref(&pl_htable, link);
 	}
 
-	if (connect && !map->pl_ignore_connects)
+	if (connect)
 		map->pl_connects++;
 
 	/* insert the new placement map into hash table */
@@ -507,13 +489,8 @@ pl_map_disconnect(uuid_t uuid)
 		struct pl_map	*map;
 
 		map = container_of(link, struct pl_map, pl_link);
-		if (!map->pl_ignore_connects) {
-			D_ASSERT(map->pl_connects > 0);
-			map->pl_connects--;
-		} else {
-			D_ASSERT(map->pl_connects == 0);
-		}
-
+		D_ASSERT(map->pl_connects > 0);
+		map->pl_connects--;
 		if (map->pl_connects == 0)
 			d_hash_rec_delete_at(&pl_htable, link);
 

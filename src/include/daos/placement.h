@@ -91,7 +91,6 @@ struct pl_map {
 	int			 pl_ref;
 	/** pool connections, protected by pl_rwlock */
 	int			 pl_connects;
-	unsigned int		 pl_ignore_connects:1;
 	/** type of placement map */
 	pl_map_type_t		 pl_type;
 	/** reference to pool map */
@@ -106,8 +105,7 @@ void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 
 struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
-int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect,
-		   bool ignore_connects);
+int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect);
 void pl_map_disconnect(uuid_t uuid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
@@ -126,7 +124,8 @@ int pl_obj_find_rebuild(struct pl_map *map,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size);
+			uint32_t *shard_id, unsigned int array_size,
+			int myrank);
 
 int pl_obj_find_reint(struct pl_map *map,
 		      struct daos_obj_md *md,
@@ -135,6 +134,14 @@ int pl_obj_find_reint(struct pl_map *map,
 		      uint32_t *tgt_reint);
 
 typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
+
+static inline struct pl_obj_shard *
+pl_obj_get_shard(void *data, int idx)
+{
+	struct pl_obj_layout	*layout = data;
+
+	return &layout->ol_shards[idx];
+}
 
 int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
 		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);

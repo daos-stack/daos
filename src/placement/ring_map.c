@@ -1326,7 +1326,8 @@ int
 ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		      struct daos_obj_shard_md *shard_md,
 		      uint32_t rebuild_ver, uint32_t *tgt_id,
-		      uint32_t *shard_idx, unsigned int array_size)
+		      uint32_t *shard_idx, unsigned int array_size,
+		      int myrank)
 {
 	struct ring_obj_placement  rop;
 	struct pl_ring_map	  *rimap = pl_map2rimap(map);
@@ -1366,6 +1367,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		layout = &layout_on_stack;
 		layout->ol_nr = shards_count;
 		layout->ol_shards = shards_on_stack;
+		memset(layout->ol_shards, 0,
+		       sizeof(*layout->ol_shards) * layout->ol_nr);
 	}
 
 	D_INIT_LIST_HEAD(&remap_list);
@@ -1385,8 +1388,58 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			 * for rebuild, perhaps they should be unified.
 			 */
 			if (l_shard->po_shard != -1) {
+				struct pool_target	*target;
+				int			 leader;
+
 				D_ASSERT(f_shard->rfs_tgt_id != -1);
 				D_ASSERT(idx < array_size);
+
+				/* If the caller does not care about DTX related
+				 * things (myrank == -1), then fill it directly.
+				 */
+				if (myrank == -1)
+					goto fill;
+
+				leader = pl_select_leader(md->omd_id,
+					l_shard->po_shard, layout->ol_nr,
+					true, pl_obj_get_shard, layout);
+				if (leader < 0) {
+					D_WARN("Not sure whether current shard "
+					       "is leader or not for obj "DF_OID
+					       ", fseq:%d, status:%d, ver:%d, "
+					       "shard:%d, rc = %d\n",
+					       DP_OID(md->omd_id),
+					       f_shard->rfs_fseq,
+					       f_shard->rfs_status, rebuild_ver,
+					       l_shard->po_shard, leader);
+					goto fill;
+				}
+
+				rc = pool_map_find_target(map->pl_poolmap,
+							  leader, &target);
+				D_ASSERT(rc == 1);
+
+				if (myrank != target->ta_comp.co_rank) {
+					/* The leader shard is not on current
+					 * server, then current server cannot
+					 * know whether DTXs for current shard
+					 * have been re-synced or not. So skip
+					 * the shard that will be handled by
+					 * the leader on another server.
+					 */
+					D_DEBUG(DB_TRACE, "Current replica (%d)"
+						"isn't the leader (%d) for obj "
+						DF_OID", fseq:%d, status:%d, "
+						"ver:%d, shard:%d, skip it\n",
+						myrank, target->ta_comp.co_rank,
+						DP_OID(md->omd_id),
+						f_shard->rfs_fseq,
+						f_shard->rfs_status,
+						rebuild_ver, l_shard->po_shard);
+					continue;
+				}
+
+fill:
 				tgt_id[idx] = f_shard->rfs_tgt_id;
 				shard_idx[idx] = l_shard->po_shard;
 				idx++;
@@ -1405,7 +1458,7 @@ out:
 	ring_remap_free_all(&remap_list);
 	if (shards_count > SHARDS_ON_STACK_COUNT)
 		pl_obj_layout_free(layout);
-	return rc ? rc : idx;
+	return rc < 0 ? rc : idx;
 }
 
 /** see \a dsr_obj_find_reint */
