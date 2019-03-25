@@ -146,7 +146,6 @@ def build_client_libs_static(env, common):
 
     return il_lib + iof_lib
 
-#pylint: disable=too-many-statements
 def scons():
     """Scons function"""
 
@@ -204,7 +203,6 @@ def scons():
         tenv.Install(os.path.join("$PREFIX", 'include'), 'include/%s' % header)
 
     SConscript('test/SConscript')
-#pylint: enable=too-many-statements
 
 if __name__ == "SCons.Script":
     scons()

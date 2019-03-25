@@ -39,8 +39,45 @@
 #define __CNSS_H__
 
 #include "log.h"
-#include "cnss_plugin.h"
 
-int iof_plugin_init(struct cnss_plugin **fns);
+#define CNSS_SUCCESS           0
+#define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
+#define CNSS_ERR_NOMEM         2 /*no memory*/
+#define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
+#define CNSS_ERR_CART          4 /*CaRT failed*/
+
+struct fuse_lowlevel_ops;
+struct fuse_args;
+struct fuse_session;
+struct iof_state;
+struct iof_projection_info;
+struct cnss_info;
+
+bool
+cnss_register_fuse(struct cnss_info *cnss_info,
+		   struct fuse_lowlevel_ops *flo,
+		   struct fuse_args *args,
+		   const char *mnt,
+		   bool threaded,
+		   void *private_data,
+		   struct fuse_session **sessionp);
+
+struct iof_state *
+iof_plugin_init();
+
+void
+iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info);
+
+void
+iof_post_start(struct iof_state *iof_state);
+
+void
+iof_finish(struct iof_state *iof_state);
+
+void
+iof_flush_fuse(struct iof_projection_info *fs_handle);
+
+int
+iof_deregister_fuse(struct iof_projection_info *fs_handle);
 
 #endif /* __CNSS_H__ */

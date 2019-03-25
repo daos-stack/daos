@@ -61,24 +61,14 @@ struct fs_info {
 	struct fuse_session	*fsi_session;
 	pthread_t		fsi_thread;
 	pthread_mutex_t		fsi_lock;
-	void			*fsi_private_data;
-	d_list_t		fsi_entries;
+	struct iof_projection_info *fsi_handle;
 	bool			fsi_running;
 	bool			fsi_mt;
 };
 
-struct plugin_entry {
-	/* The callback functions, as provided by the plugin */
-	struct cnss_plugin	*pe_fns;
-
-	/* The copy of the plugin->cnss callback functions this plugin uses */
-	struct cnss_plugin_cb	pe_self_fns;
-
-	struct fs_info		ip_fi;
-};
-
 struct cnss_info {
-	struct plugin_entry	ip_handle;
+	struct iof_state	*iof_state;
+	struct fs_info		ci_fsinfo;
 };
 
 /* Add a NO-OP signal handler.  This doesn't do anything other than
@@ -133,7 +123,7 @@ static void *ll_loop_fn(void *args)
  * Returns 0 on success, or non-zero on error.
  */
 bool
-cnss_register_fuse(void *arg,
+cnss_register_fuse(struct cnss_info *cnss_info,
 		   struct fuse_lowlevel_ops *flo,
 		   struct fuse_args *args,
 		   const char *mnt,
@@ -141,8 +131,7 @@ cnss_register_fuse(void *arg,
 		   void *private_data,
 		   struct fuse_session **sessionp)
 {
-	struct plugin_entry	*plugin = arg;
-	struct fs_info		*info = &plugin->ip_fi;
+	struct fs_info		*info = &cnss_info->ci_fsinfo;
 	int rc;
 
 	errno = 0;
@@ -165,7 +154,7 @@ cnss_register_fuse(void *arg,
 		goto cleanup_no_mutex;
 	}
 
-	info->fsi_private_data = private_data;
+	info->fsi_handle = private_data;
 
 	info->fsi_session = fuse_session_new(args,
 					     flo,
@@ -200,17 +189,13 @@ cleanup_no_mutex:
 }
 
 static int
-cnss_stop_fuse(struct cnss_info *cnss_info)
+cnss_stop_fuse(struct fs_info *info)
 {
-	struct plugin_entry *plugin = &cnss_info->ip_handle;
-	struct fs_info *info = &plugin->ip_fi;
 	struct timespec wait_time;
 	void *rcp = NULL;
 	int rc;
 
 	D_MUTEX_LOCK(&info->fsi_lock);
-
-	IOF_TRACE_DEBUG(plugin, "Unmounting FS: '%s'", info->fsi_mnt);
 
 	/* Add a short delay to allow the flush time to work, by sleeping
 	 * here it allows time for the forget calls to work through from
@@ -222,8 +207,6 @@ cnss_stop_fuse(struct cnss_info *cnss_info)
 	sleep(1);
 
 	if (info->fsi_running) {
-		IOF_TRACE_DEBUG(plugin,
-				"Sending termination signal '%s'", info->fsi_mnt);
 
 		/*
 		 * If the FUSE thread is in the filesystem servicing requests
@@ -241,21 +224,14 @@ cnss_stop_fuse(struct cnss_info *cnss_info)
 	clock_gettime(CLOCK_REALTIME, &wait_time);
 
 	do {
-		IOF_TRACE_INFO(plugin, "Trying to join fuse thread");
 
 		wait_time.tv_sec++;
 
 		rc = pthread_timedjoin_np(info->fsi_thread, &rcp, &wait_time);
 
-		IOF_TRACE_INFO(plugin,
-			       "Join returned %d:'%s'", rc, strerror(rc));
-
 		if (rc == ETIMEDOUT) {
 			if (!fuse_session_exited(info->fsi_session))
-				IOF_TRACE_INFO(plugin, "Session still running");
-
-			IOF_TRACE_INFO(plugin,
-				       "Thread still running, waking it up");
+				IOF_TRACE_INFO(info, "Session still running");
 
 			pthread_kill(info->fsi_thread, SIGUSR1);
 		}
@@ -263,46 +239,28 @@ cnss_stop_fuse(struct cnss_info *cnss_info)
 	} while (rc == ETIMEDOUT);
 
 	if (rc)
-		IOF_TRACE_ERROR(plugin, "Final join returned %d:%s",
+		IOF_TRACE_ERROR(info, "Final join returned %d:%s",
 				rc, strerror(rc));
-
-	d_list_del_init(&info->fsi_entries);
 
 	rc = pthread_mutex_destroy(&info->fsi_lock);
 	if (rc != 0)
-		IOF_TRACE_ERROR(plugin,
+		IOF_TRACE_ERROR(info,
 				"Failed to destroy lock %d:%s",
 				rc, strerror(rc));
 
 	rc = (uintptr_t)rcp;
 
 	{
-		int rcf = iof_deregister_fuse(info->fsi_private_data);
+		int rcf = iof_deregister_fuse(info->fsi_handle);
 
 		if (rcf)
 			rc = rcf;
 	}
 
 	fuse_session_destroy(info->fsi_session);
-	IOF_TRACE_INFO(plugin, "session destroyed");
+	IOF_TRACE_INFO(info, "session destroyed");
 
 	return rc;
-}
-
-/* Load a plugin from a fn pointer, return false if there was a fatal problem */
-static bool
-add_plugin(struct cnss_info *info)
-{
-	struct plugin_entry *entry = &info->ip_handle;
-	int rc;
-
-	rc = iof_plugin_init(&entry->pe_fns);
-	if (rc != 0) {
-		IOF_TRACE_DOWN(entry);
-		return false;
-	}
-
-	return true;
 }
 
 static void show_help(const char *prog)
@@ -326,7 +284,6 @@ int main(int argc, char **argv)
 	struct cnss_info *cnss_info;
 	int ret;
 	int rc;
-	bool rcb;
 
 	while (1) {
 		static struct option long_options[] = {
@@ -377,9 +334,7 @@ int main(int argc, char **argv)
 
 	IOF_TRACE_ROOT(cnss_info, "cnss_info");
 
-	rcb = add_plugin(cnss_info);
-	if (!rcb)
-		D_GOTO(shutdown_ctrl_fs, ret = CNSS_ERR_PLUGIN);
+	cnss_info->iof_state = iof_plugin_init();
 
 	/*initialize CaRT*/
 	ret = crt_init(cnss, 0);
@@ -397,19 +352,19 @@ int main(int argc, char **argv)
 	 * operations only.  Plugins can choose to disable themselves
 	 * at this point.
 	 */
-	iof_reg(&cnss_info->ip_handle, &cnss_info->ip_handle.pe_self_fns);
+	iof_reg(cnss_info->iof_state, cnss_info);
 
-	iof_post_start(&cnss_info->ip_handle);
+	iof_post_start(cnss_info->iof_state);
 
-	iof_flush_fuse(&cnss_info->ip_handle.ip_fi.fsi_private_data);
+	iof_flush_fuse(cnss_info->ci_fsinfo.fsi_handle);
 
 	ret = 0;
 
-	rc = cnss_stop_fuse(cnss_info);
+	rc = cnss_stop_fuse(&cnss_info->ci_fsinfo);
 	if (rc)
 		ret = 1;
 
-	iof_finish(&cnss_info->ip_handle);
+	iof_finish(cnss_info->iof_state);
 
 	rc = crt_finalize();
 	if (rc != -DER_SUCCESS)
@@ -425,7 +380,7 @@ int main(int argc, char **argv)
 
 shutdown_ctrl_fs:
 
-	iof_finish(&cnss_info->ip_handle);
+	iof_finish(cnss_info->iof_state);
 
 shutdown_log:
 

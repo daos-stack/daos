@@ -82,6 +82,7 @@ static void generic_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(request->ir_rs == RS_RESET);
 	request->ir_rs = RS_LIVE;
 
+
 	IOF_TRACE_INFO(request, "cci_rc %d -%s",
 		       cb_info->cci_rc, d_errstr(cb_info->cci_rc));
 
@@ -799,14 +800,12 @@ iof_thread_stop(struct iof_ctx *iof_ctx)
 }
 
 void
-iof_reg(void *arg, struct cnss_plugin_cb *cb)
+iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info)
 {
-	struct iof_state *iof_state = arg;
 	struct iof_group_info *group;
 	int ret;
 
-	iof_state->cb = cb;
-
+	iof_state->cnss_info = cnss_info;
 	ret = crt_context_create(&iof_state->iof_ctx.crt_ctx);
 	if (ret != -DER_SUCCESS) {
 		IOF_TRACE_ERROR(iof_state, "Context not created");
@@ -843,7 +842,6 @@ initialize_projection(struct iof_state *iof_state,
 		      struct iof_group_info *group)
 {
 	struct iof_projection_info	*fs_handle;
-	struct cnss_plugin_cb		*cb;
 	struct fuse_args		args = {0};
 	int				ret;
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
@@ -881,8 +879,6 @@ initialize_projection(struct iof_state *iof_state,
 				  .reset = wb_reset,
 				  .release = wb_release,
 				  POOL_TYPE_INIT(iof_wb, wb_req.ir_list)};
-
-	cb = iof_state->cb;
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
@@ -1040,7 +1036,7 @@ initialize_projection(struct iof_state *iof_state,
 	if (!fs_handle->write_pool)
 		D_GOTO(err, 0);
 
-	if (!cnss_register_fuse(cb->handle,
+	if (!cnss_register_fuse(fs_handle->iof_state->cnss_info,
 				fuse_ops,
 				&args,
 				fs_handle->mnt_dir.name,
@@ -1065,9 +1061,8 @@ err:
 }
 
 void
-iof_post_start(void *arg)
+iof_post_start(struct iof_state *iof_state)
 {
-	struct iof_state	*iof_state = arg;
 	struct iof_group_info	*group = &iof_state->group;
 
 	initialize_projection(iof_state, group);
@@ -1114,9 +1109,8 @@ ino_flush(d_list_t *rlink, void *arg)
 
 /* Called once per projection, before the FUSE filesystem has been torn down */
 void
-iof_flush_fuse(void *arg)
+iof_flush_fuse(struct iof_projection_info *fs_handle)
 {
-	struct iof_projection_info *fs_handle = arg;
 	int rc;
 
 	IOF_TRACE_INFO(fs_handle, "Flushing inode table");
@@ -1129,9 +1123,8 @@ iof_flush_fuse(void *arg)
 
 /* Called once per projection, after the FUSE filesystem has been torn down */
 int
-iof_deregister_fuse(void *arg)
+iof_deregister_fuse(struct iof_projection_info *fs_handle)
 {
-	struct iof_projection_info *fs_handle = arg;
 	d_list_t *rlink = NULL;
 	uint64_t refs = 0;
 	int handles = 0;
@@ -1203,7 +1196,7 @@ iof_deregister_fuse(void *arg)
 				break;
 
 			IOF_TRACE_INFO(fs_handle,
-				       "Active descriptors, waiting for one second");
+					  "Active descriptors, waiting for one second");
 
 		} while (active && rc == -DER_SUCCESS);
 
@@ -1240,9 +1233,8 @@ iof_deregister_fuse(void *arg)
 }
 
 void
-iof_finish(void *arg)
+iof_finish(struct iof_state *iof_state)
 {
-	struct iof_state *iof_state = arg;
 	int rc;
 
 	/* Stop progress thread */
@@ -1269,17 +1261,12 @@ iof_finish(void *arg)
 	D_FREE(iof_state);
 }
 
-struct cnss_plugin self;
-
-int iof_plugin_init(struct cnss_plugin **fns)
+struct iof_state *
+iof_plugin_init()
 {
-	struct iof_state *state;
+	struct iof_state *iof_state;
 
-	D_ALLOC_PTR(state);
-	if (!state)
-		return CNSS_ERR_NOMEM;
+	D_ALLOC_PTR(iof_state);
 
-	self.handle = state;
-	*fns = &self;
-	return CNSS_SUCCESS;
+	return iof_state;
 }

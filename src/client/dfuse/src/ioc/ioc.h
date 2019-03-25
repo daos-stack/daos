@@ -51,7 +51,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#include "cnss_plugin.h"
+#include "cnss.h"
 #include "ios_gah.h"
 #include "iof_atomic.h"
 #include "iof_fs.h"
@@ -93,8 +93,7 @@ struct iof_group_info {
  *
  */
 struct iof_state {
-	/** Callback to CNSS plugin */
-	struct cnss_plugin_cb		*cb;
+	struct cnss_info *cnss_info;
 	/** CaRT RPC protocol used for metadata */
 	struct crt_proto_format		*proto;
 	/** CaRT RPC protocol used for I/O */

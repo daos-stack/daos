@@ -89,7 +89,6 @@ def scons():
     env.Alias('install', "$PREFIX")
 
     SConscript('build/src/SConscript')
-    SConscript('build/test/SConscript')
 
     env.Install('$PREFIX/etc', ['utils/memcheck-iof.supp'])
 
