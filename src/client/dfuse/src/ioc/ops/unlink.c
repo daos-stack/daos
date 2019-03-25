@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+ /* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,11 +54,6 @@ ioc_ll_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 	struct iof_unlink_in		*in;
 	int rc;
 	int ret = EIO;
-
-	STAT_ADD(fs_handle->stats, unlink);
-
-	if (!IOF_IS_WRITEABLE(fs_handle->flags))
-		D_GOTO(out_no_request, ret = EROFS);
 
 	D_ALLOC_PTR(request);
 	if (!request) {

@@ -43,16 +43,10 @@
 #define TRACE_TYPE TO_STR(TYPE_NAME)
 #define TRACE_FREQ TO_STR(STAT_KEY) "_fuse_req"
 #define TRACE_REQ TO_STR(STAT_KEY) "_req"
-#define TRACE_RPC TO_STR(STAT_KEY) "_rpc"
 
 #define IOC_REQ_INIT(src, FSH, api, in, rc)				\
 	do {								\
 		rc = 0;							\
-		STAT_ADD(FSH->stats, STAT_KEY);				\
-		if (FS_IS_OFFLINE(FSH)) {				\
-			rc = (FSH)->offline_reason;			\
-			break;						\
-		}							\
 		/* Acquire new object only if NULL */			\
 		if (!src) {						\
 			src = iof_pool_acquire(FSH->POOL_NAME);		\
@@ -66,24 +60,10 @@
 		in = crt_req_get((src)->REQ_NAME.rpc);			\
 	} while (0)
 
-/* Initialise a descriptor and make the fuse request a child of it */
-#define IOC_REQ_INIT_LL(src, fsh, api, in, fuse_req, rc)		\
-	do {								\
-		IOC_REQ_INIT(src, fsh, api, in, rc);			\
-		if (rc)	{						\
-			IOF_TRACE_UP(fuse_req, fsh, TRACE_FREQ);	\
-			break;						\
-		}							\
-		(src)->REQ_NAME.req = fuse_req;				\
-		IOF_TRACE_UP(fuse_req, src, TRACE_FREQ);		\
-		IOF_TRACE_LINK((src)->REQ_NAME.rpc, src, TRACE_RPC);	\
-	} while (0)
-
 /* Initialise a descriptor and make the ioc request a child of it */
 #define IOC_REQ_INIT_REQ(src, fsh, api, fuse_req, rc)			\
 	do {								\
 		rc = 0;							\
-		STAT_ADD((fsh)->stats, STAT_KEY);			\
 		/* Acquire new object only if NULL */			\
 		if (!(src)) {						\
 			src = iof_pool_acquire((fsh)->POOL_NAME);	\
@@ -96,7 +76,6 @@
 		(src)->REQ_NAME.ir_api = &(api);			\
 		(src)->REQ_NAME.req = fuse_req;				\
 		IOF_TRACE_UP(&(src)->REQ_NAME, src, TRACE_REQ);		\
-		IOF_TRACE_LINK((src)->REQ_NAME.rpc, &(src)->REQ_NAME, TRACE_RPC); \
 	} while (0)
 
 #define CONTAINER(req) container_of(req, struct TYPE_NAME, REQ_NAME)

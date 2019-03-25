@@ -125,84 +125,6 @@ ioc_fuse_init(void *arg, struct fuse_conn_info *conn)
 		       "congestion_threshold %d", conn->congestion_threshold);
 }
 
-/*
- * We may have different FUSE operation implementations depending on the
- * features and type of projection (which is defined by 'flags'). The idea
- * here is to make the selection of operations dynamic and data-driven --
- * The 'fuse_operations' structure is populated dynamically at runtime by
- * selecting a combination of functions based on the flags supplied.
- *
- * Note: Read-only and Failover are not treated as separate modes, because
- * they do not require separate implementations. For read-only mode, the
- * function will merely check if the 'writeable' flag for the projection is
- * set and if not, will return an error. Similarly for failover, the function
- * will re-route the operation to a different IONSS rank in case of failure
- * and if the failover flag is set.
- *
- * As of now, we only have the default_ops table representing Private Access.
- * Default also means that we're agnostic to whether the projected file system
- * is local or parallel. If the projected file system is parallel and we want
- * failover features turned on, we simply need to set the failover flag.
- *
- * For striped metadata, we only need to override the metadata operations from
- * default_ops -- so we define a new table containing only those functions.
- *
- * For striped data, we only need to define a new table with data operations,
- * and set the striped metadata feature flag. This will ensure that functions
- * are selected from both the striped data and striped metadata tables.
- *
- * For striped metadata on Lustre, we define a table with Lustre specific
- * metadata operations, and set the striped data flag. This will select data
- * operations from the default striped data table, but metadata operations
- * from the Lustre-specific table.
- *
- * This can easily be extended to support DataWarp in scratch/cache modes.
- *
- * All these tables will be referenced in a master directory (below) called
- * 'fuse_impl_list', which will be indexed using bits[2-5] of 'flags';
- * this gives us a total of 16 entries. (First two bits represent read-only
- * and failover features, hence ignored).
- *
- * [0x0]:0000 = default operations
- * [0x1]:0001 = striped metadata (Generic PFS)
- * [0x2]:0010 = striped data (Generic PFS)
- * [0x3]:0011 = empty (includes striped data [0x2] and metadata [0x1]).
- * [0x4]:0100 = empty (Lustre; include everything from [0x0]).
- * [0x5]:0101 = Lustre-specific metadata operations (FID instead of inodes)
- * [0x6]:0110 = empty (Lustre; include [0x0] overridden by [0x2]).
- * [0x7]:0111 = empty (Lustre; combination of [0x2] and [0x5]).
- * [0x8]:1000 = DataWarp [Scratch]; private.
- * [0x9]:1001 = DataWarp [Scratch]; striped metadata (load balanced).
- * [0xA]:1010 = DataWarp [Scratch]; striped data.
- * [0xB]:1011 = empty (DataWarp [scratch] includes [0x9] and [0xA]).
- * [0xC]:1100 = DataWarp [Cache]; private.
- * [0xD]:1101 = DataWarp [Cache]; striped metadata (load balanced).
- * [0xE]:1110 = DataWarp [Cache]; striped data.
- * [0xF]:1111 = empty (DataWarp [cache]; includes [0xD] and [0xE]).
- *
- * We can also define and check for invalid modes, e.g. if striped data
- * always requires striped metadata to be turned on (but not vice versa),
- * we define 0010 as an unsupported combination of flags.
- */
-
-/* Ignore the first two bits (writeable and failover) */
-#define FLAGS_TO_MODE_INDEX(X) (((X) & 0x3F) >> 2)
-
-/* Only supporting default (Private mode) at the moment */
-static uint8_t supported_impl[] = { 0x0 };
-
-int iof_is_mode_supported(uint8_t flags)
-{
-	int i, count, mode = FLAGS_TO_MODE_INDEX(flags);
-
-	count = sizeof(supported_impl) / sizeof(*supported_impl);
-	for (i = 0; i < count; i++) {
-		if (mode == supported_impl[i])
-			return 1;
-	}
-	return 0;
-}
-
 static void ioc_fuse_destroy(void *userdata)
 {
 	IOF_TRACE_INFO(userdata, "destroy callback");
@@ -233,10 +155,6 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t flags)
 	fuse_ops->readdir = ioc_ll_readdir;
 	fuse_ops->ioctl = ioc_ll_ioctl;
 	fuse_ops->destroy = ioc_fuse_destroy;
-
-	if (!(flags & IOF_WRITEABLE))
-		return fuse_ops;
-
 	fuse_ops->symlink = ioc_ll_symlink;
 	fuse_ops->mkdir = ioc_ll_mkdir;
 	fuse_ops->unlink = ioc_ll_unlink;

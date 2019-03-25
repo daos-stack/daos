@@ -147,8 +147,6 @@ static int readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
 		D_GOTO(out, ret = reply.err);
 
 	if (reply.out->err != 0) {
-		if (reply.out->err == -DER_NONEXIST)
-			H_GAH_SET_INVALID(dir_handle);
 		IOF_TRACE_ERROR(dir_handle,
 				"Error from target %d", reply.out->err);
 		D_GOTO(out, ret = EIO);
@@ -253,7 +251,6 @@ static int readdir_next_reply(struct iof_dir_handle *dir_handle,
 		}
 		rc = readdir_get_data(dir_handle, offset);
 		if (rc != 0) {
-			dir_handle->handle_valid = 0;
 			return rc;
 		}
 	}
@@ -283,34 +280,16 @@ ioc_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	       struct fuse_file_info *fi)
 {
 	struct iof_dir_handle *dir_handle = (struct iof_dir_handle *)fi->fh;
-	struct iof_projection_info *fs_handle = dir_handle->open_req.fsh;
 	off_t next_offset = offset;
 	void *buf = NULL;
 	size_t b_offset = 0;
 	int ret = EIO;
 	int rc;
 
-	STAT_ADD(fs_handle->stats, readdir);
-
 	IOF_TRACE_UP(req, dir_handle, "readdir_fuse_req");
-
-	if (FS_IS_OFFLINE(fs_handle))
-		D_GOTO(out_err, ret = fs_handle->offline_reason);
 
 	IOF_TRACE_INFO(req, GAH_PRINT_STR " offset %zi",
 		       GAH_PRINT_VAL(dir_handle->gah), offset);
-
-	if (!H_GAH_IS_VALID(dir_handle))
-		/* If the server has reported that the GAH is invalid
-		 * then do not send a RPC to close it
-		 */
-		D_GOTO(out_err, ret = EHOSTDOWN);
-
-	/* If the handle has been reported as invalid in the past then do not
-	 * process any more requests at this stage.
-	 */
-	if (!dir_handle->handle_valid)
-		D_GOTO(out_err, ret = EHOSTDOWN);
 
 	D_ALLOC(buf, size);
 	if (!buf)

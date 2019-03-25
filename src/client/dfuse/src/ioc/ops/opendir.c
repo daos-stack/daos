@@ -58,12 +58,7 @@ opendir_ll_cb(struct ioc_request *request)
 	IOC_REQUEST_RESOLVE(request, out);
 	if (request->rc == 0) {
 		dh->gah = out->gah;
-		H_GAH_SET_VALID(dh);
-		dh->handle_valid = 1;
 		dh->ep = dh->open_req.fsh->proj.grp->psr_ep;
-		D_MUTEX_LOCK(&dh->open_req.fsh->od_lock);
-		d_list_add_tail(&dh->dh_od_list, &dh->open_req.fsh->opendir_list);
-		D_MUTEX_UNLOCK(&dh->open_req.fsh->od_lock);
 		fi.fh = (uint64_t)dh;
 		IOC_REPLY_OPEN(request, fi);
 	} else {
@@ -78,8 +73,6 @@ static const struct ioc_request_api api = {
 	.gah_offset	= offsetof(struct iof_gah_in, gah),
 	.have_gah	= true,
 };
-
-/* TODO: lots */
 
 void ioc_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {

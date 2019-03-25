@@ -50,8 +50,6 @@ handle_gah_ioctl(int cmd, struct iof_file_handle *handle,
 {
 	struct iof_projection_info *fs_handle = handle->open_req.fsh;
 
-	STAT_ADD(fs_handle->stats, il_ioctl);
-
 	/* IOF_IOCTL_GAH has size of gah embedded.  FUSE should have
 	 * allocated that many bytes in data
 	 */
@@ -73,20 +71,11 @@ void ioc_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		  const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
 	struct iof_file_handle *handle = (void *)fi->fh;
-	struct iof_projection_info *fs_handle = handle->open_req.fsh;
 	struct iof_gah_info gah_info = {0};
 	int ret = EIO;
 
 	IOF_TRACE_INFO(handle, "ioctl cmd=%#x " GAH_PRINT_STR, cmd,
 		       GAH_PRINT_VAL(handle->common.gah));
-
-	STAT_ADD(fs_handle->stats, ioctl);
-
-	if (FS_IS_OFFLINE(fs_handle))
-		D_GOTO(out_err, ret = fs_handle->offline_reason);
-
-	if (!F_GAH_IS_VALID(handle))
-		D_GOTO(out_err, 0);
 
 	if (cmd == TCGETS) {
 		IOF_TRACE_DEBUG(handle, "Ignoring TCGETS ioctl");

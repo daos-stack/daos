@@ -58,32 +58,6 @@
 #include "iof_bulk.h"
 #include "iof_pool.h"
 
-struct iof_stats {
-	ATOMIC unsigned int opendir;
-	ATOMIC unsigned int readdir;
-	ATOMIC unsigned int closedir;
-	ATOMIC unsigned int getattr;
-	ATOMIC unsigned int create;
-	ATOMIC unsigned int readlink;
-	ATOMIC unsigned int mkdir;
-	ATOMIC unsigned int statfs;
-	ATOMIC unsigned int unlink;
-	ATOMIC unsigned int ioctl;
-	ATOMIC unsigned int open;
-	ATOMIC unsigned int release;
-	ATOMIC unsigned int symlink;
-	ATOMIC unsigned int rename;
-	ATOMIC unsigned int read;
-	ATOMIC unsigned int write;
-	ATOMIC uint64_t read_bytes;
-	ATOMIC uint64_t write_bytes;
-	ATOMIC unsigned int il_ioctl;
-	ATOMIC unsigned int fsync;
-	ATOMIC unsigned int lookup;
-	ATOMIC unsigned int forget;
-	ATOMIC unsigned int setattr;
-};
-
 /**
  * A common structure for holding a cart context and thread details.
  *
@@ -107,23 +81,11 @@ struct iof_ctx {
 
 /**
  * IOF Group struct.
- *
- * Intended to be used to support multiple groups but support for that is not
- * in place yet so only 1 group is currently allowed.
- *
  */
 
 struct iof_group_info {
 	/** Service group pointer */
 	struct iof_service_group	grp;
-	/** The group name */
-	char				*grp_name;
-
-	/** Set to true if the CaRT group attached */
-	bool				crt_attached;
-
-	/** Set to true if registered with the IONSS */
-	bool				iof_registered;
 };
 
 /**
@@ -133,16 +95,12 @@ struct iof_group_info {
 struct iof_state {
 	/** Callback to CNSS plugin */
 	struct cnss_plugin_cb		*cb;
-	/** CaRT RPC protocol used for handshake */
-	struct crt_proto_format		*handshake_proto;
 	/** CaRT RPC protocol used for metadata */
 	struct crt_proto_format		*proto;
 	/** CaRT RPC protocol used for I/O */
 	struct crt_proto_format		*io_proto;
 	/** iof_ctx for state */
 	struct iof_ctx			iof_ctx;
-	/** List of projections */
-	d_list_t			fs_list;
 	/** CNSS Prefix.  Parent directory of projections */
 	char				*cnss_prefix;
 	/** ctrl_fs inoss directory handle */
@@ -151,15 +109,6 @@ struct iof_state {
 	struct ctrl_dir			*projections_dir;
 	/** Group information */
 	struct iof_group_info		group;
-	/** Number of projections */
-	uint32_t			num_proj;
-};
-
-enum iof_failover_state {
-	iof_failover_running,
-	iof_failover_offline,
-	iof_failover_in_progress,
-	iof_failover_complete,
 };
 
 struct iof_projection_info {
@@ -169,16 +118,9 @@ struct iof_projection_info {
 	struct iof_state		*iof_state;
 	struct ios_gah			gah;
 	d_list_t			link;
-	struct ctrl_dir			*fs_dir;
-	struct ctrl_dir			*stats_dir;
-	struct iof_stats		*stats;
 	struct fuse_session		*session;
 	/** The basename of the mount point */
 	struct ios_name			mnt_dir;
-	/** The mount location */
-	char				*mount_point;
-
-	enum iof_failover_state		failover_state;
 
 	/** The name of the ctrlfs directory */
 	struct ios_name			ctrl_dir;
@@ -200,41 +142,13 @@ struct iof_projection_info {
 	uint32_t			max_read;
 	uint32_t			max_iov_read;
 	uint32_t			readdir_size;
-	/** set to error code if projection is off-line */
-	int				offline_reason;
 	/** Hash table of open inodes */
 	struct d_hash_table		inode_ht;
-
-	pthread_mutex_t			od_lock;
-	/** List of directory handles owned by FUSE */
-	d_list_t			opendir_list;
-
-	pthread_mutex_t			of_lock;
-	/** List of open file handles owned by FUSE */
-	d_list_t			openfile_list;
-
-	/** List of inodes to be invalidated on failover */
-	d_list_t			p_inval_list;
 
 	/** Held for any access/modification to a gah on any inode/file/dir */
 	pthread_mutex_t			gah_lock;
 
-	/** Reference count for pending migrate RPCS */
-	ATOMIC int			p_gah_update_count;
-
-	/** List of requests to be actioned when failover completes */
-	d_list_t			p_requests_pending;
-	pthread_mutex_t			p_request_lock;
-
-	/** List of child inodes.
-	 *
-	 * Populated during failover only, should be empty if not a
-	 * directory.
-	 */
-	d_list_t			p_ie_children;
 };
-
-#define FS_IS_OFFLINE(HANDLE) ((HANDLE)->offline_reason != 0)
 
 /*
  * Returns the correct RPC Type ID from the protocol registry.
@@ -247,18 +161,7 @@ struct iof_projection_info {
 					       (HANDLE)->proj.io_proto->cpf_ver, \
 					       IDX))
 
-
-int iof_is_mode_supported(uint8_t flags);
-
 struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t);
-
-/* Everything above here relates to how the ION plugin communicates with the
- * CNSS, everything below here relates to internals to the plugin.  At some
- * point we should split this header file up into two.
- */
-
-#define STAT_ADD(STATS, STAT) atomic_inc(&STATS->STAT)
-#define STAT_ADD_COUNT(STATS, STAT, COUNT) atomic_add(&STATS->STAT, COUNT)
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
@@ -696,16 +599,14 @@ struct iof_dir_handle {
 	void				*replies_base;
 	/** Set to True if the current batch of replies is the final one */
 	int				last_replies;
-	/** Set to 1 initially, but 0 if there is a unrecoverable error */
-	int				handle_valid;
 	/** Set to 0 if the server rejects the GAH at any point */
 	ATOMIC int			gah_ok;
 	/** The inode number of the directory */
 	ino_t				inode_num;
 	/** Endpoint for this directory handle */
 	crt_endpoint_t			ep;
-	/** List of directory handles */
-	d_list_t			dh_od_list;
+
+	d_list_t dh_free_list;
 };
 
 /**
@@ -719,11 +620,6 @@ struct iof_file_handle {
 	 * use of some common code.
 	 */
 	struct iof_file_common		common;
-	/** Boolean flag to indicate GAH is valid.
-	 * Set to 1 when file is opened, however may be set to 0 either by
-	 * ionss returning -DER_NONEXIST or by ionss failure
-	 */
-	ATOMIC int			gah_ok;
 
 	/** Open request, with precreated RPC */
 	struct ioc_request		open_req;
@@ -731,11 +627,9 @@ struct iof_file_handle {
 	struct ioc_request		creat_req;
 	/* Release request, with precreated RPC */
 	struct ioc_request		release_req;
-	/** List of open files, stored in fs_handle->openfile_list */
-	d_list_t			fh_of_list;
 
-	/** List of open files for inode, stored in ino->ie_fh_list */
-	d_list_t			fh_ino_list;
+	d_list_t fh_free_list;
+
 	/** The inode number of the file */
 	ino_t				inode_num;
 	/** A pre-allocated inode entry.  This is created as the struct is
@@ -744,41 +638,6 @@ struct iof_file_handle {
 	 */
 	struct ioc_inode_entry		*ie;
 };
-
-/* GAH ok manipulation macros. gah_ok is defined as a int but we're
- * using it as a bool and accessing it though the use of atomics.
- *
- * These macros work on inode, file and directory handles.
- */
-
-/** Set the GAH so that it's valid */
-#define H_GAH_SET_VALID(OH) atomic_store_release(&(OH)->gah_ok, 1)
-
-/** Set the GAH so that it's invalid.  Assumes it currently valid */
-#define H_GAH_SET_INVALID(OH) do {					\
-		atomic_store_release(&(OH)->gah_ok, 0);			\
-		IOF_TRACE_INFO((OH), "Marking GAH as invalid");		\
-	} while (0)
-
-/** Check if the file handle is valid by reading the gah_ok field. */
-#define F_GAH_IS_VALID(OH) ({						\
-			int _rc = atomic_load_consume(&(OH)->gah_ok);	\
-			if (!_rc)					\
-				IOF_TRACE_INFO((OH),			\
-					"GAH is invalid " GAH_PRINT_STR,\
-					GAH_PRINT_VAL((OH)->common.gah)); \
-			_rc;						\
-		})
-
-/** Check if the dir or inode handle is valid by reading the gah_ok field. */
-#define H_GAH_IS_VALID(OH) ({						\
-			int _rc = atomic_load_consume(&(OH)->gah_ok);	\
-			if (!_rc)					\
-				IOF_TRACE_INFO((OH),			\
-					"GAH is invalid " GAH_PRINT_STR,\
-					GAH_PRINT_VAL((OH)->gah));	\
-			_rc;						\
-		})
 
 /** Read buffer descriptor */
 struct iof_rb {

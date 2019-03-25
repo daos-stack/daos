@@ -39,7 +39,6 @@
 #define __IOF_FS_H__
 
 #include <stdbool.h>
-#include <uuid/uuid.h> /* Required by cart/types.h.  See CART-279 */
 #include <sched.h>
 #include <cart/types.h>
 #include <iof_atomic.h>
@@ -132,7 +131,5 @@ static inline void iof_fs_wait(struct iof_projection *iof_state,
 
 	iof_tracker_wait(tracker);
 }
-
-int iof_lm_attach(crt_group_t *group, crt_context_t crt_ctx);
 
 #endif

@@ -53,8 +53,6 @@ read_bulk_cb(struct ioc_request *request)
 	if (out->err) {
 		IOF_TRACE_ERROR(rb, "Error from target %d", out->err);
 		rb->failure = true;
-		if (out->err == -DER_NONEXIST)
-			H_GAH_SET_INVALID(request->ir_file);
 		D_GOTO(out, request->rc = EIO);
 	}
 
@@ -76,7 +74,6 @@ out:
 	if (request->rc) {
 		IOC_REPLY_ERR(request, request->rc);
 	} else {
-		STAT_ADD_COUNT(request->fsh->stats, read_bytes, bytes_read);
 
 		/* It's not clear without benchmarking which approach is better
 		 * here, fuse_reply_buf() is a small wrapper around writev()
@@ -123,8 +120,6 @@ void ioc_ll_read(fuse_req_t req, fuse_ino_t ino, size_t len,
 	struct iof_rb *rb = NULL;
 	int rc;
 
-	STAT_ADD(fs_handle->stats, read);
-
 	IOF_TRACE_INFO(handle, "%#zx-%#zx " GAH_PRINT_STR, position,
 		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
 
@@ -149,7 +144,6 @@ void ioc_ll_read(fuse_req_t req, fuse_ino_t ino, size_t len,
 	in->xtvec.xt_off = position;
 	in->xtvec.xt_len = len;
 	in->data_bulk = rb->lb.handle;
-	IOF_TRACE_LINK(rb->rb_req.rpc, rb, "read_bulk_rpc");
 
 	rc = iof_fs_send(&rb->rb_req);
 	if (rc != 0) {

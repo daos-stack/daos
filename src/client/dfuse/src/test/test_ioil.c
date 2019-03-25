@@ -50,139 +50,16 @@
 #include <CUnit/Basic.h>
 #define D_LOGFAC DD_FAC(il)
 #include "log.h"
-#include "iof_ctrl_util.h"
 #include "iof_ioctl.h"
 #include "iof_api.h"
 
-static const char *cnss_prefix;
 static char *mount_dir;
 static uint64_t max_read_size;
 static uint64_t max_iov_read_size;
 
-#define WRITE_LOG_VERBOSE(fmt2, fmt1, ...) \
-	iof_ctrl_write_strf("write_log", fmt1 fmt2, __VA_ARGS__)
-
-#define WRITE_LOG(...) \
-	WRITE_LOG_VERBOSE(" at %s:%d", __VA_ARGS__, __FILE__, __LINE__)
-
 #define BUF_SIZE 4096
 
 char big_string[BUF_SIZE];
-
-static int init_suite(void)
-{
-	static char buf1[IOF_CTRL_MAX_LEN];
-	static char buf2[IOF_CTRL_MAX_LEN];
-	FILE *fp;
-	int mnt_num = 0;
-	int rc = CUE_SUCCESS;
-	int id;
-
-	rc = iof_ctrl_util_init(&cnss_prefix, &id);
-	if (rc != 0) {
-		printf("ERROR: Could not find cnss\n");
-		return -1;
-	}
-	WRITE_LOG("setting up test");
-
-	for (;;) {
-		int mnt_id = mnt_num++;
-
-		sprintf(buf1, "iof/projections/%d/mount_point", mnt_id);
-		rc = iof_ctrl_read_str(buf2, IOF_CTRL_MAX_LEN, buf1);
-
-		if (rc != 0) {
-			printf("ERROR: No writeable mount found\n");
-			return CUE_FOPEN_FAILED;
-		}
-
-		sprintf(buf1, "%s/ioil_test_file", buf2);
-		fp = fopen(buf1, "w");
-		if (fp == NULL) {
-			printf("Skipping PA mount.  Can't write %s\n",
-			       buf1);
-			continue;
-		}
-
-		fclose(fp);
-
-		sprintf(buf1, "iof/projections/%d/max_read", mnt_id);
-		rc = iof_ctrl_read_uint64(&max_read_size, buf1);
-		if (rc != 0) {
-			printf("max_read read error, skipping PA mount.\n");
-			continue;
-		}
-
-		sprintf(buf1, "iof/projections/%d/max_iov_read", mnt_id);
-		rc = iof_ctrl_read_uint64(&max_iov_read_size, buf1);
-		if (rc != 0) {
-			printf("max_iov_read read error, skipping PA mount.\n");
-			continue;
-		}
-
-		mount_dir = strdup(buf2);
-		if (mount_dir == NULL)
-			rc = CUE_NOMEMORY;
-
-		break;
-	}
-
-	return rc;
-}
-
-static int clean_suite(void)
-{
-	free(mount_dir);
-
-	WRITE_LOG("finalizing test");
-	iof_ctrl_util_finalize();
-
-	return CUE_SUCCESS;
-}
-
-static void gah_test(void)
-{
-	char *buf;
-	struct iof_gah_info gah_info;
-	int fd;
-	int rc;
-
-	WRITE_LOG("starting gah_test");
-	asprintf(&buf, "%s/ioil_test_file", mount_dir);
-
-	fd = open(buf, O_RDONLY);
-	free(buf);
-
-	CU_ASSERT_NOT_EQUAL(fd, -1);
-	if (fd == -1) {
-		printf("ERROR: Failed to open file for test: %s\n", buf);
-		return;
-	}
-
-	WRITE_LOG("calling ioctl on iof file");
-	rc = ioctl(fd, IOF_IOCTL_GAH, &gah_info);
-
-	CU_ASSERT_EQUAL(rc, 0);
-	CU_ASSERT_EQUAL(gah_info.version, IOF_IOCTL_VERSION);
-	if (rc != 0)
-		printf("ERROR: Failed ioctl test of IOF file: %s : %s\n",
-		       buf, strerror(errno));
-	else
-		printf("ioctl returned " GAH_PRINT_STR "\n",
-		       GAH_PRINT_VAL(gah_info.gah));
-
-	rc = close(fd);
-	CU_ASSERT_EQUAL(rc, 0);
-
-	/* Run ioctl test on stdout.  Should fail */
-	rc = ioctl(1, IOF_IOCTL_GAH, &gah_info);
-
-	CU_ASSERT_NOT_EQUAL(rc, 0);
-
-	if (rc == 0)
-		printf("ERROR: Failed ioctl test of non-IOF file: %s\n", buf);
-	WRITE_LOG("stop gah_test");
-}
 
 static void do_write_tests(int fd, char *buf, size_t len)
 {
@@ -191,7 +68,6 @@ static void do_write_tests(int fd, char *buf, size_t len)
 	off_t offset;
 	int rc;
 
-	WRITE_LOG("starting write test");
 	bytes = write(fd, buf, len);
 	printf("Wrote %zd bytes, expected %zu\n", bytes, len);
 	CU_ASSERT_EQUAL(bytes, len);
@@ -232,7 +108,6 @@ static void do_write_tests(int fd, char *buf, size_t len)
 	rc = close(fd);
 	printf("Closed file, rc = %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
-	WRITE_LOG("end write test");
 }
 
 static void do_read_tests(const char *fname, size_t len)
@@ -246,7 +121,6 @@ static void do_read_tests(const char *fname, size_t len)
 	int fd;
 	int rc;
 
-	WRITE_LOG("starting read test");
 	buf = calloc(2, BUF_SIZE);
 	CU_ASSERT_PTR_NOT_NULL(buf);
 
@@ -305,7 +179,6 @@ static void do_read_tests(const char *fname, size_t len)
 	rc = close(fd);
 	printf("Closed file, rc = %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
-	WRITE_LOG("end read test");
 }
 
 #define CU_ASSERT_GOTO(cond, target)  \
@@ -322,7 +195,6 @@ static void do_large_read(const char *fname, const char *expected,
 	int fd;
 	int rc;
 
-	WRITE_LOG("Running large read test (%zd bytes)", size);
 	memset(buf, 0, size);
 	fd = open(fname, O_RDONLY);
 	CU_ASSERT_NOT_EQUAL(fd, -1);
@@ -340,7 +212,6 @@ static bool do_large_write(const char *fname, const char *buf, size_t len)
 	ssize_t bytes;
 	int fd;
 
-	WRITE_LOG("Running large write test (%zd bytes)", len);
 	fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 	CU_ASSERT_GOTO(fd != -1, done_err);
 	bytes = write(fd, buf, len);
@@ -368,7 +239,6 @@ static void do_large_io_test(const char *fname, size_t len)
 	CU_ASSERT_GOTO(buf2 != NULL, done);
 
 	memset(buf, 'b', buf_size);
-	WRITE_LOG("starting large io test");
 
 	CU_ASSERT_GOTO(do_large_write(fname, buf, test1_size), done);
 	do_large_read(fname, buf, buf2, test1_size);
@@ -381,7 +251,6 @@ static void do_large_io_test(const char *fname, size_t len)
 done:
 	free(buf);
 	free(buf2);
-	WRITE_LOG("end large io test");
 }
 
 static void do_misc_tests(const char *fname, size_t len)
@@ -394,8 +263,6 @@ static void do_misc_tests(const char *fname, size_t len)
 	int fd;
 	int new_fd;
 	int status;
-
-	WRITE_LOG("starting misc test");
 
 	rc = stat(fname, &stat_info);
 	CU_ASSERT_EQUAL_FATAL(rc, 0);
@@ -559,7 +426,6 @@ skip_mmap:
 	rc = close(fd);
 	printf("close returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
-	WRITE_LOG("end misc test");
 
 	status = iof_get_bypass_status(0);
 	CU_ASSERT_EQUAL(status, IOF_IO_EXTERNAL);
@@ -606,7 +472,7 @@ int main(int argc, char **argv)
 	}
 
 	pSuite = CU_add_suite("IO interception library test",
-			      init_suite, clean_suite);
+			      NULL, NULL);
 
 	if (!pSuite) {
 		CU_cleanup_registry();
@@ -614,8 +480,7 @@ int main(int argc, char **argv)
 		return CU_get_error();
 	}
 
-	if (!CU_add_test(pSuite, "gah ioctl test", gah_test) ||
-	    !CU_add_test(pSuite, "libioil sanity test", sanity)) {
+	if (!CU_add_test(pSuite, "libioil sanity test", sanity)) {
 		CU_cleanup_registry();
 		printf("CU_add_test() failed\n");
 		return CU_get_error();

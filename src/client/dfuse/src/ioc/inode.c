@@ -69,11 +69,6 @@ find_gah(struct iof_projection_info *fs_handle, ino_t ino, struct ios_gah *gah)
 	IOF_TRACE_INFO(ie, "Inode %lu " GAH_PRINT_STR, ie->stat.st_ino,
 		       GAH_PRINT_VAL(ie->gah));
 
-	if (!H_GAH_IS_VALID(ie)) {
-		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
-		return EHOSTDOWN;
-	}
-
 	D_MUTEX_LOCK(&fs_handle->gah_lock);
 	*gah = ie->gah;
 	D_MUTEX_UNLOCK(&fs_handle->gah_lock);
@@ -98,11 +93,6 @@ find_inode(struct ioc_request *request)
 		return ENOENT;
 
 	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
-
-	if (!H_GAH_IS_VALID(ie)) {
-		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
-		return EHOSTDOWN;
-	}
 
 	IOF_TRACE_INFO(ie, "Using inode %lu " GAH_PRINT_STR " parent %lu",
 		       ie->stat.st_ino, GAH_PRINT_VAL(ie->gah), ie->parent);
@@ -154,7 +144,6 @@ void ie_close(struct iof_projection_info *fs_handle, struct ioc_inode_entry *ie)
 {
 	struct TYPE_NAME	*desc = NULL;
 	struct iof_gah_in	*in;
-	struct iof_file_handle *fh;
 	struct ioc_inode_entry *iec;
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
@@ -163,15 +152,6 @@ void ie_close(struct iof_projection_info *fs_handle, struct ioc_inode_entry *ie)
 
 	D_ASSERT(ref == 0);
 	atomic_fetch_add(&ie->ie_ref, 1);
-
-	D_MUTEX_LOCK(&fs_handle->of_lock);
-	/* Check that all files opened for this inode have been released */
-	while ((fh = d_list_pop_entry(&ie->ie_fh_list,
-				      struct iof_file_handle,
-				      fh_ino_list))) {
-		IOF_TRACE_WARNING(ie, "open file %p", fh);
-	}
-	D_MUTEX_UNLOCK(&fs_handle->of_lock);
 
 	D_MUTEX_LOCK(&fs_handle->gah_lock);
 	while ((iec = d_list_pop_entry(&ie->ie_ie_children,
@@ -184,19 +164,6 @@ void ie_close(struct iof_projection_info *fs_handle, struct ioc_inode_entry *ie)
 	D_MUTEX_UNLOCK(&fs_handle->gah_lock);
 
 	drop_ino_ref(fs_handle, ie->parent);
-
-	if (FS_IS_OFFLINE(fs_handle))
-		D_GOTO(err, rc = fs_handle->offline_reason);
-
-	if (!H_GAH_IS_VALID(ie))
-		D_GOTO(out, 0);
-
-	if (ie->gah.root != atomic_load_consume(&fs_handle->proj.grp->pri_srv_rank)) {
-		IOF_TRACE_WARNING(ie,
-				  "Gah with old root %lu " GAH_PRINT_STR,
-				  ie->stat.st_ino, GAH_PRINT_VAL(ie->gah));
-		D_GOTO(out, 0);
-	}
 
 	IOF_TRACE_INFO(ie, GAH_PRINT_STR, GAH_PRINT_VAL(ie->gah));
 
@@ -220,7 +187,7 @@ void ie_close(struct iof_projection_info *fs_handle, struct ioc_inode_entry *ie)
 err:
 	IOF_TRACE_ERROR(ie, "Failed to close " GAH_PRINT_STR " %d",
 			GAH_PRINT_VAL(ie->gah), rc);
-out:
+
 	IOF_TRACE_DOWN(ie);
 	if (desc)
 		iof_pool_release(fs_handle->close_pool, desc);

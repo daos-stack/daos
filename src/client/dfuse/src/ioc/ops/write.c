@@ -56,8 +56,6 @@ write_cb(struct ioc_request *request)
 
 		if (in->data_bulk)
 			wb->failure = true;
-		if (out->err == -DER_NONEXIST)
-			H_GAH_SET_INVALID(wb->wb_req.ir_file);
 
 		D_GOTO(err, request->rc = EIO);
 	}
@@ -67,8 +65,6 @@ write_cb(struct ioc_request *request)
 		D_GOTO(err, 0);
 
 	IOC_REPLY_WRITE(wb, request->req, out->len);
-
-	STAT_ADD_COUNT(request->fsh->stats, write_bytes, out->len);
 
 	iof_pool_release(request->fsh->write_pool, wb);
 
@@ -92,8 +88,6 @@ ioc_writex(size_t len, off_t position, struct iof_wb *wb)
 {
 	struct iof_writex_in *in = crt_req_get(wb->wb_req.rpc);
 	int rc;
-
-	IOF_TRACE_LINK(wb->wb_req.rpc, wb, "writex_rpc");
 
 	in->xtvec.xt_len = len;
 	if (len <= wb->wb_req.fsh->proj.max_iov_write) {
@@ -124,8 +118,6 @@ void ioc_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
 	struct iof_wb *wb = NULL;
 	int rc;
-
-	STAT_ADD(handle->open_req.fsh->stats, write);
 
 	wb = iof_pool_acquire(handle->open_req.fsh->write_pool);
 	if (!wb)
@@ -162,8 +154,6 @@ void ioc_ll_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	size_t len = bufv->buf[0].size;
 	struct fuse_bufvec dst = { .count = 1 };
 	int rc;
-
-	STAT_ADD(handle->open_req.fsh->stats, write);
 
 	/* Check for buffer count being 1.  According to the documentation this
 	 * will always be the case, and if it isn't then our code will be using

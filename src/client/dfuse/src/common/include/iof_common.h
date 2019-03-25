@@ -46,64 +46,9 @@
 
 #include "ios_gah.h"
 
-#define IOF_DEFAULT_SET "IONSS"
-
-/*
- * IOF features are represented by an 8-bit unsigned bit vector
- * \ref iof_fs_info.flags and are used turn various features on or off.
- * A combination of different features defines the projection mode
- *
- * Features that don't require separate implementations:
- * Bit [0]	: 0=Read-Only, 1=Read-Write
- * Bit [1]	: Failover [0=Off, 1=On]
- *
- * Features that may require separate implementations::
- * Bit [2]	: Striped Metadata [0=Off, 1=On]
- * Bit [3]	: Striped Data [0=Off, 1=On]
- *
- * Features of the projected storage type:
- * Bit [5,4]	: 00=Default, 01=Lustre, 010=DW-Scratch, 011=DW-Cache
- *
- */
-#define IOF_FS_DEFAULT			0x00UL
-#define IOF_FS_LUSTRE			0x10UL
-#define IOF_DW_SCRATCH			0x20UL
-#define IOF_DW_CACHE			0x30UL
-
-#define IOF_WRITEABLE			0x01UL
-#define IOF_FAILOVER			0x02UL
-#define IOF_STRIPED_METADATA		0x04UL
-#define IOF_STRIPED_DATA		0x08UL
-
-#define IOF_IS_WRITEABLE(FLAGS) ((FLAGS) & IOF_WRITEABLE)
-#define IOF_HAS_FAILOVER(FLAGS) ((FLAGS) & IOF_FAILOVER)
-
 #define IOF_CNSS_MT			0x080UL
 #define IOF_FUSE_READ_BUF		0x100UL
 #define IOF_FUSE_WRITE_BUF		0x200UL
-
-enum iof_projection_mode {
-	/* Private Access Mode */
-	IOF_DEFAULT_PRIVATE,
-	/* Striped Metadata on PFS */
-	IOF_PFS_STRIPED_METADATA,
-	/* Striped Data on PFS */
-	IOF_PFS_STRIPED_DATA,
-	/* Striped Metadata on Lustre */
-	IOF_LUSTRE_STRIPED_METADATA,
-
-	/* Data Warp [Scratch], Private */
-	IOF_DWS_PRIVATE,
-	/* Data Warp [Cache], Private */
-	IOF_DWC_PRIVATE,
-	/* Data Warp [Scratch], Striped Data */
-	IOF_DWS_STRIPED_DATA,
-	/* Data Warp [Cache], Striped Data */
-	IOF_DWC_STRIPED_DATA,
-
-	/* Total number of Projection Modes */
-	IOF_PROJECTION_MODES
-};
 
 /* The name of a filesystem entry
  *
@@ -111,29 +56,6 @@ enum iof_projection_mode {
 struct ios_name {
 	char name[NAME_MAX + 1];
 };
-
-#define IOF_FS_INFO							\
-	((struct ios_name)	(dir_name)		CRT_VAR)	\
-	((struct ios_gah)	(gah)			CRT_VAR)	\
-	((uint64_t)		(flags)			CRT_VAR)	\
-	((uint32_t)		(timeout)		CRT_VAR)	\
-	((uint32_t)		(max_read)		CRT_VAR)	\
-	((uint32_t)		(max_write)		CRT_VAR)	\
-	((uint32_t)		(readdir_size)		CRT_VAR)	\
-	((uint32_t)		(max_iov_read)		CRT_VAR)	\
-	((uint32_t)		(max_iov_write)		CRT_VAR)	\
-	((uint32_t)		(htable_size)		CRT_VAR)	\
-	((uint32_t)		(cnss_thread_count)	CRT_VAR)	\
-	((int)			(id)			CRT_VAR)	\
-
-CRT_GEN_STRUCT(iof_fs_info, IOF_FS_INFO)
-
-#define IOF_SQ_OUT							\
-	((uint32_t)		(poll_interval)		CRT_VAR)	\
-	((bool)			(progress_callback)	CRT_VAR)	\
-	((struct iof_fs_info)	(info)			CRT_ARRAY)
-
-CRT_RPC_DECLARE(iof_query, ,IOF_SQ_OUT)
 
 struct iof_gah_string_in {
 	struct ios_gah gah;
@@ -303,43 +225,43 @@ enum {
 #undef X
 
 #define IOF_STRUCT_XTVEC		\
-	((uint64_t) (xt_off) CRT_VAR)	\
-	((uint64_t) (xt_len) CRT_VAR)
+	((uint64_t)(xt_off) CRT_VAR)	\
+	((uint64_t)(xt_len) CRT_VAR)
 
 CRT_GEN_STRUCT(iof_xtvec, IOF_STRUCT_XTVEC);
 
 #define IOF_RPC_READX_IN					\
-	((struct ios_gah)	(gah)		CRT_VAR)	\
-	((struct iof_xtvec)	(xtvec)		CRT_VAR)	\
-	((uint64_t)		(xtvec_len)	CRT_VAR)	\
-	((uint64_t)		(bulk_len)	CRT_VAR)	\
-	((crt_bulk_t)		(xtvec_bulk)	CRT_VAR)	\
-	((crt_bulk_t)		(data_bulk)	CRT_VAR)
+	((struct ios_gah)(gah)		CRT_VAR)	\
+	((struct iof_xtvec)(xtvec)		CRT_VAR)	\
+	((uint64_t)(xtvec_len)	CRT_VAR)	\
+	((uint64_t)(bulk_len)	CRT_VAR)	\
+	((crt_bulk_t)(xtvec_bulk)	CRT_VAR)	\
+	((crt_bulk_t)(data_bulk)	CRT_VAR)
 
 #define IOF_RPC_READX_OUT			\
-	((d_iov_t) (data) CRT_VAR)		\
-	((uint64_t) (bulk_len) CRT_VAR)		\
-	((uint32_t) (iov_len) CRT_VAR)		\
-	((int) (rc) CRT_VAR)			\
-	((int) (err) CRT_VAR)
+	((d_iov_t)(data) CRT_VAR)		\
+	((uint64_t)(bulk_len) CRT_VAR)		\
+	((uint32_t)(iov_len) CRT_VAR)		\
+	((int)(rc) CRT_VAR)			\
+	((int)(err) CRT_VAR)
 
 CRT_RPC_DECLARE(iof_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT)
 
 #define IOF_RPC_WRITEX_IN					\
-	((struct ios_gah)	(gah)		CRT_VAR)	\
-	((d_iov_t)		(data)		CRT_VAR)	\
-	((struct iof_xtvec)	(xtvec)		CRT_VAR)	\
-	((uint64_t)		(xtvec_len)	CRT_VAR)	\
-	((uint64_t)		(bulk_len)	CRT_VAR)	\
-	((crt_bulk_t)		(xtvec_bulk)	CRT_VAR)	\
-	((crt_bulk_t)		(data_bulk)	CRT_VAR)
+	((struct ios_gah)(gah)		CRT_VAR)	\
+	((d_iov_t)(data)		CRT_VAR)	\
+	((struct iof_xtvec)(xtvec)		CRT_VAR)	\
+	((uint64_t)(xtvec_len)	CRT_VAR)	\
+	((uint64_t)(bulk_len)	CRT_VAR)	\
+	((crt_bulk_t)(xtvec_bulk)	CRT_VAR)	\
+	((crt_bulk_t)(data_bulk)	CRT_VAR)
 
 #define IOF_RPC_WRITEX_OUT			\
-	((uint64_t)	(len)	CRT_VAR)	\
-	((int)		(rc)	CRT_VAR)	\
-	((int)		(err)	CRT_VAR)	\
-	((uint64_t)	(pad0)	CRT_VAR)	\
-	((uint64_t)	(pad1)	CRT_VAR)
+	((uint64_t)(len)	CRT_VAR)	\
+	((int)(rc)	CRT_VAR)	\
+	((int)(err)	CRT_VAR)	\
+	((uint64_t)(pad0)	CRT_VAR)	\
+	((uint64_t)(pad1)	CRT_VAR)
 
 CRT_RPC_DECLARE(iof_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT)
 
@@ -351,11 +273,7 @@ iof_io_register(struct crt_proto_format **proto,
 		crt_rpc_cb_t handlers[]);
 
 int
-iof_signon_register(crt_rpc_cb_t handlers[]);
-
-int
 iof_client_register(crt_endpoint_t *tgt_ep,
-		    struct crt_proto_format **signon,
 		    struct crt_proto_format **write,
 		    struct crt_proto_format **io);
 

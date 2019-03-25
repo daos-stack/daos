@@ -78,13 +78,6 @@ ioc_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int ret = EIO;
 	int rc;
 
-	STAT_ADD(fs_handle->stats, rename);
-
-	if (!IOF_IS_WRITEABLE(fs_handle->flags)) {
-		IOF_LOG_INFO("Attempt to modify Read-Only File System");
-		D_GOTO(out_no_request, ret = EROFS);
-	}
-
 	D_ALLOC_PTR(request);
 	if (!request) {
 		D_GOTO(out_no_request, ret = ENOMEM);

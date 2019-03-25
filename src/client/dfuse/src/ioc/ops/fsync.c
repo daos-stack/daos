@@ -57,11 +57,6 @@ ioc_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	int rc;
 	int ret;
 
-	STAT_ADD(fs_handle->stats, fsync);
-
-	if (!IOF_IS_WRITEABLE(fs_handle->flags))
-		D_GOTO(out_no_request, ret = EROFS);
-
 	IOF_TRACE_INFO(handle);
 
 	D_ALLOC_PTR(request);

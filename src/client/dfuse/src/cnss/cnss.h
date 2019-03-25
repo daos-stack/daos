@@ -39,17 +39,8 @@
 #define __CNSS_H__
 
 #include "log.h"
-#include "ctrl_fs.h"
-#include "ctrl_common.h"
+#include "cnss_plugin.h"
 
-#include <gurt/list.h>
-
-struct cnss_info {
-	d_list_t                plugins;
-	struct ctrl_info	info;
-	const char		*prefix;
-};
-
-int iof_plugin_init(struct cnss_plugin **fns, size_t *size);
+int iof_plugin_init(struct cnss_plugin **fns);
 
 #endif /* __CNSS_H__ */

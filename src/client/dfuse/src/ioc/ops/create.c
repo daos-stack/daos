@@ -70,13 +70,8 @@ ioc_create_ll_cb(struct ioc_request *request)
 
 	fi.fh = (uint64_t)handle;
 	handle->common.gah = out->gah;
-	H_GAH_SET_VALID(handle);
 	handle->inode_num = entry.ino;
 	handle->common.ep = request->rpc->cr_ep;
-
-	D_MUTEX_LOCK(&fs_handle->of_lock);
-	d_list_add_tail(&handle->fh_of_list, &fs_handle->openfile_list);
-	D_MUTEX_UNLOCK(&fs_handle->of_lock);
 
 	/* Populate the inode table with the GAH from the duplicate file
 	 * so that it can still be accessed after the file is closed
@@ -86,7 +81,6 @@ ioc_create_ll_cb(struct ioc_request *request)
 	D_INIT_LIST_HEAD(&handle->ie->ie_fh_list);
 	D_INIT_LIST_HEAD(&handle->ie->ie_ie_children);
 	D_INIT_LIST_HEAD(&handle->ie->ie_ie_list);
-	H_GAH_SET_VALID(handle->ie);
 	IOF_TRACE_UP(handle->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
 				       &handle->ie->stat.st_ino,
@@ -144,8 +138,6 @@ void ioc_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	struct iof_create_in *in;
 	int rc;
 
-	STAT_ADD(fs_handle->stats, create);
-
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
 	 * would otherwise be using and check that is set.
@@ -171,19 +163,12 @@ void ioc_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	if (!IOF_IS_WRITEABLE(fs_handle->flags)) {
-		IOF_TRACE_INFO(req, "Attempt to modify Read-Only File "
-			       "System");
-		D_GOTO(out_err, rc = EROFS);
-	}
-
 	handle = iof_pool_acquire(fs_handle->fh_pool);
 	if (!handle)
 		D_GOTO(out_err, rc = ENOMEM);
 
 	IOF_TRACE_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
 	IOF_TRACE_UP(&handle->creat_req, handle, "creat_req");
-	IOF_TRACE_LINK(handle->creat_req.rpc, &handle->creat_req, "creat_file_rpc");
 
 	handle->common.projection = &fs_handle->proj;
 	handle->creat_req.req = req;

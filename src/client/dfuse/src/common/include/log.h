@@ -102,10 +102,6 @@
 	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' from %p\n",	\
 		      type, parent)
 
-/* Link an RPC to a descriptor */
-#define IOF_TRACE_LINK(ptr, parent, type)			\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Link '%s' to %p\n", type, parent)
-
 /* De-register a descriptor, including all aliases */
 #define IOF_TRACE_DOWN(ptr)					\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Deregistered\n")
@@ -113,10 +109,5 @@
 /* Register as root of hierarchy, used in place of IOF_TRACE_UP */
 #define IOF_TRACE_ROOT(ptr, type)				\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' as root\n", type)
-
-/** Initialize iof log facilities */
-void iof_log_init(void);
-/* Close the iof log */
-void iof_log_close(void);
 
 #endif /* __LOG_H__ */

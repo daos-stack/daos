@@ -39,8 +39,6 @@
 import os
 import sys
 
-IOF_VERSION = "0.0.1"
-
 # Desired compiler flags that will be used if the compiler supports them
 DESIRED_FLAGS = ['-Wno-missing-braces',
                  '-Wno-ignored-attributes',
@@ -81,7 +79,7 @@ def scons():
 
     prereqs.require(["cart", "fuse", "ompi"])
 
-    Export('env prereqs IOF_VERSION')
+    Export('env prereqs')
 
     env.Append(CFLAGS=['-g', '-Wall'])
 

@@ -69,13 +69,6 @@ ioc_release_priv(struct iof_file_handle *handle)
 	struct iof_projection_info *fs_handle = handle->release_req.fsh;
 	int rc;
 
-	STAT_ADD(fs_handle->stats, release);
-
-	D_MUTEX_LOCK(&fs_handle->of_lock);
-	d_list_del(&handle->fh_of_list);
-	d_list_del(&handle->fh_ino_list);
-	D_MUTEX_UNLOCK(&fs_handle->of_lock);
-
 	IOF_TRACE_UP(&handle->release_req, handle, "release_req");
 
 	IOF_TRACE_INFO(&handle->release_req,

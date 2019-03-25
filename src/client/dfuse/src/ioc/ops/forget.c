@@ -77,8 +77,6 @@ ioc_ll_forget(fuse_req_t req, fuse_ino_t ino, uintptr_t nlookup)
 {
 	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
 
-	STAT_ADD(fs_handle->stats, forget);
-
 	fuse_reply_none(req);
 
 	ioc_forget_one(fs_handle, ino, nlookup);
@@ -90,8 +88,6 @@ ioc_ll_forget_multi(fuse_req_t req, size_t count,
 {
 	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
 	int i;
-
-	STAT_ADD(fs_handle->stats, forget);
 
 	fuse_reply_none(req);
 

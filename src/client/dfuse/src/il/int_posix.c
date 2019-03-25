@@ -53,12 +53,10 @@
 #include "log.h"
 #include <gurt/list.h>
 #include <cart/api.h>
-#include "iof_mntent.h"
 #include "intercept.h"
 #include "iof_ioctl.h"
 #include "iof_vector.h"
 #include "iof_common.h"
-#include "iof_ctrl_util.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
@@ -70,10 +68,7 @@ static crt_context_t crt_ctx;
 static int cnss_id;
 static struct iof_service_group ionss_grp;
 static struct iof_projection *projections;
-static uint32_t projection_count;
 static struct crt_proto_format *iof_proto;
-
-#define BLOCK_SIZE 1024
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -114,138 +109,6 @@ int ioil_initialize_fd_table(int max_fds)
 		IOF_LOG_ERROR("Could not allocate file descriptor table"
 			      ", disabling kernel bypass: rc = %d", rc);
 	return rc;
-}
-
-#define BUFSIZE 64
-
-static int find_projections(void)
-{
-	struct iof_service_group *grp_info = &ionss_grp;
-	char *buf;
-	char tmp[BUFSIZE];
-	int rc;
-	int i = 0;
-	uint32_t version;
-	d_rank_t rank;
-	uint32_t tag;
-
-	rc = iof_ctrl_read_uint32(&version, "iof/ioctl_version");
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not read ioctl version, rc = %d", rc);
-		return 1;
-	}
-
-	if (version != IOF_IOCTL_VERSION) {
-		IOF_LOG_ERROR("IOCTL version mismatch: %d != %d", version,
-			      IOF_IOCTL_VERSION);
-		return 1;
-	}
-
-	rc = crt_group_config_path_set(cnss_prefix);
-	if (rc != 0) {
-		IOF_LOG_INFO("Could not set group config path, rc = %d", rc);
-		return 1;
-	}
-
-	snprintf(tmp, BUFSIZE, "iof/ionss/%d/name", i);
-
-	D_ALLOC(buf, IOF_CTRL_MAX_LEN);
-	if (!buf) {
-		return 1;
-	}
-
-	rc = iof_ctrl_read_str(buf, IOF_CTRL_MAX_LEN, tmp);
-	if (rc != 0) {
-		IOF_LOG_INFO("Could not get ionss name, rc = %d", rc);
-		D_FREE(buf);
-		return 1;
-	}
-
-	/* Ok, now try to attach.  Note, this will change when we
-	 * attach to multiple IONSS processes
-	 */
-	rc = crt_group_attach(buf, &grp_info->dest_grp);
-	if (rc != 0) {
-		IOF_LOG_INFO("Could not attach to ionss %s, rc = %d",
-			     buf, rc);
-		D_FREE(buf);
-		return 1;
-	}
-
-	rc = iof_lm_attach(grp_info->dest_grp, crt_ctx);
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not initialize failover, rc = %d",
-			      rc);
-		D_FREE(buf);
-		return 1;
-	}
-
-	grp_info->psr_ep.ep_grp = grp_info->dest_grp;
-
-	snprintf(tmp, BUFSIZE, "iof/ionss/%d/psr_rank", i);
-	rc = iof_ctrl_read_uint32(&rank, tmp);
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not read psr_rank, rc = %d", rc);
-		D_FREE(buf);
-		return 1;
-	}
-
-	grp_info->psr_ep.ep_rank = rank;
-
-	snprintf(tmp, BUFSIZE, "iof/ionss/%d/psr_tag", i);
-	rc = iof_ctrl_read_uint32(&tag, tmp);
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not read psr_tag, rc = %d", rc);
-		D_FREE(buf);
-		return 1;
-	}
-	grp_info->psr_ep.ep_tag = tag;
-
-	grp_info->enabled = true;
-
-	rc = iof_ctrl_read_uint32(&projection_count, "iof/projection_count");
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not read projection count, rc = %d", rc);
-		D_FREE(buf);
-		return 1;
-	}
-
-	projections = calloc(projection_count, sizeof(*projections));
-	if (projections == NULL) {
-		IOF_LOG_ERROR("Could not allocate memory");
-		D_FREE(buf);
-		return 1;
-	}
-
-	for (i = 0; i < projection_count; i++) {
-		struct iof_projection *proj = &projections[i];
-
-		proj->cli_fs_id = i;
-		proj->crt_ctx = crt_ctx;
-		proj->io_proto = iof_proto;
-
-		snprintf(tmp, BUFSIZE, "iof/projections/%d/max_iov_write", i);
-		rc = iof_ctrl_read_uint32(&proj->max_iov_write, tmp);
-		if (rc != 0) {
-			IOF_LOG_ERROR("Could not max_iov_write, rc = %d", rc);
-			D_FREE(buf);
-			return 1;
-		}
-
-		snprintf(tmp, BUFSIZE, "iof/projections/%d/max_write", i);
-		rc = iof_ctrl_read_uint32(&proj->max_write, tmp);
-		if (rc != 0) {
-			IOF_LOG_ERROR("Could not max_write, rc = %d", rc);
-			D_FREE(buf);
-			return 1;
-		}
-
-		proj->grp = &ionss_grp;
-		proj->enabled = true;
-	}
-
-	D_FREE(buf);
-	return 0;
 }
 
 static ssize_t pread_rpc(struct fd_entry *entry, char *buff, size_t len,
@@ -316,13 +179,10 @@ static void init_links(void)
 
 static __attribute__((constructor)) void ioil_init(void)
 {
-	char *buf;
 	struct rlimit rlimit;
 	int rc;
 
 	pthread_once(&init_links_flag, init_links);
-
-	iof_log_init();
 
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
@@ -338,24 +198,6 @@ static __attribute__((constructor)) void ioil_init(void)
 			      ", disabling kernel bypass", rc);
 		return;
 	}
-
-	rc = iof_ctrl_util_init(&cnss_prefix, &cnss_id);
-
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not find CNSS (rc = %d)."
-			      " disabling kernel bypass", rc);
-		return;
-	}
-
-	D_ALLOC(buf, IOF_CTRL_MAX_LEN);
-	if (!buf) {
-		return;
-	}
-
-	rc = iof_ctrl_read_str(buf, IOF_CTRL_MAX_LEN, "crt_protocol");
-	if (rc == 0)
-		setenv("CRT_PHY_ADDR_STR", buf, 1);
-	D_FREE(buf);
 
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	if (rc != 0) {
@@ -384,14 +226,6 @@ static __attribute__((constructor)) void ioil_init(void)
 		return;
 	}
 
-	rc = find_projections();
-	if (rc != 0) {
-		IOF_LOG_ERROR("Could not configure projections, rc = %d"
-			      " disabling kernel bypass", rc);
-		iof_ctrl_util_finalize();
-		return;
-	}
-
 	IOF_LOG_INFO("Using IONSS: cnss_prefix at %s, cnss_id is %d",
 		     cnss_prefix, cnss_id);
 
@@ -406,14 +240,11 @@ static __attribute__((destructor)) void ioil_fini(void)
 		crt_group_detach(ionss_grp.dest_grp);
 		crt_context_destroy(crt_ctx, 0);
 		crt_finalize();
-		iof_ctrl_util_finalize();
 		free(projections);
 	}
 	ioil_initialized = false;
 
 	__sync_synchronize();
-
-	iof_log_close();
 
 	vector_destroy(&fd_table);
 }

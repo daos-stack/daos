@@ -69,7 +69,6 @@ iof_entry_cb(struct ioc_request *request)
 	D_INIT_LIST_HEAD(&desc->ie->ie_fh_list);
 	D_INIT_LIST_HEAD(&desc->ie->ie_ie_children);
 	D_INIT_LIST_HEAD(&desc->ie->ie_ie_list);
-	H_GAH_SET_VALID(desc->ie);
 	IOF_TRACE_UP(desc->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
 				       &desc->ie->stat.st_ino,

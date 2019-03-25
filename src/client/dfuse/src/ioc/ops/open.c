@@ -63,10 +63,6 @@ ioc_open_ll_cb(struct ioc_request *request)
 	fi.fh = (uint64_t)handle;
 	handle->common.gah = out->gah;
 	handle->common.ep = request->rpc->cr_ep;
-	H_GAH_SET_VALID(handle);
-	D_MUTEX_LOCK(&request->fsh->of_lock);
-	d_list_add_tail(&handle->fh_of_list, &request->fsh->openfile_list);
-	D_MUTEX_UNLOCK(&request->fsh->of_lock);
 
 	IOC_REPLY_OPEN(&handle->open_req, fi);
 
@@ -91,8 +87,6 @@ void ioc_ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct iof_open_in *in;
 	int rc;
 
-	STAT_ADD(fs_handle->stats, open);
-
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
 	 * would otherwise be using and check that is set.
@@ -111,21 +105,12 @@ void ioc_ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	if (fi->flags & O_WRONLY || fi->flags & O_RDWR) {
-		if (!IOF_IS_WRITEABLE(fs_handle->flags)) {
-			IOF_TRACE_INFO(fs_handle,
-				       "Attempt to modify Read-Only File System");
-			D_GOTO(out_err, rc = EROFS);
-		}
-	}
-
 	handle = iof_pool_acquire(fs_handle->fh_pool);
 	if (!handle) {
 		D_GOTO(out_err, rc = ENOMEM);
 	}
 	IOF_TRACE_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
 	IOF_TRACE_UP(&handle->open_req, handle, "open_req");
-	IOF_TRACE_LINK(handle->open_req.rpc, &handle->open_req, "open_file_rpc");
 
 	handle->common.projection = &fs_handle->proj;
 	handle->open_req.req = req;

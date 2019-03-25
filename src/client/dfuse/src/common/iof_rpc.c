@@ -222,10 +222,6 @@ struct crt_msg_field *setattr_in[] = {
 	&CMF_UINT32,	/* to_set */
 };
 
-CRT_GEN_PROC_FUNC(iof_fs_info, IOF_FS_INFO)
-
-CRT_RPC_DEFINE(iof_query, ,IOF_SQ_OUT)
-
 #define X(a, b, c)					\
 	static struct crt_req_format IOF_CRF_##a =	\
 		DEFINE_CRT_REQ_FMT(b, c);
@@ -246,16 +242,6 @@ static struct crt_proto_rpc_format iof_write_rpc_types[] = {
 
 #undef X
 
-static struct crt_proto_rpc_format iof_signon_rpc_types[] = {
-	{
-		.prf_req_fmt = &CQF_iof_query,
-	},
-	{
-		/* Detach RPC */
-		.prf_flags = CRT_RPC_FEAT_NO_TIMEOUT,
-	}
-};
-
 static struct crt_proto_rpc_format iof_io_rpc_types[] = {
 	{
 		.prf_req_fmt = &CQF_iof_readx,
@@ -265,14 +251,6 @@ static struct crt_proto_rpc_format iof_io_rpc_types[] = {
 		.prf_req_fmt = &CQF_iof_writex,
 		.prf_flags = CRT_RPC_FEAT_NO_TIMEOUT,
 	}
-};
-
-static struct crt_proto_format iof_signon_registry = {
-	.cpf_name = "IOF_HANDSHAKE",
-	.cpf_ver = IOF_PROTO_SIGNON_VERSION,
-	.cpf_count = ARRAY_SIZE(iof_signon_rpc_types),
-	.cpf_prf = iof_signon_rpc_types,
-	.cpf_base = IOF_PROTO_SIGNON_BASE,
 };
 
 static struct crt_proto_format iof_write_registry = {
@@ -290,7 +268,6 @@ static struct crt_proto_format iof_io_registry = {
 	.cpf_prf = iof_io_rpc_types,
 	.cpf_base = IOF_PROTO_IO_BASE,
 };
-
 
 /* Bulk register a RPC type
  *
@@ -329,12 +306,6 @@ iof_write_register(crt_rpc_cb_t handlers[])
 }
 
 int
-iof_signon_register(crt_rpc_cb_t handlers[])
-{
-	return iof_core_register(&iof_signon_registry, NULL, handlers);
-}
-
-int
 iof_io_register(struct crt_proto_format **proto,
 		crt_rpc_cb_t handlers[])
 {
@@ -343,26 +314,11 @@ iof_io_register(struct crt_proto_format **proto,
 
 struct sq_cb {
 	struct iof_tracker	tracker;
-	uint32_t		signon_version;
-	int			signon_rc;
 	uint32_t		write_version;
 	int			write_rc;
 	uint32_t		io_version;
 	int			io_rc;
 };
-
-static void
-iof_signon_query_cb(struct crt_proto_query_cb_info *cb_info)
-{
-	struct sq_cb *cbi = cb_info->pq_arg;
-
-	cbi->signon_rc = cb_info->pq_rc;
-	if (cbi->signon_rc == -DER_SUCCESS) {
-		cbi->signon_version = cb_info->pq_ver;
-	}
-
-	iof_tracker_signal(&cbi->tracker);
-}
 
 static void
 iof_write_query_cb(struct crt_proto_query_cb_info *cb_info)
@@ -390,7 +346,6 @@ iof_io_query_cb(struct crt_proto_query_cb_info *cb_info)
 	iof_tracker_signal(&cbi->tracker);
 }
 
-
 /* Query the server side protocols in use, for now we only support one
  * version so check that with the server and ensure it's what we expect.
  *
@@ -399,23 +354,15 @@ iof_io_query_cb(struct crt_proto_query_cb_info *cb_info)
  */
 int
 iof_client_register(crt_endpoint_t *tgt_ep,
-		    struct crt_proto_format **signon,
 		    struct crt_proto_format **write,
 		    struct crt_proto_format **io)
 {
-	uint32_t signon_ver = IOF_PROTO_SIGNON_VERSION;
 	uint32_t write_ver = IOF_PROTO_WRITE_VERSION;
 	uint32_t io_ver = IOF_PROTO_IO_VERSION;
 	struct sq_cb cbi = {0};
 	int rc;
 
-	iof_tracker_init(&cbi.tracker, 3);
-
-	rc = crt_proto_query(tgt_ep, IOF_PROTO_SIGNON_BASE,
-			     &signon_ver, 1, iof_signon_query_cb, &cbi);
-	if (rc != -DER_SUCCESS) {
-		return rc;
-	}
+	iof_tracker_init(&cbi.tracker, 2);
 
 	rc = crt_proto_query(tgt_ep, IOF_PROTO_WRITE_BASE,
 			     &write_ver, 1, iof_write_query_cb, &cbi);
@@ -436,10 +383,6 @@ iof_client_register(crt_endpoint_t *tgt_ep,
 
 	iof_tracker_wait(&cbi.tracker);
 
-	if (cbi.signon_rc != -DER_SUCCESS) {
-		return cbi.signon_rc;
-	}
-
 	if (cbi.write_rc != -DER_SUCCESS) {
 		return cbi.write_rc;
 	}
@@ -448,21 +391,12 @@ iof_client_register(crt_endpoint_t *tgt_ep,
 		return cbi.io_rc;
 	}
 
-	if (cbi.signon_version != IOF_PROTO_SIGNON_VERSION) {
-		return -DER_INVAL;
-	}
-
 	if (cbi.write_version != IOF_PROTO_WRITE_VERSION) {
 		return -DER_INVAL;
 	}
 
 	if (cbi.io_version != IOF_PROTO_IO_VERSION) {
 		return -DER_INVAL;
-	}
-
-	rc = crt_proto_register(&iof_signon_registry);
-	if (rc != -DER_SUCCESS) {
-		return rc;
 	}
 
 	rc = crt_proto_register(&iof_write_registry);
@@ -475,7 +409,6 @@ iof_client_register(crt_endpoint_t *tgt_ep,
 		return rc;
 	}
 
-	*signon	= &iof_signon_registry;
 	*write	= &iof_write_registry;
 	*io	= &iof_io_registry;
 

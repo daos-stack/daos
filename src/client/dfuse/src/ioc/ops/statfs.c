@@ -79,8 +79,6 @@ ioc_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 	int rc;
 	int ret;
 
-	STAT_ADD(fs_handle->stats, statfs);
-
 	D_ALLOC_PTR(request);
 	if (!request) {
 		D_GOTO(out_no_request, ret = ENOMEM);

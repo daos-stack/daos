@@ -37,22 +37,15 @@
 """Build ping test"""
 import os
 
-HEADERS = ['cnss_plugin.h', 'iof_ctrl_util.h', 'iof_io.h', 'iof_defines.h',
+HEADERS = ['iof_io.h', 'iof_defines.h',
            'iof_api.h', 'iof_preload.h']
-COMMON_SRC = ['version.c',
-              'ios_gah.c',
-              'iof_fs.c',
-              'log.c',
+COMMON_SRC = ['iof_fs.c',
               'iof_rpc.c',
               'iof_bulk.c',
               'iof_pool.c',
               'iof_obj_pool.c',
-              'iof_vector.c',
-              'iof_mntent.c']
-LIBIOF_SRC = ['ctrl_fs_util.c']
-CNSS_SRC = ['cnss.c',
-            'ctrl_common.c',
-            'ctrl_fs.c']
+              'iof_vector.c']
+CNSS_SRC = ['cnss.c']
 IOC_SRC = ['ioc_main.c',
            'ioc_fuseops.c',
            'inode.c']
@@ -92,7 +85,7 @@ def build_common(env, files, is_shared):
 
     return common
 
-def build_client_libs_shared(env, version):
+def build_client_libs_shared(env):
     """build the shared interception library"""
     to_build = env.get('client_libs')
     if to_build == 'none':
@@ -109,16 +102,11 @@ def build_client_libs_shared(env, version):
         il_obj += ilenv.SharedObject(os.path.join('il', src),
                                      SHOBJPREFIX='s_')
     common = build_common(penv, COMMON_SRC, True)
-    common += build_common(penv, LIBIOF_SRC, True)
 
     # Now build the interception library
-    il_lib = ilenv.SharedLibrary('il/libioil', il_obj + common,
-                                 SHLIBVERSION=version)
-    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), il_lib,
-                            SHLIBVERSION=version)
-
-    iof_lib = ilenv.SharedLibrary('common/libiof', common,
-                                  SHLIBVERSION=version)
+    il_lib = ilenv.SharedLibrary('il/libioil', il_obj + common)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), il_lib)
+    iof_lib = ilenv.SharedLibrary('common/libiof', common)
 
     gen_script = ilenv.Program(['il/gen_script.c'])
     script = ilenv.Command('il/check_ioil_syms', gen_script,
@@ -128,8 +116,8 @@ def build_client_libs_shared(env, version):
         script = ilenv.Command('il/ioil-ld-opts', gen_script,
                                '$SOURCE -l $TARGET')
         env.Install('$PREFIX/share', script)
-    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), iof_lib,
-                            SHLIBVERSION=version)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), iof_lib)
+
     return iof_lib + il_lib
 
 def build_client_libs_static(env, common):
@@ -162,7 +150,7 @@ def build_client_libs_static(env, common):
 def scons():
     """Scons function"""
 
-    Import('env prereqs IOF_VERSION')
+    Import('env prereqs')
 
     # Set options which are used throughout the src.
     tenv = env.Clone()
@@ -174,7 +162,7 @@ def scons():
 
     prereqs.require(tenv, 'cart')
 
-    libs = build_client_libs_shared(tenv, IOF_VERSION)
+    libs = build_client_libs_shared(tenv)
 
     static_env = tenv.Clone()
 
@@ -184,9 +172,7 @@ def scons():
 
     # Build a static library of the common parts.
     common = build_common(tenv, COMMON_SRC, False)
-    client_common = common + build_common(tenv, LIBIOF_SRC, False)
-
-    libs += build_client_libs_static(static_env, client_common)
+    libs += build_client_libs_static(static_env, common)
 
     # Now build the CNSS application
     cenv = tenv.Clone()
@@ -197,7 +183,7 @@ def scons():
     cenv.AppendUnique(CPPPATH=['cnss'])
     cenv.AppendUnique(CPPPATH=['ioc'])
 
-    cenv.AppendUnique(LIBS=['dfs', 'dl'])
+    cenv.AppendUnique(LIBS=['dfs'])
 
     prereqs.require(cenv, 'fuse')
 
