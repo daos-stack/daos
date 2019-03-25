@@ -1,4 +1,4 @@
-# Example configuration file using sockets
+# Example configuration file for Avocado test
 
 name: daos_server           # map to -g daos_server
 port: 10001                 # mgmt port
