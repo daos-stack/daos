@@ -474,11 +474,11 @@ A special aggregation ULT processes aggregation, yielding frequently to avoid bl
 
 ## VOS Checksum Management (TODO)
 
-One of the guarantees that VOS provides is end-to-end data integrity.  Data corruption in VOS can happen while reading or writing data due to a various reasons, including leaks or failures in persistent memory, or during data transmission through the wire. VOS supports data integrity check with checksums.
+One of the guarantees that VOS provides is end-to-end data integrity.  Data corruption in VOS can happen while reading or writing data due to a variety of reasons, including leaks or failures in persistent memory, or during data transmission through the wire. VOS supports data integrity check with checksums.
 
 The VOS API for updates and writes will require checksums as arguments from its upper layer(s). VOS requires checksum for both keys and values in case of KV objects.  VOS stores the checksum along with the data.
 
-A Lookup operation on a KV will verify the checksum by computing the checksum for the key and value. If reads in byte-arrays spans over multiple extent ranges, VOS would have to recompute the checksum at the server for each individual extent range for verifying their integrity and return the computed checksum of the entire requested extent range to the client.  In case if a read requests a partial byte array extent of an existing extent range, VOS would compute the checksum of the existing extent to verify correctness and then return the requested extent range to the client with its computed checksum.  When byte array extents are aggregated, VOS individually re-computes checksum of all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
+A Lookup operation on a KV will verify the checksum by computing the checksum for the key and value. If reads in byte-arrays span multiple extent ranges, VOS would have to recompute the checksum at the server for each individual extent range for verifying their integrity and return the computed checksum of the entire requested extent range to the client.  In case a read requests a partial byte array extent of an existing extent range, VOS would compute the checksum of the existing extent to verify correctness and then return the requested extent range to the client with its computed checksum.  When byte array extents are aggregated, VOS individually re-computes checksum of all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
 
 <a id="80"></a>
 
