@@ -245,8 +245,14 @@ ace_matches_principal(struct daos_ace *ace,
 static bool
 principals_match(struct daos_ace *ace1, struct daos_ace *ace2)
 {
+	const char *principal_name = NULL;
+
+	if (ace2->dae_principal_len > 0) {
+		principal_name = ace2->dae_principal;
+	}
+
 	return ace_matches_principal(ace1, ace2->dae_principal_type,
-			ace2->dae_principal);
+			principal_name);
 }
 
 /*
