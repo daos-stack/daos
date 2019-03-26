@@ -58,6 +58,23 @@ rsvc_class(enum ds_rsvc_class_id id)
 	return rsvc_classes[id];
 }
 
+static char *
+state_str(enum ds_rsvc_state state)
+{
+	switch (state) {
+	case DS_RSVC_UP_EMPTY:
+		return "UP_EMPTY";
+	case DS_RSVC_UP:
+		return "UP";
+	case DS_RSVC_DRAINING:
+		return "DRAINING";
+	case DS_RSVC_DOWN:
+		return "DOWN";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 /* Allocate and initialize a ds_rsvc object. */
 static int
 alloc_init(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
@@ -358,6 +375,15 @@ ds_rsvc_put_leader(struct ds_rsvc *svc)
 	ds_rsvc_put(svc);
 }
 
+static void
+change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
+{
+	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name,
+		svc->s_term, state_str(svc->s_state), state_str(state));
+	svc->s_state = state;
+	ABT_cond_broadcast(svc->s_state_cv);
+}
+
 static int
 rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 {
@@ -378,7 +404,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
 	if (rc == DER_UNINIT) {
-		svc->s_state = DS_RSVC_UP_EMPTY;
+		change_state(svc, DS_RSVC_UP_EMPTY);
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
@@ -387,7 +413,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		goto out_mutex;
 	}
 
-	svc->s_state = DS_RSVC_UP;
+	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
 	return rc;
@@ -421,7 +447,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 		goto out_mutex;
 	}
 
-	svc->s_state = DS_RSVC_UP;
+	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
 	D_DEBUG(DB_MD, "%s: bootstrapped: %d\n", svc->s_name, rc);
@@ -442,7 +468,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 
 	if (svc->s_state == DS_RSVC_UP) {
 		/* Stop accepting new leader references. */
-		svc->s_state = DS_RSVC_DRAINING;
+		change_state(svc, DS_RSVC_DRAINING);
 
 		rsvc_class(svc->s_class)->sc_drain(svc);
 
@@ -460,8 +486,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 		rsvc_class(svc->s_class)->sc_step_down(svc);
 	}
 
-	svc->s_state = DS_RSVC_DOWN;
-	ABT_cond_broadcast(svc->s_state_cv);
+	change_state(svc, DS_RSVC_DOWN);
 	ABT_mutex_unlock(svc->s_mutex);
 	D_DEBUG(DB_MD, "%s: stepped down from "DF_U64"\n", svc->s_name, term);
 }
