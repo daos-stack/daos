@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,78 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include "iof_common.h"
+#include "ioc.h"
+#include "ios_gah.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+#define REQ_NAME close_req
+#define POOL_NAME dh_pool
+#define TYPE_NAME iof_dir_handle
+#include "ioc_ops.h"
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
+#define STAT_KEY closedir
+
+static bool
+closedir_ll_cb(struct ioc_request *request)
+{
+	struct iof_status_out *out	= crt_reply_get(request->rpc);
+	struct TYPE_NAME *dh		= CONTAINER(request);
+
+	IOC_REQUEST_RESOLVE(request, out);
+
+	if (!request->req)
+		D_GOTO(out, 0);
+
+	if (request->rc == 0)
+		IOC_REPLY_ZERO(request);
+	else
+		IOC_REPLY_ERR(request, request->rc);
+out:
+	iof_pool_release(dh->open_req.fsh->dh_pool, dh);
+	return false;
+}
+
+static const struct ioc_request_api api = {
+	.on_result	= closedir_ll_cb,
+	.gah_offset	= offsetof(struct iof_gah_in, gah),
+	.have_gah	= true,
 };
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+void ioc_releasedir_priv(fuse_req_t req, struct iof_dir_handle *dh)
+{
+	struct iof_projection_info *fs_handle = dh->open_req.fsh;
+	int rc;
 
-#endif /* __IOF_API_H__ */
+	IOC_REQ_INIT_REQ(dh, fs_handle, api, req, rc);
+	if (rc)
+		D_GOTO(err, rc);
+
+	rc = iof_fs_send(&dh->close_req);
+	if (rc != 0)
+		D_GOTO(err, rc);
+	return;
+err:
+	if (req) {
+		dh->close_req.req  = req;
+		IOC_REPLY_ERR(&dh->close_req, rc);
+	} else {
+		IOF_TRACE_DOWN(&dh->close_req);
+	}
+
+	iof_pool_release(fs_handle->dh_pool, dh);
+
+}
+
+void ioc_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
+		       struct fuse_file_info *fi)
+{
+	struct TYPE_NAME *dh = (struct TYPE_NAME *)fi->fh;
+
+	ioc_releasedir_priv(req, dh);
+}
+
+void ioc_int_releasedir(struct iof_dir_handle *dh)
+{
+	ioc_releasedir_priv(NULL, dh);
+}

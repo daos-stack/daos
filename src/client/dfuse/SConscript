@@ -36,17 +36,6 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build iof components"""
 
-import os
-import sys
-
-# Desired compiler flags that will be used if the compiler supports them
-DESIRED_FLAGS = ['-Wno-missing-braces',
-                 '-Wno-ignored-attributes',
-                 '-Wunknown-warning-option',
-                 '-Wno-gnu-designator',
-                 '-Wshadow',
-                 '-Wno-gnu-zero-variadic-macro-arguments']
-
 def run_checks(env):
     """Run all configure time checks"""
 
@@ -54,43 +43,24 @@ def run_checks(env):
     cenv.Append(CFLAGS='-Werror')
     config = Configure(cenv)
 
-    cmd = 'setfattr'
-
-    if not config.CheckProg(cmd):
-        print('%s command not installed, extended attribute test ' \
-              'will not work' % cmd)
-
     if config.CheckHeader('stdatomic.h'):
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
 
     config.Finish()
-
-    env.AppendIfSupported(CFLAGS=DESIRED_FLAGS)
-
-    print('Compiler options: %s %s' % (env.get('CC'),
-                                       ' '.join(env.get('CFLAGS'))))
 
 def scons():
     """Scons function"""
 
     Import('env', 'prereqs')
 
-    VariantDir('build', '.', duplicate=0)
-
-    prereqs.require(["cart", "fuse", "ompi"])
+    prereqs.require(["cart", "fuse"])
 
     Export('env prereqs')
-
-    env.Append(CFLAGS=['-g', '-Wall'])
 
     if not env.GetOption('clean'):
         run_checks(env)
 
-    env.Alias('install', "$PREFIX")
-
-    SConscript('build/src/SConscript')
-
-    env.Install('$PREFIX/etc', ['utils/memcheck-iof.supp'])
+    SConscript('src/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

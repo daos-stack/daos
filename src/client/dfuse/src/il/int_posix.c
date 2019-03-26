@@ -50,7 +50,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <string.h>
-#include "log.h"
+#include "iof_log.h"
 #include <gurt/list.h>
 #include <cart/api.h>
 #include "intercept.h"
@@ -810,7 +810,7 @@ IOF_PUBLIC int iof_dup2(int oldfd, int newfd)
 	return realfd;
 }
 
-IOF_PUBLIC FILE * iof_fdopen(int fd, const char *mode)
+IOF_PUBLIC FILE *iof_fdopen(int fd, const char *mode)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -888,7 +888,7 @@ IOF_PUBLIC int iof_fcntl(int fd, int cmd, ...)
 	return newfd;
 }
 
-IOF_PUBLIC FILE * iof_fopen(const char *path, const char *mode)
+IOF_PUBLIC FILE *iof_fopen(const char *path, const char *mode)
 {
 	FILE *fp;
 	struct fd_entry entry = {0};
@@ -919,7 +919,7 @@ finish:
 	return fp;
 }
 
-IOF_PUBLIC FILE * iof_freopen(const char *path, const char *mode, FILE *stream)
+IOF_PUBLIC FILE *iof_freopen(const char *path, const char *mode, FILE *stream)
 {
 	FILE *newstream;
 	struct fd_entry new_entry = {0};

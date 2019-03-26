@@ -34,7 +34,6 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Build ping test"""
 import os
 
 HEADERS = ['iof_io.h', 'iof_defines.h',
@@ -45,10 +44,10 @@ COMMON_SRC = ['iof_fs.c',
               'iof_pool.c',
               'iof_obj_pool.c',
               'iof_vector.c']
-CNSS_SRC = ['cnss.c']
-IOC_SRC = ['ioc_main.c',
-           'ioc_fuseops.c',
-           'inode.c']
+DFUSE_SRC = ['cnss.c',
+             'ioc_main.c',
+             'ioc_fuseops.c',
+             'inode.c']
 RPC_SRC = ['closedir',
            'create',
            'fgetattr',
@@ -77,7 +76,7 @@ def build_common(env, files, is_shared):
     common = []
 
     for src in files:
-        src_file = os.path.join('common', src)
+        src_file = os.path.join('dfuse', src)
         if is_shared:
             common += env.SharedObject(src_file, SHOBJPREFIX='s_')
         else:
@@ -87,11 +86,10 @@ def build_common(env, files, is_shared):
 
 def build_client_libs_shared(env):
     """build the shared interception library"""
-    to_build = env.get('client_libs')
-    if to_build == 'none':
-        return []
 
     ilenv = env.Clone()
+    ilenv.AppendUnique(CPPPATH=['include'])
+    ilenv.AppendUnique(CPPPATH=['dfuse'])
     ilenv.AppendUnique(CFLAGS=['-fPIC'])
     ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
     penv = ilenv.Clone()
@@ -112,21 +110,19 @@ def build_client_libs_shared(env):
     script = ilenv.Command('il/check_ioil_syms', gen_script,
                            "$SOURCE -s $TARGET")
     env.Install('$PREFIX/TESTING/scripts', script)
-    if to_build != 'shared':
-        script = ilenv.Command('il/ioil-ld-opts', gen_script,
-                               '$SOURCE -l $TARGET')
-        env.Install('$PREFIX/share', script)
+    script = ilenv.Command('il/ioil-ld-opts', gen_script,
+                           '$SOURCE -l $TARGET')
+    env.Install('$PREFIX/share', script)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), iof_lib)
 
     return iof_lib + il_lib
 
 def build_client_libs_static(env, common):
     """build the static interception library"""
-    to_build = env.get('client_libs')
-    if to_build == 'none' or to_build == 'shared':
-        return []
 
     ilenv = env.Clone()
+    ilenv.AppendUnique(CPPPATH=['include'])
+    ilenv.AppendUnique(CPPPATH=['dfuse'])
     il_obj = []
     for src in IOFIL_SRC:
         il_obj += ilenv.Object(os.path.join('il', src))
@@ -155,8 +151,7 @@ def scons():
     tenv = env.Clone()
     tenv.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
-    tenv.AppendUnique(CPPPATH=['common/include'])
-    tenv.AppendUnique(CPPPATH=['include'])
+
     tenv.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
     prereqs.require(tenv, 'cart')
@@ -175,29 +170,25 @@ def scons():
 
     # Now build the CNSS application
     cenv = tenv.Clone()
-
     # Set the define in SConscript so that it's in place for the prereqs.require
     # check which will verify fuse3/fuse.h can be loaded.
     cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
-    cenv.AppendUnique(CPPPATH=['cnss'])
-    cenv.AppendUnique(CPPPATH=['ioc'])
+    cenv.AppendUnique(CPPPATH=['dfuse'])
 
     cenv.AppendUnique(LIBS=['dfs'])
 
     prereqs.require(cenv, 'fuse')
 
-    cnss_obj = []
-    for src in CNSS_SRC:
-        cnss_obj += cenv.Object(os.path.join('cnss', src))
-    for src in IOC_SRC:
-        cnss_obj += cenv.Object(os.path.join('ioc', src))
+    dfuse_obj = []
+    for src in DFUSE_SRC:
+        dfuse_obj += cenv.Object(os.path.join('dfuse', src))
     for src in RPC_SRC:
-        cnss_obj += cenv.Object(os.path.join('ioc', 'ops', '%s.c' % src))
-    progs = cenv.Program('cnss/cnss', common + cnss_obj)
+        dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+    progs = cenv.Program('dfuse/dfusel', common + dfuse_obj)
 
     Default(progs + libs)
 
-    tenv.Install(os.path.join("$PREFIX", 'bin'), progs)
+    cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
 
     for header in HEADERS:
         tenv.Install(os.path.join("$PREFIX", 'include'), 'include/%s' % header)

@@ -35,37 +35,76 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include "iof_common.h"
+#include "ioc.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+#define REQ_NAME request
+#define POOL_NAME fsh_pool
+#define TYPE_NAME common_req
+#include "ioc_ops.h"
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
+#define STAT_KEY setattr
+
+static bool
+ioc_setattr_result_fn(struct ioc_request *request)
+{
+	struct iof_attr_out *out = crt_reply_get(request->rpc);
+
+	IOC_REQUEST_RESOLVE(request, out);
+
+	if (request->rc == 0)
+		IOC_REPLY_ATTR(request, &out->stat);
+	else
+		IOC_REPLY_ERR(request, request->rc);
+
+	iof_pool_release(request->fsh->POOL_NAME, CONTAINER(request));
+	return false;
+}
+
+static const struct ioc_request_api setattr_api = {
+	.on_result	= ioc_setattr_result_fn,
+	.gah_offset	= offsetof(struct iof_setattr_in, gah),
+	.have_gah	= true,
 };
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+void
+ioc_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
+	       struct fuse_file_info *fi)
+{
+	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct iof_file_handle		*handle = NULL;
+	struct TYPE_NAME		*desc = NULL;
+	struct iof_setattr_in		*in;
+	int rc;
 
-#endif /* __IOF_API_H__ */
+	if (fi)
+		handle = (void *)fi->fh;
+
+	IOF_TRACE_INFO(fs_handle, "inode %lu handle %p", ino, handle);
+
+	IOC_REQ_INIT_REQ(desc, fs_handle, setattr_api, req, rc);
+	if (rc)
+		D_GOTO(err, rc);
+
+	if (handle) {
+		desc->request.ir_ht = RHS_FILE;
+		desc->request.ir_file = handle;
+	} else {
+		desc->request.ir_ht = RHS_INODE_NUM;
+		desc->request.ir_inode_num = ino;
+	}
+
+	in = crt_req_get(desc->request.rpc);
+	in->to_set = to_set;
+	in->stat = *attr;
+
+	rc = iof_fs_send(&desc->request);
+	if (rc != 0)
+		D_GOTO(err, rc);
+	return;
+err:
+	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
+	if (desc)
+		iof_pool_release(fs_handle->POOL_NAME, desc);
+}

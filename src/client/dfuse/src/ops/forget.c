@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,63 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include <fuse3/fuse.h>
+#include "iof_common.h"
+#include "ioc.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+static void
+ioc_forget_one(struct iof_projection_info *fs_handle,
+	       fuse_ino_t ino, uintptr_t nlookup)
+{
+	d_list_t *rlink;
+	int rc;
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
-};
+	/* One additional reference is needed because the rec_find() itself
+	 * acquires one
+	 */
+	nlookup++;
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
+	if (!rlink) {
+		IOF_TRACE_WARNING(fs_handle, "Unable to find ref for %lu %lu",
+				  ino, nlookup);
+		return;
+	}
 
-#endif /* __IOF_API_H__ */
+	IOF_TRACE_INFO(container_of(rlink, struct ioc_inode_entry, ie_htl),
+		       "ino %lu count %lu",
+		       ino, nlookup);
+
+	rc = d_hash_rec_ndecref(&fs_handle->inode_ht, nlookup, rlink);
+	if (rc != -DER_SUCCESS) {
+		IOF_TRACE_ERROR(fs_handle, "Invalid refcount %lu on %p",
+				nlookup,
+				container_of(rlink, struct ioc_inode_entry, ie_htl));
+	}
+}
+
+void
+ioc_ll_forget(fuse_req_t req, fuse_ino_t ino, uintptr_t nlookup)
+{
+	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
+
+	fuse_reply_none(req);
+
+	ioc_forget_one(fs_handle, ino, nlookup);
+}
+
+void
+ioc_ll_forget_multi(fuse_req_t req, size_t count,
+		    struct fuse_forget_data *forgets)
+{
+	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
+	int i;
+
+	fuse_reply_none(req);
+
+	IOF_TRACE_INFO(fs_handle, "Forgetting %zi", count);
+
+	for (i = 0; i < count; i++)
+		ioc_forget_one(fs_handle, forgets[i].ino, forgets[i].nlookup);
+}

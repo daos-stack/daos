@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,49 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
+#ifndef __CNSS_H__
+#define __CNSS_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include "iof_log.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+#define CNSS_SUCCESS           0
+#define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
+#define CNSS_ERR_NOMEM         2 /*no memory*/
+#define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
+#define CNSS_ERR_CART          4 /*CaRT failed*/
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
-};
+struct fuse_lowlevel_ops;
+struct fuse_args;
+struct fuse_session;
+struct iof_state;
+struct iof_projection_info;
+struct cnss_info;
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+bool
+cnss_register_fuse(struct cnss_info *cnss_info,
+		   struct fuse_lowlevel_ops *flo,
+		   struct fuse_args *args,
+		   const char *mnt,
+		   bool threaded,
+		   void *private_data,
+		   struct fuse_session **sessionp);
 
-#endif /* __IOF_API_H__ */
+struct iof_state *
+iof_plugin_init();
+
+void
+iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info);
+
+void
+iof_post_start(struct iof_state *iof_state);
+
+void
+iof_finish(struct iof_state *iof_state);
+
+void
+iof_flush_fuse(struct iof_projection_info *fs_handle);
+
+int
+iof_deregister_fuse(struct iof_projection_info *fs_handle);
+
+#endif /* __CNSS_H__ */

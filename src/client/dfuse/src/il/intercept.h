@@ -40,7 +40,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/uio.h>
-#include "log.h"
+#include "iof_log.h"
 #include "ios_gah.h"
 #include "iof_fs.h"
 #include "iof_io.h"

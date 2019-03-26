@@ -35,37 +35,37 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include "iof_log.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+#include <cart/api.h>
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
-};
+#include "iof_fs.h"
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+static int iof_check_complete(void *arg)
+{
+	struct iof_tracker *tracker = arg;
 
-#endif /* __IOF_API_H__ */
+	return iof_tracker_test(tracker);
+}
+
+/* Progress until all callbacks are invoked */
+void iof_wait(crt_context_t crt_ctx, struct iof_tracker *tracker)
+{
+	int			rc;
+
+	for (;;) {
+		rc = crt_progress(crt_ctx, 1000 * 1000, iof_check_complete,
+				  tracker);
+
+		if (iof_tracker_test(tracker))
+			return;
+
+		/* TODO: Determine the best course of action on error.  In an
+		 * audit of cart code, it seems like this would only happen
+		 * under somewhat catostrophic circumstances.
+		 */
+		if (rc != 0 && rc != -DER_TIMEDOUT)
+			IOF_LOG_ERROR("crt_progress failed rc: %d", rc);
+	}
+}

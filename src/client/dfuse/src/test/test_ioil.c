@@ -49,7 +49,7 @@
 #include <fcntl.h>
 #include <CUnit/Basic.h>
 #define D_LOGFAC DD_FAC(il)
-#include "log.h"
+#include "iof_log.h"
 #include "iof_ioctl.h"
 #include "iof_api.h"
 

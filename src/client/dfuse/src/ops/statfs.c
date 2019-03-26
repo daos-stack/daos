@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,92 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include "iof_common.h"
+#include "ioc.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+static bool
+statfs_cb(struct ioc_request *request)
+{
+	struct iof_data_out *out = crt_reply_get(request->rpc);
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
+	/* Drop the two refs that this code has taken, one from the
+	 * req_create() call and a second from addref
+	 */
+	crt_req_decref(request->rpc);
+	crt_req_decref(request->rpc);
+	IOC_REQUEST_RESOLVE(request, out);
+	if (request->rc) {
+		D_GOTO(out_err, 0);
+	}
+
+	IOF_FUSE_REPLY_STATFS(request, out->data.iov_buf);
+	D_FREE(request);
+	return false;
+
+out_err:
+	IOC_REPLY_ERR(request, request->rc);
+	D_FREE(request);
+	return false;
+}
+
+static const struct ioc_request_api api = {
+	.on_result	= statfs_cb,
+	.gah_offset	= offsetof(struct iof_gah_in, gah),
+	.have_gah	= true,
 };
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+void
+ioc_ll_statfs(fuse_req_t req, fuse_ino_t ino)
+{
+	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct ioc_request		*request;
+	int rc;
+	int ret;
 
-#endif /* __IOF_API_H__ */
+	D_ALLOC_PTR(request);
+	if (!request) {
+		D_GOTO(out_no_request, ret = ENOMEM);
+	}
+
+	IOC_REQUEST_INIT(request, fs_handle);
+	IOC_REQUEST_RESET(request);
+
+	IOF_TRACE_UP(request, fs_handle, "statfs");
+	IOF_TRACE_INFO(request, "statfs %lu", ino);
+
+	request->req = req;
+	request->ir_api = &api;
+	request->ir_ht = RHS_ROOT;
+
+	rc = crt_req_create(fs_handle->proj.crt_ctx, NULL,
+			    FS_TO_OP(fs_handle, statfs), &request->rpc);
+	if (rc || !request->rpc) {
+		IOF_TRACE_ERROR(request,
+				"Could not create request, rc = %d",
+				rc);
+		D_GOTO(out_err, ret = EIO);
+	}
+
+	/* Add a second ref as that's what the iof_fs_send() function
+	 * expects.  In the case of failover the RPC might be completed,
+	 * and a copy made the the RPC seen in statfs_cb might not be
+	 * the same one as seen here.
+	 */
+	crt_req_addref(request->rpc);
+
+	rc = iof_fs_send(request);
+	if (rc != 0) {
+		D_GOTO(out_err, ret = EIO);
+	}
+
+	return;
+
+out_no_request:
+	IOC_REPLY_ERR_RAW(fs_handle, req, ret);
+	return;
+
+out_err:
+	IOC_REPLY_ERR(request, ret);
+	D_FREE(request);
+}

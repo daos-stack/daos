@@ -82,8 +82,7 @@ def scons():
     tenv = env.Clone()
     tenv.AppendUnique(CFLAGS=['-pthread'])
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
-    tenv.AppendUnique(CPPPATH=['../common/include'])
-    tenv.AppendUnique(CPPPATH=['../include'])
+    tenv.AppendUnique(CPPPATH=['../dfuse'])
     tenv.AppendUnique(LIBPATH='../il')
     tenv.AppendUnique(RPATH='$PREFIX/lib')
 

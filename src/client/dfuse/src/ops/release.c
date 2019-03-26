@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,72 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include "iof_common.h"
+#include "ioc.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
+static bool
+ioc_release_cb(struct ioc_request *request)
+{
+	struct iof_status_out *out = crt_reply_get(request->rpc);
+
+	IOC_REQUEST_RESOLVE(request, out);
+	if (request->rc) {
+		IOC_REPLY_ERR(request, request->rc);
+	} else {
+		IOC_REPLY_ZERO(request);
+	}
+
+	iof_pool_release(request->fsh->fh_pool, request->ir_file);
+	return false;
+}
+
+static const struct ioc_request_api api = {
+	.on_result	= ioc_release_cb,
+	.gah_offset	= offsetof(struct iof_gah_in, gah),
+	.have_gah	= true,
 };
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+static void
+ioc_release_priv(struct iof_file_handle *handle)
+{
+	struct iof_projection_info *fs_handle = handle->release_req.fsh;
+	int rc;
 
-#endif /* __IOF_API_H__ */
+	IOF_TRACE_UP(&handle->release_req, handle, "release_req");
+
+	IOF_TRACE_INFO(&handle->release_req,
+		       GAH_PRINT_STR, GAH_PRINT_VAL(handle->common.gah));
+
+	handle->release_req.ir_api = &api;
+
+	rc = iof_fs_send(&handle->release_req);
+	if (rc) {
+		D_GOTO(out_err, rc = EIO);
+	}
+
+	return;
+
+out_err:
+	if (handle->release_req.req) {
+		IOC_REPLY_ERR(&handle->release_req, rc);
+	} else {
+		IOF_TRACE_DOWN(&handle->release_req);
+	}
+	iof_pool_release(fs_handle->fh_pool, handle);
+}
+
+void ioc_ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
+
+	handle->release_req.req = req;
+	ioc_release_priv(handle);
+}
+
+void ioc_int_release(struct iof_file_handle *handle)
+{
+
+	ioc_release_priv(handle);
+}
