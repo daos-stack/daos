@@ -2,13 +2,33 @@
 
 ## Module Interface
 
-## Argobot Integration
+The I/O server supports a module interface that allows to load server-side code on demand. Each module is effectively a library dynamically loaded by the I/O server via dlopen.
+The interface between the module and the I/O server is defined in the `dss_module` data structure.
+
+Each module should specify:
+- a module name
+- a module identifier from `daos_module_id`
+- a feature bitmask
+- a module initialization and finalize function
+
+In addition, a module can optionally configure:
+- a setup and cleanup function invoked once the overall stack is up and running
+- CART RPC handlers
+- dRPC handlers
+
+## Thread Model & Argobot Integration
+
+The I/O server is a multi-threaded process using Argobots for non-blocking processing.
+
+By default, one main xstream plus two offload xstreams are created per target. The actual number of offload xstream can be configured through daos_io_server command line parameters. Moreover, an extra xtream is created to handle incoming metadata requests. Each xstream is bound to a specific CPU core. The main xstream is the one receiving incoming target requests from both client and the other servers. A specific ULT is started to make progress on network and NVMe I/O opeations.
 
 ## Thread-local Storage (TLS)
 
-## Shutdown & Signal Management
+Each xstream allocates private storage that can be accessed via the `dss_tls_get()` function. When registering, each module can specify a module key with a size of data structure that will be allocated by each xstream in the TLS. The `dss_module_key_get()` function will return this data structure for a specific registered module key.
 
-## Incast Variable Configuration
+## Incast Variable Integration
+
+DAOS uses IV (incast variable) to share values and statuses among servers under a single IV namespace, which is organized as a tree. The tree root is called IV leader, and servers can either be leaves or non-leaves. Each server maintains its own IV cache. During fetch, if the local cache can not fulfill the request, it forwards the request to its parents, until reaching the root (IV leader). As for update, it updates its local cache first, then forwards to its parents until it reaches the root, which then propagate the changes to all the other servers. The IV namespace is per pool, which is created during pool connection, and destroyed during pool disconnection. To use IV, each user needs to register itself under the IV namespace to get an identification, then it will use this ID to fetch or update its own IV value under the IV namespace.
 
 ## dRPC Server
 
