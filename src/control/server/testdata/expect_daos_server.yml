@@ -11,6 +11,7 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
+format_override: false
 scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []
@@ -23,5 +24,3 @@ attach: ""
 systemmap: ""
 path: ../../../utils/config/daos_server.yml
 nvmeshmid: 0
-formatcond:
-  l: {}

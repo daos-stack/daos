@@ -50,10 +50,10 @@ func TestParseBdev(t *testing.T) {
 		},
 		{},
 		{
-			bdevClass: bdNvme,
+			bdevClass: bdNVMe,
 		},
 		{
-			bdevClass: bdNvme,
+			bdevClass: bdNVMe,
 			bdevList:  []string{"0000:81:00.0", "0000:81:00.1"},
 			expFiles: [][]string{
 				{

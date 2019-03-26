@@ -275,9 +275,6 @@ func TestProvidedConfigs(t *testing.T) {
 		// verify the generated yaml is of expected size
 		outExpectYaml := outExpectYamls[0]
 		outYaml := outYamls[0]
-		if len(outExpectYaml) != len(outYaml) {
-			t.Fatalf("number of lines unexpected in %s", expectedFile)
-		}
 
 		// verify the generated yaml is of expected content
 		for i, line := range outExpectYaml {
@@ -286,6 +283,10 @@ func TestProvidedConfigs(t *testing.T) {
 				fmt.Sprintf(
 					"line %d parsed %s config doesn't match fixture %s:\n\thave %#v\n\twant %#v\n",
 					i, tt.inPath, expectedFile, outYaml[i], line))
+		}
+
+		if len(outExpectYaml) != len(outYaml) {
+			t.Fatalf("number of lines unexpected in %s", expectedFile)
 		}
 
 		// retrieve expected and actual io parameters
@@ -314,9 +315,19 @@ func TestProvidedConfigs(t *testing.T) {
 		}
 		// should only ever be one line in expected output, compare
 		// string representations of config.Servers
+		actual := strings.Split(fmt.Sprintf("%+v", config.Servers), " ")
+		exp := strings.Split(outExpect[0][0], " ")
+
+		for i, s := range actual {
+			AssertEqual(
+				t, s, exp[i],
+				fmt.Sprintf("parameters don't match %s", expectedFile))
+		}
+
+		// in case extra values were expected
 		AssertEqual(
-			t, fmt.Sprintf("%+v", config.Servers), outExpect[0][0],
-			fmt.Sprintf("parameters don't match %s", expectedFile))
+			t, len(actual), len(exp),
+			fmt.Sprintf("size of parameters don't match %s", expectedFile))
 	}
 }
 

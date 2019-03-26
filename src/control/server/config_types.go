@@ -45,7 +45,7 @@ const (
 	scmDCPM ScmClass = "dcpm"
 	scmRAM  ScmClass = "ram"
 
-	bdNvme   BdClass = "nvme"
+	bdNVMe   BdClass = "nvme"
 	bdMalloc BdClass = "malloc"
 	bdKdev   BdClass = "kdev"
 	bdFile   BdClass = "file"
@@ -146,7 +146,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	bdevClass := BdClass(class)
 	switch bdevClass {
-	case bdNvme, bdMalloc, bdKdev, bdFile:
+	case bdNVMe, bdMalloc, bdKdev, bdFile:
 		*b = bdevClass
 	default:
 		return errors.Errorf(
@@ -185,13 +185,9 @@ type server struct {
 // newDefaultServer creates a new instance of server struct
 // populated with defaults.
 func newDefaultServer() server {
-	c := sync.NewCond(&sync.Mutex{})
-	c.L.Lock()
-
 	return server{
-		ScmClass:   scmDCPM,
-		BdevClass:  bdNvme,
-		FormatCond: c,
+		ScmClass:  scmDCPM,
+		BdevClass: bdNVMe,
 	}
 }
 

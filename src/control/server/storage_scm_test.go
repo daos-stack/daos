@@ -162,7 +162,7 @@ func TestFormatScm(t *testing.T) {
 		},
 	}
 
-	server_idx := 0
+	serverIdx := 0
 
 	for _, tt := range tests {
 		config := newMockScmConfig(
@@ -171,7 +171,7 @@ func TestFormatScm(t *testing.T) {
 
 		ss := newMockScmStorage([]DeviceDiscovery{}, true, config)
 
-		if err := ss.Format(server_idx); err != nil {
+		if err := ss.Format(serverIdx); err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, "")
 				continue

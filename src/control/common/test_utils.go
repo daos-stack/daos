@@ -66,7 +66,7 @@ func AssertEqual(
 	if len(message) > 0 {
 		message += ", "
 	}
-	log.Errordf(utilLogDepth, "%#v != %#v", a, b)
+	log.Errordf(utilLogDepth, message+"%#v != %#v", a, b)
 	t.FailNow()
 }
 

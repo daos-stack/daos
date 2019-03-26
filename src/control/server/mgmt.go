@@ -26,13 +26,13 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
-
-	"github.com/pkg/errors"
+	"sync"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/pkg/errors"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
@@ -48,6 +48,14 @@ type controlService struct {
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
+	// init condition variables used to block until storage gets formatted
+	for idx := range c.config.Servers {
+		cv := sync.NewCond(&sync.Mutex{})
+		cv.L.Lock()
+
+		c.config.Servers[idx].FormatCond = cv
+	}
+
 	if err := c.nvme.Setup(); err != nil {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
