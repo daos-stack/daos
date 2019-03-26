@@ -115,7 +115,7 @@ void ioc_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 		  off_t position, struct fuse_file_info *fi)
 {
 	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
-	struct iof_wb *wb = NULL;
+	struct iof_wb *wb;
 	int rc;
 
 	wb = iof_pool_acquire(handle->open_req.fsh->write_pool);

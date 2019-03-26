@@ -225,7 +225,7 @@ done_err:
 
 static void do_large_io_test(const char *fname, size_t len)
 {
-	char *buf = NULL;
+	char *buf;
 	char *buf2 = NULL;
 	size_t test1_size = max_read_size * 2;
 	size_t test2_size = test1_size + max_iov_read_size;
