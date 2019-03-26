@@ -24,11 +24,10 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // Module id for the Agent security module
