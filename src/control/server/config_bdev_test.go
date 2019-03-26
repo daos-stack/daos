@@ -131,7 +131,9 @@ func TestParseBdev(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		setupTest(t)
+		// files is a mock store of written file contents
+		files = []string{}
+
 		// create default config and add server populated with test values
 		server := newDefaultServer()
 		server.ScmMount = "/mnt/daos"
@@ -139,7 +141,7 @@ func TestParseBdev(t *testing.T) {
 		server.BdevList = tt.bdevList
 		server.BdevSize = tt.bdevSize
 		server.BdevNumber = tt.bdevNumber
-		config := newMockConfig(nil, "", tt.fileExists, nil, nil, nil)
+		config := newMockConfig(nil, "", tt.fileExists, nil, nil, nil, nil)
 		config.Servers = append(config.Servers, server)
 		err := config.parseNvme()
 		if tt.errMsg != "" {

@@ -48,23 +48,11 @@ const (
 	tmpOut           = "testdata/.tmp_out.yml"
 )
 
-var (
-	// files is a mock store of written file contents
-	files    = []string{}
-	commands = []string{}
-	testInit = 0
-)
-
 func init() {
 	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
 
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()
-}
-
-func setupTest(t *testing.T) {
-	files = []string{}
-	commands = []string{}
 }
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -99,24 +87,24 @@ func uncommentServerConfig() {
 
 // newMockConfig returns default configuration with mocked external interface
 func newMockConfig(
-	cmdRet error, getenvRet string, existsRet bool, clearMountRet error,
-	reFormatRet error, makeMountRet error) configuration {
+	cmdRet error, getenvRet string, existsRet bool, mountRet error,
+	unmountRet error, mkdirRet error, removeRet error) configuration {
 
 	return newDefaultConfiguration(
 		&mockExt{
-			cmdRet, getenvRet, existsRet, clearMountRet,
-			reFormatRet, makeMountRet})
+			cmdRet, getenvRet, existsRet, mountRet, unmountRet,
+			mkdirRet, removeRet})
 }
 
 // newDefaultMockConfig returns MockConfig with default mock return values
 func newDefaultMockConfig() configuration {
-	return newMockConfig(nil, "", false, nil, nil, nil)
+	return newMockConfig(nil, "", false, nil, nil, nil, nil)
 }
 func cmdFailsConfig() configuration {
-	return newMockConfig(errors.New("exit status 1"), "", false, nil, nil, nil)
+	return newMockConfig(errors.New("exit status 1"), "", false, nil, nil, nil, nil)
 }
 func envExistsConfig() configuration {
-	return newMockConfig(nil, "somevalue", false, nil, nil, nil)
+	return newMockConfig(nil, "somevalue", false, nil, nil, nil, nil)
 }
 
 func populateMockConfig(t *testing.T, c configuration, path string) configuration {
@@ -617,7 +605,6 @@ func TestCmdlineOverride(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		setupTest(t)
 		config := tt.inConfig
 		err := config.getIOParams(&tt.inCliOpts)
 		if tt.errMsg != "" {
@@ -782,7 +769,6 @@ func TestPopulateEnv(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		setupTest(t)
 		config := tt.inConfig
 		inEnvs := tt.inEnvs
 		if len(config.Servers) == 0 {

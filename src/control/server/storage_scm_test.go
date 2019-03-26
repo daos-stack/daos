@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -58,9 +59,12 @@ func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 }
 
 // build config with mock external method behaviour relevant to this file
-func mockScmConfig(clearRet error, formatRet error, mountRet error) configuration {
+func mockScmConfig(
+	mountRet error, unmountRet error, mkdirRet error, removeRet error) configuration {
+
 	config := newDefaultConfiguration(
-		&mockExt{nil, "", false, clearRet, formatRet, mountRet})
+		&mockExt{
+			nil, "", false, mountRet, unmountRet, mkdirRet, removeRet})
 
 	if len(config.Servers) == 0 {
 		server := newDefaultServer()
@@ -72,16 +76,16 @@ func mockScmConfig(clearRet error, formatRet error, mountRet error) configuratio
 
 // return config reference with default successful behaviour
 func defaultMockScmConfig() *configuration {
-	c := mockScmConfig(nil, nil, nil)
+	c := mockScmConfig(nil, nil, nil, nil)
 	return &c
 }
 
 // return config reference with specified external method behaviour and scm config params
 func newMockScmConfig(
-	clearRet error, formatRet error, mountRet error,
+	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	mount string, class ScmClass, devs []string, size int) *configuration {
 
-	c := mockScmConfig(clearRet, formatRet, mountRet)
+	c := mockScmConfig(mountRet, unmountRet, mkdirRet, removeRet)
 	c.Servers[0].ScmMount = mount
 	c.Servers[0].ScmClass = class
 	c.Servers[0].ScmList = devs
@@ -145,28 +149,56 @@ func TestDiscoveryScm(t *testing.T) {
 
 func TestFormatScm(t *testing.T) {
 	tests := []struct {
-		clearRet  error
-		formatRet error
-		mountRet  error
-		mount     string
-		class     ScmClass
-		devs      []string
-		size      int
-		expArgs   []string
-		desc      string
-		errMsg    string
+		mountRet    error
+		unmountRet  error
+		mkdirRet    error
+		removeRet   error
+		mount       string
+		class       ScmClass
+		devs        []string
+		size        int
+		expSyscalls []string // expected arguments in syscall methods
+		desc        string
+		errMsg      string
 	}{
 		{
 			desc:   "zero values",
 			errMsg: "unsupported ScmClass",
+		},
+		{
+			desc:  "ram success",
+			mount: "/mnt/daos",
+			class: scmRAM,
+			size:  6,
+			expSyscalls: []string{
+				"umount /mnt/daos",
+				"remove /mnt/daos",
+				"mkdir /mnt/daos",
+				"mount tmpfs /mnt/daos tmpfs size=6GB",
+			},
+		},
+		{
+			desc:  "dcpm success",
+			mount: "/mnt/daos",
+			class: scmDCPM,
+			devs:  []string{"/dev/pmem0"},
+			expSyscalls: []string{
+				"umount /mnt/daos",
+				"remove /mnt/daos",
+				"mkfs.ext4 /dev/pmem0",
+				"mkdir /mnt/daos",
+				"mount /dev/pmem0 /mnt/daos ext4 dax",
+			},
 		},
 	}
 
 	serverIdx := 0
 
 	for _, tt := range tests {
+		commands = []string{}
+
 		config := newMockScmConfig(
-			tt.clearRet, tt.formatRet, tt.mountRet,
+			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
 			tt.mount, tt.class, tt.devs, tt.size)
 
 		ss := newMockScmStorage([]DeviceDiscovery{}, true, config)
@@ -178,5 +210,16 @@ func TestFormatScm(t *testing.T) {
 			}
 			t.Fatal(err)
 		}
+
+		for i, s := range commands {
+			AssertEqual(
+				t, s, tt.expSyscalls[i],
+				fmt.Sprintf("commands don't match (%s)", tt.desc))
+		}
+
+		// in case extra values were expected
+		AssertEqual(
+			t, len(commands), len(tt.expSyscalls),
+			fmt.Sprintf("unexpected number of commands (%s)", tt.desc))
 	}
 }

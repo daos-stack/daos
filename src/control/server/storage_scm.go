@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -104,6 +105,69 @@ func (s *scmStorage) Teardown() error {
 	return nil
 }
 
+// TODO
+func wipeDev(d string) error {
+	log.Debugf("wiping device %s", d)
+	// syscall.Unmount(mp)
+	// os.RemoveAll(mp)
+	// wipe signatures
+	return nil
+}
+
+// clearMount unmounts then removes mount point.
+//
+// NOTE: requires elevated privileges
+func (s *scmStorage) clearMount(mntPoint string) (err error) {
+	if err = s.config.ext.unmount(mntPoint); err != nil {
+		return
+	}
+
+	if err = s.config.ext.remove(mntPoint); err != nil {
+		return
+	}
+
+	return
+}
+
+// reFormat wipes fs signatures and formats dev with ext4.
+//
+// NOTE: requires elevated privileges
+func (s *scmStorage) reFormat(devPath string) (err error) {
+	// ensure we have confirmed we want to wipe device!
+	if err = wipeDev(devPath); err != nil {
+		return
+	}
+
+	if err = s.config.ext.runCommand(
+		fmt.Sprintf("mkfs.ext4 %s", devPath)); err != nil {
+
+		return errors.WithMessage(err, "mkfs format")
+	}
+
+	return
+}
+
+// makeMount creates a mount target directory and mounts device there.
+//
+// NOTE: requires elevated privileges
+func (s *scmStorage) makeMount(
+	devPath string, mntPoint string, devType string, mntOpts string) (err error) {
+
+	var mntFlags uintptr
+
+	if err = s.config.ext.mkdir(mntPoint); err != nil {
+		return
+	}
+
+	if err = s.config.ext.mount(
+		devPath, mntPoint, devType, mntFlags, mntOpts); err != nil {
+
+		return
+	}
+
+	return
+}
+
 // Format attempts to format (forcefully) SCM devices on a given server
 // as specified in config file.
 func (s *scmStorage) Format(idx int) error {
@@ -112,7 +176,7 @@ func (s *scmStorage) Format(idx int) error {
 	srv := s.config.Servers[idx]
 	mntPoint := srv.ScmMount
 
-	if err := s.config.ext.clearMount(mntPoint); err != nil {
+	if err := s.clearMount(mntPoint); err != nil {
 		return err
 	}
 
@@ -123,9 +187,10 @@ func (s *scmStorage) Format(idx int) error {
 				"expecting one scm pmem device per-server in config")
 		}
 		devPath = srv.ScmList[0]
+		devType = "ext4"
 		mntOpts = "dax"
 
-		if err := s.config.ext.reFormat(devPath); err != nil {
+		if err := s.reFormat(devPath); err != nil {
 			return err
 		}
 	case scmRAM:
@@ -141,9 +206,7 @@ func (s *scmStorage) Format(idx int) error {
 		return errors.New("unsupported ScmClass")
 	}
 
-	if err := s.config.ext.makeMount(
-		devPath, mntPoint, devType, mntOpts); err != nil {
-
+	if err := s.makeMount(devPath, mntPoint, devType, mntOpts); err != nil {
 		return err
 	}
 
