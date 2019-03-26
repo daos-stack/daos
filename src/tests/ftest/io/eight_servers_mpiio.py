@@ -34,7 +34,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
-import IorUtils
+import ior_utils
 from mpio_utils import MpioUtils, MpioFailed
 from daos_api import DaosContext, DaosPool, DaosApiError
 
@@ -135,10 +135,10 @@ class EightServers(Test):
 
             print ("svc_list: {}".format(svc_list))
 
-            IorUtils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                   pool_uuid, svc_list, self.num_procs,
-                                   self.hostfile_clients, iorflags, iteration,
-                                   transfer_size, block_size, True)
+            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
+                                    pool_uuid, svc_list, self.num_procs,
+                                    self.hostfile_clients, iorflags, iteration,
+                                    transfer_size, block_size, True)
 
         except (DaosApiError, MpioFailed) as excep:
             print(excep)

@@ -34,7 +34,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
-import IorUtils
+import ior_utils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class MultipleClients(Test):
@@ -75,7 +75,7 @@ class MultipleClients(Test):
                                 self.basepath)
 
         if int(str(self.name).split("-")[0]) == 1:
-            IorUtils.build_ior(self.basepath)
+            ior_utils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -144,10 +144,10 @@ class MultipleClients(Test):
             if stripe_size == '8m':
                 transfer_size = stripe_size
 
-            IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration,
-                             block_size, transfer_size, pool_uuid, svc_list,
-                             record_size, stripe_size, stripe_count, async_io,
-                             object_class, self.basepath, slots)
+            ior_utils.run_ior(self.hostfile_clients, ior_flags, iteration,
+                              block_size, transfer_size, pool_uuid, svc_list,
+                              record_size, stripe_size, stripe_count, async_io,
+                              object_class, self.basepath, slots)
 
-        except (DaosApiError, IorUtils.IorFailed) as excep:
+        except (DaosApiError, ior_utils.IorFailed) as excep:
             self.fail("<MultipleClients Test run Failed>\n {}".format(excep))

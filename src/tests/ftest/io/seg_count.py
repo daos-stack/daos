@@ -34,7 +34,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
-import IorUtils
+import ior_utils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class SegCount(Test):
@@ -83,7 +83,7 @@ class SegCount(Test):
                                 self.basepath)
 
         if int(str(self.name).split("-")[0]) == 1:
-            IorUtils.build_ior(self.basepath)
+            ior_utils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -159,11 +159,11 @@ class SegCount(Test):
                 svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
             svc_list = svc_list[:-1]
 
-            IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration,
-                             block_size, transfer_size, pool_uuid, svc_list,
-                             record_size, stripe_size, stripe_count, async_io,
-                             object_class, self.basepath, self.slots,
-                             segment_count)
+            ior_utils.run_ior(self.hostfile_clients, ior_flags, iteration,
+                              block_size, transfer_size, pool_uuid, svc_list,
+                              record_size, stripe_size, stripe_count, async_io,
+                              object_class, self.basepath, self.slots,
+                              segment_count)
 
-        except (IorUtils.IorFailed, DaosApiError) as excep:
+        except (ior_utils.IorFailed, DaosApiError) as excep:
             self.fail("<SegCount Test FAILED>.{}".format(excep))

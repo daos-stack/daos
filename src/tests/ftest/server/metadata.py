@@ -37,7 +37,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
-import IorUtils
+import ior_utils
 
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError, DaosLog
 NO_OF_MAX_CONTAINER = 13180
@@ -69,24 +69,24 @@ def ior_runner_thread(result_queue, tname, operation, **kwargs):
             cont_uuid = lines[no_file].rstrip()
 
         try:
-            IorUtils.run_ior(ior_args['client_hostfile'],
-                             ior_flag,
-                             ior_args['iteration'],
-                             ior_args['stripe_size'],
-                             ior_args['stripe_size'],
-                             ior_args['pool_uuid'],
-                             ior_args['svc_list'],
-                             ior_args['stripe_size'],
-                             ior_args['stripe_size'],
-                             ior_args['stripe_count'],
-                             ior_args['async_io'],
-                             ior_args['object_class'],
-                             ior_args['basepath'],
-                             ior_args['slots'],
-                             filename=cont_uuid,
-                             display_output=False)
+            ior_utils.run_ior(ior_args['client_hostfile'],
+                              ior_flag,
+                              ior_args['iteration'],
+                              ior_args['stripe_size'],
+                              ior_args['stripe_size'],
+                              ior_args['pool_uuid'],
+                              ior_args['svc_list'],
+                              ior_args['stripe_size'],
+                              ior_args['stripe_size'],
+                              ior_args['stripe_count'],
+                              ior_args['async_io'],
+                              ior_args['object_class'],
+                              ior_args['basepath'],
+                              ior_args['slots'],
+                              filename=cont_uuid,
+                              display_output=False)
             result_queue.put("PASS")
-        except IorUtils.IorFailed as exe:
+        except ior_utils.IorFailed as exe:
             result_queue.put("FAIL")
             print("--- FAIL --- {0} Failed to run IOR {1} Exception {2}"
                   .format(tname,

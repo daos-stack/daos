@@ -88,11 +88,11 @@ class MpioUtils():
             ssh.connect(hostlist[0])
             _ssh_stdin, ssh_stdout, ssh_stderr = (
                 ssh.exec_command(env_variables[0] + " && " +
-                env_variables[1] + " && " +
-                env_variables[2] + " && " +
-                env_variables[3] + " && " +
-                env_variables[4] + " && " +
-                run_cmd))
+                                 env_variables[1] + " && " +
+                                 env_variables[2] + " && " +
+                                 env_variables[3] + " && " +
+                                 env_variables[4] + " && " +
+                                 run_cmd))
             print(ssh_stdout.read())
             print(ssh_stderr.read())
         except (IOError, OSError, paramiko.SSHException, socket.error) as excep:

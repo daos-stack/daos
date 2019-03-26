@@ -148,7 +148,7 @@ class RebuildTests(Test):
                                               string.digits) for _ in range(5)))
                     data = (''.join(random.choice(string.ascii_uppercase +
                                                   string.digits)
-                                                  for _ in range(self.size)))
+                                    for _ in range(self.size)))
 
                     obj, txn = container.write_an_obj(data, len(data), dkey,
                                                       akey, obj, self.rank,
@@ -257,8 +257,8 @@ class RebuildTests(Test):
                                               string.digits) for _ in range(5)))
                     data = (
                         ''.join(random.choice(string.ascii_uppercase +
-                                              string.digits) for _ in 
-                                              range(self.size)))
+                                              string.digits) for _ in
+                                range(self.size)))
 
                     # Used DAOS_OC_R1S_SPEC_RANK
                     # 1 replica with specified rank

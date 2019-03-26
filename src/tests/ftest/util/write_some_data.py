@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
+
 import sys
 import numpy as np
 
@@ -32,7 +34,9 @@ class DaosIOFailed(Exception):
     """ DAOS I/O failure of some sort. """
 
 def write_some_data():
-
+    """
+    Write sys.argv[1] bytes to the file handle specified by sys.argv[2]
+    """
     sizeinbytes = long(sys.argv[1])
     filename = sys.argv[2]
 

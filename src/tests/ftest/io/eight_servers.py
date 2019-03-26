@@ -35,7 +35,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
-import IorUtils
+import ior_utils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class EightServers(Test):
@@ -89,7 +89,7 @@ class EightServers(Test):
 
         if not distutils.spawn.find_executable("ior") and \
            int(str(self.name).split("-")[0]) == 1:
-            IorUtils.build_ior(self.basepath)
+            ior_utils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -140,15 +140,15 @@ class EightServers(Test):
 
             print ("svc_list: {}".format(svc_list))
 
-            IorUtils.run_ior(self.hostfile_clients, iorflags, iteration,
-                             block_size, transfer_size, pool_uuid, svc_list,
-                             record_size, stripe_size, stripe_count,
-                             async_io, object_class, self.basepath, self.slots)
+            ior_utils.run_ior(self.hostfile_clients, iorflags, iteration,
+                              block_size, transfer_size, pool_uuid, svc_list,
+                              record_size, stripe_size, stripe_count,
+                              async_io, object_class, self.basepath, self.slots)
 
             if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except (DaosApiError, IorUtils.IorFailed) as excep:
+        except (DaosApiError, ior_utils.IorFailed) as excep:
             print(excep)
             if expected_result != 'FAIL':
                 self.fail("Test was expected to pass but it failed.\n")
