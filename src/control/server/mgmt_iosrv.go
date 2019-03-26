@@ -24,8 +24,6 @@
 package main
 
 import (
-	"fmt"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/golang/protobuf/proto"
@@ -48,7 +46,7 @@ func (c *controlService) callDrpcMethodWithMessage(
 	resp = &pb.DaosResponse{}
 	err = proto.Unmarshal(drpcResp.Body, resp)
 	if err != nil {
-		return nil, fmt.Errorf("invalid dRPC response body: %v", err)
+		return nil, errors.Errorf("invalid dRPC response body: %v", err)
 	}
 
 	return
