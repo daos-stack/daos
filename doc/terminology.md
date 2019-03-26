@@ -2,7 +2,7 @@
 
 |Acronym|Expansion |
 |---|---|
-|[ABT](www.argobots.org)|Argobots|
+|[ABT](https://github.com/pmodels/argobots/wiki/Introduction-to-Argobots)|Argobots|
 |[BIO](/doc/bio/README.md)|Blob I/O|
 |[CART](https://github.com/daos-stack/cart)|Collective and RPC Transport|
 |[DAOS](www.daos.io)|Distributed Asynchronous Object Storage |
@@ -24,6 +24,7 @@
 |[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership|
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
+|[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UUID|Universal Unique Identifier|
 |RDG|Redundancy Group|
 |[VOS](/doc/vos/README.md)|Versioning Object Store|

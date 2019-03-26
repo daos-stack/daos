@@ -1,4 +1,4 @@
-# I/O Server
+# DAOS Data Plane (aka daos_io_server)
 
 ## Module Interface
 
