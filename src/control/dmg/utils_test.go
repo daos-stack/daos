@@ -25,68 +25,74 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 var (
-	addresses = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features  = []*pb.Feature{MockFeaturePB()}
-	ctrlrs    = NvmeControllers{MockControllerPB("")}
-	modules   = ScmModules{MockModulePB()}
+	addresses  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
+	features   = []*pb.Feature{MockFeaturePB()}
+	ctrlrs     = NvmeControllers{MockControllerPB("")}
+	modules    = ScmModules{MockModulePB()}
+	exampleErr = errors.New("something went wrong")
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "utils_test: ", os.Stderr)
+}
 
 func TestHasConnection(t *testing.T) {
 	var shelltests = []struct {
 		addrs Addresses
-		eMap  ErrorMap
+		eMap  ResultMap
 		out   string
 	}{
 		{
 			addresses,
-			ErrorMap{},
+			ResultMap{},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ErrorMap{"1.2.3.4:10000": errors.New("test")},
-			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ErrorMap{"1.2.3.4:10000": errors.New("test"), "1.2.3.5:10001": errors.New("test")},
-			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\nNo active connections!",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\nNo active connections!",
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, hasConnections(tt.addrs, tt.eMap), tt.out, "bad output")
+		AssertEqual(t, hasConns(tt.addrs, tt.eMap), tt.out, "bad output")
 	}
 }
 
 func TestSprintConns(t *testing.T) {
 	var shelltests = []struct {
 		addrs Addresses
-		eMap  ErrorMap
+		eMap  ResultMap
 		out   string
 	}{
 		{
 			addresses,
-			ErrorMap{},
+			ResultMap{},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{"1.2.3.5:10001"},
-			ErrorMap{"1.2.3.4:10000": errors.New("test")},
-			"failed to connect to 1.2.3.4:10000 (test)\nActive connections: [1.2.3.5:10001]\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
 			Addresses{},
-			ErrorMap{"1.2.3.4:10000": errors.New("test"), "1.2.3.5:10001": errors.New("test")},
-			"failed to connect to 1.2.3.4:10000 (test)\nfailed to connect to 1.2.3.5:10001 (test)\nActive connections: []\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, exampleErr}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\n",
 		},
 	}
 	for _, tt := range shelltests {
@@ -102,37 +108,26 @@ func marshal(i interface{}) string {
 func TestCheckSprint(t *testing.T) {
 	var shelltests = []struct {
 		m   interface{}
-		err error
 		out string
 	}{
 		{
 			NewClientFM(features, addresses),
-			errors.New("test"),
-			"Unable to retrieve %[1]ss (test)\n",
-		},
-		{
-			NewClientFM(features, addresses),
-			nil,
-			fmt.Sprintf(
-				"Listing %%[1]ss on connected storage servers:\n%s\n",
-				marshal(NewClientFM(features, addresses))),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n  burn-name: category nvme, run workloads on device to test\n1.2.3.5:10001:\n  burn-name: category nvme, run workloads on device to test\n\n\n",
 		},
 		{
 			NewClientNvme(ctrlrs, addresses),
-			nil,
-			fmt.Sprintf(
-				"Listing %%[1]ss on connected storage servers:\n%s\n",
-				marshal(NewClientNvme(ctrlrs, addresses))),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- id: 12345\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- id: 12345\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n\n\n",
 		},
 		{
 			NewClientScm(modules, addresses),
-			nil,
-			fmt.Sprintf(
-				"Listing %%[1]ss on connected storage servers:\n%s\n",
-				marshal(NewClientScm(modules, addresses))),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n1.2.3.5:10001:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n\n\n",
+		},
+		{
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, exampleErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, exampleErr}},
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, checkAndFormat(tt.m, tt.err), tt.out, "bad output")
+		AssertEqual(t, unpackFormat(tt.m), tt.out, "bad output")
 	}
 }

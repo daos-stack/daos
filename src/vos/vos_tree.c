@@ -32,10 +32,6 @@
 #include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
 
-#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
-#define VOS_SVT_ORDER		5	/* order of single value tree */
-#define VOS_EVT_ORDER		23	/* evtree order */
-
 /**
  * VOS Btree attributes, for tree registration and tree creation.
  */
@@ -151,7 +147,7 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	csum->cs_len  = krec->kr_cs_size;
 	csum->cs_type = krec->kr_cs_type;
 	if (csum->cs_csum == NULL)
-		csum->cs_csum = vos_krec2csum(krec);
+		csum->cs_csum = (uint8_t *) vos_krec2csum(krec);
 	else if (csum->cs_buf_len > csum->cs_len)
 		memcpy(csum->cs_csum, vos_krec2csum(krec), csum->cs_len);
 
@@ -164,9 +160,20 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 /** size of hashed-key */
 static int
-ktr_hkey_size(struct btr_instance *tins)
+ktr_hkey_size(void)
 {
 	return sizeof(struct ktr_hkey);
+}
+
+static int
+ktr_rec_msize(int alloc_overhead)
+{
+	/* So this actually isn't currently the same for DKEY and AKEY but it
+	 * will be shortly so didn't want to complicate the interface by
+	 * passing the class.  Will need an update to support checksums but
+	 * for now, this is a step.
+	 */
+	return alloc_overhead + sizeof(struct vos_krec_df);
 }
 
 /** generate hkey */
@@ -502,6 +509,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t key_btr_ops = {
+	.to_rec_msize		= ktr_rec_msize,
 	.to_hkey_size		= ktr_hkey_size,
 	.to_hkey_gen		= ktr_hkey_gen,
 	.to_hkey_cmp		= ktr_hkey_cmp,
@@ -589,7 +597,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 			memcpy(csum->cs_csum,
 			       vos_irec2csum(irec), csum->cs_len);
 		else
-			csum->cs_csum = vos_irec2csum(irec);
+			csum->cs_csum = (uint8_t *) vos_irec2csum(irec);
 	}
 
 	rbund->rb_rsize	= irec->ir_size;
@@ -603,9 +611,18 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 /** size of hashed-key */
 static int
-svt_hkey_size(struct btr_instance *tins)
+svt_hkey_size(void)
 {
 	return sizeof(struct svt_hkey);
+}
+
+static int
+svt_rec_msize(int alloc_overhead)
+{
+	/* Doesn't presently include checksum so the interface will need to
+	 * change slightly for that.
+	 */
+	return alloc_overhead + sizeof(struct vos_irec_df);
 }
 
 /** generate hkey */
@@ -746,6 +763,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t singv_btr_ops = {
+	.to_rec_msize		= svt_rec_msize,
 	.to_hkey_size		= svt_hkey_size,
 	.to_hkey_gen		= svt_hkey_gen,
 	.to_hkey_cmp		= svt_hkey_cmp,

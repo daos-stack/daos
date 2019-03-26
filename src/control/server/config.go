@@ -340,8 +340,8 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
-		log.Debugf(
-			"Warning: using os env vars, specify params in config instead: ",
+		log.Errorf(
+			"using os env vars, specify params in config instead: %s",
 			examplesPath)
 		server.EnvVars = []string{}
 	}
@@ -353,7 +353,7 @@ func (c *configuration) populateEnv(ioIdx int, envs *[]string) {
 	for _, env := range c.Servers[ioIdx].EnvVars {
 		kv := strings.Split(env, "=")
 		if kv[1] == "" {
-			log.Debugf("Warning: empty value for env %s detected", kv[0])
+			log.Debugf("empty value for env %s detected", kv[0])
 		}
 		*envs = append(*envs, env)
 	}

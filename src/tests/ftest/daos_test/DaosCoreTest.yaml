@@ -11,7 +11,7 @@ hosts:
     - boro-G
     - boro-H
 # rebuild alone takes about 2hrs
-timeout: 9000
+timeout: 700
 server:
   server_group: daos_server
 daos_tests:

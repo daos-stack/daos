@@ -67,9 +67,15 @@ struct oi_key {
 };
 
 static int
-oi_hkey_size(struct btr_instance *tins)
+oi_hkey_size(void)
 {
 	return sizeof(struct oi_hkey);
+}
+
+static int
+oi_rec_msize(int alloc_overhead)
+{
+	return alloc_overhead + sizeof(struct vos_obj_df);
 }
 
 static void
@@ -194,6 +200,7 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t oi_btr_ops = {
+	.to_rec_msize	= oi_rec_msize,
 	.to_hkey_size	= oi_hkey_size,
 	.to_hkey_gen	= oi_hkey_gen,
 	.to_hkey_cmp	= oi_hkey_cmp,
@@ -603,19 +610,23 @@ static int
 oi_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	PMEMobjpool		*pop;
+	struct vos_pool		*vpool;
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	pop = vos_cont2pop(oiter->oit_cont);
+	vpool = vos_cont2pool(oiter->oit_cont);
 
-	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(oiter->oit_hdl, args);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
+
+	rc = dbtree_iter_delete(oiter->oit_hdl, args);
+
+	rc = vos_tx_end(vpool, rc);
+
+	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
-	} TX_END
-
+exit:
 	return rc;
 }
 
@@ -667,7 +678,7 @@ vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 			VOS_BTR_OBJ_TABLE);
 
 		rc = dbtree_create_inplace(VOS_BTR_OBJ_TABLE, 0,
-					   OT_BTREE_ORDER, &pool->vp_uma,
+					   VOS_OBJ_ORDER, &pool->vp_uma,
 					   &otab_df->obt_btr, &btr_hdl);
 		if (rc)
 			D_ERROR("dbtree create failed\n");

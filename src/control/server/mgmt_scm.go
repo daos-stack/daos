@@ -23,18 +23,26 @@
 
 package main
 
-import pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+import (
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
+)
 
 // ListScmModules lists all Storage Class Memory modules installed.
 func (c *controlService) ListScmModules(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListScmModulesServer) error {
+
+	log.Debugf("ControlService.ListScmModules dispatch")
+
 	if err := c.scm.Discover(); err != nil {
 		return err
 	}
+
 	for _, module := range c.scm.modules {
 		if err := stream.Send(module); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

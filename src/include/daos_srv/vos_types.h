@@ -32,6 +32,8 @@ enum vos_oi_attr {
 	VOS_OI_FAILED		= (1U << 0),
 	/** Marks object as punched */
 	VOS_OI_PUNCHED		= (1U << 1),
+	/** Marks object has been (or will be) removed */
+	VOS_OI_REMOVED		= (1U << 2),
 	/** TODO: Additional attributes to support metadata storage for SR */
 };
 
@@ -213,6 +215,7 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 enum {
 	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
 	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
+	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
 };
 
 /**
@@ -235,6 +238,16 @@ struct vos_iter_anchors {
 			ia_reprobe_akey:1,
 			ia_reprobe_sv:1,
 			ia_reprobe_ev:1;
+};
+
+/* Ignores DTX as they are transient records.   Add VEA overheads later */
+enum VOS_TREE_CLASS {
+	VOS_TC_CONTAINER,
+	VOS_TC_OBJECT,
+	VOS_TC_DKEY,
+	VOS_TC_AKEY,
+	VOS_TC_SV,
+	VOS_TC_ARRAY,
 };
 
 #endif /* __VOS_TYPES_H__ */

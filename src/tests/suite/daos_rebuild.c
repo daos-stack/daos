@@ -39,7 +39,7 @@
 #define OBJ_CLS		DAOS_OC_R3S_RW
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
-#define REBUILD_POOL_SIZE	(4ULL << 28)
+#define REBUILD_POOL_SIZE	(4ULL << 30)
 static void
 rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		    int tgt_idx, bool kill)

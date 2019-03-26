@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,112 +22,24 @@
 //
 
 syntax = "proto3";
-package proto;
+package mgmt;
 
-// This is the main service definition for adding services to the management server
-// In order to add RPCs associated with your service add them in the ManagementService
-// definition below.
-service MgmtControl {
-	rpc GetFeature(FeatureName) returns (Feature) {};
-	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
-	rpc ListFeatures(Category) returns (stream Feature) {};
-	rpc ListNvmeCtrlrs(EmptyParams) returns (stream NvmeController) {};
-	rpc UpdateNvmeCtrlr(UpdateNvmeParams) returns (NvmeController) {};
-	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
-	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
-	rpc ListScmModules(EmptyParams) returns (stream ScmModule) {};
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS IO Servers.
+
+// Identifier for server rank within DAOS pool
+message DaosRank {
+	string pool_uuid = 1;	// UUID of the pool
+	uint32 rank = 2;	// Server rank
 }
 
-message EmptyParams {}
-
-message FeatureName {
-	string name = 1;
+enum DaosRequestStatus {
+	SUCCESS = 0;
+	ERR_UNKNOWN = -1;		// Unknown error
+	ERR_INVALID_RANK = -2;		// Rank requested is invalid
+	ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
 }
 
-message Category {
-	string category = 1;
-}
-
-// Feature represents a management task that can be performed by server.
-message Feature {
-	// The category of capabilities this feature belongs to.
-	Category category = 1;
-	// The name of the feature.
-	FeatureName fname = 2;
-	// The description of the feature.
-	string description = 3;
-}
-
-// NvmeNamespace represent NVMe namespaces available on controller.
-message NvmeNamespace {
-	// namespace id
-	int32 id = 2;
-	// device capacity in GBytes
-	int32 capacity = 3;
-}
-
-// NvmeController represents an NVMe Controller.
-message NvmeController {
-	// The id of the controller.
-	int32 id = 1;
-	// The model name of the controller.
-	string model = 2;
-	// The serial number of the controller.
-	string serial = 3;
-	// The pci address of the controller.
-	string pciaddr = 4;
-	// The firmware revision of the controller.
-	string fwrev = 5;
-	// NvmeNamespaces created on this controller.
-	repeated NvmeNamespace namespace = 6;
-}
-
-message UpdateNvmeParams {
-	// The pci address of the controller to update firmware on.
-	string pciaddr = 1;
-	// Filesystem path containing firmware image
-	string path = 2;
-	// Firmware slot (register) to update
-	int32 slot = 3;
-}
-
-message FioConfigPath {
-	// Filesystem path containing fio job configuration
-	string path = 1;
-}
-
-message BurnInNvmeParams {
-	// The pci address of the controller to perform burn-in on.
-	string pciaddr = 1;
-	// FIO workload configuration file path
-	FioConfigPath path = 2;
-}
-
-message BurnInNvmeReport {
-	// Report from running burn-in reported by fio
-	string report = 1;
-}
-
-// ScmModule represent Storage Class Memory modules installed.
-message ScmModule {
-	// The uid of the module.
-	//string uid = 1;
-	// The physical id of the module.
-	uint32 physicalid = 1;
-	// The device handle of the module.
-	//string handle = 3;
-	// The channel id where module is installed.
-	uint32 channel = 2;
-	// The channel position where module is installed.
-	uint32 channelpos = 3;
-	// The memory controller id attached to module.
-	uint32 memctrlr = 4;
-	// The socket id attached to module.
-	uint32 socket = 5;
-	// The serial number of the module.
-	//string serial = 8;
-	// The capacity of the module.
-	uint64 capacity = 6;
-	// The firmware revision of the module.
-	//string fwrev = 10;
+message DaosResponse {
+	DaosRequestStatus status = 1;
 }

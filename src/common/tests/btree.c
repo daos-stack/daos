@@ -70,7 +70,7 @@ struct ik_rec {
 
 /** customized functions for btree */
 static int
-ik_hkey_size(struct btr_instance *tins)
+ik_hkey_size(void)
 {
 	struct ik_rec irec;
 	return sizeof(irec.ir_key);
@@ -126,7 +126,6 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		umem_id_t *rec_ret = (umem_id_t *) args;
 		 /** Provide the buffer to user */
 		*rec_ret	= rec->rec_mmid;
-		rec->rec_mmid	= UMMID_NULL;
 		return 0;
 	}
 	utest_free(ik_utx, irec->ir_val_mmid);

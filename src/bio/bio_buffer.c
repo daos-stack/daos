@@ -669,7 +669,7 @@ dma_rw(struct bio_desc *biod, bool prep)
 	D_ASSERT(blob != NULL && channel != NULL);
 
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
-	if (nvme_io_bypass)
+	if (daos_io_bypass & IOBP_NVME)
 		return;
 
 	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",

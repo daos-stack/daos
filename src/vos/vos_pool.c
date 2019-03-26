@@ -44,11 +44,23 @@
 #include <fcntl.h>
 
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
-/**
- * Memory class is PMEM by default, user can set it to VMEM (volatile memory)
- * for testing.
- */
-umem_class_id_t	vos_mem_class	 = UMEM_CLASS_PMEM;
+
+static int
+umem_get_type(void)
+{
+	/* NB: BYPASS_PM and BYPASS_PM_SNAP can't coexist */
+	if (daos_io_bypass & IOBP_PM) {
+		D_PRINT("Running in DRAM mode, all data are volatile.\n");
+		return UMEM_CLASS_VMEM;
+
+	} else if (daos_io_bypass & IOBP_PM_SNAP) {
+		D_PRINT("Ignore PMDK snapshot, data can be lost on failure.\n");
+		return UMEM_CLASS_PMEM_NO_SNAP;
+
+	} else {
+		return UMEM_CLASS_PMEM;
+	}
+}
 
 static struct vos_pool *
 pool_hlink2ptr(struct d_ulink *hlink)
@@ -204,8 +216,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 {
 	struct vea_space_df	*vea_md = NULL;
 	PMEMobjpool		*ph;
-	struct umem_attr	 uma;
-	struct umem_instance	 umem;
+	struct umem_attr	 uma = {0};
+	struct umem_instance	 umem = {0};
 	struct vos_pool_df	*pool_df;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct bio_blob_hdr	 blob_hdr;
@@ -248,43 +260,51 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		scm_sz = lstat.st_size;
 	}
 
-	pool_df = vos_pool_pop2df(ph);
-	TX_BEGIN(ph) {
-		pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
-		memset(pool_df, 0, sizeof(*pool_df));
-
-		memset(&uma, 0, sizeof(uma));
-		uma.uma_id = vos_mem_class;
-		uma.uma_pool = ph;
-
-		rc = vos_cont_tab_create(&uma, &pool_df->pd_ctab_df);
-		if (rc != 0)
-			pmemobj_tx_abort(EFAULT);
-
-		uuid_copy(pool_df->pd_id, uuid);
-		pool_df->pd_scm_sz = scm_sz;
-		pool_df->pd_nvme_sz = nvme_sz;
-		vea_md = &pool_df->pd_vea_df;
-
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_ERROR("Initialize pool root error: %d\n", rc);
-		/**
-		 * The transaction can in reality be aborted
-		 * only when there is no memory, either due
-		 * to loss of power or no more memory in pool
-		 */
-	} TX_END
-
-	if (rc != 0)
-		goto close;
-
-	/* SCM only pool or NVMe device isn't configured */
-	if (nvme_sz == 0 || xs_ctxt == NULL)
-		goto close;
+	uma.uma_id = umem_get_type();
+	uma.uma_pool = ph;
 
 	rc = umem_class_init(&uma, &umem);
 	if (rc != 0)
+		goto close;
+
+	rc = umem_tx_begin(&umem, NULL);
+	if (rc != 0)
+		goto close;
+
+	pool_df = vos_pool_pop2df(ph);
+
+	rc = pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
+	if (rc != 0)
+		goto end;
+	memset(pool_df, 0, sizeof(*pool_df));
+
+	rc = vos_cont_tab_create(&uma, &pool_df->pd_ctab_df);
+	if (rc != 0)
+		goto end;
+
+	uuid_copy(pool_df->pd_id, uuid);
+	pool_df->pd_scm_sz = scm_sz;
+	pool_df->pd_nvme_sz = nvme_sz;
+	vea_md = &pool_df->pd_vea_df;
+
+end:
+	/**
+	 * The transaction can in reality be aborted
+	 * only when there is no memory, either due
+	 * to loss of power or no more memory in pool
+	 */
+	if (rc == 0)
+		rc = umem_tx_commit(&umem);
+	else
+		rc = umem_tx_abort(&umem, rc);
+
+	if (rc != 0) {
+		D_ERROR("Initialize pool root error: %d\n", rc);
+		goto close;
+	}
+
+	/* SCM only pool or NVMe device isn't configured */
+	if (nvme_sz == 0 || xs_ctxt == NULL)
 		goto close;
 
 	/* Create SPDK blob on NVMe device */
@@ -451,7 +471,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = vos_mem_class;
+	uma->uma_id = umem_get_type();
 	uma->uma_pool = vos_pmemobj_open(path,
 				   POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (uma->uma_pool == NULL) {

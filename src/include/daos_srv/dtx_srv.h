@@ -26,6 +26,7 @@
 
 #include <daos/mem.h>
 #include <daos/dtx.h>
+#include <daos/placement.h>
 
 #define DTX_THRESHOLD_COUNT			512
 #define DTX_COMMIT_THRESHOLD_TIME		60ULL
@@ -94,5 +95,22 @@ enum dtx_status {
 	/** The DTX has been committed. */
 	DTX_ST_COMMITTED	= 3,
 };
+
+/**
+ * Some actions to be done for DTX control.
+ */
+enum dtx_actions {
+	/** Need to aggregate some old DTXs. */
+	DTX_ACT_AGGREGATE	= 1,
+	/** Need to commit some old DTXs asychronously. */
+	DTX_ACT_COMMIT_ASYNC	= 2,
+	/** Commit current DTX sychronously. */
+	DTX_ACT_COMMIT_SYNC	= 3,
+};
+
+int dtx_commit(uuid_t po_uuid, uuid_t co_uuid,
+	       struct daos_tx_entry *dtes, int count, uint32_t version);
+int dtx_abort(uuid_t po_uuid, uuid_t co_uuid,
+	      struct daos_tx_entry *dtes, int count, uint32_t version);
 
 #endif /* __DAOS_DTX_SRV_H__ */

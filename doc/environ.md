@@ -143,4 +143,4 @@ generic DEBUG messages. All debug streams will be enabled by default
 ("DD_MASK=all"). Single debug masks can be set ("DD_MASK=trace") or multiple
 masks ("DD_MASK=trace,test,mgmt").
 Note that since these debug streams are strictly related to the debug log
-messages, DD_LOG_MASK must be set to DEBUG.
+messages, D_LOG_MASK must be set to DEBUG.

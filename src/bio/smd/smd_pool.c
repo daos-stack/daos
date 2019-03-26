@@ -44,7 +44,7 @@ struct pool_tab_key {
 };
 
 static int
-ptab_df_hkey_size(struct btr_instance *tins)
+ptab_df_hkey_size(void)
 {
 	return sizeof(struct pool_tab_key);
 }
@@ -208,6 +208,7 @@ smd_nvme_add_pool(struct smd_nvme_pool_info *info)
 	struct pool_tab_key	ptab_key;
 	struct smd_nvme_pool_df	nvme_ptab_args;
 	struct smd_store	*store = get_smd_store();
+	daos_iov_t		key, value;
 	int			rc	= 0;
 
 	D_DEBUG(DB_TRACE, "Add a pool id in pool table\n");
@@ -222,21 +223,19 @@ smd_nvme_add_pool(struct smd_nvme_pool_info *info)
 	ptab_key.ptk_sid = info->npi_stream_id;
 	nvme_ptab_args.np_info = *info;
 
-	TX_BEGIN(smd_store_ptr2pop(store)) {
-		daos_iov_t	key, value;
+	rc = smd_tx_begin(store);
+	if (rc != 0)
+		goto failed;
 
-		daos_iov_set(&key, &ptab_key, sizeof(ptab_key));
-		daos_iov_set(&value, &nvme_ptab_args, sizeof(nvme_ptab_args));
+	daos_iov_set(&key, &ptab_key, sizeof(ptab_key));
+	daos_iov_set(&value, &nvme_ptab_args, sizeof(nvme_ptab_args));
 
-		rc = dbtree_update(store->sms_pool_tab, &key, &value);
-		if (rc) {
-			D_ERROR("Adding a pool failed in pool_table: %d\n", rc);
-			pmemobj_tx_abort(ENOMEM);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_ERROR("Adding a pool entry to nvme pool table: %d\n", rc);
-	} TX_END;
+	rc = dbtree_update(store->sms_pool_tab, &key, &value);
+
+	rc = smd_tx_end(store, rc);
+failed:
+	if (rc)
+		D_ERROR("Adding a pool failed in pool_table: %d\n", rc);
 	smd_unlock(SMD_PTAB_LOCK);
 
 	return rc;

@@ -10,18 +10,27 @@ def scons():
     denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
     prereqs.require(denv, 'fuse')
 
-    libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'fuse3']
+    libraries = ['daos_common', 'daos', 'gurt', 'cart', 'uuid']
 
     dfs_src = ['dfs.c']
-    dfs = daos_build.library(denv, 'dfs', dfs_src)
+    dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib/', dfs)
 
+    libraries = libraries + ['dfs']
+
     denv.AppendUnique(LIBPATH=[Dir('.')])
+    dfuse_libs = libraries + ['fuse3']
+
     dfuse_src = ['dfuse.c']
-    libraries += ['dfs']
-    dfuse = daos_build.program(denv, 'dfuse', dfuse_src, LIBS=libraries)
+    dfuse = daos_build.program(denv, 'dfuse', dfuse_src, LIBS=dfuse_libs)
     denv.Install('$PREFIX/bin/', dfuse)
+
+    duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
+    denv.Install('$PREFIX/lib/', duns)
+
+    libraries = libraries + ['duns']
+    duns_tool = daos_build.program(denv, 'duns', 'duns_tool.c', LIBS=libraries)
+    denv.Install('$PREFIX/bin/', duns_tool)
 
 if __name__ == "SCons.Script":
     scons()

@@ -30,19 +30,9 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-bool srv_bypass_bulk;
-
 static int
 obj_mod_init(void)
 {
-	char	*env;
-
-	env = getenv(IO_BYPASS_ENV);
-	if (env && !strcasecmp(env, "srv_bulk")) {
-		D_DEBUG(DB_IO, "All bulk data will be dropped\n");
-		srv_bypass_bulk = true;
-	}
-
 	dss_abt_pool_choose_cb_register(DAOS_OBJ_MODULE,
 					ds_obj_abt_pool_choose_cb);
 	return 0;

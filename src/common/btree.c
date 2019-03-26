@@ -32,6 +32,7 @@
 #include <daos_errno.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
+#include <daos_srv/vos_types.h>
 
 /**
  * Tree node types.
@@ -173,16 +174,20 @@ btr_has_tx(struct btr_context *tcx)
 	return umem_has_tx(btr_umm(tcx));
 }
 
+#define BTR_IS_DIRECT_KEY(feats) ((feats) & BTR_FEAT_DIRECT_KEY)
+
 static bool
 btr_is_direct_key(struct btr_context *tcx)
 {
-	return (tcx->tc_feats & BTR_FEAT_DIRECT_KEY);
+	return BTR_IS_DIRECT_KEY(tcx->tc_feats);
 }
+
+#define BTR_IS_UINT_KEY(feats) ((feats) & BTR_FEAT_UINT_KEY)
 
 static bool
 btr_is_int_key(struct btr_context *tcx)
 {
-	return (tcx->tc_feats & BTR_FEAT_UINT_KEY);
+	return BTR_IS_UINT_KEY(tcx->tc_feats);
 }
 
 static bool
@@ -373,24 +378,30 @@ do {									\
 		(trace)->tr_at,	## __VA_ARGS__);			\
 } while (0)
 
+static inline int
+btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
+{
+	int size;
+
+	if (BTR_IS_DIRECT_KEY(feats))
+		return sizeof(TMMID(struct btr_node));
+
+	if (BTR_IS_UINT_KEY(feats))
+		return sizeof(uint64_t);
+
+	size = ops->to_hkey_size();
+
+	D_ASSERT(size <= DAOS_HKEY_MAX);
+	return size;
+}
+
 /**
  * Wrapper for customized tree functions
  */
 static int
 btr_hkey_size(struct btr_context *tcx)
 {
-	int size;
-
-	if (btr_is_direct_key(tcx))
-		return sizeof(TMMID(struct btr_node));
-
-	if (btr_is_int_key(tcx))
-		return sizeof(uint64_t);
-
-	size = btr_ops(tcx)->to_hkey_size(&tcx->tc_tins);
-
-	D_ASSERT(size <= DAOS_HKEY_MAX);
-	return size;
+	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
 }
 
 static void
@@ -3387,3 +3398,40 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 
 	return 0;
 }
+
+int
+dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
+		    int tree_order, struct daos_tree_overhead *ovhd)
+{
+	btr_ops_t	*ops;
+	size_t		 hkey_size;
+
+	if (ovhd == NULL) {
+		D_ERROR("Invalid ovhd argument\n");
+		return -DER_INVAL;
+	}
+
+	if (tclass >= BTR_TYPE_MAX) {
+		D_ERROR("Invalid class id: %d\n", tclass);
+		return -DER_INVAL;
+	}
+
+	ops = btr_class_registered[tclass].tc_ops;
+
+	if (ops->to_rec_msize == NULL) {
+		D_ERROR("No record meta size callback for tree class: %d\n",
+			tclass);
+		return -DER_INVAL;
+	}
+
+	hkey_size = btr_hkey_size_const(ops, ofeat);
+
+	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
+
+	ovhd->to_order = tree_order;
+	ovhd->to_node_size = alloc_overhead + sizeof(struct btr_node) +
+		(sizeof(struct btr_record) + hkey_size) * tree_order;
+
+	return 0;
+}
+

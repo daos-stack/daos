@@ -41,10 +41,16 @@
 #include <vos_layout.h>
 #include <vos_obj.h>
 
+#define VOS_CONT_ORDER		20	/* Order of container tree */
+#define VOS_OBJ_ORDER		20	/* Order of object tree */
+#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
+#define VOS_SVT_ORDER		5	/* order of single value tree */
+#define VOS_EVT_ORDER		23	/* evtree order */
+
+
 #define DAOS_VOS_VERSION 1
 
 extern struct dss_module_key vos_module_key;
-extern umem_class_id_t vos_mem_class;
 
 #define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
@@ -55,6 +61,11 @@ extern umem_class_id_t vos_mem_class;
 
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
+/*
+ * When aggregate merge window reaches this size threshold, it will stop
+ * growing and trigger window flush immediately.
+ */
+#define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -116,6 +127,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/** The time in second when commit the DTXs for the last time. */
+	uint64_t		vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -672,16 +685,16 @@ static inline bool vos_recx_is_equal(daos_recx_t *recx1, daos_recx_t *recx2)
 	return !(memcmp(recx1, recx2, sizeof(daos_recx_t)));
 }
 
-static inline PMEMobjpool *
-vos_cont2pop(struct vos_container *cont)
+static inline struct vos_pool *
+vos_cont2pool(struct vos_container *cont)
 {
-	return vos_pool_ptr2pop(cont->vc_pool);
+	return cont->vc_pool;
 }
 
-static inline PMEMobjpool *
-vos_obj2pop(struct vos_object *obj)
+static inline struct vos_pool *
+vos_obj2pool(struct vos_object *obj)
 {
-	return vos_cont2pop(obj->obj_cont);
+	return vos_cont2pool(obj->obj_cont);
 }
 
 static inline struct umem_attr *
@@ -850,6 +863,36 @@ vos_hdl2iter(daos_handle_t hdl)
 	return (struct vos_iterator *)hdl.cookie;
 }
 
+/** iterator for dkey/akey/recx */
+struct vos_obj_iter {
+	/* public part of the iterator */
+	struct vos_iterator	 it_iter;
+	/** handle of iterator */
+	daos_handle_t		 it_hdl;
+	/** condition of the iterator: epoch logic expression */
+	vos_it_epc_expr_t	 it_epc_expr;
+	/** iterator flags */
+	uint32_t		 it_flags;
+	/** condition of the iterator: epoch range */
+	daos_epoch_range_t	 it_epr;
+	/** condition of the iterator: attribute key */
+	daos_key_t		 it_akey;
+	/* reference on the object */
+	struct vos_object	*it_obj;
+};
+
+static inline struct vos_obj_iter *
+vos_iter2oiter(struct vos_iterator *iter)
+{
+	return container_of(iter, struct vos_obj_iter, it_iter);
+}
+
+static inline struct vos_obj_iter *
+vos_hdl2oiter(daos_handle_t hdl)
+{
+	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound key.
@@ -889,6 +932,13 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	       daos_iov_t *val_iov, int flags);
+
+/* vos_io.c */
+uint16_t
+vos_media_select(struct vos_object *obj, daos_iod_type_t type,
+		 daos_size_t size);
+int
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be
  * contiguous in the struct being updated.  This is ensured at present by

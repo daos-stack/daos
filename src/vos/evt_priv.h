@@ -48,8 +48,8 @@ struct evt_iterator {
 	unsigned int			it_state;
 	/** options for iterator */
 	unsigned int			it_options;
-	/** true if forward iterator */
-	bool				it_forward;
+	unsigned int			it_forward:1,
+					it_skip_move:1;
 	/** index */
 	int				it_index;
 	/** For sorted iterators */
@@ -190,6 +190,39 @@ evt_tx_end(struct evt_context *tcx, int rc)
 
 	return umem_tx_commit(evt_umm(tcx));
 }
+
+/** Helper function for calculating the needed csum buffer length */
+daos_size_t
+evt_csum_buf_len(const struct evt_context *tcx,
+		 const struct evt_extent *extent);
+
+/** Helper function for calculating the needed csums for an extent */
+daos_size_t
+evt_csum_count(const struct evt_context *tcx,
+		 const struct evt_extent *extent);
+
+/** Helper function for dividing a range (lo-hi) into number of chunks */
+daos_size_t
+csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
+		 daos_off_t inob);
+
+/**
+ * Copy the csum from the evt_entry into the evt_desc. It is expected that
+ * enough memory was allocated for the evt_desc to account for the csums.
+ * Checksums will be placed right after the defined structure.
+ */
+void
+evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
+		   const struct evt_entry_in *ent);
+
+/**
+ * Fill the entry's checksum from the evt_desc. It is expected that the entry's
+ * full and requested extent are already filled. This copies the checksum
+ * address to the entry.
+ */
+void
+evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
+		    struct evt_entry *entry);
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want

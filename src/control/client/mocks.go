@@ -21,13 +21,57 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
 	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"google.golang.org/grpc/connectivity"
 )
+
+// implement mock/stub behaviour for Control
+type mockControl struct {
+	address   string
+	connState connectivity.State
+	features  []*pb.Feature
+	ctrlrs    NvmeControllers
+	modules   ScmModules
+}
+
+func (m *mockControl) connect(addr string) error {
+	m.address = addr
+	return nil
+}
+func (m *mockControl) disconnect() error { return nil }
+func (m *mockControl) connected() (connectivity.State, bool) {
+	return m.connState, checkState(m.connState)
+}
+func (m *mockControl) getAddress() string { return m.address }
+func (m *mockControl) listAllFeatures() (FeatureMap, error) {
+	fm := make(FeatureMap)
+	for _, f := range m.features {
+		fm[f.Fname.Name] = fmt.Sprintf(
+			"category %s, %s", f.Category.Category, f.Description)
+	}
+	return fm, nil
+}
+func (m *mockControl) listNvmeCtrlrs() (NvmeControllers, error) {
+	return m.ctrlrs, nil
+}
+func (m *mockControl) listScmModules() (ScmModules, error) {
+	return m.modules, nil
+}
+func (m *mockControl) killRank(uuid string, rank uint32) error {
+	return nil
+}
+
+func newMockControl(
+	address string, state connectivity.State, features []*pb.Feature,
+	ctrlrs NvmeControllers, modules ScmModules) (Control, error) {
+
+	return &mockControl{address, state, features, ctrlrs, modules}, nil
+}
 
 // NewClientFM provides a mock ClientFeatureMap for testing.
 func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
@@ -38,7 +82,7 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
 			fMap[f.Fname.Name] = fmt.Sprintf(
 				"category %s, %s", f.Category.Category, f.Description)
 		}
-		cf[addr] = fMap
+		cf[addr] = FeatureResult{fMap, nil}
 	}
 	return cf
 }
@@ -47,7 +91,7 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
 func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
 	cMap := make(ClientNvmeMap)
 	for _, addr := range addrs {
-		cMap[addr] = ctrlrs
+		cMap[addr] = NvmeResult{ctrlrs, nil}
 	}
 	return cMap
 }
@@ -56,7 +100,7 @@ func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
 func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
 	cMap := make(ClientScmMap)
 	for _, addr := range addrs {
-		cMap[addr] = mms
+		cMap[addr] = ScmResult{mms, nil}
 	}
 	return cMap
 }

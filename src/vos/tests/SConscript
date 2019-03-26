@@ -14,15 +14,19 @@ def scons():
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
 
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
-                    denv.Object("vts_common.c"), 'vts_aggregate.c']
+                    denv.Object("vts_common.c"), 'vts_aggregate.c',
+                    'csum_extent_tests.c']
     vos_tests = daos_build.program(denv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
     denv.AppendUnique(CPPPATH=["../../common/tests"])
     evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils],
                                  LIBS=libraries)
 
-    denv.Install('$PREFIX/bin/', vos_tests)
-    denv.Install('$PREFIX/bin/', evt_ctl)
+    vos_size = daos_build.program(denv, 'vos_size', ['vos_size.c'],
+                                  LIBS=libraries)
+
+    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, 'vos_size.py'])
+    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
 
 if __name__ == "SCons.Script":
     scons()

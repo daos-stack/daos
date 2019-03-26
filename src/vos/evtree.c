@@ -184,13 +184,24 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 	wt_diff->wt_minor = wt1->wt_minor - wt2->wt_minor;
 }
 
-/** Initialize an entry list */
-void
-evt_ent_array_init(struct evt_entry_array *ent_array)
+/** Internal function for initializing an array.   Using 0 for max
+ *  ultimately cause it to be set to maximum size needed by
+ *  evt_find_visible.
+ */
+static inline void
+evt_ent_array_init_internal(struct evt_entry_array *ent_array, int max)
 {
 	memset(ent_array, 0, sizeof(*ent_array));
 	ent_array->ea_ents = ent_array->ea_embedded_ents;
 	ent_array->ea_size = EVT_EMBEDDED_NR;
+	ent_array->ea_max = max;
+}
+
+/** Initialize an entry list */
+void
+evt_ent_array_init(struct evt_entry_array *ent_array)
+{
+	evt_ent_array_init_internal(ent_array, 0);
 }
 
 /** Finalize an entry list */
@@ -209,10 +220,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 static void
 ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
 {
-	size_t size;
-
-	size = sizeof(ent_array->ea_ents[0]) * ent_array->ea_ent_nr;
-	memset(ent_array->ea_ents, 0, size);
 	ent_array->ea_ent_nr = 0;
 	ent_array->ea_inob = tcx->tc_inob;
 }
@@ -236,6 +243,11 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	return 0;
 }
 
+static inline struct evt_list_entry *
+evt_array_entry2le(struct evt_entry *ent)
+{
+	return container_of(ent, struct evt_list_entry, le_ent);
+}
 
 /**
  * Take an embedded entry, or allocate a new entry if all embedded entries
@@ -247,6 +259,7 @@ static int
 ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		struct evt_entry **entry, bool notify_realloc)
 {
+	struct evt_list_entry	*le;
 	uint32_t		 size;
 	int			 i;
 	int			 rc;
@@ -277,6 +290,10 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		ent_array->ea_inob = tcx->tc_inob;
 	}
 	if (ent_array->ea_ent_nr == ent_array->ea_size) {
+		/** We should never exceed the maximum number of entries. */
+		D_ASSERTF(ent_array->ea_size != ent_array->ea_max,
+			  "Maximum number of ent_array entries exceeded: %d\n",
+			  ent_array->ea_max);
 		size = ent_array->ea_size * 4;
 		if (size < EVT_MIN_ALLOC)
 			size = EVT_MIN_ALLOC;
@@ -287,12 +304,20 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		if (rc != 0)
 			return rc;
 
+		D_ASSERTF(ent_array->ea_ent_nr < ent_array->ea_size,
+			  "%u >= %u, depth:%u, order:%u\n",
+			  ent_array->ea_ent_nr, ent_array->ea_size,
+			  tcx->tc_depth, tcx->tc_order);
+
 		if (notify_realloc)
 			return -DER_AGAIN; /* Invalidate any cached state */
 	}
 	D_ASSERT(ent_array->ea_ent_nr < ent_array->ea_size);
 
 	*entry = evt_ent_array_get(ent_array, ent_array->ea_ent_nr++);
+	le = evt_array_entry2le(*entry);
+	memset(le, 0, sizeof(*le));
+
 	return 0;
 }
 
@@ -389,21 +414,24 @@ int evt_ent_list_cmp_covered(const void *p1, const void *p2)
 	return evt_ent_cmp(&le1->le_ent, &le2->le_ent, EVT_COVERED);
 }
 
-static inline struct evt_entry *
-evt_array_get_list_entry(d_list_t *link)
+static inline struct evt_list_entry *
+evt_array_link2le(d_list_t *link)
 {
-	struct evt_list_entry *le = d_list_entry(link, struct evt_list_entry,
-						 le_link);
+	return d_list_entry(link, struct evt_list_entry, le_link);
+}
+
+static inline struct evt_entry *
+evt_array_link2entry(d_list_t *link)
+{
+	struct evt_list_entry *le = evt_array_link2le(link);
 
 	return &le->le_ent;
 }
 
 static inline d_list_t *
-evt_array_get_entry_link(struct evt_entry *ent)
+evt_array_entry2link(struct evt_entry *ent)
 {
-	struct evt_list_entry *le;
-
-	le = container_of(ent, struct evt_list_entry, le_ent);
+	struct evt_list_entry *le = evt_array_entry2le(ent);
 
 	return &le->le_link;
 }
@@ -418,7 +446,7 @@ evt_find_next_visible(struct evt_entry *this_ent, d_list_t *head,
 	struct evt_entry	*next_ent;
 
 	while (*next != head) {
-		next_ent = evt_array_get_list_entry(*next);
+		next_ent = evt_array_link2entry(*next);
 
 		if (next_ent->en_epoch > this_ent->en_epoch)
 			return next_ent; /* next_ent is a later update */
@@ -452,7 +480,8 @@ evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
 		struct evt_entry *next, struct evt_entry *split,
 		struct evt_entry *covered)
 {
-	daos_off_t	 diff;
+	struct evt_list_entry	*le;
+	daos_off_t		 diff;
 
 	*covered = *split = *current;
 	diff = next->en_sel_ext.ex_hi + 1 - split->en_sel_ext.ex_lo;
@@ -466,6 +495,9 @@ evt_split_entry(struct evt_context *tcx, struct evt_entry *current,
 	evt_ent_addr_update(tcx, split, diff);
 	evt_ent_addr_update(tcx, covered,
 			    evt_extent_width(&current->en_sel_ext));
+	/* the split entry may also be covered so store a back pointer */
+	le = evt_array_entry2le(split);
+	le->le_prev = covered;
 }
 
 static d_list_t *
@@ -476,10 +508,10 @@ evt_insert_sorted(struct evt_entry *this_ent, d_list_t *head, d_list_t *current)
 	d_list_t		*this_link;
 	int			 cmp;
 
-	this_link = evt_array_get_entry_link(this_ent);
+	this_link = evt_array_entry2link(this_ent);
 
 	while (current != head) {
-		next_ent = evt_array_get_list_entry(current);
+		next_ent = evt_array_link2entry(current);
 		cmp = evt_ent_cmp(this_ent, next_ent, 0);
 		if (cmp < 0) {
 			d_list_add(this_link, current->prev);
@@ -495,6 +527,44 @@ out:
 }
 
 static int
+evt_truncate_next(struct evt_context *tcx, struct evt_entry_array *ent_array,
+		  struct evt_entry *this_ent, struct evt_entry *next_ent)
+{
+	struct evt_list_entry	*le;
+	struct evt_entry	*temp_ent;
+	daos_size_t		 diff;
+	int			 rc;
+
+	le = evt_array_entry2le(next_ent);
+	if (le->le_prev &&
+	    le->le_prev->en_visibility == (EVT_COVERED | EVT_PARTIAL)) {
+		/* The truncated part has same visibility as prior split */
+		temp_ent = le->le_prev;
+		D_ASSERTF(temp_ent->en_sel_ext.ex_hi + 1 ==
+			  next_ent->en_sel_ext.ex_lo,
+			  "next_ent "DF_ENT" is not contiguous "DF_ENT"\n",
+			  DP_ENT(next_ent), DP_ENT(temp_ent));
+	} else {
+		/* allocate a record for truncated entry */
+		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+		if (rc != 0)
+			return rc;
+
+		*temp_ent = *next_ent;
+		temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
+	}
+
+	le->le_prev = temp_ent;
+	next_ent->en_visibility |= EVT_PARTIAL;
+	diff = this_ent->en_sel_ext.ex_hi + 1 - next_ent->en_sel_ext.ex_lo;
+	next_ent->en_sel_ext.ex_lo = this_ent->en_sel_ext.ex_hi + 1;
+	temp_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_lo - 1;
+	evt_ent_addr_update(tcx, next_ent, diff);
+
+	return 0;
+}
+
+static int
 evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 int *num_visible)
 {
@@ -507,7 +577,6 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	d_list_t		 covered;
 	d_list_t		*current;
 	d_list_t		*next;
-	daos_size_t		 diff;
 	bool			 insert;
 	int			 rc = 0;
 
@@ -517,21 +586,22 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	/* Now place all entries sorted in covered list */
 	evt_ent_array_for_each(this_ent, ent_array) {
-		next = evt_array_get_entry_link(this_ent);
+		next = evt_array_entry2link(this_ent);
 		d_list_add_tail(next, &covered);
 	}
 
 	/* Now uncover entries */
 	current = covered.next;
 	/* Some compilers can't tell that this_ent will be initialized */
-	this_ent = evt_array_get_list_entry(current);
+	this_ent = evt_array_link2entry(current);
 	insert = true;
 	next = current->next;
 
 	while (next != &covered) {
 		if (insert) {
-			this_ent = evt_array_get_list_entry(current);
+			this_ent = evt_array_link2entry(current);
 			this_ent->en_visibility |= EVT_VISIBLE;
+			evt_array_entry2le(this_ent)->le_prev = NULL;
 			(*num_visible)++;
 		}
 
@@ -558,22 +628,19 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 			continue;
 		}
 
-		/* allocate a record for truncated entry */
-		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
-		if (rc != 0)
-			return rc;
-
 		if (next_ent->en_epoch < this_ent->en_epoch) {
 			/* Case #2, next rect is partially under this rect,
-			 * Truncate left end of next_rec, reinsert.
+			 * Truncate left end of next_ent, reinsert.
+			 *
+			 * This case is complicated by the fact that the
+			 * left end may just be an extension of a previously
+			 * split but covered entry.
 			 */
-			*temp_ent = *next_ent;
-			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
-			next_ent->en_visibility |= EVT_PARTIAL;
-			diff = this_ext->ex_hi + 1 - next_ext->ex_lo;
-			next_ext->ex_lo = this_ext->ex_hi + 1;
-			temp_ent->en_sel_ext.ex_hi = next_ext->ex_lo - 1;
-			evt_ent_addr_update(tcx, next_ent, diff);
+			rc = evt_truncate_next(tcx, ent_array, this_ent,
+					       next_ent);
+			if (rc != 0)
+				return rc;
+
 			/* current now points at next_ent.  Remove it and
 			 * reinsert it in the list in case truncation moved
 			 * it to a new position
@@ -585,8 +652,16 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 			 * inserting this_ent again
 			 */
 			insert = false;
-		} else if (next_ext->ex_hi >= this_ext->ex_hi) {
-			/* Case #3, truncate entry */
+			continue;
+		}
+
+		/* allocate a record for truncated entry */
+		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
+		if (rc != 0)
+			return rc;
+
+		if (next_ext->ex_hi >= this_ext->ex_hi) {
+			/* Case #3, truncate this_ent */
 			*temp_ent = *this_ent;
 			temp_ent->en_visibility = EVT_COVERED | EVT_PARTIAL;
 			this_ent->en_visibility |= EVT_PARTIAL;
@@ -611,7 +686,7 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		}
 	}
 
-	this_ent = evt_array_get_list_entry(current);
+	this_ent = evt_array_link2entry(current);
 	D_ASSERT(!evt_flags_equal(this_ent->en_visibility, EVT_COVERED));
 	this_ent->en_visibility |= EVT_VISIBLE;
 	(*num_visible)++;
@@ -1624,7 +1699,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
-	dst_desc->dc_csum = ent->ei_csum;
+	evt_desc_csum_fill(tcx, dst_desc, ent);
 
 	return 0;
 }
@@ -1652,7 +1727,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		return -DER_INVAL;
 	}
 
-	evt_ent_array_init(&ent_array);
+	evt_ent_array_init_internal(&ent_array, 1);
 
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
@@ -1741,7 +1816,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	entry->en_csum = desc->dc_csum;
+	evt_entry_csum_fill(tcx, desc, entry);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -1771,14 +1846,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	ent_array_reset(tcx, ent_array);
+	if (ent_array == &tcx->tc_iter.it_entries)
+		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
 	nd_off = tcx->tc_root->tr_node;
 	while (1) {
-		struct evt_node	*node;
-		bool		 leaf;
+		struct evt_node_entry	*ne;
+		struct evt_node		*node;
+		bool			 leaf;
 
 		node = evt_off2node(tcx, nd_off);
 		leaf = evt_node_is_leaf(tcx, node);
@@ -1789,13 +1866,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			DP_RECT(evt_node_mbr_get(tcx, node)), nd_off, level, at,
 			leaf);
 
-		for (i = at; i < node->tn_nr; i++) {
+		ne = evt_node_entry_at(tcx, node, at);
+
+		for (i = at; i < node->tn_nr; i++, ne++) {
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
 			int			 time_overlap;
 			int			 range_overlap;
 
-			rtmp = evt_node_rect_at(tcx, node, i);
+			rtmp = &ne->ne_rect;
+
 			V_TRACE(DB_TRACE, " rect[%d]="DF_RECT"\n",
 				i, DP_RECT(rtmp));
 
@@ -2327,15 +2407,35 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		TMMID(struct evt_desc)	 desc_mmid;
 		struct evt_desc		*desc;
 
+		/**
+		 * csum len, type, and chunksize will be a configuration stored
+		 * in the container meta data. for now trust the entity checksum
+		 * to have correct values.
+		 */
+		const daos_csum_buf_t *csum = &ent->ei_csum;
+
+		tcx->tc_root->tr_csum_len		= csum->cs_len;
+		tcx->tc_root->tr_csum_type		= csum->cs_type;
+		tcx->tc_root->tr_csum_chunk_size	= csum->cs_chunksize;
+		uint32_t csum_buf_size =
+			evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+
+		if (csum_buf_size > 0)
+			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
+						"for checksum", csum_buf_size);
+
+		size_t allocation_size = sizeof(struct evt_desc) +
+					 csum_buf_size;
+
 		desc_mmid = umem_zalloc_typed(evt_umm(tcx), struct evt_desc,
-					     sizeof(struct evt_desc));
+					     allocation_size);
 		if (TMMID_IS_NULL(desc_mmid))
 			return -DER_NOMEM;
 		ne->ne_child = desc_mmid.oid.off;
 		desc = evt_tmmid2ptr(tcx, desc_mmid);
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		desc->dc_csum = ent->ei_csum;
+		evt_desc_csum_fill(tcx, desc, ent);
 		desc->dc_ver = ent->ei_ver;
 	} else {
 		ne->ne_child = in_off;
@@ -2657,7 +2757,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 		return -DER_NO_HDL;
 
 	/* NB: This function presently only supports exact match on extent. */
-	evt_ent_array_init(&ent_array);
+	evt_ent_array_init_internal(&ent_array, 1);
 
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
@@ -2691,4 +2791,90 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	 * with 1 entry in the list
 	 */
 	return evt_tx_end(tcx, rc);
+}
+
+daos_size_t
+csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
+		 daos_off_t inob)
+{
+	if (chunk_size == 0)
+		return 0;
+	lo *= inob;
+	hi *= inob;
+
+	/** Align to chunk size */
+	lo = lo - lo % chunk_size;
+	hi = hi + chunk_size - hi % chunk_size;
+	daos_off_t width = hi - lo;
+
+	return width / chunk_size;
+}
+
+daos_size_t
+evt_csum_count(const struct evt_context *tcx,
+	       const struct evt_extent *extent)
+{
+	return csum_chunk_count(tcx->tc_root->tr_csum_chunk_size,
+				extent->ex_lo,
+				extent->ex_hi, tcx->tc_root->tr_inob);
+}
+
+daos_size_t
+evt_csum_buf_len(const struct evt_context *tcx,
+		 const struct evt_extent *extent)
+{
+	if (tcx->tc_root->tr_csum_chunk_size == 0)
+		return 0;
+	return tcx->tc_root->tr_csum_len * evt_csum_count(tcx, extent);
+}
+
+void
+evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
+		   const struct evt_entry_in *ent)
+{
+	const daos_csum_buf_t *csum = &ent->ei_csum;
+	daos_size_t csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+
+	D_ASSERT(csum->cs_buf_len >= csum_buf_len);
+	memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+}
+
+void
+evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
+		    struct evt_entry *entry)
+{
+	if (tcx->tc_root->tr_csum_len > 0 &&
+		tcx->tc_root->tr_csum_chunk_size) {
+		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
+		daos_off_t lo_offset = evt_entry_selected_offset(entry);
+		uint32_t csum_count = evt_csum_count(tcx, &entry->en_ext);
+		uint32_t chunk_len = tcx->tc_root->tr_csum_chunk_size;
+
+		uint64_t csum_start = lo_offset / chunk_len;
+
+		entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
+		entry->en_csum.cs_nr = csum_count;
+		entry->en_csum.cs_buf_len = csum_count *
+			tcx->tc_root->tr_csum_len;
+		entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
+		entry->en_csum.cs_chunksize = chunk_len;
+		entry->en_csum.cs_csum =
+			&desc->pt_csum[0] + csum_start *
+					    tcx->tc_root->tr_csum_len;
+	}
+}
+
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd)
+{
+	if (ovhd == NULL) {
+		D_ERROR("Invalid ovhd argument\n");
+		return -DER_INVAL;
+	}
+
+	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
+	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
+		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_order = tree_order;
+	return 0;
 }
