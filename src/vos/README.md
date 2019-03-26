@@ -472,7 +472,7 @@ A special aggregation ULT processes aggregation, yielding frequently to avoid bl
 
 <a id="79"></a>
 
-## VOS Checksum Management (TODO)
+## VOS Checksum Management (TO BE UPDATED)
 
 One of the guarantees that VOS provides is end-to-end data integrity.  Data corruption in VOS can happen while reading or writing data due to a variety of reasons, including leaks or failures in persistent memory, or during data transmission through the wire. VOS supports data integrity check with checksums.
 
