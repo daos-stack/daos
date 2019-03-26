@@ -77,7 +77,7 @@ struct dtx_cos_key {
 };
 
 static int
-dtx_cos_hkey_size(struct btr_instance *tins)
+dtx_cos_hkey_size(void)
 {
 	return sizeof(struct dtx_cos_key);
 }

@@ -39,7 +39,7 @@ struct dtx_rec_bundle {
 };
 
 static int
-dtx_hkey_size(struct btr_instance *tins)
+dtx_hkey_size(void)
 {
 	return sizeof(struct daos_tx_id);
 }

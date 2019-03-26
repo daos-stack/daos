@@ -37,7 +37,7 @@
 #define SMD_DTAB_ORDER 32
 
 static int
-dtab_df_hkey_size(struct btr_instance *tins)
+dtab_df_hkey_size(void)
 {
 	return sizeof(struct d_uuid);
 }

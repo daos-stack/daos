@@ -617,4 +617,15 @@ int evt_iter_delete(daos_handle_t ih, void *value_out);
 int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
 		   struct evt_entry *entry, daos_anchor_t *anchor);
 
+/** Get overhead constants for an evtree
+ *
+ * \param alloc_overhead[IN]	Expected per-allocation overhead in bytes
+ * \param tree_order[IN]	The expected tree order used in creation
+ * \param ovhd[OUT]		Struct to fill with overheads
+ *
+ * \return 0 on success, error otherwise
+ */
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd);
+
 #endif /* __DAOS_EV_TREE_H__ */

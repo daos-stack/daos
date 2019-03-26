@@ -24,3 +24,6 @@
 package main
 
 // TODO: provide implementation to this placeholder
+
+// PoolCmd is the struct representing the top-level pool subcommand.
+type PoolCmd struct{}
