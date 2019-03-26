@@ -445,12 +445,11 @@ void sanity(void)
 	int fd;
 
 	fflush(stdout);
-	len = strlen(mount_dir);
-	asprintf(&buf, "%s/sanity", mount_dir);
+	len = asprintf(&buf, "%s/sanity", mount_dir);
+	CU_ASSERT_NOT_EQUAL_FATAL(len, -1);
 	CU_ASSERT_PTR_NOT_NULL(buf);
 
 	unlink(buf);
-	len = strlen(buf);
 	fd = open(buf, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 	CU_ASSERT_NOT_EQUAL_FATAL(fd, -1);
 
