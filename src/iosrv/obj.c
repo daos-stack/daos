@@ -54,11 +54,17 @@ ds_obj_retry_cb(tse_task_t *task, void *arg)
 	 * automatically, so let's just keep refreshing the
 	 * layout.
 	 */
-	D_DEBUG(DB_TRACE, "retry task %p\n", task);
 
 	/* let's check if the pool_map has been changed */
-	dc_obj_layout_refresh(*oh);
+	rc = dc_obj_layout_refresh(*oh);
+	if (rc) {
+		D_ERROR("task %p, dc_obj_layout_refresh failed rc %d\n",
+			task, rc);
+		task->dt_result = rc;
+		return rc;
+	}
 
+	D_DEBUG(DB_TRACE, "retry task %p\n", task);
 	rc = dc_task_resched(task);
 	if (rc != 0) {
 		D_ERROR("Failed to re-init task (%p)\n", task);

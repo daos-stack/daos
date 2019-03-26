@@ -867,7 +867,8 @@ dc_obj_query(tse_task_t *task)
 int
 dc_obj_layout_refresh(daos_handle_t oh)
 {
-	struct dc_object *obj;
+	struct dc_object	*obj;
+	int			 rc;
 
 	obj = obj_hdl2ptr(oh);
 	if (obj == NULL) {
@@ -875,11 +876,11 @@ dc_obj_layout_refresh(daos_handle_t oh)
 		return -DER_NO_HDL;
 	}
 
-	obj_layout_refresh(obj);
+	rc = obj_layout_refresh(obj);
 
 	obj_decref(obj);
 
-	return 0;
+	return rc;
 }
 
 static int
