@@ -1043,6 +1043,7 @@ expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 
 	/* Create an exact duplicate */
 	D_ALLOC(new_ace, daos_ace_get_size(ace[type]));
+	assert_non_null(new_ace);
 	memcpy(new_ace, ace[type],
 			daos_ace_get_size(ace[type]));
 
@@ -1956,6 +1957,41 @@ test_acl_is_valid_bad_ordering(void **state)
 	expect_acl_invalid_bad_ordering(DAOS_ACL_EVERYONE, DAOS_ACL_OWNER);
 }
 
+
+static void
+test_acl_random_buffer(void **state)
+{
+	size_t	bufsize, i;
+	uint8_t	*buf;
+	bool	result;
+
+	/* Fuzz test - random content */
+	srand((unsigned int)time(NULL));
+
+	bufsize = (size_t)(rand() % UINT16_MAX);
+	D_ALLOC(buf, bufsize);
+	assert_non_null(buf);
+
+	for (i = 0; i < bufsize; i++) {
+		buf[i] = rand() % UINT8_MAX;
+	}
+
+	result = daos_acl_is_valid((struct daos_acl *)buf);
+	/*
+	 * In theory it's possible (but unlikely) to run into a case where the
+	 * random garbage represents something valid. Interesting to see what
+	 * the content actually was.
+	 */
+	if (result) {
+		printf("Surprise! The random buffer was a valid ACL:\n");
+		daos_acl_dump((struct daos_acl *)buf);
+	}
+
+	assert_false(result);
+
+	D_FREE(buf);
+}
+
 int
 main(void)
 {
@@ -2052,7 +2088,8 @@ main(void)
 		cmocka_unit_test(test_acl_is_valid_duplicate_ace_type),
 		cmocka_unit_test(test_acl_is_valid_duplicate_user),
 		cmocka_unit_test(test_acl_is_valid_duplicate_group),
-		cmocka_unit_test(test_acl_is_valid_bad_ordering)
+		cmocka_unit_test(test_acl_is_valid_bad_ordering),
+		cmocka_unit_test(test_acl_random_buffer)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
