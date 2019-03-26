@@ -30,6 +30,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <time.h>
 #include <daos_types.h>
 #include <daos_security.h>
 #include <gurt/common.h>
@@ -1834,6 +1835,127 @@ test_acl_is_valid_later_ace_invalid(void **state)
 	free_all_aces(ace, num_aces);
 }
 
+static void
+test_acl_is_valid_duplicate_ace_type(void **state)
+{
+	struct daos_acl *acl;
+	size_t		num_aces = 3;
+	struct daos_ace *ace[num_aces];
+
+	ace[0] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
+	ace[1] = daos_ace_create(DAOS_ACL_USER, "user1@");
+	ace[2] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
+	acl = daos_acl_create(ace, num_aces);
+
+	assert_false(daos_acl_is_valid(acl));
+
+	daos_acl_free(acl);
+	free_all_aces(ace, num_aces);
+}
+
+static void
+test_acl_is_valid_duplicate_user(void **state)
+{
+	struct daos_acl *acl;
+	size_t		num_aces = 3;
+	struct daos_ace *ace[num_aces];
+
+	ace[0] = daos_ace_create(DAOS_ACL_USER, "user1@");
+	ace[1] = daos_ace_create(DAOS_ACL_USER, "anotheruser@");
+	ace[2] = daos_ace_create(DAOS_ACL_USER, "user1@");
+	acl = daos_acl_create(ace, num_aces);
+
+	assert_false(daos_acl_is_valid(acl));
+
+	daos_acl_free(acl);
+	free_all_aces(ace, num_aces);
+}
+
+static void
+test_acl_is_valid_duplicate_group(void **state)
+{
+	struct daos_acl *acl;
+	size_t		num_aces = 3;
+	struct daos_ace *ace[num_aces];
+
+	ace[0] = daos_ace_create(DAOS_ACL_GROUP, "grp1@");
+	ace[1] = daos_ace_create(DAOS_ACL_GROUP, "anothergroup@");
+	ace[2] = daos_ace_create(DAOS_ACL_GROUP, "grp1@");
+	acl = daos_acl_create(ace, num_aces);
+
+	assert_false(daos_acl_is_valid(acl));
+
+	daos_acl_free(acl);
+	free_all_aces(ace, num_aces);
+}
+
+static struct daos_acl *
+acl_create_in_exact_order(struct daos_ace *ace[], size_t num_aces)
+{
+	struct daos_acl	*acl;
+	uint8_t		*pen;
+	size_t		i;
+
+	acl = daos_acl_create(ace, num_aces);
+
+	/* Create probably reordered our input - rewrite in exact order */
+	pen = acl->dal_ace;
+	for (i = 0; i < num_aces; i++) {
+		ssize_t ace_len = daos_ace_get_size(ace[i]);
+
+		assert_true(ace_len > 0);
+
+		memcpy(pen, ace[i], ace_len);
+		pen += ace_len;
+	}
+
+	return acl;
+}
+
+static bool
+needs_name(enum daos_acl_principal_type type)
+{
+	return (type == DAOS_ACL_USER || type == DAOS_ACL_GROUP);
+}
+
+static void
+expect_acl_invalid_bad_ordering(enum daos_acl_principal_type type1,
+		enum daos_acl_principal_type type2)
+{
+	struct daos_acl *acl;
+	size_t		num_aces = 2;
+	struct daos_ace *ace[num_aces];
+	const char	*name1 = NULL;
+	const char	*name2 = NULL;
+
+	if (needs_name(type1)) {
+		name1 = "name1@";
+	}
+
+	if (needs_name(type2)) {
+		name2 = "name2@";
+	}
+
+	ace[0] = daos_ace_create(type1, name1);
+	ace[1] = daos_ace_create(type2, name2);
+	acl = acl_create_in_exact_order(ace, num_aces);
+
+	assert_false(daos_acl_is_valid(acl));
+
+	daos_acl_free(acl);
+	free_all_aces(ace, num_aces);
+}
+
+static void
+test_acl_is_valid_bad_ordering(void **state)
+{
+	expect_acl_invalid_bad_ordering(DAOS_ACL_USER, DAOS_ACL_OWNER);
+	expect_acl_invalid_bad_ordering(DAOS_ACL_OWNER_GROUP, DAOS_ACL_USER);
+	expect_acl_invalid_bad_ordering(DAOS_ACL_GROUP, DAOS_ACL_OWNER_GROUP);
+	expect_acl_invalid_bad_ordering(DAOS_ACL_EVERYONE, DAOS_ACL_GROUP);
+	expect_acl_invalid_bad_ordering(DAOS_ACL_EVERYONE, DAOS_ACL_OWNER);
+}
+
 int
 main(void)
 {
@@ -1926,7 +2048,11 @@ main(void)
 		cmocka_unit_test(test_acl_is_valid_len_unaligned),
 		cmocka_unit_test(test_acl_is_valid_one_invalid_ace),
 		cmocka_unit_test(test_acl_is_valid_valid_aces),
-		cmocka_unit_test(test_acl_is_valid_later_ace_invalid)
+		cmocka_unit_test(test_acl_is_valid_later_ace_invalid),
+		cmocka_unit_test(test_acl_is_valid_duplicate_ace_type),
+		cmocka_unit_test(test_acl_is_valid_duplicate_user),
+		cmocka_unit_test(test_acl_is_valid_duplicate_group),
+		cmocka_unit_test(test_acl_is_valid_bad_ordering)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

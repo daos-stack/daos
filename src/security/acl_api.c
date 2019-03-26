@@ -24,6 +24,7 @@
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
+#include <gurt/hash.h>
 #include <stdio.h>
 
 /*
@@ -544,21 +545,156 @@ daos_acl_dump(struct daos_acl *acl)
 
 }
 
-static bool
+/*
+ * Internal structure for hash table entries
+ */
+struct ace_hash_entry {
+	d_list_t	entry;
+	int		refcount;
+	struct daos_ace	*ace;
+};
+
+struct ace_hash_entry *
+ace_hash_entry(d_list_t *rlink)
+{
+	return (struct ace_hash_entry *)container_of(rlink,
+			struct ace_hash_entry, entry);
+}
+
+/*
+ * Key comparison for hash table - Checks whether the principals match.
+ * Body of the ACE doesn't need to match.
+ */
+bool
+hash_ace_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
+		 const void *key, unsigned int ksize)
+{
+	struct daos_ace		*ace;
+	struct ace_hash_entry	*entry;
+
+	entry = ace_hash_entry(rlink);
+	ace = (struct daos_ace *)key;
+
+	return principals_match(ace, entry->ace);
+}
+
+void
+hash_ace_add_ref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ace_hash_entry *entry;
+
+	entry = ace_hash_entry(rlink);
+	entry->refcount++;
+}
+
+bool
+hash_ace_dec_ref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ace_hash_entry *entry;
+
+	entry = ace_hash_entry(rlink);
+	entry->refcount--;
+
+	return entry->refcount <= 0;
+}
+
+void
+hash_ace_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ace_hash_entry *entry;
+
+	entry = ace_hash_entry(rlink);
+	D_FREE(entry);
+}
+
+/*
+ * Checks if the given daos_ace is a duplicate of one already we've already
+ * seen.
+ */
+static int
+check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
+{
+	struct ace_hash_entry	*entry;
+	d_list_t		*link;
+	int			rc;
+
+	D_ALLOC_PTR(entry);
+	if(entry == NULL) {
+		D_ERROR("Failed to allocate hash table entry\n");
+		return -DER_NOMEM;
+	}
+
+	D_INIT_LIST_HEAD(&entry->entry);
+	entry->ace = ace;
+
+	link = d_hash_rec_find(found_aces, ace, daos_ace_get_size(ace));
+	if (link != NULL) { /* Duplicate */
+		hash_ace_dec_ref(found_aces, link);
+		D_FREE(entry);
+		return -DER_INVAL;
+	}
+
+	rc = d_hash_rec_insert(found_aces, ace,
+			daos_ace_get_size(ace),
+			&entry->entry, true);
+	if (rc != 0) {
+		D_ERROR("Failed to insert new hash entry, rc=%d\n", rc);
+		D_FREE(entry);
+	}
+
+	return rc;
+}
+
+/*
+ * Walks the list of ACEs and checks them for validity.
+ */
+static int
 validate_aces(struct daos_acl *acl)
 {
-	struct daos_ace *current;
+	struct daos_ace		*current;
+	int			last_type;
+	int			rc;
+	struct d_hash_table	found;
+	d_hash_table_ops_t	ops = {
+			.hop_key_cmp = hash_ace_key_cmp,
+			.hop_rec_addref = hash_ace_add_ref,
+			.hop_rec_decref = hash_ace_dec_ref,
+			.hop_rec_free = hash_ace_free
+	};
+
+	last_type = -1;
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
+			8, NULL, &ops, &found);
+	if (rc != 0) {
+		D_ERROR("Failed to create hash table, rc=%d\n", rc);
+		return rc;
+	}
 
 	current = daos_acl_get_next_ace(acl, NULL);
 	while (current != NULL) {
 		if (!daos_ace_is_valid(current)) {
-			return false;
+			rc = -DER_INVAL;
+			goto out;
 		}
 
+		/* Type order is in order of the enum */
+		if (current->dae_principal_type < last_type) {
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		rc = check_ace_is_duplicate(current, &found);
+		if (rc != 0) {
+			goto out;
+		}
+
+		last_type = current->dae_principal_type;
 		current = daos_acl_get_next_ace(acl, current);
 	}
 
-	return true;
+out:
+	d_hash_table_destroy_inplace(&found, true);
+	return rc;
 }
 
 bool
@@ -581,7 +717,7 @@ daos_acl_is_valid(struct daos_acl *acl)
 		return false;
 	}
 
-	if (!validate_aces(acl)) {
+	if (validate_aces(acl) != 0) {
 		return false;
 	}
 
