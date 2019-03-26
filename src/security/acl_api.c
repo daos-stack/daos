@@ -703,31 +703,34 @@ out:
 	return rc;
 }
 
-bool
-daos_acl_is_valid(struct daos_acl *acl)
+int
+daos_acl_validate(struct daos_acl *acl)
 {
+	int rc;
+
 	if (acl == NULL) {
-		return false;
+		return -DER_INVAL;
 	}
 
 	if (acl->dal_ver != DAOS_ACL_VERSION) {
-		return false;
+		return -DER_INVAL;
 	}
 
 	if (acl->dal_len > 0 && acl->dal_len < sizeof(struct daos_ace)) {
-		return false;
+		return -DER_INVAL;
 	}
 
 	/* overall structure must be 64-bit aligned */
 	if (acl->dal_len % 8 != 0) {
-		return false;
+		return -DER_INVAL;
 	}
 
-	if (validate_aces(acl) != 0) {
-		return false;
+	rc = validate_aces(acl);
+	if (rc != 0) {
+		return rc;
 	}
 
-	return true;
+	return 0;
 }
 
 static bool

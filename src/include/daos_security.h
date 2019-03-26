@@ -253,10 +253,12 @@ daos_acl_dump(struct daos_acl *acl);
  *
  * \param	acl	Access Control List to sanity check
  *
- * \return	True if the ACL is valid, false otherwise
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
  */
-bool
-daos_acl_is_valid(struct daos_acl *acl);
+int
+daos_acl_validate(struct daos_acl *acl);
 
 /**
  * Allocate a new Access Control Entry with an appropriately aligned principal

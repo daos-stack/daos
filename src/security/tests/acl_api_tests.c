@@ -1720,7 +1720,7 @@ test_ace_is_valid_audit_without_flags(void **state)
 static void
 test_acl_is_valid_null(void **state)
 {
-	assert_false(daos_acl_is_valid(NULL));
+	assert_int_equal(daos_acl_validate(NULL), -DER_INVAL);
 }
 
 static void
@@ -1730,7 +1730,7 @@ test_acl_is_valid_empty(void **state)
 
 	acl = daos_acl_create(NULL, 0);
 
-	assert_true(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), 0);
 
 	daos_acl_free(acl);
 }
@@ -1743,7 +1743,7 @@ expect_acl_invalid_with_version(uint16_t version)
 	acl = daos_acl_create(NULL, 0);
 	acl->dal_ver = version;
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 }
@@ -1765,7 +1765,7 @@ test_acl_is_valid_len_too_small(void **state)
 	acl = daos_acl_create(&ace, 1);
 	acl->dal_len = sizeof(struct daos_ace) - 8; /* still aligned */
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
@@ -1781,7 +1781,7 @@ test_acl_is_valid_len_unaligned(void **state)
 	acl = daos_acl_create(&ace, 1);
 	acl->dal_len = sizeof(struct daos_ace) + 1;
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
@@ -1797,7 +1797,7 @@ test_acl_is_valid_one_invalid_ace(void **state)
 	ace->dae_access_types = 1 << 7; /* invalid access type */
 	acl = daos_acl_create(&ace, 1);
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
@@ -1813,7 +1813,7 @@ test_acl_is_valid_valid_aces(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_true(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), 0);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1830,7 +1830,7 @@ test_acl_is_valid_later_ace_invalid(void **state)
 	ace[num_aces - 1]->dae_access_types = 1 << 7; /* invalid access type */
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1848,7 +1848,7 @@ test_acl_is_valid_duplicate_ace_type(void **state)
 	ace[2] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1866,7 +1866,7 @@ test_acl_is_valid_duplicate_user(void **state)
 	ace[2] = daos_ace_create(DAOS_ACL_USER, "user1@");
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1884,7 +1884,7 @@ test_acl_is_valid_duplicate_group(void **state)
 	ace[2] = daos_ace_create(DAOS_ACL_GROUP, "grp1@");
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1941,7 +1941,7 @@ expect_acl_invalid_bad_ordering(enum daos_acl_principal_type type1,
 	ace[1] = daos_ace_create(type2, name2);
 	acl = acl_create_in_exact_order(ace, num_aces);
 
-	assert_false(daos_acl_is_valid(acl));
+	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -1963,7 +1963,7 @@ test_acl_random_buffer(void **state)
 {
 	size_t	bufsize, i;
 	uint8_t	*buf;
-	bool	result;
+	int	result;
 
 	/* Fuzz test - random content */
 	srand((unsigned int)time(NULL));
@@ -1976,18 +1976,18 @@ test_acl_random_buffer(void **state)
 		buf[i] = rand() % UINT8_MAX;
 	}
 
-	result = daos_acl_is_valid((struct daos_acl *)buf);
+	result = daos_acl_validate((struct daos_acl *)buf);
 	/*
 	 * In theory it's possible (but unlikely) to run into a case where the
 	 * random garbage represents something valid. Interesting to see what
 	 * the content actually was.
 	 */
-	if (result) {
+	if (result == 0) {
 		printf("Surprise! The random buffer was a valid ACL:\n");
 		daos_acl_dump((struct daos_acl *)buf);
 	}
 
-	assert_false(result);
+	assert_int_equal(result, -DER_INVAL);
 
 	D_FREE(buf);
 }
