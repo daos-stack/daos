@@ -42,5 +42,6 @@ int dc_pool_evict(tse_task_t *task);
 int dc_pool_extend(tse_task_t *task);
 int dc_mgmt_set_params(tse_task_t *task);
 int dc_mgmt_profile(uint64_t modules, char *path, bool start);
+int dc_mgmt_query(tse_task_t *task);
 
 #endif

@@ -49,6 +49,7 @@ typedef enum {
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_POOL_ADD_REPLICAS,
 	DAOS_OPC_POOL_REMOVE_REPLICAS,
+	DAOS_OPC_QUERY,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -173,6 +174,11 @@ typedef struct {
 	const char		*grp;
 	d_rank_list_t		*svc;
 } daos_pool_evict_t;
+
+typedef struct {
+	const char		*grp;
+	d_rank_t		rank;
+} daos_query_t;
 
 typedef struct {
 	const uuid_t		uuid;

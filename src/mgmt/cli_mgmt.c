@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 		goto out_task;
 	}
 
@@ -196,6 +196,78 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 err_grp:
 	D_DEBUG(DB_MGMT, "mgmt profile: rc %d\n", rc);
 	daos_group_detach(ep.ep_grp);
+	return rc;
+}
+
+static int
+query_cp(tse_task_t *task, void *data)
+{
+	crt_rpc_t	       *rpc = *(crt_rpc_t **)data;
+	struct mgmt_query_out  *out = crt_reply_get(rpc);
+	daos_query_t	       *args = dc_task_get_args(task);
+	struct server_entry    *servers = out->qo_servers.ca_arrays;
+	int			i;
+	int			rc = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("RPC error while killing rank: %d\n", rc);
+		goto out;
+	}
+
+	D_PRINT("System: %s\n", args->grp);
+	D_PRINT("Map version: %u\n", out->qo_map_version);
+	D_PRINT("Map in sync: %s\n", out->qo_map_in_sync ? "yes" : "no");
+	D_PRINT("Servers:\n");
+	for (i = 0; i < out->qo_servers.ca_count; i++)
+		D_PRINT("\t%u\t%s\t%s\n", servers[i].se_rank,
+			servers[i].se_flags == 0 ? "OUT" : "IN",
+			servers[i].se_uri);
+
+out:
+	daos_group_detach(rpc->cr_ep.ep_grp);
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_mgmt_query(tse_task_t *task)
+{
+	daos_query_t		*args;
+	crt_endpoint_t		 ep;
+	crt_rpc_t		*rpc;
+	crt_opcode_t		 opc;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	rc = daos_group_attach(args->grp, &ep.ep_grp);
+	if (rc != 0) {
+		D_ERROR("failed to attach to group %s: %d\n", args->grp, rc);
+		goto err_task;
+	}
+
+	ep.ep_rank = args->rank;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_QUERY, DAOS_MGMT_MODULE, DAOS_MGMT_VERSION);
+	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create MGMT_QUERY request: %d\n", rc);
+		goto err_grp;
+	}
+
+	rc = tse_task_register_comp_cb(task, query_cp, &rpc, sizeof(rpc));
+	if (rc != 0)
+		goto err_rpc;
+
+	crt_req_addref(rpc); /* for query_cp */
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+err_grp:
+	daos_group_detach(ep.ep_grp);
+err_task:
+	tse_task_complete(task, rc);
 	return rc;
 }
 
