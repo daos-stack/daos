@@ -41,18 +41,14 @@ func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
 	return nil
 }
 
-func mockScmCS(ss *scmStorage) *controlService {
-	return &controlService{scm: ss}
-}
-
 func TestListScmModules(t *testing.T) {
-	s := mockScmCS(defaultMockScmStorage())
+	cs := newMockControlService()
 	m := MockModulePB()
 	mock := &mockListScmModulesServer{}
 
-	s.ListScmModules(nil, mock)
+	cs.ListScmModules(nil, mock)
 
-	AssertEqual(t, len(s.scm.modules), 1, "unexpected number of modules")
+	AssertEqual(t, len(cs.scm.modules), 1, "unexpected number of modules")
 	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")
 	AssertEqual(t, mock.Results, []*pb.ScmModule{m}, "unexpected list of modules sent")
 }

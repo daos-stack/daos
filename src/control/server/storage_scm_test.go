@@ -66,18 +66,7 @@ func mockScmConfig(
 		&mockExt{
 			nil, "", false, mountRet, unmountRet, mkdirRet, removeRet})
 
-	if len(config.Servers) == 0 {
-		server := newDefaultServer()
-		config.Servers = append(config.Servers, server)
-	}
-
 	return config
-}
-
-// return config reference with default successful behaviour
-func defaultMockScmConfig() *configuration {
-	c := mockScmConfig(nil, nil, nil, nil)
-	return &c
 }
 
 // return config reference with specified external method behaviour and scm config params
@@ -86,6 +75,7 @@ func newMockScmConfig(
 	mount string, class ScmClass, devs []string, size int) *configuration {
 
 	c := mockScmConfig(mountRet, unmountRet, mkdirRet, removeRet)
+	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = mount
 	c.Servers[0].ScmClass = class
 	c.Servers[0].ScmList = devs
@@ -105,11 +95,10 @@ func newMockScmStorage(
 	}
 }
 
-func defaultMockScmStorage() *scmStorage {
+func defaultMockScmStorage(config *configuration) *scmStorage {
 	m := MockModule()
-	config := defaultMockScmConfig()
 
-	return newMockScmStorage([]DeviceDiscovery{m}, true, config)
+	return newMockScmStorage([]DeviceDiscovery{m}, false, config)
 }
 
 func TestDiscoveryScm(t *testing.T) {
@@ -129,7 +118,7 @@ func TestDiscoveryScm(t *testing.T) {
 
 	mPB := MockModulePB()
 	m := MockModule()
-	config := newDefaultMockConfig()
+	config := defaultMockConfig()
 
 	for _, tt := range tests {
 		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited, &config)
@@ -163,6 +152,11 @@ func TestFormatScm(t *testing.T) {
 	}{
 		{
 			desc:   "zero values",
+			errMsg: "scm mount must be specified in config",
+		},
+		{
+			desc:   "no class",
+			mount:  "/mnt/daos",
 			errMsg: "unsupported ScmClass",
 		},
 		{
@@ -189,6 +183,27 @@ func TestFormatScm(t *testing.T) {
 				"mkdir /mnt/daos",
 				"mount /dev/pmem0 /mnt/daos ext4 dax",
 			},
+		},
+		{
+			desc:   "dcpm missing dev",
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string{},
+			errMsg: "expecting one scm dcpm pmem device per-server in config",
+		},
+		{
+			desc:   "dcpm nil devs",
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string(nil),
+			errMsg: "expecting one scm dcpm pmem device per-server in config",
+		},
+		{
+			desc:   "dcpm empty dev",
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string{""},
+			errMsg: "scm dcpm device list must contain path",
 		},
 	}
 

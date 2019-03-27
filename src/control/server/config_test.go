@@ -96,8 +96,8 @@ func newMockConfig(
 			mkdirRet, removeRet})
 }
 
-// newDefaultMockConfig returns MockConfig with default mock return values
-func newDefaultMockConfig() configuration {
+// defaultMockConfig returns MockConfig with default mock return values
+func defaultMockConfig() configuration {
 	return newMockConfig(nil, "", false, nil, nil, nil, nil)
 }
 func cmdFailsConfig() configuration {
@@ -134,7 +134,7 @@ func TestParseConfigSucceed(t *testing.T) {
 			t.Fatal(err)
 		}
 		// verify decoding of config from written file
-		config := newDefaultMockConfig()
+		config := defaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		if err != nil {
@@ -179,7 +179,7 @@ func TestParseConfigFail(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		config := newDefaultMockConfig()
+		config := defaultMockConfig()
 		config.Path = tmpIn
 		err = config.loadConfig()
 		// output error messages will always be first entry in a slice.
@@ -197,25 +197,25 @@ func TestProvidedConfigs(t *testing.T) {
 		errMsg   string
 	}{
 		{
-			newDefaultMockConfig(),
+			defaultMockConfig(),
 			sConfigUncomment,
 			"uncommented default config",
 			"",
 		},
 		{
-			newDefaultMockConfig(),
+			defaultMockConfig(),
 			socketsExample,
 			"socket example config",
 			"",
 		},
 		{
-			newDefaultMockConfig(),
+			defaultMockConfig(),
 			psm2Example,
 			"psm2 example config",
 			"",
 		},
 		{
-			newDefaultMockConfig(),
+			defaultMockConfig(),
 			defaultConfig,
 			"default empty config",
 			"required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
@@ -392,7 +392,7 @@ func TestCmdlineOverride(t *testing.T) {
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
 	newC := func(t *testing.T) configuration {
-		return populateMockConfig(t, newDefaultMockConfig(), sConfigUncomment)
+		return populateMockConfig(t, defaultMockConfig(), sConfigUncomment)
 	}
 
 	tests := []struct {
@@ -510,7 +510,7 @@ func TestCmdlineOverride(t *testing.T) {
 			// currently not provided as config or cli option, set
 			// directly in configuration
 			inConfig: func() configuration {
-				c := newDefaultMockConfig()
+				c := defaultMockConfig()
 				c.NvmeShmID = 1
 				return populateMockConfig(t, c, sConfigUncomment)
 			}(),
@@ -598,7 +598,7 @@ func TestCmdlineOverride(t *testing.T) {
 			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			inConfig: newDefaultMockConfig(),
+			inConfig: defaultMockConfig(),
 			desc:     "override defaults, no Provider set and no provider env exists",
 			errMsg:   "required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
 		},
@@ -639,7 +639,7 @@ func TestPopulateEnv(t *testing.T) {
 		desc      string
 	}{
 		{
-			newDefaultMockConfig(),
+			defaultMockConfig(),
 			0,
 			[]string{},
 			[]string{},
@@ -647,7 +647,7 @@ func TestPopulateEnv(t *testing.T) {
 			"empty config (no envs) and getenv returns empty",
 		},
 		{
-			newDefaultMockConfig(),
+			defaultMockConfig(),
 			0,
 			[]string{"FOO=bar"},
 			[]string{"FOO=bar"},
@@ -655,7 +655,7 @@ func TestPopulateEnv(t *testing.T) {
 			"empty config (no envs) and getenv returns empty",
 		},
 		{
-			populateMockConfig(t, newDefaultMockConfig(), socketsExample),
+			populateMockConfig(t, defaultMockConfig(), socketsExample),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
@@ -711,7 +711,7 @@ func TestPopulateEnv(t *testing.T) {
 			"sockets populated config (with envs) and getenv returns with 'somevalue'",
 		},
 		{
-			populateMockConfig(t, newDefaultMockConfig(), psm2Example),
+			populateMockConfig(t, defaultMockConfig(), psm2Example),
 			0,
 			[]string{"FOO=bar"},
 			[]string{

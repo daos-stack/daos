@@ -55,6 +55,7 @@ func (c *controlService) Setup() {
 		cv.L.Lock()
 
 		c.config.Servers[idx].FormatCond = cv
+		log.Debugf("Setup(): locked format cond var for server %d\n", idx)
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -94,24 +95,27 @@ func (c *controlService) FormatStorage(
 	}
 
 	// TODO: execute in parallel across servers
-	for i, s := range c.config.Servers {
+	for i := range c.config.Servers {
+		cond := c.config.Servers[i].FormatCond
 		// wait for lock to be released when main is ready
-		s.FormatCond.L.Lock()
+		cond.L.Lock()
 
 		if err := c.nvme.Format(i); err != nil {
 			e = errors.WithStack(err)
+			cond.L.Unlock()
 			return
 		}
 
-		// pass external interface and relevant config params
 		if err := c.scm.Format(i); err != nil {
 			e = errors.WithStack(err)
+			cond.L.Unlock()
 			return
 		}
 
 		// storage subsystem format successful, signal to alert main.
-		s.FormatCond.Signal()
-		s.FormatCond.L.Unlock()
+		log.Debugf("FormatStorage(): signaled cond var for server %d\n", i)
+		cond.Signal()
+		cond.L.Unlock()
 	}
 
 	return

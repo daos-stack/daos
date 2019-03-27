@@ -36,9 +36,18 @@ import (
 // ScmmMap is a type alias for info on Storage Class Memory Modules
 type ScmmMap map[int32]*pb.ScmModule
 
+// NvmeStorage interface specifies basic functionality for subsystem
+type ScmStorage interface {
+	Setup() error
+	Teardown() error
+	Format(int) error
+	Discover() error
+}
+
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device
 // details.
+//
 // IpmCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
@@ -47,6 +56,24 @@ type scmStorage struct {
 	modules     ScmmMap
 	initialized bool
 	formatted   bool
+}
+
+// todo: implement remaining methods for scmStorage
+// func (s *scmStorage) Update(params interface{}) interface{} {return nil}
+// func (s *scmStorage) BurnIn(params interface{}) (fioPath string, cmds []string, env string, err error) {
+// return
+// }
+
+// Setup placeholder implementation for scmStorage
+func (s *scmStorage) Setup() error {
+	s.initialized = true
+	return nil
+}
+
+// Teardown placeholder implementation for scmStorage
+func (s *scmStorage) Teardown() error {
+	s.initialized = false
+	return nil
 }
 
 func loadModules(mms []ipmctl.DeviceDiscovery) (ScmmMap, error) {
@@ -85,24 +112,6 @@ func (s *scmStorage) Discover() error {
 		return nil
 	}
 	return errors.Errorf("scm storage not initialized")
-}
-
-// todo: implement remaining methods for scmStorage
-// func (s *scmStorage) Update(params interface{}) interface{} {return nil}
-// func (s *scmStorage) BurnIn(params interface{}) (fioPath string, cmds []string, env string, err error) {
-// return
-// }
-
-// Setup placeholder implementation for scmStorage
-func (s *scmStorage) Setup() error {
-	s.initialized = true
-	return nil
-}
-
-// Teardown placeholder implementation for scmStorage
-func (s *scmStorage) Teardown() error {
-	s.initialized = false
-	return nil
 }
 
 // TODO
@@ -176,6 +185,9 @@ func (s *scmStorage) Format(idx int) error {
 	srv := s.config.Servers[idx]
 	mntPoint := srv.ScmMount
 
+	if mntPoint == "" {
+		return errors.New("scm mount must be specified in config")
+	}
 	if err := s.clearMount(mntPoint); err != nil {
 		return err
 	}
@@ -184,9 +196,12 @@ func (s *scmStorage) Format(idx int) error {
 	case scmDCPM:
 		if len(srv.ScmList) != 1 {
 			return errors.New(
-				"expecting one scm pmem device per-server in config")
+				"expecting one scm dcpm pmem device per-server in config")
 		}
 		devPath = srv.ScmList[0]
+		if devPath == "" {
+			return errors.New("scm dcpm device list must contain path")
+		}
 		devType = "ext4"
 		mntOpts = "dax"
 

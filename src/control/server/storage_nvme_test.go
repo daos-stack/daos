@@ -104,26 +104,24 @@ func (m *mockSpdkSetup) prep(int, string) error { return nil }
 func (m *mockSpdkSetup) reset() error           { return nil }
 
 // mockNvmeStorage factory
-func newMockNvmeStorage(spdkNvme NVME, inited bool) *nvmeStorage {
-	config := newDefaultMockConfig()
+func newMockNvmeStorage(
+	spdkNvme NVME, inited bool, config *configuration) *nvmeStorage {
+
 	return &nvmeStorage{
 		env:         &mockSpdkEnv{},
 		nvme:        spdkNvme,
 		spdk:        &mockSpdkSetup{},
-		config:      &config,
+		config:      config,
 		initialized: inited,
 	}
 }
 
 // defaultMockNvmeStorage factory
-func defaultMockNvmeStorage() *nvmeStorage {
-	config := newDefaultMockConfig()
-	return &nvmeStorage{
-		env:    &mockSpdkEnv{},
-		nvme:   defaultMockSpdkNvme(),
-		spdk:   &mockSpdkSetup{},
-		config: &config,
-	}
+func defaultMockNvmeStorage(config *configuration) *nvmeStorage {
+	return newMockNvmeStorage(
+		defaultMockSpdkNvme(),
+		false, // Discover will not fetch when initialised is true
+		config)
 }
 
 func TestDiscoveryNvmeSingle(t *testing.T) {
@@ -141,7 +139,8 @@ func TestDiscoveryNvmeSingle(t *testing.T) {
 	c := MockControllerPB("1.0.0")
 
 	for _, tt := range tests {
-		sn := newMockNvmeStorage(defaultMockSpdkNvme(), tt.inited)
+		config := defaultMockConfig()
+		sn := newMockNvmeStorage(defaultMockSpdkNvme(), tt.inited, &config)
 
 		if err := sn.Discover(); err != nil {
 			t.Fatal(err)
@@ -200,10 +199,11 @@ func TestDiscoveryNvmeMulti(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		config := defaultMockConfig()
 		sn := newMockNvmeStorage(
-			newMockSpdkNvme(
-				"1.0.0", "1.0.1", tt.ctrlrs, tt.nss),
-			false)
+			newMockSpdkNvme("1.0.0", "1.0.1", tt.ctrlrs, tt.nss),
+			false,
+			&config)
 
 		if err := sn.Discover(); err != nil {
 			t.Fatal(err)
@@ -264,7 +264,9 @@ func TestUpdateNvme(t *testing.T) {
 	c := MockControllerPB("1.0.1")
 
 	for _, tt := range tests {
-		sn := defaultMockNvmeStorage()
+		config := defaultMockConfig()
+		sn := defaultMockNvmeStorage(&config)
+
 		if tt.inited {
 			if err := sn.Discover(); err != nil {
 				t.Fatal(err)
@@ -317,7 +319,9 @@ func TestBurnInNvme(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		sn := defaultMockNvmeStorage()
+		config := defaultMockConfig()
+		sn := defaultMockNvmeStorage(&config)
+
 		if tt.inited {
 			if err := sn.Discover(); err != nil {
 				t.Fatal(err)

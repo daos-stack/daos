@@ -100,6 +100,7 @@ func formatIosrv(
 
 	if !config.FormatOverride {
 		// wait on format storage grpc call before creating superblock
+		log.Debugf("waiting on format cond var for server %d\n", i)
 		config.Servers[i].FormatCond.Wait()
 	}
 
