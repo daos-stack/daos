@@ -114,6 +114,10 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 		return config, errors.New("missing I/O server params")
 	}
 
+	for idx := range config.Servers {
+		config.Servers[idx].Hostname = host
+	}
+
 	return config, nil
 }
 
@@ -428,7 +432,8 @@ func (c *configuration) setLogging(name string) (*os.File, error) {
 
 	// if no logfile specified, output from multiple hosts
 	// may get aggregated, prefix entries with hostname
-	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+	log.NewDefaultLogger(
+		log.Debug, c.Servers[0].Hostname+" ", os.Stderr)
 
 	return nil, nil
 }
