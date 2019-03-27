@@ -30,45 +30,36 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ShowStorageCommand is the struct representing the command to list storage.
-type ShowStorageCommand struct{}
-
-// Execute is run when ShowStorageCommand activates
-func (s *ShowStorageCommand) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
-	}
-
-	fmt.Printf(
-		checkAndFormat(conns.ListNvme()),
-		"NVMe SSD controller and constituent namespace")
-
-	fmt.Printf(checkAndFormat(conns.ListScm()), "SCM module")
-
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
-	return nil
+// SvcCmd is the struct representing the top-level service subcommand.
+type SvcCmd struct {
+	KillRank KillRankSvcCmd `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
 }
 
-// KillRankCommand is the struct representing the command to kill server
+// KillRankSvcCmd is the struct representing the command to kill server
 // identified by rank on given pool identified by uuid.
-type KillRankCommand struct {
+type KillRankSvcCmd struct {
 	Rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server"`
 	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to"`
 }
 
-// Execute is run when KillRankCommand activates
-func (k *KillRankCommand) Execute(args []string) error {
+// run kill rank command with specified parameters on all connected servers
+func killRankSvc(uuid string, rank uint32) {
+	errors := conns.KillRank(uuid, rank)
+
+	if len(errors) == 0 {
+		fmt.Println("Kill Rank succeeding on all active connections!")
+	} else {
+		fmt.Printf(unpackFormat(errors), "Kill Rank command failures")
+	}
+}
+
+// Execute is run when KillRankSvcCmd activates
+func (k *KillRankSvcCmd) Execute(args []string) error {
 	if err := connectHosts(); err != nil {
 		return errors.WithMessage(err, "unable to connect to hosts")
 	}
 
-	if err := conns.KillRank(k.PoolUUID, k.Rank); err != nil {
-		return errors.WithMessage(err, "Kill Rank failed")
-	}
-
-	fmt.Println("Kill Rank succeeding on all active connections!")
+	killRankSvc(k.PoolUUID, k.Rank)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)

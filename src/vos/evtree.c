@@ -2843,7 +2843,8 @@ void
 evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		    struct evt_entry *entry)
 {
-	if (tcx->tc_root->tr_csum_len > 0) {
+	if (tcx->tc_root->tr_csum_len > 0 &&
+		tcx->tc_root->tr_csum_chunk_size) {
 		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 		daos_off_t lo_offset = evt_entry_selected_offset(entry);
 		uint32_t csum_count = evt_csum_count(tcx, &entry->en_ext);
@@ -2861,4 +2862,19 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 			&desc->pt_csum[0] + csum_start *
 					    tcx->tc_root->tr_csum_len;
 	}
+}
+
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd)
+{
+	if (ovhd == NULL) {
+		D_ERROR("Invalid ovhd argument\n");
+		return -DER_INVAL;
+	}
+
+	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
+	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
+		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_order = tree_order;
+	return 0;
 }

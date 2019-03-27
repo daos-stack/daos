@@ -54,7 +54,7 @@ The DAOS management Go package allows to administrate a DAOS system from any nod
 - <a href="control/dmg/README.md">DAOS Management tool (aka dmg)</a>
 
 The DAOS library (i.e. libdaos) implements the DAOS storage model and is primarily targeted at application and I/O middleware developers who want to store datasets into DAOS containers. It can be used from any nodes connected to the fabric used by the targeted DAOS system. The application process is authenticated via the DAOS agent (see next section). The API exported by libdaos is commonly called the DAOS API (in opposition to the DAOS management API) and allows to manage containers and access DAOS objects through different interfaces (e.g. key-value store or array API). The libdfs library emulates POSIX file and directory abstractions over libdaos and provides a smooth migration path for applications that require a POSIX namespace. For further reading on libdaos, bindings for different programming languages and libdfs:
-- <a href="client/api/README.md">DAOS Library (libdaos)</a>
+- <a href="client/api/README.md">DAOS Library (libdaos)</a> and <a href="client/addons/README.md">array/kv interface built on top of the native DAOS API</a>
 - <a href="utils/py/README.md">Python API bindings</a>
 - <a href="https://github.com/daos-stack/go-daos">Go bindings</a> and <a href="https://godoc.org/github.com/daos-stack/go-daos/pkg/daos">API documentation</a>
 - <a href="client/dfs/README.md">POSIX File & Directory Emulation (libdfs)</a>
@@ -123,7 +123,7 @@ Local NVM storage is managed by the Versioning Object Store (VOS) and blob I/O (
 
 DAOS objects are distributed across multiple targets for both performance (i.e. sharding) and resilience (i.e. replication or erasure code). The placement library implements different algorithms (e.g. ring-based placement, jump consistent hash, ...) to generate the layout of an object from the list of targets and the object identifier.
 
-The replicated service (RSCV) library finally provides some common code to support fault tolerance. This is used by the pool, container & management services in conjunction with the RDB library that implements a replicated key-value store over Raft.
+The replicated service (RSVC) library finally provides some common code to support fault tolerance. This is used by the pool, container & management services in conjunction with the RDB library that implements a replicated key-value store over Raft.
 
 For further reading on those infrastructure libraries, please see:
 - <a href="common/README.md">Common Library</a>

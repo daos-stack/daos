@@ -31,6 +31,22 @@ import (
 	"github.com/pkg/errors"
 )
 
+// cliOptions struct defined flags that can be used when invoking daos_server.
+type cliOptions struct {
+	Port        uint16             `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string             `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string             `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string            `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16             `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Group       string             `short:"g" long:"group" description:"Server group name"`
+	Attach      *string            `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string            `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+	PrepNvme    PrepNvmeCommand    `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
+}
+
 // ShowStorageCommand is the struct representing the command to list storage.
 // Retrieves and prints details of locally attached SCM and NVMe storage.
 type ShowStorageCommand struct{}
