@@ -46,10 +46,10 @@ const (
 `
 	// device block size hardcoded to 4096
 	fileTempl = `[AIO]
-{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}} 4096
+{{ $host := .Hostname }}{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO_{{$host}}_{{$i}} 4096
 {{ end }} `
 	kdevTempl = `[AIO]
-{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}}
+{{ $host := .Hostname }}{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO_{{$host}}_{{$i}}
 {{ end }}`
 	mallocTempl = `[Malloc]
 	NumberOfLuns {{.BdevNumber}}
