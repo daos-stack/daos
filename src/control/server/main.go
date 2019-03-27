@@ -97,13 +97,8 @@ func serverMain() error {
 	} else {
 		// if no logfile specified, output from multiple hosts
 		// may get aggregated, prefix entries with hostname
-		name, err := os.Hostname()
-		if err != nil {
-			log.Errorf("Failure retrieving hostname: %s", err)
-			return err
-		}
-
-		log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+		log.NewDefaultLogger(
+			log.Debug, config.Servers[0].Hostname+" ", os.Stderr)
 	}
 
 	// Backup active config.
