@@ -42,7 +42,7 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
-#define D_LOGFAC DD_FAC(cn)
+#define D_LOGFAC DD_FAC(dfuse)
 
 #include "cnss.h"
 
