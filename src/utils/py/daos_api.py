@@ -917,7 +917,7 @@ class IORequest(object):
         dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
         dkey_iov.iov_len = ctypes.sizeof(dkey)
 
-        ret = func(self.obj.oh, c_tx, ctypes.byref(dkey_iov),
+        ret = func(self.obj.obj_handle, c_tx, ctypes.byref(dkey_iov),
                    1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
@@ -969,7 +969,7 @@ class IORequest(object):
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        ret = func(self.obj.oh, c_tx, ctypes.byref(dkey_iov), 1,
+        ret = func(self.obj.obj_handle, c_tx, ctypes.byref(dkey_iov), 1,
                    ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
         if ret != 0:
             raise DaosApiError("Array fetch returned non-zero. RC: {0}"
@@ -1034,7 +1034,7 @@ class IORequest(object):
             dkey_ptr = None
 
         func = self.context.get_function('update-obj')
-        ret = func(self.obj.oh, c_tx, dkey_ptr, 1,
+        ret = func(self.obj.obj_handle, c_tx, dkey_ptr, 1,
                    ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
@@ -1102,7 +1102,7 @@ class IORequest(object):
 
         # now do it
         func = self.context.get_function('fetch-obj')
-        ret = func(self.obj.oh, c_tx, dkey_ptr,
+        ret = func(self.obj.obj_handle, c_tx, dkey_ptr,
                    1, iod_ptr, sgl_ptr, None, None)
         if ret != 0:
             raise DaosApiError("Object fetch returned non-zero. RC: {0}"
@@ -1161,7 +1161,7 @@ class IORequest(object):
 
         # now do it
         func = self.context.get_function('update-obj')
-        ret = func(self.obj.oh, c_tx, dkey_ptr, c_count,
+        ret = func(self.obj.obj_handle, c_tx, dkey_ptr, c_count,
                    iod_ptr, sgl_ptr, None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
@@ -1218,7 +1218,7 @@ class IORequest(object):
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        ret = func(self.obj.oh, c_tx, ctypes.byref(dkey_iov),
+        ret = func(self.obj.obj_handle, c_tx, ctypes.byref(dkey_iov),
                    c_count, ctypes.byref(iods), sgl_ptr, None, None)
         if ret != 0:
             raise DaosApiError("multikey fetch returned non-zero. RC: {0}"

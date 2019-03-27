@@ -113,8 +113,8 @@ class ObjUpdateBadParam(Test):
             obj, dummy_tx = container.write_an_obj(thedata, thedatasize,
                                                    dkey, akey, None, None, 2)
 
-            saved_oh = obj.oh
-            obj.oh = 99999
+            saved_oh = obj.obj_handle
+            obj.obj_handle = 99999
 
             obj, dummy_tx = container.write_an_obj(thedata, thedatasize,
                                                    dkey, akey, obj, None, 2)

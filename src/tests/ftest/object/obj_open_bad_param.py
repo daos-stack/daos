@@ -145,8 +145,8 @@ class ObjOpenBadParam(Test):
 
         :avocado: tags=object,objopen,objopenbadhand,regression,vm,small
         """
-        saved_handle = self.obj.oh
-        self.obj.oh = 8675309
+        saved_handle = self.obj.obj_handle
+        self.obj.obj_handle = 8675309
 
         try:
             dummy_obj = self.obj.open()
@@ -156,7 +156,7 @@ class ObjOpenBadParam(Test):
                 self.d_log.error(traceback.format_exc())
                 self.fail("test expected a -1002 but did not get it")
         finally:
-            self.obj.oh = saved_handle
+            self.obj.obj_handle = saved_handle
 
     def test_invalid_container_handle(self):
         """
@@ -211,8 +211,8 @@ class ObjOpenBadParam(Test):
 
         :avocado: tags=object,objopen,objopenpoolhandle,regression,vm,small
         """
-        saved_oh = self.obj.oh
-        self.obj.oh = self.pool.handle
+        saved_oh = self.obj.obj_handle
+        self.obj.obj_handle = self.pool.handle
 
         try:
             dummy_obj = self.obj.open()
@@ -222,7 +222,7 @@ class ObjOpenBadParam(Test):
                 self.d_log.error(traceback.format_exc())
                 self.fail("test expected a -1002 but did not get it")
         finally:
-            self.obj.oh = saved_oh
+            self.obj.obj_handle = saved_oh
 
     def test_null_ranklist(self):
         """

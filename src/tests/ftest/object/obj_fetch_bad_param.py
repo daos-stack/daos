@@ -140,8 +140,8 @@ class ObjFetchBadParam(Test):
 
         try:
             # trash the handle and read again
-            saved_oh = self.obj.oh
-            self.obj.oh = 99999
+            saved_oh = self.obj.obj_handle
+            self.obj.obj_handle = 99999
 
             # expecting this to fail with -1002
             dummy_thedata2 = self.container.read_an_obj(self.datasize,
