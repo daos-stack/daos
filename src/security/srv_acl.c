@@ -173,7 +173,7 @@ ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token)
 }
 
 int
-ds_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
+ds_sec_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
 				uint64_t access)
 {
 	int		rc;

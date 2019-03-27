@@ -1788,7 +1788,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
-	rc = ds_check_pool_access(&ugm, &in->pci_cred, in->pci_capas);
+	rc = ds_sec_check_pool_access(&ugm, &in->pci_cred, in->pci_capas);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),

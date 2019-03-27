@@ -48,6 +48,6 @@
  *		-DER_MISC	Invalid response from daos_server
  *		-DER_NO_PERM	Credential does not have access
  */
-int ds_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
+int ds_sec_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
 				uint64_t access);
 #endif /* __DAOS_SRV_SECURITY_H__ */
