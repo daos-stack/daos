@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
@@ -81,24 +82,31 @@ func (c *controlService) Teardown() {
 }
 
 // Format delegates to Storage implementation's Format methods.
-func (c *controlService) Format() error {
+func (c *controlService) FormatStorage(
+	ctx context.Context, params *pb.FormatStorageParams) (
+	resp *pb.FormatStorageResponse, e error) {
+
 	if c.config.FormatOverride {
-		return errors.New(
+		e = errors.New(
 			"Format() call unsupported when " +
 				"format_override set in server config file, ")
+		return
 	}
 
 	// TODO: execute in parallel across servers
 	for i, s := range c.config.Servers {
 		// wait for lock to be released when main is ready
 		s.FormatCond.L.Lock()
+
 		if err := c.nvme.Format(i); err != nil {
-			return errors.WithStack(err)
+			e = errors.WithStack(err)
+			return
 		}
 
 		// pass external interface and relevant config params
 		if err := c.scm.Format(i); err != nil {
-			return errors.WithStack(err)
+			e = errors.WithStack(err)
+			return
 		}
 
 		// storage subsystem format successful, signal to alert main.
@@ -106,7 +114,7 @@ func (c *controlService) Format() error {
 		s.FormatCond.L.Unlock()
 	}
 
-	return nil
+	return
 }
 
 // loadInitData retrieves initial data from relative file path.
