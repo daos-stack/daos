@@ -212,6 +212,7 @@ struct vos_object {
 extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
+extern struct vos_iter_ops vos_dtx_iter_ops;
 
 /** VOS thread local storage structure */
 struct vos_tls {
@@ -447,22 +448,6 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_cos_register(void);
-
-/**
- * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
- *
- * \param cont	[IN]	Pointer to the container.
- * \param oid	[IN]	The target object (shard) ID.
- * \param dti	[IN]	The DTX identifier.
- * \param dkey	[IN]	The hashed dkey.
- * \param punch	[IN]	For punch DTX or not.
- *
- * \return		Zero on success and need not additional actions.
- * \return		Negative value if error.
- */
-int
-vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct daos_tx_id *dti, uint64_t dkey, bool punch);
 
 /**
  * Remove the DTX from the CoS cache.
