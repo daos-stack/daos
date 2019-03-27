@@ -119,6 +119,7 @@ func serverMain() error {
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 	secpb.RegisterAccessControlServer(grpcServer, secServer)
 

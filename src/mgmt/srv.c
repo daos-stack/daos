@@ -34,9 +34,12 @@
 
 #include <signal.h>
 #include <daos/drpc_modules.h>
+#include <daos_srv/daos_server.h>
+#include <daos_srv/rsvc.h>
 
-#include "srv_internal.h"
+#include "mgmt.pb-c.h"
 #include "srv.pb-c.h"
+#include "srv_internal.h"
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
@@ -93,11 +96,205 @@ process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
 }
 
 static void
+process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+{
+	Mgmt__SetRankReq	*pb_req = NULL;
+	int			rc;
+
+	mgmt__daos_response__init(daos_resp);
+
+	/* Unpack the daos request from the drpc call body */
+	pb_req = mgmt__set_rank_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (pb_req == NULL) {
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("Failed to extract request\n");
+
+		return;
+	}
+
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to set rank to %u\n", pb_req->rank);
+
+	rc = crt_rank_self_set(pb_req->rank);
+	if (rc != 0) {
+		D_ERROR("Failed to set self rank %u: %d\n", pb_req->rank, rc);
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	}
+
+	dss_notify_rank_set();
+
+	mgmt__set_rank_req__free_unpacked(pb_req, NULL);
+}
+
+/*
+ * TODO: Make sure the MS doesn't accept any requests until StartMS completes.
+ * See also process_startms_request.
+ */
+static void
+process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+{
+	Mgmt__CreateMsReq	*pb_req = NULL;
+	uuid_t			uuid;
+	int			rc;
+
+	mgmt__daos_response__init(daos_resp);
+
+	/* Unpack the daos request from the drpc call body */
+	pb_req = mgmt__create_ms_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (pb_req == NULL) {
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("Failed to extract request\n");
+
+		return;
+	}
+
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to create MS (bootstrap=%d)\n",
+		pb_req->bootstrap);
+
+	if (pb_req->bootstrap) {
+		rc = uuid_parse(pb_req->uuid, uuid);
+		if (rc != 0) {
+			D_ERROR("Unable to parse server UUID: %s\n",
+				pb_req->uuid);
+			goto out;
+		}
+	}
+
+	rc = ds_mgmt_svc_start(true /* create */, ds_rsvc_get_md_cap(),
+			       pb_req->bootstrap, uuid, pb_req->addr);
+	if (rc != 0)
+		D_ERROR("Failed to create MS (bootstrap=%d): %d\n",
+			pb_req->bootstrap, rc);
+
+out:
+	mgmt__create_ms_req__free_unpacked(pb_req, NULL);
+	if (rc != 0)
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+}
+
+/*
+ * TODO: Make sure the MS doesn't accept any requests until StartMS completes.
+ * See also process_createms_request, which already starts the MS.
+ */
+static void
+process_startms_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+{
+	int rc;
+
+	mgmt__daos_response__init(daos_resp);
+
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to start MS\n");
+
+	rc = ds_mgmt_svc_start(false /* !create */, 0 /* size */,
+			       false /* !bootstrap */, NULL /* uuid */,
+			       NULL /* addr */);
+	if (rc == -DER_ALREADY) {
+		D_DEBUG(DB_MGMT, "MS already started\n");
+	} else if (rc != 0) {
+		D_ERROR("Failed to start MS: %d\n", rc);
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	}
+}
+
+static void
+process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *resp)
+{
+	Mgmt__JoinReq		*pb_req = NULL;
+	struct mgmt_join_in	in = {};
+	struct mgmt_join_out	out = {};
+	int			rc;
+
+	mgmt__join_resp__init(resp);
+
+	/* Unpack the daos request from the drpc call body */
+	pb_req = mgmt__join_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (pb_req == NULL) {
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("Failed to extract request\n");
+
+		return;
+	}
+
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to join\n");
+
+	in.ji_rank = pb_req->rank;
+	in.ji_server.sr_flags = SERVER_IN;
+	in.ji_server.sr_nctxs = pb_req->nctxs;
+	rc = uuid_parse(pb_req->uuid, in.ji_server.sr_uuid);
+	if (rc != 0) {
+		D_ERROR("Failed to parse UUID: %s\n", pb_req->uuid);
+		goto out;
+	}
+	if (strlen(pb_req->addr) + 1 > ADDR_STR_MAX_LEN) {
+		D_ERROR("Server address '%s' too long: %d\n", pb_req->addr, rc);
+		goto out;
+	}
+	strncpy(in.ji_server.sr_addr, pb_req->addr, ADDR_STR_MAX_LEN);
+	if (strlen(pb_req->uri) + 1 > ADDR_STR_MAX_LEN) {
+		D_ERROR("Self URI '%s' too long: %d\n", pb_req->uri, rc);
+		goto out;
+	}
+	strncpy(in.ji_server.sr_uri, pb_req->uri, ADDR_STR_MAX_LEN);
+
+	rc = ds_mgmt_join_handler(&in, &out);
+	if (rc != 0) {
+		D_ERROR("Failed to join: %d\n", rc);
+		goto out;
+	}
+
+	resp->rank = out.jo_rank;
+	if (out.jo_flags & SERVER_IN)
+		resp->state = MGMT__JOIN_RESP__STATE__IN;
+	else
+		resp->state = MGMT__JOIN_RESP__STATE__OUT;
+
+out:
+	mgmt__join_req__free_unpacked(pb_req, NULL);
+	if (rc != 0)
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+}
+
+static void
+pack_daos_response(Mgmt__DaosResponse *daos_resp, Drpc__Response *drpc_resp)
+{
+	uint8_t	*body;
+	size_t	len;
+
+	len = mgmt__daos_response__get_packed_size(daos_resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+		return;
+	}
+
+	if (mgmt__daos_response__pack(daos_resp, body) != len) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Unexpected num bytes for daos resp\n");
+		return;
+	}
+
+	/* Populate drpc response body with packed daos response */
+	drpc_resp->body.len = len;
+	drpc_resp->body.data = body;
+}
+
+static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResponse	*daos_resp = NULL;
-	uint8_t			*body = NULL;
-	size_t			len = 0;
+	Mgmt__JoinResp		*join_resp;
+	uint8_t			*body;
+	size_t			len;
 
 	D_ALLOC_PTR(daos_resp);
 	if (daos_resp == NULL) {
@@ -107,34 +304,47 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
+	/**
+	 * Process drpc request and populate daos response,
+	 * command errors should be indicated inside daos response.
+	 */
 	switch (drpc_req->method) {
 	case DRPC_METHOD_MGMT_KILL_RANK:
-		/**
-		 * Process drpc request and populate daos response,
-		 * command errors should be indicated inside daos response.
-		 */
 		process_killrank_request(drpc_req, daos_resp);
-
-		len = mgmt__daos_response__get_packed_size(daos_resp);
+		pack_daos_response(daos_resp, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_SET_RANK:
+		process_setrank_request(drpc_req, daos_resp);
+		pack_daos_response(daos_resp, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CREATE_MS:
+		process_createms_request(drpc_req, daos_resp);
+		pack_daos_response(daos_resp, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_START_MS:
+		process_startms_request(drpc_req, daos_resp);
+		pack_daos_response(daos_resp, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_JOIN:
+		D_ALLOC_PTR(join_resp);
+		if (join_resp == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate daos response ref\n");
+			break;
+		}
+		process_join_request(drpc_req, join_resp);
+		len = mgmt__join_resp__get_packed_size(join_resp);
 		D_ALLOC(body, len);
 		if (body == NULL) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Failed to allocate drpc response body\n");
-
+			D_FREE(join_resp);
 			break;
 		}
-
-		if (mgmt__daos_response__pack(daos_resp, body) != len) {
-			drpc_resp->status = DRPC__STATUS__FAILURE;
-			D_ERROR("Unexpected num bytes for daos resp\n");
-
-			break;
-		}
-
-		/* Populate drpc response body with packed daos response */
+		mgmt__join_resp__pack(join_resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
-
+		D_FREE(join_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
