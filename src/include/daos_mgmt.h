@@ -323,6 +323,17 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 			  d_rank_list_t *svc, d_rank_list_t *targets,
 			  d_rank_list_t *failed, daos_event_t *ev);
 
+/**
+ * Query the system map.
+ *
+ * \param grp	[IN]	System name
+ * \param rank	[IN]	Rank of Management Service
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_query(char *grp, d_rank_t rank, daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif

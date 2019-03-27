@@ -28,6 +28,7 @@
 #define __MGMT_RPC_H__
 
 #include <daos/rpc.h>
+#include <daos/rsvc.h>
 
 /*
  * RPC operation codes
@@ -54,7 +55,10 @@
 		ds_mgmt_params_set_hdlr, NULL),				\
 	X(MGMT_PROFILE,							\
 		0, &CQF_mgmt_profile,					\
-		ds_mgmt_profile_hdlr, NULL)
+		ds_mgmt_profile_hdlr, NULL),				\
+	X(MGMT_QUERY,							\
+		0, &CQF_mgmt_query,					\
+		ds_mgmt_hdlr_query, NULL)
 
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
@@ -207,5 +211,22 @@ CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
 
 CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
+
+/* Replicated server hint */
+#define DAOS_SEQ_RSVC_HINT \
+	((uint32_t)		(sh_flags)		CRT_VAR)	\
+	((uint32_t)		(sh_rank)		CRT_VAR)	\
+	((uint64_t)		(sh_term)		CRT_VAR)
+
+#define DAOS_ISEQ_MGMT_QUERY /* input fields */
+
+#define DAOS_OSEQ_MGMT_QUERY /* output fields */			\
+	((struct server_entry)	(qo_servers)		CRT_ARRAY)	\
+	((uint32_t)		(qo_map_version)	CRT_VAR)	\
+	((uint32_t)		(qo_map_in_sync)	CRT_VAR)	\
+	((struct rsvc_hint)	(qo_hint)		CRT_VAR)	\
+	((int32_t)		(qo_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_query, DAOS_ISEQ_MGMT_QUERY, DAOS_OSEQ_MGMT_QUERY)
 
 #endif /* __MGMT_RPC_H__ */

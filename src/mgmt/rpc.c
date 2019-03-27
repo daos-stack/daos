@@ -29,6 +29,7 @@
 #include "rpc.h"
 
 CRT_GEN_PROC_FUNC(server_entry, DAOS_SEQ_SERVER_ENTRY);
+CRT_GEN_PROC_FUNC(rsvc_hint, DAOS_SEQ_RSVC_HINT);
 
 CRT_RPC_DEFINE(mgmt_pool_create, DAOS_ISEQ_MGMT_POOL_CREATE,
 		DAOS_OSEQ_MGMT_POOL_CREATE)
@@ -48,6 +49,7 @@ CRT_RPC_DEFINE(mgmt_tgt_params_set, DAOS_ISEQ_MGMT_TGT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_TGT_PARAMS_SET)
 CRT_RPC_DEFINE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
+CRT_RPC_DEFINE(mgmt_query, DAOS_ISEQ_MGMT_QUERY, DAOS_OSEQ_MGMT_QUERY)
 
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition

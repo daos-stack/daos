@@ -539,6 +539,47 @@ enum_server_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	return 0;
 }
 
+void
+ds_mgmt_hdlr_query(crt_rpc_t *rpc)
+{
+	struct mgmt_svc	       *svc;
+	struct mgmt_query_out  *out = crt_reply_get(rpc);
+	struct rdb_tx		tx;
+	struct enum_server_arg	arg = {};
+	int			rc;
+
+	rc = mgmt_svc_lookup_leader(&svc, &out->qo_hint);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out_svc;
+
+	ABT_rwlock_rdlock(svc->ms_lock);
+
+	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
+			    enum_server_cb, &arg);
+	if (rc != 0)
+		goto out_lock;
+
+	out->qo_servers.ca_count = arg.esa_servers_len;
+	out->qo_servers.ca_arrays = arg.esa_servers;
+	out->qo_map_version = svc->ms_map_version;
+	out->qo_map_in_sync = !svc->ms_distribute;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	mgmt_svc_put_leader(svc);
+out:
+	out->qo_rc = rc;
+	crt_reply_send(rpc);
+	if (arg.esa_servers != NULL)
+		D_FREE(arg.esa_servers);
+}
+
 /*
  * If successful, output parameters rank and rank_next return the allocated
  * rank and the new rank_next value, respectively.

@@ -61,6 +61,7 @@ struct mgmt_join_out {
 	struct rsvc_hint	jo_hint;
 };
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
+void ds_mgmt_hdlr_query(crt_rpc_t *rpc);
 
 /** srv_pool.c */
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
