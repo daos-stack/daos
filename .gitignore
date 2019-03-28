@@ -9,10 +9,8 @@ daos_m.conf
 config.log
 /install/
 utils/daos_build.pyc
-hwloc-*.tar.gz
-mpi4py-*.tar.gz
-protobuf-all-*.tar.gz
-protobuf-c-*.tar.gz
+*.tar.gz
+*.tgz
 *.pyc
 src/tests/ftest/*/*.yaml.dist
 *.un~
