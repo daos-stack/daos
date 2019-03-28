@@ -733,7 +733,7 @@ static int
 mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			 struct daos_obj_shard_md *shard_md,
 			 uint32_t rebuild_ver, uint32_t *tgt_rank,
-			 uint32_t *shard_id, unsigned int array_size)
+			 uint32_t *shard_id, unsigned int array_size, int myrank)
 {
 	struct pl_mapless_map   *mplmap;
 	struct pl_obj_layout    *layout;
