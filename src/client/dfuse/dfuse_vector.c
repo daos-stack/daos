@@ -45,8 +45,8 @@
 #include <stdlib.h>
 #include <gurt/common.h> /* container_of */
 #include "iof_atomic.h"
-#include "iof_obj_pool.h"
-#include "iof_vector.h"
+#include "dfuse_obj_pool.h"
+#include "dfuse_vector.h"
 
 #define CAS(valuep, old, new) \
 	atomic_compare_exchange(valuep, old, new)

@@ -36,9 +36,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iof_common.h"
-#include "ioc.h"
-#include "ios_gah.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
+#include "dfuse_gah.h"
 
 static bool
 write_cb(struct ioc_request *request)

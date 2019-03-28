@@ -36,8 +36,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #define D_LOGFAC DD_FAC(il)
-#include "iof_common.h"
-#include "ios_gah.h"
+#include "dfuse_common.h"
+#include "dfuse_gah.h"
 #include "intercept.h"
 
 struct write_cb_r {

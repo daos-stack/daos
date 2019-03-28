@@ -36,13 +36,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iof_common.h"
-#include "ioc.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 #define REQ_NAME request
 #define POOL_NAME fgh_pool
 #define TYPE_NAME common_req
-#include "ioc_ops.h"
+#include "dfuse_ops.h"
 
 #define STAT_KEY getattr
 

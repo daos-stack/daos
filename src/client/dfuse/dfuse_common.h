@@ -38,13 +38,13 @@
 #ifndef IOF_COMMON_H
 #define IOF_COMMON_H
 
-#include "iof_log.h"
+#include "dfuse_log.h"
 
 #include <sys/stat.h>
 #include <cart/api.h>
 #include <gurt/common.h>
 
-#include "ios_gah.h"
+#include "dfuse_gah.h"
 
 #define IOF_CNSS_MT			0x080UL
 #define IOF_FUSE_READ_BUF		0x100UL

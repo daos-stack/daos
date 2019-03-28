@@ -51,12 +51,12 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#include "cnss.h"
-#include "ios_gah.h"
+#include "dfuse_cnss.h"
+#include "dfuse_gah.h"
 #include "iof_atomic.h"
-#include "iof_fs.h"
-#include "iof_bulk.h"
-#include "iof_pool.h"
+#include "dfuse_fs.h"
+#include "dfuse_bulk.h"
+#include "dfuse_pool.h"
 
 /**
  * A common structure for holding a cart context and thread details.

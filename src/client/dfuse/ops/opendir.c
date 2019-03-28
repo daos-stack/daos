@@ -36,13 +36,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iof_common.h"
-#include "ioc.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 #define REQ_NAME open_req
 #define POOL_NAME dh_pool
 #define TYPE_NAME iof_dir_handle
-#include "ioc_ops.h"
+#include "dfuse_ops.h"
 
 #define STAT_KEY opendir
 

@@ -40,9 +40,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/uio.h>
-#include "iof_log.h"
-#include "ios_gah.h"
-#include "iof_fs.h"
+#include "dfuse_log.h"
+#include "dfuse_gah.h"
+#include "dfuse_fs.h"
 #include "ioil_io.h"
 #include "ioil_api.h"
 

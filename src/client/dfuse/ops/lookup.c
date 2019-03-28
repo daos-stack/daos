@@ -37,13 +37,13 @@
  */
 
 #include <fuse3/fuse.h>
-#include "iof_common.h"
-#include "ioc.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 #define REQ_NAME request
 #define POOL_NAME lookup_pool
 #define TYPE_NAME entry_req
-#include "ioc_ops.h"
+#include "dfuse_ops.h"
 
 bool
 iof_entry_cb(struct ioc_request *request)

@@ -38,10 +38,10 @@
  * A simple, efficient pool for allocating objects of equal size
  */
 #include <pthread.h>
-#include "iof_log.h"
+#include "dfuse_log.h"
 #include <gurt/common.h> /* container_of */
 #include <gurt/list.h>
-#include "iof_obj_pool.h"
+#include "dfuse_obj_pool.h"
 
 /* A hack to assert that the sizeof obj_pool_t is large enough */
 struct tpv_data {

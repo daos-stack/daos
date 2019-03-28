@@ -38,11 +38,11 @@
 
 #include <sys/ioctl.h>
 
-#include "iof_common.h"
+#include "dfuse_common.h"
 
 #include <gurt/common.h>
-#include "ioc.h"
-#include "iof_ioctl.h"
+#include "dfuse.h"
+#include "dfuse_ioctl.h"
 
 static void
 handle_gah_ioctl(int cmd, struct iof_file_handle *handle,

@@ -36,14 +36,14 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iof_common.h"
-#include "ioc.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 #define POOL_NAME close_pool
 #define TYPE_NAME common_req
 #define REQ_NAME request
 #define STAT_KEY release
-#include "ioc_ops.h"
+#include "dfuse_ops.h"
 
 /* Find a GAH from a inode, return 0 if found */
 int

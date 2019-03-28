@@ -39,8 +39,8 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
-#include "iof_log.h"
-#include "iof_bulk.h"
+#include "dfuse_log.h"
+#include "dfuse_bulk.h"
 
 bool iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 		    bool read_only)

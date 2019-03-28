@@ -41,10 +41,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "iof_log.h"
+#include "dfuse_log.h"
 #include <gurt/common.h>
 
-#include "iof_pool.h"
+#include "dfuse_pool.h"
 
 static void
 debug_dump(struct iof_pool_type *type)

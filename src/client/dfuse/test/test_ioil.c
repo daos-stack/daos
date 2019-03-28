@@ -49,8 +49,8 @@
 #include <fcntl.h>
 #include <CUnit/Basic.h>
 #define D_LOGFAC DD_FAC(il)
-#include "iof_log.h"
-#include "iof_ioctl.h"
+#include "dfuse_log.h"
+#include "dfuse_ioctl.h"
 #include "ioil_api.h"
 
 static char *mount_dir;

@@ -36,10 +36,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iof_common.h"
-#include "ioc.h"
-#include "iof_ioctl.h"
-#include "iof_pool.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
+#include "dfuse_pool.h"
 
 int
 iof_fs_resend(struct ioc_request *request);

@@ -36,13 +36,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "iof_common.h"
-#include "ioc.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 #define REQ_NAME request
 #define POOL_NAME mkdir_pool
 #define TYPE_NAME entry_req
-#include "ioc_ops.h"
+#include "dfuse_ops.h"
 
 static const struct ioc_request_api api = {
 	.gah_offset	= offsetof(struct iof_create_in, common.gah),

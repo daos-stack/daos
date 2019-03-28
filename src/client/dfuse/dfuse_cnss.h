@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,49 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef __CNSS_H__
+#define __CNSS_H__
 
-#include "iof_log.h"
+#include "dfuse_log.h"
 
-#include <cart/api.h>
+#define CNSS_SUCCESS           0
+#define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
+#define CNSS_ERR_NOMEM         2 /*no memory*/
+#define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
+#define CNSS_ERR_CART          4 /*CaRT failed*/
 
-#include "iof_fs.h"
+struct fuse_lowlevel_ops;
+struct fuse_args;
+struct fuse_session;
+struct iof_state;
+struct iof_projection_info;
+struct cnss_info;
 
-static int iof_check_complete(void *arg)
-{
-	struct iof_tracker *tracker = arg;
+bool
+cnss_register_fuse(struct cnss_info *cnss_info,
+		   struct fuse_lowlevel_ops *flo,
+		   struct fuse_args *args,
+		   const char *mnt,
+		   bool threaded,
+		   void *private_data,
+		   struct fuse_session **sessionp);
 
-	return iof_tracker_test(tracker);
-}
+struct iof_state *
+iof_plugin_init();
 
-/* Progress until all callbacks are invoked */
-void iof_wait(crt_context_t crt_ctx, struct iof_tracker *tracker)
-{
-	int			rc;
+void
+iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info);
 
-	for (;;) {
-		rc = crt_progress(crt_ctx, 1000 * 1000, iof_check_complete,
-				  tracker);
+void
+iof_post_start(struct iof_state *iof_state);
 
-		if (iof_tracker_test(tracker))
-			return;
+void
+iof_finish(struct iof_state *iof_state);
 
-		/* TODO: Determine the best course of action on error.  In an
-		 * audit of cart code, it seems like this would only happen
-		 * under somewhat catostrophic circumstances.
-		 */
-		if (rc != 0 && rc != -DER_TIMEDOUT)
-			IOF_LOG_ERROR("crt_progress failed rc: %d", rc);
-	}
-}
+void
+iof_flush_fuse(struct iof_projection_info *fs_handle);
+
+int
+iof_deregister_fuse(struct iof_projection_info *fs_handle);
+
+#endif /* __CNSS_H__ */

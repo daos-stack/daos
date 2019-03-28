@@ -35,49 +35,25 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __CNSS_H__
-#define __CNSS_H__
+#ifndef __IOF_IOCTL_H__
+#define __IOF_IOCTL_H__
 
-#include "iof_log.h"
+#include <asm/ioctl.h>
+#include "dfuse_gah.h"
 
-#define CNSS_SUCCESS           0
-#define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
-#define CNSS_ERR_NOMEM         2 /*no memory*/
-#define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
-#define CNSS_ERR_CART          4 /*CaRT failed*/
+#define IOF_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
+#define IOF_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
+#define IOF_IOCTL_VERSION 3       /* Version of ioctl protocol */
 
-struct fuse_lowlevel_ops;
-struct fuse_args;
-struct fuse_session;
-struct iof_state;
-struct iof_projection_info;
-struct cnss_info;
+struct iof_gah_info {
+	int version;
+	struct ios_gah gah;
+	int cnss_id;
+	int cli_fs_id;
+};
 
-bool
-cnss_register_fuse(struct cnss_info *cnss_info,
-		   struct fuse_lowlevel_ops *flo,
-		   struct fuse_args *args,
-		   const char *mnt,
-		   bool threaded,
-		   void *private_data,
-		   struct fuse_session **sessionp);
+/* Defines the IOCTL command to get the gah for a IOF file */
+#define IOF_IOCTL_GAH ((int)_IOR(IOF_IOCTL_TYPE, IOF_IOCTL_GAH_NUMBER, \
+				 struct iof_gah_info))
 
-struct iof_state *
-iof_plugin_init();
-
-void
-iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info);
-
-void
-iof_post_start(struct iof_state *iof_state);
-
-void
-iof_finish(struct iof_state *iof_state);
-
-void
-iof_flush_fuse(struct iof_projection_info *fs_handle);
-
-int
-iof_deregister_fuse(struct iof_projection_info *fs_handle);
-
-#endif /* __CNSS_H__ */
+#endif

@@ -37,8 +37,8 @@
  */
 
 #include <fuse3/fuse.h>
-#include "iof_common.h"
-#include "ioc.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 static void
 ioc_forget_one(struct iof_projection_info *fs_handle,

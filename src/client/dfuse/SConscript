@@ -36,18 +36,18 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import os
 
-HEADERS = ['iof_io.h', 'iof_defines.h',
-           'iof_api.h', 'iof_preload.h']
-COMMON_SRC = ['iof_fs.c',
-              'iof_rpc.c',
-              'iof_bulk.c',
-              'iof_pool.c',
-              'iof_obj_pool.c',
-              'iof_vector.c']
-DFUSE_SRC = ['cnss.c',
-             'ioc_main.c',
-             'ioc_fuseops.c',
-             'inode.c']
+HEADERS = ['ioil_io.h', 'ioil_defines.h',
+           'ioil_api.h', 'ioil_preload.h']
+COMMON_SRC = ['dfuse_fs.c',
+              'dfuse_rpc.c',
+              'dfuse_bulk.c',
+              'dfuse_pool.c',
+              'dfuse_obj_pool.c',
+              'dfuse_vector.c']
+DFUSE_SRC = ['dfuse_cnss.c',
+             'dfuse_main.c',
+             'dfuse_fuseops.c',
+             'dfuse_inode.c']
 RPC_SRC = ['closedir',
            'create',
            'fgetattr',

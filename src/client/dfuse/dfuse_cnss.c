@@ -44,7 +44,7 @@
 
 #define D_LOGFAC DD_FAC(dfuse)
 
-#include "cnss.h"
+#include "dfuse_cnss.h"
 
 #include "daos_fs.h"
 #include "daos_api.h"

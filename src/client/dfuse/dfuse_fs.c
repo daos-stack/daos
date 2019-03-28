@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,25 +35,37 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_IOCTL_H__
-#define __IOF_IOCTL_H__
 
-#include <asm/ioctl.h>
-#include "ios_gah.h"
+#include "dfuse_log.h"
 
-#define IOF_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
-#define IOF_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
-#define IOF_IOCTL_VERSION 3       /* Version of ioctl protocol */
+#include <cart/api.h>
 
-struct iof_gah_info {
-	int version;
-	struct ios_gah gah;
-	int cnss_id;
-	int cli_fs_id;
-};
+#include "dfuse_fs.h"
 
-/* Defines the IOCTL command to get the gah for a IOF file */
-#define IOF_IOCTL_GAH ((int)_IOR(IOF_IOCTL_TYPE, IOF_IOCTL_GAH_NUMBER, \
-				 struct iof_gah_info))
+static int iof_check_complete(void *arg)
+{
+	struct iof_tracker *tracker = arg;
 
-#endif
+	return iof_tracker_test(tracker);
+}
+
+/* Progress until all callbacks are invoked */
+void iof_wait(crt_context_t crt_ctx, struct iof_tracker *tracker)
+{
+	int			rc;
+
+	for (;;) {
+		rc = crt_progress(crt_ctx, 1000 * 1000, iof_check_complete,
+				  tracker);
+
+		if (iof_tracker_test(tracker))
+			return;
+
+		/* TODO: Determine the best course of action on error.  In an
+		 * audit of cart code, it seems like this would only happen
+		 * under somewhat catostrophic circumstances.
+		 */
+		if (rc != 0 && rc != -DER_TIMEDOUT)
+			IOF_LOG_ERROR("crt_progress failed rc: %d", rc);
+	}
+}

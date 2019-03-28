@@ -38,9 +38,8 @@
 
 #include <fuse3/fuse_lowlevel.h>
 
-#include "iof_common.h"
-#include "ioc.h"
-#include "iof_log.h"
+#include "dfuse_common.h"
+#include "dfuse.h"
 
 #define SHOW_FLAG(HANDLE, FLAGS, FLAG)					\
 	do {								\

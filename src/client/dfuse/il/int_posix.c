@@ -50,13 +50,13 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <string.h>
-#include "iof_log.h"
+#include "dfuse_log.h"
 #include <gurt/list.h>
 #include <cart/api.h>
 #include "intercept.h"
-#include "iof_ioctl.h"
-#include "iof_vector.h"
-#include "iof_common.h"
+#include "dfuse_ioctl.h"
+#include "dfuse_vector.h"
+#include "dfuse_common.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 

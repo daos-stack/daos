@@ -36,9 +36,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #define D_LOGFAC DD_FAC(il)
-#include "iof_log.h"
-#include "iof_common.h"
-#include "ios_gah.h"
+#include "dfuse_common.h"
+#include "dfuse_gah.h"
 #include "intercept.h"
 
 struct read_bulk_cb_r {
@@ -97,8 +96,9 @@ read_bulk_cb(const struct crt_cb_info *cb_info)
 	iof_tracker_signal(&reply->tracker);
 }
 
-static ssize_t read_bulk(char *buff, size_t len, off_t position,
-			 struct iof_file_common *f_info, int *errcode)
+static ssize_t
+read_bulk(char *buff, size_t len, off_t position,
+	  struct iof_file_common *f_info, int *errcode)
 {
 	struct iof_projection *fs_handle;
 	struct iof_service_group *grp;

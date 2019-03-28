@@ -42,12 +42,11 @@
 #include <sched.h>
 #include <cart/types.h>
 #include "iof_atomic.h"
-#include "ios_gah.h"
+#include "dfuse_gah.h"
 
 struct iof_service_group {
 	crt_group_t		*dest_grp; /* Server group */
 	crt_endpoint_t		psr_ep;    /* Server PSR endpoint */
-	ATOMIC uint32_t		pri_srv_rank;  /* Primary Service Rank */
 	bool			enabled;   /* Indicates group is available */
 };
 
