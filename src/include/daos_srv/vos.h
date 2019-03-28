@@ -79,6 +79,22 @@ int
 vos_dtx_end(struct daos_tx_handle *dth, int result, bool leader);
 
 /**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+
+/**
  * Search the specified DTX is in the CoS cache or not.
  *
  * \param coh	[IN]	Container open handle.
@@ -868,5 +884,21 @@ int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
 		  daos_recx_t *recx);
+
+/** Return constants that can be used to estimate the metadata overhead
+ *  in persistent memory on-disk format.
+ *
+ *  \param alloc_overhead[IN]	Expected allocation overhead
+ *  \param tclass[IN]		The type of tree to query
+ *  \param ofeat[IN]		Relevant object features
+ *  \param ovhd[IN,OUT]		Returned overheads
+ *
+ *  \return 0 on success, error otherwise.
+ */
+int vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
+			  uint64_t ofeat, struct daos_tree_overhead *ovhd);
+
+/** Return the size of the pool metadata in persistent memory on-disk format */
+int vos_pool_get_msize(void);
 
 #endif /* __VOS_API_H */

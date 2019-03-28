@@ -89,7 +89,7 @@
 #
 ## Storage mount directory
 #
-## TODO: If no pre-configured mountpoins are specified, DAOS will auto-detect
+## TODO: If no pre-configured mountpoints are specified, DAOS will auto-detect
 ## NVDIMMs, configure them in interleave mode, format with ext4 and
 ## mount with the DAX extension creating a subdirectory within scm_mount_path.
 #

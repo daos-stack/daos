@@ -70,7 +70,7 @@ struct ik_rec {
 
 /** customized functions for btree */
 static int
-ik_hkey_size(struct btr_instance *tins)
+ik_hkey_size(void)
 {
 	struct ik_rec irec;
 	return sizeof(irec.ir_key);

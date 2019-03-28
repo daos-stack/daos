@@ -28,13 +28,10 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/btree.h>
+#include <daos/mem.h>
 #include <daos_srv/vos.h>
 #include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
-
-#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
-#define VOS_SVT_ORDER		5	/* order of single value tree */
-#define VOS_EVT_ORDER		23	/* evtree order */
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -164,9 +161,20 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 /** size of hashed-key */
 static int
-ktr_hkey_size(struct btr_instance *tins)
+ktr_hkey_size(void)
 {
 	return sizeof(struct ktr_hkey);
+}
+
+static int
+ktr_rec_msize(int alloc_overhead)
+{
+	/* So this actually isn't currently the same for DKEY and AKEY but it
+	 * will be shortly so didn't want to complicate the interface by
+	 * passing the class.  Will need an update to support checksums but
+	 * for now, this is a step.
+	 */
+	return alloc_overhead + sizeof(struct vos_krec_df);
 }
 
 /** generate hkey */
@@ -415,8 +423,13 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 			D_GOTO(out, rc);
 		}
 	}
-	ktr_rec_store(tins, rec, kbund, rbund);
- out:
+
+	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_mmid,
+				     DTX_RT_KEY, 0);
+	if (rc == 0)
+		ktr_rec_store(tins, rec, kbund, rbund);
+
+out:
 	if (!daos_handle_is_inval(btr_oh))
 		dbtree_close(btr_oh);
 
@@ -439,6 +452,14 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	krec = vos_rec2krec(tins, rec);
 	umem_attr_get(&tins->ti_umm, &uma);
+
+	vos_dtx_degister_record(&tins->ti_umm, krec->kr_dtx,
+				rec->rec_mmid, DTX_RT_KEY);
+	if (krec->kr_dtx_shares > 0) {
+		D_ERROR("There are some unknown DTXs (%d) share the key rec\n",
+			krec->kr_dtx_shares);
+		return -DER_BUSY;
+	}
 
 	/* has subtree? */
 	if (krec->kr_btr.tr_order) {
@@ -502,6 +523,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t key_btr_ops = {
+	.to_rec_msize		= ktr_rec_msize,
 	.to_hkey_size		= ktr_hkey_size,
 	.to_hkey_gen		= ktr_hkey_gen,
 	.to_hkey_cmp		= ktr_hkey_cmp,
@@ -603,9 +625,18 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 /** size of hashed-key */
 static int
-svt_hkey_size(struct btr_instance *tins)
+svt_hkey_size(void)
 {
 	return sizeof(struct svt_hkey);
+}
+
+static int
+svt_rec_msize(int alloc_overhead)
+{
+	/* Doesn't presently include checksum so the interface will need to
+	 * change slightly for that.
+	 */
+	return alloc_overhead + sizeof(struct vos_irec_df);
 }
 
 /** generate hkey */
@@ -659,6 +690,14 @@ svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		rbund->rb_mmid = UMMID_NULL; /* taken over by btree */
 	}
 
+	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_mmid,
+				     DTX_RT_SVT, 0);
+	if (rc != 0)
+		/* It is unnecessary to free the PMEM that will be dropped
+		 * automatically when the PMDK transaction is aborted.
+		 */
+		return rc;
+
 	rc = svt_rec_store(tins, rec, kbund, rbund);
 	return rc;
 }
@@ -673,6 +712,8 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return 0;
 
+	vos_dtx_degister_record(&tins->ti_umm, irec->ir_dtx,
+				rec->rec_mmid, DTX_RT_SVT);
 	if (args != NULL) {
 		*(umem_id_t *)args = rec->rec_mmid;
 		rec->rec_mmid = UMMID_NULL; /** taken over by user */
@@ -746,6 +787,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t singv_btr_ops = {
+	.to_rec_msize		= svt_rec_msize,
 	.to_hkey_size		= svt_hkey_size,
 	.to_hkey_gen		= svt_hkey_gen,
 	.to_hkey_cmp		= svt_hkey_cmp,
@@ -913,6 +955,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
+	umem_id_t		 addr;
 	int			 rc;
 	bool			 replay = (flags & VOS_OF_REPLAY_PC);
 
@@ -936,6 +979,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	kbund = iov2key_bundle(key_iov);
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
+	addr = umem_ptr2id(vos_obj2umm(obj), krec);
 
 	if (krec->kr_bmap & KREC_BF_PUNCHED &&
 	    krec->kr_latest == kbund->kb_epoch) {
@@ -953,10 +997,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	/* PROBE_EQ == insert in this case */
 	rc = dbtree_upsert(toh, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key_iov,
 			   val_iov);
-	if (rc)
+	if (rc != 0 || replay)
 		return rc;
 
-	if (!replay) { /* delete the max epoch */
+	if (vos_dth_get() == NULL) { /* delete the max epoch */
 		struct umem_instance	*umm = vos_obj2umm(obj);
 		struct vos_krec_df	*krec2;
 		struct vos_key_bundle	 kbund2;
@@ -983,6 +1027,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 		rc = dbtree_delete(toh, &tmp, NULL);
 		if (rc)
 			D_ERROR("Failed to delete: %d\n", rc);
+	} else {
+		rc = vos_dtx_register_record(btr_hdl2umm(toh), addr, DTX_RT_KEY,
+					     DTX_RF_EXCHANGE_SRC);
 	}
 	return rc;
 }

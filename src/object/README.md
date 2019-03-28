@@ -4,7 +4,7 @@ DAOS object stores user's data, it is identified by object ID which is unique
 within the DAOS conatiner it belongs to. Objects can be distributed across any
 target of the pool for both performance and resilience.
 DAOS object in DAOS storage model is shown in the diagram -
-![../../doc/graph/Fig_002.png](../../doc/graph/Fig_002.png "object in storage model")
+![/doc/graph/Fig_002.png](/doc/graph/Fig_002.png "object in storage model")
 The object module implements the object I/O stack.
 
 ## KV store, dkey and akey
@@ -17,7 +17,7 @@ Enumeration of the akeys of a dkey is provided.
 The value can be either atomic <b>single value</b> (i.e. value replaced on
 update) or a <b>byte array</b> (i.e. arbitrary extent fetch/update).
 
-## Object Schema and object class
+## Object Schema and Object Class
 
 To avoid scaling problems and overhead common to traditional storage stack,
 DAOS objects are intentionally very simple. No default object metadata beyond
@@ -29,17 +29,18 @@ The DAOS <b>object schema</b> describes the definitions for object types, data
 protection methods, and data distribution strategies. An <b>object class</b> has
 a unique class ID, which is a 16-bit value, and can represent a category of
 objects that use the same schema and schema attributes. DAOS provides some
-pre-defined object class for the most common use (see daos_obj_classes). In
-addition user can register customized object class by daos_obj_register_class()
-(now it is not implemented yet). A successfully registered object class is
-stored as container metadata; it is valid in the lifetime of the container.
+pre-defined object class for the most common use (see `daos_obj_classes`). In
+addition user can register customized object class by
+`daos_obj_register_class()` (not implemented yet). A successfully registered
+object class is stored as container metadata; it is valid in the lifetime of the
+container.
 
-The object class ID is embedded in object ID. By daos_obj_generate_id() user can
-generate an object ID for the specific object class ID. DAOS uses this class ID
-to find the corresponding object class, and then distribute and protect object
-data based on algorithm descriptions of this class.
+The object class ID is embedded in object ID. By `daos_obj_generate_id()` user
+can generate an object ID for the specific object class ID. DAOS uses this class
+ID to find the corresponding object class, and then distribute and protect
+object data based on algorithm descriptions of this class.
 
-## Data protection method
+## Data Protection Method
 
 Two types data protection methods supported by DAOS - replication and erasure
 coding.
@@ -50,7 +51,7 @@ Replication ensures high availability of object data because objects are
 accessible while any replica exists. Replication can also increase read
 bandwidth by allowing concurrent reads from different replicas.
 
-#### Client replication
+#### Client-side Replication
 
 Client replication is the mode that it is synchronous and fully in the client
 stack, to provide high concurrency and low latency I/O for the upper layer.
@@ -73,8 +74,8 @@ some extra mechanism to enforce consistency between replicas:
     and resubmitting request. At the meanwhile, the DAOS servers can rebuild the
     missing replica in the background. Therefore, DAOS can still guarantee data
     consistency between replicas. This process is transparent to DAOS user.
-    In the implementation, the IO completion callback (obj_comp_cb) will check
-    the IO's completion status and will retry the IO when needed:
+    In the implementation, the IO completion callback (`obj_comp_cb`) will
+    check the IO's completion status and will retry the IO when needed:
     -   If any shard's IO completed with retryable error (stale pool map,
         timedout, or other CaRT/HG level network error) then will refresh the
         pool map and retry the IO.
@@ -94,7 +95,7 @@ some extra mechanism to enforce consistency between replicas:
     interrupted I/O requests to enforce data consistency between replicas, or
     abort the epoch and rollback to the consistent status of the container.
 
-#### Server replication
+#### Server-side Replication
 
 DAOS also supports server replication, which has stronger consistency of
 replicas with a trade-off in performance and latency. In server replication mode
@@ -115,7 +116,7 @@ error handing is same as client replication mode described above.
 
 In this mode the conflict writes can be detected and serialized by the leader
 shard server. Now both modes are supported by DAOS, it can be dynamically
-configured by environment variable "DAOS_IO_SRV_DISPATCH" before loading DAOS
+configured by environment variable `DAOS_IO_SRV_DISPATCH` before loading DAOS
 server. By default DAOS works in server replication mode, and if the ENV set as
 zero then will work in client replication mode.
 
@@ -129,17 +130,17 @@ efficiency.
 Erasure codes may be used to improve resilience, with lower space overhead. This
 feature is still working in progress.
 
-## Object data distribution strategy
+## Object Sharding
 
 DAOS supports different data distribution strategies.
 
-### Single (unstriped) Object (DAOS_OS_SINGLE)
+### Single (unstriped) Object (`DAOS_OS_SINGLE`)
 
 Single (unstriped) objects always has one stripe and each shard of it is a full
 replica, they can generate the localities of replicas by the placement
 algorithm. A single (unstriped) object can be either a byte-array or a KV.
 
-### Fixed Stripe Object (DAOS_OS_STRIPED)
+### Fixed Stripe Object (`DAOS_OS_STRIPED`)
 
 A fixed stripe object has a constant number of stripes and each stripe has a
 fixed stripe size. Upper levels provide values for these attributes when
@@ -153,5 +154,5 @@ created. In contrast, a dynamically stripped object could be created with a
 single stripe. It will increase its stripe count as its size grows to some
 boundary, to achieve more storage space and better concurrent I/O performance.
 
-Now the dynamically Striped Object schema defined in DAOS (DAOS_OS_DYN_STRIPED/
-DAOS_OS_DYN_CHUNKED) but not implemented yet.
+Now the dynamically Striped Object schema defined in DAOS (`DAOS_OS_DYN_STRIPED`
+/`DAOS_OS_DYN_CHUNKED`) but not implemented yet.

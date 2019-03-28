@@ -24,16 +24,6 @@ In future, the leader should be able to detect the target failure
 promptly and then trigger the rebuild automatically by itself,
 without the help of sysadmin.
 
-### Multiple pool and targets rebuild
-
-If there are multiple pools being impacted by the failing
-target, these pools can be rebuilt concurrently.
-
-If there are multiple targets in the same pool fail before the
-rebuild really happens, then these targets can be rebuilt at the
-same time, otherwise the new failing target rebuilt has to be deferred
-until the current pool rebuilt is finished.
-
 ## Rebuild process
 
 The rebuild is divided into 2 phases, scan and pull.
@@ -45,12 +35,13 @@ to all other surviving targets by a collective RPC. Any target
 that receives this RPC will start to scan its own object table
 to determine the object losts data redundancy on the faulty
 target, if it does, then send their IDs and related metadata
-to the Rebuild Targets. As for how to choose the rebuild target
-for faulty target,it will be described in placement/README.md
+to the rebuild targets(rebuild initiator). As for how to choose
+the rebuild target for faulty target, it will be described in
+placement/README.md
 
 ### Pull
 
-Once the rebuild targets get the object list from the scanning
+Once the rebuild initiators get the object list from the scanning
 target, it will pull the data of these objects from other
 replicas and then write data locally. Each target will report
 its rebuild status, rebuilding objects, records, is\_finished?
@@ -59,18 +50,101 @@ finished its scanning and rebuilding phase, it will notify all targets
 the rebuild has finished, and they can release all of the resources
 hold during rebuild process.
 
-### I/O during rebuild
+<a id="f10.18"></a>
+**Rebuild Protocol**
+![../../doc/graph/Fig_059.png](../../doc/graph/Fig_059.png "Rebuild Protocol")
 
-During rebuild, I/O is almost the same as usual, except two cases
+The <a href="#f10.18">figure</a> above is an example of this process:
+There are five objects in the cluster: object A is 3-way replicated,
+object B, C, D and E are 2-way replicated. When target-2 failed,
+target-0, which is the Raft leader, broadcasted the failure to all
+surviving targets to notify them to enter the degraded mode and scan:
 
-1. Fetch will try to skip the rebuilding target.
+- Target-0 found that object D lost a replica and calculated out target-1 is
+the rebuild target for D, so it sent object Dâs ID and its metadata to
+target-1.
+- Target-1 found that object A lost a replica and calculated out target-3 is
+the rebuild target for A, so it sent object Aâs ID and its metadata to
+target-3.
+- Target-4 found objects A and C lost replicas and it calculated out target-3
+is the rebuild target for both objects A and C, so it sent IDs for objects A
+and C and their metadata to target-3.
+- After receiving these object IDs and their metadata, target-1 and target-3
+can compute out surviving replicas of these objects, and rebuild these objects
+by pulling data from these replicas.
 
-2. Once the new spare target is chosen, client will start updating
-the data both on the new target, in the mean time, rebuild might also
-update the same data from other replicas, then the data might be
-updated twice during the rebuild.
+### Multiple pool and targets rebuild
 
-### Rebuild resource throttle
+In a large-scale storage cluster, multiple failures might occur
+when a rebuild from a previous failure is still in progress. In this
+case, DAOS should neither simultaneously handle these failures, nor
+interrupt and reset the earlier rebuilding progress for later
+failures. Otherwise, the time consumed for rebuilds for each failure
+might grow significantly and rebuilds may never end if new failures
+overlap with ongoing rebuilds. So for multiple failures, these rules
+are applied
+
+- If the rebuild initiator failes during rebuild, then the object shards
+being rebuilt on the initiator should be ignored, which will be handled
+by next rebuild.
+- If rebuild initiator can not fetch the data from other replicas due to
+the failure, it will switch to other replicas if avaible.
+- A target in rebuild does not need to re-scan its objects or reset rebuild
+progress for the current failure if another failure has occurred.
+- When there are multiple failures, if the number of failed targets from
+different domains exceeds the fault tolerance level, then there could be
+unrecoverable errors and applications could suffer from data loss. In this
+case, upper layer stack software could see errors while sending I/O to the
+object that could have missing data.
+
+The following <a href="#f10.20">figure</a> is an example of this protocol.
+
+<a id="f10.20"></a>
+**Multi-failure protocol**
+![../../doc/graph/Fig_061.png](../../doc/graph/Fig_061.png "Multi-failure protocol")
+
+- In this example, object A is 2-way replicated, object B, C and D are 3-way
+replicated.
+- After failure of target-1, target-2 is the initiator of rebuilding object B,
+it is pulling data from target-3 and target-4; target-3 is the initiator of
+rebuilding object C, it is pulling data from target-0 and target-2.
+- Target-3 failed before completing rebuild for target-1, so rebuild of object
+C should be abandoned at this point, because target-3 is the initiator of it.
+The missing data redundancy of object C will be reconstructed while rebuilding
+target-3.
+- Because target-3 is also contributor of rebuilding object B, based on the
+protocol, the initiator of object B, which is target-2, should switch to
+target-4 and continue rebuild of object B.
+- Rebuild process of target-1 can complete after finishing rebuild of object B.
+By this time, object C still lost a replica. This is quite understandable,
+because even if two failures have no overlap, object C will still lose the
+replica on target-3.
+- In the process of rebuilding target-3, target-4 is the new initiator of
+rebuilding object C.
+
+If there are multiple pools being impacted by the failing
+target, these pools can be rebuilt concurrently.
+
+## I/O during rebuild
+
+If there are concurrent writes during rebuild, the rebuild protocol should
+guarantee that new writes will never be lost. Those writes should be either
+directly stored in the new object shard or pulled to the new object shard
+by the rebuild initiator. And also fetch should be guarantee to get the
+correct data. To achieve these, these protocols are applied
+
+1. Fetch will always skip the rebuilding target.
+2. Update can complete only if updates of all the object shards have
+successfully completed.
+- If any of these updates failed, the client will infinitely retry until
+it succeeds, or there is a pool map change which shows the target failed.
+In the second case, the client will switch to the new pool map, and send
+the update to the new destination, which is the rebuild target of this object.
+3. There are no synchronization between normal I/O and rebuild process, so during
+rebuild process, the data might be written duplicately by rebuild initiator and
+normal I/O.
+
+## Rebuild resource throttle
 
 During rebuild process, the user can set the throttle to guarantee
 the rebuild will not use more resource than the user setting. The

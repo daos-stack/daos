@@ -1,7 +1,7 @@
 
 # Versioning Object Store
 
-The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a DAOS pool.
+The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/doc/storage_model.md#DAOS_Pool">DAOS pool</a>.
 It maintains its own metadata in persistent memory and may store data either in persistent memory or on block storage, depending on available storage and performance requirements.
 It must provide this functionality with minimum overhead so that performance can approach the theoretical performance of the underlying hardware as closely as possible, both with respect to latency and bandwidth.
 Its internal data structures, in both persistent and non-persistent memory, must also support the highest levels of concurrency so that throughput scales over the cores of modern processor architectures.
@@ -13,7 +13,7 @@ This document contains the following sections:
 
 - <a href="#62">Persistent Memory based Storage</a>
     - <a href="#63">In-Memory Storage</a>
-    - <a href="#64">Lightweight I/O Stack: NVM Library</a>
+    - <a href="#64">Lightweight I/O Stack: PMDK Libraries</a>
 - <a href="#71">VOS Concepts</a>
     - <a href="#711">VOS Indexes</a>
     - <a href="#712">Object Listing</a>
@@ -22,15 +22,9 @@ This document contains the following sections:
     - <a href="#723">Key in VOS KV Stores</a>
     - <a href="#724">Internal Data Structures</a>
 - <a href="#73">Key Array Stores</a>
-- <a href="#75">Epoch Based Operations</a>
-    - <a href="#751">VOS Discard</a>
-    - <a href="#752">VOS Aggregate</a>
-    - <a href="#753">VOS Flush</a>
-- <a href="#76">VOS over NVM Library</a>
-    - <a href="#761">Root Object</a>
-- <a href="#77">Layout for Index Tables</a>
-- <a href="#78">Transactions and Recovery</a>
-    - <a href="#781">Discussions on Transaction Model</a>
+- <a href="#74">Epoch Based Operations</a>
+    - <a href="#741">VOS Discard</a>
+    - <a href="#742">VOS Aggregate</a>
 - <a href="#79">VOS Checksum Management</a>
 - <a href="#80">Metadata Overhead</a>
 - <a href="#81">Replica Consistency</a>
@@ -48,17 +42,17 @@ This enables a disruptive change in performance compared to conventional storage
 Direct access to byte-addressable low-latency storage opens up new horizons where metadata can be scanned in less than a second without bothering with seek time and alignment.
 
 The VOS relies on a log-based architecture using persistent memory primarily to maintain internal persistent metadata indexes.
-The actual data can be stored either in persistent memory directly or in block-based storage (via <a href="https://spdk.io/">SPDK</a> for instance).
+The actual data can be stored either in persistent memory directly or in block-based NVMe storage.
 The DAOS service has two tiers of storage: Storage Class Memory (SCM) for byte-granular application data and metadata, and NVMe for bulk application data.
-Similar to how PMDK is currently used to faciliate access to SCM, the Storage Performance Development Kit (SPDK) is used to provide seamless and efficient access to NVMe SSDs.
+Similar to how PMDK is currently used to faciliate access to SCM, the Storage Performance Development Kit (<a href="https://spdk.io/">SPDK</a>) is used to provide seamless and efficient access to NVMe SSDs.
 The current DAOS storage model involves three DAOS server xstreams per core, along with one main DAOS server xstream per core mapped to an NVMe SSD device.
 DAOS storage allocations can occur on either SCM by using a PMDK pmemobj pool, or on NVMe, using an SPDK blob.
 All local server metadata will be stored in a per-server pmemobj pool on SCM and will include all current and relevant NVMe device, pool, and xstream mapping information.
-Please refer to the Blob I/O (BIO) module for more information regarding NVMe, SPDK, and per-server metadata.
-Special care will be taken when developing the VOS layer because any software bug could corrupt data structures in persistent memory.
-The VOS therefore checksums its persistent data structures despite the presence of hardware ECC.
+Please refer to the <a href="../bio/README.md">Blob I/O</a> (BIO) module for more information regarding NVMe, SPDK, and per-server metadata.
+Special care is taken when developing and modifying the VOS layer because any software bug could corrupt data structures in persistent memory.
+The VOS, therefore, checksums its persistent data structures despite the presence of hardware ECC.
 
-The VOS provides a lightweight I/O stack fully in user space, leveraging the PMDK open source libraries developed to support this programming model.
+The VOS provides a lightweight I/O stack fully in user space, leveraging the <a href="pmem.io">PMDK</a> open source libraries developed to support this programming model.
 
 <a id="64"></a>
 
@@ -106,16 +100,24 @@ The first is an object index used to map an object ID and epoch to object metada
 The other two indicies are for maintining active and committed <a href="#811">DTX</a> records for ensuring efficient updates across multiple replicas.
 
 DAOS supports two types of values, each associated with a Distribution Key (DKEY) and an Attribute Key (AKEY): Single value and Array value.
-An update to a single value replaces the entire value whereas an array update only replaces the records specified in the update.
-The DAOS API provides generic Key-Value and Array abstractions built on this underlying interface.
-For the remainder of this document, Key-Value will describe DKEY-AKEY-Single Value whereas Key-Array will describe DKEY-AKEY-Array.
+The DKEY is used for placement, determining which VOS pool is used to store the data.
+The AKEY identifies the data to be stored.
+The ability to to specify both a DKEY and an AKEY provides applications with flexibility to either distribute or co-locate different values in DAOS.
+A single value is an atomic value meaning that writes to an AKEY update the entire value and reads retrieve the latest value in its entirety.
+An array value is an index of equally sized records.  Each update to an array value only affects the specified records and reads read the latest updates to each record index requested.
+Each VOS pool maintains the VOS provides a per container hierarchy of containers, objects, DKEYs, AKEYs, and values as shown <a href="#7a">below</a>.
+The DAOS API provides generic Key-Value and Array abstractions built on this underlying interface.  The former sets the DKEY to the user specified key and uses a fixed AKEY.
+The latter uses the upper bits of the array index to create a DKEY and uses a fixed AKEY thus evenly distributing array indices over all VOS pools in the object layout.
+For the remainder of the VOS description, Key-Value and Key-Array shall be used to describe the VOS layout rather than these simplifying abstractions.
+In other words, they shall describe the DKEY-AKEY-Value in a single VOS pool.
 
 VOS objects are not created explicitly, but are created on first write by creating the object metadata and inserting a reference to it in the owning container's object index.
 All object updates log the data for each update, which may be an object, DKEY, AKEY, single value, or array value punch or an update to a single value or array value.
 Note that "punch" of an extent of an array object is logged as zeroed extents, rather than causing relevant array extents or key values to be discarded. A punch of an object, DKEY, AKEY, or single value is logged so that reads at a later timestamp see no data.
 This ensures that the full version history of objects remain accessible.   The DAOS api, however, only allows accessing data at snapshots so VOS aggregation can aggresively remove objects, keys, and values that are no longer accessible at a known snapshot.
 
-TODO: Placeholder for new VOS figure
+<a id="7a"></a>
+![../../doc/graph/Fig_067.png](../../doc/graph/Fig_067.png "VOS Pool storage layout")
 
 When performing lookup on a single value in an object, the object index is traversed to find the index node with the highest epoch number less than or equal to the requested epoch (near-epoch) that matches the key.
 If a value or negative entry is found, it is returned.
@@ -140,24 +142,46 @@ Hints about the expectations of the object can be encoded in the object ID.
 For example, an object can be replicated, erasure coded, use checksums, or have integer or lexical DKEYs and/or AKEYs.
 If integer or lexical keys are used, the object index is ordered by keys, making queries, such as array size, more efficient.
 Otherwise, keys are ordered by the hashed value in the index.
-The type of object is identified from the object ID.
+The object ID is 128 bits.  The upper 32 bits are used to encodes the object type, and key types while the lower 96 bits are a user defined identifier that must be unique to the container.
 
 <a id="712"></a>
 
 ### Object Listing
 
-VOS provides a generic iterator that can be used to iterate through objects, DKEYs, AKEYs, single values, and array extents in a container.
-The object ID is 64 bits and encodes the object type, dkey and akey types, and a user definable identifier that must be unique to the container of 64 bits.
-This can allow enumeration of object IDs for a type of object.
-Interfaces to enumerate byte array and key value objects are shown in the <a href="#7b">figure</a> below.
-At all times, the object index hash table holds only object IDs that are non-empty, i.e., if an index tree associated with an object is empty (after an aggregation/discard), the object ID and its associated indexes are removed from the object index hash table.
+VOS provides a generic iterator that can be used to iterate through containers, objects, DKEYs, AKEYs, single values, and array extents in a VOS pool.
+The iteration API is shown in the <a href="#7b">figure</a> below.
 
 <a id="7b"></a>
-TODO: Fix this figure.  Figure out if there is a way to just reference the header which will always be up-to-date
-![../../doc/graph/Fig_009.png](../../doc/graph/Fig_009.png "Interfaces for enumeration KV and Byte array objects")
+```C
+/**
+ * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
+ * cb(\a arg) for each entry.
+ *
+ * If \a cb returns a nonzero (either > 0 or < 0) value that is not
+ * -DER_NONEXIST, this function stops the iteration and returns that nonzero
+ * value from \a cb. If \a cb returns -DER_NONEXIST, this function completes
+ * the iteration and returns 0. If \a cb returns 0, the iteration continues.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		type		entry type of starting level
+ * \param[in]		recursive	iterate in lower level recursively
+ * \param[in]		anchors		array of anchors, one for each
+ *					iteration level
+ * \param[in]		cb		iteration callback
+ * \param[in]		arg		callback argument
+ *
+ * \retval		0	iteration complete
+ * \retval		> 0	callback return value
+ * \retval		-DER_*	error (but never -DER_NONEXIST)
+ */
+int
+vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+```
 
-The interfaces shown in the <a href="7b">figure</a> above track the next object ID to extract with the help of an iterator.
-The same iterator routines would be used within VOS for enumeration of containers, all object types, DKEYs, AKEYs, single values, and array extents.
+The generic VOS iterator API enables both the DAOS enumeration API as well as DAOS internal features supporting rebuild, aggregation, and discard.
+It is flexible enough to iterate through all keys, single values, and extents for a specified epoch range.
+Additionally, it supports iteration through visible extents.
 
 <a id="72"></a>
 
@@ -194,23 +218,32 @@ The key-value record of the KV-object is stored in the tree as value of its node
 So in case of punch this value contains a "special" return code/flag to identify the punch operation.
 
 VOS also supports enumeration of keys belonging to a particular epoch.
-VOS uses iterators that can iterate through the KV store in listing all the keys and their associated values to support this enumeration.
 
 <a id="723"></a>
 
 ### Key in VOS KV Stores
 
 VOS KV supports key sizes from small keys to extremely large keys.
-To provide this level of flexibility VOS hashes the keys with an assumption that with a fast and consistent hash function one can get the same hash-value for the same key.
-This way the actual key is stored once along with the value, and the hash-value of the key is used in the index structure.
-A lightweight hash function like xxHash MurMur64 can be used.
-To verify hash collisions, the "actual key" in the KV store must be compared with the "actual key" being inserted or searched, once the node is located.
-Although with a good hash function collision is a remote chance, comparison of keys is required for correctness.
-But the approach of hashing keys still avoids having to compare every huge key in the search path, which would save lot of CPU cycles especially during lookups.
-
-Additionally, VOS supports specialized integer and lexical key types.
-These types of keys are specified when creating the object id.
-When such keys are used, VOS doesn't hash the keys but rather uses the original key value for comparisons resulting in a key-ordered index, numerically or lexically sorted, respectively.
+For AKEYs and DKEYs, VOS supports either hashed keys or one of two types of
+"direct" keys: lexical or integer.
+#### Hashed Keys
+The most flexible key type is the hashed key.   VOS runs two fast hash
+algorithms on the user supplied key and uses the combined hashed key values for
+the index.  The intention of the combined hash is to avoid collisions between
+keys. The actual key still must be compared for correctness.
+#### Direct Keys
+The use of hashed keys results in unordered keys.  This is problematic in cases
+where the user's algorithms may benefit from ordering.   Therefore, VOS supports
+two types of keys that are not hashed, but rather interpreted directly.
+##### Lexical Keys
+Lexical keys are compared using a lexical ordering.  This enables usage such as
+sorted strings.   Presently, lexical keys are limited in length, however to
+80 characters.
+##### Integer Keys
+Integer keys are unsigned 64-bit integers and are compared as such.   This
+enables use cases such as DAOS array API using the upper bits of the index
+as a dkey and the lower bits as an offset. This enables such objects to use the
+the DAOS key query API to calculate the size more efficiently.
 
 KV stores in VOS allow the user to maintain versions of the different KV pairs in random order.
 For example, an update can happen in epoch 10 and followed by another update in epoch 5, where HCE is less than 5.
@@ -356,8 +389,8 @@ Originally, the DAOS design called for splitting such in-tree rectangles on inse
 3. Walk through the sorted array, splitting extents if necessary and marking them as visible as applicable
 4. Re-sort the array.  This final sort can optionally keep or discard holes and covered extents, depending on the use case.
 
-<a id="7k"></a>
 TODO: Create a new figure
+<a id="7k"></a>
 <b>Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table <a href="#7g">above</a></b>
 
 ![../../doc/graph/Fig_016.png](../../doc/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
@@ -387,34 +420,38 @@ For deleting nodes from an EV-Tree, same approach as search can be used to locat
 Once deleted, to coalesce multiple leaf-nodes that have less than order/2 entries, reinsertion is done.
 EV-tree reinserts are done (instead of merging leaf-nodes as in B+ trees) because on deletion of leaf node/slots, the size of bounding boxes changes, and it is important to make sure the rectangles are organized into minimum bounding boxes without unnecessary overlaps.
 In VOS, delete is required only during aggregation and discard operations.
-These operations are discussed in a following section (<a hfer="#75">Epoch Based Operations</a>).
+These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
 
 
 <a id="74"></a>
 
 ## Epoch Based Operations
 
-TODO: This section needs a rewrite
 Epochs provide a way for modifying VOS objects without destroying the history of updates/writes.
 Each update consumes memory and discarding unused history can help reclaim unused space.
 VOS provides methods to compact the history of writes/updates and reclaim space in every storage node.
 VOS also supports rollback of history incase transactions are aborted.
+The DAOS API timestamp corresponds to a VOS epoch.
+The API only allows reading either the latest state or from a persistent snapshot which is simply a reference on a given epoch.
 
-To compact epochs, VOS allows epochs to be aggregated, i.e., the value/extent-data of the latest epoch of any key is always kept over older epochs.
+To compact epochs, VOS allows all epochs between snapshots to be aggregated, i.e., the value/extent-data of the latest epoch of any key is always kept over older epochs.
 This also ensures that merging history does not cause loss of exclusive updates/writes made to an epoch.
 To rollback history VOS provides the discard operation.
 
-<a id="7p"></a>
-![../../doc/graph/Fig_021.png](../../doc/graph/Fig_021.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools")
+```C
+int vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
+int vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
+int vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
+```
 
 Aggregate and discard operations in VOS accept a range of epochs to be aggregated normally corresponding to ranges between persistent snapshots.
 
-<a id="751"></a>
+<a id="741"></a>
 
 ### VOS Discard
 
 Discard forcefully removes epochs without aggregation.
-Use of this operation is necessary only when value/extent-data associated with a {container handle cookie, epoch} pair needs to be discarded.
+Use of this operation is necessary only when value/extent-data associated with a pair needs to be discarded.
 During this operation, VOS looks up all objects associated with each cookie in the requested epoch range from the cookie index table and removes the records directly from the respective object trees by looking at their respective epoch validity.
 DAOS requires discard to service abort requests.
 Abort operations require discard to be synchronous.
@@ -423,355 +460,61 @@ During discard, keys and byte-array rectangles need to be searched for nodes/slo
 This means that there was an update before the now discarded epoch and its validity got modified to support near-epoch lookup.
 This epoch validity of the previous update has to be extended to infinity to ensure future lookups at near-epoch would fetch the last known updated value for the key/extent range.
 
-<a id="752"></a>
+<a id="742"></a>
 
 ### VOS Aggregate
 
-During aggregation, VOS must retain only the latest update to a key/extent-range discarding the others.
-VOS looks up the lists of object ID from the epoch index table for the requested epoch range, and determines for each entry in these lists, whether to delete them or update their epoch.
-The epoch index table maintains a list of all object IDs that were updated in an epoch and facilitates looking up object IDs ordered by epochs.
-Each entry in the list is looked up in their associated index tree.
-Based on the epoch validity of those entries, the decision is made whether to retain the entries and/or increase their lower bound epoch validity to the highest epoch in the aggregate range, or discard them.
-Specifically, if the key or extent range is valid for highest epoch in the aggregate range it is retained, if not it is discarded.
-The epoch index table allows all object IDs associated with an epoch that needs to be aggregated to be fetched with an O(1) lookup.
-For example, if there are 1 billion objects in VOS and only one object has history in the epoch range to be aggregated, the epoch index table restricts the search to one object ID rather than a billion objects.
-
-Another aspect of aggregation in the case of byte-array objects is, to merge nodes in the index tree that were previously split due to I/O operations in epochs, which are now aggregated.
-Specifically, if the start epoch for a set of split extent ranges are the same, they can be merged to form one extent range.
-This optimization further reduces the metadata overhead and eliminates unwanted splits for contiguous extent ranges on the same epoch.
-
-Aggregate can be an expensive operation, but using a different thread in the background for the operation by the caller (typically the DAOS server) can help hide the cost.
-Although this operation does alter the respective individual object tree-indexes, this would not be an issue while using a concurrent tree data structure as discussed in sections 6.2 and 6.3.
-
-
-<a id="76"></a>
-
-## VOS over NVM Library
-
-VOS accesses persistent memory (pmem) with the help of the Non-volatile memory library (PMDK) .
-A persistent-memory aware file system exposes persistent memory to the operating system.
-Unlike traditional page-cache based file systems, the pmem aware file-system provides the shortest-path to the storage (i.e., a non-paged load/store).
-This allows applications to access the underlying persistent memory directly.
-Although there is direct access, using malloc() or free() to allocate directly from the pool of persistent memory would not work because these interfaces do not support persistence and this can lead to persistent memory leaks on program failures.
-Persistent memory stores can potentially go through processor cache, which without explicit flushing, can also lead to persistent memory leaks.
-In addition, cache-line evictions can lead to dirty data still residing in the memory sub-system, which need explicit flushing to the persistent memory.
-This necessitates the need for transactional interfaces to guarantee that the objects and data are consistent in the persistent memory in the case of failures or crashes.
-NVM Library (PMDK) provides ways to persistently perform malloc() and free() directly from the application.
-The library as shown in the <a href="#7q">figure</a> below resides in user space.
-
-<a id="7q"></a>
-<b>Architecture of PMDK on persistent memory using a PM-Aware File System </b>
-
-![../../doc/graph/Fig_022.png](../../doc/graph/Fig_022.png "Architecture of PMDK on persistent memory using a PM-Aware File System")
-
-PMDK builds on the Direct Access (DAX) changes in Linux.
-PMDK offers a collection of libraries amongst which libpmemobj, which offers transaction based persistent memory, handling is the one discussed in this section.
-Typically a DAX device is mounted on a ext4 file system.
-Libpmemobj provides API to memory-map a persistent memory file to get direct access from the DAX file system.
-VOS can create and maintain its data structures using a pmem file and libpmemobj, such that it remains consistent on system failures.
-This section elaborates on creating a VOS pool and its internal data structures using PMDK specifically libpmemobj APIs and constructs.
-
-
-<a id="761"></a>
-
-### Root Object
-
-The root object in PMDK facilitates locating the superblock of a Versioning object store.
-The superblock is the starting point of accessing the versioning object store and contains information of the location of containers stored inside the pool, the unique uid of the VOS pool, compatibility flags and a lock for synchronization.
-The following code in the <a href="#7r">Figure</a> below shows the creation of root object for VOS using PMDK pointers.
-
-<a id="7r"></a>
-TODO: Figure out how to link the vos data structure in header
-<b>Code block showing the creation of root object for VOS using PMDK pointers</b>
-
-![../../doc/graph/Fig_023.png](../../doc/graph/Fig_023.png "Code block showing the creation of root object for VOS using PMDK pointers")
-
-
-Pointers in PMDK contain the offset from the beginning of the pool rather than the virtual address space and a unique ID of the pool.
-Internally, PMDK uses the pool ID to locate the actual virtual address of the pool stored in a hash table.
-The actual virtual address of the pointer is determined by looking up the address of the pool, using the pool ID and adding the associated offset to it.
-PMDK represents persistent pointers as PMEMoid, and the pmemobj_direct(PMEMoid oid) converts it to a virtual memory pointer.
-Although PMDK provides a way for accessing persistent memory pointers as void\*, operating on such pointers can be error-prone because there is no type associated with the pmem pointers.
-PMDK addresses this issue with the help of named unions and macros as shown in Figure 6.16.
-PMDK also provides additional macros D_RW and D_RO to convert typed PMEMoid pointers to direct pointers of their associated types, which are equivalents of using pmemobj_direct on the oids and converting the resultant void* pointers to their respective types.
-
-The root object in PMDK is created with the pmemobj_root() API or the macro POBJ_ROOT to return a typed pointer.
-The root object for VOS created with PMDK pointers is shown in the first <a href="#7s">example</a>.
-
-<a id="7s"></a>
-
-<b>Code block showing TOID macros for defining typed pointers in PMDK</b>
-
-![../../doc/graph/Fig_024.png](../../doc/graph/Fig_024.png "Code block showing TOID macros for defining typed pointers in PMDK")
-
-<a id="7t"></a>
-
-<b>Internal Representation of List Entry Macros in PMDK</b>
-
-![../../doc/graph/Fig_025.png](../../doc/graph/Fig_025.png "Internal Representation of List Entry Macros in PMDK")
-
-
-<a id="77"></a>
-
-## Layout for Index Tables
-
-<a id="7u"></a>
-**Code Block representing the layout of container index table structures with PMDK pointers and ListsCode Block representing the layout of container index table structures with PMDK pointers and Lists**
-
-
-![../../doc/graph/Fig_026.png](../../doc/graph/Fig_026.png "Code Block representing the layout of container index table structures with PMDK pointers and Lists")
-
-The three main index tables for VOS are the container index table, object index table and epoch index table.
-VOS uses PMDK TOID pointers as shown in the previous <a href="#761">section</a>, to construct all the three index tables The PMDK library libpmemobj also provides a set of list interfaces to create persistent lists.
-These persistent lists provide separate chaining for hash buckets in the hash table.
-Persistent list operations represented with POBJ_LIST_* macros and their internal representation are shown in the <a href="7u">Figure</a> above.
-Each container created in VOS has its own object index and epoch index tables.
-The container table is a hash table that hashes the container uuid to a value.
-The value comprises of the persistent memory pointer to both the object and the epoch index tables, and the lowest and highest epoch of that container.
-
-<a id="7v"></a>
-**Code Block representing the layout of object index and epoch index entry**
-
-![../../doc/graph/Fig_027.png](../../doc/graph/Fig_027.png "Code Block representing the layout of object index and epoch index entry")
-
-<a id="7w"></a>
-**Code Block Representing the layout for B+ Tree in PMDK**
-
-![../../doc/graph/Fig_028.png](../../doc/graph/Fig_028.png "Code Block representing the layout of object index and epoch index entry")
-
-<a id="7w"></a>
-**Layout definition for VOS over PMDK**
-
-![../../doc/graph/Fig_029.png](../../doc/graph/Fig_029.png "Layout definition for VOS over PMDK")
-
-<a id="7x"></a>
-**Code block representing the pool creation, pool open and root-object creation**
-
-![../../doc/graph/Fig_030.png](../../doc/graph/Fig_030.png "Code block representing the pool creation, pool open and root-object creation")
-
-The first <a href="#7u">figure</a> shows the detailed layout of the container index table with PMDK pointers and list API.
-Layouts of object table and epoch table are similar to the container index table shown in this <a href="#7v">figure</a>.
-Each object table entry would have the object id, PMEM pointer to the tree based index structure (either rb-tree/b+-tree).
-
-An epoch-table entry would be comprised of the epoch number and its respective key.
-Key in the epoch-table is generic and can take the type as byte-array extents or KV keys, and has been left as a void\* persistent memory pointer for that reason.
-The following code in the previous<a href="#7w">Figure</a> represents the layout for B+ Tree in PMDK.
-A similar construction would be necessary for the container handle cookie index table.
-The code in previous<a href="#7w">Figure</a> presents a layout definition for VOS over PMDK.
-
-In addition to providing persistent memory friendly definitions for all the data structures required to maintain metadata in the VOS pool, PMDK requires a clearly defined layout for the PMDK pool.
-PMDK provides run-time and compile-time safety with specially-defined macros.
-previous<a href="#7x">Figure</a> shows layout definition for VOS.
-Both POBJ_LAYOUT_ROOT and POBJ_LAYOUT_TOID perform a TOID_DECLARE as show in with an additional type_id argument.
-
-POBJ_LAYOUT_BEGIN starts a counter to assign type IDs consecutively until end.
-This is useful in verifying whether the current version of the layout matches with the existing objects and their type numbers.
-PMDK provides a TOID_VALID macro to verify type numbers.
-
-On definition of the layout, VOS initializes the pool using pmemobj_create.
-The pmemobj_open interface allows us to open the pool for future use.
-PMDK provides the pmemobj_root or its equivalent macro POBJ_ROOT for defining the root object for the pool.
-The POBJ_LAYOUT_NAME is just a wrapper to translate the layout string created using POBJ_LAYOUT_BEGIN/END to an internal representation of PMDK.
-
-In the case of persistent memory, the actual data apart from the metadata is also stored in the same pool.
-VOS allocates the pool to be sufficiently larger to support all objects and their metadata.
-This choice of design is to ensure effective use of underlying storage.
-
-PMDK supports allocation, resizing and freeing objects from the persistent memory pool in a thread-safe and fail-safe manner with interfaces like pmemobj_alloc and pmemobj_free.
-These routines are atomic with respect to other threads or any power-failure interruption.
-In the event of program failure or system crash, on recovery the allocations made are guaranteed to be entirely completed or discarded, leaving the persistent memory heap and internal object containers in a consistent state.
-
-A detailed list of these interfaces is available in the manpage for libpmemobj.
-The alloc and free interfaces discussed here are non-transactional.
-libpmemobj offers transactional interfaces to guarantee consistency at all time.
-The following <a href="#78">section</a> discusses transactions within PMDK for VOS.
-
-
-<a id="78"></a>
-
-## Transactions and Recovery
-
-Transactions are required with persistent memory to ensure a consistent state at all times.
-The following code sample shows transaction flow with the different stages using macros.
-
-<a id="7y"></a>
-<b>Transaction flow with the different stages using macros</b>
-
-![../../doc/graph/Fig_036.png](../../doc/graph/Fig_036.png ">Transaction flow with the different stages using macros")
-
-PMDK, specifically libpmemobj, provides a set of transactional interfaces to use persistent memory in a fail-safe manner.
-Libpmemobj transactions allow enclosing a set of operations between start and commit and ensuring a durable and consistent state of the underlying PMEM on transaction commit.
-In case of a power failure or system crash, libpmemobj guarantees that all uncommitted changes roll back on restart, thereby restoring the consistent state of memory pool from the time when the transaction started.
-
-<b>B+Tree KV tree creation with PMDK transactions</b>
-<a id="7z"></a>
-![../../doc/graph/Fig_037.png](../../doc/graph/Fig_037.png ">Transaction flow with the different stages using macros")
-
-The library libpmemobj offers a set of functions to create and manage transactions.
-Each transaction goes through a series of stages namely, TX_STAGE_NONE, TX_STAGE_WORK, TX_STAGE_ONABORT, TX_STAGE_FINALLY and TX_STAGE_ONCOMMIT.
-
-A set of pmemobj_tx_* functions are also provided to change the different stages.
-libpmemobj also offers macros to eliminate boilerplate code while creating and managing transactions, for example pmemobj_begin() requires the user to set a jmp_buf with setjmp function every time a new transaction is created; this will be enclosed in a macro TX_BEGIN.
-This section will use macros provided by libpmemobj to explain VOS use of transactions.
-
-The API libpmemobj represents the complete transaction flow represented with macros as shown in the <a href="#7y">figure</a>
-above.
-The second <a href="#7z">figure</a> shows a simple example of creating a new KV store with B+ tree with the help of PMDK transactions.
-TX_ZNEW macro creates a typed, zeroed object of size type.
-libpmemobj also offers several transactional allocations like TX_ALLOC, TX_ZALLOC, and TX_REALLOC among others.
-The detail list of APIs is available in [1].
-
-The pmemobj_tx_add_range_direct interface used in this example takes a snapshot of a persistent memory block of a given size, located at the address ptr in virtual memory spaces and saves it to undo log.
-On failure, the library rolls back all changes associated with this memory range.
-The code example in the <a href="#7aa">figure</a>
-below uses B+ Tree based KV store for usage of adding fields to ensure tracking in undo logs for recovery (implementations for bplus_tree_insert_empty_leaf and bplus_tree_insert_into_leaf are not shown for simplicity).
-
-<b>Simple example using B+ Tree based KV store for usage of adding fields to ensure tracking in undo logs for recovery</b>
-
-<a id="7aa"></a>
-![../../doc/graph/Fig_038.png](../../doc/graph/Fig_038.png "Simple example using B+ Tree based KV store for usage of adding fields to ensure tracking in undo logs for recovery")
-
-To ensure consistency for all objects modified within a transaction, libpmemobj expects all fields to be explicitly added to the transaction to make it a part of the transaction.
-This is because the library maintains an undo-log to track objects added to a transaction.
-This log is persistent and is key to rolling back modifications in case of failure.
-If a particular object is missing in the undo-log, then libpmemobj does not track modifications made to this object causing a persistent memory leak on failure.
-The code sample in the <a href="#7aa">Figure</a> above shows a partial implementation for insert into a B+ tree for a KV store.
-This example is an extension of the layout definition of B+ Trees provided in <a href="#7w">*Layout definition for VOS over PMDK\</a>.
-*A simple 64-bit integer key and a void* value is considered in this example and it is seen that a transaction is started/insert and whenever a particular object is modified, for example the root node in this case, it has to be added to the transaction beforehand.
-
-<a id="781"></a>
-
-### Discussions on Transaction Model
-
-Although PMDK transactions provide guarantees for data consistency, that does not come without a price.
-PMDK creates, persists and maintains undo logs to provide necessary guarantees for recovery on failure.
-However, maintaining undo logs is expensive.
-VOS can group operations on its internal data structures and perform updates to data structures in batches, in order to minimize the overhead from undo-logs.
-
-In addition, PMDK transactions currently only support single-threaded transactions where threads currently do not cooperate within a single transaction and so there is no contention management or conflict detection, which is generally a characteristic of software transactional memories.
-This is a potential problem because VOS requires concurrent access to its internal data structures, which can increase the number of undo logs to ensure consistency.
-
-There are two possible directions being considered to address this problem.
-The PMDK team has proposed one solution, in which every thread has its own copy of the tree that, which would be kept in-sync with the help of an insert-only, lock-free, singly-linked list, to which all memory ranges (only offset and size) are appended.
-
-A second approach is to use copy-on-write, where writes do not change existing nodes, but rather create a new node at a new location for providing updates.
-Once the update is successful, the tree's pointers point to the new node, rather than the old node, and reclaim space by freeing old nodes.
-The primary benefit of this approach is that updates happen at a separate location without touching the original tree structure.
-This facilitates discarding all the latest updates to the tree without causing persistent memory leaks.
-In this case, discarding updates on failure would mean simply discarding all allocated objects for the new updates, as there was no modification to existing data.
-Constant allocation and freeing of persistent memory can lead to fragmentation.
-Jemalloc is a heap manager which uses algorithms and approaches to avoid fragmentation .
-PMDK uses Jemalloc to manage its allocations through memkind .
-By using PMDK to handle PMEM allocations, VOS can leverage the defragmentation benefits of jemalloc.
-In addition, auto-defragmentation tools can also be developed in future to address defragmentation due to copy-on-write style approach, similar to files-systems like btrfs.
+During aggregation, VOS must retain the latest update to a key/extent-range discarding the others and any updates visible at a persisitent snapshot.
+VOS can freely remove or consolidate keys or extents so long as it doesn't alter the view visible at the latest timestamp or at any persistent snapshot epoch.
+Aggregation makes use of the vos_iterate API to find both visible and hidden entries between persistent snapshots and removes hidden keys and extents and merges contiguous partial extents to reduce metadata overhead.
+Aggregation can be an expensive operation but doesn't need to consume cycles on the critical path.
+A special aggregation ULT processes aggregation, yielding frequently to avoid blocking continuing I/O.
 
 <a id="79"></a>
 
-## VOS Checksum Management
+## VOS Checksum Management (TO BE UPDATED)
 
-One of the guarantees that VOS provides is end-to-end data integrity.
-Data corruption in VOS can happen while reading or writing data due to a various
-reasons, including leaks or failures in persistent memory, or during data
-transmission through the wire. VOS supports data integrity check with checksums.
+One of the guarantees that VOS provides is end-to-end data integrity.  Data corruption in VOS can happen while reading or writing data due to a variety of reasons, including leaks or failures in persistent memory, or during data transmission through the wire. VOS supports data integrity check with checksums.
 
-Client side (HDF5, DAOS-SR, and DAOS) of the stack provides checksum for both
-byte extents and key value stores on writes and updates, respectively.
+The VOS API for updates and writes will require checksums as arguments from its upper layer(s). VOS requires checksum for both keys and values in case of KV objects.  VOS stores the checksum along with the data.
 
-The VOS API for updates and writes will require checksums as arguments from its
-upper layer(s). VOS requires checksum for both keys and values in case of KV
-objects.  VOS stores the checksum along with the data.
-
-A Lookup operation on a KV will verify the checksum by computing the checksum
-for the key and value. If reads in byte-arrays spans over multiple extent
-ranges, VOS would have to recompute the checksum at the server for each
-individual extent range for verifying their integrity and return the computed
-checksum of the entire requested extent range to the client.  In case if a read
-requests a partial byte array extent of an existing extent range, VOS would
-compute the checksum of the existing extent to verify correctness and then
-return the requested extent range to the client with its computed checksum.
-When byte array extents are aggregated, VOS individually re-computes checksum of
-all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
-
-Because checksum computation involves multiple layers of stack to be in-sync, VOS plans to leverage and extend either the mchecksum library or the
-<a href="https://01.org/intel&#174;-storage-acceleration-library-open-source-version">
-Intel&#174; Storage acceleration library</a>.
+A Lookup operation on a KV will verify the checksum by computing the checksum for the key and value. If reads in byte-arrays span multiple extent ranges, VOS would have to recompute the checksum at the server for each individual extent range for verifying their integrity and return the computed checksum of the entire requested extent range to the client.  In case a read requests a partial byte array extent of an existing extent range, VOS would compute the checksum of the existing extent to verify correctness and then return the requested extent range to the client with its computed checksum.  When byte array extents are aggregated, VOS individually re-computes checksum of all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
 
 <a id="80"></a>
 
 ## Metadata Overhead
 
-VOS has many internal data structure making the amount of metadata to maintain object an important factor.
-Although it would be challenging to provide the exact amount of metadata associated with creating and maintaining different objects within VOS, with certain assumptions we can get an estimate of how much metadata would be required for certain object kinds.
-This section provides an estimate of the amount of metadata space required for creating and maintaining a single KV object.
-The primary purpose of this analysis is to present an idea of the metadata costs associated with creating and maintaining objects in VOS.
-The numbers presented provide approximations rather than modeling or quantifying the exact metadata overhead consumption.
+VOS provides a tool vos_stats.py that can take a set of assumptions about how many keys and objects and VOS pools are in use and provide an estimate of metadata overhead.
 
-**Assumptions:**
+TODO: Provide more discussion
 
-B+-tree with a tree order "8" is used for implementing the KV object and all the index tables in a VOS pool.
-Let us assume that:
-<ol>
-<li>each node header consumes, 32 bytes</li>
-<li>A btree record would consume a total of 56bytes where:
-  <ol>
-  <li>hkey_size takes 16 bytes (128 bits)</li>
-  <li>pmem value pointer consumes 16 bytes</li>
-  <li>epochs takes 16 bytes</li>
-  <li>key and value size consume 8 bytes each</li></ol>
-<li>creating a node would cost = ~576bytes (after adjusting for cache alignment</li>
-<li>tree root to hold (order, depth, class, feature) would consume 40bytes.
-Creating tree root would be an one time cost.</li>
-</ol>
+To run an example, first setup the paths
+```
+[~/daos]$ source ./scons_local/utils/setup_local.sh
+/home/jvolivie/daos
+Build vars file found: ./.build_vars.sh
+```
 
-**Scenarios**
-<ol>
-<li>In the best case case when the record position in empty in a leaf, the metadata cost would be:
-  <ol>
-  <li>16 (KV record pointer) + 16 (hkey_size) + 2 (key_count/node) + 32 (additional metadata) = 64 bytes.</li>
-  <li>Additional metadata includes epochs, key and value size.</li>
-  </ol>
-<li>In the most general or average case, with an assumption that the tree is 50% full with a reasonable depth, the metadata cost can be approximately calculated using
-</li>
-<li>tree root to hold (order, depth, class, feature) would consume 40bytes.
-Creating tree root would be an one time cost.
-<ol>
-  <li>(btr_record_metadata + key_count + depth) * 2 * (1 + 1/8 + 1/64 + ...)</li>
-  <li>(64 + 2) * 2 * (1 + 1/8 + 1/64 + ...) = ~151bytes</li>
-  <li>Since the order assumed is 8, the 1/8 refers to the point that 1 parent record points to 8 leaf records and so on until root.</li>
-  </ol>
-<li>Metadata initial setup cost for creating one record in a KV including all indexes associated.
-<ol>
-  <li>create_cookie_tree + create_object_tree + create_kv_object (with one record) + create_epoch_tree</li>
-  <li>Create one tree node for every table/object starting from a empty b-tree</li>
-  <li>(btr_tree_node + btree_root) = 4 * (544 + 40) = ~2.36kbytes (after padding for cache alignment)</li>
-  </ol>
-  <li>Once all indexes are created and individual trees have reasonable depth, we can use the average case to determine the metadata cost
-  <ol>
-  <li>1 object with a million KV records, with 1000 epoch and cookies would consume:  (1 + 1000000 + 1000 + 1000) * 151 = ~145MB
-Which is 145MB/106   =  ~152bytes/record</li>
-</ol></li>
-</ol>
+Then run vos_size to create vos_size.yaml with metadata size information
+```
+[~/daos]$ vos_size
+```
 
-While using KV we would have additional cost involved in creating one root-tree node for every level on each insert.
-To keep the analysis simpler, let us assume one distribution key and many attribute keys.
-Each attribute key would have a separate value tree.
-The initial metadata cost is high but the overall update cost in the best case and the average case would still remain the same as in case of the single level b-tree.
-This is because, once a value tree for a key is created all updates are added directly to the value tree.
-And once the different levels of the trees have been initialized, at no point will two levels of the trees would get rebalanced simultaneously.
-
-<ol>
-<li>Creating one KV - record (initial setup)
-<ol>
-<li>create_cookie_tree + create_object_tree + create_kv_object (with one record) + create_epoch_tree</li>
-<li>Create one tree node for every table/object</li>
-<li>6 * (btr_tree_node + root) + 1 * record = (6 * 616) + 64 = ~3.8kbytes</li>
-</ol>
-<li>Creating one object with one million keys with overwrites at 1000 epochs with 1000 cookies (average case)
-<ol>
-<li>initial setup cost + (1000 + 1000 + 1) * btree_average_update_metadata_cost = (1000000 * 616) + (1000 + 1000 + 1) * 151 = ~588MB, which is 588MB/106 = ~616 bytes/record
-</ol></li>
-</ol>
-
+Finally, execute vos_size.py to get a meta data estimate for the use cases in an input.yaml.
+An example input yaml is installed to /etc.
+```
+[~/daos]$ vos_size.py "${SL_PREFIX}/etc/vos_size_input.yaml"
+Metadata totals:
+	pool                :          2 K ( 0.00%)
+	container           :          9 K ( 0.00%)
+	object              :         11 K ( 0.00%)
+	dkey                :         13 K ( 0.00%)
+	akey                :         42 K ( 0.00%)
+	single_value        :         40 K ( 0.00%)
+	array               :        248 K ( 0.01%)
+	total_meta          :        367 K ( 0.02%)
+Total bytes with user data: 2053492K
+```
 
 <a id="81"></a>
 
