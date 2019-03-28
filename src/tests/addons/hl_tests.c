@@ -65,6 +65,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	nr = ENUM_DESC_NR;
 		int		rc;
+
 		memset(buf, 0, ENUM_DESC_BUF);
 		rc = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor,
 				  NULL);
