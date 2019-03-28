@@ -167,7 +167,9 @@ bool d_should_fail(struct d_fault_attr_t *fault_attr_ptr);
  *                              fa_in.fa_interval
  *                              fa_in.fa_max_faults
  *                              fa_in.fa_err_code
- *
+ *				fa_in.fa_num_faults
+ *				fa_in.fa_probability_x
+ *				fa_in.fa_probability_y
  * \return                      DER_SUCCESS on success, negative value on error.
  */
 int

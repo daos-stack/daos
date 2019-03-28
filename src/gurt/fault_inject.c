@@ -180,6 +180,12 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	fault_attr->fa_max_faults = fa_in.fa_max_faults;
 	fault_attr->fa_err_code = fa_in.fa_err_code;
 	fault_attr->fa_argument = fa_argument;
+	/**
+	 * Let's update fa_num_faults here too, so the user can reset num faults
+	 * by fault_attr_set, then it can use the same fault_attr to inject
+	 * other failures.
+	 */
+	fault_attr->fa_num_faults = fa_in.fa_num_faults;
 	/* nrand48() only takes the high order 48 bits for its seed */
 	memcpy(fault_attr->fa_rand_state, &d_fault_inject_seed, 4);
 	D_SPIN_UNLOCK(&fault_attr->fa_lock);
