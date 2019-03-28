@@ -863,13 +863,13 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	/*
 	 * Set 'iov_len' beforehand, cause it will be used as copy
-	 * size in bio_readv().
+	 * size in bio_read().
 	 */
 	iov_out->iov_len = biov->bi_data_len;
 	bioc = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
 	D_ASSERT(bioc != NULL);
 
-	return bio_readv(bioc, biov->bi_addr, iov_out);
+	return bio_read(bioc, biov->bi_addr, iov_out);
 }
 
 static int
