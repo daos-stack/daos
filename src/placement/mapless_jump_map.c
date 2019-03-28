@@ -55,7 +55,7 @@ struct coll_map {
 
 struct remap_node {
 	uint32_t rank;
-	uint32_t id;
+	uint32_t shard_idx;
 };
 
 /**
@@ -535,10 +535,11 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 			if (pool_target_unavail(target)) {
 				rebuild_doms[rebuild_num] = ndom_id;
 				rebuild_shard_num[rebuild_num] = k;
+				uint32_t tgt_rank = target->ta_comp.co_rank;
 
 				if (remap_list != NULL) {
-					remap_list[rebuild_num].rank = tgt_id;
-					remap_list[rebuild_num].id = k;
+					remap_list[rebuild_num].rank = tgt_rank;
+					remap_list[rebuild_num].shard_idx = k;
 				}
 				rebuild_num++;
 			}
@@ -785,9 +786,56 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					   mplmap->dom_used_length,
 					   mplmap->cnt_used_length, remap_list);
 
+
 	for (i = 0; i < failed_tgt_num; ++i) {
+		struct pool_target	*target;
+		int			leader;
+
+		target = NULL;
+		if(myrank != -1)
+			goto add;
+
+		leader = pl_select_leader(md->omd_id,
+				remap_list[i].shard_idx, layout->ol_nr,
+				true, pl_obj_get_shard, layout);
+
+		if (leader < 0) {
+			D_WARN("Not sure whether current shard "
+				"is leader or not for obj "DF_OID
+				", ver:%d, shard:%d, rc = %d\n",
+				DP_OID(md->omd_id), rebuild_ver,
+				remap_list[i].shard_idx, leader);
+			goto add;
+		}
+
+		rc = pool_map_find_target(map->pl_poolmap,
+						leader, &target);
+
+		D_ASSERT(rc == 1);
+
+		if (myrank != target->ta_comp.co_rank) {
+			/* The leader shard is not on current
+			 * server, then current server cannot
+			 * know whether DTXs for current shard
+			 * have been re-synced or not. So skip
+			 * the shard that will be handled by
+			 * the leader on another server.
+			 */
+			D_DEBUG(DB_TRACE, "Current replica (%d)"
+				"isn't the leader (%d) for obj "
+				DF_OID", fseq:%d, status:%d, "
+				"ver:%d, shard:%d, skip it\n",
+				myrank, target->ta_comp.co_rank,
+				DP_OID(md->omd_id),
+				target->ta_comp.co_fseq,
+				target->ta_comp.co_status,
+				rebuild_ver, remap_list[i].shard_idx);
+			continue;
+		}
+
+add:
 		tgt_rank[i] = remap_list[i].rank;
-		shard_id[i] = remap_list[i].id;
+		shard_id[i] = remap_list[i].shard_idx;
 	}
 	return failed_tgt_num;
 }
