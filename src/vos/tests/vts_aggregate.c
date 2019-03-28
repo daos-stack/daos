@@ -354,8 +354,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	assert_non_null(buf_u);
 
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
-		if (punch_nr > 0 && punch_idx < punch_nr
-		    && punch_epoch[punch_idx] == epoch) {
+		if (punch_idx < punch_nr && punch_epoch[punch_idx] == epoch) {
 			arg->ta_flags |= TF_PUNCH;
 			assert_true(punch_idx < punch_nr);
 			punch_idx++;
