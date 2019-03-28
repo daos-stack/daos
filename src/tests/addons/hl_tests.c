@@ -55,7 +55,6 @@ list_keys(daos_handle_t oh, int *num_keys)
 	int		 key_nr = 0;
 	daos_sg_list_t	 sgl;
 	daos_iov_t       sg_iov;
-	int		 rc;
 
 	buf = malloc(ENUM_DESC_BUF);
 	daos_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
@@ -65,7 +64,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	nr = ENUM_DESC_NR;
-
+		int		rc;
 		memset(buf, 0, ENUM_DESC_BUF);
 		rc = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor,
 				  NULL);
