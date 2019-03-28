@@ -68,7 +68,7 @@ def build_static_tests(env):
 def scons():
     """Scons function"""
 
-    Import('env prereqs')
+    Import('dfuse_env prereqs')
 
     if not prereqs.check_component('cunit'):
         print("\n************************************************")
@@ -79,10 +79,10 @@ def scons():
         return
 
     # Set options which are used throughout the src.
-    tenv = env.Clone()
+    tenv = dfuse_env.Clone()
     tenv.AppendUnique(CFLAGS=['-pthread'])
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
-    tenv.AppendUnique(CPPPATH=['../dfuse'])
+    tenv.AppendUnique(CPPPATH=['..'])
     tenv.AppendUnique(LIBPATH='../il')
     tenv.AppendUnique(RPATH='$PREFIX/lib')
 
