@@ -1957,18 +1957,18 @@ test_acl_is_valid_bad_ordering(void **state)
 	expect_acl_invalid_bad_ordering(DAOS_ACL_EVERYONE, DAOS_ACL_OWNER);
 }
 
-
 static void
-test_acl_random_buffer(void **state)
+expect_acl_random_buffer_not_valid(void)
 {
-	size_t	bufsize, i;
-	uint8_t	*buf;
-	int	result;
+	size_t		bufsize, i;
+	uint32_t	len;
+	struct daos_acl	*random_acl;
+	uint8_t		*buf;
+	int		result;
 
-	/* Fuzz test - random content */
-	srand((unsigned int)time(NULL));
-
-	bufsize = (size_t)(rand() % UINT16_MAX);
+	/* Limit the length to limit how much time we spend */
+	len = (uint32_t)(rand() % UINT16_MAX);
+	bufsize = sizeof(struct daos_acl) + len;
 	D_ALLOC(buf, bufsize);
 	assert_non_null(buf);
 
@@ -1976,7 +1976,11 @@ test_acl_random_buffer(void **state)
 		buf[i] = rand() % UINT8_MAX;
 	}
 
-	result = daos_acl_validate((struct daos_acl *)buf);
+	/* Need to match the advertised len to the actual len */
+	random_acl = (struct daos_acl *)buf;
+	random_acl->dal_len = len;
+
+	result = daos_acl_validate(random_acl);
 	/*
 	 * In theory it's possible (but unlikely) to run into a case where the
 	 * random garbage represents something valid. Interesting to see what
@@ -1984,12 +1988,25 @@ test_acl_random_buffer(void **state)
 	 */
 	if (result == 0) {
 		printf("Surprise! The random buffer was a valid ACL:\n");
-		daos_acl_dump((struct daos_acl *)buf);
+		daos_acl_dump(random_acl);
+	} else {
+		assert_int_equal(result, -DER_INVAL);
 	}
 
-	assert_int_equal(result, -DER_INVAL);
-
 	D_FREE(buf);
+}
+
+static void
+test_acl_random_buffer(void **state)
+{
+	int i;
+
+	/* Fuzz test - random content */
+	srand((unsigned int)time(NULL));
+
+	for (i = 0; i < 500; i++) {
+		expect_acl_random_buffer_not_valid();
+	}
 }
 
 int
