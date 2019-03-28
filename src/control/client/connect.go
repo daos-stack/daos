@@ -67,6 +67,7 @@ type Connect interface {
 	ClearConns() ResultMap
 	ListFeatures() ClientFeatureMap
 	ListStorage() (ClientNvmeMap, ClientScmMap)
+	FormatStorage() ResultMap
 	KillRank(uuid string, rank uint32) ResultMap
 }
 
@@ -193,4 +194,13 @@ func (c *connList) makeRequests(
 	}
 
 	return cMap
+}
+
+// NewConnect is a factory for Connect interface to operate over
+// multiple clients.
+func NewConnect() Connect {
+	return &connList{
+		factory:     &controllerFactory{},
+		controllers: []Control{},
+	}
 }

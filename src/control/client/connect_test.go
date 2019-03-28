@@ -31,15 +31,16 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/connectivity"
 )
 
 var (
-	addresses = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features  = []*pb.Feature{MockFeaturePB()}
-	ctrlrs    = NvmeControllers{MockControllerPB("")}
-	modules   = ScmModules{MockModulePB()}
+	addresses  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
+	features   = []*pb.Feature{MockFeaturePB()}
+	ctrlrs     = NvmeControllers{MockControllerPB("")}
+	modules    = ScmModules{MockModulePB()}
+	errExample = errors.New("")
 )
 
 func init() {
@@ -51,17 +52,34 @@ type mockControllerFactory struct {
 	features []*pb.Feature
 	ctrlrs   NvmeControllers
 	modules  ScmModules
+	// to provide error injection into Control objects
+	formatRet  error
+	killRet    error
+	connectRet error
 }
 
 func (m *mockControllerFactory) create(address string) (Control, error) {
-	return newMockControl(address, m.state, m.features, m.ctrlrs, m.modules)
+	// returns controller with default successful behaviour
+	return newMockControl(
+		address, m.state, m.features, m.ctrlrs, m.modules,
+		m.formatRet, m.killRet, m.connectRet), nil
 }
 
 func newMockConnect(
 	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
-	modules ScmModules) Connect {
+	modules ScmModules, formatRet error, killRet error, connectRet error) Connect {
 
-	return &connList{factory: &mockControllerFactory{state, features, ctrlrs, modules}}
+	return &connList{
+		factory: &mockControllerFactory{
+			state, features, ctrlrs, modules,
+			formatRet, killRet, connectRet,
+		},
+	}
+}
+
+func defaultMockConnect() Connect {
+	return newMockConnect(
+		connectivity.Ready, features, ctrlrs, modules, nil, nil, nil)
 }
 
 func TestConnectClients(t *testing.T) {
@@ -69,16 +87,21 @@ func TestConnectClients(t *testing.T) {
 		addrsIn       Addresses
 		addrsOut      Addresses
 		state         connectivity.State
+		connRet       error
 		shouldSucceed bool
 	}{
-		{addresses, addresses, connectivity.Idle, true},
-		{addresses, Addresses{}, connectivity.Connecting, false},
-		{addresses, addresses, connectivity.Ready, true},
-		{addresses, Addresses{}, connectivity.TransientFailure, false},
-		{addresses, Addresses{}, connectivity.Shutdown, false},
+		{addresses, addresses, connectivity.Idle, nil, true},
+		{addresses, Addresses{}, connectivity.Connecting, nil, false},
+		{addresses, addresses, connectivity.Ready, nil, true},
+		{addresses, Addresses{}, connectivity.TransientFailure, nil, false},
+		{addresses, Addresses{}, connectivity.Shutdown, nil, false},
+		{addresses, addresses, connectivity.Idle, errExample, false},
+		{addresses, Addresses{}, connectivity.Connecting, errExample, false},
+		{addresses, addresses, connectivity.Ready, errExample, true},
 	}
 	for _, tt := range conntests {
-		cc := newMockConnect(tt.state, features, ctrlrs, modules)
+		cc := newMockConnect(
+			tt.state, features, ctrlrs, modules, nil, nil, tt.connRet)
 
 		addrs, eMap := cc.ConnectClients(tt.addrsIn)
 
@@ -103,16 +126,29 @@ func TestConnectClients(t *testing.T) {
 }
 
 func clientSetup(
-	t *testing.T, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules) Connect {
+	state connectivity.State, features []*pb.Feature,
+	ctrlrs NvmeControllers, modules ScmModules,
+	formatRet error, killRet error, connectRet error) Connect {
 
-	cc := newMockConnect(state, features, ctrlrs, modules)
+	cc := newMockConnect(
+		state, features, ctrlrs, modules,
+		formatRet, killRet, connectRet)
+
 	_, _ = cc.ConnectClients(addresses)
+
+	return cc
+}
+
+func defaultClientSetup() Connect {
+	cc := defaultMockConnect()
+
+	_, _ = cc.ConnectClients(addresses)
+
 	return cc
 }
 
 func TestDuplicateConns(t *testing.T) {
-	cc := newMockConnect(connectivity.Ready, features, ctrlrs, modules)
+	cc := defaultMockConnect()
 	addrs, eMap := cc.ConnectClients(append(addresses, addresses...))
 
 	// verify duplicates are ignored.
@@ -121,7 +157,7 @@ func TestDuplicateConns(t *testing.T) {
 }
 
 func TestGetClearConns(t *testing.T) {
-	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
+	cc := defaultClientSetup()
 
 	addrs, eMap := cc.GetActiveConns(ResultMap{})
 	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
@@ -144,7 +180,7 @@ func TestGetClearConns(t *testing.T) {
 }
 
 func TestListFeatures(t *testing.T) {
-	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
+	cc := defaultClientSetup()
 
 	clientFeatures := cc.ListFeatures()
 
@@ -154,7 +190,7 @@ func TestListFeatures(t *testing.T) {
 }
 
 func TestListStorage(t *testing.T) {
-	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
+	cc := defaultClientSetup()
 
 	clientNvme, clientScm := cc.ListStorage()
 
@@ -167,10 +203,60 @@ func TestListStorage(t *testing.T) {
 		"unexpected client SCM modules returned")
 }
 
+func checkResults(t *testing.T, addrs Addresses, results ResultMap, errExp error) {
+	AssertEqual(
+		t, len(addresses), len(results),
+		"unexpected number of failures in result")
+
+	for _, res := range addresses {
+		AssertEqual(
+			t, results[res].Err, errExp,
+			"unexpected error in result")
+	}
+}
+
+func TestFormatStorage(t *testing.T) {
+	tests := []struct {
+		formatRet error
+	}{
+		{
+			nil,
+		},
+		{
+			errExample,
+		},
+	}
+
+	for _, tt := range tests {
+		cc := clientSetup(
+			connectivity.Ready, features, ctrlrs, modules,
+			tt.formatRet, nil, nil)
+
+		resultMap := cc.FormatStorage()
+
+		checkResults(t, addresses, resultMap, tt.formatRet)
+	}
+}
+
 func TestKillRank(t *testing.T) {
-	cc := clientSetup(t, connectivity.Ready, features, ctrlrs, modules)
+	tests := []struct {
+		killRet error
+	}{
+		{
+			nil,
+		},
+		{
+			errExample,
+		},
+	}
 
-	eMap := cc.KillRank("acd", 0)
+	for _, tt := range tests {
+		cc := clientSetup(
+			connectivity.Ready, features, ctrlrs, modules,
+			nil, tt.killRet, nil)
 
-	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+		resultMap := cc.KillRank("acd", 0)
+
+		checkResults(t, addresses, resultMap, tt.killRet)
+	}
 }

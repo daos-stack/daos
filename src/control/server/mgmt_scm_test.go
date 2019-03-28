@@ -28,6 +28,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/go-ipmctl/ipmctl"
 	"google.golang.org/grpc"
 )
 
@@ -43,6 +44,8 @@ func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
 
 func TestListScmModules(t *testing.T) {
 	cs := newMockControlService()
+	cs.scm = newMockScmStorage([]DeviceDiscovery{MockModule()}, true, cs.config)
+
 	m := MockModulePB()
 	mock := &mockListScmModulesServer{}
 

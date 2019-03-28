@@ -51,6 +51,7 @@ type Control interface {
 	listAllFeatures() (FeatureMap, error)
 	listScmModules() (ScmModules, error)
 	listNvmeCtrlrs() (NvmeControllers, error)
+	formatStorage() error
 	killRank(uuid string, rank uint32) error
 }
 
