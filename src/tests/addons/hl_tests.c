@@ -42,6 +42,54 @@
 static void simple_put_get(void **state);
 
 #define NUM_KEYS 1000
+#define ENUM_KEY_NR     1000
+#define ENUM_DESC_NR    10
+#define ENUM_DESC_BUF   (ENUM_DESC_NR * ENUM_KEY_NR)
+
+static void
+list_keys(daos_handle_t oh, int *num_keys)
+{
+	char		*buf;
+	daos_key_desc_t  kds[ENUM_DESC_NR];
+	daos_anchor_t	 anchor = {0};
+	int		 key_nr = 0;
+	daos_sg_list_t	 sgl;
+	daos_iov_t       sg_iov;
+	int		 rc;
+
+	buf = malloc(ENUM_DESC_BUF);
+	daos_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	nr = ENUM_DESC_NR;
+
+		memset(buf, 0, ENUM_DESC_BUF);
+		rc = daos_kv_list(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor,
+				  NULL);
+		assert_int_equal(rc, 0);
+
+		if (nr == 0)
+			continue;
+#if 0
+		uint32_t	i;
+		char		*ptr;
+
+		for (ptr = buf, i = 0; i < nr; i++) {
+			char key[10];
+
+			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
+			print_message("i:%d dkey:%s len:%d\n",
+				      i + key_nr, key, (int)kds[i].kd_key_len);
+			ptr += kds[i].kd_key_len;
+		}
+#endif
+		key_nr += nr;
+	}
+	*num_keys = key_nr;
+}
 
 static void
 simple_put_get(void **state)
@@ -52,9 +100,10 @@ simple_put_get(void **state)
 	daos_size_t	buf_size = 1024, size;
 	daos_event_t	ev;
 	const char      *key_fmt = "key%d";
+	char		key[10];
 	char		*buf;
 	char		*buf_out;
-	int		i;
+	int		i, num_keys;
 	int		rc;
 
 	D_ALLOC(buf, buf_size);
@@ -78,8 +127,6 @@ simple_put_get(void **state)
 	print_message("Inserting %d Keys\n", NUM_KEYS);
 	/** Insert Keys */
 	for (i = 0; i < NUM_KEYS; i++) {
-		char key[10];
-
 		sprintf(key, key_fmt, i);
 		rc = daos_kv_put(oh, DAOS_TX_NONE, key, buf_size, buf,
 				 arg->async ? &ev : NULL);
@@ -97,7 +144,6 @@ simple_put_get(void **state)
 	print_message("Overwriting Last Key\n");
 	/** overwrite the last key */
 	{
-		char key[10];
 		int value = NUM_KEYS;
 
 		sprintf(key, key_fmt, NUM_KEYS-1);
@@ -114,11 +160,13 @@ simple_put_get(void **state)
 		}
 	}
 
+	print_message("Enumerating Keys\n");
+	list_keys(oh, &num_keys);
+	assert_int_equal(num_keys, NUM_KEYS);
+
 	print_message("Reading and Checking Keys\n");
 	/** read and verify the keys */
 	for (i = 0; i < NUM_KEYS; i++) {
-		char key[10];
-
 		memset(buf_out, 0, buf_size);
 
 		sprintf(key, key_fmt, i);
@@ -159,6 +207,18 @@ simple_put_get(void **state)
 			assert_int_equal(NUM_KEYS, *((int *)buf_out));
 		}
 	}
+
+
+	print_message("Remove 10 Keys\n");
+	for (i = 0; i < 10; i++) {
+		sprintf(key, key_fmt, i);
+		rc = daos_kv_remove(oh, DAOS_TX_NONE, key, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	print_message("Enumerating Keys\n");
+	list_keys(oh, &num_keys);
+	assert_int_equal(num_keys, NUM_KEYS - 10);
 
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
