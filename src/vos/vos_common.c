@@ -180,6 +180,8 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 	}
 
+	tls->vtl_dth = NULL;
+
 	return tls;
 }
 
@@ -338,12 +340,13 @@ vos_init(void)
 		return rc;
 	}
 
+	vsa_dth = NULL;
 	vsa_xsctxt_inst = NULL;
 	vsa_nvme_init = false;
 
 	D_ALLOC_PTR(vsa_imems_inst);
 	if (vsa_imems_inst == NULL)
-		D_GOTO(exit, rc);
+		D_GOTO(exit, rc = -DER_NOMEM);
 
 	rc = vos_imem_strts_create(vsa_imems_inst);
 	if (rc)
