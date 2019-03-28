@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,37 +35,41 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __IOF_API_H__
-#define __IOF_API_H__
+#ifndef __IOF_IO_H__
+#define __IOF_IO_H__
 
-#include <stdbool.h>
-#include <iof_defines.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/uio.h>
+#include <stdio.h>
+#include "ioil_defines.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-enum iof_bypass_status {
-	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
-	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
-	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
-	IOF_IO_DIS_FLAG,	/* Bypass is disabled for file because
-				 *  O_APPEND or O_PATH was used
-				 */
-	IOF_IO_DIS_FCNTL,	/* Bypass is disabled for file because
-				 * bypass doesn't support an fcntl
-				 */
-	IOF_IO_DIS_STREAM,	/* Bypass is disabled for file opened as a
-				 * stream.
-				 */
-	IOF_IO_DIS_RSRC,	/* Bypass is disabled due to lack of
-				 * resources in interception library
-				 */
-};
+/* High level, POSIX equivalent API */
+IOF_PUBLIC int iof_open(const char *, int, ...);
+IOF_PUBLIC ssize_t iof_pread(int, void *, size_t, off_t);
+IOF_PUBLIC ssize_t iof_pread(int, void *, size_t, off_t);
+IOF_PUBLIC ssize_t iof_pwrite(int, const void *, size_t, off_t);
+IOF_PUBLIC off_t iof_lseek(int, off_t, int);
+IOF_PUBLIC ssize_t iof_preadv(int, const struct iovec *, int, off_t);
+IOF_PUBLIC ssize_t iof_pwritev(int, const struct iovec *, int, off_t);
+IOF_PUBLIC void *iof_mmap(void *, size_t, int, int, int, off_t);
+IOF_PUBLIC int iof_close(int);
+IOF_PUBLIC ssize_t iof_read(int, void *, size_t);
+IOF_PUBLIC ssize_t iof_write(int, const void *, size_t);
+IOF_PUBLIC ssize_t iof_readv(int, const struct iovec *, int);
+IOF_PUBLIC ssize_t iof_writev(int, const struct iovec *, int);
+IOF_PUBLIC int iof_fsync(int);
+IOF_PUBLIC int iof_fdatasync(int);
+IOF_PUBLIC int iof_dup(int);
+IOF_PUBLIC int iof_dup2(int, int);
+IOF_PUBLIC int iof_fcntl(int fd, int cmd, ...);
+IOF_PUBLIC FILE *iof_fdopen(int, const char *);
+IOF_PUBLIC FILE *iof_fopen(const char *, const char *);
+IOF_PUBLIC FILE *iof_freopen(const char *, const char *, FILE *);
+IOF_PUBLIC int iof_fclose(FILE *);
 
-/** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
- */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
-
-#endif /* __IOF_API_H__ */
+#endif /* __IOF_IO_H__ */

@@ -83,7 +83,7 @@ def scons():
     tenv.AppendUnique(CFLAGS=['-pthread'])
     tenv.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     tenv.AppendUnique(CPPPATH=['..'])
-    tenv.AppendUnique(LIBPATH='../il')
+    tenv.AppendUnique(CPPPATH='../il')
     tenv.AppendUnique(RPATH='$PREFIX/lib')
 
     prereqs.require(tenv, 'cart', 'cunit')
@@ -91,6 +91,7 @@ def scons():
     il_test = []
 
     lfenv = tenv.Clone()
+    lfenv.AppendUnique(CPPPATH='../il')
     lfenv.AppendUnique(OBJPREFIX='lf_')
     lfenv.AppendUnique(CPPDEFINES='LARGEFILE64_SOURCE')
 

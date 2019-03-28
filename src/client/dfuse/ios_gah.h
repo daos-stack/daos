@@ -48,18 +48,16 @@
 #ifndef __IOF_GAH_H__
 #define __IOF_GAH_H__
 
-#include <inttypes.h>
-
 /**
  * Global Access Handle (GAH).
  *
  */
 struct ios_gah {
-	uint8_t root;		/**< The rank where the GAH was allocated */
+	uint64_t root;		/**< The rank where the GAH was allocated */
 
 };
 
-#define GAH_PRINT_STR "Gah(%" PRIu8 ")"
+#define GAH_PRINT_STR "Gah(%" PRIx64 ")"
 #define GAH_PRINT_VAL(P) (P).root
 
 #endif

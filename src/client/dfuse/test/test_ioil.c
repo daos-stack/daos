@@ -51,7 +51,7 @@
 #define D_LOGFAC DD_FAC(il)
 #include "iof_log.h"
 #include "iof_ioctl.h"
-#include "iof_api.h"
+#include "ioil_api.h"
 
 static char *mount_dir;
 static uint64_t max_read_size;

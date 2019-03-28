@@ -43,8 +43,8 @@
 #include "iof_log.h"
 #include "ios_gah.h"
 #include "iof_fs.h"
-#include "iof_io.h"
-#include "iof_api.h"
+#include "ioil_io.h"
+#include "ioil_api.h"
 
 /* Low level I/O functions we intercept
  *
