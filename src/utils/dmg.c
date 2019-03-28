@@ -289,6 +289,7 @@ pool_op_hdlr(int argc, char *argv[])
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
 		{"svc",		required_argument,	NULL,	'v'},
+		{"rank",	required_argument,	NULL,	'r'},
 		{"target",	required_argument,	NULL,	't'},
 		{NULL,		0,			NULL,	0}
 	};
@@ -297,8 +298,10 @@ pool_op_hdlr(int argc, char *argv[])
 	daos_handle_t		pool;
 	const char	       *svc_str = NULL;
 	d_rank_list_t	       *svc;
+	const char	       *rank_str = NULL;
 	const char	       *tgt_str = NULL;
-	d_rank_list_t	       *targets;
+	d_rank_list_t	       *ranks = NULL;
+	d_rank_list_t	       *targets = NULL;
 	enum pool_op		op = pool_op_parse(argv[1]);
 	struct d_tgt_list	tgt_list = { 0 };
 	int			tgt = -1;
@@ -306,13 +309,11 @@ pool_op_hdlr(int argc, char *argv[])
 
 	uuid_clear(pool_uuid);
 
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "G:p:r:t:v:", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'G':
 			group = optarg;
-			break;
-		case 't':
-			tgt_str = optarg;
 			break;
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -321,6 +322,12 @@ pool_op_hdlr(int argc, char *argv[])
 					optarg);
 				return 2;
 			}
+			break;
+		case 't':
+			tgt_str = optarg;
+			break;
+		case 'r':
+			rank_str = optarg;
 			break;
 		case 'v':
 			svc_str = optarg;
@@ -345,27 +352,29 @@ pool_op_hdlr(int argc, char *argv[])
 		fprintf(stderr, "failed to parse service ranks\n");
 		return 2;
 	}
-	if (svc->rl_nr == 0) {
-		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
-		return 2;
-	}
 
-	targets = NULL;
-	if (tgt_str != NULL) {
-		targets = daos_rank_list_parse(tgt_str, ":");
-		if (targets != NULL && targets->rl_nr == 0) {
-			daos_rank_list_free(targets);
-			targets = NULL;
+	if (rank_str != NULL) {
+		ranks = daos_rank_list_parse(rank_str, ":");
+		if (ranks == NULL) {
+			fprintf(stderr, "failed to parse ranks\n");
+			return 2;
 		}
 	}
 
-	/* Check the targets for POOL_EXCLUDE, REPLICA_ADD & REPLICA_DEL. */
-	if (targets == NULL &&
+	/* Check the ranks for POOL_EXCLUDE, REPLICA_ADD & REPLICA_DEL. */
+	if (ranks == NULL &&
 	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL)) {
 		fprintf(stderr, "valid target ranks required\n");
 		daos_rank_list_free(svc);
 		return 2;
+	}
+
+	if (tgt_str != NULL) {
+		targets = daos_rank_list_parse(tgt_str, ":");
+		if (targets == NULL) {
+			fprintf(stderr, "failed to parse target ranks\n");
+			return 2;
+		}
 	}
 
 	switch (op) {
@@ -378,10 +387,16 @@ pool_op_hdlr(int argc, char *argv[])
 
 	case POOL_EXCLUDE:
 		/* Only support exclude single target XXX */
-		D_ASSERT(targets->rl_nr == 1);
+		D_ASSERT(ranks->rl_nr == 1);
 		tgt_list.tl_nr = 1;
-		tgt_list.tl_ranks = targets->rl_ranks;
-		tgt_list.tl_tgts = &tgt;
+		tgt_list.tl_ranks = ranks->rl_ranks;
+		if (targets != NULL) {
+			D_ASSERT(targets->rl_nr == 1);
+			tgt_list.tl_tgts = (int *)targets->rl_ranks;
+		} else {
+			tgt_list.tl_tgts = &tgt;
+		}
+
 		rc = daos_pool_tgt_exclude(pool_uuid, group, svc, &tgt_list,
 				       NULL /* ev */);
 		if (rc != 0)
@@ -390,7 +405,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case REPLICA_ADD:
-		rc = daos_pool_add_replicas(pool_uuid, group, svc, targets,
+		rc = daos_pool_add_replicas(pool_uuid, group, svc, ranks,
 					    NULL /* failed */, NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to add replicas: "
@@ -398,7 +413,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case REPLICA_DEL:
-		rc = daos_pool_remove_replicas(pool_uuid, group, svc, targets,
+		rc = daos_pool_remove_replicas(pool_uuid, group, svc, ranks,
 					       NULL /* failed */,
 					       NULL /* ev */);
 		if (rc != 0)
@@ -414,6 +429,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 	}
 	daos_rank_list_free(svc);
+	daos_rank_list_free(ranks);
 	daos_rank_list_free(targets);
 	if (rc != 0)
 		return rc;
