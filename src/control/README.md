@@ -14,15 +14,15 @@ The [management tool](dmg) is an example client application which can connect to
 
 ## Documentation
 
-- [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/client)
-- [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/server)
-- [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/client/agent)
-- [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
-- [dRPC](https://godoc.org/github.com/daos-stack/daos/src/control/drpc)
-- [server package](server/README.md)
-- [management tool package](dmg/README.md)
-- [client package](client/README.md)
-- [common package](common/README.md)
+  - [Management API](https://godoc.org/github.com/daos-stack/daos/src/control/client)
+  - [Management internals](https://godoc.org/github.com/daos-stack/daos/src/control/server)
+  - [Agent API](https://godoc.org/github.com/daos-stack/daos/src/control/client/agent)
+  - [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
+  - [dRPC](https://godoc.org/github.com/daos-stack/daos/src/control/drpc)
+  - [server package](server/README.md)
+  - [management tool package](dmg/README.md)
+  - [client package](client/README.md)
+  - [common package](common/README.md)
 
 ## Architecture
 
