@@ -65,7 +65,7 @@ On CentOS and openSuSE:
     yum install -y yum-plugin-copr epel-release
     yum copr -y enable jhli/ipmctl
     yum copr -y enable jhli/safeclib
-    yum install -y libipmctl-devel
+    yum install -y libipmctl-devel python-devel
 ```
 
 On Ubuntu and Debian:
