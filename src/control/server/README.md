@@ -109,7 +109,7 @@ TODO: examples for both DCPM and RAM (emulation) SCM classes including config fi
 
 ### prep-nvme
 
-This subcommand requires elevated permissions and needs to be run with root permissions (sudo).
+This subcommand requires elevated permissions (sudo).
 
 NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server prep-nvme -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK.
 
@@ -128,24 +128,13 @@ List NVMe SSDs and SCM modules locally attached to the host.
 
 See `daos_server show-storage --help` for usage.
 
-## Shell Usage
+## Management Tool (client) Usage
 
-In order to run the shell to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).
+In order to run the tool to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).
 
-`daos_server` is to be run as root in order to perform administrative tasks, to be run through `orterun` as root:
+[`daos_shell`](../dmg) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user. The tool is lightweight and doesn't depend on storage libraries. The tool (a gRPC client application) connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
-```
-root$ orterun -np 1 -c 1 --hostfile hostfile --enable-recovery --allow-run-as-root --report-uri /tmp/urifile daos_server -c 1
-```
-
-`daos_shell` (the management tool to exercise the client api) is to be run on login nodes by an unprivileged user (and is designed to be lightweight without dependencies on storage libraries).  The shell can be used to connect to and interact with multiple gRPC servers concurrently (running on port 10000 by default) as follows:
-```
-$ projects/daos_m/install/bin/daos_shell -l foo-45:10001,foo-44:10001
-DAOS Management Shell
->>>
-```
-
-See `daos_shell --help` for usage.
+See `daos_shell --help` for usage and [here](../dmg) for package details.
 
 ## NVMe management capabilities
 
