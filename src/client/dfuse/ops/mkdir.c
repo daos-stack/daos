@@ -53,7 +53,7 @@ static const struct ioc_request_api api = {
 #define STAT_KEY mkdir
 
 void
-ioc_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
+dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
 	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct entry_req		*desc = NULL;

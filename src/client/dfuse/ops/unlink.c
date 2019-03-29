@@ -46,7 +46,7 @@ static const struct ioc_request_api api = {
 };
 
 static void
-ioc_ll_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
+dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 {
 	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct ioc_request		*request;
@@ -110,13 +110,13 @@ out_err:
 }
 
 void
-ioc_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
+dfuse_cb_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	ioc_ll_remove(req, parent, name, false);
+	dfuse_cb_remove(req, parent, name, false);
 }
 
 void
-ioc_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+dfuse_cb_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	ioc_ll_remove(req, parent, name, true);
+	dfuse_cb_remove(req, parent, name, true);
 }

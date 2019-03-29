@@ -67,9 +67,9 @@ handle_gah_ioctl(int cmd, struct iof_file_handle *handle,
 }
 
 void
-ioc_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
-	     struct fuse_file_info *fi, unsigned int flags,
-	     const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+	       struct fuse_file_info *fi, unsigned int flags,
+	       const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
 	struct iof_file_handle *handle = (void *)fi->fh;
 	struct iof_gah_info gah_info = {0};

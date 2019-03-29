@@ -71,7 +71,7 @@ static const struct ioc_request_api api = {
 };
 
 void
-ioc_ll_statfs(fuse_req_t req, fuse_ino_t ino)
+dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 {
 	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct ioc_request		*request;

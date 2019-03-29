@@ -68,8 +68,8 @@ static const struct ioc_request_api api = {
 };
 
 void
-ioc_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
-	      fuse_ino_t newparent, const char *newname, unsigned int flags)
+dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
+		fuse_ino_t newparent, const char *newname, unsigned int flags)
 {
 	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
 	struct ioc_request	*request;

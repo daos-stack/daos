@@ -134,33 +134,33 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t flags)
 		return NULL;
 
 	fuse_ops->init = ioc_fuse_init;
-	fuse_ops->getattr = ioc_ll_getattr;
-	fuse_ops->lookup = ioc_ll_lookup;
-	fuse_ops->forget = ioc_ll_forget;
-	fuse_ops->forget_multi = ioc_ll_forget_multi;
-	fuse_ops->statfs = ioc_ll_statfs;
-	fuse_ops->readlink = ioc_ll_readlink;
-	fuse_ops->open = ioc_ll_open;
-	fuse_ops->read = ioc_ll_read;
-	fuse_ops->release = ioc_ll_release;
-	fuse_ops->opendir = ioc_ll_opendir;
-	fuse_ops->releasedir = ioc_ll_releasedir;
-	fuse_ops->readdir = ioc_ll_readdir;
-	fuse_ops->ioctl = ioc_ll_ioctl;
+	fuse_ops->getattr = dfuse_cb_getattr;
+	fuse_ops->lookup = dfuse_cb_lookup;
+	fuse_ops->forget = dfuse_cb_forget;
+	fuse_ops->forget_multi = dfuse_cb_forget_multi;
+	fuse_ops->statfs = dfuse_cb_statfs;
+	fuse_ops->readlink = dfuse_cb_readlink;
+	fuse_ops->open = dfuse_cb_open;
+	fuse_ops->read = dfuse_cb_read;
+	fuse_ops->release = dfuse_cb_release;
+	fuse_ops->opendir = dfuse_cb_opendir;
+	fuse_ops->releasedir = dfuse_cb_releasedir;
+	fuse_ops->readdir = dfuse_cb_readdir;
+	fuse_ops->ioctl = dfuse_cb_ioctl;
 	fuse_ops->destroy = ioc_fuse_destroy;
-	fuse_ops->symlink = ioc_ll_symlink;
-	fuse_ops->mkdir = ioc_ll_mkdir;
-	fuse_ops->unlink = ioc_ll_unlink;
-	fuse_ops->write = ioc_ll_write;
-	fuse_ops->rmdir = ioc_ll_rmdir;
-	fuse_ops->create = ioc_ll_create;
-	fuse_ops->setattr = ioc_ll_setattr;
-	fuse_ops->rename = ioc_ll_rename;
-	fuse_ops->fsync = ioc_ll_fsync;
-	fuse_ops->write = ioc_ll_write;
+	fuse_ops->symlink = dfuse_cb_symlink;
+	fuse_ops->mkdir = dfuse_cb_mkdir;
+	fuse_ops->unlink = dfuse_cb_unlink;
+	fuse_ops->write = dfuse_cb_write;
+	fuse_ops->rmdir = dfuse_cb_rmdir;
+	fuse_ops->create = dfuse_cb_create;
+	fuse_ops->setattr = dfuse_cb_setattr;
+	fuse_ops->rename = dfuse_cb_rename;
+	fuse_ops->fsync = dfuse_cb_fsync;
+	fuse_ops->write = dfuse_cb_write;
 
 	if (flags & IOF_FUSE_WRITE_BUF)
-		fuse_ops->write_buf = ioc_ll_write_buf;
+		fuse_ops->write_buf = dfuse_cb_write_buf;
 
 	return fuse_ops;
 }

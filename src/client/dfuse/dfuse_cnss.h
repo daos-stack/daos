@@ -40,7 +40,6 @@
 
 #include "dfuse_log.h"
 
-
 /**
  * These pre-date -DER_* codes, and are used for exit status on failure so
  * keep them for now until we can test a replacement.

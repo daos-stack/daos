@@ -237,7 +237,7 @@ readdir_next_reply_consume(struct iof_dir_handle *dir_handle)
  */
 static int
 readdir_next_reply(struct iof_dir_handle *dir_handle, off_t offset,
-			      struct iof_readdir_reply **reply)
+		   struct iof_readdir_reply **reply)
 {
 	int rc;
 
@@ -277,8 +277,8 @@ readdir_next_reply(struct iof_dir_handle *dir_handle, off_t offset,
 }
 
 void
-ioc_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
-	       struct fuse_file_info *fi)
+dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
+		 struct fuse_file_info *fi)
 {
 	struct iof_dir_handle *dir_handle = (struct iof_dir_handle *)fi->fh;
 	off_t next_offset = offset;

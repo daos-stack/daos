@@ -100,7 +100,7 @@ err:
 }
 
 void
-ioc_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+dfuse_cb_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct TYPE_NAME *dh = (struct TYPE_NAME *)fi->fh;
 

@@ -246,7 +246,7 @@ ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
 	oldref = atomic_fetch_add(&ie->ie_ref, 1);
 	IOF_TRACE_DEBUG(ie, "addref to %u", oldref + 1);
- }
+}
 
 static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
@@ -909,12 +909,6 @@ initialize_projection(struct iof_state *iof_state,
 
 	fs_handle->iof_state = iof_state;
 	fs_handle->proj.io_proto = iof_state->io_proto;
-	IOF_TRACE_INFO(fs_handle, "FUSE: %sthreaded | API => "
-			"Write: ioc_ll_write%s, Read: fuse_reply_%s",
-			fs_handle->flags & IOF_CNSS_MT
-					 ? "Multi-" : "Single ",
-			fs_handle->flags & IOF_FUSE_WRITE_BUF ? "_buf" : "",
-			fs_handle->flags & IOF_FUSE_READ_BUF ? "buf" : "data");
 
 	IOF_TRACE_INFO(fs_handle, "%d cart threads",
 		       fs_handle->ctx_num);

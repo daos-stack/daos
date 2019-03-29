@@ -658,78 +658,108 @@ struct entry_req {
 /* inode.c */
 
 /* Convert from a inode to a GAH using the hash table */
-int find_gah(struct iof_projection_info *, fuse_ino_t, struct ios_gah *);
+int
+find_gah(struct iof_projection_info *, fuse_ino_t, struct ios_gah *);
 
 int
 find_inode(struct ioc_request *);
 
-void ie_close(struct iof_projection_info *, struct ioc_inode_entry *);
+void
+ie_close(struct iof_projection_info *, struct ioc_inode_entry *);
 
-int iof_fs_send(struct ioc_request *request);
+int
+iof_fs_send(struct ioc_request *request);
 
-int ioc_simple_resend(struct ioc_request *request);
+int
+ioc_simple_resend(struct ioc_request *request);
 
-bool ioc_gen_cb(struct ioc_request *);
+bool
+ioc_gen_cb(struct ioc_request *);
 
-void ioc_ll_lookup(fuse_req_t, fuse_ino_t, const char *);
+void
+dfuse_cb_lookup(fuse_req_t, fuse_ino_t, const char *);
 
-void ioc_ll_forget(fuse_req_t, fuse_ino_t, uint64_t);
+void
+dfuse_cb_forget(fuse_req_t, fuse_ino_t, uint64_t);
 
-void ioc_ll_forget_multi(fuse_req_t, size_t, struct fuse_forget_data *);
+void
+dfuse_cb_forget_multi(fuse_req_t, size_t, struct fuse_forget_data *);
 
-void ioc_ll_getattr(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+void
+dfuse_cb_getattr(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
 
-void ioc_ll_statfs(fuse_req_t, fuse_ino_t);
+void
+dfuse_cb_statfs(fuse_req_t, fuse_ino_t);
 
-void ioc_ll_readlink(fuse_req_t, fuse_ino_t);
+void
+dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
-void ioc_ll_mkdir(fuse_req_t, fuse_ino_t, const char *, mode_t);
+void
+dfuse_cb_mkdir(fuse_req_t, fuse_ino_t, const char *, mode_t);
 
-void ioc_ll_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+void
+dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
 
-void ioc_ll_create(fuse_req_t, fuse_ino_t, const char *, mode_t,
-		   struct fuse_file_info *);
+void
+dfuse_cb_create(fuse_req_t, fuse_ino_t, const char *, mode_t,
+		struct fuse_file_info *);
 
-void ioc_ll_read(fuse_req_t, fuse_ino_t, size_t, off_t,
+void
+dfuse_cb_read(fuse_req_t, fuse_ino_t, size_t, off_t,
+	      struct fuse_file_info *);
+
+void
+dfuse_cb_release(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+
+void
+ioc_int_release(struct iof_file_handle *);
+
+void
+dfuse_cb_unlink(fuse_req_t, fuse_ino_t, const char *);
+
+void
+dfuse_cb_rmdir(fuse_req_t, fuse_ino_t, const char *);
+
+void
+dfuse_cb_opendir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+
+void
+dfuse_cb_readdir(fuse_req_t, fuse_ino_t, size_t, off_t,
 		 struct fuse_file_info *);
 
-void ioc_ll_release(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+void
+dfuse_cb_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,
+		const char *, unsigned int);
 
-void ioc_int_release(struct iof_file_handle *);
+void
+dfuse_cb_releasedir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
 
-void ioc_ll_unlink(fuse_req_t, fuse_ino_t, const char *);
+void
+ioc_int_releasedir(struct iof_dir_handle *);
 
-void ioc_ll_rmdir(fuse_req_t, fuse_ino_t, const char *);
+void
+dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
+	       struct fuse_file_info *);
 
-void ioc_ll_opendir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+void
+dfuse_cb_write_buf(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
+		   struct fuse_file_info *);
 
-void ioc_ll_readdir(fuse_req_t, fuse_ino_t, size_t, off_t,
-		    struct fuse_file_info *);
+void
+dfuse_cb_ioctl(fuse_req_t, fuse_ino_t, int, void *, struct fuse_file_info *,
+	       unsigned int, const void *, size_t, size_t);
 
-void ioc_ll_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,
-		   const char *, unsigned int);
+void
+dfuse_cb_setattr(fuse_req_t, fuse_ino_t, struct stat *, int,
+		 struct fuse_file_info *);
 
-void ioc_ll_releasedir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+void
+dfuse_cb_symlink(fuse_req_t, const char *, fuse_ino_t, const char *);
 
-void ioc_int_releasedir(struct iof_dir_handle *);
+void
+dfuse_cb_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
 
-void ioc_ll_write(fuse_req_t, fuse_ino_t, const char *,	size_t, off_t,
-		  struct fuse_file_info *);
-
-void ioc_ll_write_buf(fuse_req_t, fuse_ino_t, struct fuse_bufvec *,
-		      off_t, struct fuse_file_info *);
-
-void ioc_ll_ioctl(fuse_req_t, fuse_ino_t, int, void *,
-		  struct fuse_file_info *, unsigned int, const void *,
-		  size_t, size_t);
-
-void ioc_ll_setattr(fuse_req_t, fuse_ino_t, struct stat *, int,
-		    struct fuse_file_info *);
-
-void ioc_ll_symlink(fuse_req_t, const char *, fuse_ino_t, const char *);
-
-void ioc_ll_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
-
-bool iof_entry_cb(struct ioc_request *);
+bool
+iof_entry_cb(struct ioc_request *);
 
 #endif

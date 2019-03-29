@@ -79,7 +79,7 @@ static const struct ioc_request_api api = {
 };
 
 void
-ioc_ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
 	struct iof_file_handle *handle = NULL;

@@ -53,8 +53,8 @@ static const struct ioc_request_api api = {
 #define STAT_KEY symlink
 
 void
-ioc_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
-	       const char *name)
+dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+		 const char *name)
 {
 	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct entry_req		*desc = NULL;

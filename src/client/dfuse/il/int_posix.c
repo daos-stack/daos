@@ -507,8 +507,7 @@ do_real_write:
 }
 
 IOF_PUBLIC ssize_t
-iof_pwrite(int fd, const void *buf, size_t count,
-			      off_t offset)
+iof_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;

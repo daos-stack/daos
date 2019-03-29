@@ -190,7 +190,7 @@ def scons():
     #  dfuse_env.Install(os.path.join("$PREFIX", 'include'), 'il/%s' % header)
 
     Export('dfuse_env')
-    
+
     SConscript('test/SConscript')
 
 if __name__ == "SCons.Script":

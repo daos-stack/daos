@@ -110,7 +110,7 @@ static const struct ioc_request_api api = {
 #define STAT_KEY lookup
 
 void
-ioc_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
+dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct TYPE_NAME		*desc = NULL;

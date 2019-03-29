@@ -46,7 +46,7 @@ static const struct ioc_request_api api = {
 };
 
 void
-ioc_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
+dfuse_cb_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	     struct fuse_file_info *fi)
 {
 	struct iof_file_handle		*handle = (struct iof_file_handle *)fi->fh;

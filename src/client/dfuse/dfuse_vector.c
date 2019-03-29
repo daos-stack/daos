@@ -281,7 +281,7 @@ vector_get_(vector_t *vector, unsigned int index, void **ptr)
 
 int
 vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
-		void **ptr)
+	    void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
 	struct entry *entry;
