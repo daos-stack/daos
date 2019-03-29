@@ -63,14 +63,6 @@ type control struct {
 	gconn  *grpc.ClientConn
 }
 
-func newControl(address string) (Control, error) {
-	c := &control{}
-	if err := c.connect(address); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // connect provides an easy interface to connect to Mgmt DAOS server.
 //
 // It takes address and port in a string.

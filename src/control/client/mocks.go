@@ -43,7 +43,10 @@ type mockControl struct {
 }
 
 func (m *mockControl) connect(addr string) error {
-	m.address = addr
+	if m.connectRet == nil {
+		m.address = addr
+	}
+
 	return m.connectRet
 }
 func (m *mockControl) disconnect() error { return nil }

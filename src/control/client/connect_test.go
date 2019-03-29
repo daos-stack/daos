@@ -32,7 +32,7 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/connectivity"
+	. "google.golang.org/grpc/connectivity"
 )
 
 var (
@@ -48,7 +48,7 @@ func init() {
 }
 
 type mockControllerFactory struct {
-	state    connectivity.State
+	state    State
 	features []*pb.Feature
 	ctrlrs   NvmeControllers
 	modules  ScmModules
@@ -59,14 +59,18 @@ type mockControllerFactory struct {
 }
 
 func (m *mockControllerFactory) create(address string) (Control, error) {
-	// returns controller with default successful behaviour
-	return newMockControl(
+	// returns controller with mock properties specified in constructor
+	controller := newMockControl(
 		address, m.state, m.features, m.ctrlrs, m.modules,
-		m.formatRet, m.killRet, m.connectRet), nil
+		m.formatRet, m.killRet, m.connectRet)
+
+	err := controller.connect(address)
+
+	return controller, err
 }
 
 func newMockConnect(
-	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
+	state State, features []*pb.Feature, ctrlrs NvmeControllers,
 	modules ScmModules, formatRet error, killRet error, connectRet error) Connect {
 
 	return &connList{
@@ -79,54 +83,54 @@ func newMockConnect(
 
 func defaultMockConnect() Connect {
 	return newMockConnect(
-		connectivity.Ready, features, ctrlrs, modules, nil, nil, nil)
+		Ready, features, ctrlrs, modules, nil, nil, nil)
 }
 
 func TestConnectClients(t *testing.T) {
+	eMsg := "socket connection is not active (%s)"
+
 	var conntests = []struct {
-		addrsIn       Addresses
-		addrsOut      Addresses
-		state         connectivity.State
-		connRet       error
-		shouldSucceed bool
+		addrsIn Addresses
+		state   State
+		connRet error
+		errMsg  string
 	}{
-		{addresses, addresses, connectivity.Idle, nil, true},
-		{addresses, Addresses{}, connectivity.Connecting, nil, false},
-		{addresses, addresses, connectivity.Ready, nil, true},
-		{addresses, Addresses{}, connectivity.TransientFailure, nil, false},
-		{addresses, Addresses{}, connectivity.Shutdown, nil, false},
-		{addresses, addresses, connectivity.Idle, errExample, false},
-		{addresses, Addresses{}, connectivity.Connecting, errExample, false},
-		{addresses, addresses, connectivity.Ready, errExample, true},
+		{addresses, Idle, nil, ""},
+		{addresses, Connecting, nil, fmt.Sprintf(eMsg, Connecting)},
+		{addresses, Ready, nil, ""},
+		{addresses, TransientFailure, nil, fmt.Sprintf(eMsg, TransientFailure)},
+		{addresses, Shutdown, nil, fmt.Sprintf(eMsg, Shutdown)},
+		{addresses, Idle, errExample, ""},
+		{addresses, Connecting, errExample, ""},
+		{addresses, Ready, errExample, ""},
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
 			tt.state, features, ctrlrs, modules, nil, nil, tt.connRet)
 
-		addrs, eMap := cc.ConnectClients(tt.addrsIn)
+		results := cc.ConnectClients(tt.addrsIn)
 
-		if tt.shouldSucceed {
-			AssertStringsEqual(
-				t, addrs, tt.addrsOut,
-				"unexpected client address list returned")
+		AssertEqual(
+			t, len(results), len(tt.addrsIn), // assumes no duplicates
+			"unexpected number of results")
+
+		for _, res := range results {
+			if tt.errMsg != "" {
+				AssertEqual(
+					t, res.Err.Error(), tt.errMsg,
+					"unexpected error value in results")
+				continue
+			}
+			fmt.Printf("%#v", res)
 			AssertEqual(
-				t, eMap, ResultMap{},
-				"unexpected non-nil failure map")
-			continue
-		}
-		AssertEqual(t, len(addrs), 0, "unexpected number of clients connected")
-		AssertEqual(t, len(eMap), len(tt.addrsIn), "unexpected failure map")
-		for _, addr := range tt.addrsIn {
-			AssertEqual(
-				t, eMap[addr].Err,
-				fmt.Errorf("socket connection is not active (%s)", tt.state),
-				"unexpected failure in map")
+				t, res.Err, nil,
+				"unexpected non-nil error value in results")
 		}
 	}
 }
 
 func clientSetup(
-	state connectivity.State, features []*pb.Feature,
+	state State, features []*pb.Feature,
 	ctrlrs NvmeControllers, modules ScmModules,
 	formatRet error, killRet error, connectRet error) Connect {
 
@@ -134,7 +138,7 @@ func clientSetup(
 		state, features, ctrlrs, modules,
 		formatRet, killRet, connectRet)
 
-	_, _ = cc.ConnectClients(addresses)
+	_ = cc.ConnectClients(addresses)
 
 	return cc
 }
@@ -142,41 +146,73 @@ func clientSetup(
 func defaultClientSetup() Connect {
 	cc := defaultMockConnect()
 
-	_, _ = cc.ConnectClients(addresses)
+	_ = cc.ConnectClients(addresses)
 
 	return cc
 }
 
 func TestDuplicateConns(t *testing.T) {
 	cc := defaultMockConnect()
-	addrs, eMap := cc.ConnectClients(append(addresses, addresses...))
+	results := cc.ConnectClients(append(addresses, addresses...))
 
-	// verify duplicates are ignored.
-	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, len(eMap), 0, "unexpected failure map")
+	AssertEqual(
+		t, len(results), len(addresses), // duplicates ignored
+		"unexpected number of results")
+
+	for _, res := range results {
+		AssertEqual(
+			t, res.Err, nil,
+			"unexpected error value in results")
+	}
 }
 
 func TestGetClearConns(t *testing.T) {
 	cc := defaultClientSetup()
 
-	addrs, eMap := cc.GetActiveConns(ResultMap{})
-	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+	results := cc.GetActiveConns(ResultMap{})
+	AssertEqual(t, results, ResultMap{}, "unexpected result map")
 
-	eMap = cc.ClearConns()
-	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+	results = cc.ClearConns()
+	AssertEqual(t, results, ResultMap{}, "unexpected result map")
 
-	addrs, eMap = cc.GetActiveConns(ResultMap{})
-	AssertEqual(t, addrs, Addresses{}, "expected nil client address list to be returned")
-	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+	results = cc.GetActiveConns(ResultMap{})
+	AssertEqual(t, results, ResultMap{}, "unexpected result map")
 
-	addrs, eMap = cc.ConnectClients(addresses)
-	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+	results = cc.ConnectClients(addresses)
+	AssertEqual(
+		t, len(results), len(addresses),
+		"unexpected number of results")
 
-	addrs, eMap = cc.GetActiveConns(ResultMap{})
-	AssertStringsEqual(t, addrs, addresses, "unexpected client address list returned")
-	AssertEqual(t, eMap, ResultMap{}, "unexpected failure map")
+	for _, res := range results {
+		AssertEqual(
+			t, res.Err, nil,
+			"unexpected error value in results")
+	}
+
+	results = cc.GetActiveConns(results)
+	AssertEqual(
+		t, len(results), len(addresses),
+		"unexpected number of results")
+
+	for _, res := range results {
+		AssertEqual(
+			t, res.Err, nil,
+			"unexpected error value in results")
+	}
+
+	results = cc.ClearConns()
+	AssertEqual(
+		t, len(results), len(addresses),
+		"unexpected number of results")
+
+	for _, res := range results {
+		AssertEqual(
+			t, res.Err, nil,
+			"unexpected error value in results")
+	}
+
+	results = cc.GetActiveConns(ResultMap{})
+	AssertEqual(t, results, ResultMap{}, "unexpected result map")
 }
 
 func TestListFeatures(t *testing.T) {
@@ -229,7 +265,7 @@ func TestFormatStorage(t *testing.T) {
 
 	for _, tt := range tests {
 		cc := clientSetup(
-			connectivity.Ready, features, ctrlrs, modules,
+			Ready, features, ctrlrs, modules,
 			tt.formatRet, nil, nil)
 
 		resultMap := cc.FormatStorage()
@@ -252,7 +288,7 @@ func TestKillRank(t *testing.T) {
 
 	for _, tt := range tests {
 		cc := clientSetup(
-			connectivity.Ready, features, ctrlrs, modules,
+			Ready, features, ctrlrs, modules,
 			nil, tt.killRet, nil)
 
 		resultMap := cc.KillRank("acd", 0)

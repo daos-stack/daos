@@ -32,7 +32,8 @@ import (
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	List ListStorCmd `command:"list" alias:"l" description:"List locally-attached SCM and NVMe storage"`
+	List   ListStorCmd   `command:"list" alias:"l" description:"List SCM and NVMe storage attached to remote servers."`
+	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 }
 
 // ListStorCmd is the struct representing the list storage subcommand.
@@ -63,8 +64,31 @@ func (s *ListStorCmd) Execute(args []string) error {
 	return nil
 }
 
-// todo: implement shell commands for features other than discovery on
-// multiple nodes
+// FormatStorCmd is the struct representing the format storage subcommand.
+type FormatStorCmd struct{}
+
+// run NVMe and SCM storage format on all connected servers
+func formatStor() {
+	fmt.Printf(
+		unpackFormat(conns.FormatStorage()),
+		"Format Storage command results")
+}
+
+// Execute is run when FormatStorCmd activates
+func (s *FormatStorCmd) Execute(args []string) error {
+	if err := connectHosts(); err != nil {
+		return errors.Wrap(err, "unable to connect to hosts")
+	}
+
+	formatStor()
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
+// todo: implement burn-in and firmware update subcommands
 
 //func getUpdateParams(c *ishell.Context) (*pb.UpdateNvmeParams, error) {
 //	// disable the '>>>' for cleaner same line input.
