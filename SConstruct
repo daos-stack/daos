@@ -15,7 +15,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-DAOS_VERSION = "0.0.2"
+DAOS_VERSION = "0.4.0"
 
 def is_platform_arm():
     """Detect if platform is ARM"""

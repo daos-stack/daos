@@ -200,7 +200,7 @@ struct dss_drpc_handler {
 struct dss_module {
 	/* Name of the module */
 	const char		 *sm_name;
-	/* Module id see enum dss_module_id */
+	/* Module id see enum daos_module_id */
 	int			  sm_mod_id;
 	/* Module version */
 	int			  sm_ver;

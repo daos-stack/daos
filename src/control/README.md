@@ -1,4 +1,4 @@
-# DAOS Control Plane (daos_server)
+# DAOS Control Plane (aka daos_server) (TO BE UPDATED)
 
 DAOS operates over two, closely integrated planes, Control and Data. The Data plane handles the heavy lifting transport operations while the Control plane orchestrates process and storage management, facilitating the operation of the Data plane.
 
@@ -120,36 +120,6 @@ Burn-in validation is performed using the [fio tool](https://github.com/axboe/fi
 First a view of software component architecture:
 
 ![Architecture diagram](/doc/graph/system_architecture.png)
-
-Then communication interfaces:
-
-```
-    ттттттттттттттттт ттттттттттттттттт
-    т  Go Shell     т т Other Client  т
-    ттттттттттттттттт ттттттттттттттттт
-            т                 т
-            ттттттттттЌттттттттт
-                     тМ
-          ттттттттттттттттттттттт
-          т    Go daos_server   т----|
-          ттттттттттттттттттттттт    |
-                     т               |
-                     тМ               |
-       ттттттттттттттттттттттттттттт |
-       т     Unix Domain Socket    т |
-       ттттттттттттттттттттттттттттт |
-                     т               |
-                     тМ               |
-          ттттттттттттттттттттттт    |
-          т   C daos_io_server  т    |
-          ттттттттттттттттттттттт    |
-                     т               |
-                     тМ               |
-           тттттттттттттттттттттт    |
-           т Persistent Storage т<---|
-           тттттттттттттттттттттт
-```
-TODO: include details of `daos_agent` interaction
 
 ## Development Requirements
 

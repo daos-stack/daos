@@ -79,6 +79,22 @@ int
 vos_dtx_end(struct daos_tx_handle *dth, int result, bool leader);
 
 /**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+
+/**
  * Search the specified DTX is in the CoS cache or not.
  *
  * \param coh	[IN]	Container open handle.

@@ -1,32 +1,24 @@
 # DAOS Client Library
 
-- <a href="/src/include/">libdaos API</a> and <a href="/doc/man/man3/">man pages</a>
-
 The DAOS API is divided along several functionalities to address the different
 features that DAOS exposes:
-
 - Management API: pool and target management
-
 - Pool Client API: pool access
-
 - Container API: container management and access, container snapshots
-
 - Transaction API: transaction model and concurrency control
-
 - Object API: object and data management and access
-
 - Event, Event Queue, and Task API: non-blocking operations
-
 - Addons API: array and KV operations built over the DAOS object API
-
 - DFS API: DAOS file system API to emulate a POSIX namespace over DAOS
-
 - DUNS API: DAOS unified namespace API for integration with an existing system
   namespace.
 
 Each of those components have associated README.md files that provide more
 details about the functionality they support except for APIs to support
 non-blocking operations which is discussed here.
+
+The libdaos API is availabe under [/src/include/daos\_\*](/src/include/) and
+associated man pages under [/doc/man/man3/](/doc/man/man3/).
 
 ## Event & Event Queue
 
@@ -36,7 +28,7 @@ determined through a pointer to a DAOS event passed to each API call that:
 - if NULL indicates that the operation is to be blocking. The operation will
   return after completing the operation. The error codes for all failure cases
   will be returned through the return code of the API function itself.
-  
+
 - if a valid event is used, the operation will run in non-blocking mode and
   return immediately after scheduling the operation in the internal scheduler
   and after RPCs are submitted to the underlying stack. The return value of the
