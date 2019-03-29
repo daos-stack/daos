@@ -120,7 +120,7 @@ boro-45:10001: []
 <summary>Example output when listing storage in interactive mode</summary>
 <p>
 
-```
+```bash
 [tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell
 Active connections: [localhost:10001]
 

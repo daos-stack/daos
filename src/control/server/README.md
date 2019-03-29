@@ -83,9 +83,8 @@ It is strongly recommended to specify all parameters and environment for running
 
 To clarify with respect to environment variables affecting the behaviour of `daos_io_server` instances:
 
-  * If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell. The config file will be ignored.
-
-  * If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
+*  If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell. The config file will be ignored.
+*  If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
 
 ### Configuring logging through the config file
 
@@ -312,7 +311,7 @@ boro-45:10001: []
 <summary>Example output when listing storage in interactive shell mode</summary>
 <p>
 
-```
+```bash
 [tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell
 Active connections: [localhost:10001]
 
