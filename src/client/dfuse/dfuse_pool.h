@@ -117,34 +117,40 @@ struct iof_pool {
  *
  * Returns a CaRT error code.
  */
-int iof_pool_init(struct iof_pool *, void *arg)
+int
+iof_pool_init(struct iof_pool *, void *arg)
 	__attribute((warn_unused_result, nonnull(1)));
 
 /* Destroy a pool, called once at shutdown */
-void iof_pool_destroy(struct iof_pool *);
+void
+iof_pool_destroy(struct iof_pool *);
 
 /* Register a new type to a pool, called multiple times after init */
 struct iof_pool_type *
 iof_pool_register(struct iof_pool *, struct iof_pool_reg *);
 
 /* Allocate a datastructure in performant way */
-void *iof_pool_acquire(struct iof_pool_type *);
+void *
+iof_pool_acquire(struct iof_pool_type *);
 
 /* Release a datastructure in a performant way */
-void iof_pool_release(struct iof_pool_type *, void *);
+void
+iof_pool_release(struct iof_pool_type *, void *);
 
 /* Pre-allocate datastructures
  * This should be called off the critical path, after previous acquire/release
  * calls and will do memory allocation as required.  Only 1 call is needed after
  * transitions so it does not need calling in progress loops.
  */
-void iof_pool_restock(struct iof_pool_type *);
+void
+iof_pool_restock(struct iof_pool_type *);
 
 /* Reclaim any memory possible across all types
  *
  * Returns true of there are any descriptors in use.
  */
-bool iof_pool_reclaim(struct iof_pool *)
+bool
+iof_pool_reclaim(struct iof_pool *)
 	__attribute((warn_unused_result, nonnull));
 
 #endif /*  __IOF_POOL_H__ */

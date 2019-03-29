@@ -84,7 +84,8 @@ readdir_cb(const struct crt_cb_info *cb_info)
  * If this function returns a non-zero status then that status is returned to
  * FUSE and the handle is marked as invalid.
  */
-static int readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
+static int
+readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
 {
 	struct iof_projection_info *fs_handle = dir_handle->open_req.fsh;
 	struct iof_readdir_in *in;
@@ -200,7 +201,8 @@ out_with_rpc:
  *
  * Returns True if the consumed entry is the last one.
  */
-static int readdir_next_reply_consume(struct iof_dir_handle *dir_handle)
+static int
+readdir_next_reply_consume(struct iof_dir_handle *dir_handle)
 {
 	if (dir_handle->reply_count != 0) {
 		dir_handle->replies++;
@@ -233,8 +235,8 @@ static int readdir_next_reply_consume(struct iof_dir_handle *dir_handle)
  * There is no caching on the server, and when the server responds to a RPC it
  * can include zero or more replies.
  */
-static int readdir_next_reply(struct iof_dir_handle *dir_handle,
-			      off_t offset,
+static int
+readdir_next_reply(struct iof_dir_handle *dir_handle, off_t offset,
 			      struct iof_readdir_reply **reply)
 {
 	int rc;

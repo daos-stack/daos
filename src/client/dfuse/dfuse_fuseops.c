@@ -48,7 +48,8 @@
 		FLAGS &= ~FLAG;						\
 	} while (0)
 
-static void ioc_show_flags(void *handle, unsigned int in)
+static void
+ioc_show_flags(void *handle, unsigned int in)
 {
 	SHOW_FLAG(handle, in, FUSE_CAP_ASYNC_READ);
 	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_LOCKS);
@@ -69,9 +70,6 @@ static void ioc_show_flags(void *handle, unsigned int in)
 	SHOW_FLAG(handle, in, FUSE_CAP_PARALLEL_DIROPS);
 	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, in, FUSE_CAP_HANDLE_KILLPRIV);
-#ifdef FUSE_CAP_BIG_WRITES
-	SHOW_FLAG(handle, in, FUSE_CAP_BIG_WRITES);
-#endif
 
 	if (in)
 		IOF_TRACE_ERROR(handle, "Unknown flags %#x", in);
@@ -107,10 +105,6 @@ ioc_fuse_init(void *arg, struct fuse_conn_info *conn)
 	IOF_TRACE_INFO(fs_handle, "Capability supported %#x", conn->capable);
 
 	ioc_show_flags(fs_handle, conn->capable);
-
-#ifdef FUSE_CAP_BIG_WRITES
-	conn->want |= FUSE_CAP_BIG_WRITES;
-#endif
 
 	/* This does not work as ioctl.c assumes fi->fh is a file handle */
 	conn->want &= ~FUSE_CAP_IOCTL_DIR;

@@ -44,7 +44,7 @@ COMMON_SRC = ['dfuse_fs.c',
               'dfuse_pool.c',
               'dfuse_obj_pool.c',
               'dfuse_vector.c']
-DFUSE_SRC = ['dfuse_cnss.c',
+DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
              'dfuse_inode.c']
@@ -69,7 +69,7 @@ RPC_SRC = ['closedir',
            'unlink',
            'write']
 
-IOFIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
+IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 
 def build_common(env, files, is_shared):
     """Build the common objects as shared or static"""
@@ -93,7 +93,7 @@ def build_client_libs_shared(env):
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 
     il_obj = []
-    for src in IOFIL_SRC:
+    for src in IOIL_SRC:
         il_obj += ilenv.SharedObject(os.path.join('il', src),
                                      SHOBJPREFIX='s_')
     common = build_common(penv, COMMON_SRC, True)
@@ -101,7 +101,7 @@ def build_client_libs_shared(env):
     # Now build the interception library
     il_lib = ilenv.SharedLibrary('il/libioil', il_obj + common)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), il_lib)
-    iof_lib = ilenv.SharedLibrary('common/libiof', common)
+    dfuse_lib = ilenv.SharedLibrary('common/libdfuse', common)
 
     gen_script = ilenv.Program(['il/gen_script.c'])
     script = ilenv.Command('il/check_ioil_syms', gen_script,
@@ -110,16 +110,16 @@ def build_client_libs_shared(env):
     script = ilenv.Command('il/ioil-ld-opts', gen_script,
                            '$SOURCE -l $TARGET')
     env.Install('$PREFIX/share', script)
-    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), iof_lib)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), dfuse_lib)
 
-    return iof_lib + il_lib
+    return dfuse_lib + il_lib
 
 def build_client_libs_static(env, common):
     """build the static interception library"""
 
     ilenv = env.Clone()
     il_obj = []
-    for src in IOFIL_SRC:
+    for src in IOIL_SRC:
         il_obj += ilenv.Object(os.path.join('il', src))
 
     # Now build the interception library
@@ -130,12 +130,12 @@ def build_client_libs_static(env, common):
     env.Install('$PREFIX/lib', il_lib)
 
     # Now build the interception library
-    iof_lib_src = ilenv.Library('common/libiof_source', common)
-    iof_lib = ilenv.Command('common/libiof.a', iof_lib_src,
+    dfuse_lib_src = ilenv.Library('common/libdfuse_source', common)
+    dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
                             'objcopy --localize-hidden $SOURCE $TARGET')
-    env.Install('$PREFIX/lib', iof_lib)
+    env.Install('$PREFIX/lib', dfuse_lib)
 
-    return il_lib + iof_lib
+    return il_lib + dfuse_lib
 
 def scons():
     """Scons function"""

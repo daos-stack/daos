@@ -40,11 +40,11 @@
 #include "dfuse_fs.h"
 
 #define IOF_PROTO_SIGNON_BASE 0x02000000
-#define IOF_PROTO_SIGNON_VERSION 2
+#define IOF_PROTO_SIGNON_VERSION 3
 #define IOF_PROTO_WRITE_BASE 0x01000000
-#define IOF_PROTO_WRITE_VERSION 4
+#define IOF_PROTO_WRITE_VERSION 5
 #define IOF_PROTO_IO_BASE 0x03000000
-#define IOF_PROTO_IO_VERSION 1
+#define IOF_PROTO_IO_VERSION 2
 
 /*
  * Re-use the CMF_UUID type when using a GAH as they are both 128 bit types

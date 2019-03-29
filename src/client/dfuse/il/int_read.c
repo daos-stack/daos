@@ -208,11 +208,9 @@ ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
 	return read_bulk(buff, len, position, f_info, errcode);
 }
 
-/* TODO: This could be optimized to send multiple RPCs at once rather than
- * sending them serially.   Get it working first.
- */
-ssize_t ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-		       struct iof_file_common *f_info, int *errcode)
+ssize_t
+ioil_do_preadv(const struct iovec *iov, int count, off_t position,
+	       struct iof_file_common *f_info, int *errcode)
 {
 	ssize_t bytes_read;
 	ssize_t total_read = 0;

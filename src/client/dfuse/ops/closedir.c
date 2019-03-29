@@ -73,7 +73,8 @@ static const struct ioc_request_api api = {
 	.have_gah	= true,
 };
 
-void ioc_releasedir_priv(fuse_req_t req, struct iof_dir_handle *dh)
+void
+ioc_releasedir_priv(fuse_req_t req, struct iof_dir_handle *dh)
 {
 	struct iof_projection_info *fs_handle = dh->open_req.fsh;
 	int rc;
@@ -98,15 +99,16 @@ err:
 
 }
 
-void ioc_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
-		       struct fuse_file_info *fi)
+void
+ioc_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct TYPE_NAME *dh = (struct TYPE_NAME *)fi->fh;
 
 	ioc_releasedir_priv(req, dh);
 }
 
-void ioc_int_releasedir(struct iof_dir_handle *dh)
+void
+ioc_int_releasedir(struct iof_dir_handle *dh)
 {
 	ioc_releasedir_priv(NULL, dh);
 }

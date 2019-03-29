@@ -42,7 +42,8 @@
 
 #include "dfuse_fs.h"
 
-static int iof_check_complete(void *arg)
+static int
+iof_check_complete(void *arg)
 {
 	struct iof_tracker *tracker = arg;
 
@@ -50,7 +51,8 @@ static int iof_check_complete(void *arg)
 }
 
 /* Progress until all callbacks are invoked */
-void iof_wait(crt_context_t crt_ctx, struct iof_tracker *tracker)
+void
+iof_wait(crt_context_t crt_ctx, struct iof_tracker *tracker)
 {
 	int			rc;
 

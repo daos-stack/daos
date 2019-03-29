@@ -78,7 +78,8 @@ _Static_assert(sizeof(obj_pool_t) >= sizeof(struct obj_pool),
 #define MAGIC 0x345342aa
 
 /* On thread death, save the free entries globally */
-static void save_free_entries(void *tpv_data)
+static void
+save_free_entries(void *tpv_data)
 {
 	struct tpv_data *tpv = (struct tpv_data *)tpv_data;
 	struct obj_pool *pool = tpv->pool;
@@ -101,7 +102,8 @@ static void save_free_entries(void *tpv_data)
  * \param pool[out] Pool to initialize
  * \param obj_size[in] Size of objects in pool
  */
-int obj_pool_initialize(obj_pool_t *pool, size_t obj_size)
+int
+obj_pool_initialize(obj_pool_t *pool, size_t obj_size)
 {
 	struct obj_pool *real_pool = (struct obj_pool *)pool;
 	int rc;
@@ -138,7 +140,8 @@ int obj_pool_initialize(obj_pool_t *pool, size_t obj_size)
 }
 
 /* Destroy a pool and all objects in pool */
-int obj_pool_destroy(obj_pool_t *pool)
+int
+obj_pool_destroy(obj_pool_t *pool)
 {
 	struct pool_entry *block;
 	struct tpv_data *tpv;
@@ -176,7 +179,8 @@ int obj_pool_destroy(obj_pool_t *pool)
 	return -DER_SUCCESS;
 }
 
-static int get_tpv(struct obj_pool *pool, struct tpv_data **tpv)
+static int
+get_tpv(struct obj_pool *pool, struct tpv_data **tpv)
 {
 	struct tpv_data *tpv_data = pthread_getspecific(pool->key);
 
@@ -205,7 +209,8 @@ static int get_tpv(struct obj_pool *pool, struct tpv_data **tpv)
 	return -DER_SUCCESS;
 }
 
-static int get_new_entry(struct pool_entry **entry, struct obj_pool *pool)
+static int
+get_new_entry(struct pool_entry **entry, struct obj_pool *pool)
 {
 	char *block;
 	char *cursor;
@@ -250,7 +255,8 @@ zero:
 	return -DER_SUCCESS;
 }
 
-int obj_pool_get_(obj_pool_t *pool, void **item, size_t size)
+int
+obj_pool_get_(obj_pool_t *pool, void **item, size_t size)
 {
 	struct obj_pool *real_pool = (struct obj_pool *)pool;
 	struct pool_entry *entry;
@@ -273,7 +279,8 @@ int obj_pool_get_(obj_pool_t *pool, void **item, size_t size)
 	return rc;
 }
 
-int obj_pool_put(obj_pool_t *pool, void *item)
+int
+obj_pool_put(obj_pool_t *pool, void *item)
 {
 	struct obj_pool *real_pool = (struct obj_pool *)pool;
 	struct pool_entry *entry;

@@ -90,7 +90,8 @@ out_err:
 	iof_pool_release(fs_handle->fh_pool, handle);
 }
 
-void ioc_ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+void
+ioc_ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
 
@@ -98,7 +99,8 @@ void ioc_ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	ioc_release_priv(handle);
 }
 
-void ioc_int_release(struct iof_file_handle *handle)
+void
+ioc_int_release(struct iof_file_handle *handle)
 {
 
 	ioc_release_priv(handle);

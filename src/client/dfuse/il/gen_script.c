@@ -39,7 +39,8 @@
 #include <unistd.h>
 #include "intercept.h"
 
-void print_usage(const char *prog)
+void
+print_usage(const char *prog)
 {
 	printf("Usage: %s <-l|-s> <file_to_generate>\n", prog);
 	printf("\nOptions:\n");
@@ -62,7 +63,8 @@ void print_usage(const char *prog)
 #define SYMBOL_GEN_IOF(type, name, params) \
 	fprintf(fp, "iof_" #name " ");
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 	FILE *fp;
 	const char *path = NULL;

@@ -40,18 +40,36 @@
 
 #include "dfuse_log.h"
 
+
+/**
+ * These pre-date -DER_* codes, and are used for exit status on failure so
+ * keep them for now until we can test a replacement.
+ */
+
 #define CNSS_SUCCESS           0
 #define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
 #define CNSS_ERR_NOMEM         2 /*no memory*/
 #define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
 #define CNSS_ERR_CART          4 /*CaRT failed*/
 
-struct fuse_lowlevel_ops;
-struct fuse_args;
-struct fuse_session;
-struct iof_state;
-struct iof_projection_info;
-struct cnss_info;
+#include "dfuse_common.h"
+#include "dfuse.h"
+
+struct fs_info {
+	char			*fsi_mnt;
+	struct fuse		*fsi_fuse;
+	struct fuse_session	*fsi_session;
+	pthread_t		fsi_thread;
+	pthread_mutex_t		fsi_lock;
+	struct iof_projection_info *fsi_handle;
+	bool			fsi_running;
+	bool			fsi_mt;
+};
+
+struct cnss_info {
+	struct iof_state	*iof_state;
+	struct fs_info		ci_fsinfo;
+};
 
 bool
 cnss_register_fuse(struct cnss_info *cnss_info,

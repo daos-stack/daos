@@ -99,7 +99,8 @@ struct fd_entry {
 	int status;
 };
 
-int ioil_initialize_fd_table(int max_fds)
+int
+ioil_initialize_fd_table(int max_fds)
 {
 	int rc;
 
@@ -111,8 +112,8 @@ int ioil_initialize_fd_table(int max_fds)
 	return rc;
 }
 
-static ssize_t pread_rpc(struct fd_entry *entry, char *buff, size_t len,
-			 off_t offset)
+static ssize_t
+pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_read;
 	int errcode;
@@ -125,8 +126,9 @@ static ssize_t pread_rpc(struct fd_entry *entry, char *buff, size_t len,
 }
 
 /* Start simple and just loop */
-static ssize_t preadv_rpc(struct fd_entry *entry, const struct iovec *iov,
-			  int count, off_t offset)
+static ssize_t
+preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
+	   off_t offset)
 {
 	ssize_t bytes_read;
 	int errcode;
@@ -139,8 +141,8 @@ static ssize_t preadv_rpc(struct fd_entry *entry, const struct iovec *iov,
 	return bytes_read;
 }
 
-static ssize_t pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len,
-			  off_t offset)
+static ssize_t
+pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
@@ -155,8 +157,9 @@ static ssize_t pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len,
 }
 
 /* Start simple and just loop */
-static ssize_t pwritev_rpc(struct fd_entry *entry, const struct iovec *iov,
-			   int count, off_t offset)
+static ssize_t
+pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
+	    off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
@@ -177,7 +180,8 @@ static void init_links(void)
 	FOREACH_INTERCEPT(IOIL_FORWARD_MAP_OR_FAIL);
 }
 
-static __attribute__((constructor)) void ioil_init(void)
+static __attribute__((constructor)) void
+ioil_init(void)
 {
 	struct rlimit rlimit;
 	int rc;
@@ -234,7 +238,8 @@ static __attribute__((constructor)) void ioil_init(void)
 	ioil_initialized = true;
 }
 
-static __attribute__((destructor)) void ioil_fini(void)
+static __attribute__((destructor)) void
+ioil_fini(void)
 {
 	if (ioil_initialized) {
 		crt_group_detach(ionss_grp.dest_grp);
@@ -249,8 +254,8 @@ static __attribute__((destructor)) void ioil_fini(void)
 	vector_destroy(&fd_table);
 }
 
-static bool check_ioctl_on_open(int fd, struct fd_entry *entry, int flags,
-				int status)
+static bool
+check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
 	struct iof_gah_info gah_info;
 	int rc;
@@ -294,7 +299,8 @@ static bool check_ioctl_on_open(int fd, struct fd_entry *entry, int flags,
 	return true;
 }
 
-static bool drop_reference_if_disabled(struct fd_entry *entry)
+static bool
+drop_reference_if_disabled(struct fd_entry *entry)
 {
 	if (entry->status == IOF_IO_BYPASS)
 		return false;
@@ -304,7 +310,8 @@ static bool drop_reference_if_disabled(struct fd_entry *entry)
 	return true;
 }
 
-IOF_PUBLIC int iof_open(const char *pathname, int flags, ...)
+IOF_PUBLIC int
+iof_open(const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
 	int fd;
@@ -353,7 +360,8 @@ finish:
 	return fd;
 }
 
-IOF_PUBLIC int iof_creat(const char *pathname, mode_t mode)
+IOF_PUBLIC int
+iof_creat(const char *pathname, mode_t mode)
 {
 	struct fd_entry entry = {0};
 	int fd;
@@ -377,7 +385,8 @@ finish:
 	return fd;
 }
 
-IOF_PUBLIC int iof_close(int fd)
+IOF_PUBLIC int
+iof_close(int fd)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -397,7 +406,8 @@ do_real_close:
 	return __real_close(fd);
 }
 
-IOF_PUBLIC ssize_t iof_read(int fd, void *buf, size_t len)
+IOF_PUBLIC ssize_t
+iof_read(int fd, void *buf, size_t len)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -431,7 +441,8 @@ do_real_read:
 	return __real_read(fd, buf, len);
 }
 
-IOF_PUBLIC ssize_t iof_pread(int fd, void *buf, size_t count, off_t offset)
+IOF_PUBLIC ssize_t
+iof_pread(int fd, void *buf, size_t count, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -461,7 +472,8 @@ do_real_pread:
 	return __real_pread(fd, buf, count, offset);
 }
 
-IOF_PUBLIC ssize_t iof_write(int fd, const void *buf, size_t len)
+IOF_PUBLIC ssize_t
+iof_write(int fd, const void *buf, size_t len)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -494,7 +506,8 @@ do_real_write:
 	return __real_write(fd, buf, len);
 }
 
-IOF_PUBLIC ssize_t iof_pwrite(int fd, const void *buf, size_t count,
+IOF_PUBLIC ssize_t
+iof_pwrite(int fd, const void *buf, size_t count,
 			      off_t offset)
 {
 	struct fd_entry *entry;
@@ -525,7 +538,8 @@ do_real_pwrite:
 	return __real_pwrite(fd, buf, count, offset);
 }
 
-IOF_PUBLIC off_t iof_lseek(int fd, off_t offset, int whence)
+IOF_PUBLIC off_t
+iof_lseek(int fd, off_t offset, int whence)
 {
 	struct fd_entry *entry;
 	off_t new_offset = -1;
@@ -578,7 +592,8 @@ do_real_lseek:
 	return __real_lseek(fd, offset, whence);
 }
 
-IOF_PUBLIC ssize_t iof_readv(int fd, const struct iovec *vector, int iovcnt)
+IOF_PUBLIC ssize_t
+iof_readv(int fd, const struct iovec *vector, int iovcnt)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -611,8 +626,8 @@ do_real_readv:
 	return __real_readv(fd, vector, iovcnt);
 }
 
-IOF_PUBLIC ssize_t iof_preadv(int fd, const struct iovec *vector, int iovcnt,
-			      off_t offset)
+IOF_PUBLIC ssize_t
+iof_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -641,7 +656,8 @@ do_real_preadv:
 	return __real_preadv(fd, vector, iovcnt, offset);
 }
 
-IOF_PUBLIC ssize_t iof_writev(int fd, const struct iovec *vector, int iovcnt)
+IOF_PUBLIC ssize_t
+iof_writev(int fd, const struct iovec *vector, int iovcnt)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -674,8 +690,8 @@ do_real_writev:
 	return __real_writev(fd, vector, iovcnt);
 }
 
-IOF_PUBLIC ssize_t iof_pwritev(int fd, const struct iovec *vector, int iovcnt,
-			       off_t offset)
+IOF_PUBLIC ssize_t
+iof_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -705,8 +721,9 @@ do_real_pwritev:
 	return __real_pwritev(fd, vector, iovcnt, offset);
 }
 
-IOF_PUBLIC void *iof_mmap(void *address, size_t length, int prot, int flags,
-			  int fd, off_t offset)
+IOF_PUBLIC void *
+iof_mmap(void *address, size_t length, int prot, int flags, int fd,
+	 off_t offset)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -730,7 +747,8 @@ IOF_PUBLIC void *iof_mmap(void *address, size_t length, int prot, int flags,
 	return __real_mmap(address, length, prot, flags, fd, offset);
 }
 
-IOF_PUBLIC int iof_fsync(int fd)
+IOF_PUBLIC int
+iof_fsync(int fd)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -749,7 +767,8 @@ do_real_fsync:
 	return __real_fsync(fd);
 }
 
-IOF_PUBLIC int iof_fdatasync(int fd)
+IOF_PUBLIC int
+iof_fdatasync(int fd)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -789,7 +808,8 @@ IOF_PUBLIC int iof_dup(int oldfd)
 	return newfd;
 }
 
-IOF_PUBLIC int iof_dup2(int oldfd, int newfd)
+IOF_PUBLIC int
+iof_dup2(int oldfd, int newfd)
 {
 	struct fd_entry *entry = NULL;
 	int realfd = __real_dup2(oldfd, newfd);
@@ -810,7 +830,8 @@ IOF_PUBLIC int iof_dup2(int oldfd, int newfd)
 	return realfd;
 }
 
-IOF_PUBLIC FILE *iof_fdopen(int fd, const char *mode)
+IOF_PUBLIC FILE *
+iof_fdopen(int fd, const char *mode)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -833,7 +854,8 @@ IOF_PUBLIC FILE *iof_fdopen(int fd, const char *mode)
 	return __real_fdopen(fd, mode);
 }
 
-IOF_PUBLIC int iof_fcntl(int fd, int cmd, ...)
+IOF_PUBLIC int
+iof_fcntl(int fd, int cmd, ...)
 {
 	va_list ap;
 	void *arg;
@@ -888,7 +910,8 @@ IOF_PUBLIC int iof_fcntl(int fd, int cmd, ...)
 	return newfd;
 }
 
-IOF_PUBLIC FILE *iof_fopen(const char *path, const char *mode)
+IOF_PUBLIC FILE *
+iof_fopen(const char *path, const char *mode)
 {
 	FILE *fp;
 	struct fd_entry entry = {0};
@@ -919,7 +942,8 @@ finish:
 	return fp;
 }
 
-IOF_PUBLIC FILE *iof_freopen(const char *path, const char *mode, FILE *stream)
+IOF_PUBLIC FILE *
+iof_freopen(const char *path, const char *mode, FILE *stream)
 {
 	FILE *newstream;
 	struct fd_entry new_entry = {0};
@@ -978,7 +1002,8 @@ IOF_PUBLIC FILE *iof_freopen(const char *path, const char *mode, FILE *stream)
 	return newstream;
 }
 
-IOF_PUBLIC int iof_fclose(FILE *stream)
+IOF_PUBLIC int
+iof_fclose(FILE *stream)
 {
 	struct fd_entry *entry = NULL;
 	int fd;
@@ -1007,7 +1032,8 @@ do_real_fclose:
 	return __real_fclose(stream);
 }
 
-IOF_PUBLIC int iof_get_bypass_status(int fd)
+IOF_PUBLIC int
+iof_get_bypass_status(int fd)
 {
 	struct fd_entry *entry;
 	int rc;

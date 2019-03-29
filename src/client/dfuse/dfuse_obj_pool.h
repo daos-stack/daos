@@ -57,9 +57,11 @@ typedef struct {
  * \param pool[out] Pool to initialize
  * \param obj_size[in] Size of objects in pool
  */
-int obj_pool_initialize(obj_pool_t *pool, size_t obj_size);
+int
+obj_pool_initialize(obj_pool_t *pool, size_t obj_size);
 /* Destroy a pool and all objects in pool */
-int obj_pool_destroy(obj_pool_t *pool);
+int
+obj_pool_destroy(obj_pool_t *pool);
 
 /* Get a zero initialized item from the pool
  * \param [in] Pool from which to get item
@@ -72,10 +74,12 @@ int obj_pool_destroy(obj_pool_t *pool);
 /* Return an item to the pool
  * \param [in] Item to return to pool
  */
-int obj_pool_put(obj_pool_t *pool, void *item);
+int
+obj_pool_put(obj_pool_t *pool, void *item);
 
 /* Internal routine.  Use pool_allocate instead */
-int obj_pool_get_(obj_pool_t *pool, void **item, size_t size);
+int
+obj_pool_get_(obj_pool_t *pool, void **item, size_t size);
 
 #if defined(__cplusplus)
 }

@@ -42,8 +42,9 @@
 #include "dfuse_log.h"
 #include "dfuse_bulk.h"
 
-bool iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
-		    bool read_only)
+bool
+iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
+	       bool read_only)
 {
 	struct iof_local_bulk *bulk = (ptr + bulk_offset);
 	d_sg_list_t sgl = {0};
@@ -86,7 +87,8 @@ bool iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 	return true;
 }
 
-static void bulk_free_helper(void *ptr, struct iof_local_bulk *bulk)
+static void
+bulk_free_helper(void *ptr, struct iof_local_bulk *bulk)
 {
 	void *addr;
 	int rc;
@@ -116,7 +118,8 @@ static void bulk_free_helper(void *ptr, struct iof_local_bulk *bulk)
 				strerror(errno));
 }
 
-void iof_bulk_free(void *ptr, off_t bulk_offset)
+void
+iof_bulk_free(void *ptr, off_t bulk_offset)
 {
 	struct iof_local_bulk *bulk = (ptr + bulk_offset);
 

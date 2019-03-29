@@ -111,8 +111,9 @@ err:
 	iof_pool_release(wb->wb_req.fsh->write_pool, wb);
 }
 
-void ioc_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
-		  off_t position, struct fuse_file_info *fi)
+void
+ioc_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
+	     off_t position, struct fuse_file_info *fi)
 {
 	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
 	struct iof_wb *wb;
@@ -145,8 +146,9 @@ err:
  * doing any allocation/memcpy() and it uses fuse_buf_copy() to put the data
  * directly into our data buffer avoiding an additional memcpy().
  */
-void ioc_ll_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
-		      off_t position, struct fuse_file_info *fi)
+void
+ioc_ll_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
+		 off_t position, struct fuse_file_info *fi)
 {
 	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
 	struct iof_wb *wb = NULL;

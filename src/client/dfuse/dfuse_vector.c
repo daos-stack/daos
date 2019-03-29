@@ -57,7 +57,8 @@ union ptr_lock {
 };
 
 /* Acquires a lock on the pointer and returns the pointer. */
-static inline void *acquire_ptr_lock(union ptr_lock *lock)
+static inline void *
+acquire_ptr_lock(union ptr_lock *lock)
 {
 	uintptr_t new_value;
 	uintptr_t old_value;
@@ -79,7 +80,8 @@ static inline void *acquire_ptr_lock(union ptr_lock *lock)
 	return (void *)old_value;
 }
 
-static inline void release_ptr_lock(union ptr_lock *lock)
+static inline void
+release_ptr_lock(union ptr_lock *lock)
 {
 	atomic_store_release(&lock->value, lock->value & ~((uintptr_t)1));
 }
@@ -87,7 +89,8 @@ static inline void release_ptr_lock(union ptr_lock *lock)
 /* Caller must hold lock.  A valid aligned pointer value
  * releases the lock
  */
-static inline void set_ptr_value(union ptr_lock *lock, void *new_value)
+static inline void
+set_ptr_value(union ptr_lock *lock, void *new_value)
 {
 	atomic_store_release(&lock->value, (uintptr_t)new_value);
 }
@@ -122,7 +125,8 @@ _Static_assert(sizeof(struct vector) <= sizeof(vector_t),
 	(((index + ALLOC_SIZE) >> ALLOC_SIZE_SHIFT) << ALLOC_SIZE_SHIFT)
 
 /* Assumes new_index is in bounds of vector but not yet allocated */
-static int expand_vector(struct vector *vector, unsigned int new_index)
+static int
+expand_vector(struct vector *vector, unsigned int new_index)
 {
 	unsigned int num_entries = get_new_size(new_index);
 	unsigned int new_entries;
@@ -151,7 +155,8 @@ static int expand_vector(struct vector *vector, unsigned int new_index)
 }
 
 /* Assumes caller holds pthread_rwlock.   Same lock will be held on exit */
-static int expand_if_needed(struct vector *vector, unsigned int index)
+static int
+expand_if_needed(struct vector *vector, unsigned int index)
 {
 	int rc = -DER_SUCCESS;
 
@@ -172,7 +177,8 @@ static int expand_if_needed(struct vector *vector, unsigned int index)
 	return rc;
 }
 
-int vector_init(vector_t *vector, int sizeof_entry, int max_entries)
+int
+vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 {
 	struct vector *realv = (struct vector *)vector;
 	int rc;
@@ -206,7 +212,8 @@ int vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 	return -DER_SUCCESS;
 }
 
-int vector_destroy(vector_t *vector)
+int
+vector_destroy(vector_t *vector)
 {
 	struct vector *realv = (struct vector *)vector;
 	int rc;
@@ -229,7 +236,8 @@ int vector_destroy(vector_t *vector)
 		return -DER_INVAL;
 }
 
-int vector_get_(vector_t *vector, unsigned int index, void **ptr)
+int
+vector_get_(vector_t *vector, unsigned int index, void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
 	struct entry *entry;
@@ -271,7 +279,8 @@ int vector_get_(vector_t *vector, unsigned int index, void **ptr)
 	return rc;
 }
 
-int vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
+int
+vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
 		void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
@@ -328,7 +337,8 @@ int vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
 	return rc;
 }
 
-int vector_decref(vector_t *vector, void *ptr)
+int
+vector_decref(vector_t *vector, void *ptr)
 {
 	struct vector *realv = (struct vector *)vector;
 	struct entry *entry;
@@ -350,7 +360,8 @@ int vector_decref(vector_t *vector, void *ptr)
 	return -DER_SUCCESS;
 }
 
-int vector_set_(vector_t *vector, unsigned int index, void *ptr, size_t size)
+int
+vector_set_(vector_t *vector, unsigned int index, void *ptr, size_t size)
 {
 	struct vector *realv = (struct vector *)vector;
 	struct entry *entry;
@@ -401,7 +412,8 @@ release:
 	return rc;
 }
 
-int vector_remove_(vector_t *vector, unsigned int index, void **ptr)
+int
+vector_remove_(vector_t *vector, unsigned int index, void **ptr)
 {
 	struct vector *realv = (struct vector *)vector;
 	struct entry *entry;

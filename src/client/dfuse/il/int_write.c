@@ -87,8 +87,9 @@ write_cb(const struct crt_cb_info *cb_info)
 	iof_tracker_signal(&reply->tracker);
 }
 
-ssize_t ioil_do_writex(const char *buff, size_t len, off_t position,
-		       struct iof_file_common *f_info, int *errcode)
+ssize_t
+ioil_do_writex(const char *buff, size_t len, off_t position,
+	       struct iof_file_common *f_info, int *errcode)
 {
 	struct iof_projection *fs_handle;
 	struct iof_service_group *grp;
@@ -186,11 +187,9 @@ ssize_t ioil_do_writex(const char *buff, size_t len, off_t position,
 	return reply.len;
 }
 
-/* TODO: This could be optimized to send multiple RPCs at once rather than
- * sending them serially.   Get it working first.
- */
-ssize_t ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-			struct iof_file_common *f_info, int *errcode)
+ssize_t
+ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
+		struct iof_file_common *f_info, int *errcode)
 {
 	ssize_t bytes_written;
 	ssize_t total_write = 0;
