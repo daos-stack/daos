@@ -34,6 +34,7 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Build DFuse"""
 import os
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
@@ -132,7 +133,7 @@ def build_client_libs_static(env, common):
     # Now build the interception library
     dfuse_lib_src = ilenv.Library('common/libdfuse_source', common)
     dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
-                            'objcopy --localize-hidden $SOURCE $TARGET')
+                              'objcopy --localize-hidden $SOURCE $TARGET')
     env.Install('$PREFIX/lib', dfuse_lib)
 
     return il_lib + dfuse_lib
