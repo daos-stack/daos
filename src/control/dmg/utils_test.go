@@ -48,55 +48,41 @@ func init() {
 
 func TestHasConnection(t *testing.T) {
 	var shelltests = []struct {
-		addrs Addresses
-		eMap  ResultMap
-		out   string
+		results ResultMap
+		out     string
 	}{
 		{
-			addresses,
 			ResultMap{},
+			"Active connections: []\nNo active connections!",
+		},
+		{
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}},
+			"Active connections: [1.2.3.4:10000]\n",
+		},
+		{
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}},
+			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: []\nNo active connections!",
+		},
+		{
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
-			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
-		},
-		{
-			Addresses{},
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
 			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\nNo active connections!",
 		},
-	}
-	for _, tt := range shelltests {
-		AssertEqual(t, hasConns(tt.addrs, tt.eMap), tt.out, "bad output")
-	}
-}
-
-func TestSprintConns(t *testing.T) {
-	var shelltests = []struct {
-		addrs Addresses
-		eMap  ResultMap
-		out   string
-	}{
 		{
-			addresses,
-			ResultMap{},
-			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
-		},
-		{
-			Addresses{"1.2.3.5:10001"},
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}},
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
 			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
-			Addresses{},
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
+			"failed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: [1.2.3.4:10000]\n",
 		},
 	}
+
 	for _, tt := range shelltests {
-		AssertEqual(t, sprintConns(tt.addrs, tt.eMap), tt.out, "bad output")
+		AssertEqual(t, hasConns(tt.results), tt.out, "bad output")
 	}
 }
 

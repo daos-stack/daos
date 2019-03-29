@@ -56,7 +56,7 @@ func sprintConns(results client.ResultMap) (out string) {
 		if results[addr].Err != nil {
 			out = fmt.Sprintf(
 				"%sfailed to connect to %s (%s)\n",
-				out, addr, resultsMap[key].Err)
+				out, addr, results[addr].Err)
 			continue
 		}
 		addrs[i] = addr

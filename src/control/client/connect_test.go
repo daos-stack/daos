@@ -40,7 +40,7 @@ var (
 	features   = []*pb.Feature{MockFeaturePB()}
 	ctrlrs     = NvmeControllers{MockControllerPB("")}
 	modules    = ScmModules{MockModulePB()}
-	errExample = errors.New("")
+	errExample = errors.New("unknown failure")
 )
 
 func init() {
@@ -100,9 +100,9 @@ func TestConnectClients(t *testing.T) {
 		{addresses, Ready, nil, ""},
 		{addresses, TransientFailure, nil, fmt.Sprintf(eMsg, TransientFailure)},
 		{addresses, Shutdown, nil, fmt.Sprintf(eMsg, Shutdown)},
-		{addresses, Idle, errExample, ""},
-		{addresses, Connecting, errExample, ""},
-		{addresses, Ready, errExample, ""},
+		{addresses, Idle, errExample, "unknown failure"},
+		{addresses, Connecting, errExample, "unknown failure"},
+		{addresses, Ready, errExample, "unknown failure"},
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
@@ -121,7 +121,7 @@ func TestConnectClients(t *testing.T) {
 					"unexpected error value in results")
 				continue
 			}
-			fmt.Printf("%#v", res)
+
 			AssertEqual(
 				t, res.Err, nil,
 				"unexpected non-nil error value in results")
@@ -151,68 +151,42 @@ func defaultClientSetup() Connect {
 	return cc
 }
 
-func TestDuplicateConns(t *testing.T) {
-	cc := defaultMockConnect()
-	results := cc.ConnectClients(append(addresses, addresses...))
-
+func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
 	AssertEqual(
-		t, len(results), len(addresses), // duplicates ignored
+		t, len(results), len(addrs), // duplicates ignored
 		"unexpected number of results")
 
 	for _, res := range results {
 		AssertEqual(
-			t, res.Err, nil,
+			t, res.Err, e,
 			"unexpected error value in results")
 	}
+}
+
+func TestDuplicateConns(t *testing.T) {
+	cc := defaultMockConnect()
+	results := cc.ConnectClients(append(addresses, addresses...))
+
+	checkResults(t, addresses, results, nil)
 }
 
 func TestGetClearConns(t *testing.T) {
 	cc := defaultClientSetup()
 
 	results := cc.GetActiveConns(ResultMap{})
-	AssertEqual(t, results, ResultMap{}, "unexpected result map")
+	checkResults(t, addresses, results, nil)
 
 	results = cc.ClearConns()
-	AssertEqual(t, results, ResultMap{}, "unexpected result map")
+	checkResults(t, addresses, results, nil)
 
 	results = cc.GetActiveConns(ResultMap{})
 	AssertEqual(t, results, ResultMap{}, "unexpected result map")
 
 	results = cc.ConnectClients(addresses)
-	AssertEqual(
-		t, len(results), len(addresses),
-		"unexpected number of results")
-
-	for _, res := range results {
-		AssertEqual(
-			t, res.Err, nil,
-			"unexpected error value in results")
-	}
+	checkResults(t, addresses, results, nil)
 
 	results = cc.GetActiveConns(results)
-	AssertEqual(
-		t, len(results), len(addresses),
-		"unexpected number of results")
-
-	for _, res := range results {
-		AssertEqual(
-			t, res.Err, nil,
-			"unexpected error value in results")
-	}
-
-	results = cc.ClearConns()
-	AssertEqual(
-		t, len(results), len(addresses),
-		"unexpected number of results")
-
-	for _, res := range results {
-		AssertEqual(
-			t, res.Err, nil,
-			"unexpected error value in results")
-	}
-
-	results = cc.GetActiveConns(ResultMap{})
-	AssertEqual(t, results, ResultMap{}, "unexpected result map")
+	checkResults(t, addresses, results, nil)
 }
 
 func TestListFeatures(t *testing.T) {
@@ -237,18 +211,6 @@ func TestListStorage(t *testing.T) {
 	AssertEqual(
 		t, clientScm, NewClientScm(modules, addresses),
 		"unexpected client SCM modules returned")
-}
-
-func checkResults(t *testing.T, addrs Addresses, results ResultMap, errExp error) {
-	AssertEqual(
-		t, len(addresses), len(results),
-		"unexpected number of failures in result")
-
-	for _, res := range addresses {
-		AssertEqual(
-			t, results[res].Err, errExp,
-			"unexpected error in result")
-	}
 }
 
 func TestFormatStorage(t *testing.T) {
