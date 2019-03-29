@@ -107,7 +107,7 @@ TODO: examples for both DCPM and RAM (emulation) SCM classes including config fi
 
 `daos_server` supports various subcommands (see `daos_server --help` for available subcommands) which will perform stand-alone tasks as opposed to launching as a daemon (default operation if launched without subcommand).
 
-### prep-nvme
+### storage prep-nvme
 
 This subcommand requires elevated permissions (sudo).
 
@@ -122,9 +122,38 @@ linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 
 See `daos_server prep-nvme --help` for usage.
 
-### show-storage
+### storage list
 
-List NVMe SSDs and SCM modules locally attached to the host.
+<details>
+<summary>List NVMe SSDs and SCM modules locally attached to the host.</summary>
+<p>
+
+```
+[tanabarr@boro-45 daos_m]$ daos_server storage list
+Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
+[ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk_pid29193 ]
+EAL: Detected 72 lcore(s)
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Multi-process socket /home/tanabarr/.spdk_pid29193_unix
+EAL: Probing VFIO support...
+Unable to unlink shared memory file: /var/run/.spdk_pid29193_config. Error code: 2
+Unable to unlink shared memory file: /var/run/.spdk_pid29193_hugepage_info. Error code: 2
+EAL: PCI device 0000:81:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:2701 spdk_nvme
+Listing attached storage...
+NVMe:
+- id: 0
+  model: 'INTEL SSDPED1K375GA '
+  serial: 'PHKS7335006W375AGN  '
+  pciaddr: 0000:81:00.0
+  fwrev: E2010420
+  namespace:
+  - id: 1
+    capacity: 375
+```
+
+</p>
+</details>
 
 See `daos_server show-storage --help` for usage.
 
