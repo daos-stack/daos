@@ -58,7 +58,7 @@ out:
 static void
 generic_cb(const struct crt_cb_info *cb_info)
 {
-	struct ioc_request *request = cb_info->cci_arg;
+	struct ioc_request		*request = cb_info->cci_arg;
 	struct iof_projection_info	*fsh = request->fsh;
 	struct ioc_inode_entry		*ir_inode = NULL;
 	bool				keep_ref;
@@ -129,10 +129,10 @@ err:
 int
 iof_fs_resend(struct ioc_request *request)
 {
-	struct iof_projection_info *fs_handle = request->fsh;
-	crt_endpoint_t ep;
-	int ret;
-	int rc;
+	struct iof_projection_info	*fs_handle = request->fsh;
+	crt_endpoint_t			ep;
+	int				ret;
+	int				rc;
 
 	if (request->ir_api->have_gah) {
 		void *in = crt_req_get(request->rpc);
@@ -214,8 +214,8 @@ static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	   const void *key, unsigned int ksize)
 {
-	const struct ioc_inode_entry *ie;
-	const ino_t *ino = key;
+	const struct ioc_inode_entry	*ie;
+	const ino_t			*ino = key;
 
 	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
 
@@ -225,8 +225,8 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct ioc_inode_entry *ie;
-	int oldref;
+	struct ioc_inode_entry	*ie;
+	int			oldref;
 
 	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
 	oldref = atomic_fetch_add(&ie->ie_ref, 1);
@@ -236,8 +236,8 @@ ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct ioc_inode_entry *ie;
-	int oldref;
+	struct ioc_inode_entry	*ie;
+	int			oldref;
 
 	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
 	oldref = atomic_fetch_sub(&ie->ie_ref, 1);
@@ -248,8 +248,8 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct iof_projection_info *fs_handle = htable->ht_priv;
-	struct ioc_inode_entry *ie;
+	struct iof_projection_info	*fs_handle = htable->ht_priv;
+	struct ioc_inode_entry		*ie;
 
 	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
 
@@ -295,8 +295,8 @@ dh_init(void *arg, void *handle)
 static bool
 dh_reset(void *arg)
 {
-	struct iof_dir_handle *dh = arg;
-	int rc;
+	struct iof_dir_handle	*dh = arg;
+	int			rc;
 
 	dh->reply_count = 0;
 
@@ -366,8 +366,8 @@ fh_init(void *arg, void *handle)
 static bool
 fh_reset(void *arg)
 {
-	struct iof_file_handle *fh = arg;
-	int rc;
+	struct iof_file_handle	*fh = arg;
+	int			rc;
 
 	IOC_REQUEST_RESET(&fh->open_req);
 	CHECK_AND_RESET_RRPC(fh, open_req);
@@ -499,8 +499,8 @@ ENTRY_INIT(symlink);
 static bool
 entry_reset(void *arg)
 {
-	struct entry_req *req = arg;
-	int rc;
+	struct entry_req	*req = arg;
+	int			rc;
 
 	/* If this descriptor has previously been used then destroy the
 	 * existing RPC
@@ -579,8 +579,8 @@ rb_large_init(void *arg, void *handle)
 static bool
 rb_reset(void *arg)
 {
-	struct iof_rb *rb = arg;
-	int rc;
+	struct iof_rb	*rb = arg;
+	int		rc;
 
 	IOC_REQUEST_RESET(&rb->rb_req);
 	CHECK_AND_RESET_RRPC(rb, rb_req);
@@ -635,8 +635,8 @@ wb_init(void *arg, void *handle)
 static bool
 wb_reset(void *arg)
 {
-	struct iof_wb *wb = arg;
-	int rc;
+	struct iof_wb	*wb = arg;
+	int		rc;
 
 	IOC_REQUEST_RESET(&wb->wb_req);
 	CHECK_AND_RESET_RRPC(wb, wb_req);
@@ -832,7 +832,7 @@ initialize_projection(struct iof_state *iof_state,
 	struct fuse_args		args = {0};
 	int				ret;
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
-	int i;
+	int				i;
 
 	struct iof_pool_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
@@ -1106,12 +1106,12 @@ iof_flush_fuse(struct iof_projection_info *fs_handle)
 int
 iof_deregister_fuse(struct iof_projection_info *fs_handle)
 {
-	d_list_t *rlink = NULL;
-	uint64_t refs = 0;
-	int handles = 0;
-	int rc;
-	int rcp = 0;
-	int i;
+	d_list_t	*rlink;
+	uint64_t	refs = 0;
+	int		handles = 0;
+	int		rc;
+	int		rcp = 0;
+	int		i;
 
 	IOF_TRACE_INFO(fs_handle, "Draining inode table");
 	do {

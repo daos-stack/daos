@@ -86,17 +86,17 @@ static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
 	  struct iof_file_common *f_info, int *errcode)
 {
-	struct iof_projection *fs_handle;
-	struct iof_service_group *grp;
-	struct iof_readx_in *in;
-	struct iof_readx_out *out;
-	struct read_bulk_cb_r reply = {0};
-	crt_rpc_t *rpc = NULL;
-	crt_bulk_t bulk;
-	ssize_t read_len = 0;
-	d_sg_list_t sgl = {0};
-	d_iov_t iov = {0};
-	int rc;
+	struct iof_projection		*fs_handle;
+	struct iof_service_group	*grp;
+	struct iof_readx_in		*in;
+	struct iof_readx_out		*out;
+	struct read_bulk_cb_r		reply = {0};
+	crt_rpc_t			*rpc = NULL;
+	crt_bulk_t			bulk;
+	ssize_t				read_len = 0;
+	d_sg_list_t			sgl = {0};
+	d_iov_t				iov = {0};
+	int				rc;
 
 	fs_handle = f_info->projection;
 	grp = fs_handle->grp;

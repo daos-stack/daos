@@ -77,17 +77,17 @@ ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
 	       struct iof_file_common *f_info, int *errcode)
 {
-	struct iof_projection *fs_handle;
-	struct iof_service_group *grp;
-	struct iof_writex_in *in;
-	struct write_cb_r reply = {0};
-	crt_rpc_t *rpc = NULL;
-	crt_bulk_t bulk;
-	d_sg_list_t sgl = {0};
-	d_iov_t iov = {0};
-	uint64_t imm_len;
-	uint64_t imm_offset = 0;
-	int rc;
+	struct iof_projection		*fs_handle;
+	struct iof_service_group	*grp;
+	struct iof_writex_in		*in;
+	struct write_cb_r		reply = {0};
+	crt_rpc_t			*rpc = NULL;
+	crt_bulk_t			bulk;
+	d_sg_list_t			sgl = {0};
+	d_iov_t				iov = {0};
+	uint64_t			imm_len;
+	uint64_t			imm_offset = 0;
+	int				rc;
 
 	IOF_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position,
 		     position + len - 1, GAH_PRINT_VAL(f_info->gah));

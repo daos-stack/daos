@@ -56,9 +56,9 @@ iof_signal_poke(int signal)
 static void
 *ll_loop_fn(void *args)
 {
-	int ret;
-	struct fs_info *info = args;
-	const struct sigaction act = {.sa_handler = iof_signal_poke};
+	int			ret;
+	struct fs_info		*info = args;
+	const struct sigaction	act = {.sa_handler = iof_signal_poke};
 
 	D_MUTEX_LOCK(&info->fsi_lock);
 	info->fsi_running = true;
@@ -101,8 +101,8 @@ cnss_register_fuse(struct cnss_info *cnss_info,
 		   void *private_data,
 		   struct fuse_session **sessionp)
 {
-	struct fs_info *info = &cnss_info->ci_fsinfo;
-	int rc;
+	struct fs_info	*info = &cnss_info->ci_fsinfo;
+	int		rc;
 
 	errno = 0;
 	rc = mkdir(mnt, 0755);
@@ -161,9 +161,9 @@ cleanup_no_mutex:
 static int
 cnss_stop_fuse(struct fs_info *info)
 {
-	struct timespec wait_time;
-	void *rcp = NULL;
-	int rc;
+	struct timespec	wait_time;
+	void		*rcp = NULL;
+	int		rc;
 
 	D_MUTEX_LOCK(&info->fsi_lock);
 
@@ -251,11 +251,11 @@ show_help(const char *prog)
 int
 main(int argc, char **argv)
 {
-	char *cnss = "CNSS";
-	const char *prefix = NULL;
-	struct cnss_info *cnss_info;
-	int ret;
-	int rc;
+	char			*cnss = "CNSS";
+	const char		*prefix = NULL;
+	struct cnss_info	*cnss_info;
+	int			ret;
+	int			rc;
 
 	while (1) {
 		static struct option long_options[] = {
