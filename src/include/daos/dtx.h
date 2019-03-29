@@ -68,7 +68,16 @@ enum daos_ops_intent {
 	DAOS_INTENT_UPDATE	= 2,	/* write/insert */
 	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
 	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
-	DAOS_INTENT_PROBE	= 5,	/* check aborted or not */
+	DAOS_INTENT_CHECK	= 5,	/* check aborted or not */
+};
+
+enum daos_dtx_alb {
+	/* unavailable case */
+	ALB_UNAVAILABLE		= 0,
+	/* available, no (or not care) pending modification */
+	ALB_AVAILABLE_CLEAN	= 1,
+	/* available but with dirty modification or garbage */
+	ALB_AVAILABLE_DIRTY	= 2,
 };
 
 #endif /* __DAOS_DTX_H__ */
