@@ -25,7 +25,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
+	"syscall"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
@@ -162,14 +164,16 @@ func (s *scmStorage) reFormat(devPath string) (err error) {
 func (s *scmStorage) makeMount(
 	devPath string, mntPoint string, devType string, mntOpts string) (err error) {
 
-	var mntFlags uintptr
+	var flags uintptr
+	flags = syscall.MS_NOATIME | syscall.MS_SILENT
+	flags |= syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_NOSUID
 
 	if err = s.config.ext.mkdir(mntPoint); err != nil {
 		return
 	}
 
 	if err = s.config.ext.mount(
-		devPath, mntPoint, devType, mntFlags, mntOpts); err != nil {
+		devPath, mntPoint, devType, flags, mntOpts); err != nil {
 
 		return
 	}
@@ -188,7 +192,8 @@ func (s *scmStorage) Format(idx int) error {
 	if mntPoint == "" {
 		return errors.New("scm mount must be specified in config")
 	}
-	if err := s.clearMount(mntPoint); err != nil {
+	// continue for NOENT errors
+	if err := s.clearMount(mntPoint); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -213,7 +218,7 @@ func (s *scmStorage) Format(idx int) error {
 		devType = "tmpfs"
 
 		if srv.ScmSize >= 0 {
-			mntOpts = "size=" + strconv.Itoa(srv.ScmSize) + "GB"
+			mntOpts = "size=" + strconv.Itoa(srv.ScmSize) + "g"
 			break
 		}
 		log.Debugf("no scm_size specified in config for ram tmpfs")

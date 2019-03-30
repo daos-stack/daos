@@ -96,13 +96,17 @@ func formatIosrv(
 		return errors.Wrap(err, op)
 	}
 
-	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
-
 	if !config.FormatOverride {
 		// wait on format storage grpc call before creating superblock
-		log.Debugf("waiting on format cond var for server %d\n", i)
+		log.Debugf("waiting for storage format on server %d\n", i)
 		config.Servers[i].FormatCond.Wait()
+	} else {
+		log.Debugf(
+			"continuing without storage format on server %d "+
+				"(format_override set in config)\n", i)
 	}
+
+	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
 
 	if err := createIosrvSuper(config, i, reformat, createMS, bootstrapMS); err != nil {
 		return errors.WithMessage(err, op)

@@ -26,6 +26,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"sync"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -49,13 +50,12 @@ type controlService struct {
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
-	// init condition variables used to block until storage gets formatted
+	// init condition variables used to wait on storage formatting
 	for idx := range c.config.Servers {
 		cv := sync.NewCond(&sync.Mutex{})
 		cv.L.Lock()
 
 		c.config.Servers[idx].FormatCond = cv
-		log.Debugf("Setup(): locked format cond var for server %d\n", idx)
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -85,12 +85,29 @@ func (c *controlService) Teardown() {
 // Format delegates to Storage implementation's Format methods.
 func (c *controlService) FormatStorage(
 	ctx context.Context, params *pb.FormatStorageParams) (
-	resp *pb.FormatStorageResponse, e error) {
+	*pb.FormatStorageResponse, error) {
+
+	// TODO: verify superblock don't exist
 
 	if c.config.FormatOverride {
-		e = errors.New(
-			"Format() call unsupported when " +
+		return nil, errors.New(
+			"FormatStorage() call unsupported when " +
 				"format_override set in server config file, ")
+	}
+
+	errAnnotate := func(err error, msg string, cond *sync.Cond) (e error) {
+		e = err
+		if os.IsPermission(e) {
+			e = errors.WithMessage(
+				e,
+				"daos_server needs root privileges to format")
+		}
+
+		e = errors.WithMessage(e, msg)
+		// log with context of previous frame
+		log.Errordf(common.UtilLogDepth, e.Error())
+		cond.L.Unlock()
+
 		return
 	}
 
@@ -101,24 +118,23 @@ func (c *controlService) FormatStorage(
 		cond.L.Lock()
 
 		if err := c.nvme.Format(i); err != nil {
-			e = errors.WithStack(err)
-			cond.L.Unlock()
-			return
+			return nil, errAnnotate(err, "nvme format", cond)
 		}
 
 		if err := c.scm.Format(i); err != nil {
-			e = errors.WithStack(err)
-			cond.L.Unlock()
-			return
+			return nil, errAnnotate(err, "scm format", cond)
 		}
 
 		// storage subsystem format successful, signal to alert main.
-		log.Debugf("FormatStorage(): signaled cond var for server %d\n", i)
 		cond.Signal()
 		cond.L.Unlock()
+		log.Debugf(
+			"FormatStorage(): storage format successful on server %d\n",
+			i)
 	}
 
-	return
+	// TODO: return something useful like ack in response
+	return &pb.FormatStorageResponse{}, nil
 }
 
 // loadInitData retrieves initial data from relative file path.

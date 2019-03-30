@@ -168,7 +168,7 @@ func TestFormatScm(t *testing.T) {
 				"umount /mnt/daos",
 				"remove /mnt/daos",
 				"mkdir /mnt/daos",
-				"mount tmpfs /mnt/daos tmpfs size=6GB",
+				"mount tmpfs /mnt/daos tmpfs size=6g",
 			},
 		},
 		{

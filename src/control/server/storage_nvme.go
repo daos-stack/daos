@@ -156,7 +156,6 @@ func (n *nvmeStorage) Teardown() (err error) {
 // as specified in config file.
 func (n *nvmeStorage) Format(idx int) error {
 	// TODO: add implementation
-	log.Debugf("running nvmeStorage Format\n")
 	return nil
 }
 

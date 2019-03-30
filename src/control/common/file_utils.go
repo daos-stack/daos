@@ -240,7 +240,7 @@ func CheckSudo() (bool, string) {
 
 // Run executes command in os and builds useful error message.
 func Run(cmd string) error {
-	log.Debugdf(utilLogDepth, "Running %s\n", cmd)
+	log.Debugdf(UtilLogDepth, "exec '%s'\n", cmd)
 
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()

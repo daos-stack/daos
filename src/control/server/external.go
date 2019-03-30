@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -94,6 +95,10 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 // NOTE: requires elevated privileges
 func (e *ext) mount(
 	dev string, mount string, mntType string, flags uintptr, opts string) error {
+
+	log.Debugf(
+		"calling mount with %s, %s, %s, %s, %s",
+		dev, mount, mntType, fmt.Sprint(flags), opts)
 
 	if err := syscall.Mount(dev, mount, mntType, flags, opts); err != nil {
 		return os.NewSyscallError("mount", err)

@@ -71,7 +71,7 @@ type FormatStorCmd struct{}
 func formatStor() {
 	fmt.Printf(
 		unpackFormat(conns.FormatStorage()),
-		"Format Storage command results")
+		"Format Storage command result")
 }
 
 // Execute is run when FormatStorCmd activates
