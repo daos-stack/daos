@@ -522,6 +522,18 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+ktr_check_availability(struct btr_instance *tins, struct btr_record *rec,
+		       uint32_t intent)
+{
+	struct vos_krec_df	*key;
+
+	key = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
+					  key->kr_dtx, rec->rec_mmid,
+					  intent, DTX_RT_KEY);
+}
+
 static btr_ops_t key_btr_ops = {
 	.to_rec_msize		= ktr_rec_msize,
 	.to_hkey_size		= ktr_hkey_size,
@@ -534,6 +546,7 @@ static btr_ops_t key_btr_ops = {
 	.to_rec_free		= ktr_rec_free,
 	.to_rec_fetch		= ktr_rec_fetch,
 	.to_rec_update		= ktr_rec_update,
+	.to_check_availability	= ktr_check_availability,
 };
 
 /**
@@ -786,6 +799,18 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return svt_rec_store(tins, rec, kbund, rbund);
 }
 
+static int
+svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
+		       uint32_t intent)
+{
+	struct vos_irec_df	*svt;
+
+	svt = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
+					  svt->ir_dtx, UMMID_NULL, intent,
+					  DTX_RT_SVT);
+}
+
 static btr_ops_t singv_btr_ops = {
 	.to_rec_msize		= svt_rec_msize,
 	.to_hkey_size		= svt_hkey_size,
@@ -795,6 +820,7 @@ static btr_ops_t singv_btr_ops = {
 	.to_rec_free		= svt_rec_free,
 	.to_rec_fetch		= svt_rec_fetch,
 	.to_rec_update		= svt_rec_update,
+	.to_check_availability	= svt_check_availability,
 };
 
 /**
