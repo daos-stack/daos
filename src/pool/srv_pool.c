@@ -986,9 +986,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		    pool_map_get_version(pool->sp_map) < map_version) {
 			struct pool_map *tmp;
 
-			/* Need to update pool->sp_map. Swap with map. */
-			pool->sp_map_version = map_version;
-			rc = pl_map_update(pool->sp_uuid, map, false, true);
+			rc = pl_map_update(pool->sp_uuid, map,
+					   pool->sp_map != NULL ? false : true);
 			if (rc != 0) {
 				svc->ps_pool = NULL;
 				ABT_rwlock_unlock(pool->sp_lock);
@@ -996,9 +995,11 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 				goto out;
 			}
 
+			/* Need to update pool->sp_map. Swap with map. */
 			tmp = pool->sp_map;
 			pool->sp_map = map;
 			map = tmp;
+			pool->sp_map_version = map_version;
 		}
 	} else {
 		map = NULL; /* taken over by pool */
@@ -2297,7 +2298,8 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * new pool map with the old one in the cache.
 	 */
 	ABT_rwlock_wrlock(svc->ps_pool->sp_lock);
-	rc = pl_map_update(pool_uuid, map, false, true);
+	rc = pl_map_update(pool_uuid, map,
+			   svc->ps_pool->sp_map != NULL ? false : true);
 	if (rc == 0) {
 		map_tmp = svc->ps_pool->sp_map;
 		svc->ps_pool->sp_map = map;
@@ -2924,14 +2926,6 @@ out:
 	crt_reply_send(rpc);
 }
 
-static inline struct pl_obj_shard*
-ds_pool_get_shard(void *data, int idx)
-{
-	struct pl_obj_layout	*layout = data;
-
-	return &layout->ol_shards[idx];
-}
-
 /**
  * Check whether the leader replica of the given object resides
  * on current server or not.
@@ -2977,7 +2971,7 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 		goto out;
 
 	leader = pl_select_leader(oid->id_pub, oid->id_shard, layout->ol_nr,
-				  true, ds_pool_get_shard, layout);
+				  true, pl_obj_get_shard, layout);
 	if (leader < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",

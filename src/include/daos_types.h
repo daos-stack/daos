@@ -102,6 +102,17 @@ static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
 	csum_buf->cs_chunksize = chunksize;
 }
 
+static inline bool
+daos_csum_isvalid(daos_csum_buf_t *csum)
+{
+	return csum != NULL &&
+	       csum->cs_len > 0 &&
+	       csum->cs_buf_len > 0 &&
+	       csum->cs_csum != NULL &&
+	       csum->cs_chunksize > 0 &&
+	       csum->cs_nr > 0;
+}
+
 static inline void
 daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 {
@@ -401,7 +412,7 @@ typedef struct {
  */
 
 /**
- * ID of an object, 192 bits
+ * ID of an object, 128 bits
  * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
  * provided by the user and assumed to be unique inside a container.
  */

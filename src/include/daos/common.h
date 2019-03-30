@@ -54,6 +54,16 @@
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
+/** Overheads for a tree */
+struct daos_tree_overhead {
+	/** Static size of an allocated tree node */
+	int			to_node_size;
+	/** Dynamic metadata size of an allocated record. */
+	int			to_record_msize;
+	/** Tree order */
+	int			to_order;
+};
+
 /*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many DP_UUIDs.

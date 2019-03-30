@@ -118,7 +118,7 @@ If all the software dependencies listed previously are already satisfied, type t
     scons --config=force install
 ```
 
-If you are a developer of DAOS, we recommend following the instructions in the [DAOS for Developers](#daos-for-development) section below.
+If you are a developer of DAOS, we recommend following the instructions in [DAOS for Developers](development.md).
 
 Otherwise, the missing dependencies can be built automatically by invoking scons with the following parameters:
 

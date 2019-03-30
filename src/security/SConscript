@@ -1,6 +1,16 @@
 """Build security library"""
 import daos_build
 
+SRC_FILES = ['srv.c', 'cli_security.c', 'acl_api.c', 'srv_acl.c',
+             'security.pb-c.c']
+
+def get_objects(cache, *args):
+    """Retrieve built objects from the object cache"""
+    built = []
+    for arg in args:
+        built.append(cache[arg])
+    return built
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -10,20 +20,23 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    # Shared src between server and client
-    common_src = denv.SharedObject(['security.pb-c.c'])
+    # Populate the object cache
+    cache = {}
+    for src_file in SRC_FILES:
+        cache[src_file] = denv.SharedObject(src_file)
 
     ds_sec = daos_build.library(denv, 'security',
-                                ['srv.c', 'srv_acl.c', 'acl_api.c'])
+                                get_objects(cache, 'srv.c', 'srv_acl.c',
+                                            'acl_api.c'))
     denv.Install('$PREFIX/lib/daos_srv', ds_sec)
 
     # dc_security: Security Client
-    dc_security_tgts = denv.SharedObject(['cli_security.c', 'acl_api.c'],
-                                         OBJPREFIX="c_") + common_src
+    dc_security_tgts = get_objects(cache, 'acl_api.c', 'cli_security.c',
+                                   'security.pb-c.c')
     Export('dc_security_tgts')
 
-    dc_sectest_tgts = denv.SharedObject(['cli_security.c', 'srv_acl.c'],
-                                        OBJPREFIX="s_") + common_src
+    dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',
+                                  'security.pb-c.c')
     Export('dc_sectest_tgts')
 
     SConscript('tests/SConscript', exports='denv')

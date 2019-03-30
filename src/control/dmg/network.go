@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,38 +21,9 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package main
 
-import (
-	"io"
-	"time"
+// TODO: provide implementation to this placeholder
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
-	"golang.org/x/net/context"
-)
-
-// listScmModules prints all discovered Storage Class Memory modules installed.
-func (c *control) listScmModules() (mms ScmModules, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := c.client.ListScmModules(ctx, &pb.EmptyParams{})
-	if err != nil {
-		return
-	}
-
-	var mm *pb.ScmModule
-	for {
-		mm, err = stream.Recv()
-		if err == io.EOF {
-			err = nil
-			break
-		} else if err != nil {
-			return
-		}
-		mms = append(mms, mm)
-	}
-
-	return
-}
+// NetCmd is the struct representing the top-level network subcommand.
+type NetCmd struct{}

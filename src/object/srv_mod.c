@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #define D_LOGFAC	DD_FAC(object)
 
 #include <daos_srv/daos_server.h>
+#include <daos_srv/vos.h>
+#include <daos_srv/pool.h>
 #include <daos/rpc.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -35,6 +37,7 @@ obj_mod_init(void)
 {
 	dss_abt_pool_choose_cb_register(DAOS_OBJ_MODULE,
 					ds_obj_abt_pool_choose_cb);
+	vos_dtx_register_check_leader(ds_pool_check_leader);
 	return 0;
 }
 

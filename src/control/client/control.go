@@ -34,9 +34,6 @@ import (
 
 var errConnect = fmt.Errorf("no client connection was found, please connect")
 
-// FeatureMap is an alias for mgmt features supported by gRPC server.
-type FeatureMap map[string]string
-
 // ScmModules is an alias for protobuf ScmModule message slice representing
 // a number of SCM modules installed on a storage node.
 type ScmModules []*pb.ScmModule

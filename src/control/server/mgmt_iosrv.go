@@ -27,6 +27,7 @@ import (
 	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -56,6 +57,8 @@ func (c *controlService) callDrpcMethodWithMessage(
 // KillRank implements the method defined for the MgmtControl protobuf service.
 func (c *controlService) KillRank(
 	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResponse, error) {
+
+	log.Debugf("ControlService.KillRank dispatch")
 
 	return c.callDrpcMethodWithMessage(killRank, rank)
 }
