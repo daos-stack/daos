@@ -87,11 +87,9 @@ func (c *controlService) FormatStorage(
 	ctx context.Context, params *pb.FormatStorageParams) (
 	*pb.FormatStorageResponse, error) {
 
-	// TODO: verify superblock don't exist
-
 	if c.config.FormatOverride {
 		return nil, errors.New(
-			"FormatStorage() call unsupported when " +
+			"FormatStorage call unsupported when " +
 				"format_override set in server config file, ")
 	}
 
@@ -113,6 +111,16 @@ func (c *controlService) FormatStorage(
 
 	// TODO: execute in parallel across servers
 	for i := range c.config.Servers {
+		// verify superblock don't exist
+		if _, err := os.Stat(
+			iosrvSuperPath(c.config.Servers[i].ScmMount)); err == nil {
+
+			return nil, errors.Errorf(
+				"FormatStorage: server %d already formatted", i)
+		} else if !os.IsNotExist(err) {
+			return nil, errors.Wrap(err, "FormatStorage")
+		}
+
 		cond := c.config.Servers[i].FormatCond
 		// wait for lock to be released when main is ready
 		cond.L.Lock()
@@ -129,7 +137,7 @@ func (c *controlService) FormatStorage(
 		cond.Signal()
 		cond.L.Unlock()
 		log.Debugf(
-			"FormatStorage(): storage format successful on server %d\n",
+			"FormatStorage: storage format successful on server %d\n",
 			i)
 	}
 

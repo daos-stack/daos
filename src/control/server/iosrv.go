@@ -88,6 +88,8 @@ func formatIosrv(
 	op += " server " + config.Servers[i].ScmMount
 
 	if _, err := os.Stat(iosrvSuperPath(config.Servers[i].ScmMount)); err == nil {
+		log.Debugf("server %d has already been formatted\n", i)
+
 		if reformat {
 			return errors.New(op + ": reformat not implemented yet")
 		}
@@ -97,8 +99,9 @@ func formatIosrv(
 	}
 
 	if !config.FormatOverride {
-		// wait on format storage grpc call before creating superblock
 		log.Debugf("waiting for storage format on server %d\n", i)
+
+		// wait on format storage grpc call before creating superblock
 		config.Servers[i].FormatCond.Wait()
 	} else {
 		log.Debugf(
