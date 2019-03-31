@@ -376,27 +376,11 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	rbund->rb_krec = krec;
 
 	/** Subtree will be created later */
-		krec->kr_bmap |= KREC_BF_EVT;
-		rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
-					&krec->kr_evt[0], tins->ti_coh,
-					&evt_oh);
-		if (rc != 0) {
-			D_ERROR("Failed to create evtree: %d\n", rc);
-			D_GOTO(out, rc);
-		}
-	}
 
 	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_mmid,
 				     DTX_RT_KEY, 0);
 	if (rc == 0)
 		ktr_rec_store(tins, rec, kbund, rbund);
-
-out:
-	if (!daos_handle_is_inval(btr_oh))
-		dbtree_close(btr_oh);
-
-	if (!daos_handle_is_inval(evt_oh))
-		evt_close(evt_oh);
 
 	return rc;
 }
