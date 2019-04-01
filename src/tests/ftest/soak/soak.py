@@ -17,7 +17,7 @@ limitations under the License.
 GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 The Government's rights to use, modify, reproduce, release, perform, display,
 or disclose this software are subject to the terms of the Apache License as
-provided in Contract No. B609815.
+provided in Contract No. 8F-30005.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 '''
@@ -39,23 +39,23 @@ import slurm_utils
 import dmg_utils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
-# global stores intermediate test results
-_soak_results = {}
-
-def job_done(args):
-    """
-    This is a callback function called when a job is done
-
-    handle --which job, i.e. the job ID
-    state  --string indicating job completion status
-    """
-    global _soak_results
-    _soak_results[args["handle"]] = args["state"]
 
 class Soak(Test):
     """
     Test class Description: DAOS Soak test cases
     """
+
+    def job_done(self, args):
+        """
+        This is a callback function called when a job is done
+
+        handle --which job, i.e. the job ID
+        state  --string indicating job completion status
+        """
+
+        self.soak_results[args["handle"]] = args["state"]
+
+
     def create_pool(self):
         """
         Creates a pool that the various tests use for storage.
@@ -73,20 +73,27 @@ class Soak(Test):
                          createsize, createsetid, None, None,
                          self.createsvc)
 
-    def get_ior_job(self, spec, processes, name):
+    def build_ior_script(self, job):
         """
-        Builds an IOR command string based on input parameters
+        Builds an IOR command string which is then added to slurm script
 
-        spec --which set of IOR params to read in the test yaml
+        job --which job to read in the yaml file
 
         """
 
         # for the moment build IOR
         #IorUtils.build_ior(self.basepath)
 
-        # which job spec to read
-        spec = "/run/" + spec + "/"
+        # read job info
+        job_params = "/run/" + job + "/"
+        job_name = self.params.get("name", job_params)
+        job_nodes = self.params.get("nodes", job_params)
+        job_processes = self.params.get("process_per_node",
+                                        job_params)
+        job_spec = self.params.get("jobspec", job_params)
 
+        # read ior cmd info
+        spec = "/run/" + job_spec + "/"
         iteration = self.params.get("iter", spec + 'iteration/')
         ior_flags = self.params.get("F", spec + 'iorflags/')
         transfer_size = self.params.get("t", spec + 'transfersize/')
@@ -112,20 +119,24 @@ class Soak(Test):
         if stripe_size == '8m':
             transfer_size = stripe_size
 
-        hostfile = os.path.join(self.tmpdir, "ior_hosts_" + name)
+        hostfile = os.path.join(self.tmpdir, "ior_hosts_" + job_name)
 
         cmd = IorUtils.get_ior_cmd(ior_flags, iteration, block_size,
                                    transfer_size, pool_uuid, svc_list,
                                    record_size, stripe_size, stripe_count,
                                    async_io, object_class, self.basepath,
-                                   hostfile, processes)
-        return cmd
+                                   hostfile, job_processes)
+
+        output = os.path.join(self.tmpdir, job_name + "_results.out")
+        script = slurm_utils.write_slurm_script(self.tmpdir, job_name,
+                                                output, int(job_nodes), [cmd])
+        return script
 
     def setUp(self):
 
         # intermediate results are stored in this global
         # start off with it empty
-        _soak_results.clear()
+        self.soak_results = {}
 
         self.partition = None
 
@@ -174,46 +185,23 @@ class Soak(Test):
         """
 
         try:
-            # retrieve job parameters
-            s1_job1_name = self.params.get("name", '/run/job1/')
-            s1_job1_nodes = self.params.get("nodes", '/run/job1/')
-            s1_job1_processes = self.params.get("process_per_node",
-                                                '/run/job1/')
-            s1_job1_spec = self.params.get("jobspec", '/run/job1/')
-            cmd = [self.get_ior_job(s1_job1_spec, s1_job1_processes,
-                                    s1_job1_name)]
+            # turn job parameters into slurm script
+            script1 = self.build_ior_script('job1')
 
-            # write out a slurm job script
-            output = os.path.join(self.tmpdir, s1_job1_name + "_results.out")
-            script1 = slurm_utils.write_slurm_script(self.tmpdir, s1_job1_name,
-                                                    output,
-                                                    int(s1_job1_nodes), cmd)
             # queue it up to run and register a callback to retrieve results
-            job_id = slurm_utils.run_slurm_script(script1)
-            slurm_utils.register_for_job_results(job_id, job_done, maxwait=3600)
+            job_id1 = slurm_utils.run_slurm_script(script1)
+            slurm_utils.register_for_job_results(job_id1, self, maxwait=3600)
 
             # queue up a second job
-            s1_job2_name = self.params.get("name", '/run/job2/')
-            s1_job2_nodes = self.params.get("nodes", '/run/job2/')
-            s1_job2_processes = self.params.get("process_per_node",
-                                                '/run/job2/')
-            s1_job2_spec = self.params.get("jobspec", '/run/job2/')
-            cmd = [self.get_ior_job(s1_job2_spec, s1_job2_processes,
-                                    s1_job2_name)]
-
-            output = os.path.join(self.tmpdir, s1_job2_name + "_results.out")
-            script2 = slurm_utils.write_slurm_script(self.tmpdir, s1_job2_name,
-                                                    output,
-                                                    int(s1_job2_nodes), cmd)
-            id2 = slurm_utils.run_slurm_script(script2)
-            slurm_utils.register_for_job_results(id2, job_done, maxwait=3600)
+            script2 = self.build_ior_script('job2')
+            job_id2 = slurm_utils.run_slurm_script(script2)
+            slurm_utils.register_for_job_results(job_id2, self, maxwait=3600)            
 
             # wait for all the jobs to finish
-            global _soak_results
-            while len(_soak_results) < 2:
+            while len(self.soak_results) < 2:
                 time.sleep(10)
 
-            for job, result in _soak_results.iteritems():
+            for job, result in self.soak_results.iteritems():
                 if result != "COMPLETED":
                     self.fail("Soak job: {} didn't complete as expected: {}".
                               format(job, result))
@@ -223,11 +211,11 @@ class Soak(Test):
         finally:
             try:
                 os.remove(script1)
-            except:
+            except StandardError:
                 pass
             try:
                 os.remove(script2)
-            except:
+            except StandardError:
                 pass
 
     def test_soak_2(self):
@@ -239,9 +227,8 @@ class Soak(Test):
 
         script = None
         try:
-            dmgcmds = DmgUtils.get_dmg_script("dmg1", self.params,
-                                              self.basepath,
-                                              self.workdir)
+            dmgcmds = dmg_utils.get_dmg_script("dmg1", self.params,
+                                               self.basepath)
 
             s2_job1_name = self.params.get("name", '/run/job3/')
             s2_job1_nodes = self.params.get("nodes", '/run/job3/')
@@ -249,17 +236,16 @@ class Soak(Test):
             output = os.path.join(self.tmpdir, s2_job1_name + "_results.out")
 
             script = slurm_utils.write_slurm_script(self.tmpdir, s2_job1_name,
-                                                   output,
-                                                   s2_job1_nodes, dmgcmds)
+                                                    output,
+                                                    s2_job1_nodes, dmgcmds)
             job_id = slurm_utils.run_slurm_script(script)
-            slurm_utils.register_for_job_results(job_id, job_done, maxwait=3600)
+            slurm_utils.register_for_job_results(job_id, self, maxwait=3600)
 
             # wait for all the jobs to finish
-            global _soak_results
-            while len(_soak_results) < 1:
+            while len(self.soak_results) < 1:
                 time.sleep(10)
 
-            for job, result in _soak_results.iteritems():
+            for job, result in self.soak_results.iteritems():
                 if result != "COMPLETED":
                     self.fail("Soak job: {} didn't complete as expected: {}".
                               format(job, result))
@@ -284,43 +270,28 @@ class Soak(Test):
         script2 = None
         try:
             # retrieve IOR job parameters
-            s3_job1_name = self.params.get("name", '/run/job1/')
-            s3_job1_nodes = self.params.get("nodes", '/run/job1/')
-            s3_job1_processes = self.params.get("process_per_node",
-                                                '/run/job1/')
-            s3_job1_spec = self.params.get("jobspec", '/run/job1/')
-            cmd = self.get_ior_job(s3_job1_spec, s3_job1_processes,
-                                   s3_job1_name)
-
-            # write out a slurm job script
-            output = os.path.join(self.tmpdir, s3_job1_name + "_results.out")
-            script1 = slurm_utils.write_slurm_script(self.tmpdir, s3_job1_name,
-                                                    output,
-                                                    int(s3_job1_nodes), [cmd])
-            # queue it up to run and register a callback to retrieve results
-            job_id = slurm_utils.run_slurm_script(script1)
-            slurm_utils.register_for_job_results(job_id, job_done, maxwait=3600)
+            script1 = self.build_ior_script('job1')
+            job_id1 = slurm_utils.run_slurm_script(script1)
+            slurm_utils.register_for_job_results(job_id1, self, maxwait=3600)
 
             # now do the dmg job
-            dmgcmds = DmgUtils.get_dmg_script("dmg1", self.params,
-                                              self.basepath,
-                                              self.workdir)
+            dmgcmds = dmg_utils.get_dmg_script("dmg1", self.params,
+                                               self.basepath)
 
             s3_job2_name = self.params.get("name", '/run/job3/')
             s3_job2_nodes = self.params.get("nodes", '/run/job3/')
             output = os.path.join(self.tmpdir, s3_job2_name + "_results.out")
             script2 = slurm_utils.write_slurm_script(self.tmpdir, s3_job2_name,
-                                                    output, s3_job2_nodes,
-                                                    dmgcmds)
-            job_id = slurm_utils.run_slurm_script(script2)
-            slurm_utils.register_for_job_results(job_id, job_done, maxwait=3600)
+                                                     output, s3_job2_nodes,
+                                                     dmgcmds)
+            job_id2 = slurm_utils.run_slurm_script(script2)
+            slurm_utils.register_for_job_results(job_id2, self, maxwait=3600)
 
             # wait for all the jobs to finish
-            global _soak_results
-            while len(_soak_results) < 2:
+            while len(self.soak_results) < 2:
                 time.sleep(10)
 
-            for job, result in _soak_results.iteritems():
+            for job, result in self.soak_results.iteritems():
                 if result != "COMPLETED":
                     self.fail("Soak job: {} didn't complete as expected: {}".
                               format(job, result))
@@ -330,9 +301,9 @@ class Soak(Test):
         finally:
             try:
                 os.remove(script1)
-            except:
+            except StandardError:
                 pass
             try:
                 os.remove(script2)
-            except:
+            except StandardError:
                 pass

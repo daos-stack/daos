@@ -1,10 +1,10 @@
 hosts:
    test_machines:
         daos_servers:
-            - boro-29
+            - boro-A
         # either compute or partition can be used, not both
         #compute:
-        #    - boro-30
+        #    - boro-A
         partition: tp
         gateway: []
 timeout: 1000
@@ -56,7 +56,7 @@ ior1:
     recordsize:
         recordsize_8b:
             r: '8b'
-    stripesize: 
+    stripesize:
         stripesize_1m:
             s: '1m'
     stripecount:

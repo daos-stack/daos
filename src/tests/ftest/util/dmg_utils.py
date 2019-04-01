@@ -27,7 +27,10 @@ import json
 class DmgFailed(Exception):
     """Raise if DMG command or related activity doesn't work."""
 
-def get_dmg_script(dmgparams, testparams, basepath, tmp):
+def get_dmg_script(dmgparams, testparams, basepath):
+    '''
+    Build a dmg command line
+    '''
 
     with open(os.path.join(basepath, ".build_vars.json")) as afile:
         build_paths = json.load(afile)
@@ -47,4 +50,3 @@ def get_dmg_script(dmgparams, testparams, basepath, tmp):
         script.append(complete_cmd)
 
     return script
-

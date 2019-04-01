@@ -22,7 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-import os, sys, random, time, subprocess, threading
+from __future__ import print_function
+import os
+import random
+import time
+import subprocess
+import threading
 import pyslurm
 
 _lock = threading.Lock()
@@ -53,32 +58,31 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         os.makedirs(path)
     scriptfile = path + '/jobscript' + str(unique) + ".sh"
 
-    f = open(scriptfile, 'w')
+    with open(scriptfile, 'w') as script_file:
 
-    # identify what be used to run this script
-    f.write("#!/bin/bash\n#\n")
+        # identify what be used to run this script
+        script_file.write("#!/bin/bash\n#\n")
 
-    # write the mandatory parameters
-    f.write("#SBATCH --job-name={}\n".format(name))
-    f.write("#SBATCH --output={}\n".format(output))
-    f.write("#SBATCH --nodes={}\n".format(nodecount))
-    f.write("#SBATCH --distribution=cyclic\n")
+        # write the mandatory parameters
+        script_file.write("#SBATCH --job-name={}\n".format(name))
+        script_file.write("#SBATCH --output={}\n".format(output))
+        script_file.write("#SBATCH --nodes={}\n".format(nodecount))
+        script_file.write("#SBATCH --distribution=cyclic\n")
 
-    if sbatch:
-        for key, value in sbatch:
-            f.write("#SBATCH --{}={}\n".format(key, value))
-    f.write("\n")
+        if sbatch:
+            for key, value in sbatch:
+                script_file.write("#SBATCH --{}={}\n".format(key, value))
+        script_file.write("\n")
 
-    # debug
-    f.write("echo \"nodes: \" $SLURM_JOB_NODELIST \"\"\n")
-    f.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \" \"\n")
-    f.write("echo \"job name: \" $SLURM_JOB_NAME \"\"\n")
+        # debug
+        script_file.write("echo \"nodes: \" $SLURM_JOB_NODELIST \n")
+        script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
+        script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
 
-    for cmd in cmds:
-        f.write("srun " + cmd)
-        f.write("\n")
+        for cmd in cmds:
+            script_file.write("srun " + cmd)
+            script_file.write("\n")
 
-    f.close()
     return scriptfile
 
 def run_slurm_cmd(cmd, name):
@@ -110,7 +114,7 @@ def run_slurm_script(script):
 
     cmd = "sbatch " + script
     output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-    print output
+    print(output)
     if 'Submitted batch job' in output:
         output_list = output.split()
         if len(output_list) >= 4:
@@ -118,16 +122,6 @@ def run_slurm_script(script):
 
     raise SlurmFailed("Batch job failed to start: {}".format(output))
 
-def get_job_output(handle, path):
-    """
-        Get the output from a slurm job.
-
-        handle   --slurm job id
-
-
-        returns  --string containing both stdout and stderr
-    """
-    pass
 
 def check_slurm_job(handle):
     """
@@ -148,28 +142,29 @@ def check_slurm_job(handle):
     return state
 
 
-def register_for_job_results(handle, cb_func, maxwait=3600):
+def register_for_job_results(handle, test, maxwait=3600):
     """
         Register a callback for a slurm soak test job.
 
         handle   --slurm job id
+        test     --object with a job_done callback function
         maxwait  --maximum time to wait in seconds, defaults to 1 hour
         returns  --None
 
     """
-    params = {"handle":handle, "maxwait":maxwait, "cb_func":cb_func}
+    params = {"handle":handle, "maxwait":maxwait, "test_obj":test}
     athread = threading.Thread(target=watch_job,
-                         kwargs=params)
+                               kwargs=params)
     athread.start()
 
-def watch_job(handle, maxwait, cb_func):
+def watch_job(handle, maxwait, test_obj):
     """
     This function waits for a slurm job to finish and
     calls the provided callback function with the result.
 
     handle   --the slurm job handle
     maxwait  --max time in seconds to wait
-    cb_func  --whom to notify when its done
+    test_obj --whom to notify when its done
 
     return   --none, all results handled through callback
     """
@@ -191,4 +186,4 @@ def watch_job(handle, maxwait, cb_func):
     print("FINAL STATE: slurm job {} completed with : {}".format(handle, state))
     params = {"handle":handle, "state":state}
     with _lock:
-        cb_func(params)
+        test_obj.job_done(params)
