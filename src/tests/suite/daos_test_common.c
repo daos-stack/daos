@@ -633,8 +633,8 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		test_arg_t	*arg = state;
 
 		if (idx >= tests_size) {
-			print_message("No test %d\n", idx);
-			continue;
+			print_message("No more tests\n");
+			break;
 		}
 
 		arg->index = idx;

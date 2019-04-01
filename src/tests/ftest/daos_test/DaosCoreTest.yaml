@@ -20,10 +20,38 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_r:
+    test_r_0-1:
       daos_test: r
-      test_name: rebuild tests
+      test_name: rebuild tests 0-1
       args: -u subtests="0-1"
+    test_r_2-5:
+      daos_test: r
+      test_name: rebuild tests 2-5
+      args: -u subtests="2-5"
+    test_r_6-10:
+      daos_test: r
+      test_name: rebuild tests 6-10
+      args: -u subtests="6-10"
+    test_r_11-15:
+      daos_test: r
+      test_name: rebuild tests 11-15
+      args: -u subtests="11-15"
+    test_r_16-20:
+      daos_test: r
+      test_name: rebuild tests 16-20
+      args: -u subtests="16-20"
+    test_r_21-25:
+      daos_test: r
+      test_name: rebuild tests 21-25
+      args: -u subtests="21-25"
+    test_r_26-30:
+      daos_test: r
+      test_name: rebuild tests 26-30
+      args: -u subtests="26-30"
+    test_r_31-33:
+      daos_test: r
+      test_name: rebuild tests 31-33
+      args: -u subtests="26-33"
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
