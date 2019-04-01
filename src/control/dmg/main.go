@@ -40,9 +40,11 @@ type cliOptions struct {
 	// TODO: implement host file parsing
 	Hostfile string `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	// TODO: implement client side configuration file parsing
-	ConfigPath  string             `short:"o" long:"config-path" description:"Client config file path"`
-	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
-	KillRank    KillRankCommand    `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
+	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
+	Storage    StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
+	Service    SvcCmd  `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
+	Network    NetCmd  `command:"network" alias:"n" description:"Perform tasks related to locally-attached network devices"`
+	Pool       PoolCmd `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }
 
 var (

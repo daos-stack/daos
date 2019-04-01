@@ -1,0 +1,19 @@
+---
+# yaml sample
+num_pools: 10
+updates:
+  - array:
+      rec_per_akey: 100
+      avgsize: 1000000
+      container: a
+      object: a
+      dkey: 20
+      dkey_type: "integer_dkey"
+      akey_per_dkey: 1
+  - single_value:
+      avgsize: 512000
+      container: a
+      object: a
+      dkey: 20
+      akey_per_dkey: 10
+

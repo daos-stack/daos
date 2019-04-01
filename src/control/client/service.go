@@ -46,3 +46,37 @@ func (c *control) killRank(uuid string, rank uint32) error {
 
 	return nil
 }
+
+// KillRank Will terminate server running at given rank on pool specified by
+// uuid.
+func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+	errors := make(ResultMap)
+	ch := make(chan ClientResult)
+
+	for _, mc := range c.controllers {
+		go func(mc Control, u string, r uint32, ch chan ClientResult) {
+			ch <- ClientResult{
+				mc.getAddress(), nil, mc.killRank(u, r),
+			}
+		}(mc, uuid, rank, ch)
+	}
+
+	for range c.controllers {
+		res := <-ch
+
+		if res.Err != nil {
+			errors[res.Address] = res
+		}
+	}
+
+	return errors
+}
+
+// NewConnect is a factory for Connect interface to operate over
+// multiple clients.
+func NewConnect() Connect {
+	return &connList{
+		factory:     &controllerFactory{},
+		controllers: []Control{},
+	}
+}

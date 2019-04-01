@@ -237,13 +237,14 @@ typedef struct {
 	 */
 	void		(*to_hkey_gen)(struct btr_instance *tins,
 				       daos_iov_t *key, void *hkey);
-	/**
-	 * Size of the hashed key.
+	/** Static callback to get size of the hashed key. */
+	int		(*to_hkey_size)(void);
+
+	/** Static callback to metadata size of the record
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param alloc_overhead[IN]	Expected per-allocation overhead
 	 */
-	int		(*to_hkey_size)(struct btr_instance *tins);
+	int		(*to_rec_msize)(int alloc_ovheread);
 	/**
 	 * Optional:
 	 * Comparison of hashed key.
@@ -480,6 +481,30 @@ typedef struct {
 	 */
 	int		(*to_node_tx_add)(struct btr_instance *tins,
 					  TMMID(struct btr_node) nd_mmid);
+	/**
+	 * Optional:
+	 * Check whether the given record is available to outside or not.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root mmid
+	 *			and memory class etc.
+	 * \param rec	[IN]	Record to be checked.
+	 * \parem intent [IN]	The intent for why check the record.
+	 *
+	 * \a return	ALB_AVAILABLE_DIRTY	The target is available but with
+	 *					some uncommitted modification
+	 *					or garbage, need cleanup.
+	 *		ALB_AVAILABLE_CLEAN	The target is available,
+	 *					no pending modification.
+	 *		ALB_UNAVAILABLE		The target is unavailable.
+	 *		-DER_INPROGRESS		If the target record is in
+	 *					some uncommitted DTX, the caller
+	 *					needs to retry related operation
+	 *					some time later.
+	 *		Other negative values on error.
+	 */
+	int		(*to_check_availability)(struct btr_instance *tins,
+						 struct btr_record *rec,
+						 uint32_t intent);
 } btr_ops_t;
 
 /**
@@ -565,6 +590,7 @@ int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
+struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
 /******* iterator API ******************************************************/
 
@@ -584,6 +610,8 @@ int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		      uint32_t intent, daos_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
+int dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent);
+int dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		      daos_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);
@@ -609,5 +637,18 @@ enum {
 	DBTREE_SMD_BEGIN	= 30,
 	DBTREE_SMD_END		= DBTREE_SMD_BEGIN + 9,
 };
+
+/** Get overhead constants for a given tree class
+ *
+ * \param alloc_overhead[IN]	Expected per-allocation overhead in bytes
+ * \param tclass[IN]		The registered tree class
+ * \param feats[IN]		The features used to initialize the tree class
+ * \param tree_order[IN]	The expected tree order used in creation
+ * \param ovhd[OUT]		Struct to fill with overheads
+ *
+ * \return 0 on success, error otherwise
+ */
+int dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t feats,
+			int tree_order, struct daos_tree_overhead *ovhd);
 
 #endif /* __DAOS_BTREE_H__ */
