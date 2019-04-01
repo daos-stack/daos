@@ -1058,6 +1058,12 @@ class PreReqComponent(object):
                 if comp_def.build(env, needed_libs):
                     self.__required[comp] = False
                     changes = True
+                else:
+                    if comp_def.src_path and \
+                       not os.path.exists(comp_def.src_path):
+                        self.save_component_prefix('%s_PREFIX' %
+                                                   comp_def.name.upper(),
+                                                   "/usr")
             except Exception as error:
                 # Save the exception in case the component is requested again
                 self.__errors[comp] = error

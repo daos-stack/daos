@@ -52,14 +52,11 @@ if [ "$1" != "utest" ]; then
   python test/validate_build_info.py
   scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes --config=force
   python test/validate_build_info.py
-  set +e
-  scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes \
-        --config=force --require-optional
-  if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+  if scons -C test -f SConstruct "${prebuilt2[@]}" --build-deps=yes \
+        --config=force --require-optional; then
       echo "Test for --require-optional failed"
       exit 1
   fi
-  set -e
 fi
 
 set +e
@@ -92,7 +89,7 @@ check_cmd()
         fi
     fi
     grep "Valgrind.*check failed" scons_utest_output.txt
-    result=$?
+    result=${PIPESTATUS[0]}
     if [ "$issues" = "clean" ]; then
         if [ $result -eq 0 ]; then
             failed=$((failed + 1))
@@ -123,10 +120,10 @@ run_unit_tests()
     check_cmd 'fail' 'clean' scons -C test -f SConstruct.utest \
                            --test-name=fail
     if [ $failed -ne 0 ]; then
-    echo "Unit test failure"
-    exit $failed
+        echo "Unit test failure"
+        exit $failed
     else
-    echo "All unit tests passed"
+        echo "All unit tests passed"
     fi
 }
 

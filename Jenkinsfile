@@ -1,25 +1,63 @@
 #!/usr/bin/env groovy
-// Copyright (c) 2018 Intel Corporation
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the "Software"),
-// to deal in the Software without restriction, including without limitation
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-// DEALINGS IN THE SOFTWARE.
+/* Copyright (c) 2018-2019 Intel Corporation
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+// To use a test branch (i.e. PR) until it lands to master
+// I.e. for testing library changes
+//@Library(value="pipeline-lib@your_branch") _
 
-@Library(value="pipeline-lib") _
+def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+
+long get_timestamp() {
+    Date date = new Date()
+    return date.getTime()
+}
+
+String get_deps_build_vars() {
+    def deps = [
+        'MERCURY'  : '1.0.1-2',
+        'OMPI'     : '3.0.0rc4-3',
+        'PMIX'     : '2.1.1-2',
+        'LIBFABRIC': '1.7.1rc1-1',
+        'OPENPA'   : '1.0.4-2'
+    ]
+    def buildargs = ""
+    deps.each {
+        dep, ver -> buildargs +="--build-arg ${dep}=" +
+        /* ideally we'd use the actual dep version here to reduce docker
+         * churn, however Jenkins doesn't store the build args with the
+         * image tags, so it doesn't differentiate between images built
+         * with versions of dependencies.  so use a timestamp to force
+         * an installation (or not) of dependencies on each run
+         *                      dep.toLowerCase() + "-${ver} "
+         */
+                                get_timestamp() + " "
+
+    }
+
+    return buildargs
+}
+
+def log_date_re = '[0-9]{4}-[0-9]{2}-[0-9]{1,2}'
+def log_time_re = '[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{1,3}Z'
+def log_timestamp_re = '\\[' + log_date_re + 'T' + log_time_re + '\\]'
 
 pipeline {
   agent any
@@ -91,209 +129,248 @@ pipeline {
   }
 
   stages {
-    stage('Phase 1') {
-    parallel {
-      stage ('environment report') {
-        agent any
-        steps {
-          sh "export; pip freeze || true"
-        }
+    stage('Cancel Previous Builds') {
+      when { changeRequest() }
+      steps {
+        cancelPreviousBuilds()
       }
-      stage ('code_lint_check') {
-
-        // Just use CentOS for lint checks.
-        agent {
-           dockerfile {
-             filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-             dir 'scons_local/docker'
-             label 'docker_runner'
-             additionalBuildArgs '$BUILDARGS'
-           }
-        } // agent
-        steps {
-          sh "pip freeze || true"
-          checkPatch review_creds: "${env.GITHUB_CREDS}"
-        } // steps
-      } // stage ('code_lint_check')
-      stage ('fuse build') {
-        agent {
-          dockerfile {
-            filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-            dir 'scons_local/docker'
-            label 'docker_runner'
-            additionalBuildArgs '$BUILDARGS'
+    }
+    stage('Phase 1') {
+      parallel {
+        stage ('environment report') {
+          agent any
+          steps {
+            sh "export; pip freeze || true"
           }
-        } // agent
-        steps {
-          // Older scons_local_review only used master branch.
-          // Newer one looked up the last known good build of master branch.
-          // Pipeline currently does not have access that info.
-
-          sh 'rm -rf testbin/ && mkdir -p testbin'
-          sconsBuild target: 'fuse',
-                     directory: 'scons_local',
-                     scm: [url: 'https://github.com/libfuse/libfuse.git',
-                           branch: "${env.FUSE_COMMIT}",
-                           cleanAfterCheckout: true],
-                     no_install: true,  // No separate install step
-                     TARGET_PREFIX: '/testbin',
-                     target_work: 'testbin'
-
-          echo "fuse build succeeded"
-        } // steps
-      } // stage ('fuse build')
-      stage ('openpa prebuild') {
-        agent {
-          dockerfile {
-            filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-            dir 'scons_local/docker'
-            label 'docker_runner'
-            additionalBuildArgs '$BUILDARGS'
-          }
-        } // agent
-        steps {
-          sh 'rm -rf testbin/ && mkdir -p testbin'
-          sconsBuild target: 'openpa',
-                     directory: 'scons_local',
-                     scm: [url: 'http://git.mcs.anl.gov/radix/openpa.git',
-                           branch: "${env.OPENPA_COMMIT}",
-                           cleanAfterCheckout: true],
-                     no_install: true,  // No separate install step
-                     TARGET_PREFIX: '/testbin',
-                     target_work: 'testbin'
-
-          echo "openpa build succeeded"
-          stash name: "${env.MY_DOCKERFILE}-openpa",
-                includes: 'testbin/openpa/**'
-        } // steps
-      } // stage ('openpa prebuild')
-      stage ('hwloc prebuild') {
-        agent {
-          dockerfile {
-            filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-            dir 'scons_local/docker'
-            label 'docker_runner'
-            additionalBuildArgs '$BUILDARGS'
-          }
-        } // agent
-        steps {
-          sh 'rm -rf testbin/ && mkdir -p testbin'
-          sconsBuild target: 'hwloc',
-                     directory: 'scons_local',
-                     scm: [url: 'https://github.com/open-mpi/hwloc.git',
-                           branch: "${env.HWLOC_COMMIT}",
-                           cleanAfterCheckout: true],
-                     no_install: true,  // No separate install step
-                     TARGET_PREFIX: '/testbin',
-                     target_work: 'testbin',
-                     prebuild: 'pushd ${WORKSPACE}/hwloc;' +
-                               ' ./autogen.sh; popd'
-          echo "hwloc build succeeded"
-          stash name: "${env.MY_DOCKERFILE}-hwloc",
-                includes: 'testbin/hwloc/**'
-        } // steps
-      } // stage ('hwloc prebuild')
-    } // parallel
+        }
+        stage ('code_lint_check') {
+          // Just use CentOS for lint checks.
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+             }
+          } // agent
+          steps {
+            sh "pip freeze || true"
+            checkPatch review_creds: "${env.GITHUB_CREDS}"
+          } // steps
+        } // stage ('code_lint_check')
+        stage ('fuse build') {
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+            }
+          } // agent
+          steps {
+            // Older scons_local_review only used master branch.
+            // Newer one looked up the last known good build of master branch.
+            // Pipeline currently does not have access that info.
+            sh 'rm -rf testbin/ && mkdir -p testbin'
+            sconsBuild target: 'fuse',
+                       directory: 'scons_local',
+                       scm: [url: 'https://github.com/libfuse/libfuse.git',
+                             branch: "${env.FUSE_COMMIT}",
+                             cleanAfterCheckout: true],
+                       no_install: true,  // No separate install step
+                       TARGET_PREFIX: '/testbin',
+                       target_work: 'testbin'
+            echo "fuse build succeeded"
+          } // steps
+        } // stage ('fuse build')
+        stage ('openpa prebuild') {
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+            }
+          } // agent
+          steps {
+            sh 'rm -rf testbin/ && mkdir -p testbin'
+            sconsBuild target: 'openpa',
+                       directory: 'scons_local',
+                       scm: [url: 'http://git.mcs.anl.gov/radix/openpa.git',
+                             branch: "${env.OPENPA_COMMIT}",
+                             cleanAfterCheckout: true],
+                       no_install: true,  // No separate install step
+                       TARGET_PREFIX: '/testbin',
+                       target_work: 'testbin'
+            echo "openpa build succeeded"
+            stash name: "${env.MY_DOCKERFILE}-openpa",
+                  includes: 'testbin/openpa/**'
+          } // steps
+        } // stage ('openpa prebuild')
+        stage ('hwloc prebuild') {
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+            }
+          } // agent
+          steps {
+            sh 'rm -rf testbin/ && mkdir -p testbin'
+            sconsBuild target: 'hwloc',
+                       directory: 'scons_local',
+                       scm: [url: 'https://github.com/open-mpi/hwloc.git',
+                             branch: "${env.HWLOC_COMMIT}",
+                             cleanAfterCheckout: true],
+                       no_install: true,  // No separate install step
+                       TARGET_PREFIX: '/testbin',
+                       target_work: 'testbin',
+                       prebuild: 'pushd ${WORKSPACE}/hwloc;' +
+                                 ' ./autogen.sh; popd'
+            echo "hwloc build succeeded"
+            stash name: "${env.MY_DOCKERFILE}-hwloc",
+                  includes: 'testbin/hwloc/**'
+          } // steps
+        } // stage ('hwloc prebuild')
+      } // parallel
     } // stage ('phase 1')
     stage('Phase 2') {
-    parallel {
-      stage ('CaRT build') {
-        agent {
-          dockerfile {
-            filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-            dir 'scons_local/docker'
-            label 'docker_runner'
-            additionalBuildArgs '$BUILDARGS'
+      parallel {
+        stage ('CaRT build with RPMs') {
+          agent {
+            dockerfile {
+              filename 'Dockerfile.centos.7'
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS --build-arg USE_RPMS=true ' +
+                                  get_deps_build_vars()
+            }
+          } // agent
+          steps {
+            sconsBuild target: 'cart',
+                       scons_local_replace: true,
+                       scm: [url: 'https://github.com/daos-stack/cart.git',
+                             cleanAfterCheckout: true,
+                             withSubmodules: true],
+                       log_to_file: "scons_out"
+            echo "CaRT build with RPMs succeeded"
+            sh 'if egrep \'' + log_timestamp_re + ''' RUN: \' scons_out; then
+                    echo "RUN commands found when none should have been"
+                    exit 1
+                fi'''
+          } // steps
+          post {
+            cleanup {
+              sh 'rm -f scons_out'
+            }
           }
-        } // agent
-        steps {
-          sconsBuild target: 'cart',
-                     scons_local_replace: true,
-                     scm: [url: 'https://github.com/daos-stack/cart.git',
-                           cleanAfterCheckout: true,
-                           withSubmodules: true]
-          echo "CaRT build succeeded"
-        } // steps
-      } // stage ('CaRT build')
-      stage ('daos depends') {
-        agent {
-          dockerfile {
-            filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-            dir 'scons_local/docker'
-            label 'docker_runner'
-            additionalBuildArgs '$BUILDARGS'
-          }
-        } // agent
-        steps {
-          // skip cart as we are already buiding that.
-          sconsBuild target: 'daos',
-                     REQUIRES: 'pmdk,argobots,isal,protobufc',
-                     directory: 'scons_local',
-                     scons_local_replace: true,
-                     scm: [url: 'https://github.com/daos-stack/daos.git',
-                           cleanAfterCheckout: true,
-                           withSubmodules: true]
-          echo "daos depends build succeeded"
-        } // steps
-      } // stage ('daos depends')
-      stage ('basic checks') {
-        agent {
-          dockerfile {
-            filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-            dir 'scons_local/docker'
-            label 'docker_runner'
-            additionalBuildArgs '$BUILDARGS'
-          }
-        } // agent
-        steps {
-          //checkout scm
-          // Older scons_local_review only used master branch.
-          // Newer one looked up the last known good build of master branch.
-          // Pipeline currently does not have access that info.
-          checkoutScm url: 'http://git.mcs.anl.gov/radix/openpa.git',
-                      branch: "${env.OPENPA_COMMIT}",
-                      checkoutDir: 'openpa',
-                      cleanAfterCheckout: true
-          checkoutScm url: 'https://github.com/mercury-hpc/mercury.git',
-                      branch: "${env.MERCURY_COMMIT}",
-                      checkoutDir: 'mercury',
-                      cleanAfterCheckout: true,
-                      withSubmodules: true
-          checkoutScm url: 'https://github.com/ofiwg/libfabric.git',
-                      branch: "${env.OFI_COMMIT}",
-                      checkoutDir: 'ofi',
-                      cleanAfterCheckout: true
-          checkoutScm url: 'https://github.com/pmix/master.git',
-                      branch: "${env.PMIX_COMMIT}",
-                      checkoutDir: 'pmix',
-                      cleanAfterCheckout: true
-          checkoutScm url: 'https://github.com/open-mpi/ompi.git',
-                      branch: "${env.OMPI_COMMIT}",
-                      checkoutDir: 'ompi',
-                      cleanAfterCheckout: true
-          sh('''find /testbin -maxdepth 1 -type l -print 0 | xargs -r0 rm
-                rm -rf testbin
-                for new_dir in openpa hwloc; do
-                  mkdir -p testbin/${new_dir}
-                  ln -s ${PWD}/testbin/${new_dir} /testbin/${new_dir}
-                done''')
-          runTest stashes: ["${env.MY_DOCKERFILE}-hwloc",
-                             "${env.MY_DOCKERFILE}-openpa"],
-            script: '''#!/bin/bash
-                       set -e
-                       export WORKSPACE=""
-                       export prebuilt1="PREBUILT_PREFIX=/testbin/hwloc"
-                              prebuilt1+=":/testbin/openpa"
-                       export prebuilt2="HWLOC_PREBUILT=/testbin/hwloc"
-                              prebuilt2+=" OPENPA_PREBUILT=/testbin/openpa"
-                       export SRC_PREFIX="${PWD}"
-                             SRC_PREFIX+=":${PWD}/scons_local/test/prereq"
-                       pushd scons_local
+        }
+        stage ('CaRT build') {
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+            }
+          } // agent
+          steps {
+            sconsBuild target: 'cart',
+                       scons_local_replace: true,
+                       scm: [url: 'https://github.com/daos-stack/cart.git',
+                             cleanAfterCheckout: true,
+                             withSubmodules: true]
+            echo "CaRT build succeeded"
+          } // steps
+        } // stage ('CaRT build')
+        stage ('daos depends') {
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+            }
+          } // agent
+          steps {
+            // skip cart as we are already buiding that.
+            sconsBuild target: 'daos',
+                       REQUIRES: 'pmdk,argobots,isal,protobufc',
+                       directory: 'scons_local',
+                       scons_local_replace: true,
+                       scm: [url: 'https://github.com/daos-stack/daos.git',
+                             cleanAfterCheckout: true,
+                             withSubmodules: true]
+            echo "daos depends build succeeded"
+          } // steps
+        } // stage ('daos depends')
+        stage ('basic checks') {
+          agent {
+            dockerfile {
+              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
+              dir 'scons_local/docker'
+              label 'docker_runner'
+              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                  '$BUILDARGS'
+            }
+          } // agent
+          steps {
+            //checkout scm
+            // Older scons_local_review only used master branch.
+            // Newer one looked up the last known good build of master branch.
+            // Pipeline currently does not have access that info.
+            checkoutScm url: 'http://git.mcs.anl.gov/radix/openpa.git',
+                        branch: "${env.OPENPA_COMMIT}",
+                        checkoutDir: 'openpa',
+                        cleanAfterCheckout: true
+            checkoutScm url: 'https://github.com/mercury-hpc/mercury.git',
+                        branch: "${env.MERCURY_COMMIT}",
+                        checkoutDir: 'mercury',
+                        cleanAfterCheckout: true,
+                        withSubmodules: true
+            checkoutScm url: 'https://github.com/ofiwg/libfabric.git',
+                        branch: "${env.OFI_COMMIT}",
+                        checkoutDir: 'ofi',
+                        cleanAfterCheckout: true
+            checkoutScm url: 'https://github.com/pmix/master.git',
+                        branch: "${env.PMIX_COMMIT}",
+                        checkoutDir: 'pmix',
+                        cleanAfterCheckout: true
+            checkoutScm url: 'https://github.com/open-mpi/ompi.git',
+                        branch: "${env.OMPI_COMMIT}",
+                        checkoutDir: 'ompi',
+                        cleanAfterCheckout: true
+            sh('''find /testbin -maxdepth 1 -type l -print0 | xargs -r0 rm
+                  rm -rf testbin
+                  for new_dir in openpa hwloc; do
+                    mkdir -p testbin/${new_dir}
+                    ln -s ${PWD}/testbin/${new_dir} /testbin/${new_dir}
+                  done''')
+            runTest stashes: ["${env.MY_DOCKERFILE}-hwloc",
+                               "${env.MY_DOCKERFILE}-openpa"],
+              script: '''#!/bin/bash
+                         set -e
+                         export WORKSPACE=""
+                         export prebuilt1="PREBUILT_PREFIX=/testbin/hwloc"
+                                prebuilt1+=":/testbin/openpa"
+                         export prebuilt2="HWLOC_PREBUILT=/testbin/hwloc"
+                                prebuilt2+=" OPENPA_PREBUILT=/testbin/openpa"
+                         export SRC_PREFIX="${PWD}"
+                               SRC_PREFIX+=":${PWD}/scons_local/test/prereq"
+                         pushd scons_local
                          ./test_scons_local.sh
-                       popd'''
-        } // steps
-      } // stage ('basic checks')
-    } // parallel
+                         popd'''
+          } // steps
+        } // stage ('basic checks')
+      } // parallel
     } // stage ('phase 2')
   } // stages
 } // pipeline

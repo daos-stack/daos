@@ -21,11 +21,11 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import os
+import platform
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
-import os
-import platform
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -35,6 +35,17 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
 NINJA_PROG = ProgramBinary('ninja', ["ninja-build", "ninja"])
+
+def inst(reqs, name):
+    """Return True if name is in list of installed packages"""
+    set([name, 'all']).intersection(set(reqs.installed))
+
+def check(reqs, name, built_str, installed_str=""):
+    """Return a different string based on whether a component is
+       installed or not"""
+    if inst(reqs, name):
+        return installed_str
+    return built_str
 
 def define_mercury(reqs):
     """mercury definitions"""
@@ -50,7 +61,8 @@ def define_mercury(reqs):
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
-                          '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
+                          '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
+                          check(reqs, 'openpa', '', '64') + '/libopa.a '
                           '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
                           '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
                           '-DBUILD_EXAMPLES=OFF '
@@ -62,14 +74,16 @@ def define_mercury(reqs):
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
                           '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
-                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE '
-                          '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
-                          '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
-                          , 'make $JOBS_OPT', 'make install'],
+                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
+                          check(reqs, 'ofi',
+                                '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
+                                '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
+                          'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
                 requires=['openpa', 'boost', 'ofi'] + libs,
                 extra_include_path=[os.path.join('include', 'na')],
-                out_of_src_build=True)
+                out_of_src_build=True,
+                package='mercury-devel' if inst(reqs, 'mercury') else None)
 
     retriever = GitRepoRetriever('https://github.com/ofiwg/libfabric')
     reqs.define('ofi',
@@ -79,7 +93,8 @@ def define_mercury(reqs):
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
-                headers=['rdma/fabric.h'])
+                headers=['rdma/fabric.h'],
+                package='libfabric-devel' if inst(reqs, 'ofi') else None)
 
     reqs.define('openpa',
                 retriever=GitRepoRetriever(
@@ -87,7 +102,8 @@ def define_mercury(reqs):
                 commands=['$LIBTOOLIZE', './autogen.sh',
                           './configure --prefix=$OPENPA_PREFIX',
                           'make $JOBS_OPT',
-                          'make install'], libs=['opa'])
+                          'make install'], libs=['opa'],
+                package='openpa-devel' if inst(reqs, 'openpa') else None)
 
     if ARM_PLATFORM:
         url = "https://github.com/mercury-hpc/mchecksum.git"
@@ -150,20 +166,21 @@ def define_pmix(reqs):
                 commands=['./configure --prefix=$HWLOC_PREFIX',
                           'make $JOBS_OPT', 'make install'],
                 headers=['hwloc.h'],
-                libs=['hwloc'])
+                libs=['hwloc'],
+                package='hwloc-devel' if inst(reqs, 'hwloc') else None)
 
     retriever = GitRepoRetriever('https://github.com/pmix/master')
     reqs.define('pmix',
                 retriever=retriever,
                 commands=['./autogen.pl',
                           './configure --with-platform=optimized '
-                          '--prefix=$PMIX_PREFIX '
-                          '--with-hwloc=$HWLOC_PREFIX',
+                          '--prefix=$PMIX_PREFIX',
                           'make $JOBS_OPT', 'make install'],
                 libs=['pmix'],
                 required_progs=['autoreconf', 'aclocal', 'libtool'],
                 headers=['pmix.h'],
-                requires=['hwloc', 'event'])
+                requires=['hwloc', 'event'],
+                package='pmix-devel' if inst(reqs, 'pmix') else None)
 
 
     retriever = GitRepoRetriever('https://github.com/pmix/prrte')
@@ -172,9 +189,10 @@ def define_pmix(reqs):
                 commands=['./autogen.pl',
                           './configure --with-platform=optimized '
                           '--prefix=$PRRTE_PREFIX '
-                          '--enable-orterun-prefix-by-default '
-                          '--with-pmix=$PMIX_PREFIX '
-                          '--with-hwloc=$HWLOC_PREFIX',
+                          '--enable-orterun-prefix-by-default ' +
+                          check(reqs, 'pmix', '--with-pmix=$PMIX_PREFIX') +
+                          ' ' +
+                          check(reqs, 'hwloc', '--with-hwloc=$HWLOC_PREFIX'),
                           'make $JOBS_OPT', 'make install'],
                 required_progs=['g++', 'flex'],
                 progs=['prun', 'prte', 'prted'],
@@ -188,16 +206,21 @@ def define_pmix(reqs):
                 commands=['./autogen.pl --no-oshmem',
                           './configure --with-platform=optimized '
                           '--enable-orterun-prefix-by-default '
-                          '--prefix=$OMPI_PREFIX '
-                          '--with-pmix=$PMIX_PREFIX '
+                          '--prefix=$OMPI_PREFIX ' +
+                          '--with-pmix=' +
+                          check(reqs, 'pmix', '$PMIX_PREFIX', 'external') +
+                          ' ' +
                           '--disable-mpi-fortran '
                           '--enable-contrib-no-build=vt '
-                          '--with-libevent=external '
-                          '--with-hwloc=$HWLOC_PREFIX',
+                          '--with-libevent=external ' +
+                          '--with-hwloc=' +
+                          check(reqs, 'hwloc', '$HWLOC_PREFIX',
+                                'external'),
                           'make $JOBS_OPT', 'make install'],
                 libs=['open-rte'],
                 required_progs=['g++', 'flex'],
-                requires=['pmix', 'hwloc', 'event'])
+                requires=['pmix', 'hwloc', 'event'],
+                package='ompi-devel' if inst(reqs, 'ompi') else None)
 
 
 
@@ -250,7 +273,9 @@ def define_components(reqs):
                           "OMPI_PREBUILT=$OMPI_PREFIX "
                           "CART_PREBUILT=$CART_PREFIX "
                           "FUSE_PREBUILT=$FUSE_PREFIX "
-                          "PREFIX=$IOF_PREFIX install"],
+                          "PREFIX=$IOF_PREFIX "
+                          "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
+                          "install"],
                 headers=['cnss_plugin.h'],
                 requires=['cart', 'fuse', 'ompi'])
 
@@ -261,7 +286,9 @@ def define_components(reqs):
                 commands=["scons $JOBS_OPT "
                           "OMPI_PREBUILT=$OMPI_PREFIX "
                           "CART_PREBUILT=$CART_PREFIX "
-                          "PREFIX=$DAOS_PREFIX install"],
+                          "PREFIX=$DAOS_PREFIX "
+                          "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
+                          "install"],
                 headers=['daos.h'],
                 requires=['cart', 'ompi'])
 
@@ -288,11 +315,14 @@ def define_components(reqs):
                           "OMPI_PREBUILT=$OMPI_PREFIX "
                           "MERCURY_PREBUILT=$MERCURY_PREFIX "
                           "PMIX_PREBUILT=$PMIX_PREFIX "
-                          "PREFIX=$CART_PREFIX install"],
+                          "PREFIX=$CART_PREFIX "
+                          "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
+                          "install"],
                 headers=["cart/api.h", "gurt/list.h"],
                 libs=["cart", "gurt"],
                 requires=['mercury', 'uuid', 'crypto', 'ompi',
-                          'pmix', 'boost', 'yaml'])
+                          'pmix', 'boost', 'yaml'],
+                package='cart-devel' if inst(reqs, 'cart') else None)
 
     reqs.define('fio',
                 retriever=GitRepoRetriever(
