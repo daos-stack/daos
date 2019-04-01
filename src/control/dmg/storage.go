@@ -67,24 +67,6 @@ func (s *ListStorCmd) Execute(args []string) error {
 // FormatStorCmd is the struct representing the format storage subcommand.
 type FormatStorCmd struct{}
 
-func getConsent() bool {
-	var response string
-
-	_, err := fmt.Scanln(&response)
-	if err != nil {
-		panic(err)
-	}
-
-	if response == "no" {
-		return false
-	} else if response != "yes" {
-		fmt.Println("Please type yes or no and then press enter:")
-		return getConsent()
-	}
-
-	return true
-}
-
 // run NVMe and SCM storage format on all connected servers
 func formatStor() {
 	fmt.Println(

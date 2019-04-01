@@ -121,3 +121,23 @@ func unpackFormat(i interface{}) string {
 	out := "Listing %[1]ss on connected storage servers:\n"
 	return fmt.Sprintf("%s%s\n", out, s)
 }
+
+// getConsent scans stdin for yes/no
+func getConsent() bool {
+	var response string
+
+	_, err := fmt.Scanln(&response)
+	if err != nil {
+		fmt.Printf("Error reading input: %#v\n", err)
+		return false
+	}
+
+	if response == "no" {
+		return false
+	} else if response != "yes" {
+		fmt.Println("Please type yes or no and then press enter:")
+		return getConsent()
+	}
+
+	return true
+}
