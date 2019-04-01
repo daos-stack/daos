@@ -57,7 +57,7 @@
  *		container open/close.
  *
  * And a set of "offload XS" (dss_tgt_offload_xs_nr)
- * Now dss_tgt_offload_xs_nr can be 1 or 2.
+ * Now dss_tgt_offload_xs_nr can be [0, 2].
  * 1.2) The tasks for offload XS:
  *	ULT server for:
  *		IO request dispatch (TX coordinator, on 1st offload XS),
@@ -83,7 +83,7 @@
  * 2) dss_tgt2xs() to query the XS id of the xstream for specific ULT task.
  */
 
-/** Number of offload XS per target (1 or 2)*/
+/** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
@@ -93,8 +93,13 @@ unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 #define REBUILD_DEFAULT_SCHEDULE_RATIO 30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 
+#define DSS_XS_NAME_LEN		(64)
+#define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
+#define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
+
 /** Per-xstream configuration data */
 struct dss_xstream {
+	char		dx_name[DSS_XS_NAME_LEN];
 	ABT_future	dx_shutdown;
 	hwloc_cpuset_t	dx_cpuset;
 	ABT_xstream	dx_xstream;
@@ -107,9 +112,7 @@ struct dss_xstream {
 	 * For offload XS it is same value as its main XS.
 	 */
 	int		dx_tgt_id;
-	/* CART context id, [0, DSS_CTX_NR_TOTAL - 1].
-	 * Invalid (-1) for the offload XS w/o CART context created.
-	 */
+	/* CART context id, invalid (-1) for the offload XS w/o CART context */
 	int		dx_ctx_id;
 	bool		dx_main_xs;	/* true for main XS */
 	bool		dx_comm;	/* true with cart context */
@@ -406,12 +409,21 @@ dss_srv_handler(void *arg)
 		}
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
 		/** verify CART assigned the ctx_id ascendantly start from 0 */
-		if (dx->dx_xs_id == 0)
-			D_ASSERT(dx->dx_ctx_id == 0);
-		else
-			D_ASSERT(dx->dx_ctx_id ==
-				 (dx->dx_tgt_id * DSS_CTX_NR_PER_TGT +
-				  dss_sys_xs_nr + !dx->dx_main_xs));
+		if (dx->dx_xs_id < dss_sys_xs_nr) {
+			D_ASSERT(dx->dx_ctx_id == dx->dx_xs_id);
+		} else {
+			if (dx->dx_main_xs)
+				D_ASSERTF(dx->dx_ctx_id ==
+					  dx->dx_tgt_id + dss_sys_xs_nr,
+					  "incorrect ctx_id %d for xs_id %d\n",
+					  dx->dx_ctx_id, dx->dx_xs_id);
+			else
+				D_ASSERTF(dx->dx_ctx_id ==
+					  (dss_sys_xs_nr + dss_tgt_nr +
+					   dx->dx_tgt_id),
+					  "incorrect ctx_id %d for xs_id %d\n",
+					  dx->dx_ctx_id, dx->dx_xs_id);
+		}
 	}
 
 	/* Prepare the scheduler */
@@ -608,9 +620,15 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
 	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
-
-	dx->dx_xs_id	= xs_id;
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	if (xs_id < dss_sys_xs_nr) {
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
+			 xs_id);
+	} else {
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_TGT_XS_NAME_FMT,
+			 dx->dx_tgt_id, xs_offset + 1);
+	}
+	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
 	dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
@@ -660,13 +678,13 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 		goto out_xstream;
 	}
-	xstream_data.xd_xs_ptrs[xstream_data.xd_xs_nr++] = dx;
+	xstream_data.xd_xs_ptrs[xs_id] = dx;
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 	ABT_thread_attr_free(&attr);
 
-	D_DEBUG(DB_TRACE, "created xstream xs_id(%d)/tgt_id(%d)/"
+	D_DEBUG(DB_TRACE, "created xstream name(%s)xs_id(%d)/tgt_id(%d)/"
 		"ctx_id(%d)/comm(%d)/is_main_xs(%d).\n",
-		dx->dx_xs_id, dx->dx_tgt_id, dx->dx_ctx_id,
+		dx->dx_name, dx->dx_xs_id, dx->dx_tgt_id, dx->dx_ctx_id,
 		dx->dx_comm, dx->dx_main_xs);
 
 	return 0;
@@ -700,10 +718,14 @@ dss_xstreams_fini(bool force)
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_future_set(dx->dx_shutdown, dx);
 	}
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_thread_join(dx->dx_progress);
 		ABT_thread_free(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
@@ -712,6 +734,8 @@ dss_xstreams_fini(bool force)
 	/** Wait for each execution stream to complete */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_xstream_join(dx->dx_xstream);
 		ABT_xstream_free(&dx->dx_xstream);
 	}
@@ -719,6 +743,8 @@ dss_xstreams_fini(bool force)
 	/** housekeeping ... */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_sched_free(&dx->dx_sched);
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;
@@ -751,13 +777,34 @@ dss_xstreams_empty(void)
 }
 
 static int
+dss_start_xs_id(int xs_id)
+{
+	hwloc_obj_t	obj;
+	int		rc;
+
+	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
+				     (xs_id + dss_core_offset) % dss_core_nr);
+	if (obj == NULL) {
+		D_ERROR("Null core returned by hwloc\n");
+		return -DER_INVAL;
+	}
+
+	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static int
 dss_xstreams_init()
 {
 	int	rc;
-	int	i;
+	int	i, xs_id;
 
 	D_ASSERT(dss_tgt_nr >= 1);
-	D_ASSERT(dss_tgt_offload_xs_nr == 1 || dss_tgt_offload_xs_nr == 2);
+	D_ASSERT(dss_tgt_offload_xs_nr == 0 || dss_tgt_offload_xs_nr == 1 ||
+		 dss_tgt_offload_xs_nr == 2);
 
 	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, NULL);
@@ -770,23 +817,40 @@ dss_xstreams_init()
 	D_DEBUG(DB_TRACE, "%d cores detected, starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
 
-	for (i = 0; i < DSS_XS_NR_TOTAL; i++) {
-		hwloc_obj_t	obj;
-
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					     i % dss_core_nr);
-		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc\n");
-			D_GOTO(failed, rc = -DER_INVAL);
-		}
-
-		rc = dss_start_one_xstream(obj->allowed_cpuset, i);
+	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
+	/* start system service XS */
+	for (i = 0; i < dss_sys_xs_nr; i++) {
+		xs_id = i;
+		rc = dss_start_xs_id(xs_id);
 		if (rc)
-			D_GOTO(failed, rc);
+			D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_TRACE, "%d execution streams successfully started\n",
-		dss_tgt_nr);
-failed:
+
+	/* start main IO service XS */
+	for (i = 0; i < dss_tgt_nr; i++) {
+		xs_id = DSS_MAIN_XS_ID(i);
+		rc = dss_start_xs_id(xs_id);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
+	/* start offload XS if any */
+	if (dss_tgt_offload_xs_nr == 0)
+		D_GOTO(out, rc);
+	for (i = 0; i < dss_tgt_nr; i++) {
+		int j;
+
+		for (j = 0; j < dss_tgt_offload_xs_nr; j++) {
+			xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+			rc = dss_start_xs_id(xs_id);
+			if (rc)
+				D_GOTO(out, rc);
+		}
+	}
+
+	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
+		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
+out:
 	dss_xstreams_open_barrier();
 	if (dss_xstreams_empty()) /* started nothing */
 		pthread_key_delete(dss_tls_key);
