@@ -45,6 +45,7 @@ int dac_array_global2local(daos_handle_t coh, daos_iov_t glob,
 int dac_kv_get(tse_task_t *task);
 int dac_kv_put(tse_task_t *task);
 int dac_kv_remove(tse_task_t *task);
+int dac_kv_list(tse_task_t *task);
 int dac_obj_fetch_multi(tse_task_t *task);
 int dac_obj_update_multi(tse_task_t *task);
 #endif /* __DAOS_ADDONSX_H__ */
