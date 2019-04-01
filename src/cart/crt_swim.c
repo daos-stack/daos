@@ -200,7 +200,7 @@ static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 		 csm->csm_target->cst_state.sms_status == SWIM_MEMBER_DEAD);
 out:
 	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
-	D_DEBUG(DB_TRACE, "select dping target: %lu\n", id);
+	D_DEBUG(DB_TRACE, "select dping target: %lu => %lu\n", self_id, id);
 	return id;
 }
 
@@ -229,7 +229,7 @@ static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 		 csm->csm_target->cst_state.sms_status != SWIM_MEMBER_ALIVE);
 out:
 	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
-	D_DEBUG(DB_TRACE, "select iping target: %lu\n", id);
+	D_DEBUG(DB_TRACE, "select iping target: %lu => %lu\n", self_id, id);
 	return id;
 }
 
@@ -271,15 +271,12 @@ static int crt_swim_get_member_state(struct swim_context *ctx,
 	struct crt_grp_priv	*grp_priv = swim_data(ctx);
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
-	int			 rc = -DER_INVAL;
+	int			 rc = -DER_NONEXIST;
 
 	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == id) {
 			*state = cst->cst_state;
-			D_DEBUG(DB_TRACE, "get_member_state %lu: "
-				"nr=%lu, st=%c\n", id, state->sms_incarnation,
-				"ASD"[state->sms_status]);
 			rc = 0;
 			break;
 		}
@@ -296,15 +293,12 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	struct crt_grp_priv	*grp_priv = swim_data(ctx);
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
-	int			 rc = -DER_INVAL;
+	int			 rc = -DER_NONEXIST;
 
 	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == id) {
 			cst->cst_state = *state;
-			D_DEBUG(DB_TRACE, "set_member_state %lu: "
-				"nr=%lu, st=%c\n", id, state->sms_incarnation,
-				"ASD"[state->sms_status]);
 			rc = 0;
 			break;
 		}
@@ -510,9 +504,9 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 		csm->csm_target = cst;
 
-		D_DEBUG(DB_TRACE, "add self %lu: nr=%lu, st=%c\n",
-			cst->cst_id, cst->cst_state.sms_incarnation,
-			"ASD"[cst->cst_state.sms_status]);
+		D_DEBUG(DB_TRACE, "add self {%lu %c %lu}\n",
+			cst->cst_id, "ASD"[cst->cst_state.sms_status],
+			cst->cst_state.sms_incarnation);
 
 		cst = NULL;
 	}
@@ -535,9 +529,9 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 							      csm->csm_target,
 							      cst_link);
 
-		D_DEBUG(DB_TRACE, "add member %lu: nr=%lu, st=%c\n",
-			cst->cst_id, cst->cst_state.sms_incarnation,
-			"ASD"[cst->cst_state.sms_status]);
+		D_DEBUG(DB_TRACE, "add member {%lu %c %lu}\n",
+			cst->cst_id, "ASD"[cst->cst_state.sms_status],
+			cst->cst_state.sms_incarnation);
 		cst = NULL;
 	}
 
@@ -574,9 +568,9 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == (swim_id_t)rank) {
-			D_DEBUG(DB_TRACE, "del member %lu: nr=%lu, st=%c\n",
-				cst->cst_id, cst->cst_state.sms_incarnation,
-				"ASD"[cst->cst_state.sms_status]);
+			D_DEBUG(DB_TRACE, "del member {%lu %c %lu}\n",
+				cst->cst_id, "ASD"[cst->cst_state.sms_status],
+				cst->cst_state.sms_incarnation);
 
 			next = D_CIRCLEQ_LOOP_NEXT(&csm->csm_head,
 						   csm->csm_target, cst_link);
@@ -613,9 +607,9 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 	csm->csm_target = NULL;
 	while (!D_CIRCLEQ_EMPTY(&csm->csm_head)) {
 		cst = D_CIRCLEQ_FIRST(&csm->csm_head);
-		D_DEBUG(DB_TRACE, "del member %lu: nr=%lu, st=%c\n",
-			cst->cst_id, cst->cst_state.sms_incarnation,
-			"ASD"[cst->cst_state.sms_status]);
+		D_DEBUG(DB_TRACE, "del member {%lu %c %lu}\n",
+			cst->cst_id, "ASD"[cst->cst_state.sms_status],
+			cst->cst_state.sms_incarnation);
 		D_CIRCLEQ_REMOVE(&csm->csm_head, cst, cst_link);
 		D_FREE(cst);
 	}
