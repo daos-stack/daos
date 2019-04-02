@@ -187,8 +187,7 @@ func (s *scmStorage) Format(idx int) error {
 	if mntPoint == "" {
 		return errors.New("scm mount must be specified in config")
 	}
-	// continue for NOENT errors
-	if err := s.clearMount(mntPoint); err != nil && !os.IsNotExist(err) {
+	if err := s.clearMount(mntPoint); err != nil {
 		return err
 	}
 

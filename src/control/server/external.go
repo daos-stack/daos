@@ -80,8 +80,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 		return
 	}
 	defer file.Close()
-	err = syscall.Fallocate(int(file.Fd()), 0, 0, size)
-	if err != nil {
+	if err := syscall.Fallocate(int(file.Fd()), 0, 0, size); err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
 			log.Debugf(
@@ -106,9 +105,18 @@ func (e *ext) mount(
 	return nil
 }
 
-// NOTE: requires elevated privileges
+// NOTE: requires elevated privileges, lazy unmount, mntpoint may not be
+//       available immediately after
 func (e *ext) unmount(mntPoint string) error {
-	if err := syscall.Unmount(mntPoint, 0); err != nil {
+	log.Debugf("calling unmount with %s, MNT_DETACH", mntPoint)
+
+	if err := syscall.Unmount(mntPoint, syscall.MNT_DETACH); err != nil {
+		// will return EINVAL if mount doesn't exist, treat as success
+		e, ok := err.(syscall.Errno)
+		if ok && (e == syscall.EINVAL) {
+			return nil
+		}
+
 		return os.NewSyscallError("umount", err)
 	}
 	return nil
@@ -124,7 +132,8 @@ func (e *ext) mkdir(mntPoint string) error {
 
 // NOTE: requires elevated privileges
 func (e *ext) remove(mntPoint string) error {
-	if err := os.RemoveAll(mntPoint); err != nil {
+	// ignore NOENT errors, treat as success
+	if err := os.RemoveAll(mntPoint); err != nil && !os.IsNotExist(err) {
 		return errors.WithMessage(err, "remove")
 	}
 	return nil
