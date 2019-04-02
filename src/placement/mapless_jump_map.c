@@ -535,11 +535,13 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 			if (pool_target_unavail(target)) {
 				rebuild_doms[rebuild_num] = ndom_id;
 				rebuild_shard_num[rebuild_num] = k;
+
 				uint32_t tgt_rank = target->ta_comp.co_rank;
 
 				if (remap_list != NULL) {
 					remap_list[rebuild_num].rank = tgt_rank;
 					remap_list[rebuild_num].shard_idx = k;
+
 				}
 				rebuild_num++;
 			}
@@ -734,7 +736,8 @@ static int
 mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			 struct daos_obj_shard_md *shard_md,
 			 uint32_t rebuild_ver, uint32_t *tgt_rank,
-			 uint32_t *shard_id, unsigned int array_size, int myrank)
+			 uint32_t *shard_id, unsigned int array_size,
+			 int myrank)
 {
 	struct pl_mapless_map   *mplmap;
 	struct pl_obj_layout    *layout;
@@ -785,7 +788,6 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					   group_size, group_cnt, oid, 10,
 					   mplmap->dom_used_length,
 					   mplmap->cnt_used_length, remap_list);
-
 
 	for (i = 0; i < failed_tgt_num; ++i) {
 		struct pool_target	*target;
