@@ -128,7 +128,7 @@ func getConsent() bool {
 
 	_, err := fmt.Scanln(&response)
 	if err != nil {
-		fmt.Printf("Error reading input: %#v\n", err)
+		fmt.Printf("Error reading input: %s\n", err)
 		return false
 	}
 
