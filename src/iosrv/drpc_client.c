@@ -43,8 +43,11 @@ notify_ready(void)
 	int		rc;
 
 	req = drpc_call_create(dss_drpc_ctx,
-			DRPC_MODULE_SRV,
-			DRPC_METHOD_SRV_NOTIFY_READY);
+			       DRPC_MODULE_SRV,
+			       DRPC_METHOD_SRV_NOTIFY_READY);
+	if (req == NULL) {
+		return -DER_NOMEM;
+	}
 
 	rc = drpc_call(dss_drpc_ctx, R_SYNC, req, &resp);
 
