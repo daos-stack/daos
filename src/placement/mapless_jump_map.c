@@ -794,7 +794,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		int			leader;
 
 		target = NULL;
-		if(myrank != -1)
+		if (myrank != -1)
 			goto add;
 
 		leader = pl_select_leader(md->omd_id,
