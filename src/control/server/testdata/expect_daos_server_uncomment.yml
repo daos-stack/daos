@@ -71,8 +71,11 @@ hyperthreads: true
 nr_hugepages: 4096
 control_log_mask: ERROR
 control_log_file: /tmp/daos_control.log
+targets: 0
 modules: ""
 attach: ""
+xshelpernr: 0
+firstcore: 0
 systemmap: ""
 path: testdata/.daos_server_uncomment.yml
 nvmeshmid: 0

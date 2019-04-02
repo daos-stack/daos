@@ -33,8 +33,18 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos/placement.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+
+/**
+ * Register the function for checking whether the replica is leader or not.
+ *
+ * \param checker	[IN]	The specified function for checking leader.
+ */
+void
+vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
+			      uint32_t, struct pl_obj_layout **));
 
 /**
  * Prepare the DTX handle in DRAM.
@@ -77,6 +87,22 @@ vos_dtx_begin(struct daos_tx_id *dti, daos_unit_oid_t *oid, daos_key_t *dkey,
  */
 int
 vos_dtx_end(struct daos_tx_handle *dth, int result, bool leader);
+
+/**
+ * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	The target object (shard) ID.
+ * \param dti	[IN]	The DTX identifier.
+ * \param dkey	[IN]	The hashed dkey.
+ * \param punch	[IN]	For punch DTX or not.
+ *
+ * \return		Zero on success and need not additional actions.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
+		struct daos_tx_id *dti, uint64_t dkey, bool punch);
 
 /**
  * Search the specified DTX is in the CoS cache or not.

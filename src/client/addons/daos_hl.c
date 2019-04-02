@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,8 +80,44 @@ int
 daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	       daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
-	return -DER_NOSYS;
+	daos_kv_remove_t	*args;
+	tse_task_t		*task;
+	int			rc;
+
+	rc = dc_task_create(dac_kv_remove, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->th	= th;
+	args->key	= key;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
+	     daos_key_desc_t *kds, daos_sg_list_t *sgl, daos_anchor_t *anchor,
+	     daos_event_t *ev)
+{
+	daos_kv_list_t	*args;
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_task_create(dac_kv_list, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->th	= th;
+	args->nr	= nr;
+	args->kds	= kds;
+	args->sgl	= sgl;
+	args->anchor	= anchor;
+
+	return dc_task_schedule(task, true);
 }
 
 int

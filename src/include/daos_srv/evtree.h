@@ -247,6 +247,8 @@ struct evt_entry {
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
+	/** The DTX entry address */
+	umem_id_t			en_dtx;
 };
 
 struct evt_list_entry {
@@ -258,7 +260,7 @@ struct evt_list_entry {
 	struct evt_entry	 le_ent;
 };
 
-#define EVT_EMBEDDED_NR 32
+#define EVT_EMBEDDED_NR 16
 /**
  * list head of \a evt_entry, it contains a few embedded entries to support
  * lightweight allocation of entries.

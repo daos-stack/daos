@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@
 #include "srv_internal.h"
 
 static d_list_t			 ds_iv_ns_list;
-static d_rank_t			 myrank;
 static int			 ds_iv_ns_id = 1;
 static d_list_t			 ds_iv_class_list;
 static int			 ds_iv_class_nr;
@@ -441,7 +440,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		entry->iv_valid = true;
 
 	D_DEBUG(DB_TRACE, "key id %d rank %d myrank %d valid %s\n",
-		key.class_id, key.rank, myrank, invalidate ? "no" : "yes");
+		key.class_id, key.rank, dss_self_rank(),
+		invalidate ? "no" : "yes");
 
 	return rc;
 }
@@ -675,7 +675,7 @@ ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
 	int			rc;
 
 	/* Create namespace on master */
-	rc = iv_ns_create_internal(ds_iv_ns_id++, myrank, &ns);
+	rc = iv_ns_create_internal(ds_iv_ns_id++, dss_self_rank(), &ns);
 	if (rc)
 		return rc;
 
@@ -704,6 +704,7 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 		struct ds_iv_ns **p_iv_ns)
 {
 	struct ds_iv_ns	*ns = NULL;
+	d_rank_t	myrank = dss_self_rank();
 	int		rc;
 
 	/* the ns for master will be created in ds_iv_ns_create() */
@@ -754,18 +755,14 @@ ds_iv_ns_id_get(void *ns)
 	return ((struct ds_iv_ns *)ns)->iv_ns_id;
 }
 
-int
+void
 ds_iv_init()
 {
-	int rc;
-
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
-	rc = crt_group_rank(NULL, &myrank);
-	return rc;
 }
 
-int
+void
 ds_iv_fini(void)
 {
 	struct ds_iv_ns		*ns;
@@ -786,8 +783,6 @@ ds_iv_fini(void)
 
 	if (crt_iv_class_nr > 0)
 		D_FREE(crt_iv_class);
-
-	return 0;
 }
 
 enum opc {

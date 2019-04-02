@@ -254,8 +254,8 @@ enum vos_krec_bf {
 };
 
 /**
- * Persisted VOS (d)key record, it is referenced by btr_record::rec_mmid
- * of btree VOS_BTR_KEY.
+ * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_mmid
+ * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.
  */
 struct vos_krec_df {
 	/** record bitmap, e.g. has evtree, see vos_krec_bf */
@@ -274,7 +274,7 @@ struct vos_krec_df {
 	daos_epoch_t			kr_earliest;
 	/** The DTX entry in SCM. */
 	umem_id_t			kr_dtx;
-	/** The count of uncommitted DTXs that share the object. */
+	/** The count of uncommitted DTXs that share the key. */
 	uint32_t			kr_dtx_shares;
 	/** For 64-bits alignment. */
 	uint32_t			kr_padding;
@@ -293,8 +293,8 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
 	  sizeof(((struct vos_krec_df *)0)->kr_latest));
 
 /**
- * Persisted VOS index & epoch record, it is referenced by btr_record::rec_mmid
- * of btree VOS_BTR_IDX.
+ * Persisted VOS single value & epoch record, it is referenced by
+ * btr_record::rec_mmid of btree VOS_BTR_SINGV.
  */
 struct vos_irec_df {
 	/** key checksum size (in bytes) */

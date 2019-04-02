@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ err_task:
 	if (params)
 		D_FREE(params);
 	if (update_task)
-		D_FREE(update_task);
+		tse_task_complete(update_task, rc);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -220,7 +220,7 @@ err_task:
 	if (params)
 		D_FREE(params);
 	if (fetch_task)
-		D_FREE(fetch_task);
+		tse_task_complete(fetch_task, rc);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -228,7 +228,97 @@ err_task:
 int
 dac_kv_remove(tse_task_t *task)
 {
-	return -DER_NOSYS;
+	daos_kv_remove_t	*args = daos_task_get_args(task);
+	daos_obj_punch_t	*punch_args;
+	tse_task_t		*punch_task = NULL;
+	struct io_params	*params;
+	int			rc;
+
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		return -DER_NOMEM;
+	}
+
+	/** init dkey */
+	daos_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
+
+	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, tse_task2sched(task),
+			      0, NULL, &punch_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	punch_args = daos_task_get_args(punch_task);
+	punch_args->oh		= args->oh;
+	punch_args->th		= args->th;
+	punch_args->dkey	= &params->dkey;
+	punch_args->akeys	= NULL;
+	punch_args->akey_nr	= 0;
+
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
+				       sizeof(params));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = tse_task_register_deps(task, 1, &punch_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = tse_task_schedule(punch_task, false);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	tse_sched_progress(tse_task2sched(task));
+
+	return 0;
+
+err_task:
+	if (params)
+		D_FREE(params);
+	if (punch_task)
+		tse_task_complete(punch_task, rc);
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
+dac_kv_list(tse_task_t *task)
+{
+	daos_kv_list_t		*args = daos_task_get_args(task);
+	daos_obj_list_dkey_t	*list_args;
+	tse_task_t		*list_task = NULL;
+	int			rc;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
+			      0, NULL, &list_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	list_args = daos_task_get_args(list_task);
+	list_args->oh		= args->oh;
+	list_args->th		= args->th;
+	list_args->nr		= args->nr;
+	list_args->sgl		= args->sgl;
+	list_args->kds		= args->kds;
+	list_args->anchor	= args->anchor;
+
+	rc = tse_task_register_deps(task, 1, &list_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = tse_task_schedule(list_task, false);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	tse_sched_progress(tse_task2sched(task));
+
+	return 0;
+
+err_task:
+	if (list_task)
+		tse_task_complete(list_task, rc);
+	tse_task_complete(task, rc);
+	return rc;
 }
 
 static int
