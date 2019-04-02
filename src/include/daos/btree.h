@@ -481,6 +481,30 @@ typedef struct {
 	 */
 	int		(*to_node_tx_add)(struct btr_instance *tins,
 					  TMMID(struct btr_node) nd_mmid);
+	/**
+	 * Optional:
+	 * Check whether the given record is available to outside or not.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root mmid
+	 *			and memory class etc.
+	 * \param rec	[IN]	Record to be checked.
+	 * \parem intent [IN]	The intent for why check the record.
+	 *
+	 * \a return	ALB_AVAILABLE_DIRTY	The target is available but with
+	 *					some uncommitted modification
+	 *					or garbage, need cleanup.
+	 *		ALB_AVAILABLE_CLEAN	The target is available,
+	 *					no pending modification.
+	 *		ALB_UNAVAILABLE		The target is unavailable.
+	 *		-DER_INPROGRESS		If the target record is in
+	 *					some uncommitted DTX, the caller
+	 *					needs to retry related operation
+	 *					some time later.
+	 *		Other negative values on error.
+	 */
+	int		(*to_check_availability)(struct btr_instance *tins,
+						 struct btr_record *rec,
+						 uint32_t intent);
 } btr_ops_t;
 
 /**
@@ -586,6 +610,8 @@ int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		      uint32_t intent, daos_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
+int dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent);
+int dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		      daos_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);

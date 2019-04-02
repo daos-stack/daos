@@ -33,8 +33,18 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos/placement.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
+
+/**
+ * Register the function for checking whether the replica is leader or not.
+ *
+ * \param checker	[IN]	The specified function for checking leader.
+ */
+void
+vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
+			      uint32_t, struct pl_obj_layout **));
 
 /**
  * Prepare the DTX handle in DRAM.
