@@ -179,6 +179,7 @@ func TestFormatScm(t *testing.T) {
 			expSyscalls: []string{
 				"umount /mnt/daos",
 				"remove /mnt/daos",
+				"wipefs -a /dev/pmem0",
 				"mkfs.ext4 /dev/pmem0",
 				"mkdir /mnt/daos",
 				"mount /dev/pmem0 /mnt/daos ext4 dax",

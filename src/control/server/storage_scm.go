@@ -116,15 +116,6 @@ func (s *scmStorage) Discover() error {
 	return errors.Errorf("scm storage not initialized")
 }
 
-// TODO
-func wipeDev(d string) error {
-	log.Debugf("wiping device %s", d)
-	// syscall.Unmount(mp)
-	// os.RemoveAll(mp)
-	// wipe signatures
-	return nil
-}
-
 // clearMount unmounts then removes mount point.
 //
 // NOTE: requires elevated privileges
@@ -142,11 +133,15 @@ func (s *scmStorage) clearMount(mntPoint string) (err error) {
 
 // reFormat wipes fs signatures and formats dev with ext4.
 //
-// NOTE: requires elevated privileges
+// NOTE: Requires elevated privileges and is a destructive operation, prompt
+//       user for confirmation before running.
 func (s *scmStorage) reFormat(devPath string) (err error) {
-	// ensure we have confirmed we want to wipe device!
-	if err = wipeDev(devPath); err != nil {
-		return
+	log.Debugf("wiping all fs identifiers on device %s", devPath)
+
+	if err = s.config.ext.runCommand(
+		fmt.Sprintf("wipefs -a %s", devPath)); err != nil {
+
+		return errors.WithMessage(err, "wipefs")
 	}
 
 	if err = s.config.ext.runCommand(
