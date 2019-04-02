@@ -507,4 +507,6 @@ typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
 int dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 		    dss_enum_unpack_cb_t cb, void *cb_arg);
 
+d_rank_t dss_self_rank(void);
+
 #endif /* __DSS_API_H__ */

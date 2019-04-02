@@ -215,15 +215,28 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+oi_check_availability(struct btr_instance *tins, struct btr_record *rec,
+		      uint32_t intent)
+{
+	struct vos_obj_df	*obj;
+
+	obj = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
+					  obj->vo_dtx, rec->rec_mmid,
+					  intent, DTX_RT_OBJ);
+}
+
 static btr_ops_t oi_btr_ops = {
-	.to_rec_msize	= oi_rec_msize,
-	.to_hkey_size	= oi_hkey_size,
-	.to_hkey_gen	= oi_hkey_gen,
-	.to_hkey_cmp	= oi_hkey_cmp,
-	.to_rec_alloc	= oi_rec_alloc,
-	.to_rec_free	= oi_rec_free,
-	.to_rec_fetch	= oi_rec_fetch,
-	.to_rec_update	= oi_rec_update,
+	.to_rec_msize		= oi_rec_msize,
+	.to_hkey_size		= oi_hkey_size,
+	.to_hkey_gen		= oi_hkey_gen,
+	.to_hkey_cmp		= oi_hkey_cmp,
+	.to_rec_alloc		= oi_rec_alloc,
+	.to_rec_free		= oi_rec_free,
+	.to_rec_fetch		= oi_rec_fetch,
+	.to_rec_update		= oi_rec_update,
+	.to_check_availability	= oi_check_availability,
 };
 
 /**
@@ -589,7 +602,8 @@ oi_iter_next(struct vos_iterator *iter)
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	rc = dbtree_iter_next(oiter->oit_hdl);
+	rc = dbtree_iter_next_with_intent(oiter->oit_hdl,
+					  vos_iter_intent(iter));
 	if (rc)
 		D_GOTO(out, rc);
 

@@ -119,6 +119,7 @@ typedef enum {
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
+	DAOS_OPC_KV_LIST,
 	DAOS_OPC_OBJ_FETCH_MULTI,
 	DAOS_OPC_OBJ_UPDATE_MULTI,
 
@@ -554,6 +555,15 @@ typedef struct {
 	daos_handle_t		th;
 	const char		*key;
 } daos_kv_remove_t;
+
+typedef struct {
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	uint32_t		*nr;
+	daos_key_desc_t		*kds;
+	daos_sg_list_t		*sgl;
+	daos_anchor_t		*anchor;
+} daos_kv_list_t;
 
 typedef struct {
 	daos_handle_t		oh;
