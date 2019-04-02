@@ -37,7 +37,7 @@ import errno
 
 from avocado.utils import genio
 
-sessions = {}
+SESSIONS = {}
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -45,9 +45,8 @@ class ServerFailed(Exception):
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     Launches DAOS servers in accordance with the supplied hostfile.
-
     """
-    global sessions
+    global SESSIONS
     try:
         servers = (
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
@@ -75,7 +74,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 os.environ[key] = val
 
         env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
-                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*']
+                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*', 'D_FI_CONFIG']
 
         env_args = []
         for (env_var, env_val) in os.environ.items():
@@ -99,12 +98,12 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
             resource.RLIMIT_CORE,
             (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
 
-        sessions[setname] = subprocess.Popen(server_cmd,
+        SESSIONS[setname] = subprocess.Popen(server_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=subprocess.PIPE)
-        fdesc = sessions[setname].stdout.fileno()
-        flags = fcntl.fcntl(fdesc, fcntl.F_GETFL)
-        fcntl.fcntl(fdesc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        fdesc = SESSIONS[setname].stdout.fileno()
+        fstat = fcntl.fcntl(fdesc, fcntl.F_GETFL)
+        fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
         timeout = 600
         start_time = time.time()
         result = 0
@@ -113,7 +112,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
         while True:
             output = ""
             try:
-                output = sessions[setname].stdout.read()
+                output = SESSIONS[setname].stdout.read()
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
                     raise excpn
@@ -129,18 +128,18 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 break
         print("<SERVER> server started and took %s seconds to start" % \
               (time.time() - start_time))
-    except Exception as excpn:
-        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
+        traceback.print_exception(excpn.__class__, error, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
-            sessions[setname].send_signal(signal.SIGINT)
+            SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
             # get the stderr
-            error = sessions[setname].stderr.read()
-            if sessions[setname].poll() is None:
-                sessions[setname].kill()
-            retcode = sessions[setname].wait()
+            error = SESSIONS[setname].stderr.read()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            retcode = SESSIONS[setname].wait()
             print("<SERVER> server start return code: {}\n" \
                   "stderr:\n{}".format(retcode, error))
         except KeyError:
@@ -154,24 +153,24 @@ def stop_server(setname=None, hosts=None):
     has spawned.  Doesn't always work though.
     """
 
-    global sessions
+    global SESSIONS
     try:
         if setname is None:
-            for _key, val in sessions.items():
+            for _key, val in SESSIONS.items():
                 val.send_signal(signal.SIGINT)
                 time.sleep(5)
                 if val.poll() is None:
                     val.kill()
                 val.wait()
         else:
-            sessions[setname].send_signal(signal.SIGINT)
+            SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
-            if sessions[setname].poll() is None:
-                sessions[setname].kill()
-            sessions[setname].wait()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            SESSIONS[setname].wait()
         print("<SERVER> server stopped")
-    except Exception as excep:
-        print("<SERVER> Exception occurred: {0}".format(str(excep)))
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
         raise ServerFailed("Server didn't stop!")
 
     if not hosts:

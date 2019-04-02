@@ -2830,13 +2830,17 @@ fetch_replica_unavail(void **state)
 	lookup_single(dkey, akey, 0, buf, size, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0) {
+		/* re-enable rebuild */
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+					  DSS_KEY_FAIL_LOC, 0, 0, NULL);
+
+		/* wait until rebuild done */
+		test_rebuild_wait(&arg, 1);
+
 		/* add back the excluded targets */
 		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
 				rank);
 
-		/* re-enable rebuild */
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-			DSS_KEY_FAIL_LOC, 0, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
 	D_FREE(buf);

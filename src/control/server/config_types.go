@@ -237,9 +237,12 @@ type configuration struct {
 	NrHugepages    int             `yaml:"nr_hugepages"`
 	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
 	ControlLogFile string          `yaml:"control_log_file"`
+	Targets        int             `yaml:"targets"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
+	XShelpernr int
+	Firstcore int
 	SystemMap string
 	Path      string
 	ext       External

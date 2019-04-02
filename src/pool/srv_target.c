@@ -66,6 +66,13 @@ ds_pool_child_lookup(const uuid_t uuid)
 	return NULL;
 }
 
+struct ds_pool_child *
+ds_pool_child_get(struct ds_pool_child *child)
+{
+	child->spc_ref++;
+	return child;
+}
+
 void
 ds_pool_child_put(struct ds_pool_child *child)
 {
@@ -221,7 +228,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 
 	if (arg->pca_map != NULL) {
-		rc = pl_map_update(pool->sp_uuid, arg->pca_map, false, true);
+		rc = pl_map_update(pool->sp_uuid, arg->pca_map, true);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
 				DP_UUID(key), rc);
@@ -860,15 +867,6 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
-			rc = pl_map_update(pool->sp_uuid, map, false, true);
-			if (rc != 0) {
-				ABT_rwlock_unlock(pool->sp_lock);
-				D_ERROR(DF_UUID
-					": failed to update pl_map: %d\n",
-					DP_UUID(pool->sp_uuid), rc);
-				D_GOTO(out, rc);
-			}
-
 			pool->sp_map = map;
 			map = tmp;
 		}
@@ -886,7 +884,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		   map != NULL) {
 		struct pool_map *tmp = pool->sp_map;
 
-		rc = pl_map_update(pool->sp_uuid, map, false, true);
+		rc = pl_map_update(pool->sp_uuid, map,
+				   pool->sp_map != NULL ? false : true);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
@@ -1060,43 +1059,70 @@ iter_fini:
 	return rc;
 }
 
-struct obj_iter_arg {
-	cont_iter_cb_t	callback;
+struct cont_iter_arg {
+	ds_iter_cb_t	 callback;
+	uuid_t		 po_uuid;
 	void		*arg;
+	uint32_t	 version;
+	uint32_t	 intent;
 };
 
 static int
-cont_obj_iter_cb(uuid_t cont_uuid, daos_unit_oid_t oid, daos_epoch_t eph,
-		 void *data)
+cont_iter_cb(uuid_t cont_uuid, vos_iter_entry_t *ent, void *data)
 {
-	struct obj_iter_arg *arg = data;
+	struct cont_iter_arg *arg = data;
 
-	return arg->callback(cont_uuid, oid, eph, arg->arg);
+	return arg->callback(cont_uuid, ent, arg->arg);
 }
 
 static int
-pool_obj_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
+pool_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
 {
-	return ds_cont_obj_iter(ph, co_uuid, cont_obj_iter_cb, data);
+	struct cont_iter_arg *arg = data;
+
+	switch (arg->intent) {
+	case DAOS_INTENT_REBUILD: {
+		int	rc;
+
+		/* For rebuild case, we need to resync DTXs' status firstly. */
+		rc = dtx_resync(ph, arg->po_uuid, co_uuid, arg->version, true);
+		if (rc != 0) {
+			D_ERROR("Fail to resync some DTX(s) for the pool/cont "
+				DF_UUID"/"DF_UUID" that will affect subsequent "
+				"object rebuild: rc = %d.\n",
+				DP_UUID(arg->po_uuid), DP_UUID(co_uuid), rc);
+			return rc;
+		}
+
+		/* Fall through to the regular object iteration. */
+	}
+	default:
+		return ds_cont_iter(ph, co_uuid, cont_iter_cb, data,
+				    VOS_ITER_OBJ);
+	}
 }
 
 /**
- * Iterate all of the objects in the pool.
+ * Iterate all of the objects or DTXs in the pool.
  **/
 int
-ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
+ds_pool_iter(uuid_t pool_uuid, ds_iter_cb_t callback, void *data,
+	     uint32_t version, uint32_t intent)
 {
-	struct obj_iter_arg	arg;
+	struct cont_iter_arg	 arg;
 	struct ds_pool_child	*child;
-	int			rc;
+	int			 rc;
 
 	child = ds_pool_child_lookup(pool_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST;
 
 	arg.callback = callback;
+	uuid_copy(arg.po_uuid, pool_uuid);
 	arg.arg = data;
-	rc = ds_pool_cont_iter(child->spc_hdl, pool_obj_iter_cb, &arg);
+	arg.version = version;
+	arg.intent = intent;
+	rc = ds_pool_cont_iter(child->spc_hdl, pool_iter_cb, &arg);
 
 	ds_pool_child_put(child);
 

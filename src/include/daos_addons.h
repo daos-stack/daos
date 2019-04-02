@@ -113,6 +113,41 @@ int
 daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	       daos_event_t *ev);
 
+/**
+ * List/enumerate all keys in an object.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[in,out]
+ *		nr	[in]: number of key descriptors in \a kds. [out]: number
+ *			of returned key descriptors.
+ * \param[in,out]
+ *		kds	[in]: preallocated array of \nr key descriptors. [out]:
+ *			size of each individual key.
+ * \param[in]	sgl	Scatter/gather list to store the dkey list.
+ *			All keys are written contiguously, with actual
+ *			boundaries that can be calculated using \a kds.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
+	     daos_key_desc_t *kds, daos_sg_list_t *sgl, daos_anchor_t *anchor,
+	     daos_event_t *ev);
+
 typedef struct {
 	daos_key_t	*ioa_dkey;
 	unsigned int	ioa_nr;

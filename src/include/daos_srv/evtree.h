@@ -247,6 +247,8 @@ struct evt_entry {
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
+	/** The DTX entry address */
+	umem_id_t			en_dtx;
 };
 
 struct evt_list_entry {
@@ -258,7 +260,7 @@ struct evt_list_entry {
 	struct evt_entry	 le_ent;
 };
 
-#define EVT_EMBEDDED_NR 32
+#define EVT_EMBEDDED_NR 16
 /**
  * list head of \a evt_entry, it contains a few embedded entries to support
  * lightweight allocation of entries.
@@ -616,5 +618,16 @@ int evt_iter_delete(daos_handle_t ih, void *value_out);
  */
 int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
 		   struct evt_entry *entry, daos_anchor_t *anchor);
+
+/** Get overhead constants for an evtree
+ *
+ * \param alloc_overhead[IN]	Expected per-allocation overhead in bytes
+ * \param tree_order[IN]	The expected tree order used in creation
+ * \param ovhd[OUT]		Struct to fill with overheads
+ *
+ * \return 0 on success, error otherwise
+ */
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd);
 
 #endif /* __DAOS_EV_TREE_H__ */

@@ -26,6 +26,7 @@ package common
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/log"
@@ -58,6 +59,23 @@ func AssertFalse(t *testing.T, b bool, message string) {
 // then be used but will introduce a third party dep.
 func AssertEqual(
 	t *testing.T, a interface{}, b interface{}, message string) {
+
+	if reflect.DeepEqual(a, b) {
+		return
+	}
+	if len(message) > 0 {
+		message += ", "
+	}
+	log.Errordf(utilLogDepth, "%#v != %#v", a, b)
+	t.FailNow()
+}
+
+// AssertStringsEqual sorts string slices before comparing.
+func AssertStringsEqual(
+	t *testing.T, a []string, b []string, message string) {
+
+	sort.Strings(a)
+	sort.Strings(b)
 
 	if reflect.DeepEqual(a, b) {
 		return

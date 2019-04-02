@@ -40,22 +40,6 @@ import (
 	secpb "github.com/daos-stack/daos/src/control/security/proto"
 )
 
-// cliOptions struct defined flags that can be used when invoking daos_server.
-type cliOptions struct {
-	Port        uint16             `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath   string             `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath  string             `short:"o" long:"config_path" description:"Server config file path"`
-	Modules     *string            `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores       uint16             `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Group       string             `short:"g" long:"group" description:"Server group name"`
-	Attach      *string            `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string            `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
-	PrepNvme    PrepNvmeCommand    `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
-}
-
 func main() {
 	if serverMain() != nil {
 		os.Exit(1)
@@ -65,7 +49,7 @@ func main() {
 func serverMain() error {
 	runtime.GOMAXPROCS(1)
 
-	// Set default global logger for application.
+	// Bootstrap default logger before config options get set.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
 	opts := new(cliOptions)
@@ -110,6 +94,16 @@ func serverMain() error {
 			os.Args[0], config.ControlLogFile)
 
 		log.SetOutput(f)
+	} else {
+		// if no logfile specified, output from multiple hosts
+		// may get aggregated, prefix entries with hostname
+		name, err := os.Hostname()
+		if err != nil {
+			log.Errorf("Failure retrieving hostname: %s", err)
+			return err
+		}
+
+		log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
 	}
 
 	// Backup active config.
