@@ -122,7 +122,7 @@ func (e *ext) unmount(mntPoint string) error {
 	return nil
 }
 
-// NOTE: requires elevated privileges
+// NOTE: may require elevated privileges
 func (e *ext) mkdir(mntPoint string) error {
 	if err := os.MkdirAll(mntPoint, 0777); err != nil {
 		return errors.WithMessage(err, "mkdir")
@@ -130,7 +130,7 @@ func (e *ext) mkdir(mntPoint string) error {
 	return nil
 }
 
-// NOTE: requires elevated privileges
+// NOTE: may require elevated privileges
 func (e *ext) remove(mntPoint string) error {
 	// ignore NOENT errors, treat as success
 	if err := os.RemoveAll(mntPoint); err != nil && !os.IsNotExist(err) {

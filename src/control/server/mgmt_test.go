@@ -30,8 +30,6 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
-	//pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	//"google.golang.org/grpc"
 )
 
 func init() {

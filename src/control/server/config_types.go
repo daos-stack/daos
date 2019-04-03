@@ -113,7 +113,7 @@ func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error
 	return nil
 }
 
-// ScmClass enum specifing device type for Storage Class Memoryo
+// ScmClass enum specifing device type for Storage Class Memory
 type ScmClass string
 
 // UnmarshalYAML implements yaml.Unmarshaler on ScmClass struct
@@ -214,13 +214,13 @@ type configuration struct {
 	ControlLogFile string          `yaml:"control_log_file"`
 	Targets        int             `yaml:"targets"`
 	// development (subject to change) config fields
-	Modules   string
-	Attach    string
+	Modules    string
+	Attach     string
 	XShelpernr int
-	Firstcore int
-	SystemMap string
-	Path      string
-	ext       External // interface to os utilities
+	Firstcore  int
+	SystemMap  string
+	Path       string
+	ext        External // interface to os utilities
 	// Shared memory segment ID to enable SPDK multiprocess mode,
 	// SPDK application processes can then access the same shared
 	// memory and therefore NVMe controllers.

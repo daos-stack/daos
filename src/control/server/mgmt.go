@@ -82,7 +82,44 @@ func (c *controlService) Teardown() {
 	}
 }
 
-// Format delegates to Storage implementation's Format methods.
+func errAnnotate(err error, msg string) (e error) {
+	e = err
+	if os.IsPermission(e) {
+		e = errors.WithMessage(
+			e,
+			"daos_server needs root privileges to format")
+	}
+
+	e = errors.WithMessage(e, msg)
+
+	// log with context of previous frame
+	log.Errordf(common.UtilLogDepth, e.Error())
+
+	return
+}
+
+func (c *controlService) doFormat(i int) error {
+	cond := c.config.Servers[i].FormatCond
+	// wait for lock to be released when main is ready
+	cond.L.Lock()
+	defer cond.L.Unlock()
+
+	if err := c.nvme.Format(i); err != nil {
+		return errAnnotate(err, "nvme format")
+	}
+
+	if err := c.scm.Format(i); err != nil {
+		return errAnnotate(err, "scm format")
+	}
+
+	// storage subsystem format successful, signal to alert main.
+	cond.Signal()
+
+	return nil
+}
+
+// Format delegates to Storage implementation's Format methods to prepare
+// storage for use by DAOS data plane.
 func (c *controlService) FormatStorage(
 	ctx context.Context, params *pb.FormatStorageParams) (
 	*pb.FormatStorageResponse, error) {
@@ -91,22 +128,6 @@ func (c *controlService) FormatStorage(
 		return nil, errors.New(
 			"FormatStorage call unsupported when " +
 				"format_override set in server config file, ")
-	}
-
-	errAnnotate := func(err error, msg string, cond *sync.Cond) (e error) {
-		e = err
-		if os.IsPermission(e) {
-			e = errors.WithMessage(
-				e,
-				"daos_server needs root privileges to format")
-		}
-
-		e = errors.WithMessage(e, msg)
-		// log with context of previous frame
-		log.Errordf(common.UtilLogDepth, e.Error())
-		cond.L.Unlock()
-
-		return
 	}
 
 	// TODO: execute in parallel across servers
@@ -121,21 +142,10 @@ func (c *controlService) FormatStorage(
 			return nil, errors.Wrap(err, "FormatStorage")
 		}
 
-		cond := c.config.Servers[i].FormatCond
-		// wait for lock to be released when main is ready
-		cond.L.Lock()
-
-		if err := c.nvme.Format(i); err != nil {
-			return nil, errAnnotate(err, "nvme format", cond)
+		if err := c.doFormat(i); err != nil {
+			return nil, err
 		}
 
-		if err := c.scm.Format(i); err != nil {
-			return nil, errAnnotate(err, "scm format", cond)
-		}
-
-		// storage subsystem format successful, signal to alert main.
-		cond.Signal()
-		cond.L.Unlock()
 		log.Debugf(
 			"FormatStorage: storage format successful on server %d\n",
 			i)

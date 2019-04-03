@@ -115,16 +115,16 @@ func TestConnectClients(t *testing.T) {
 			"unexpected number of results")
 
 		for _, res := range results {
-			if tt.errMsg != "" {
+			if tt.errMsg == "" {
 				AssertEqual(
-					t, res.Err.Error(), tt.errMsg,
-					"unexpected error value in results")
+					t, res.Err, nil,
+					"unexpected non-nil error value in results")
 				continue
 			}
 
 			AssertEqual(
-				t, res.Err, nil,
-				"unexpected non-nil error value in results")
+				t, res.Err.Error(), tt.errMsg,
+				"unexpected error value in results")
 		}
 	}
 }

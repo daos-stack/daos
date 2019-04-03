@@ -37,7 +37,7 @@ import (
 // ScmmMap is a type alias for info on Storage Class Memory Modules
 type ScmmMap map[int32]*pb.ScmModule
 
-// NvmeStorage interface specifies basic functionality for subsystem
+// ScmStorage interface specifies basic functionality for subsystem
 type ScmStorage interface {
 	Setup() error
 	Teardown() error

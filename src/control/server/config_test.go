@@ -596,13 +596,12 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "Targets cli overrides Cores cli",
+			desc: "Targets cli overrides Cores cli",
 		},
 		{
 			inCliOpts: cliOptions{Cores: 2},
 			inConfig: func() configuration {
-				c := newDefaultMockConfig()
+				c := defaultMockConfig()
 				c.Targets = 3
 				return populateMockConfig(t, c, sConfigUncomment)
 			}(),
@@ -624,8 +623,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-d", "./.daos/daos_server",
 				},
 			},
-			expNumCmds: 2,
-			desc:       "Targets config overrides Cores cli",
+			desc: "Targets config overrides Cores cli",
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string

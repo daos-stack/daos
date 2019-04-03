@@ -51,7 +51,7 @@ type cliOptions struct {
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	List     ListStorCmd `command:"list" alias:"l" description:"List SCM and NVMe storage attached to local server."`
+	List     ListStorCmd `command:"list" alias:"l" description:"List SCM and NVMe storage attached to local server"`
 	PrepNvme PrepNvmeCmd `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
 }
 
