@@ -27,9 +27,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
@@ -145,14 +143,6 @@ func serverMain() error {
 		log.Errorf("Failed to format servers: %s", err)
 		return err
 	}
-
-	// Create a channel to retrieve signals.
-	sigchan := make(chan os.Signal, 2)
-	signal.Notify(sigchan,
-		syscall.SIGTERM,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGHUP)
 
 	// Process configurations parameters for Nvme.
 	if err = config.parseNvme(); err != nil {
