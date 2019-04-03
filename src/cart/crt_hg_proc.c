@@ -479,6 +479,11 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
 	}
+	hg_ret = hg_proc_hg_uint64_t(hg_proc, &hdr->cch_hlc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_HG);
+	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rank);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
@@ -541,6 +546,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 		D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
+	(void)crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc);
 	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
@@ -566,6 +572,7 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_flags = in->crp_flags;
 
 	out->crp_req_hdr = in->crp_req_hdr;
+	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
 		return;
@@ -722,15 +729,27 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	/* D_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
-		if (proc_op == CRT_PROC_ENCODE)
+		if (proc_op == CRT_PROC_ENCODE) {
 			rpc_priv->crp_req_hdr.cch_flags = rpc_priv->crp_flags;
+			rpc_priv->crp_req_hdr.cch_hlc = crt_hlc_get();
+		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
 			D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
 			D_GOTO(out, rc);
 		}
-		if (proc_op == CRT_PROC_DECODE)
-			rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
+		/**
+		 * crt_proc_in_common will be called in two paths:
+		 * 1. Within HG_Forward -> hg_set_input ...,
+		 *    to pack (ENCODE) in the request.
+		 * 2. When received the RPC, if user calls HG_Get_input it call
+		 *    this funcion with DECODE, but the handling was changed to
+		 *    crt_hg_unpack_header + _unpack_body and the direct call
+		 *    of HG_Get_inputwas removed.
+		 *
+		 * XXXX: Keep assertion here to avoid silent logic change.
+		 */
+		D_ASSERT(proc_op != CRT_PROC_DECODE);
 	}
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
@@ -781,12 +800,16 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	/* D_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
+		if (proc_op == CRT_PROC_ENCODE)
+			rpc_priv->crp_reply_hdr.cch_hlc = crt_hlc_get();
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "crt_proc_common_hdr failed rc: %d\n", rc);
 			D_GOTO(out, rc);
 		}
+		if (proc_op == CRT_PROC_DECODE)
+			(void)crt_hlc_get_msg(rpc_priv->crp_reply_hdr.cch_hlc);
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "RPC failed to execute on target. error code: %d\n",

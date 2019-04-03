@@ -90,6 +90,8 @@ struct crt_common_hdr {
 	uint32_t	cch_opc;
 	/* RPC request flag, see enum crt_rpc_flags_internal */
 	uint32_t	cch_flags;
+	/* HLC timestamp */
+	uint64_t	cch_hlc;
 	/* gid and rank identify the rpc request sender */
 	d_rank_t	cch_rank;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
@@ -145,11 +147,11 @@ struct crt_corpc_info {
 
 struct crt_rpc_priv {
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
-	d_list_t			crp_epi_link;
+	d_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
-	d_list_t			crp_tmp_link;
+	d_list_t		crp_tmp_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
-	d_list_t			crp_parent_link;
+	d_list_t		crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
 	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */

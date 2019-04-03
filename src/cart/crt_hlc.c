@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Intel Corporation
+/* Copyright (C) 2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,62 +34,65 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Atomic directives
  */
-#ifndef __GURT_ATOMIC_H__
-#define __GURT_ATOMIC_H__
-
-#if HAVE_STDATOMIC
-
-#include <stdatomic.h>
-
-#ifdef __INTEL_COMPILER
-#define ATOMIC volatile
-#else
-#define ATOMIC _Atomic
-#endif
-
-/* stdatomic interface for compare_and_exchange doesn't quite align */
-#define atomic_compare_exchange(ptr, oldvalue, newvalue) \
-	atomic_compare_exchange_weak(ptr, &oldvalue, newvalue, \
-				memory_order_relaxed, memory_order_relaxed)
-#define atomic_store_release(ptr, value) \
-	atomic_store_explicit(ptr, value, memory_order_release)
-
-#define atomic_add(ptr, value) atomic_fetch_add_explicit(ptr,		\
-							 value,		\
-							 memory_order_relaxed)
-#define atomic_load_consume(ptr) \
-	atomic_load_explicit(ptr, memory_order_consume)
-
-#define atomic_dec_release(ptr) \
-	atomic_fetch_sub_explicit(ptr, 1, memory_order_release)
-
-#else
-
-#define atomic_fetch_sub __sync_fetch_and_sub
-#define atomic_fetch_add __sync_fetch_and_add
-#define atomic_compare_exchange __sync_bool_compare_and_swap
-#define atomic_store_release(ptr, value) \
-	do {                             \
-		__sync_synchronize();    \
-		*(ptr) = (value);        \
-	} while (0)
-/* There doesn't seem to be a great option here to mimic just
- * consume.  Adding 0 should suffice for the load side.  If
- * the compiler is smart, it could potentially avoid the
- * actual synchronization after the store as the store isn't
- * required.
+/**
+ * This file is part of CaRT. Hybrid Logical Clock (HLC) implementation.
  */
-#define atomic_load_consume(ptr) atomic_fetch_add(ptr, 0)
-#define atomic_dec_release(ptr) __sync_fetch_and_sub(ptr, 1)
-#define ATOMIC
+#include "crt_internal.h"
+#include <gurt/common.h>	/* for NSEC_PER_SEC */
+#include <gurt/atomic.h>
+#include <time.h>
 
-#define atomic_add(ptr, value) atomic_fetch_add(ptr, value)
+#define CRT_HLC_MASK 0xFFFFULL
 
-#endif
+static ATOMIC uint64_t crt_hlc;
 
-#define atomic_inc(ptr) atomic_add(ptr, 1)
+/** Get local physical time */
+static inline uint64_t crt_hlc_localtime_get(void)
+{
+	struct timespec now;
+	uint64_t	pt;
+	int		rc;
 
-#endif /* __GURT_ATOMIC_H__ */
+	rc = clock_gettime(CLOCK_REALTIME_COARSE, &now);
+	pt = rc ? crt_hlc : (now.tv_sec * NSEC_PER_SEC + now.tv_nsec);
+
+	/**
+	 * Return the most significant 48 bits of time.
+	 * In case of error of retrieving a system time use previous time.
+	 */
+	return pt & ~CRT_HLC_MASK;
+}
+
+uint64_t crt_hlc_get(void)
+{
+	uint64_t pt = crt_hlc_localtime_get();
+	uint64_t hlc, ret;
+
+	do {
+		hlc = crt_hlc;
+		ret = (hlc & ~CRT_HLC_MASK) < pt ? pt : (hlc + 1);
+	} while (!atomic_compare_exchange(&crt_hlc, hlc, ret));
+
+	return ret;
+}
+
+uint64_t crt_hlc_get_msg(uint64_t msg)
+{
+	uint64_t pt = crt_hlc_localtime_get();
+	uint64_t hlc, ret, ml = msg & ~CRT_HLC_MASK;
+
+	do {
+		hlc = crt_hlc;
+		if ((hlc & ~CRT_HLC_MASK) < ml)
+			ret = ml < pt ? pt : (msg + 1);
+		else if ((hlc & ~CRT_HLC_MASK) < pt)
+			ret = pt;
+		else if (pt <= ml)
+			ret = (hlc < msg ? msg : hlc) + 1;
+		else
+			ret = hlc + 1;
+	} while (!atomic_compare_exchange(&crt_hlc, hlc, ret));
+
+	return ret;
+}

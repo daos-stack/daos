@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Intel Corporation
+/* Copyright (C) 2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,62 +34,90 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Atomic directives
  */
-#ifndef __GURT_ATOMIC_H__
-#define __GURT_ATOMIC_H__
-
-#if HAVE_STDATOMIC
-
-#include <stdatomic.h>
-
-#ifdef __INTEL_COMPILER
-#define ATOMIC volatile
-#else
-#define ATOMIC _Atomic
-#endif
-
-/* stdatomic interface for compare_and_exchange doesn't quite align */
-#define atomic_compare_exchange(ptr, oldvalue, newvalue) \
-	atomic_compare_exchange_weak(ptr, &oldvalue, newvalue, \
-				memory_order_relaxed, memory_order_relaxed)
-#define atomic_store_release(ptr, value) \
-	atomic_store_explicit(ptr, value, memory_order_release)
-
-#define atomic_add(ptr, value) atomic_fetch_add_explicit(ptr,		\
-							 value,		\
-							 memory_order_relaxed)
-#define atomic_load_consume(ptr) \
-	atomic_load_explicit(ptr, memory_order_consume)
-
-#define atomic_dec_release(ptr) \
-	atomic_fetch_sub_explicit(ptr, 1, memory_order_release)
-
-#else
-
-#define atomic_fetch_sub __sync_fetch_and_sub
-#define atomic_fetch_add __sync_fetch_and_add
-#define atomic_compare_exchange __sync_bool_compare_and_swap
-#define atomic_store_release(ptr, value) \
-	do {                             \
-		__sync_synchronize();    \
-		*(ptr) = (value);        \
-	} while (0)
-/* There doesn't seem to be a great option here to mimic just
- * consume.  Adding 0 should suffice for the load side.  If
- * the compiler is smart, it could potentially avoid the
- * actual synchronization after the store as the store isn't
- * required.
+/**
+ * This file is part of CaRT testing.
  */
-#define atomic_load_consume(ptr) atomic_fetch_add(ptr, 0)
-#define atomic_dec_release(ptr) __sync_fetch_and_sub(ptr, 1)
-#define ATOMIC
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <time.h>
 
-#define atomic_add(ptr, value) atomic_fetch_add(ptr, value)
+#include <cmocka.h>
 
-#endif
+#include <cart/api.h>
+#include "../cart/crt_internal.h"
 
-#define atomic_inc(ptr) atomic_add(ptr, 1)
+#define COUNT 32000
 
-#endif /* __GURT_ATOMIC_H__ */
+static uint64_t last;
+
+static void
+test_hlc_get(void **state)
+{
+	uint64_t time;
+	int i;
+
+	for (i = 0; i < COUNT; i++) {
+		time = crt_hlc_get();
+		assert_true(last < time);
+		last = time;
+		if (i == 9)
+			sleep(1);
+	}
+}
+
+static void
+test_hlc_get_msg(void **state)
+{
+	uint64_t time = last, time2 = last;
+	int i;
+
+	for (i = 0; i < COUNT; i++) {
+		if (i % 5 == 1)
+			time2 = time + 0x100;
+		else if (i % 5 == 2)
+			time2 = time - 0x100;
+		else
+			time2 = time + (i % 3);
+		time = crt_hlc_get_msg(time2);
+		assert_true(time2 < time);
+		assert_true(last < time);
+		last = time;
+		if (i == 9)
+			sleep(1);
+	}
+}
+
+static int
+init_tests(void **state)
+{
+	unsigned int seed;
+
+	/* Seed the random number generator once per test run */
+	seed = time(NULL);
+	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
+	srand(seed);
+
+	return 0;
+}
+
+static int
+fini_tests(void **state)
+{
+	return 0;
+}
+
+
+int main(int argc, char **argv)
+{
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_hlc_get),
+		cmocka_unit_test(test_hlc_get_msg),
+	};
+
+	return cmocka_run_group_tests(tests, init_tests, fini_tests);
+}

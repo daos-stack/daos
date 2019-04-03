@@ -104,4 +104,7 @@ crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req);
 
+/* Internal API to sync timestamp with remote message */
+uint64_t crt_hlc_get_msg(uint64_t msg);
+
 #endif /* __CRT_INTERNAL_FNS_H__ */

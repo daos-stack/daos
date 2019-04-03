@@ -408,6 +408,21 @@ crt_reply_get(crt_rpc_t *rpc)
 }
 
 /**
+ * Return current HLC timestamp
+ *
+ * HLC timestamps are synchronized between nodes. They sends with each RPC for
+ * different nodes and updated when received from different node. The HLC
+ * timestamps synchronization will be called transparently at sending/receiving
+ * RPC into the wire (when Mercury will encode/decode the packet). So, with
+ * each call of this function you will get from it always last HLC timestamp
+ * synchronized across all nodes involved in current communication.
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+crt_hlc_get(void);
+
+/**
  * Abort an RPC request.
  *
  * \param[in] req              pointer to RPC request
