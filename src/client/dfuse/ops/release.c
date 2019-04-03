@@ -29,11 +29,11 @@ dfuse_release_cb(struct dfuse_request *request)
 {
 	struct dfuse_status_out *out = crt_reply_get(request->rpc);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 	} else {
-		IOC_REPLY_ZERO(request);
+		DFUSE_REPLY_ZERO(request);
 	}
 
 	dfuse_pool_release(request->fsh->fh_pool, request->ir_file);
@@ -52,9 +52,9 @@ dfuse_release_priv(struct dfuse_file_handle *handle)
 	struct dfuse_projection_info *fs_handle = handle->release_req.fsh;
 	int rc;
 
-	IOF_TRACE_UP(&handle->release_req, handle, "release_req");
+	DFUSE_TRA_UP(&handle->release_req, handle, "release_req");
 
-	IOF_TRACE_INFO(&handle->release_req,
+	DFUSE_TRA_INFO(&handle->release_req,
 		       GAH_PRINT_STR, GAH_PRINT_VAL(handle->common.gah));
 
 	handle->release_req.ir_api = &api;
@@ -68,9 +68,9 @@ dfuse_release_priv(struct dfuse_file_handle *handle)
 
 out_err:
 	if (handle->release_req.req) {
-		IOC_REPLY_ERR(&handle->release_req, rc);
+		DFUSE_REPLY_ERR(&handle->release_req, rc);
 	} else {
-		IOF_TRACE_DOWN(&handle->release_req);
+		DFUSE_TRA_DOWN(&handle->release_req);
 	}
 	dfuse_pool_release(fs_handle->fh_pool, handle);
 }

@@ -24,12 +24,12 @@
 #include "dfuse_common.h"
 #include "dfuse_fs.h"
 
-#define IOF_PROTO_SIGNON_BASE 0x02000000
-#define IOF_PROTO_SIGNON_VERSION 3
-#define IOF_PROTO_WRITE_BASE 0x01000000
-#define IOF_PROTO_WRITE_VERSION 5
-#define IOF_PROTO_IO_BASE 0x03000000
-#define IOF_PROTO_IO_VERSION 2
+#define DFUSE_PROTO_SIGNON_BASE 0x02000000
+#define DFUSE_PROTO_SIGNON_VERSION 3
+#define DFUSE_PROTO_WRITE_BASE 0x01000000
+#define DFUSE_PROTO_WRITE_VERSION 5
+#define DFUSE_PROTO_IO_BASE 0x03000000
+#define DFUSE_PROTO_IO_VERSION 2
 
 /*
  * Re-use the CMF_UUID type when using a GAH as they are both 128 bit types
@@ -61,24 +61,24 @@ dfuse_proc_stat(crt_proc_t proc, void *arg)
 	return crt_proc_memcpy(proc, data, sizeof(*data));
 }
 
-struct crt_msg_field CMF_IOF_NAME = {
+struct crt_msg_field CMF_DFUSE_NAME = {
 	.cmf_size = sizeof(struct ios_name),
 	.cmf_proc = crt_proc_struct_ios_name,
 };
 
-struct crt_msg_field CMF_IOF_STAT = {
+struct crt_msg_field CMF_DFUSE_STAT = {
 	.cmf_size = sizeof(struct stat),
 	.cmf_proc = dfuse_proc_stat,
 };
 
 struct crt_msg_field *gah_string_in[] = {
 	&CMF_GAH,	/* gah */
-	&CMF_IOF_NAME,	/* name */
+	&CMF_DFUSE_NAME,	/* name */
 };
 
 struct crt_msg_field *imigrate_in[] = {
 	&CMF_GAH,	/* gah of parent */
-	&CMF_IOF_NAME,	/* name */
+	&CMF_DFUSE_NAME,	/* name */
 	&CMF_INT,	/* inode */
 };
 
@@ -89,39 +89,39 @@ struct crt_msg_field *string_out[] = {
 };
 
 struct crt_msg_field *entry_out[] = {
-	&CMF_GAH,	/* gah */
-	&CMF_IOF_STAT,	/* struct stat */
-	&CMF_INT,	/* rc */
-	&CMF_INT,	/* err */
+	&CMF_GAH,		/* gah */
+	&CMF_DFUSE_STAT,	/* struct stat */
+	&CMF_INT,		/* rc */
+	&CMF_INT,		/* err */
 };
 
 struct crt_msg_field *create_out[] = {
-	&CMF_GAH,	/* gah */
-	&CMF_GAH,	/* inode gah */
-	&CMF_IOF_STAT,	/* struct stat */
-	&CMF_INT,	/* rc */
-	&CMF_INT,	/* err */
+	&CMF_GAH,		/* gah */
+	&CMF_GAH,		/* inode gah */
+	&CMF_DFUSE_STAT,	/* struct stat */
+	&CMF_INT,		/* rc */
+	&CMF_INT,		/* err */
 };
 
 struct crt_msg_field *two_string_in[] = {
 	&CMF_GAH,
-	&CMF_IOF_NAME,
+	&CMF_DFUSE_NAME,
 	&CMF_STRING,
 };
 
 struct crt_msg_field *create_in[] = {
-	&CMF_GAH,	/* gah */
-	&CMF_IOF_NAME,	/* name */
-	&CMF_INT,	/* mode */
-	&CMF_INT,	/* flags */
+	&CMF_GAH,		/* gah */
+	&CMF_DFUSE_NAME,	/* name */
+	&CMF_INT,		/* mode */
+	&CMF_INT,		/* flags */
 };
 
 struct crt_msg_field *rename_in[] = {
-	&CMF_GAH,	/* old parent */
-	&CMF_GAH,	/* new parent */
-	&CMF_IOF_NAME,	/* old name */
-	&CMF_IOF_NAME,	/* new name */
-	&CMF_INT,	/* flags */
+	&CMF_GAH,		/* old parent */
+	&CMF_GAH,		/* new parent */
+	&CMF_DFUSE_NAME,	/* old name */
+	&CMF_DFUSE_NAME,	/* new name */
+	&CMF_INT,		/* flags */
 };
 
 struct crt_msg_field *open_in[] = {
@@ -130,15 +130,15 @@ struct crt_msg_field *open_in[] = {
 };
 
 struct crt_msg_field *unlink_in[] = {
-	&CMF_IOF_NAME,	/* name */
-	&CMF_GAH,	/* gah */
-	&CMF_INT,	/* flags */
+	&CMF_DFUSE_NAME,	/* name */
+	&CMF_GAH,		/* gah */
+	&CMF_INT,		/* flags */
 };
 
 struct crt_msg_field *attr_out[] = {
-	&CMF_IOF_STAT,	/* stat */
-	&CMF_INT,	/* rc */
-	&CMF_INT,	/* err */
+	&CMF_DFUSE_STAT,	/* stat */
+	&CMF_INT,		/* rc */
+	&CMF_INT,		/* err */
 };
 
 struct crt_msg_field *iov_pair[] = {
@@ -167,10 +167,10 @@ struct crt_msg_field *readdir_out[] = {
 	&CMF_INT,
 };
 
-CRT_GEN_PROC_FUNC(dfuse_xtvec, IOF_STRUCT_XTVEC);
+CRT_GEN_PROC_FUNC(dfuse_xtvec, DFUSE_STRUCT_XTVEC);
 
-CRT_RPC_DEFINE(dfuse_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT);
-CRT_RPC_DEFINE(dfuse_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT);
+CRT_RPC_DEFINE(dfuse_readx, DFUSE_RPC_READX_IN, DFUSE_RPC_READX_OUT);
+CRT_RPC_DEFINE(dfuse_writex, DFUSE_RPC_WRITEX_IN, DFUSE_RPC_WRITEX_OUT);
 
 struct crt_msg_field *status_out[] = {
 	&CMF_INT,
@@ -201,27 +201,27 @@ struct crt_msg_field *writex_out[] = {
 };
 
 struct crt_msg_field *setattr_in[] = {
-	&CMF_GAH,	/* gah */
-	&CMF_IOF_STAT,	/* struct stat */
-	&CMF_UINT32,	/* to_set */
+	&CMF_GAH,		/* gah */
+	&CMF_DFUSE_STAT,	/* struct stat */
+	&CMF_UINT32,		/* to_set */
 };
 
 #define X(a, b, c)					\
-	static struct crt_req_format IOF_CRF_##a =	\
+	static struct crt_req_format DFUSE_CRF_##a =	\
 		DEFINE_CRT_REQ_FMT(b, c);
 
-IOF_RPCS_LIST
+DFUSE_RPCS_LIST
 
 #undef X
 
 #define X(a, b, c)					\
 	{						\
 		.prf_flags = CRT_RPC_FEAT_NO_TIMEOUT,	\
-		.prf_req_fmt = &IOF_CRF_##a,	\
+		.prf_req_fmt = &DFUSE_CRF_##a,	\
 	},
 
 static struct crt_proto_rpc_format dfuse_write_rpc_types[] = {
-	IOF_RPCS_LIST
+	DFUSE_RPCS_LIST
 };
 
 #undef X
@@ -238,19 +238,19 @@ static struct crt_proto_rpc_format dfuse_io_rpc_types[] = {
 };
 
 static struct crt_proto_format dfuse_write_registry = {
-	.cpf_name = "IOF_METADATA",
-	.cpf_ver = IOF_PROTO_WRITE_VERSION,
+	.cpf_name = "DFUSE_METADATA",
+	.cpf_ver = DFUSE_PROTO_WRITE_VERSION,
 	.cpf_count = ARRAY_SIZE(dfuse_write_rpc_types),
 	.cpf_prf = dfuse_write_rpc_types,
-	.cpf_base = IOF_PROTO_WRITE_BASE,
+	.cpf_base = DFUSE_PROTO_WRITE_BASE,
 };
 
 static struct crt_proto_format dfuse_io_registry = {
-	.cpf_name = "IOF_IO",
-	.cpf_ver = IOF_PROTO_IO_VERSION,
+	.cpf_name = "DFUSE_IO",
+	.cpf_ver = DFUSE_PROTO_IO_VERSION,
 	.cpf_count = ARRAY_SIZE(dfuse_io_rpc_types),
 	.cpf_prf = dfuse_io_rpc_types,
-	.cpf_base = IOF_PROTO_IO_BASE,
+	.cpf_base = DFUSE_PROTO_IO_BASE,
 };
 
 /* Bulk register a RPC type
@@ -265,8 +265,8 @@ static struct crt_proto_format dfuse_io_registry = {
  */
 static int
 dfuse_core_register(struct crt_proto_format *reg,
-		  struct crt_proto_format **proto,
-		  crt_rpc_cb_t handlers[])
+		    struct crt_proto_format **proto,
+		    crt_rpc_cb_t handlers[])
 {
 	int rc;
 	int i;
@@ -338,17 +338,17 @@ dfuse_io_query_cb(struct crt_proto_query_cb_info *cb_info)
  */
 int
 dfuse_client_register(crt_endpoint_t *tgt_ep,
-		    struct crt_proto_format **write,
-		    struct crt_proto_format **io)
+		      struct crt_proto_format **write,
+		      struct crt_proto_format **io)
 {
-	uint32_t write_ver = IOF_PROTO_WRITE_VERSION;
-	uint32_t io_ver = IOF_PROTO_IO_VERSION;
+	uint32_t write_ver = DFUSE_PROTO_WRITE_VERSION;
+	uint32_t io_ver = DFUSE_PROTO_IO_VERSION;
 	struct sq_cb cbi = {0};
 	int rc;
 
 	dfuse_tracker_init(&cbi.tracker, 2);
 
-	rc = crt_proto_query(tgt_ep, IOF_PROTO_WRITE_BASE,
+	rc = crt_proto_query(tgt_ep, DFUSE_PROTO_WRITE_BASE,
 			     &write_ver, 1, dfuse_write_query_cb, &cbi);
 	if (rc != -DER_SUCCESS) {
 		dfuse_tracker_signal(&cbi.tracker);
@@ -357,7 +357,7 @@ dfuse_client_register(crt_endpoint_t *tgt_ep,
 		return rc;
 	}
 
-	rc = crt_proto_query(tgt_ep, IOF_PROTO_IO_BASE,
+	rc = crt_proto_query(tgt_ep, DFUSE_PROTO_IO_BASE,
 			     &io_ver, 1, dfuse_io_query_cb, &cbi);
 	if (rc != -DER_SUCCESS) {
 		dfuse_tracker_signal(&cbi.tracker);
@@ -375,11 +375,11 @@ dfuse_client_register(crt_endpoint_t *tgt_ep,
 		return cbi.io_rc;
 	}
 
-	if (cbi.write_version != IOF_PROTO_WRITE_VERSION) {
+	if (cbi.write_version != DFUSE_PROTO_WRITE_VERSION) {
 		return -DER_INVAL;
 	}
 
-	if (cbi.io_version != IOF_PROTO_IO_VERSION) {
+	if (cbi.io_version != DFUSE_PROTO_IO_VERSION) {
 		return -DER_INVAL;
 	}
 

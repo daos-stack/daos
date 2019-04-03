@@ -29,13 +29,13 @@ dfuse_rename_cb(struct dfuse_request *request)
 {
 	struct dfuse_status_out *out = crt_reply_get(request->rpc);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 		D_GOTO(out, 0);
 	}
 
-	IOC_REPLY_ZERO(request);
+	DFUSE_REPLY_ZERO(request);
 
 out:
 	/* Clean up the two refs this code holds on the rpc */
@@ -67,11 +67,11 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		D_GOTO(out_no_request, ret = ENOMEM);
 	}
 
-	IOC_REQUEST_INIT(request, fs_handle);
-	IOC_REQUEST_RESET(request);
+	DFUSE_REQUEST_INIT(request, fs_handle);
+	DFUSE_REQUEST_RESET(request);
 
-	IOF_TRACE_UP(request, fs_handle, "rename");
-	IOF_TRACE_DEBUG(request, "renaming %s to %s", name, newname);
+	DFUSE_TRA_UP(request, fs_handle, "rename");
+	DFUSE_TRA_DEBUG(request, "renaming %s to %s", name, newname);
 
 	request->req = req;
 	request->ir_api = &api;
@@ -80,8 +80,7 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 			    NULL,
 			    FS_TO_OP(fs_handle, rename), &request->rpc);
 	if (rc || !request->rpc) {
-		IOF_LOG_ERROR("Could not create request, rc = %d",
-			      rc);
+		DFUSE_LOG_ERROR("Could not create request, rc = %d", rc);
 		D_GOTO(out_err, ret = EIO);
 	}
 
@@ -108,13 +107,13 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	return;
 
 out_no_request:
-	IOC_REPLY_ERR_RAW(fs_handle, req, ret);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
 	return;
 
 out_decref:
 	crt_req_decref(request->rpc);
 
 out_err:
-	IOC_REPLY_ERR(request, ret);
+	DFUSE_REPLY_ERR(request, ret);
 	D_FREE(request);
 }

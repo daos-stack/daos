@@ -34,12 +34,12 @@ read_bulk_cb(struct dfuse_request *request)
 	void *buff = NULL;
 
 	if (out->err) {
-		IOF_TRACE_ERROR(rb, "Error from target %d", out->err);
+		DFUSE_TRA_ERROR(rb, "Error from target %d", out->err);
 		rb->failure = true;
 		D_GOTO(out, request->rc = EIO);
 	}
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc)
 		D_GOTO(out, 0);
 
@@ -55,7 +55,7 @@ read_bulk_cb(struct dfuse_request *request)
 
 out:
 	if (request->rc) {
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 	} else {
 
 		/* It's not clear without benchmarking which approach is better
@@ -66,10 +66,10 @@ out:
 		 * For now it's easy to pick between them, and both of them are
 		 * passing valgrind tests.
 		 */
-		if (request->fsh->flags & IOF_FUSE_READ_BUF) {
+		if (request->fsh->flags & DFUSE_FUSE_READ_BUF) {
 			rc = fuse_reply_buf(request->req, buff, bytes_read);
 			if (rc != 0)
-				IOF_TRACE_ERROR(rb,
+				DFUSE_TRA_ERROR(rb,
 						"fuse_reply_buf returned %d:%s",
 						rc, strerror(-rc));
 
@@ -78,7 +78,7 @@ out:
 			rb->fbuf.buf[0].mem = buff;
 			rc = fuse_reply_data(request->req, &rb->fbuf, 0);
 			if (rc != 0)
-				IOF_TRACE_ERROR(rb,
+				DFUSE_TRA_ERROR(rb,
 						"fuse_reply_data returned %d:%s",
 						rc, strerror(-rc));
 		}
@@ -104,7 +104,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct dfuse_rb *rb = NULL;
 	int rc;
 
-	IOF_TRACE_INFO(handle, "%#zx-%#zx " GAH_PRINT_STR, position,
+	DFUSE_TRA_INFO(handle, "%#zx-%#zx " GAH_PRINT_STR, position,
 		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
 
 	if (len <= 4096)
@@ -116,7 +116,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	if (!rb)
 		D_GOTO(out_err, rc = ENOMEM);
 
-	IOF_TRACE_UP(rb, handle, "readbuf");
+	DFUSE_TRA_UP(rb, handle, "readbuf");
 
 	rb->rb_req.req = req;
 	rb->rb_req.ir_api = &api;
@@ -131,7 +131,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	rc = dfuse_fs_send(&rb->rb_req);
 	if (rc != 0) {
-		IOC_REPLY_ERR(&rb->rb_req, rc);
+		DFUSE_REPLY_ERR(&rb->rb_req, rc);
 		dfuse_pool_release(pt, rb);
 	}
 
@@ -139,5 +139,5 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	return;
 
 out_err:
-	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

@@ -35,28 +35,28 @@
  * used by files that don't log to the default facility
  */
 
-#define IOF_LOG_WARNING(fmt, ...)	\
+#define DFUSE_LOG_WARNING(fmt, ...)	\
 	D_WARN(fmt "\n", ## __VA_ARGS__)
 
-#define IOF_LOG_ERROR(fmt, ...)		\
+#define DFUSE_LOG_ERROR(fmt, ...)		\
 	D_ERROR(fmt "\n", ## __VA_ARGS__)
 
-#define IOF_LOG_DEBUG(fmt, ...)	\
+#define DFUSE_LOG_DEBUG(fmt, ...)	\
 	D_DEBUG(DB_ANY, fmt "\n", ## __VA_ARGS__)
 
-#define IOF_LOG_INFO(fmt, ...)		\
+#define DFUSE_LOG_INFO(fmt, ...)		\
 	D_INFO(fmt "\n", ## __VA_ARGS__)
 
 /* A couple of helper functions so we can append '\n'
  * without changing all of instances of the macros
  */
-#define IOF_TRACE_HELPER(func, ptr, fmt, ...) \
+#define DFUSE_TRA_HELPER(func, ptr, fmt, ...) \
 	func(ptr, fmt "\n", ## __VA_ARGS__)
 
-#define IOF_TRACE_DEBUG_HELPER(func, ptr, fmt, ...) \
+#define DFUSE_TRA_DEBUG_HELPER(func, ptr, fmt, ...) \
 	D_TRACE_DEBUG(DB_ANY, ptr, fmt "\n", ## __VA_ARGS__)
 
-/* IOF_TRACE marcos defined for tracing descriptors and RPCs
+/* DFUSE_TRACE marcos defined for tracing descriptors and RPCs
  * in the logs. UP() is used to register a new descriptor -
  * this includes giving it a "type" and also a parent to build
  * a descriptor hierarchy. Then DOWN() will de-register
@@ -70,29 +70,29 @@
  * DEBUG/INFO, however just takes an extra argument for the
  * lowest-level descriptor to tie the logging message to.
  */
-#define IOF_TRACE_WARNING(ptr, ...)			\
-	IOF_TRACE_HELPER(D_TRACE_WARN, ptr, "" __VA_ARGS__)
+#define DFUSE_TRA_WARNING(ptr, ...)			\
+	DFUSE_TRA_HELPER(D_TRACE_WARN, ptr, "" __VA_ARGS__)
 
-#define IOF_TRACE_ERROR(ptr, ...)			\
-	IOF_TRACE_HELPER(D_TRACE_ERROR, ptr, "" __VA_ARGS__)
+#define DFUSE_TRA_ERROR(ptr, ...)			\
+	DFUSE_TRA_HELPER(D_TRACE_ERROR, ptr, "" __VA_ARGS__)
 
-#define IOF_TRACE_DEBUG(ptr, ...)			\
-	IOF_TRACE_DEBUG_HELPER(DB_ANY, ptr, "" __VA_ARGS__)
+#define DFUSE_TRA_DEBUG(ptr, ...)			\
+	DFUSE_TRA_DEBUG_HELPER(DB_ANY, ptr, "" __VA_ARGS__)
 
-#define IOF_TRACE_INFO(ptr, ...)			\
-	IOF_TRACE_HELPER(D_TRACE_INFO, ptr, "" __VA_ARGS__)
+#define DFUSE_TRA_INFO(ptr, ...)			\
+	DFUSE_TRA_HELPER(D_TRACE_INFO, ptr, "" __VA_ARGS__)
 
 /* Register a descriptor with a parent and a type */
-#define IOF_TRACE_UP(ptr, parent, type)					\
+#define DFUSE_TRA_UP(ptr, parent, type)					\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' from %p\n",	\
 		      type, parent)
 
 /* De-register a descriptor, including all aliases */
-#define IOF_TRACE_DOWN(ptr)					\
+#define DFUSE_TRA_DOWN(ptr)					\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Deregistered\n")
 
-/* Register as root of hierarchy, used in place of IOF_TRACE_UP */
-#define IOF_TRACE_ROOT(ptr, type)				\
+/* Register as root of hierarchy, used in place of DFUSE_TRA_UP */
+#define DFUSE_TRA_ROOT(ptr, type)				\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' as root\n", type)
 
 #endif /* __LOG_H__ */

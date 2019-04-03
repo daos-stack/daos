@@ -35,10 +35,10 @@ dfuse_create_ll_cb(struct dfuse_request *request)
 	d_list_t			*rlink;
 	bool				keep_ref = false;
 
-	IOF_TRACE_DEBUG(handle, "cci_rc %d rc %d err %d",
+	DFUSE_TRA_DEBUG(handle, "cci_rc %d rc %d err %d",
 			request->rc, out->rc, out->err);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc != 0) {
 		D_GOTO(out_err, 0);
 	}
@@ -61,14 +61,14 @@ dfuse_create_ll_cb(struct dfuse_request *request)
 	 */
 	handle->ie->gah = out->igah;
 	handle->ie->stat = out->stat;
-	IOF_TRACE_UP(handle->ie, fs_handle, "inode");
+	DFUSE_TRA_UP(handle->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
 				       &handle->ie->stat.st_ino,
 				       sizeof(handle->ie->stat.st_ino),
 				       &handle->ie->ie_htl);
 
 	if (rlink == &handle->ie->ie_htl) {
-		IOF_TRACE_INFO(handle->ie, "New file %lu " GAH_PRINT_STR,
+		DFUSE_TRA_INFO(handle->ie, "New file %lu " GAH_PRINT_STR,
 			       entry.ino, GAH_PRINT_VAL(out->gah));
 
 		handle->ie = NULL;
@@ -89,17 +89,17 @@ dfuse_create_ll_cb(struct dfuse_request *request)
 		 * the file, so even if it had been unlinked it would still
 		 * exist and thus the inode was unlikely to be reused.
 		 */
-		IOF_TRACE_INFO(request, "Existing file rlink %p %lu "
+		DFUSE_TRA_INFO(request, "Existing file rlink %p %lu "
 			       GAH_PRINT_STR, rlink, entry.ino,
 			       GAH_PRINT_VAL(out->gah));
 		ie_close(fs_handle, handle->ie);
 	}
 
-	IOC_REPLY_CREATE(request, entry, fi);
+	DFUSE_REPLY_CREATE(request, entry, fi);
 	return keep_ref;
 
 out_err:
-	IOC_REPLY_ERR(request, request->rc);
+	DFUSE_REPLY_ERR(request, request->rc);
 	dfuse_pool_release(fs_handle->fh_pool, handle);
 	return false;
 }
@@ -124,22 +124,22 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		IOF_TRACE_INFO(req, "O_LARGEFILE required 0%o",
+		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o",
 			       fi->flags);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
 	/* Check for flags that do not make sense in this context.
 	 */
-	if (fi->flags & IOF_UNSUPPORTED_CREATE_FLAGS) {
-		IOF_TRACE_INFO(req, "unsupported flag requested 0%o",
+	if (fi->flags & DFUSE_UNSUPPORTED_CREATE_FLAGS) {
+		DFUSE_TRA_INFO(req, "unsupported flag requested 0%o",
 			       fi->flags);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
 	/* Check that only the flag for a regular file is specified */
 	if ((mode & S_IFMT) != S_IFREG) {
-		IOF_TRACE_INFO(req, "unsupported mode requested 0%o",
+		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o",
 			       mode);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
@@ -148,14 +148,14 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	if (!handle)
 		D_GOTO(out_err, rc = ENOMEM);
 
-	IOF_TRACE_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
-	IOF_TRACE_UP(&handle->creat_req, handle, "creat_req");
+	DFUSE_TRA_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
+	DFUSE_TRA_UP(&handle->creat_req, handle, "creat_req");
 
 	handle->common.projection = &fs_handle->proj;
 	handle->creat_req.req = req;
 	handle->creat_req.ir_api = &api;
 
-	IOF_TRACE_INFO(handle, "file '%s' flags 0%o mode 0%o", name, fi->flags,
+	DFUSE_TRA_INFO(handle, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
 	in = crt_req_get(handle->creat_req.rpc);
@@ -181,10 +181,10 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	return;
 out_err:
-	IOC_REPLY_ERR_RAW(handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(handle, req, rc);
 
 	if (handle) {
-		IOF_TRACE_DOWN(&handle->creat_req);
+		DFUSE_TRA_DOWN(&handle->creat_req);
 		dfuse_pool_release(fs_handle->fh_pool, handle);
 	}
 }

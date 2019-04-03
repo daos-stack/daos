@@ -37,15 +37,15 @@ closedir_ll_cb(struct dfuse_request *request)
 	struct dfuse_status_out *out	= crt_reply_get(request->rpc);
 	struct TYPE_NAME *dh		= CONTAINER(request);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 
 	if (!request->req)
 		D_GOTO(out, 0);
 
 	if (request->rc == 0)
-		IOC_REPLY_ZERO(request);
+		DFUSE_REPLY_ZERO(request);
 	else
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 out:
 	dfuse_pool_release(dh->open_req.fsh->dh_pool, dh);
 	return false;
@@ -63,7 +63,7 @@ dfuse_releasedir_priv(fuse_req_t req, struct dfuse_dir_handle *dh)
 	struct dfuse_projection_info *fs_handle = dh->open_req.fsh;
 	int rc;
 
-	IOC_REQ_INIT_REQ(dh, fs_handle, api, req, rc);
+	DFUSE_REQ_INIT_REQ(dh, fs_handle, api, req, rc);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -74,9 +74,9 @@ dfuse_releasedir_priv(fuse_req_t req, struct dfuse_dir_handle *dh)
 err:
 	if (req) {
 		dh->close_req.req  = req;
-		IOC_REPLY_ERR(&dh->close_req, rc);
+		DFUSE_REPLY_ERR(&dh->close_req, rc);
 	} else {
-		IOF_TRACE_DOWN(&dh->close_req);
+		DFUSE_TRA_DOWN(&dh->close_req);
 	}
 
 	dfuse_pool_release(fs_handle->dh_pool, dh);

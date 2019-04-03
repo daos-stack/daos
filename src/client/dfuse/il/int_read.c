@@ -48,7 +48,7 @@ read_bulk_cb(const struct crt_cb_info *cb_info)
 		 *
 		 * TODO: Handle target eviction here
 		 */
-		IOF_LOG_INFO("Bad RPC reply %d", cb_info->cci_rc);
+		DFUSE_LOG_INFO("Bad RPC reply %d", cb_info->cci_rc);
 		if (cb_info->cci_rc == -DER_TIMEDOUT)
 			reply->err = EAGAIN;
 		else
@@ -58,7 +58,7 @@ read_bulk_cb(const struct crt_cb_info *cb_info)
 	}
 
 	if (out->err) {
-		IOF_LOG_ERROR("Error from target %d", out->err);
+		DFUSE_LOG_ERROR("Error from target %d", out->err);
 
 		if (out->err == -DER_NOMEM)
 			reply->err = ENOMEM;
@@ -107,8 +107,7 @@ read_bulk(char *buff, size_t len, off_t position,
 					  0),
 			    &rpc);
 	if (rc || !rpc) {
-		IOF_LOG_ERROR("Could not create request, rc = %d",
-			      rc);
+		DFUSE_LOG_ERROR("Could not create request, rc = %d", rc);
 		*errcode = EIO;
 		return -1;
 	}
@@ -127,7 +126,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	rc = crt_bulk_create(fs_handle->crt_ctx, &sgl, CRT_BULK_RW,
 			     &in->data_bulk);
 	if (rc) {
-		IOF_LOG_ERROR("Failed to make local bulk handle %d", rc);
+		DFUSE_LOG_ERROR("Failed to make local bulk handle %d", rc);
 		*errcode = EIO;
 		return -1;
 	}
@@ -139,7 +138,7 @@ read_bulk(char *buff, size_t len, off_t position,
 
 	rc = crt_req_send(rpc, read_bulk_cb, &reply);
 	if (rc) {
-		IOF_LOG_ERROR("Could not send rpc, rc = %d", rc);
+		DFUSE_LOG_ERROR("Could not send rpc, rc = %d", rc);
 		*errcode = EIO;
 		return -1;
 	}
@@ -159,16 +158,16 @@ read_bulk(char *buff, size_t len, off_t position,
 	if (out->iov_len > 0) {
 		if (out->data.iov_len != out->iov_len) {
 			/* TODO: This is a resource leak */
-			IOF_LOG_ERROR("Missing IOV %d", out->iov_len);
+			DFUSE_LOG_ERROR("Missing IOV %d", out->iov_len);
 			*errcode = EIO;
 			return -1;
 		}
 		read_len = out->data.iov_len;
-		IOF_LOG_INFO("Received %#zx via immediate", read_len);
+		DFUSE_LOG_INFO("Received %#zx via immediate", read_len);
 		memcpy(buff + out->bulk_len, out->data.iov_buf, read_len);
 	}
 	if (out->bulk_len > 0) {
-		IOF_LOG_INFO("Received %#zx via bulk", out->bulk_len);
+		DFUSE_LOG_INFO("Received %#zx via bulk", out->bulk_len);
 		read_len += out->bulk_len;
 	}
 
@@ -180,7 +179,7 @@ read_bulk(char *buff, size_t len, off_t position,
 		return -1;
 	}
 
-	IOF_LOG_INFO("Read complete %#zx", read_len);
+	DFUSE_LOG_INFO("Read complete %#zx", read_len);
 
 	return read_len;
 }
@@ -188,8 +187,8 @@ read_bulk(char *buff, size_t len, off_t position,
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
 		      struct dfuse_file_common *f_info, int *errcode)
 {
-	IOF_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position, position + len - 1,
-		     GAH_PRINT_VAL(f_info->gah));
+	DFUSE_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position, position + len - 1,
+		       GAH_PRINT_VAL(f_info->gah));
 
 	return read_bulk(buff, len, position, f_info, errcode);
 }

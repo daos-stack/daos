@@ -53,6 +53,6 @@ dfuse_wait(crt_context_t crt_ctx, struct dfuse_tracker *tracker)
 		 * under somewhat catostrophic circumstances.
 		 */
 		if (rc != 0 && rc != -DER_TIMEDOUT)
-			IOF_LOG_ERROR("crt_progress failed rc: %d", rc);
+			DFUSE_LOG_ERROR("crt_progress failed rc: %d", rc);
 	}
 }

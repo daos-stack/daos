@@ -47,7 +47,7 @@ write_cb(const struct crt_cb_info *cb_info)
 		 *
 		 * TODO: Handle target eviction here
 		 */
-		IOF_LOG_INFO("Bad RPC reply %d", cb_info->cci_rc);
+		DFUSE_LOG_INFO("Bad RPC reply %d", cb_info->cci_rc);
 		if (cb_info->cci_rc == -DER_TIMEDOUT)
 			reply->err = EAGAIN;
 		else
@@ -57,7 +57,7 @@ write_cb(const struct crt_cb_info *cb_info)
 	}
 
 	if (out->err) {
-		IOF_LOG_ERROR("Error from target %d", out->err);
+		DFUSE_LOG_ERROR("Error from target %d", out->err);
 
 		reply->err = EIO;
 
@@ -89,8 +89,8 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	uint64_t			imm_offset = 0;
 	int				rc;
 
-	IOF_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position,
-		     position + len - 1, GAH_PRINT_VAL(f_info->gah));
+	DFUSE_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position,
+		       position + len - 1, GAH_PRINT_VAL(f_info->gah));
 
 	fs_handle = f_info->projection;
 	grp = fs_handle->grp;
@@ -101,8 +101,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 					  1),
 			    &rpc);
 	if (rc || !rpc) {
-		IOF_LOG_ERROR("Could not create request, rc = %d",
-			      rc);
+		DFUSE_LOG_ERROR("Could not create request, rc = %d", rc);
 		*errcode = EIO;
 		return -1;
 	}
@@ -130,8 +129,8 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 		rc = crt_bulk_create(fs_handle->crt_ctx, &sgl, CRT_BULK_RO,
 				     &in->data_bulk);
 		if (rc) {
-			IOF_LOG_ERROR("Failed to make local bulk handle %d",
-				      rc);
+			DFUSE_LOG_ERROR("Failed to make local bulk handle %d",
+				        rc);
 			*errcode = EIO;
 			return -1;
 		}
@@ -146,7 +145,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 
 	rc = crt_req_send(rpc, write_cb, &reply);
 	if (rc) {
-		IOF_LOG_ERROR("Could not send rpc, rc = %d", rc);
+		DFUSE_LOG_ERROR("Could not send rpc, rc = %d", rc);
 		*errcode = EIO;
 		return -1;
 	}

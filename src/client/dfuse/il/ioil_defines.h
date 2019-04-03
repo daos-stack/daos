@@ -21,19 +21,19 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __IOF_DEFINES_H__
-#define __IOF_DEFINES_H__
+#ifndef __DFUSE_DEFINES_H__
+#define __DFUSE_DEFINES_H__
 
 #include <inttypes.h>
 
-#ifdef IOF_DECLARE_WEAK
+#ifdef DFUSE_DECLARE_WEAK
 /* For LD_PRELOAD, declaring public symbols as weak allows 3rd
  * party libraries to use the headers without knowing beforehand
  * if the ioil libraries will be present at runtime
  */
-#define IOF_PUBLIC __attribute__((visibility("default"), weak))
+#define DFUSE_PUBLIC __attribute__((visibility("default"), weak))
 #else
-#define IOF_PUBLIC __attribute__((visibility("default")))
+#define DFUSE_PUBLIC __attribute__((visibility("default")))
 #endif
 
-#endif /* __IOF_DEFINES_H__ */
+#endif /* __DFUSE_DEFINES_H__ */

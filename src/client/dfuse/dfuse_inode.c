@@ -32,7 +32,8 @@
 
 /* Find a GAH from a inode, return 0 if found */
 int
-find_gah(struct dfuse_projection_info *fs_handle, ino_t ino, struct ios_gah *gah)
+find_gah(struct dfuse_projection_info *fs_handle, ino_t ino,
+	 struct ios_gah *gah)
 {
 	struct dfuse_inode_entry *ie;
 	d_list_t *rlink;
@@ -50,7 +51,7 @@ find_gah(struct dfuse_projection_info *fs_handle, ino_t ino, struct ios_gah *gah
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	IOF_TRACE_INFO(ie, "Inode %lu " GAH_PRINT_STR, ie->stat.st_ino,
+	DFUSE_TRA_INFO(ie, "Inode %lu " GAH_PRINT_STR, ie->stat.st_ino,
 		       GAH_PRINT_VAL(ie->gah));
 
 	D_MUTEX_LOCK(&fs_handle->gah_lock);
@@ -78,7 +79,7 @@ find_inode(struct dfuse_request *request)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	IOF_TRACE_INFO(ie, "Using inode %lu " GAH_PRINT_STR " parent %lu",
+	DFUSE_TRA_INFO(ie, "Using inode %lu " GAH_PRINT_STR " parent %lu",
 		       ie->stat.st_ino, GAH_PRINT_VAL(ie->gah), ie->parent);
 
 	request->ir_inode = ie;
@@ -104,7 +105,7 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
 
 	if (!rlink) {
-		IOF_TRACE_WARNING(fs_handle, "Could not find entry %lu", ino);
+		DFUSE_TRA_WARNING(fs_handle, "Could not find entry %lu", ino);
 		return;
 	}
 	d_hash_rec_ndecref(&fs_handle->inode_ht, 2, rlink);
@@ -115,7 +116,7 @@ ie_close_cb(struct dfuse_request *request)
 {
 	struct TYPE_NAME	*desc = CONTAINER(request);
 
-	IOF_TRACE_DOWN(request);
+	DFUSE_TRA_DOWN(request);
 	dfuse_pool_release(desc->request.fsh->close_pool, desc);
 	return false;
 }
@@ -124,27 +125,28 @@ static const struct dfuse_request_api api = {
 	.on_result	= ie_close_cb,
 };
 
-void ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+void ie_close(struct dfuse_projection_info *fs_handle,
+	      struct dfuse_inode_entry *ie)
 {
 	struct TYPE_NAME	*desc = NULL;
 	struct dfuse_gah_in	*in;
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
-	IOF_TRACE_DEBUG(ie, "closing, ref %u, parent %lu", ref, ie->parent);
+	DFUSE_TRA_DEBUG(ie, "closing, ref %u, parent %lu", ref, ie->parent);
 
 	D_ASSERT(ref == 0);
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	drop_ino_ref(fs_handle, ie->parent);
 
-	IOF_TRACE_INFO(ie, GAH_PRINT_STR, GAH_PRINT_VAL(ie->gah));
+	DFUSE_TRA_INFO(ie, GAH_PRINT_STR, GAH_PRINT_VAL(ie->gah));
 
-	IOC_REQ_INIT(desc, fs_handle, api, in, rc);
+	DFUSE_REQ_INIT(desc, fs_handle, api, in, rc);
 	if (rc)
 		D_GOTO(err, 0);
 
-	IOF_TRACE_UP(&desc->request, ie, "close_req");
+	DFUSE_TRA_UP(&desc->request, ie, "close_req");
 
 	D_MUTEX_LOCK(&fs_handle->gah_lock);
 	in->gah = ie->gah;
@@ -154,14 +156,14 @@ void ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry 
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	IOF_TRACE_DOWN(ie);
+	DFUSE_TRA_DOWN(ie);
 	return;
 
 err:
-	IOF_TRACE_ERROR(ie, "Failed to close " GAH_PRINT_STR " %d",
+	DFUSE_TRA_ERROR(ie, "Failed to close " GAH_PRINT_STR " %d",
 			GAH_PRINT_VAL(ie->gah), rc);
 
-	IOF_TRACE_DOWN(ie);
+	DFUSE_TRA_DOWN(ie);
 	if (desc)
 		dfuse_pool_release(fs_handle->close_pool, desc);
 }

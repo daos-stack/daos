@@ -34,17 +34,17 @@ statfs_cb(struct dfuse_request *request)
 	 */
 	crt_req_decref(request->rpc);
 	crt_req_decref(request->rpc);
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
 		D_GOTO(out_err, 0);
 	}
 
-	IOF_FUSE_REPLY_STATFS(request, out->data.iov_buf);
+	DFUSE_FUSE_REPLY_STATFS(request, out->data.iov_buf);
 	D_FREE(request);
 	return false;
 
 out_err:
-	IOC_REPLY_ERR(request, request->rc);
+	DFUSE_REPLY_ERR(request, request->rc);
 	D_FREE(request);
 	return false;
 }
@@ -68,11 +68,11 @@ dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 		D_GOTO(out_no_request, ret = ENOMEM);
 	}
 
-	IOC_REQUEST_INIT(request, fs_handle);
-	IOC_REQUEST_RESET(request);
+	DFUSE_REQUEST_INIT(request, fs_handle);
+	DFUSE_REQUEST_RESET(request);
 
-	IOF_TRACE_UP(request, fs_handle, "statfs");
-	IOF_TRACE_INFO(request, "statfs %lu", ino);
+	DFUSE_TRA_UP(request, fs_handle, "statfs");
+	DFUSE_TRA_INFO(request, "statfs %lu", ino);
 
 	request->req = req;
 	request->ir_api = &api;
@@ -81,7 +81,7 @@ dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 	rc = crt_req_create(fs_handle->proj.crt_ctx, NULL,
 			    FS_TO_OP(fs_handle, statfs), &request->rpc);
 	if (rc || !request->rpc) {
-		IOF_TRACE_ERROR(request,
+		DFUSE_TRA_ERROR(request,
 				"Could not create request, rc = %d",
 				rc);
 		D_GOTO(out_err, ret = EIO);
@@ -102,10 +102,10 @@ dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 	return;
 
 out_no_request:
-	IOC_REPLY_ERR_RAW(fs_handle, req, ret);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
 	return;
 
 out_err:
-	IOC_REPLY_ERR(request, ret);
+	DFUSE_REPLY_ERR(request, ret);
 	D_FREE(request);
 }

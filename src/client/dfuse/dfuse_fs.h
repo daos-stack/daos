@@ -20,8 +20,8 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __IOF_FS_H__
-#define __IOF_FS_H__
+#ifndef __DFUSE_FS_H__
+#define __DFUSE_FS_H__
 
 #include <stdbool.h>
 #include <sched.h>
@@ -72,7 +72,7 @@ struct dfuse_tracker {
 
 /* Initialize number of events to track */
 static inline void dfuse_tracker_init(struct dfuse_tracker *tracker,
-				    int expected_count)
+				      int expected_count)
 {
 	atomic_store_release(&tracker->remaining, expected_count);
 }
@@ -103,7 +103,7 @@ void dfuse_wait(crt_context_t, struct dfuse_tracker *);
 
 /* Progress until all events have signaled */
 static inline void dfuse_fs_wait(struct dfuse_projection *dfuse_state,
-			       struct dfuse_tracker *tracker)
+				 struct dfuse_tracker *tracker)
 {
 	/* If there is no progress thread then call progress from within
 	 * this function, else just wait

@@ -32,10 +32,10 @@ write_cb(struct dfuse_request *request)
 	struct dfuse_writex_in	*in = crt_req_get(request->rpc);
 
 	if (out->err) {
-		/* Convert the error types, out->err is a IOF error code
+		/* Convert the error types, out->err is a CaRT error code
 		 * so translate it to a errno we can pass back to FUSE.
 		 */
-		IOF_TRACE_ERROR(wb, "Error from target %d", out->err);
+		DFUSE_TRA_ERROR(wb, "Error from target %d", out->err);
 
 		if (in->data_bulk)
 			wb->failure = true;
@@ -43,18 +43,18 @@ write_cb(struct dfuse_request *request)
 		D_GOTO(err, request->rc = EIO);
 	}
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc)
 		D_GOTO(err, 0);
 
-	IOC_REPLY_WRITE(wb, request->req, out->len);
+	DFUSE_REPLY_WRITE(wb, request->req, out->len);
 
 	dfuse_pool_release(request->fsh->write_pool, wb);
 
 	return false;
 
 err:
-	IOC_REPLY_ERR(request, request->rc);
+	DFUSE_REPLY_ERR(request, request->rc);
 
 	dfuse_pool_release(request->fsh->write_pool, wb);
 	return false;
@@ -91,7 +91,7 @@ dfuse_writex(size_t len, off_t position, struct dfuse_wb *wb)
 	return;
 
 err:
-	IOC_REPLY_ERR_RAW(wb, wb->wb_req.req, rc);
+	DFUSE_REPLY_ERR_RAW(wb, wb->wb_req.req, rc);
 	dfuse_pool_release(wb->wb_req.fsh->write_pool, wb);
 }
 
@@ -107,9 +107,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	if (!wb)
 		D_GOTO(err, rc = ENOMEM);
 
-	IOF_TRACE_UP(wb, handle, "writebuf");
+	DFUSE_TRA_UP(wb, handle, "writebuf");
 
-	IOF_TRACE_INFO(wb, "%#zx-%#zx " GAH_PRINT_STR, position,
+	DFUSE_TRA_INFO(wb, "%#zx-%#zx " GAH_PRINT_STR, position,
 		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
 
 	wb->wb_req.req = req;
@@ -121,7 +121,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 
 	return;
 err:
-	IOC_REPLY_ERR_RAW(handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(handle, req, rc);
 }
 
 /*
@@ -147,15 +147,15 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (bufv->count != 1)
 		D_GOTO(err, rc = EIO);
 
-	IOF_TRACE_INFO(handle, "Count %zi [0].flags %#x",
+	DFUSE_TRA_INFO(handle, "Count %zi [0].flags %#x",
 		       bufv->count, bufv->buf[0].flags);
 
 	wb = dfuse_pool_acquire(handle->open_req.fsh->write_pool);
 	if (!wb)
 		D_GOTO(err, rc = ENOMEM);
-	IOF_TRACE_UP(wb, handle, "writebuf");
+	DFUSE_TRA_UP(wb, handle, "writebuf");
 
-	IOF_TRACE_INFO(wb, "%#zx-%#zx " GAH_PRINT_STR, position,
+	DFUSE_TRA_INFO(wb, "%#zx-%#zx " GAH_PRINT_STR, position,
 		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
 
 	wb->wb_req.req = req;
@@ -171,7 +171,7 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 
 	return;
 err:
-	IOC_REPLY_ERR_RAW(handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(handle, req, rc);
 	if (wb)
 		dfuse_pool_release(handle->open_req.fsh->write_pool, wb);
 }

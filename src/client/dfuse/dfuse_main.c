@@ -75,9 +75,9 @@ static void
 		ret = fuse_session_loop(info->fsi_session);
 	}
 	if (ret != 0)
-		IOF_LOG_ERROR("Fuse loop exited with return code: %d", ret);
+		DFUSE_LOG_ERROR("Fuse loop exited with return code: %d", ret);
 
-	IOF_LOG_DEBUG("%p fuse loop completed %d", info, ret);
+	DFUSE_LOG_DEBUG("%p fuse loop completed %d", info, ret);
 
 	D_MUTEX_LOCK(&info->fsi_lock);
 	info->fsi_running = false;
@@ -201,7 +201,7 @@ cnss_stop_fuse(struct fs_info *info)
 
 		if (rc == ETIMEDOUT) {
 			if (!fuse_session_exited(info->fsi_session))
-				IOF_TRACE_INFO(info, "Session still running");
+				DFUSE_TRA_INFO(info, "Session still running");
 
 			pthread_kill(info->fsi_thread, SIGUSR1);
 		}
@@ -209,12 +209,12 @@ cnss_stop_fuse(struct fs_info *info)
 	} while (rc == ETIMEDOUT);
 
 	if (rc)
-		IOF_TRACE_ERROR(info, "Final join returned %d:%s",
+		DFUSE_TRA_ERROR(info, "Final join returned %d:%s",
 				rc, strerror(rc));
 
 	rc = pthread_mutex_destroy(&info->fsi_lock);
 	if (rc != 0)
-		IOF_TRACE_ERROR(info,
+		DFUSE_TRA_ERROR(info,
 				"Failed to destroy lock %d:%s",
 				rc, strerror(rc));
 
@@ -228,7 +228,7 @@ cnss_stop_fuse(struct fs_info *info)
 	}
 
 	fuse_session_destroy(info->fsi_session);
-	IOF_TRACE_INFO(info, "session destroyed");
+	DFUSE_TRA_INFO(info, "session destroyed");
 
 	return rc;
 }
@@ -287,7 +287,7 @@ main(int argc, char **argv)
 		prefix = getenv("CNSS_PREFIX");
 	}
 	if (prefix == NULL) {
-		IOF_LOG_ERROR("CNSS prefix is required");
+		DFUSE_LOG_ERROR("CNSS prefix is required");
 		return CNSS_ERR_PREFIX;
 	}
 
@@ -296,7 +296,7 @@ main(int argc, char **argv)
 	 */
 	ret = chdir(prefix);
 	if (ret != 0) {
-		IOF_LOG_ERROR("Could not chdir to CNSS_PREFIX");
+		DFUSE_LOG_ERROR("Could not chdir to CNSS_PREFIX");
 		return CNSS_ERR_PREFIX;
 	}
 
@@ -304,14 +304,14 @@ main(int argc, char **argv)
 	if (!cnss_info)
 		D_GOTO(shutdown_log, ret = CNSS_ERR_NOMEM);
 
-	IOF_TRACE_ROOT(cnss_info, "cnss_info");
+	DFUSE_TRA_ROOT(cnss_info, "cnss_info");
 
 	cnss_info->dfuse_state = dfuse_plugin_init();
 
 	/*initialize CaRT*/
 	ret = crt_init(cnss, 0);
 	if (ret) {
-		IOF_TRACE_ERROR(cnss_info,
+		DFUSE_TRA_ERROR(cnss_info,
 				"crt_init failed with ret = %d", ret);
 		if (ret == -DER_NOMEM)
 			ret = CNSS_ERR_NOMEM;
@@ -342,9 +342,9 @@ main(int argc, char **argv)
 	if (rc != -DER_SUCCESS)
 		ret = 1;
 
-	IOF_TRACE_INFO(cnss_info, "Exiting with status %d", ret);
+	DFUSE_TRA_INFO(cnss_info, "Exiting with status %d", ret);
 
-	IOF_TRACE_DOWN(cnss_info);
+	DFUSE_TRA_DOWN(cnss_info);
 
 	D_FREE(cnss_info);
 
@@ -356,8 +356,8 @@ shutdown_ctrl_fs:
 
 shutdown_log:
 
-	IOF_TRACE_DOWN(cnss_info);
-	IOF_LOG_INFO("Exiting with status %d", ret);
+	DFUSE_TRA_DOWN(cnss_info);
+	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	D_FREE(cnss_info);
 
 	return ret;

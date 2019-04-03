@@ -28,7 +28,7 @@
 
 #define SHOW_FLAG(HANDLE, FLAGS, FLAG)					\
 	do {								\
-		IOF_TRACE_INFO(HANDLE, "Flag " #FLAG " %s",		\
+		DFUSE_TRA_INFO(HANDLE, "Flag " #FLAG " %s",		\
 			(FLAGS & FLAG) ? "enabled" : "disabled");	\
 		FLAGS &= ~FLAG;						\
 	} while (0)
@@ -57,7 +57,7 @@ dfuse_show_flags(void *handle, unsigned int in)
 	SHOW_FLAG(handle, in, FUSE_CAP_HANDLE_KILLPRIV);
 
 	if (in)
-		IOF_TRACE_ERROR(handle, "Unknown flags %#x", in);
+		DFUSE_TRA_ERROR(handle, "Unknown flags %#x", in);
 }
 
 /* Called on filesystem init.  It has the ability to both observe configuration
@@ -69,11 +69,11 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
 	struct dfuse_projection_info *fs_handle = arg;
 
-	IOF_TRACE_INFO(fs_handle,
+	DFUSE_TRA_INFO(fs_handle,
 		       "Fuse configuration for projection srv:%d cli:%d",
 		       fs_handle->fs_id, fs_handle->proj.cli_fs_id);
 
-	IOF_TRACE_INFO(fs_handle, "Proto %d %d",
+	DFUSE_TRA_INFO(fs_handle, "Proto %d %d",
 		       conn->proto_major, conn->proto_minor);
 
 	/* This value has to be set here to the same value passed to
@@ -83,30 +83,30 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->max_read = fs_handle->max_read;
 	conn->max_write = fs_handle->proj.max_write;
 
-	IOF_TRACE_INFO(fs_handle, "max read %#x", conn->max_read);
-	IOF_TRACE_INFO(fs_handle, "max write %#x", conn->max_write);
-	IOF_TRACE_INFO(fs_handle, "readahead %#x", conn->max_readahead);
+	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
+	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
+	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
-	IOF_TRACE_INFO(fs_handle, "Capability supported %#x", conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported %#x", conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
 	/* This does not work as ioctl.c assumes fi->fh is a file handle */
 	conn->want &= ~FUSE_CAP_IOCTL_DIR;
 
-	IOF_TRACE_INFO(fs_handle, "Capability requested %#x", conn->want);
+	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
 	dfuse_show_flags(fs_handle, conn->want);
 
-	IOF_TRACE_INFO(fs_handle, "max_background %d", conn->max_background);
-	IOF_TRACE_INFO(fs_handle,
+	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
+	DFUSE_TRA_INFO(fs_handle,
 		       "congestion_threshold %d", conn->congestion_threshold);
 }
 
 static void dfuse_fuse_destroy(void *userdata)
 {
-	IOF_TRACE_INFO(userdata, "destroy callback");
-	IOF_TRACE_DOWN(userdata);
+	DFUSE_TRA_INFO(userdata, "destroy callback");
+	DFUSE_TRA_DOWN(userdata);
 	D_FREE(userdata);
 }
 
@@ -144,7 +144,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t flags)
 	fuse_ops->fsync = dfuse_cb_fsync;
 	fuse_ops->write = dfuse_cb_write;
 
-	if (flags & IOF_FUSE_WRITE_BUF)
+	if (flags & DFUSE_FUSE_WRITE_BUF)
 		fuse_ops->write_buf = dfuse_cb_write_buf;
 
 	return fuse_ops;

@@ -46,8 +46,8 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 	struct dfuse_two_string_in	*in;
 	int rc;
 
-	IOF_TRACE_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-	IOC_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
+	DFUSE_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -70,9 +70,9 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 		D_GOTO(err, 0);
 	return;
 err:
-	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc) {
-		IOF_TRACE_DOWN(&desc->request);
+		DFUSE_TRA_DOWN(&desc->request);
 		dfuse_pool_release(fs_handle->symlink_pool, desc);
 	}
 }

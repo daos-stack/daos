@@ -20,15 +20,15 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __IOF_IOCTL_H__
-#define __IOF_IOCTL_H__
+#ifndef __DFUSE_IOCTL_H__
+#define __DFUSE_IOCTL_H__
 
 #include <asm/ioctl.h>
 #include "dfuse_gah.h"
 
-#define IOF_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
-#define IOF_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
-#define IOF_IOCTL_VERSION 4       /* Version of ioctl protocol */
+#define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
+#define DFUSE_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
+#define DFUSE_IOCTL_VERSION 4       /* Version of ioctl protocol */
 
 struct dfuse_gah_info {
 	int version;
@@ -38,7 +38,7 @@ struct dfuse_gah_info {
 };
 
 /* Defines the IOCTL command to get the gah for a IOF file */
-#define IOF_IOCTL_GAH ((int)_IOR(IOF_IOCTL_TYPE, IOF_IOCTL_GAH_NUMBER, \
+#define DFUSE_IOCTL_GAH ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_GAH_NUMBER, \
 				 struct dfuse_gah_info))
 
 #endif

@@ -45,7 +45,7 @@ readdir_cb(const struct crt_cb_info *cb_info)
 		 * is any error then we have to disable the local dir_handle
 		 *
 		 */
-		IOF_LOG_ERROR("Error from RPC %d", cb_info->cci_rc);
+		DFUSE_LOG_ERROR("Error from RPC %d", cb_info->cci_rc);
 		if (cb_info->cci_rc == -DER_EVICTED)
 			reply->err = EHOSTDOWN;
 		else
@@ -84,7 +84,7 @@ readdir_get_data(struct dfuse_dir_handle *dir_handle, off_t offset)
 	rc = crt_req_create(fs_handle->proj.crt_ctx, &dir_handle->ep,
 			    FS_TO_OP(fs_handle, readdir), &rpc);
 	if (rc || !rpc) {
-		IOF_TRACE_ERROR(dir_handle,
+		DFUSE_TRA_ERROR(dir_handle,
 				"Could not create request, rc = %d", rc);
 		return EIO;
 	}
@@ -107,7 +107,7 @@ readdir_get_data(struct dfuse_dir_handle *dir_handle, off_t offset)
 		rc = crt_bulk_create(fs_handle->proj.crt_ctx, &sgl, CRT_BULK_RW,
 				     &in->bulk);
 		if (rc) {
-			IOF_TRACE_ERROR(dir_handle,
+			DFUSE_TRA_ERROR(dir_handle,
 					"Failed to make local bulk handle %d",
 					rc);
 			D_FREE(iov.iov_buf);
@@ -120,7 +120,7 @@ readdir_get_data(struct dfuse_dir_handle *dir_handle, off_t offset)
 	dfuse_tracker_init(&reply.tracker, 1);
 	rc = crt_req_send(rpc, readdir_cb, &reply);
 	if (rc) {
-		IOF_TRACE_ERROR(dir_handle,
+		DFUSE_TRA_ERROR(dir_handle,
 				"Could not send rpc, rc = %d", rc);
 		return EIO;
 	}
@@ -131,12 +131,12 @@ readdir_get_data(struct dfuse_dir_handle *dir_handle, off_t offset)
 		D_GOTO(out, ret = reply.err);
 
 	if (reply.out->err != 0) {
-		IOF_TRACE_ERROR(dir_handle,
+		DFUSE_TRA_ERROR(dir_handle,
 				"Error from target %d", reply.out->err);
 		D_GOTO(out, ret = EIO);
 	}
 
-	IOF_TRACE_DEBUG(dir_handle,
+	DFUSE_TRA_DEBUG(dir_handle,
 			"Reply received iov: %d bulk: %d", reply.out->iov_count,
 			reply.out->bulk_count);
 
@@ -145,7 +145,7 @@ readdir_get_data(struct dfuse_dir_handle *dir_handle, off_t offset)
 
 		if (reply.out->replies.iov_len != reply.out->iov_count *
 			sizeof(struct dfuse_readdir_reply)) {
-			IOF_TRACE_ERROR(dir_handle, "Incorrect iov reply");
+			DFUSE_TRA_ERROR(dir_handle, "Incorrect iov reply");
 			D_GOTO(out, ret = EIO);
 		}
 		dir_handle->replies = reply.out->replies.iov_buf;
@@ -229,7 +229,7 @@ readdir_next_reply(struct dfuse_dir_handle *dir_handle, off_t offset,
 
 	/* Check for available data and fetch more if none */
 	if (dir_handle->reply_count == 0) {
-		IOF_TRACE_DEBUG(dir_handle, "Fetching more data");
+		DFUSE_TRA_DEBUG(dir_handle, "Fetching more data");
 		if (dir_handle->rpc) {
 			crt_req_decref(dir_handle->rpc);
 			dir_handle->rpc = NULL;
@@ -241,7 +241,7 @@ readdir_next_reply(struct dfuse_dir_handle *dir_handle, off_t offset,
 	}
 
 	if (dir_handle->reply_count == 0) {
-		IOF_TRACE_DEBUG(dir_handle, "No more replies");
+		DFUSE_TRA_DEBUG(dir_handle, "No more replies");
 		if (dir_handle->rpc) {
 			crt_req_decref(dir_handle->rpc);
 			dir_handle->rpc = NULL;
@@ -251,7 +251,7 @@ readdir_next_reply(struct dfuse_dir_handle *dir_handle, off_t offset,
 
 	*reply = dir_handle->replies;
 
-	IOF_TRACE_INFO(dir_handle,
+	DFUSE_TRA_INFO(dir_handle,
 		       "Next offset %zi count %d %s",
 		       (*reply)->nextoff,
 		       dir_handle->reply_count,
@@ -271,9 +271,9 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	int ret = EIO;
 	int rc;
 
-	IOF_TRACE_UP(req, dir_handle, "readdir_fuse_req");
+	DFUSE_TRA_UP(req, dir_handle, "readdir_fuse_req");
 
-	IOF_TRACE_INFO(req, GAH_PRINT_STR " offset %zi",
+	DFUSE_TRA_INFO(req, GAH_PRINT_STR " offset %zi",
 		       GAH_PRINT_VAL(dir_handle->gah), offset);
 
 	D_ALLOC(buf, size);
@@ -287,7 +287,7 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 			(dir_handle, next_offset,
 					 &dir_reply);
 
-		IOF_TRACE_DEBUG(dir_handle, "err %d buf %p", rc, dir_reply);
+		DFUSE_TRA_DEBUG(dir_handle, "err %d buf %p", rc, dir_reply);
 
 		if (rc != 0)
 			D_GOTO(out_err, ret = rc);
@@ -299,12 +299,12 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		 * In this case there is no next entry to consume.
 		 */
 		if (!dir_reply) {
-			IOF_TRACE_INFO(dir_handle,
+			DFUSE_TRA_INFO(dir_handle,
 				       "No more directory contents");
 			goto out;
 		}
 
-		IOF_TRACE_DEBUG(dir_handle, "reply rc %d stat_rc %d",
+		DFUSE_TRA_DEBUG(dir_handle, "reply rc %d stat_rc %d",
 				dir_reply->read_rc,
 				dir_reply->stat_rc);
 
@@ -327,7 +327,7 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		 */
 
 		if (dir_reply->stat_rc != 0) {
-			IOF_TRACE_ERROR(req, "Stat rc is non-zero");
+			DFUSE_TRA_ERROR(req, "Stat rc is non-zero");
 			D_GOTO(out_err, ret = EIO);
 		}
 
@@ -336,7 +336,7 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 					&dir_reply->stat,
 					dir_reply->nextoff);
 
-		IOF_TRACE_DEBUG(dir_handle,
+		DFUSE_TRA_DEBUG(dir_handle,
 				"New file '%s' %d next off %zi size %d (%lu)",
 				dir_reply->d_name, ret, dir_reply->nextoff,
 				ret,
@@ -348,7 +348,7 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		 */
 
 		if (ret > size - b_offset) {
-			IOF_TRACE_DEBUG(req,
+			DFUSE_TRA_DEBUG(req,
 					"Output buffer is full");
 			goto out;
 		}
@@ -360,19 +360,19 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	} while (1);
 
 out:
-	IOF_TRACE_DEBUG(req, "Returning %zi bytes", b_offset);
+	DFUSE_TRA_DEBUG(req, "Returning %zi bytes", b_offset);
 
 	rc = fuse_reply_buf(req, buf, b_offset);
 	if (rc != 0)
-		IOF_TRACE_ERROR(req, "fuse_reply_error returned %d", rc);
+		DFUSE_TRA_ERROR(req, "fuse_reply_error returned %d", rc);
 
-	IOF_TRACE_DOWN(req);
+	DFUSE_TRA_DOWN(req);
 
 	D_FREE(buf);
 	return;
 
 out_err:
-	IOF_FUSE_REPLY_ERR(req, ret);
+	DFUSE_FUSE_REPLY_ERR(req, ret);
 
 	D_FREE(buf);
 }

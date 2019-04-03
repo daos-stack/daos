@@ -44,11 +44,11 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 		D_GOTO(out_no_request, ret = ENOMEM);
 	}
 
-	IOC_REQUEST_INIT(request, fs_handle);
-	IOC_REQUEST_RESET(request);
+	DFUSE_REQUEST_INIT(request, fs_handle);
+	DFUSE_REQUEST_RESET(request);
 
-	IOF_TRACE_UP(request, fs_handle, dir ? "rmdir" : "unlink");
-	IOF_TRACE_INFO(request, "parent %lu name '%s'", parent, name);
+	DFUSE_TRA_UP(request, fs_handle, dir ? "rmdir" : "unlink");
+	DFUSE_TRA_INFO(request, "parent %lu name '%s'", parent, name);
 
 	request->req = req;
 	request->ir_api = &api;
@@ -56,7 +56,7 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 	rc = crt_req_create(fs_handle->proj.crt_ctx, NULL,
 			    FS_TO_OP(fs_handle, unlink), &request->rpc);
 	if (rc || !request->rpc) {
-		IOF_LOG_ERROR("Could not create request, rc = %d", rc);
+		DFUSE_LOG_ERROR("Could not create request, rc = %d", rc);
 		D_GOTO(out_err, ret = EIO);
 	}
 
@@ -83,14 +83,14 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 	return;
 
 out_no_request:
-	IOC_REPLY_ERR_RAW(fs_handle, req, ret);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
 	return;
 
 out_decref:
 	crt_req_decref(request->rpc);
 
 out_err:
-	IOC_REPLY_ERR(request, ret);
+	DFUSE_REPLY_ERR(request, ret);
 	D_FREE(request);
 }
 

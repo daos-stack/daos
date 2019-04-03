@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __IOF_GAH_H__
-#define __IOF_GAH_H__
+#ifndef __DFUSE_GAH_H__
+#define __DFUSE_GAH_H__
 
 /**
  * Global Access Handle (GAH).

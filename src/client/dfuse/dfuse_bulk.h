@@ -20,8 +20,8 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __IOF_BULK_H__
-#define __IOF_BULK_H__
+#ifndef __DFUSE_BULK_H__
+#define __DFUSE_BULK_H__
 
 #include <stdbool.h>
 #include <cart/api.h>
@@ -32,14 +32,14 @@ struct dfuse_local_bulk {
 	size_t		 len;
 };
 
-bool dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
-		    bool read_only);
+bool dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset,
+		      size_t len, bool read_only);
 void dfuse_bulk_free(void *ptr, off_t bulk_offset);
 
-#define IOF_BULK_ALLOC(ctx, ptr, field, len, read_only)			\
-	dfuse_bulk_alloc((ctx), (ptr), offsetof(__typeof__(*ptr), field),	\
+#define DFUSE_BULK_ALLOC(ctx, ptr, field, len, read_only)		\
+	dfuse_bulk_alloc((ctx), (ptr), offsetof(__typeof__(*ptr), field), \
 		       (len), (read_only))
-#define IOF_BULK_FREE(ptr, field)	\
+#define DFUSE_BULK_FREE(ptr, field)	\
 	dfuse_bulk_free((ptr), offsetof(__typeof__(*ptr), field))
 
-#endif /* __IOF_BULK_H__ */
+#endif /* __DFUSE_BULK_H__ */

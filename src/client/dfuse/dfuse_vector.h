@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __IOF_VECTOR_H__
-#define __IOF_VECTOR_H__
+#ifndef __DFUSE_VECTOR_H__
+#define __DFUSE_VECTOR_H__
 
 #if defined(__cplusplus)
 extern "C" {
@@ -143,4 +143,4 @@ int vector_remove_(vector_t *vector, unsigned int index, void **entry);
 }
 #endif /* __cplusplus */
 
-#endif /*  __IOF_VECTOR_H__ */
+#endif /*  __DFUSE_VECTOR_H__ */

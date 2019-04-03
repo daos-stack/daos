@@ -36,12 +36,12 @@ dfuse_setattr_result_fn(struct dfuse_request *request)
 {
 	struct dfuse_attr_out *out = crt_reply_get(request->rpc);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 
 	if (request->rc == 0)
-		IOC_REPLY_ATTR(request, &out->stat);
+		DFUSE_REPLY_ATTR(request, &out->stat);
 	else
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 
 	dfuse_pool_release(request->fsh->POOL_NAME, CONTAINER(request));
 	return false;
@@ -66,9 +66,9 @@ dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	if (fi)
 		handle = (void *)fi->fh;
 
-	IOF_TRACE_INFO(fs_handle, "inode %lu handle %p", ino, handle);
+	DFUSE_TRA_INFO(fs_handle, "inode %lu handle %p", ino, handle);
 
-	IOC_REQ_INIT_REQ(desc, fs_handle, setattr_api, req, rc);
+	DFUSE_REQ_INIT_REQ(desc, fs_handle, setattr_api, req, rc);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -89,7 +89,7 @@ dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		D_GOTO(err, rc);
 	return;
 err:
-	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc)
 		dfuse_pool_release(fs_handle->POOL_NAME, desc);
 }

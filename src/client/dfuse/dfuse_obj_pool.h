@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __IOF_OBJ_POOL_H__
-#define __IOF_OBJ_POOL_H__
+#ifndef __DFUSE_OBJ_POOL_H__
+#define __DFUSE_OBJ_POOL_H__
 
 #if defined(__cplusplus)
 extern "C" {
@@ -69,4 +69,4 @@ obj_pool_get_(obj_pool_t *pool, void **item, size_t size);
 }
 #endif /* __cplusplus */
 
-#endif /*  __IOF_OBJ_POOL_H__ */
+#endif /*  __DFUSE_OBJ_POOL_H__ */

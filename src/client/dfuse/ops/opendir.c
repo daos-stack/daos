@@ -38,14 +38,14 @@ opendir_ll_cb(struct dfuse_request *request)
 	struct dfuse_opendir_out	*out = crt_reply_get(request->rpc);
 	struct fuse_file_info	fi = {0};
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc == 0) {
 		dh->gah = out->gah;
 		dh->ep = dh->open_req.fsh->proj.grp->psr_ep;
 		fi.fh = (uint64_t)dh;
-		IOC_REPLY_OPEN(request, fi);
+		DFUSE_REPLY_OPEN(request, fi);
 	} else {
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 		dfuse_pool_release(dh->open_req.fsh->dh_pool, dh);
 	}
 	return false;
@@ -64,8 +64,8 @@ dfuse_cb_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct TYPE_NAME		*dh = NULL;
 	int rc;
 
-	IOF_TRACE_INFO(fs_handle, "ino %lu", ino);
-	IOC_REQ_INIT_REQ(dh, fs_handle, api, req, rc);
+	DFUSE_TRA_INFO(fs_handle, "ino %lu", ino);
+	DFUSE_REQ_INIT_REQ(dh, fs_handle, api, req, rc);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -81,5 +81,5 @@ err:
 	if (dh)
 		dfuse_pool_release(fs_handle->dh_pool, dh);
 
-	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

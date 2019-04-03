@@ -21,14 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-/**
- * \file
- *
- * CNSS/IOF client headers.
- */
-
-#ifndef __IOF_H__
-#define __IOF_H__
+#ifndef __DFUSE_H__
+#define __DFUSE_H__
 
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
@@ -64,7 +58,7 @@ struct dfuse_ctx {
 };
 
 /**
- * IOF Group struct.
+ * DFUSE Group struct.
  */
 
 struct dfuse_group_info {
@@ -73,7 +67,7 @@ struct dfuse_group_info {
 };
 
 /**
- * Global state for IOF client.
+ * Global state for DFUSE client.
  *
  */
 struct dfuse_state {
@@ -136,20 +130,22 @@ struct dfuse_projection_info {
 /*
  * Returns the correct RPC Type ID from the protocol registry.
  */
-#define FS_TO_OP(HANDLE, FN) (CRT_PROTO_OPC((HANDLE)->dfuse_state->proto->cpf_base, \
-					    (HANDLE)->dfuse_state->proto->cpf_ver, \
-					    DEF_RPC_TYPE(FN)))
+#define FS_TO_OP(HANDLE, FN) \
+	(CRT_PROTO_OPC((HANDLE)->dfuse_state->proto->cpf_base,		\
+		(HANDLE)->dfuse_state->proto->cpf_ver,			\
+		DEF_RPC_TYPE(FN)))
 
-#define FS_TO_IOOP(HANDLE, IDX) (CRT_PROTO_OPC((HANDLE)->proj.io_proto->cpf_base, \
-					       (HANDLE)->proj.io_proto->cpf_ver, \
-					       IDX))
+#define FS_TO_IOOP(HANDLE, IDX) \
+	(CRT_PROTO_OPC((HANDLE)->proj.io_proto->cpf_base,		\
+		(HANDLE)->proj.io_proto->cpf_ver,			\
+		IDX))
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
 		if ((FLAGS) & (MODE))				\
-			IOF_TRACE_DEBUG(HANDLE, #MODE);		\
+			DFUSE_TRA_DEBUG(HANDLE, #MODE);	\
 		FLAGS &= ~MODE;					\
 	} while (0)
 
@@ -182,7 +178,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
 		if (_flag)						\
-			IOF_TRACE_ERROR(HANDLE, "Flags 0%o", _flag);	\
+			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
 	} while (0)
 
 /** Dump the file mode to the logfile. */
@@ -193,164 +189,165 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
 		LOG_MODE((HANDLE), _flag, S_ISVTX);			\
 		if (_flag)						\
-			IOF_TRACE_ERROR(HANDLE, "Mode 0%o", _flag);	\
+			DFUSE_TRA_ERROR(HANDLE, "Mode 0%o", _flag);	\
 	} while (0)
 
-#define IOF_UNSUPPORTED_CREATE_FLAGS (O_ASYNC | O_CLOEXEC | O_DIRECTORY | \
+#define DFUSE_UNSUPPORTED_CREATE_FLAGS (O_ASYNC | O_CLOEXEC | O_DIRECTORY | \
 					O_NOCTTY | O_PATH)
 
-#define IOF_UNSUPPORTED_OPEN_FLAGS (IOF_UNSUPPORTED_CREATE_FLAGS | O_CREAT | \
-					O_EXCL)
+#define DFUSE_UNSUPPORTED_OPEN_FLAGS (DFUSE_UNSUPPORTED_CREATE_FLAGS | \
+					O_CREAT | O_EXCL)
 
-#define IOC_REPLY_ERR_RAW(handle, req, status)				\
+#define DFUSE_REPLY_ERR_RAW(handle, req, status)			\
 	do {								\
 		int __err = status;					\
 		int __rc;						\
 		if (__err <= 0) {					\
-			IOF_TRACE_ERROR(handle,				\
+			DFUSE_TRA_ERROR(handle,				\
 					"Invalid call to fuse_reply_err: %d", \
 					__err);				\
 			__err = EIO;					\
 		}							\
 		if (__err == ENOTSUP || __err == EIO)			\
-			IOF_TRACE_WARNING(handle, "Returning %d '%s'",	\
+			DFUSE_TRA_WARNING(handle, "Returning %d '%s'", \
 					  __err, strerror(__err));	\
 		else							\
-			IOF_TRACE_DEBUG(handle, "Returning %d '%s'",	\
+			DFUSE_TRA_DEBUG(handle, "Returning %d '%s'",	\
 					__err, strerror(__err));	\
 		__rc = fuse_reply_err(req, __err);			\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(handle,				\
+			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define IOF_FUSE_REPLY_ERR(req, status)			\
+#define DFUSE_FUSE_REPLY_ERR(req, status)		\
 	do {						\
-		IOC_REPLY_ERR_RAW(req, req, status);	\
-		IOF_TRACE_DOWN(req);			\
+		DFUSE_REPLY_ERR_RAW(req, req, status);	\
+		DFUSE_TRA_DOWN(req);			\
 	} while (0)
 
-#define IOC_REPLY_ERR(dfuse_req, status)				\
+#define DFUSE_REPLY_ERR(dfuse_req, status)				\
 	do {								\
-		IOC_REPLY_ERR_RAW(dfuse_req, (dfuse_req)->req, status);	\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_REPLY_ERR_RAW(dfuse_req, (dfuse_req)->req, status); \
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOF_FUSE_REPLY_ZERO(req)					\
+#define DFUSE_FUSE_REPLY_ZERO(req)					\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(req, "Returning 0");			\
+		DFUSE_TRA_DEBUG(req, "Returning 0");			\
 		__rc = fuse_reply_err(req, 0);				\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(req,				\
+			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(req);					\
+		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
-#define IOC_REPLY_ZERO(dfuse_req)					\
+#define DFUSE_REPLY_ZERO(dfuse_req)					\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning 0");		\
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning 0");		\
 		__rc = fuse_reply_err((dfuse_req)->req, 0);		\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_ATTR(dfuse_req, attr)					\
+#define DFUSE_REPLY_ATTR(dfuse_req, attr)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning attr");		\
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning attr");		\
 		__rc = fuse_reply_attr((dfuse_req)->req, attr, 0);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_READLINK(dfuse_req, path)				\
+#define DFUSE_REPLY_READLINK(dfuse_req, path)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning path '%s'", path); \
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning path '%s'", path); \
 		__rc = fuse_reply_readlink((dfuse_req)->req, path);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_WRITE(handle, req, bytes)				\
+#define DFUSE_REPLY_WRITE(handle, req, bytes)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(handle, "Returning write(%zi)", bytes);	\
+		DFUSE_TRA_DEBUG(handle, "Returning write(%zi)", bytes); \
 		__rc = fuse_reply_write(req, bytes);			\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(handle,				\
+			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define IOC_REPLY_OPEN(dfuse_req, fi)					\
+#define DFUSE_REPLY_OPEN(dfuse_req, fi)					\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning open");		\
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning open");		\
 		__rc = fuse_reply_open((dfuse_req)->req, &fi);		\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_CREATE(dfuse_req, entry, fi)				\
+#define DFUSE_REPLY_CREATE(dfuse_req, entry, fi)			\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning create");		\
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning create");	\
 		__rc = fuse_reply_create((dfuse_req)->req, &entry, &fi); \
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_create returned %d:%s",\
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_ENTRY(dfuse_req, entry)				\
+#define DFUSE_REPLY_ENTRY(dfuse_req, entry)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning entry");		\
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning entry");	\
 		__rc = fuse_reply_entry((dfuse_req)->req, &entry);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_entry returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOF_FUSE_REPLY_STATFS(dfuse_req, stat)				\
+#define DFUSE_FUSE_REPLY_STATFS(dfuse_req, stat)			\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(dfuse_req, "Returning statfs");		\
+		DFUSE_TRA_DEBUG(dfuse_req, "Returning statfs");	\
 		__rc = fuse_reply_statfs((dfuse_req)->req, stat);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_statfs returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_IOCTL(handle, req, gah_info)				\
+#define DFUSE_REPLY_IOCTL(handle, req, gah_info)			\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(handle, "Returning ioctl");		\
-		__rc = fuse_reply_ioctl(req, 0, &(gah_info), sizeof(gah_info)); \
+		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
+		__rc = fuse_reply_ioctl(req, 0, &(gah_info),		\
+					sizeof(gah_info));		\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(handle,				\
+			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_ioctl returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -358,7 +355,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 struct dfuse_request;
 
 /**
- * IOF Request API.
+ * DFUSE Request API.
  *
  * Set of callbacks invoked during the lifetime of a request.
  */
@@ -397,7 +394,7 @@ enum dfuse_request_htype {
 };
 
 /**
- * IOF Request descriptor.
+ * DFUSE Request descriptor.
  *
  */
 struct dfuse_request {
@@ -405,7 +402,7 @@ struct dfuse_request {
 	struct dfuse_projection_info	*fsh;
 	/** Pointer to the RPC for this request. */
 	crt_rpc_t			*rpc;
-	/** Fuse request for this IOF request, may be 0 */
+	/** Fuse request for this DFUSE request, may be 0 */
 	fuse_req_t			req;
 	/** Callbacks to use for this request */
 	const struct dfuse_request_api	*ir_api;
@@ -443,7 +440,7 @@ struct dfuse_request {
 };
 
 /** Initialise a request.  To be called once per request */
-#define IOC_REQUEST_INIT(REQUEST, FSH)			\
+#define DFUSE_REQUEST_INIT(REQUEST, FSH)		\
 	do {						\
 		(REQUEST)->fsh = FSH;			\
 		(REQUEST)->rpc = NULL;			\
@@ -452,15 +449,15 @@ struct dfuse_request {
 	} while (0)
 
 /** Reset a request for re-use.  To be called before each use */
-#define IOC_REQUEST_RESET(REQUEST)					\
-	do {								\
-		D_ASSERT((REQUEST)->ir_rs == RS_INIT ||			\
-			(REQUEST)->ir_rs == RS_RESET ||			\
-			(REQUEST)->ir_rs == RS_LIVE);			\
-		(REQUEST)->ir_rs = RS_RESET;				\
-		(REQUEST)->ir_ht = RHS_NONE;				\
-		(REQUEST)->ir_inode = NULL;				\
-		(REQUEST)->rc = 0;					\
+#define DFUSE_REQUEST_RESET(REQUEST)				\
+	do {							\
+		D_ASSERT((REQUEST)->ir_rs == RS_INIT ||		\
+			(REQUEST)->ir_rs == RS_RESET ||		\
+			(REQUEST)->ir_rs == RS_LIVE);		\
+		(REQUEST)->ir_rs = RS_RESET;			\
+		(REQUEST)->ir_ht = RHS_NONE;			\
+		(REQUEST)->ir_inode = NULL;			\
+		(REQUEST)->rc = 0;				\
 	} while (0)
 
 /**
@@ -471,7 +468,7 @@ struct dfuse_request {
  * the client; do nothing. A non-zero error code in the RPC response
  * denotes a server error, in which case, set the status error code to EIO.
  */
-#define IOC_REQUEST_RESOLVE(REQUEST, OUT)				\
+#define DFUSE_REQUEST_RESOLVE(REQUEST, OUT)				\
 	do {								\
 		if (((OUT) != NULL) && (!(REQUEST)->rc)) {		\
 			(REQUEST)->rc = (OUT)->rc;			\
@@ -480,7 +477,7 @@ struct dfuse_request {
 					(REQUEST)->rc = ENOMEM;		\
 				else					\
 					(REQUEST)->rc = EIO;		\
-				IOF_TRACE_INFO((REQUEST),		\
+				DFUSE_TRA_INFO((REQUEST),		\
 					"Returning '%s' from -%s",	\
 					strerror((REQUEST)->rc),	\
 					d_errstr((OUT)->err));		\

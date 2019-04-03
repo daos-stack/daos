@@ -31,10 +31,10 @@ dfuse_open_ll_cb(struct dfuse_request *request)
 	struct dfuse_open_out	*out = crt_reply_get(request->rpc);
 	struct fuse_file_info	fi = {0};
 
-	IOF_TRACE_DEBUG(handle, "cci_rc %d rc %d err %d",
+	DFUSE_TRA_DEBUG(handle, "cci_rc %d rc %d err %d",
 			request->rc, out->rc, out->err);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc != 0) {
 		D_GOTO(out_err, 0);
 	}
@@ -47,12 +47,12 @@ dfuse_open_ll_cb(struct dfuse_request *request)
 	handle->common.gah = out->gah;
 	handle->common.ep = request->rpc->cr_ep;
 
-	IOC_REPLY_OPEN(&handle->open_req, fi);
+	DFUSE_REPLY_OPEN(&handle->open_req, fi);
 
 	return false;
 
 out_err:
-	IOC_REPLY_ERR(request, request->rc);
+	DFUSE_REPLY_ERR(request, request->rc);
 	dfuse_pool_release(request->fsh->fh_pool, handle);
 	return false;
 }
@@ -76,15 +76,15 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		IOF_TRACE_INFO(fs_handle, "O_LARGEFILE required 0%o",
+		DFUSE_TRA_INFO(fs_handle, "O_LARGEFILE required 0%o",
 			       fi->flags);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
 	/* Check for flags that do not make sense in this context.
 	 */
-	if (fi->flags & IOF_UNSUPPORTED_OPEN_FLAGS) {
-		IOF_TRACE_INFO(fs_handle, "unsupported flag requested 0%o",
+	if (fi->flags & DFUSE_UNSUPPORTED_OPEN_FLAGS) {
+		DFUSE_TRA_INFO(fs_handle, "unsupported flag requested 0%o",
 			       fi->flags);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
@@ -93,8 +93,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (!handle) {
 		D_GOTO(out_err, rc = ENOMEM);
 	}
-	IOF_TRACE_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
-	IOF_TRACE_UP(&handle->open_req, handle, "open_req");
+	DFUSE_TRA_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
+	DFUSE_TRA_UP(&handle->open_req, handle, "open_req");
 
 	handle->common.projection = &fs_handle->proj;
 	handle->open_req.req = req;
@@ -106,7 +106,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	handle->open_req.ir_inode_num = ino;
 
 	in->flags = fi->flags;
-	IOF_TRACE_INFO(handle, "flags 0%o", fi->flags);
+	DFUSE_TRA_INFO(handle, "flags 0%o", fi->flags);
 
 	LOG_FLAGS(handle, fi->flags);
 
@@ -119,7 +119,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	return;
 out_err:
-	IOC_REPLY_ERR_RAW(handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(handle, req, rc);
 
 	if (handle)
 		dfuse_pool_release(fs_handle->fh_pool, handle);

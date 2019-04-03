@@ -35,15 +35,15 @@ handle_gah_ioctl(int cmd, struct dfuse_file_handle *handle,
 {
 	struct dfuse_projection_info *fs_handle = handle->open_req.fsh;
 
-	/* IOF_IOCTL_GAH has size of gah embedded.  FUSE should have
+	/* DFUSE_IOCTL_GAH has size of gah embedded.  FUSE should have
 	 * allocated that many bytes in data
 	 */
-	IOF_TRACE_INFO(handle, "Requested " GAH_PRINT_STR " fs_id=%d,"
+	DFUSE_TRA_INFO(handle, "Requested " GAH_PRINT_STR " fs_id=%d,"
 		       " cli_fs_id=%d",
 		       GAH_PRINT_VAL(handle->common.gah),
 		       fs_handle->fs_id,
 		       fs_handle->proj.cli_fs_id);
-	gah_info->version = IOF_IOCTL_VERSION;
+	gah_info->version = DFUSE_IOCTL_VERSION;
 	D_MUTEX_LOCK(&fs_handle->gah_lock);
 	gah_info->gah = handle->common.gah;
 	D_MUTEX_UNLOCK(&fs_handle->gah_lock);
@@ -60,24 +60,24 @@ dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 	struct dfuse_gah_info gah_info = {0};
 	int ret = EIO;
 
-	IOF_TRACE_INFO(handle, "ioctl cmd=%#x " GAH_PRINT_STR, cmd,
+	DFUSE_TRA_INFO(handle, "ioctl cmd=%#x " GAH_PRINT_STR, cmd,
 		       GAH_PRINT_VAL(handle->common.gah));
 
 	if (cmd == TCGETS) {
-		IOF_TRACE_DEBUG(handle, "Ignoring TCGETS ioctl");
+		DFUSE_TRA_DEBUG(handle, "Ignoring TCGETS ioctl");
 		D_GOTO(out_err, ret = ENOTTY);
 	}
 
-	if (cmd != IOF_IOCTL_GAH) {
-		IOF_TRACE_INFO(handle, "Real ioctl support is not implemented");
+	if (cmd != DFUSE_IOCTL_GAH) {
+		DFUSE_TRA_INFO(handle, "Real ioctl support is not implemented");
 		D_GOTO(out_err, ret = ENOTSUP);
 	}
 
 	handle_gah_ioctl(cmd, handle, &gah_info);
 
-	IOC_REPLY_IOCTL(handle, req, gah_info);
+	DFUSE_REPLY_IOCTL(handle, req, gah_info);
 	return;
 
 out_err:
-	IOC_REPLY_ERR_RAW(handle, req, ret);
+	DFUSE_REPLY_ERR_RAW(handle, req, ret);
 }

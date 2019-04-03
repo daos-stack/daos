@@ -29,7 +29,7 @@
 
 bool
 dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
-	       bool read_only)
+		 bool read_only)
 {
 	struct dfuse_local_bulk *bulk = (ptr + bulk_offset);
 	d_sg_list_t sgl = {0};
@@ -41,7 +41,7 @@ dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 			 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (bulk->buf == MAP_FAILED) {
 		bulk->buf = NULL;
-		IOF_TRACE_ERROR(ptr, "mmap failed: %s", strerror(errno));
+		DFUSE_TRA_ERROR(ptr, "mmap failed: %s", strerror(errno));
 		return false;
 	}
 
@@ -58,7 +58,7 @@ dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 	if (rc) {
 		rc = munmap(bulk->buf, len);
 		if (rc == -1)
-			IOF_TRACE_DEBUG(ptr, "munmap failed: %p: %s", bulk->buf,
+			DFUSE_TRA_DEBUG(ptr, "munmap failed: %p: %s", bulk->buf,
 					strerror(errno));
 		bulk->buf = NULL;
 		bulk->handle = NULL;
@@ -66,7 +66,7 @@ dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 	}
 	bulk->len = len;
 
-	IOF_TRACE_DEBUG(ptr, "mapped bulk range: %p-%p", bulk->buf,
+	DFUSE_TRA_DEBUG(ptr, "mapped bulk range: %p-%p", bulk->buf,
 			bulk->buf + len - 1);
 
 	return true;
@@ -87,19 +87,19 @@ bulk_free_helper(void *ptr, struct dfuse_local_bulk *bulk)
 		 * crashes due to an access to this memory region, then it
 		 * indicates a bug in the stack.
 		 */
-		IOF_TRACE_DEBUG(ptr, "Bulk free failed, remapping: %p, rc = %d",
+		DFUSE_TRA_DEBUG(ptr, "Bulk free failed, remapping: %p, rc = %d",
 				bulk->buf, rc);
 		addr = mmap(bulk->buf, bulk->len, PROT_NONE,
 			    MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (addr == MAP_FAILED)
-			IOF_TRACE_ERROR(ptr, "remap failed: %p: %s", bulk->buf,
+			DFUSE_TRA_ERROR(ptr, "remap failed: %p: %s", bulk->buf,
 					strerror(errno));
 		return;
 	}
-	IOF_TRACE_DEBUG(ptr, "unmapped bulk %p", bulk->buf);
+	DFUSE_TRA_DEBUG(ptr, "unmapped bulk %p", bulk->buf);
 	rc = munmap(bulk->buf, bulk->len);
 	if (rc == -1)
-		IOF_TRACE_DEBUG(ptr, "munmap failed: %p: %s", bulk->buf,
+		DFUSE_TRA_DEBUG(ptr, "munmap failed: %p: %s", bulk->buf,
 				strerror(errno));
 }
 

@@ -20,8 +20,8 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef IOF_COMMON_H
-#define IOF_COMMON_H
+#ifndef DFUSE_COMMON_H
+#define DFUSE_COMMON_H
 
 #include "dfuse_log.h"
 
@@ -31,9 +31,9 @@
 
 #include "dfuse_gah.h"
 
-#define IOF_CNSS_MT			0x080UL
-#define IOF_FUSE_READ_BUF		0x100UL
-#define IOF_FUSE_WRITE_BUF		0x200UL
+#define DFUSE_CNSS_MT		0x080UL
+#define DFUSE_FUSE_READ_BUF	0x100UL
+#define DFUSE_FUSE_WRITE_BUF	0x200UL
 
 /* The name of a filesystem entry
  *
@@ -179,9 +179,9 @@ struct dfuse_setattr_in {
 
 extern struct crt_req_format QUERY_RPC_FMT;
 
-#define DEF_RPC_TYPE(TYPE) IOF_OPI_##TYPE
+#define DEF_RPC_TYPE(TYPE) DFUSE_OPI_##TYPE
 
-#define IOF_RPCS_LIST					\
+#define DFUSE_RPCS_LIST					\
 	X(opendir,	gah_in,		gah_pair)	\
 	X(readdir,	readdir_in,	readdir_out)	\
 	X(closedir,	gah_in,		NULL)		\
@@ -204,62 +204,62 @@ extern struct crt_req_format QUERY_RPC_FMT;
 #define X(a, b, c) DEF_RPC_TYPE(a),
 
 enum {
-	IOF_RPCS_LIST
+	DFUSE_RPCS_LIST
 };
 
 #undef X
 
-#define IOF_STRUCT_XTVEC		\
+#define DFUSE_STRUCT_XTVEC		\
 	((uint64_t)(xt_off) CRT_VAR)	\
 	((uint64_t)(xt_len) CRT_VAR)
 
-CRT_GEN_STRUCT(dfuse_xtvec, IOF_STRUCT_XTVEC);
+CRT_GEN_STRUCT(dfuse_xtvec, DFUSE_STRUCT_XTVEC);
 
-#define IOF_RPC_READX_IN					\
+#define DFUSE_RPC_READX_IN				\
 	((struct ios_gah)(gah)		CRT_VAR)	\
-	((struct dfuse_xtvec)(xtvec)		CRT_VAR)	\
-	((uint64_t)(xtvec_len)	CRT_VAR)	\
-	((uint64_t)(bulk_len)	CRT_VAR)	\
+	((struct dfuse_xtvec)(xtvec)	CRT_VAR)	\
+	((uint64_t)(xtvec_len)		CRT_VAR)	\
+	((uint64_t)(bulk_len)		CRT_VAR)	\
 	((crt_bulk_t)(xtvec_bulk)	CRT_VAR)	\
 	((crt_bulk_t)(data_bulk)	CRT_VAR)
 
-#define IOF_RPC_READX_OUT			\
+#define DFUSE_RPC_READX_OUT			\
 	((d_iov_t)(data) CRT_VAR)		\
 	((uint64_t)(bulk_len) CRT_VAR)		\
 	((uint32_t)(iov_len) CRT_VAR)		\
 	((int)(rc) CRT_VAR)			\
 	((int)(err) CRT_VAR)
 
-CRT_RPC_DECLARE(dfuse_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT)
+CRT_RPC_DECLARE(dfuse_readx, DFUSE_RPC_READX_IN, DFUSE_RPC_READX_OUT)
 
-#define IOF_RPC_WRITEX_IN					\
+#define DFUSE_RPC_WRITEX_IN				\
 	((struct ios_gah)(gah)		CRT_VAR)	\
 	((d_iov_t)(data)		CRT_VAR)	\
-	((struct dfuse_xtvec)(xtvec)		CRT_VAR)	\
-	((uint64_t)(xtvec_len)	CRT_VAR)	\
-	((uint64_t)(bulk_len)	CRT_VAR)	\
+	((struct dfuse_xtvec)(xtvec)	CRT_VAR)	\
+	((uint64_t)(xtvec_len)		CRT_VAR)	\
+	((uint64_t)(bulk_len)		CRT_VAR)	\
 	((crt_bulk_t)(xtvec_bulk)	CRT_VAR)	\
 	((crt_bulk_t)(data_bulk)	CRT_VAR)
 
-#define IOF_RPC_WRITEX_OUT			\
+#define DFUSE_RPC_WRITEX_OUT			\
 	((uint64_t)(len)	CRT_VAR)	\
-	((int)(rc)	CRT_VAR)	\
-	((int)(err)	CRT_VAR)	\
+	((int)(rc)		CRT_VAR)	\
+	((int)(err)		CRT_VAR)	\
 	((uint64_t)(pad0)	CRT_VAR)	\
 	((uint64_t)(pad1)	CRT_VAR)
 
-CRT_RPC_DECLARE(dfuse_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT)
+CRT_RPC_DECLARE(dfuse_writex, DFUSE_RPC_WRITEX_IN, DFUSE_RPC_WRITEX_OUT)
 
 int
 dfuse_write_register(crt_rpc_cb_t handlers[]);
 
 int
 dfuse_io_register(struct crt_proto_format **proto,
-		crt_rpc_cb_t handlers[]);
+		  crt_rpc_cb_t handlers[]);
 
 int
 dfuse_client_register(crt_endpoint_t *tgt_ep,
-		    struct crt_proto_format **write,
-		    struct crt_proto_format **io);
+		      struct crt_proto_format **write,
+		      struct crt_proto_format **io);
 
 #endif

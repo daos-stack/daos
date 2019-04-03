@@ -32,17 +32,17 @@
 static void
 debug_dump(struct dfuse_pool_type *type)
 {
-	IOF_TRACE_INFO(type, "Pool type %p '%s'", type, type->reg.name);
-	IOF_TRACE_DEBUG(type, "size %d offset %d",
+	DFUSE_TRA_INFO(type, "Pool type %p '%s'", type, type->reg.name);
+	DFUSE_TRA_DEBUG(type, "size %d offset %d",
 			type->reg.size, type->reg.offset);
-	IOF_TRACE_DEBUG(type, "Count: free %d pending %d total %d",
+	DFUSE_TRA_DEBUG(type, "Count: free %d pending %d total %d",
 			type->free_count, type->pending_count, type->count);
-	IOF_TRACE_DEBUG(type, "Calls: init %d reset %d release %d",
+	DFUSE_TRA_DEBUG(type, "Calls: init %d reset %d release %d",
 			type->init_count, type->reset_count,
 			type->release_count);
-	IOF_TRACE_DEBUG(type, "OP: init %d reset %d", type->op_init,
+	DFUSE_TRA_DEBUG(type, "OP: init %d reset %d", type->op_init,
 			type->op_reset);
-	IOF_TRACE_DEBUG(type, "No restock: current %d hwm %d", type->no_restock,
+	DFUSE_TRA_DEBUG(type, "No restock: current %d hwm %d", type->no_restock,
 			type->no_restock_hwm);
 }
 
@@ -58,8 +58,8 @@ dfuse_pool_init(struct dfuse_pool *pool, void *arg)
 	if (rc != -DER_SUCCESS)
 		return rc;
 
-	IOF_TRACE_UP(pool, arg, "dfuse_pool");
-	IOF_TRACE_DEBUG(pool, "Creating a pool");
+	DFUSE_TRA_UP(pool, arg, "dfuse_pool");
+	DFUSE_TRA_DEBUG(pool, "Creating a pool");
 
 	pool->init = true;
 	pool->arg = arg;
@@ -83,28 +83,28 @@ dfuse_pool_destroy(struct dfuse_pool *pool)
 
 	in_use = dfuse_pool_reclaim(pool);
 	if (in_use)
-		IOF_TRACE_WARNING(pool, "Pool has active objects");
+		DFUSE_TRA_WARNING(pool, "Pool has active objects");
 
 	while ((type = d_list_pop_entry(&pool->list,
 					struct dfuse_pool_type,
 					type_list))) {
 		if (type->count != 0)
-			IOF_TRACE_WARNING(type,
+			DFUSE_TRA_WARNING(type,
 					  "Freeing type with active objects");
 		rc = pthread_mutex_destroy(&type->lock);
 		if (rc != 0)
-			IOF_TRACE_ERROR(type,
+			DFUSE_TRA_ERROR(type,
 					"Failed to destroy lock %d %s",
 					rc, strerror(rc));
-		IOF_TRACE_DOWN(type);
+		DFUSE_TRA_DOWN(type);
 		D_FREE(type);
 	}
 	rc = pthread_mutex_destroy(&pool->lock);
 	if (rc != 0)
-		IOF_TRACE_ERROR(pool,
+		DFUSE_TRA_ERROR(pool,
 				"Failed to destroy lock %d %s",
 				rc, strerror(rc));
-	IOF_TRACE_DOWN(pool);
+	DFUSE_TRA_DOWN(pool);
 }
 
 /* Helper function for migrating objects from pending list to free list.
@@ -125,7 +125,7 @@ restock(struct dfuse_pool_type *type, int count)
 
 	if (type->reg.max_free_desc != 0 &&
 	    type->free_count >= type->reg.max_free_desc) {
-		IOF_TRACE_DEBUG(type, "free_count %d, max_free_desc %d, "
+		DFUSE_TRA_DEBUG(type, "free_count %d, max_free_desc %d, "
 				"cannot append.",
 				type->free_count, type->reg.max_free_desc);
 		return 0;
@@ -135,7 +135,7 @@ restock(struct dfuse_pool_type *type, int count)
 		void *ptr = (void *)entry - type->reg.offset;
 		bool rcb = true;
 
-		IOF_TRACE_DEBUG(type, "Resetting %p", ptr);
+		DFUSE_TRA_DEBUG(type, "Resetting %p", ptr);
 
 		d_list_del(entry);
 		type->pending_count--;
@@ -149,7 +149,7 @@ restock(struct dfuse_pool_type *type, int count)
 			d_list_add(entry, &type->free_list);
 			type->free_count++;
 		} else {
-			IOF_TRACE_INFO(ptr, "entry %p failed reset", ptr);
+			DFUSE_TRA_INFO(ptr, "entry %p failed reset", ptr);
 			type->count--;
 			D_FREE(ptr);
 		}
@@ -179,7 +179,7 @@ dfuse_pool_reclaim(struct dfuse_pool *pool)
 	d_list_for_each_entry(type, &pool->list, type_list) {
 		d_list_t *entry, *enext;
 
-		IOF_TRACE_DEBUG(type, "Resetting type");
+		DFUSE_TRA_DEBUG(type, "Resetting type");
 
 		D_MUTEX_LOCK(&type->lock);
 
@@ -202,9 +202,9 @@ dfuse_pool_reclaim(struct dfuse_pool *pool)
 			type->free_count--;
 			type->count--;
 		}
-		IOF_TRACE_DEBUG(type, "%d in use", type->count);
+		DFUSE_TRA_DEBUG(type, "%d in use", type->count);
 		if (type->count) {
-			IOF_TRACE_INFO(type,
+			DFUSE_TRA_INFO(type,
 				       "Active descriptors (%d) of type '%s'",
 				       type->count,
 				       type->reg.name);
@@ -235,7 +235,7 @@ create(struct dfuse_pool_type *type)
 
 	if (type->reg.reset) {
 		if (!type->reg.reset(ptr)) {
-			IOF_TRACE_INFO(type, "entry %p failed reset", ptr);
+			DFUSE_TRA_INFO(type, "entry %p failed reset", ptr);
 			D_FREE(ptr);
 			return NULL;
 		}
@@ -293,7 +293,7 @@ dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
 		return NULL;
 	}
 
-	IOF_TRACE_UP(type, pool, reg->name);
+	DFUSE_TRA_UP(type, pool, reg->name);
 
 	D_INIT_LIST_HEAD(&type->free_list);
 	D_INIT_LIST_HEAD(&type->pending_list);
@@ -315,7 +315,7 @@ dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
 		 * injected fault would be ignored - failing the specific
 		 * test.
 		 */
-		IOF_TRACE_DOWN(type);
+		DFUSE_TRA_DOWN(type);
 		D_MUTEX_DESTROY(&type->lock);
 		D_FREE(type);
 		return NULL;
@@ -369,11 +369,11 @@ dfuse_pool_acquire(struct dfuse_pool_type *type)
 	D_MUTEX_UNLOCK(&type->lock);
 
 	if (ptr)
-		IOF_TRACE_DEBUG(type, "Using %p", ptr);
+		DFUSE_TRA_DEBUG(type, "Using %p", ptr);
 	else if (at_limit)
-		IOF_TRACE_INFO(type, "Descriptor limit hit");
+		DFUSE_TRA_INFO(type, "Descriptor limit hit");
 	else
-		IOF_TRACE_WARNING(type, "Failed to allocate for type");
+		DFUSE_TRA_WARNING(type, "Failed to allocate for type");
 	return ptr;
 }
 
@@ -388,7 +388,7 @@ dfuse_pool_release(struct dfuse_pool_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->reg.offset;
 
-	IOF_TRACE_DOWN(ptr);
+	DFUSE_TRA_DOWN(ptr);
 	D_MUTEX_LOCK(&type->lock);
 	type->pending_count++;
 	d_list_add_tail(entry, &type->pending_list);
@@ -409,7 +409,7 @@ dfuse_pool_release(struct dfuse_pool_type *type, void *ptr)
 void
 dfuse_pool_restock(struct dfuse_pool_type *type)
 {
-	IOF_TRACE_DEBUG(type, "Count (%d/%d/%d)", type->pending_count,
+	DFUSE_TRA_DEBUG(type, "Count (%d/%d/%d)", type->pending_count,
 			type->free_count, type->count);
 
 	D_MUTEX_LOCK(&type->lock);

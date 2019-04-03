@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __IOF_POOL_H__
-#define __IOF_POOL_H__
+#ifndef __DFUSE_POOL_H__
+#define __DFUSE_POOL_H__
 
 #include <pthread.h>
 #include <gurt/list.h>
@@ -137,4 +137,4 @@ bool
 dfuse_pool_reclaim(struct dfuse_pool *)
 	__attribute((warn_unused_result, nonnull));
 
-#endif /*  __IOF_POOL_H__ */
+#endif /*  __DFUSE_POOL_H__ */

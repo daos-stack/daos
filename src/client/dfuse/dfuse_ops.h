@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __IOC_OPS_H__
-#define __IOC_OPS_H__
+#ifndef __DFUSE_OPS_H__
+#define __DFUSE_OPS_H__
 
 #define STR_H(s) #s
 #define TO_STR(s) STR_H(s)
@@ -30,13 +30,13 @@
 #define TRACE_FREQ TO_STR(STAT_KEY) "_fuse_req"
 #define TRACE_REQ TO_STR(STAT_KEY) "_req"
 
-#define IOC_REQ_INIT(src, FSH, api, in, rc)				\
+#define DFUSE_REQ_INIT(src, FSH, api, in, rc)				\
 	do {								\
 		rc = 0;							\
 		/* Acquire new object only if NULL */			\
 		if (!src) {						\
 			src = dfuse_pool_acquire(FSH->POOL_NAME);	\
-			IOF_TRACE_UP(src, FSH, TRACE_TYPE);		\
+			DFUSE_TRA_UP(src, FSH, TRACE_TYPE);		\
 		}							\
 		if (!src) {						\
 			rc = ENOMEM;					\
@@ -47,7 +47,7 @@
 	} while (0)
 
 /* Initialise a descriptor and make the dfuse_request a child of it */
-#define IOC_REQ_INIT_REQ(src, fsh, api, fuse_req, rc)			\
+#define DFUSE_REQ_INIT_REQ(src, fsh, api, fuse_req, rc)			\
 	do {								\
 		rc = 0;							\
 		/* Acquire new object only if NULL */			\
@@ -57,11 +57,11 @@
 				rc = ENOMEM;				\
 				break;					\
 			}						\
-			IOF_TRACE_UP(src, fsh, TRACE_TYPE);		\
+			DFUSE_TRA_UP(src, fsh, TRACE_TYPE);		\
 		}							\
 		(src)->REQ_NAME.ir_api = &(api);			\
 		(src)->REQ_NAME.req = fuse_req;				\
-		IOF_TRACE_UP(&(src)->REQ_NAME, src, TRACE_REQ);		\
+		DFUSE_TRA_UP(&(src)->REQ_NAME, src, TRACE_REQ);		\
 	} while (0)
 
 #define CONTAINER(req) container_of(req, struct TYPE_NAME, REQ_NAME)

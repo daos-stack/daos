@@ -33,13 +33,13 @@ dfuse_gen_cb(struct dfuse_request *request)
 {
 	struct dfuse_status_out *out = crt_reply_get(request->rpc);
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
-		IOC_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->rc);
 		D_GOTO(out, 0);
 	}
 
-	IOC_REPLY_ZERO(request);
+	DFUSE_REPLY_ZERO(request);
 
 out:
 	/* Clean up the two refs this code holds on the rpc */
@@ -66,7 +66,7 @@ generic_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(request->ir_rs == RS_RESET);
 	request->ir_rs = RS_LIVE;
 
-	IOF_TRACE_INFO(request, "cci_rc %d -%s",
+	DFUSE_TRA_INFO(request, "cci_rc %d -%s",
 		       cb_info->cci_rc, d_errstr(cb_info->cci_rc));
 
 	if (request->ir_ht == RHS_INODE) {
@@ -121,7 +121,7 @@ dfuse_fs_send(struct dfuse_request *request)
 	}
 	return 0;
 err:
-	IOF_TRACE_ERROR(request, "Could not send rpc, rc = %d", rc);
+	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", rc);
 
 	return rc;
 }
@@ -138,7 +138,7 @@ dfuse_fs_resend(struct dfuse_request *request)
 		void *in = crt_req_get(request->rpc);
 		struct ios_gah *gah = in + request->ir_api->gah_offset;
 
-		IOF_TRACE_DEBUG(request,
+		DFUSE_TRA_DEBUG(request,
 				"loading gah from %d %p", request->ir_ht,
 				request->ir_inode);
 
@@ -158,7 +158,7 @@ dfuse_fs_resend(struct dfuse_request *request)
 			*gah = request->ir_dir->gah;
 			break;
 		default:
-			IOF_TRACE_ERROR(request,
+			DFUSE_TRA_ERROR(request,
 					"Invalid request type %d",
 					request->ir_ht);
 			D_MUTEX_UNLOCK(&request->fsh->gah_lock);
@@ -166,7 +166,7 @@ dfuse_fs_resend(struct dfuse_request *request)
 		}
 
 		D_MUTEX_UNLOCK(&request->fsh->gah_lock);
-		IOF_TRACE_DEBUG(request, GAH_PRINT_STR, GAH_PRINT_VAL(*gah));
+		DFUSE_TRA_DEBUG(request, GAH_PRINT_STR, GAH_PRINT_VAL(*gah));
 	}
 
 	ep.ep_tag = 0;
@@ -195,7 +195,7 @@ dfuse_fs_resend(struct dfuse_request *request)
 	if (rc) {
 		D_GOTO(err, ret = EIO);
 	}
-	IOF_TRACE_INFO(request, "Sending RPC to rank %d",
+	DFUSE_TRA_INFO(request, "Sending RPC to rank %d",
 		       request->rpc->cr_ep.ep_rank);
 
 	crt_req_addref(request->rpc);
@@ -205,7 +205,7 @@ dfuse_fs_resend(struct dfuse_request *request)
 	}
 	return 0;
 err:
-	IOF_TRACE_ERROR(request, "Could not send rpc, rc = %d", ret);
+	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", ret);
 
 	return ret;
 }
@@ -230,7 +230,7 @@ ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	oldref = atomic_fetch_add(&ie->ie_ref, 1);
-	IOF_TRACE_DEBUG(ie, "addref to %u", oldref + 1);
+	DFUSE_TRA_DEBUG(ie, "addref to %u", oldref + 1);
 }
 
 static bool
@@ -241,7 +241,7 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	oldref = atomic_fetch_sub(&ie->ie_ref, 1);
-	IOF_TRACE_DEBUG(ie, "decref to %u", oldref - 1);
+	DFUSE_TRA_DEBUG(ie, "decref to %u", oldref - 1);
 	return oldref == 1;
 }
 
@@ -253,7 +253,7 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	IOF_TRACE_DEBUG(ie, "parent %lu", ie->parent);
+	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->parent);
 	ie_close(fs_handle, ie);
 	D_FREE(ie);
 }
@@ -269,8 +269,8 @@ dh_init(void *arg, void *handle)
 {
 	struct dfuse_dir_handle *dh = arg;
 
-	IOC_REQUEST_INIT(&dh->open_req, handle);
-	IOC_REQUEST_INIT(&dh->close_req, handle);
+	DFUSE_REQUEST_INIT(&dh->open_req, handle);
+	DFUSE_REQUEST_INIT(&dh->close_req, handle);
 	dh->rpc = NULL;
 }
 
@@ -327,8 +327,8 @@ dh_reset(void *arg)
 		return false;
 	}
 
-	IOC_REQUEST_RESET(&dh->open_req);
-	IOC_REQUEST_RESET(&dh->close_req);
+	DFUSE_REQUEST_RESET(&dh->open_req);
+	DFUSE_REQUEST_RESET(&dh->close_req);
 
 	dh->open_req.ir_ht = RHS_INODE_NUM;
 	dh->close_req.ir_ht = RHS_DIR;
@@ -357,9 +357,9 @@ fh_init(void *arg, void *handle)
 {
 	struct dfuse_file_handle *fh = arg;
 
-	IOC_REQUEST_INIT(&fh->open_req, handle);
-	IOC_REQUEST_INIT(&fh->creat_req, handle);
-	IOC_REQUEST_INIT(&fh->release_req, handle);
+	DFUSE_REQUEST_INIT(&fh->open_req, handle);
+	DFUSE_REQUEST_INIT(&fh->creat_req, handle);
+	DFUSE_REQUEST_INIT(&fh->release_req, handle);
 	fh->ie = NULL;
 }
 
@@ -369,17 +369,17 @@ fh_reset(void *arg)
 	struct dfuse_file_handle	*fh = arg;
 	int			rc;
 
-	IOC_REQUEST_RESET(&fh->open_req);
+	DFUSE_REQUEST_RESET(&fh->open_req);
 	CHECK_AND_RESET_RRPC(fh, open_req);
 
 	fh->open_req.ir_ht = RHS_INODE_NUM;
 
-	IOC_REQUEST_RESET(&fh->creat_req);
+	DFUSE_REQUEST_RESET(&fh->creat_req);
 	CHECK_AND_RESET_RRPC(fh, creat_req);
 
 	fh->creat_req.ir_ht = RHS_INODE_NUM;
 
-	IOC_REQUEST_RESET(&fh->release_req);
+	DFUSE_REQUEST_RESET(&fh->release_req);
 	CHECK_AND_RESET_RRPC(fh, release_req);
 
 	fh->release_req.ir_ht = RHS_FILE;
@@ -396,14 +396,16 @@ fh_reset(void *arg)
 	}
 
 	rc = crt_req_create(fh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(fh->open_req.fsh, open), &fh->open_req.rpc);
+			    FS_TO_OP(fh->open_req.fsh, open),
+			    &fh->open_req.rpc);
 	if (rc || !fh->open_req.rpc) {
 		D_FREE(fh->ie);
 		return false;
 	}
 
 	rc = crt_req_create(fh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(fh->open_req.fsh, create), &fh->creat_req.rpc);
+			    FS_TO_OP(fh->open_req.fsh, create),
+			    &fh->creat_req.rpc);
 	if (rc || !fh->creat_req.rpc) {
 		D_FREE(fh->ie);
 		crt_req_decref(fh->open_req.rpc);
@@ -411,7 +413,8 @@ fh_reset(void *arg)
 	}
 
 	rc = crt_req_create(fh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(fh->open_req.fsh, close), &fh->release_req.rpc);
+			    FS_TO_OP(fh->open_req.fsh, close),
+			    &fh->release_req.rpc);
 	if (rc || !fh->release_req.rpc) {
 		D_FREE(fh->ie);
 		crt_req_decref(fh->open_req.rpc);
@@ -443,7 +446,7 @@ fh_release(void *arg)
 	static void type##_common_init(void *arg, void *handle)		\
 	{								\
 		struct common_req *req = arg;				\
-		IOC_REQUEST_INIT(&req->request, handle);		\
+		DFUSE_REQUEST_INIT(&req->request, handle);		\
 		req->opcode = FS_TO_OP(req->request.fsh, type);		\
 	}
 COMMON_INIT(getattr);
@@ -459,13 +462,13 @@ common_reset(void *arg)
 
 	req->request.req = NULL;
 
-	IOC_REQUEST_RESET(&req->request);
+	DFUSE_REQUEST_RESET(&req->request);
 	CHECK_AND_RESET_RRPC(req, request);
 
 	rc = crt_req_create(req->request.fsh->proj.crt_ctx, NULL,
 			    req->opcode, &req->request.rpc);
 	if (rc || !req->request.rpc) {
-		IOF_TRACE_ERROR(req, "Could not create request, rc = %d", rc);
+		DFUSE_TRA_ERROR(req, "Could not create request, rc = %d", rc);
 		return false;
 	}
 	crt_req_addref(req->request.rpc);
@@ -487,7 +490,7 @@ common_release(void *arg)
 	static void type##_entry_init(void *arg, void *handle)		\
 	{								\
 		struct entry_req *req = arg;				\
-		IOC_REQUEST_INIT(&req->request, handle);		\
+		DFUSE_REQUEST_INIT(&req->request, handle);		\
 		req->opcode = FS_TO_OP(req->request.fsh, type);		\
 		req->dest = NULL;					\
 		req->ie = NULL;						\
@@ -505,7 +508,7 @@ entry_reset(void *arg)
 	/* If this descriptor has previously been used then destroy the
 	 * existing RPC
 	 */
-	IOC_REQUEST_RESET(&req->request);
+	DFUSE_REQUEST_RESET(&req->request);
 	CHECK_AND_RESET_RRPC(req, request);
 
 	req->request.ir_ht = RHS_INODE_NUM;
@@ -534,7 +537,7 @@ entry_reset(void *arg)
 	rc = crt_req_create(req->request.fsh->proj.crt_ctx, NULL, req->opcode,
 			    &req->request.rpc);
 	if (rc || !req->request.rpc) {
-		IOF_TRACE_ERROR(req, "Could not create request, rc = %d", rc);
+		DFUSE_TRA_ERROR(req, "Could not create request, rc = %d", rc);
 		D_FREE(req->ie);
 		return false;
 	}
@@ -559,7 +562,7 @@ rb_page_init(void *arg, void *handle)
 {
 	struct dfuse_rb *rb = arg;
 
-	IOC_REQUEST_INIT(&rb->rb_req, handle);
+	DFUSE_REQUEST_INIT(&rb->rb_req, handle);
 	rb->buf_size = 4096;
 	rb->fbuf.count = 1;
 	rb->fbuf.buf[0].fd = -1;
@@ -582,19 +585,19 @@ rb_reset(void *arg)
 	struct dfuse_rb	*rb = arg;
 	int		rc;
 
-	IOC_REQUEST_RESET(&rb->rb_req);
+	DFUSE_REQUEST_RESET(&rb->rb_req);
 	CHECK_AND_RESET_RRPC(rb, rb_req);
 
 	rb->rb_req.ir_ht = RHS_FILE;
 
 	if (rb->failure) {
-		IOF_BULK_FREE(rb, lb);
+		DFUSE_BULK_FREE(rb, lb);
 		rb->failure = false;
 	}
 
 	if (!rb->lb.buf) {
-		IOF_BULK_ALLOC(rb->rb_req.fsh->proj.crt_ctx, rb, lb,
-			       rb->buf_size, false);
+		DFUSE_BULK_ALLOC(rb->rb_req.fsh->proj.crt_ctx, rb, lb,
+				 rb->buf_size, false);
 		if (!rb->lb.buf)
 			return false;
 	}
@@ -602,8 +605,8 @@ rb_reset(void *arg)
 	rc = crt_req_create(rb->rb_req.fsh->proj.crt_ctx, NULL,
 			    FS_TO_IOOP(rb->rb_req.fsh, 0), &rb->rb_req.rpc);
 	if (rc || !rb->rb_req.rpc) {
-		IOF_TRACE_ERROR(rb, "Could not create request, rc = %d", rc);
-		IOF_BULK_FREE(rb, lb);
+		DFUSE_TRA_ERROR(rb, "Could not create request, rc = %d", rc);
+		DFUSE_BULK_FREE(rb, lb);
 		return false;
 	}
 	crt_req_addref(rb->rb_req.rpc);
@@ -616,7 +619,7 @@ rb_release(void *arg)
 {
 	struct dfuse_rb *rb = arg;
 
-	IOF_BULK_FREE(rb, lb);
+	DFUSE_BULK_FREE(rb, lb);
 
 	crt_req_decref(rb->rb_req.rpc);
 	crt_req_decref(rb->rb_req.rpc);
@@ -627,7 +630,7 @@ wb_init(void *arg, void *handle)
 {
 	struct dfuse_wb *wb = arg;
 
-	IOC_REQUEST_INIT(&wb->wb_req, handle);
+	DFUSE_REQUEST_INIT(&wb->wb_req, handle);
 	wb->failure = false;
 	wb->lb.buf = NULL;
 }
@@ -638,19 +641,19 @@ wb_reset(void *arg)
 	struct dfuse_wb	*wb = arg;
 	int		rc;
 
-	IOC_REQUEST_RESET(&wb->wb_req);
+	DFUSE_REQUEST_RESET(&wb->wb_req);
 	CHECK_AND_RESET_RRPC(wb, wb_req);
 
 	wb->wb_req.ir_ht = RHS_FILE;
 
 	if (wb->failure) {
-		IOF_BULK_FREE(wb, lb);
+		DFUSE_BULK_FREE(wb, lb);
 		wb->failure = false;
 	}
 
 	if (!wb->lb.buf) {
-		IOF_BULK_ALLOC(wb->wb_req.fsh->proj.crt_ctx, wb, lb,
-			       wb->wb_req.fsh->proj.max_write, true);
+		DFUSE_BULK_ALLOC(wb->wb_req.fsh->proj.crt_ctx, wb, lb,
+				 wb->wb_req.fsh->proj.max_write, true);
 		if (!wb->lb.buf)
 			return false;
 	}
@@ -658,8 +661,8 @@ wb_reset(void *arg)
 	rc = crt_req_create(wb->wb_req.fsh->proj.crt_ctx, NULL,
 			    FS_TO_IOOP(wb->wb_req.fsh, 1), &wb->wb_req.rpc);
 	if (rc || !wb->wb_req.rpc) {
-		IOF_TRACE_ERROR(wb, "Could not create request, rc = %d", rc);
-		IOF_BULK_FREE(wb, lb);
+		DFUSE_TRA_ERROR(wb, "Could not create request, rc = %d", rc);
+		DFUSE_BULK_FREE(wb, lb);
 		return false;
 	}
 	crt_req_addref(wb->wb_req.rpc);
@@ -675,7 +678,7 @@ wb_release(void *arg)
 	crt_req_decref(wb->wb_req.rpc);
 	crt_req_decref(wb->wb_req.rpc);
 
-	IOF_BULK_FREE(wb, lb);
+	DFUSE_BULK_FREE(wb, lb);
 }
 
 /* Call crt_progress() on a context until it returns timeout
@@ -689,7 +692,7 @@ dfuse_progress_drain(struct dfuse_ctx *dfuse_ctx)
 	int ctx_rc;
 
 	if (!dfuse_ctx->crt_ctx) {
-		IOF_TRACE_WARNING(dfuse_ctx, "Null context");
+		DFUSE_TRA_WARNING(dfuse_ctx, "Null context");
 		return -DER_SUCCESS;
 	}
 
@@ -697,7 +700,7 @@ dfuse_progress_drain(struct dfuse_ctx *dfuse_ctx)
 		ctx_rc = crt_progress(dfuse_ctx->crt_ctx, 1000000, NULL, NULL);
 
 		if (ctx_rc != -DER_TIMEDOUT && ctx_rc != -DER_SUCCESS) {
-			IOF_TRACE_WARNING(dfuse_ctx, "progress returned %d",
+			DFUSE_TRA_WARNING(dfuse_ctx, "progress returned %d",
 					  ctx_rc);
 			return ctx_rc;
 		}
@@ -725,13 +728,13 @@ dfuse_thread(void *arg)
 		}
 
 		if (rc != 0)
-			IOF_TRACE_ERROR(dfuse_ctx, "crt_progress failed rc: %d",
+			DFUSE_TRA_ERROR(dfuse_ctx, "crt_progress failed rc: %d",
 					rc);
 
 	} while (!dfuse_tracker_test(&dfuse_ctx->thread_stop_tracker));
 
 	if (rc != 0)
-		IOF_TRACE_ERROR(dfuse_ctx, "crt_progress error on shutdown "
+		DFUSE_TRA_ERROR(dfuse_ctx, "crt_progress error on shutdown "
 				"rc: %d", rc);
 
 	return (void *)(uintptr_t)rc;
@@ -750,13 +753,13 @@ dfuse_thread_start(struct dfuse_ctx *dfuse_ctx)
 			    dfuse_thread, dfuse_ctx);
 
 	if (rc != 0) {
-		IOF_TRACE_ERROR(dfuse_ctx, "Could not start progress thread");
+		DFUSE_TRA_ERROR(dfuse_ctx, "Could not start progress thread");
 		return false;
 	}
 
 	rc = pthread_setname_np(dfuse_ctx->thread, "IOF thread");
 	if (rc != 0)
-		IOF_TRACE_ERROR(dfuse_ctx, "Could not set thread name");
+		DFUSE_TRA_ERROR(dfuse_ctx, "Could not set thread name");
 
 	dfuse_tracker_wait(&dfuse_ctx->thread_start_tracker);
 	return true;
@@ -774,10 +777,10 @@ dfuse_thread_stop(struct dfuse_ctx *dfuse_ctx)
 	if (!dfuse_ctx->thread)
 		return 0;
 
-	IOF_TRACE_INFO(dfuse_ctx, "Stopping CRT thread");
+	DFUSE_TRA_INFO(dfuse_ctx, "Stopping CRT thread");
 	dfuse_tracker_signal(&dfuse_ctx->thread_stop_tracker);
 	pthread_join(dfuse_ctx->thread, &rtn);
-	IOF_TRACE_INFO(dfuse_ctx,
+	DFUSE_TRA_INFO(dfuse_ctx,
 		       "CRT thread stopped with %d",
 		       (int)(uintptr_t)rtn);
 
@@ -795,20 +798,21 @@ dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 	dfuse_state->cnss_info = cnss_info;
 	ret = crt_context_create(&dfuse_state->dfuse_ctx.crt_ctx);
 	if (ret != -DER_SUCCESS) {
-		IOF_TRACE_ERROR(dfuse_state, "Context not created");
+		DFUSE_TRA_ERROR(dfuse_state, "Context not created");
 		return;
 	}
 
-	IOF_TRACE_UP(&dfuse_state->dfuse_ctx, dfuse_state, "dfuse_ctx");
+	DFUSE_TRA_UP(&dfuse_state->dfuse_ctx, dfuse_state, "dfuse_ctx");
 
 	ret = crt_context_set_timeout(dfuse_state->dfuse_ctx.crt_ctx, 7);
 	if (ret != -DER_SUCCESS) {
-		IOF_TRACE_ERROR(dfuse_state, "Context timeout not set");
+		DFUSE_TRA_ERROR(dfuse_state, "Context timeout not set");
 		return;
 	}
 
 	if (!dfuse_thread_start(&dfuse_state->dfuse_ctx)) {
-		IOF_TRACE_ERROR(dfuse_state, "Failed to create progress thread");
+		DFUSE_TRA_ERROR(dfuse_state,
+				"Failed to create progress thread");
 		return;
 	}
 
@@ -816,10 +820,10 @@ dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 	group = &dfuse_state->group;
 
 	ret = dfuse_client_register(&group->grp.psr_ep,
-				  &dfuse_state->proto,
-				  &dfuse_state->io_proto);
+				    &dfuse_state->proto,
+				    &dfuse_state->io_proto);
 	if (ret) {
-		IOF_TRACE_ERROR(dfuse_state,
+		DFUSE_TRA_ERROR(dfuse_state,
 				"RPC registration failed with ret: %d", ret);
 	}
 }
@@ -837,12 +841,14 @@ initialize_projection(struct dfuse_state *dfuse_state,
 	struct dfuse_pool_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
 				  .release = dh_release,
-				  POOL_TYPE_INIT(dfuse_dir_handle, dh_free_list)};
+				  POOL_TYPE_INIT(dfuse_dir_handle,
+						 dh_free_list)};
 
 	struct dfuse_pool_reg fh = {.init = fh_init,
 				  .reset = fh_reset,
 				  .release = fh_release,
-				  POOL_TYPE_INIT(dfuse_file_handle, fh_free_list)};
+				  POOL_TYPE_INIT(dfuse_file_handle,
+						 fh_free_list)};
 
 	struct dfuse_pool_reg common_t = {.reset = common_reset,
 					.release = common_release,
@@ -855,12 +861,14 @@ initialize_projection(struct dfuse_state *dfuse_state,
 	struct dfuse_pool_reg rb_page = {.init = rb_page_init,
 				       .reset = rb_reset,
 				       .release = rb_release,
-				       POOL_TYPE_INIT(dfuse_rb, rb_req.ir_list)};
+				       POOL_TYPE_INIT(dfuse_rb,
+						      rb_req.ir_list)};
 
 	struct dfuse_pool_reg rb_large = {.init = rb_large_init,
 					.reset = rb_reset,
 					.release = rb_release,
-					POOL_TYPE_INIT(dfuse_rb, rb_req.ir_list)};
+					POOL_TYPE_INIT(dfuse_rb,
+						       rb_req.ir_list)};
 
 	struct dfuse_pool_reg wb = {.init = wb_init,
 				  .reset = wb_reset,
@@ -871,7 +879,7 @@ initialize_projection(struct dfuse_state *dfuse_state,
 	if (!fs_handle)
 		return false;
 
-	IOF_TRACE_UP(fs_handle, dfuse_state, "dfuse_projection");
+	DFUSE_TRA_UP(fs_handle, dfuse_state, "dfuse_projection");
 
 	if (fs_handle->ctx_num == 0) {
 		fs_handle->ctx_num = 1;
@@ -879,13 +887,13 @@ initialize_projection(struct dfuse_state *dfuse_state,
 
 	D_ALLOC_ARRAY(fs_handle->ctx_array, fs_handle->ctx_num);
 	if (!fs_handle->ctx_array) {
-		IOF_TRACE_DOWN(fs_handle);
+		DFUSE_TRA_DOWN(fs_handle);
 		D_FREE(fs_handle);
 		return false;
 	}
 
 	for (i = 0; i < fs_handle->ctx_num; i++) {
-		IOF_TRACE_UP(&fs_handle->ctx_array[i], fs_handle, "dfuse_ctx");
+		DFUSE_TRA_UP(&fs_handle->ctx_array[i], fs_handle, "dfuse_ctx");
 	}
 
 	ret = dfuse_pool_init(&fs_handle->pool, fs_handle);
@@ -895,7 +903,7 @@ initialize_projection(struct dfuse_state *dfuse_state,
 	fs_handle->dfuse_state = dfuse_state;
 	fs_handle->proj.io_proto = dfuse_state->io_proto;
 
-	IOF_TRACE_INFO(fs_handle, "%d cart threads",
+	DFUSE_TRA_INFO(fs_handle, "%d cart threads",
 		       fs_handle->ctx_num);
 
 	ret = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
@@ -916,7 +924,7 @@ initialize_projection(struct dfuse_state *dfuse_state,
 
 	ret = crt_context_create(&fs_handle->proj.crt_ctx);
 	if (ret) {
-		IOF_TRACE_ERROR(fs_handle, "Could not create context");
+		DFUSE_TRA_ERROR(fs_handle, "Could not create context");
 		D_GOTO(err, 0);
 	}
 
@@ -930,7 +938,7 @@ initialize_projection(struct dfuse_state *dfuse_state,
 		 * of this function
 		 */
 		if (!dfuse_thread_start(&fs_handle->ctx_array[i])) {
-			IOF_TRACE_ERROR(fs_handle, "Could not create thread");
+			DFUSE_TRA_ERROR(fs_handle, "Could not create thread");
 			D_GOTO(err, 0);
 		}
 	}
@@ -982,12 +990,14 @@ initialize_projection(struct dfuse_state *dfuse_state,
 		D_GOTO(err, 0);
 
 	common_t.init = close_common_init;
-	fs_handle->close_pool = dfuse_pool_register(&fs_handle->pool, &common_t);
+	fs_handle->close_pool = dfuse_pool_register(&fs_handle->pool,
+						    &common_t);
 	if (!fs_handle->close_pool)
 		D_GOTO(err, 0);
 
 	entry_t.init = lookup_entry_init;
-	fs_handle->lookup_pool = dfuse_pool_register(&fs_handle->pool, &entry_t);
+	fs_handle->lookup_pool = dfuse_pool_register(&fs_handle->pool,
+						     &entry_t);
 	if (!fs_handle->lookup_pool)
 		D_GOTO(err, 0);
 
@@ -997,7 +1007,8 @@ initialize_projection(struct dfuse_state *dfuse_state,
 		D_GOTO(err, 0);
 
 	entry_t.init = symlink_entry_init;
-	fs_handle->symlink_pool = dfuse_pool_register(&fs_handle->pool, &entry_t);
+	fs_handle->symlink_pool = dfuse_pool_register(&fs_handle->pool,
+						      &entry_t);
 	if (!fs_handle->symlink_pool)
 		D_GOTO(err, 0);
 
@@ -1005,11 +1016,13 @@ initialize_projection(struct dfuse_state *dfuse_state,
 	if (!fs_handle->fh_pool)
 		D_GOTO(err, 0);
 
-	fs_handle->rb_pool_page = dfuse_pool_register(&fs_handle->pool, &rb_page);
+	fs_handle->rb_pool_page = dfuse_pool_register(&fs_handle->pool,
+						      &rb_page);
 	if (!fs_handle->rb_pool_page)
 		D_GOTO(err, 0);
 
-	fs_handle->rb_pool_large = dfuse_pool_register(&fs_handle->pool, &rb_large);
+	fs_handle->rb_pool_large = dfuse_pool_register(&fs_handle->pool,
+						       &rb_large);
 	if (!fs_handle->rb_pool_large)
 		D_GOTO(err, 0);
 
@@ -1021,16 +1034,16 @@ initialize_projection(struct dfuse_state *dfuse_state,
 				fuse_ops,
 				&args,
 				fs_handle->mnt_dir.name,
-				(fs_handle->flags & IOF_CNSS_MT) != 0,
+				(fs_handle->flags & DFUSE_CNSS_MT) != 0,
 				fs_handle,
 				&fs_handle->session)) {
-		IOF_TRACE_ERROR(fs_handle, "Unable to register FUSE fs");
+		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err, 0);
 	}
 
 	D_FREE(fuse_ops);
 
-	IOF_TRACE_DEBUG(fs_handle, "Fuse mount installed at: '%s'",
+	DFUSE_TRA_DEBUG(fs_handle, "Fuse mount installed at: '%s'",
 			fs_handle->mnt_dir.name);
 
 	return true;
@@ -1069,18 +1082,18 @@ ino_flush(d_list_t *rlink, void *arg)
 					      ie->name,
 					      strlen(ie->name));
 	if (rc != 0)
-		IOF_TRACE_WARNING(ie,
+		DFUSE_TRA_WARNING(ie,
 				  "%lu %lu '%s': %d %s",
 				  ie->parent, ie->stat.st_ino, ie->name, rc,
 				  strerror(-rc));
 	else
-		IOF_TRACE_INFO(ie,
+		DFUSE_TRA_INFO(ie,
 			       "%lu %lu '%s': %d %s",
 			       ie->parent, ie->stat.st_ino, ie->name, rc,
 			       strerror(-rc));
 
-	/* If the FUSE connection is dead then do not traverse further, it doesn't
-	 * matter what gets returned here, as long as it's negative
+	/* If the FUSE connection is dead then do not traverse further, it
+	 * doesn't matter what gets returned here, as long as it's negative
 	 */
 	if (rc == -EBADF)
 		return -DER_NO_HDL;
@@ -1094,12 +1107,12 @@ dfuse_flush_fuse(struct dfuse_projection_info *fs_handle)
 {
 	int rc;
 
-	IOF_TRACE_INFO(fs_handle, "Flushing inode table");
+	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
 	rc = d_hash_table_traverse(&fs_handle->inode_ht, ino_flush,
 				   fs_handle);
 
-	IOF_TRACE_INFO(fs_handle, "Flush complete: %d", rc);
+	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
 }
 
 /* Called once per projection, after the FUSE filesystem has been torn down */
@@ -1113,7 +1126,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	int		rcp = 0;
 	int		i;
 
-	IOF_TRACE_INFO(fs_handle, "Draining inode table");
+	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
 		struct dfuse_inode_entry *ie;
 		uint ref;
@@ -1127,7 +1140,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 
 		ref = atomic_load_consume(&ie->ie_ref);
 
-		IOF_TRACE_DEBUG(ie, "Dropping %d", ref);
+		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
 		ie->parent = 0;
@@ -1136,18 +1149,18 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	} while (rlink);
 
 	if (handles) {
-		IOF_TRACE_WARNING(fs_handle,
+		DFUSE_TRA_WARNING(fs_handle,
 				  "dropped %lu refs on %u inodes",
 				  refs, handles);
 	} else {
-		IOF_TRACE_INFO(fs_handle,
+		DFUSE_TRA_INFO(fs_handle,
 			       "dropped %lu refs on %u inodes",
 			       refs, handles);
 	}
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->inode_ht, false);
 	if (rc) {
-		IOF_TRACE_WARNING(fs_handle, "Failed to close inode handles");
+		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
 	}
 
@@ -1157,7 +1170,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	for (i = 0; i < fs_handle->ctx_num; i++) {
 		rc = dfuse_thread_stop(&fs_handle->ctx_array[i]);
 		if (rc != 0)
-			IOF_TRACE_ERROR(fs_handle,
+			DFUSE_TRA_ERROR(fs_handle,
 					"thread[%d] stop returned %d", i, rc);
 	}
 
@@ -1176,35 +1189,35 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 			if (!active)
 				break;
 
-			IOF_TRACE_INFO(fs_handle,
+			DFUSE_TRA_INFO(fs_handle,
 				       "Active descriptors, waiting for one second");
 
 		} while (active && rc == -DER_SUCCESS);
 
 		rc = crt_context_destroy(fs_handle->proj.crt_ctx, false);
 		if (rc == -DER_BUSY)
-			IOF_TRACE_INFO(fs_handle, "RPCs in flight, waiting");
+			DFUSE_TRA_INFO(fs_handle, "RPCs in flight, waiting");
 		else if (rc != DER_SUCCESS)
-			IOF_TRACE_ERROR(fs_handle,
+			DFUSE_TRA_ERROR(fs_handle,
 					"Could not destroy context %d",
 					rc);
 	} while (rc == -DER_BUSY);
 
 	if (rc != -DER_SUCCESS)
-		IOF_TRACE_ERROR(fs_handle, "Count not destroy context");
+		DFUSE_TRA_ERROR(fs_handle, "Count not destroy context");
 
 	dfuse_pool_destroy(&fs_handle->pool);
 
 	rc = pthread_mutex_destroy(&fs_handle->gah_lock);
 	if (rc != 0) {
-		IOF_TRACE_ERROR(fs_handle,
+		DFUSE_TRA_ERROR(fs_handle,
 				"Failed to destroy lock %d %s",
 				rc, strerror(rc));
 		rcp = rc;
 	}
 
 	for (i = 0; i < fs_handle->ctx_num; i++) {
-		IOF_TRACE_DOWN(&fs_handle->ctx_array[i]);
+		DFUSE_TRA_DOWN(&fs_handle->ctx_array[i]);
 	}
 	d_list_del_init(&fs_handle->link);
 
@@ -1221,24 +1234,25 @@ dfuse_finish(struct dfuse_state *dfuse_state)
 	/* Stop progress thread */
 	rc = dfuse_thread_stop(&dfuse_state->dfuse_ctx);
 	if (rc != 0)
-		IOF_TRACE_ERROR(dfuse_state,
+		DFUSE_TRA_ERROR(dfuse_state,
 				"thread stop returned %d", rc);
 
 	if (dfuse_state->dfuse_ctx.crt_ctx) {
 
 		rc = dfuse_progress_drain(&dfuse_state->dfuse_ctx);
 		if (rc != 0)
-			IOF_TRACE_ERROR(dfuse_state,
+			DFUSE_TRA_ERROR(dfuse_state,
 					"could not drain context %d", rc);
 
 		rc = crt_context_destroy(dfuse_state->dfuse_ctx.crt_ctx, false);
 		if (rc != -DER_SUCCESS)
-			IOF_TRACE_ERROR(dfuse_state, "Could not destroy context %d",
+			DFUSE_TRA_ERROR(dfuse_state,
+					"Could not destroy context %d",
 					rc);
-		IOF_TRACE_DOWN(&dfuse_state->dfuse_ctx);
+		DFUSE_TRA_DOWN(&dfuse_state->dfuse_ctx);
 	}
 
-	IOF_TRACE_DOWN(dfuse_state);
+	DFUSE_TRA_DOWN(dfuse_state);
 	D_FREE(dfuse_state);
 }
 

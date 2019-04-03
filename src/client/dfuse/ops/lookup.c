@@ -40,7 +40,7 @@ dfuse_entry_cb(struct dfuse_request *request)
 	d_list_t			*rlink;
 	bool				keep_ref = false;
 
-	IOC_REQUEST_RESOLVE(request, out);
+	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc)
 		D_GOTO(out, 0);
 
@@ -50,14 +50,14 @@ dfuse_entry_cb(struct dfuse_request *request)
 
 	desc->ie->gah = out->gah;
 	desc->ie->stat = out->stat;
-	IOF_TRACE_UP(desc->ie, fs_handle, "inode");
+	DFUSE_TRA_UP(desc->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
 				       &desc->ie->stat.st_ino,
 				       sizeof(desc->ie->stat.st_ino),
 				       &desc->ie->ie_htl);
 
 	if (rlink == &desc->ie->ie_htl) {
-		IOF_TRACE_INFO(desc->ie, "New file %lu " GAH_PRINT_STR,
+		DFUSE_TRA_INFO(desc->ie, "New file %lu " GAH_PRINT_STR,
 			       entry.ino, GAH_PRINT_VAL(out->gah));
 		desc->ie = NULL;
 		keep_ref = true;
@@ -69,7 +69,7 @@ dfuse_entry_cb(struct dfuse_request *request)
 		 * the parent anyway, so keep that one, but drop one in the call
 		 * to ie_close().
 		 */
-		IOF_TRACE_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
+		DFUSE_TRA_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
 			       "Existing file %lu " GAH_PRINT_STR,
 			       entry.ino, GAH_PRINT_VAL(out->gah));
 		atomic_fetch_sub(&desc->ie->ie_ref, 1);
@@ -77,11 +77,11 @@ dfuse_entry_cb(struct dfuse_request *request)
 		ie_close(fs_handle, desc->ie);
 	}
 
-	IOC_REPLY_ENTRY(request, entry);
+	DFUSE_REPLY_ENTRY(request, entry);
 	dfuse_pool_release(desc->pool, desc);
 	return keep_ref;
 out:
-	IOC_REPLY_ERR(request, request->rc);
+	DFUSE_REPLY_ERR(request, request->rc);
 	dfuse_pool_release(desc->pool, desc);
 	return false;
 }
@@ -102,12 +102,12 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_gah_string_in	*in;
 	int rc;
 
-	IOF_TRACE_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-	IOC_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
+	DFUSE_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
 	if (rc)
 		D_GOTO(err, rc);
 
-	IOF_TRACE_INFO(desc, "ie %p", &desc->ie);
+	DFUSE_TRA_INFO(desc, "ie %p", &desc->ie);
 
 	desc->request.ir_inode_num = parent;
 
@@ -124,5 +124,5 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 err:
 	if (desc)
 		dfuse_pool_release(fs_handle->lookup_pool, desc);
-	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

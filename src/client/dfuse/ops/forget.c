@@ -26,7 +26,7 @@
 
 static void
 dfuse_forget_one(struct dfuse_projection_info *fs_handle,
-	       fuse_ino_t ino, uintptr_t nlookup)
+		 fuse_ino_t ino, uintptr_t nlookup)
 {
 	d_list_t *rlink;
 	int rc;
@@ -38,18 +38,18 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
 	if (!rlink) {
-		IOF_TRACE_WARNING(fs_handle, "Unable to find ref for %lu %lu",
+		DFUSE_TRA_WARNING(fs_handle, "Unable to find ref for %lu %lu",
 				  ino, nlookup);
 		return;
 	}
 
-	IOF_TRACE_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
+	DFUSE_TRA_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
 		       "ino %lu count %lu",
 		       ino, nlookup);
 
 	rc = d_hash_rec_ndecref(&fs_handle->inode_ht, nlookup, rlink);
 	if (rc != -DER_SUCCESS) {
-		IOF_TRACE_ERROR(fs_handle, "Invalid refcount %lu on %p",
+		DFUSE_TRA_ERROR(fs_handle, "Invalid refcount %lu on %p",
 				nlookup,
 				container_of(rlink, struct dfuse_inode_entry, ie_htl));
 	}
@@ -67,14 +67,14 @@ dfuse_cb_forget(fuse_req_t req, fuse_ino_t ino, uintptr_t nlookup)
 
 void
 dfuse_cb_forget_multi(fuse_req_t req, size_t count,
-		    struct fuse_forget_data *forgets)
+		      struct fuse_forget_data *forgets)
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	int i;
 
 	fuse_reply_none(req);
 
-	IOF_TRACE_INFO(fs_handle, "Forgetting %zi", count);
+	DFUSE_TRA_INFO(fs_handle, "Forgetting %zi", count);
 
 	for (i = 0; i < count; i++)
 		dfuse_forget_one(fs_handle, forgets[i].ino, forgets[i].nlookup);
