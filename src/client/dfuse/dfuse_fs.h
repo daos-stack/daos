@@ -26,7 +26,7 @@
 #include <stdbool.h>
 #include <sched.h>
 #include <cart/types.h>
-#include "iof_atomic.h"
+#include <gurt/atomic.h>
 #include "dfuse_gah.h"
 
 struct iof_service_group {

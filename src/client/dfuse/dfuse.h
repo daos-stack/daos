@@ -38,7 +38,6 @@
 
 #include "dfuse_cnss.h"
 #include "dfuse_gah.h"
-#include "iof_atomic.h"
 #include "dfuse_fs.h"
 #include "dfuse_bulk.h"
 #include "dfuse_pool.h"

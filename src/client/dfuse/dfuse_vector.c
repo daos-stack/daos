@@ -27,7 +27,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <gurt/common.h> /* container_of */
-#include "iof_atomic.h"
+#include <gurt/atomic.h>
 #include "dfuse_obj_pool.h"
 #include "dfuse_vector.h"
 
