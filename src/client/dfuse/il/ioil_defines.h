@@ -29,7 +29,7 @@
 #ifdef IOF_DECLARE_WEAK
 /* For LD_PRELOAD, declaring public symbols as weak allows 3rd
  * party libraries to use the headers without knowing beforehand
- * if the iof libraries will be present at runtime
+ * if the ioil libraries will be present at runtime
  */
 #define IOF_PUBLIC __attribute__((visibility("default"), weak))
 #else

@@ -97,7 +97,7 @@
 								 #name);    \
 		if (__real_ ## name == NULL) {                              \
 			fprintf(stderr,                                     \
-				"libiofil couldn't map " #name "\n");       \
+				"libioil couldn't map " #name "\n");       \
 			exit(1);                                            \
 		}                                                           \
 	} while (0);

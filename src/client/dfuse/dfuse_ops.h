@@ -35,7 +35,7 @@
 		rc = 0;							\
 		/* Acquire new object only if NULL */			\
 		if (!src) {						\
-			src = dfuse_pool_acquire(FSH->POOL_NAME);		\
+			src = dfuse_pool_acquire(FSH->POOL_NAME);	\
 			IOF_TRACE_UP(src, FSH, TRACE_TYPE);		\
 		}							\
 		if (!src) {						\
@@ -46,7 +46,7 @@
 		in = crt_req_get((src)->REQ_NAME.rpc);			\
 	} while (0)
 
-/* Initialise a descriptor and make the ioc request a child of it */
+/* Initialise a descriptor and make the dfuse_request a child of it */
 #define IOC_REQ_INIT_REQ(src, fsh, api, fuse_req, rc)			\
 	do {								\
 		rc = 0;							\
