@@ -161,7 +161,9 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // server defines configuration options for DAOS IO Server instances
 type server struct {
 	Rank            *rank    `yaml:"rank"`
-	Cpus            []string `yaml:"cpus"`
+	Targets         []string `yaml:"targets"` // cpus to run xstreams
+	NrXsHelpers     int      `yaml:"nr_xs_helpers"`
+	FirstCore       int      `yaml:"first_core"`
 	FabricIface     string   `yaml:"fabric_iface"`
 	FabricIfacePort int      `yaml:"fabric_iface_port"`
 	LogMask         string   `yaml:"log_mask"`
@@ -212,15 +214,12 @@ type configuration struct {
 	NrHugepages    int             `yaml:"nr_hugepages"`
 	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
 	ControlLogFile string          `yaml:"control_log_file"`
-	Targets        int             `yaml:"targets"`
 	// development (subject to change) config fields
-	Modules    string
-	Attach     string
-	XShelpernr int
-	Firstcore  int
-	SystemMap  string
-	Path       string
-	ext        External // interface to os utilities
+	Modules   string
+	Attach    string
+	SystemMap string
+	Path      string
+	ext       External // interface to os utilities
 	// Shared memory segment ID to enable SPDK multiprocess mode,
 	// SPDK application processes can then access the same shared
 	// memory and therefore NVMe controllers.

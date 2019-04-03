@@ -602,7 +602,6 @@ func TestCmdlineOverride(t *testing.T) {
 			inCliOpts: cliOptions{Cores: 2},
 			inConfig: func() configuration {
 				c := defaultMockConfig()
-				c.Targets = 3
 				return populateMockConfig(t, c, sConfigUncomment)
 			}(),
 			outCliOpts: [][]string{
@@ -625,6 +624,8 @@ func TestCmdlineOverride(t *testing.T) {
 			},
 			desc: "Targets config overrides Cores cli",
 		},
+		// exceed nrhelpers
+		// default helpers, not passed
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			inConfig: envExistsConfig(),
