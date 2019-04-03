@@ -743,4 +743,4 @@ dfuse_cb_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
 bool
 dfuse_entry_cb(struct dfuse_request *);
 
-#endif
+#endif /* __DFUSE_H__ */

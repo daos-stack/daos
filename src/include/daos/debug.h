@@ -60,7 +60,7 @@
 	ACTION(drpc,      drpc,      arg)	\
 	ACTION(security,  security,  arg)	\
 	ACTION(dtx,       dtx,       arg)	\
-	ACTION(dfuse,     fduse,     arg)	\
+	ACTION(dfuse,     dfuse,     arg)	\
 	ACTION(il,        il,        arg)
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\

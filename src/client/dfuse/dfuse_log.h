@@ -20,8 +20,10 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __LOG_H__
-#define __LOG_H__
+
+#ifndef __DFUSE_LOG_H__
+#define __DFUSE_LOG_H__
+
 #include <sys/types.h>
 #include <stdio.h>
 
@@ -95,4 +97,4 @@
 #define DFUSE_TRA_ROOT(ptr, type)				\
 	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' as root\n", type)
 
-#endif /* __LOG_H__ */
+#endif /* __DFUSE_LOG_H__ */

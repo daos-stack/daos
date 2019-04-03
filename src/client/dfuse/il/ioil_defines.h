@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_DEFINES_H__
-#define __DFUSE_DEFINES_H__
+#ifndef __IOIL_DEFINES_H__
+#define __IOIL_DEFINES_H__
 
 #include <inttypes.h>
 
@@ -36,4 +36,4 @@
 #define DFUSE_PUBLIC __attribute__((visibility("default")))
 #endif
 
-#endif /* __DFUSE_DEFINES_H__ */
+#endif /* __IOIL_DEFINES_H__ */

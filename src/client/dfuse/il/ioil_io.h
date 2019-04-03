@@ -21,18 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_IO_H__
-#define __DFUSE_IO_H__
+#ifndef __IOIL_IO_H__
+#define __IOIL_IO_H__
 
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/uio.h>
 #include <stdio.h>
 #include "ioil_defines.h"
-
-#if defined(__cplusplus)
-extern "C" {
-#endif
 
 /* High level, POSIX equivalent API */
 DFUSE_PUBLIC int dfuse_open(const char *, int, ...);
@@ -58,4 +54,4 @@ DFUSE_PUBLIC FILE *dfuse_fopen(const char *, const char *);
 DFUSE_PUBLIC FILE *dfuse_freopen(const char *, const char *, FILE *);
 DFUSE_PUBLIC int dfuse_fclose(FILE *);
 
-#endif /* __DFUSE_IO_H__ */
+#endif /* __IOIL_IO_H__ */

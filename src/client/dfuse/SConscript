@@ -13,7 +13,7 @@ DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
              'dfuse_inode.c']
-RPC_SRC = ['closedir',
+OPS_SRC = ['closedir',
            'create',
            'fgetattr',
            'forget',
@@ -142,7 +142,7 @@ def scons():
     dfuse_obj = []
     for src in DFUSE_SRC:
         dfuse_obj += cenv.Object(src)
-    for src in RPC_SRC:
+    for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
     progs = cenv.Program('dfuse/dfusel', common + dfuse_obj)
 

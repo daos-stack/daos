@@ -24,10 +24,6 @@
 #ifndef __DFUSE_OBJ_POOL_H__
 #define __DFUSE_OBJ_POOL_H__
 
-#if defined(__cplusplus)
-extern "C" {
-#endif /* __cplusplus */
-
 #include <gurt/errno.h>
 
 /* This data structure is intended for small objects */
@@ -64,9 +60,5 @@ obj_pool_put(obj_pool_t *pool, void *item);
 /* Internal routine.  Use pool_allocate instead */
 int
 obj_pool_get_(obj_pool_t *pool, void **item, size_t size);
-
-#if defined(__cplusplus)
-}
-#endif /* __cplusplus */
 
 #endif /*  __DFUSE_OBJ_POOL_H__ */

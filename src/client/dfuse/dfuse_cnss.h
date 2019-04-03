@@ -20,8 +20,9 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __CNSS_H__
-#define __CNSS_H__
+
+#ifndef __DFUSE_CNSS_H__
+#define __DFUSE_CNSS_H__
 
 #include "dfuse_log.h"
 
@@ -82,4 +83,4 @@ dfuse_flush_fuse(struct dfuse_projection_info *fs_handle);
 int
 dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
 
-#endif /* __CNSS_H__ */
+#endif /* __DFUSE_CNSS_H__ */

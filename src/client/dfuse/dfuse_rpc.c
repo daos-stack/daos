@@ -284,12 +284,6 @@ dfuse_core_register(struct crt_proto_format *reg,
 }
 
 int
-dfuse_write_register(crt_rpc_cb_t handlers[])
-{
-	return dfuse_core_register(&dfuse_write_registry, NULL, handlers);
-}
-
-int
 dfuse_io_register(struct crt_proto_format **proto,
 		crt_rpc_cb_t handlers[])
 {

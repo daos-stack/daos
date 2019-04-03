@@ -21,15 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_API_H__
-#define __DFUSE_API_H__
+#ifndef __IOIL_API_H__
+#define __IOIL_API_H__
 
 #include <stdbool.h>
 #include "ioil_defines.h"
-
-#if defined(__cplusplus)
-extern "C" {
-#endif
 
 enum dfuse_bypass_status {
 	DFUSE_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
@@ -54,4 +50,4 @@ enum dfuse_bypass_status {
  */
 DFUSE_PUBLIC int dfuse_get_bypass_status(int fd);
 
-#endif /* __DFUSE_API_H__ */
+#endif /* __IOIL_API_H__ */

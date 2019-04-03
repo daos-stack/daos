@@ -66,4 +66,4 @@
 
 #define CONTAINER(req) container_of(req, struct TYPE_NAME, REQ_NAME)
 
-#endif
+#endif /* __DFUSE_OPS_H__ */

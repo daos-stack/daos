@@ -20,8 +20,9 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef DFUSE_COMMON_H
-#define DFUSE_COMMON_H
+
+#ifndef __DFUSE_COMMON_H__
+#define __DFUSE_COMMON_H__
 
 #include "dfuse_log.h"
 
@@ -251,9 +252,6 @@ CRT_RPC_DECLARE(dfuse_readx, DFUSE_RPC_READX_IN, DFUSE_RPC_READX_OUT)
 CRT_RPC_DECLARE(dfuse_writex, DFUSE_RPC_WRITEX_IN, DFUSE_RPC_WRITEX_OUT)
 
 int
-dfuse_write_register(crt_rpc_cb_t handlers[]);
-
-int
 dfuse_io_register(struct crt_proto_format **proto,
 		  crt_rpc_cb_t handlers[]);
 
@@ -262,4 +260,4 @@ dfuse_client_register(crt_endpoint_t *tgt_ep,
 		      struct crt_proto_format **write,
 		      struct crt_proto_format **io);
 
-#endif
+#endif /* __DFUSE_COMMON_H__ */

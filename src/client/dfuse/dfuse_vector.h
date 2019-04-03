@@ -24,10 +24,6 @@
 #ifndef __DFUSE_VECTOR_H__
 #define __DFUSE_VECTOR_H__
 
-#if defined(__cplusplus)
-extern "C" {
-#endif /* __cplusplus */
-
 #include <gurt/errno.h>
 
 /* An opaque 64-bit structure allocated by the user */
@@ -138,9 +134,5 @@ int vector_set_(vector_t *vector, unsigned int index, void *entry, size_t size);
 #define vector_remove(vector, index, entrypp) \
 	vector_remove_(vector, index, (void **)entrypp)
 int vector_remove_(vector_t *vector, unsigned int index, void **entry);
-
-#if defined(__cplusplus)
-}
-#endif /* __cplusplus */
 
 #endif /*  __DFUSE_VECTOR_H__ */

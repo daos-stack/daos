@@ -36,4 +36,4 @@ struct ios_gah {
 #define GAH_PRINT_STR "Gah(%" PRIx64 ")"
 #define GAH_PRINT_VAL(P) (P).root
 
-#endif
+#endif /* __DFUSE_GAH_H__ */

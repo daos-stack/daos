@@ -21,11 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_PRELOAD_H__
-#define __DFUSE_PRELOAD_H__
+#ifndef __IOIL_PRELOAD_H__
+#define __IOIL_PRELOAD_H__
 
 #define DFUSE_DECLARE_WEAK
 #include <dfuse_api.h>
 #include <dfuse_io.h>
 
-#endif /* __DFUSE_PRELOAD_H__ */
+#endif /* __IOIL_PRELOAD_H__ */

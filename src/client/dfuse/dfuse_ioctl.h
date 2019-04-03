@@ -41,4 +41,4 @@ struct dfuse_gah_info {
 #define DFUSE_IOCTL_GAH ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_GAH_NUMBER, \
 				 struct dfuse_gah_info))
 
-#endif
+#endif /* __DFUSE_IOCTL_H__ */

@@ -20,6 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 #ifndef __DFUSE_FS_H__
 #define __DFUSE_FS_H__
 
@@ -116,4 +117,4 @@ static inline void dfuse_fs_wait(struct dfuse_projection *dfuse_state,
 	dfuse_tracker_wait(tracker);
 }
 
-#endif
+#endif /* __DFUSE_FS_H__ */
