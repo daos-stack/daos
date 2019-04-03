@@ -34,13 +34,10 @@
 
 /* Prototypes for static helper functions */
 static int request_credentials_via_drpc(Drpc__Response **response);
-static Drpc__Call *new_credential_request(void);
-static int send_drpc_message(Drpc__Call *message, Drpc__Response **response);
 static char *get_agent_socket_path(void);
 static int process_credential_response(Drpc__Response *response,
 		daos_iov_t *creds);
 static int sanity_check_credential_response(Drpc__Response *response);
-
 
 int
 dc_sec_request_creds(daos_iov_t *creds)
@@ -59,63 +56,38 @@ dc_sec_request_creds(daos_iov_t *creds)
 
 	rc = process_credential_response(response, creds);
 
-	drpc__response__free_unpacked(response, NULL);
+	drpc_response_free(response);
 	return rc;
 }
 
 static int
 request_credentials_via_drpc(Drpc__Response **response)
 {
-	Drpc__Call	*request = new_credential_request();
-	int		rc;
-
-	if (request == NULL) {
-		return -DER_NOMEM;
-	}
-
-	rc = send_drpc_message(request, response);
-
-	drpc__call__free_unpacked(request, NULL);
-	return rc;
-}
-
-static Drpc__Call *
-new_credential_request(void)
-{
-	Drpc__Call *request;
-
-	D_ALLOC_PTR(request);
-	if (request != NULL) {
-		drpc__call__init(request);
-
-		request->module = DRPC_MODULE_SECURITY_AGENT;
-		request->method =
-				DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS;
-
-		/* No body needed - agent knows what auth flavor to give us */
-	}
-
-	return request;
-}
-
-static int
-send_drpc_message(Drpc__Call *message, Drpc__Response **response)
-{
+	Drpc__Call	*request;
 	struct drpc	*agent_socket;
 	int		rc;
 
 	agent_socket = drpc_connect(get_agent_socket_path());
 	if (agent_socket == NULL) {
-		/* can't connect to agent socket */
+		D_ERROR("Can't connect to agent socket\n");
 		return -DER_BADPATH;
 	}
 
-	rc = drpc_call(agent_socket, R_SYNC, message, response);
-	drpc_close(agent_socket);
+	request = drpc_call_create(agent_socket,
+			DRPC_MODULE_SECURITY_AGENT,
+			DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS);
+	if (request == NULL) {
+		D_ERROR("Couldn't allocate dRPC call\n");
+		drpc_close(agent_socket);
+		return -DER_NOMEM;
+	}
 
+	rc = drpc_call(agent_socket, R_SYNC, request, response);
+
+	drpc_close(agent_socket);
+	drpc_call_free(request);
 	return rc;
 }
-
 
 static char *
 get_agent_socket_path(void)
@@ -139,11 +111,12 @@ process_credential_response(Drpc__Response *response,
 	int rc = DER_SUCCESS;
 
 	if (response == NULL) {
+		D_ERROR("Response was null\n");
 		return -DER_NOREPLY;
 	}
 
 	if (response->status != DRPC__STATUS__SUCCESS) {
-		/* Recipient could not parse our message */
+		D_ERROR("dRPC response error: %d\n", response->status);
 		return -DER_MISC;
 	}
 
@@ -157,6 +130,7 @@ process_credential_response(Drpc__Response *response,
 		 */
 		D_ALLOC(bytes, response->body.len);
 		if (bytes == NULL) {
+			D_ERROR("Could not allocate iov buffer\n");
 			return -DER_NOMEM;
 		}
 
@@ -176,12 +150,12 @@ sanity_check_credential_response(Drpc__Response *response)
 	SecurityCredential *pb_cred = security_credential__unpack(NULL,
 			response->body.len, response->body.data);
 	if (pb_cred == NULL) {
-		/* Malformed body */
+		D_ERROR("Body was not a SecurityCredential\n");
 		return -DER_MISC;
 	}
 
-	/* Not super useful if we didn't get a token */
 	if (pb_cred->token == NULL) {
+		D_ERROR("Credential did not include token\n");
 		rc = -DER_MISC;
 	}
 
