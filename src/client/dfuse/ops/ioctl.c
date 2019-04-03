@@ -30,10 +30,10 @@
 #include "dfuse_ioctl.h"
 
 static void
-handle_gah_ioctl(int cmd, struct iof_file_handle *handle,
-		 struct iof_gah_info *gah_info)
+handle_gah_ioctl(int cmd, struct dfuse_file_handle *handle,
+		 struct dfuse_gah_info *gah_info)
 {
-	struct iof_projection_info *fs_handle = handle->open_req.fsh;
+	struct dfuse_projection_info *fs_handle = handle->open_req.fsh;
 
 	/* IOF_IOCTL_GAH has size of gah embedded.  FUSE should have
 	 * allocated that many bytes in data
@@ -56,8 +56,8 @@ dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 	       struct fuse_file_info *fi, unsigned int flags,
 	       const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
-	struct iof_file_handle *handle = (void *)fi->fh;
-	struct iof_gah_info gah_info = {0};
+	struct dfuse_file_handle *handle = (void *)fi->fh;
+	struct dfuse_gah_info gah_info = {0};
 	int ret = EIO;
 
 	IOF_TRACE_INFO(handle, "ioctl cmd=%#x " GAH_PRINT_STR, cmd,

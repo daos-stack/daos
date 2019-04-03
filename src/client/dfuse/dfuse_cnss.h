@@ -45,13 +45,13 @@ struct fs_info {
 	struct fuse_session	*fsi_session;
 	pthread_t		fsi_thread;
 	pthread_mutex_t		fsi_lock;
-	struct iof_projection_info *fsi_handle;
+	struct dfuse_projection_info *fsi_handle;
 	bool			fsi_running;
 	bool			fsi_mt;
 };
 
 struct cnss_info {
-	struct iof_state	*iof_state;
+	struct dfuse_state	*dfuse_state;
 	struct fs_info		ci_fsinfo;
 };
 
@@ -64,22 +64,22 @@ cnss_register_fuse(struct cnss_info *cnss_info,
 		   void *private_data,
 		   struct fuse_session **sessionp);
 
-struct iof_state *
-iof_plugin_init();
+struct dfuse_state *
+dfuse_plugin_init();
 
 void
-iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info);
+dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info);
 
 void
-iof_post_start(struct iof_state *iof_state);
+dfuse_post_start(struct dfuse_state *dfuse_state);
 
 void
-iof_finish(struct iof_state *iof_state);
+dfuse_finish(struct dfuse_state *dfuse_state);
 
 void
-iof_flush_fuse(struct iof_projection_info *fs_handle);
+dfuse_flush_fuse(struct dfuse_projection_info *fs_handle);
 
 int
-iof_deregister_fuse(struct iof_projection_info *fs_handle);
+dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
 
 #endif /* __CNSS_H__ */

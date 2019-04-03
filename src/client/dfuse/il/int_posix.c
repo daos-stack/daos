@@ -52,9 +52,9 @@ static vector_t fd_table;
 static const char *cnss_prefix;
 static crt_context_t crt_ctx;
 static int cnss_id;
-static struct iof_service_group ionss_grp;
-static struct iof_projection *projections;
-static struct crt_proto_format *iof_proto;
+static struct dfuse_service_group ionss_grp;
+static struct dfuse_projection *projections;
+static struct crt_proto_format *dfuse_proto;
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -79,7 +79,7 @@ static const char * const bypass_status[] = {
 };
 
 struct fd_entry {
-	struct iof_file_common common;
+	struct dfuse_file_common common;
 	off_t pos;
 	int flags;
 	int status;
@@ -207,7 +207,7 @@ ioil_init(void)
 	/* TODO: This needs to call the crt_proto_query() to ensure the server
 	 * supports the same version of the protocol
 	 */
-	rc = iof_io_register(&iof_proto, NULL);
+	rc = dfuse_io_register(&dfuse_proto, NULL);
 	if (rc != 0) {
 		crt_context_destroy(crt_ctx, 0);
 		crt_finalize();
@@ -243,7 +243,7 @@ ioil_fini(void)
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
-	struct iof_gah_info gah_info;
+	struct dfuse_gah_info gah_info;
 	int rc;
 
 	if (fd == -1)
@@ -297,7 +297,7 @@ drop_reference_if_disabled(struct fd_entry *entry)
 }
 
 IOF_PUBLIC int
-iof_open(const char *pathname, int flags, ...)
+dfuse_open(const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
 	int fd;
@@ -347,7 +347,7 @@ finish:
 }
 
 IOF_PUBLIC int
-iof_creat(const char *pathname, mode_t mode)
+dfuse_creat(const char *pathname, mode_t mode)
 {
 	struct fd_entry entry = {0};
 	int fd;
@@ -372,7 +372,7 @@ finish:
 }
 
 IOF_PUBLIC int
-iof_close(int fd)
+dfuse_close(int fd)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -393,7 +393,7 @@ do_real_close:
 }
 
 IOF_PUBLIC ssize_t
-iof_read(int fd, void *buf, size_t len)
+dfuse_read(int fd, void *buf, size_t len)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -428,7 +428,7 @@ do_real_read:
 }
 
 IOF_PUBLIC ssize_t
-iof_pread(int fd, void *buf, size_t count, off_t offset)
+dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -459,7 +459,7 @@ do_real_pread:
 }
 
 IOF_PUBLIC ssize_t
-iof_write(int fd, const void *buf, size_t len)
+dfuse_write(int fd, const void *buf, size_t len)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -493,7 +493,7 @@ do_real_write:
 }
 
 IOF_PUBLIC ssize_t
-iof_pwrite(int fd, const void *buf, size_t count, off_t offset)
+dfuse_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -524,7 +524,7 @@ do_real_pwrite:
 }
 
 IOF_PUBLIC off_t
-iof_lseek(int fd, off_t offset, int whence)
+dfuse_lseek(int fd, off_t offset, int whence)
 {
 	struct fd_entry *entry;
 	off_t new_offset = -1;
@@ -578,7 +578,7 @@ do_real_lseek:
 }
 
 IOF_PUBLIC ssize_t
-iof_readv(int fd, const struct iovec *vector, int iovcnt)
+dfuse_readv(int fd, const struct iovec *vector, int iovcnt)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -612,7 +612,7 @@ do_real_readv:
 }
 
 IOF_PUBLIC ssize_t
-iof_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
+dfuse_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_read;
@@ -642,7 +642,7 @@ do_real_preadv:
 }
 
 IOF_PUBLIC ssize_t
-iof_writev(int fd, const struct iovec *vector, int iovcnt)
+dfuse_writev(int fd, const struct iovec *vector, int iovcnt)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -676,7 +676,7 @@ do_real_writev:
 }
 
 IOF_PUBLIC ssize_t
-iof_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
+dfuse_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 {
 	struct fd_entry *entry;
 	ssize_t bytes_written;
@@ -707,7 +707,7 @@ do_real_pwritev:
 }
 
 IOF_PUBLIC void *
-iof_mmap(void *address, size_t length, int prot, int flags, int fd,
+dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 	 off_t offset)
 {
 	struct fd_entry *entry;
@@ -733,7 +733,7 @@ iof_mmap(void *address, size_t length, int prot, int flags, int fd,
 }
 
 IOF_PUBLIC int
-iof_fsync(int fd)
+dfuse_fsync(int fd)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -753,7 +753,7 @@ do_real_fsync:
 }
 
 IOF_PUBLIC int
-iof_fdatasync(int fd)
+dfuse_fdatasync(int fd)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -772,7 +772,7 @@ do_real_fdatasync:
 	return __real_fdatasync(fd);
 }
 
-IOF_PUBLIC int iof_dup(int oldfd)
+IOF_PUBLIC int dfuse_dup(int oldfd)
 {
 	struct fd_entry *entry = NULL;
 	int rc;
@@ -794,7 +794,7 @@ IOF_PUBLIC int iof_dup(int oldfd)
 }
 
 IOF_PUBLIC int
-iof_dup2(int oldfd, int newfd)
+dfuse_dup2(int oldfd, int newfd)
 {
 	struct fd_entry *entry = NULL;
 	int realfd = __real_dup2(oldfd, newfd);
@@ -816,7 +816,7 @@ iof_dup2(int oldfd, int newfd)
 }
 
 IOF_PUBLIC FILE *
-iof_fdopen(int fd, const char *mode)
+dfuse_fdopen(int fd, const char *mode)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -840,7 +840,7 @@ iof_fdopen(int fd, const char *mode)
 }
 
 IOF_PUBLIC int
-iof_fcntl(int fd, int cmd, ...)
+dfuse_fcntl(int fd, int cmd, ...)
 {
 	va_list ap;
 	void *arg;
@@ -896,7 +896,7 @@ iof_fcntl(int fd, int cmd, ...)
 }
 
 IOF_PUBLIC FILE *
-iof_fopen(const char *path, const char *mode)
+dfuse_fopen(const char *path, const char *mode)
 {
 	FILE *fp;
 	struct fd_entry entry = {0};
@@ -928,7 +928,7 @@ finish:
 }
 
 IOF_PUBLIC FILE *
-iof_freopen(const char *path, const char *mode, FILE *stream)
+dfuse_freopen(const char *path, const char *mode, FILE *stream)
 {
 	FILE *newstream;
 	struct fd_entry new_entry = {0};
@@ -988,7 +988,7 @@ iof_freopen(const char *path, const char *mode, FILE *stream)
 }
 
 IOF_PUBLIC int
-iof_fclose(FILE *stream)
+dfuse_fclose(FILE *stream)
 {
 	struct fd_entry *entry = NULL;
 	int fd;
@@ -1018,7 +1018,7 @@ do_real_fclose:
 }
 
 IOF_PUBLIC int
-iof_get_bypass_status(int fd)
+dfuse_get_bypass_status(int fd)
 {
 	struct fd_entry *entry;
 	int rc;

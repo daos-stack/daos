@@ -35,27 +35,27 @@ extern "C" {
 #endif
 
 /* High level, POSIX equivalent API */
-IOF_PUBLIC int iof_open(const char *, int, ...);
-IOF_PUBLIC ssize_t iof_pread(int, void *, size_t, off_t);
-IOF_PUBLIC ssize_t iof_pread(int, void *, size_t, off_t);
-IOF_PUBLIC ssize_t iof_pwrite(int, const void *, size_t, off_t);
-IOF_PUBLIC off_t iof_lseek(int, off_t, int);
-IOF_PUBLIC ssize_t iof_preadv(int, const struct iovec *, int, off_t);
-IOF_PUBLIC ssize_t iof_pwritev(int, const struct iovec *, int, off_t);
-IOF_PUBLIC void *iof_mmap(void *, size_t, int, int, int, off_t);
-IOF_PUBLIC int iof_close(int);
-IOF_PUBLIC ssize_t iof_read(int, void *, size_t);
-IOF_PUBLIC ssize_t iof_write(int, const void *, size_t);
-IOF_PUBLIC ssize_t iof_readv(int, const struct iovec *, int);
-IOF_PUBLIC ssize_t iof_writev(int, const struct iovec *, int);
-IOF_PUBLIC int iof_fsync(int);
-IOF_PUBLIC int iof_fdatasync(int);
-IOF_PUBLIC int iof_dup(int);
-IOF_PUBLIC int iof_dup2(int, int);
-IOF_PUBLIC int iof_fcntl(int fd, int cmd, ...);
-IOF_PUBLIC FILE *iof_fdopen(int, const char *);
-IOF_PUBLIC FILE *iof_fopen(const char *, const char *);
-IOF_PUBLIC FILE *iof_freopen(const char *, const char *, FILE *);
-IOF_PUBLIC int iof_fclose(FILE *);
+IOF_PUBLIC int dfuse_open(const char *, int, ...);
+IOF_PUBLIC ssize_t dfuse_pread(int, void *, size_t, off_t);
+IOF_PUBLIC ssize_t dfuse_pread(int, void *, size_t, off_t);
+IOF_PUBLIC ssize_t dfuse_pwrite(int, const void *, size_t, off_t);
+IOF_PUBLIC off_t dfuse_lseek(int, off_t, int);
+IOF_PUBLIC ssize_t dfuse_preadv(int, const struct iovec *, int, off_t);
+IOF_PUBLIC ssize_t dfuse_pwritev(int, const struct iovec *, int, off_t);
+IOF_PUBLIC void *dfuse_mmap(void *, size_t, int, int, int, off_t);
+IOF_PUBLIC int dfuse_close(int);
+IOF_PUBLIC ssize_t dfuse_read(int, void *, size_t);
+IOF_PUBLIC ssize_t dfuse_write(int, const void *, size_t);
+IOF_PUBLIC ssize_t dfuse_readv(int, const struct iovec *, int);
+IOF_PUBLIC ssize_t dfuse_writev(int, const struct iovec *, int);
+IOF_PUBLIC int dfuse_fsync(int);
+IOF_PUBLIC int dfuse_fdatasync(int);
+IOF_PUBLIC int dfuse_dup(int);
+IOF_PUBLIC int dfuse_dup2(int, int);
+IOF_PUBLIC int dfuse_fcntl(int fd, int cmd, ...);
+IOF_PUBLIC FILE *dfuse_fdopen(int, const char *);
+IOF_PUBLIC FILE *dfuse_fopen(const char *, const char *);
+IOF_PUBLIC FILE *dfuse_freopen(const char *, const char *, FILE *);
+IOF_PUBLIC int dfuse_fclose(FILE *);
 
 #endif /* __IOF_IO_H__ */

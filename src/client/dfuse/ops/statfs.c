@@ -25,9 +25,9 @@
 #include "dfuse.h"
 
 static bool
-statfs_cb(struct ioc_request *request)
+statfs_cb(struct dfuse_request *request)
 {
-	struct iof_data_out *out = crt_reply_get(request->rpc);
+	struct dfuse_data_out *out = crt_reply_get(request->rpc);
 
 	/* Drop the two refs that this code has taken, one from the
 	 * req_create() call and a second from addref
@@ -49,17 +49,17 @@ out_err:
 	return false;
 }
 
-static const struct ioc_request_api api = {
+static const struct dfuse_request_api api = {
 	.on_result	= statfs_cb,
-	.gah_offset	= offsetof(struct iof_gah_in, gah),
+	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
 	.have_gah	= true,
 };
 
 void
 dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 {
-	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct ioc_request		*request;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_request		*request;
 	int rc;
 	int ret;
 
@@ -87,14 +87,14 @@ dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 		D_GOTO(out_err, ret = EIO);
 	}
 
-	/* Add a second ref as that's what the iof_fs_send() function
+	/* Add a second ref as that's what the dfuse_fs_send() function
 	 * expects.  In the case of failover the RPC might be completed,
 	 * and a copy made the the RPC seen in statfs_cb might not be
 	 * the same one as seen here.
 	 */
 	crt_req_addref(request->rpc);
 
-	rc = iof_fs_send(request);
+	rc = dfuse_fs_send(request);
 	if (rc != 0) {
 		D_GOTO(out_err, ret = EIO);
 	}

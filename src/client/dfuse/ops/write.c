@@ -25,11 +25,11 @@
 #include "dfuse.h"
 
 static bool
-write_cb(struct ioc_request *request)
+write_cb(struct dfuse_request *request)
 {
-	struct iof_wb		*wb = container_of(request, struct iof_wb, wb_req);
-	struct iof_writex_out	*out = crt_reply_get(request->rpc);
-	struct iof_writex_in	*in = crt_req_get(request->rpc);
+	struct dfuse_wb		*wb = container_of(request, struct dfuse_wb, wb_req);
+	struct dfuse_writex_out	*out = crt_reply_get(request->rpc);
+	struct dfuse_writex_in	*in = crt_req_get(request->rpc);
 
 	if (out->err) {
 		/* Convert the error types, out->err is a IOF error code
@@ -49,27 +49,27 @@ write_cb(struct ioc_request *request)
 
 	IOC_REPLY_WRITE(wb, request->req, out->len);
 
-	iof_pool_release(request->fsh->write_pool, wb);
+	dfuse_pool_release(request->fsh->write_pool, wb);
 
 	return false;
 
 err:
 	IOC_REPLY_ERR(request, request->rc);
 
-	iof_pool_release(request->fsh->write_pool, wb);
+	dfuse_pool_release(request->fsh->write_pool, wb);
 	return false;
 }
 
-static const struct ioc_request_api api = {
+static const struct dfuse_request_api api = {
 	.on_result = write_cb,
-	.gah_offset = offsetof(struct iof_writex_in, gah),
+	.gah_offset = offsetof(struct dfuse_writex_in, gah),
 	.have_gah = true,
 };
 
 static void
-ioc_writex(size_t len, off_t position, struct iof_wb *wb)
+dfuse_writex(size_t len, off_t position, struct dfuse_wb *wb)
 {
-	struct iof_writex_in *in = crt_req_get(wb->wb_req.rpc);
+	struct dfuse_writex_in *in = crt_req_get(wb->wb_req.rpc);
 	int rc;
 
 	in->xtvec.xt_len = len;
@@ -83,7 +83,7 @@ ioc_writex(size_t len, off_t position, struct iof_wb *wb)
 	in->xtvec.xt_off = position;
 	wb->wb_req.ir_api = &api;
 
-	rc = iof_fs_send(&wb->wb_req);
+	rc = dfuse_fs_send(&wb->wb_req);
 	if (rc) {
 		D_GOTO(err, rc = EIO);
 	}
@@ -92,18 +92,18 @@ ioc_writex(size_t len, off_t position, struct iof_wb *wb)
 
 err:
 	IOC_REPLY_ERR_RAW(wb, wb->wb_req.req, rc);
-	iof_pool_release(wb->wb_req.fsh->write_pool, wb);
+	dfuse_pool_release(wb->wb_req.fsh->write_pool, wb);
 }
 
 void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
-	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
-	struct iof_wb *wb;
+	struct dfuse_file_handle *handle = (struct dfuse_file_handle *)fi->fh;
+	struct dfuse_wb *wb;
 	int rc;
 
-	wb = iof_pool_acquire(handle->open_req.fsh->write_pool);
+	wb = dfuse_pool_acquire(handle->open_req.fsh->write_pool);
 	if (!wb)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -117,7 +117,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 
 	memcpy(wb->lb.buf, buff, len);
 
-	ioc_writex(len, position, wb);
+	dfuse_writex(len, position, wb);
 
 	return;
 err:
@@ -134,8 +134,8 @@ void
 dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 		   off_t position, struct fuse_file_info *fi)
 {
-	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
-	struct iof_wb *wb = NULL;
+	struct dfuse_file_handle *handle = (struct dfuse_file_handle *)fi->fh;
+	struct dfuse_wb *wb = NULL;
 	size_t len = bufv->buf[0].size;
 	struct fuse_bufvec dst = { .count = 1 };
 	int rc;
@@ -150,7 +150,7 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	IOF_TRACE_INFO(handle, "Count %zi [0].flags %#x",
 		       bufv->count, bufv->buf[0].flags);
 
-	wb = iof_pool_acquire(handle->open_req.fsh->write_pool);
+	wb = dfuse_pool_acquire(handle->open_req.fsh->write_pool);
 	if (!wb)
 		D_GOTO(err, rc = ENOMEM);
 	IOF_TRACE_UP(wb, handle, "writebuf");
@@ -167,11 +167,11 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (rc != len)
 		D_GOTO(err, rc = EIO);
 
-	ioc_writex(len, position, wb);
+	dfuse_writex(len, position, wb);
 
 	return;
 err:
 	IOC_REPLY_ERR_RAW(handle, req, rc);
 	if (wb)
-		iof_pool_release(handle->open_req.fsh->write_pool, wb);
+		dfuse_pool_release(handle->open_req.fsh->write_pool, wb);
 }

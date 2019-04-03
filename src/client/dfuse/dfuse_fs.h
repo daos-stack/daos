@@ -29,7 +29,7 @@
 #include <gurt/atomic.h>
 #include "dfuse_gah.h"
 
-struct iof_service_group {
+struct dfuse_service_group {
 	crt_group_t		*dest_grp; /* Server group */
 	crt_endpoint_t		psr_ep;    /* Server PSR endpoint */
 	bool			enabled;   /* Indicates group is available */
@@ -39,9 +39,9 @@ struct iof_service_group {
  *
  * Shared between CNSS and IL.
  */
-struct iof_projection {
+struct dfuse_projection {
 	/** Server group info */
-	struct iof_service_group	*grp;
+	struct dfuse_service_group	*grp;
 	/** Protocol used for I/O RPCs */
 	struct crt_proto_format		*io_proto;
 	/** context to use */
@@ -59,32 +59,32 @@ struct iof_projection {
 };
 
 /* Common data stored on open file handles */
-struct iof_file_common {
-	struct iof_projection	*projection;
+struct dfuse_file_common {
+	struct dfuse_projection	*projection;
 	struct ios_gah		gah;
 	crt_endpoint_t		ep;
 };
 
 /* Tracks remaining events for completion */
-struct iof_tracker {
+struct dfuse_tracker {
 	ATOMIC int remaining;
 };
 
 /* Initialize number of events to track */
-static inline void iof_tracker_init(struct iof_tracker *tracker,
+static inline void dfuse_tracker_init(struct dfuse_tracker *tracker,
 				    int expected_count)
 {
 	atomic_store_release(&tracker->remaining, expected_count);
 }
 
 /* Signal an event */
-static inline void iof_tracker_signal(struct iof_tracker *tracker)
+static inline void dfuse_tracker_signal(struct dfuse_tracker *tracker)
 {
 	atomic_dec_release(&tracker->remaining);
 }
 
 /* Test if all events have signaled */
-static inline bool iof_tracker_test(struct iof_tracker *tracker)
+static inline bool dfuse_tracker_test(struct dfuse_tracker *tracker)
 {
 	if (atomic_load_consume(&tracker->remaining) == 0)
 		return true;
@@ -92,28 +92,28 @@ static inline bool iof_tracker_test(struct iof_tracker *tracker)
 	return false;
 }
 
-static inline void iof_tracker_wait(struct iof_tracker *tracker)
+static inline void dfuse_tracker_wait(struct dfuse_tracker *tracker)
 {
-	while (!iof_tracker_test(tracker))
+	while (!dfuse_tracker_test(tracker))
 		sched_yield();
 }
 
 /* Progress until all events have signaled */
-void iof_wait(crt_context_t, struct iof_tracker *);
+void dfuse_wait(crt_context_t, struct dfuse_tracker *);
 
 /* Progress until all events have signaled */
-static inline void iof_fs_wait(struct iof_projection *iof_state,
-			       struct iof_tracker *tracker)
+static inline void dfuse_fs_wait(struct dfuse_projection *dfuse_state,
+			       struct dfuse_tracker *tracker)
 {
 	/* If there is no progress thread then call progress from within
 	 * this function, else just wait
 	 */
-	if (!iof_state->progress_thread) {
-		iof_wait(iof_state->crt_ctx, tracker);
+	if (!dfuse_state->progress_thread) {
+		dfuse_wait(dfuse_state->crt_ctx, tracker);
 		return;
 	}
 
-	iof_tracker_wait(tracker);
+	dfuse_tracker_wait(tracker);
 }
 
 #endif

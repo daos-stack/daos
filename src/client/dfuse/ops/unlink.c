@@ -24,18 +24,18 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static const struct ioc_request_api api = {
-	.on_result	= ioc_gen_cb,
+static const struct dfuse_request_api api = {
+	.on_result	= dfuse_gen_cb,
 	.have_gah	= true,
-	.gah_offset	= offsetof(struct iof_unlink_in, gah),
+	.gah_offset	= offsetof(struct dfuse_unlink_in, gah),
 };
 
 static void
 dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 {
-	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct ioc_request		*request;
-	struct iof_unlink_in		*in;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_request		*request;
+	struct dfuse_unlink_in		*in;
 	int rc;
 	int ret = EIO;
 
@@ -75,7 +75,7 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 
 	crt_req_addref(request->rpc);
 
-	rc = iof_fs_send(request);
+	rc = dfuse_fs_send(request);
 	if (rc != 0) {
 		D_GOTO(out_decref, ret = EIO);
 	}

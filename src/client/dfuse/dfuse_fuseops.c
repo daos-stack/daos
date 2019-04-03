@@ -34,7 +34,7 @@
 	} while (0)
 
 static void
-ioc_show_flags(void *handle, unsigned int in)
+dfuse_show_flags(void *handle, unsigned int in)
 {
 	SHOW_FLAG(handle, in, FUSE_CAP_ASYNC_READ);
 	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_LOCKS);
@@ -65,9 +65,9 @@ ioc_show_flags(void *handle, unsigned int in)
  * parsing this is where we apply tunables.
  */
 static void
-ioc_fuse_init(void *arg, struct fuse_conn_info *conn)
+dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
-	struct iof_projection_info *fs_handle = arg;
+	struct dfuse_projection_info *fs_handle = arg;
 
 	IOF_TRACE_INFO(fs_handle,
 		       "Fuse configuration for projection srv:%d cli:%d",
@@ -89,28 +89,28 @@ ioc_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	IOF_TRACE_INFO(fs_handle, "Capability supported %#x", conn->capable);
 
-	ioc_show_flags(fs_handle, conn->capable);
+	dfuse_show_flags(fs_handle, conn->capable);
 
 	/* This does not work as ioctl.c assumes fi->fh is a file handle */
 	conn->want &= ~FUSE_CAP_IOCTL_DIR;
 
 	IOF_TRACE_INFO(fs_handle, "Capability requested %#x", conn->want);
 
-	ioc_show_flags(fs_handle, conn->want);
+	dfuse_show_flags(fs_handle, conn->want);
 
 	IOF_TRACE_INFO(fs_handle, "max_background %d", conn->max_background);
 	IOF_TRACE_INFO(fs_handle,
 		       "congestion_threshold %d", conn->congestion_threshold);
 }
 
-static void ioc_fuse_destroy(void *userdata)
+static void dfuse_fuse_destroy(void *userdata)
 {
 	IOF_TRACE_INFO(userdata, "destroy callback");
 	IOF_TRACE_DOWN(userdata);
 	D_FREE(userdata);
 }
 
-struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t flags)
+struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t flags)
 {
 	struct fuse_lowlevel_ops *fuse_ops;
 
@@ -118,7 +118,7 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t flags)
 	if (!fuse_ops)
 		return NULL;
 
-	fuse_ops->init = ioc_fuse_init;
+	fuse_ops->init = dfuse_fuse_init;
 	fuse_ops->getattr = dfuse_cb_getattr;
 	fuse_ops->lookup = dfuse_cb_lookup;
 	fuse_ops->forget = dfuse_cb_forget;
@@ -132,7 +132,7 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t flags)
 	fuse_ops->releasedir = dfuse_cb_releasedir;
 	fuse_ops->readdir = dfuse_cb_readdir;
 	fuse_ops->ioctl = dfuse_cb_ioctl;
-	fuse_ops->destroy = ioc_fuse_destroy;
+	fuse_ops->destroy = dfuse_fuse_destroy;
 	fuse_ops->symlink = dfuse_cb_symlink;
 	fuse_ops->mkdir = dfuse_cb_mkdir;
 	fuse_ops->unlink = dfuse_cb_unlink;

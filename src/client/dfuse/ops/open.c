@@ -25,10 +25,10 @@
 #include "dfuse.h"
 
 static bool
-ioc_open_ll_cb(struct ioc_request *request)
+dfuse_open_ll_cb(struct dfuse_request *request)
 {
-	struct iof_file_handle	*handle = container_of(request, struct iof_file_handle, open_req);
-	struct iof_open_out	*out = crt_reply_get(request->rpc);
+	struct dfuse_file_handle	*handle = container_of(request, struct dfuse_file_handle, open_req);
+	struct dfuse_open_out	*out = crt_reply_get(request->rpc);
 	struct fuse_file_info	fi = {0};
 
 	IOF_TRACE_DEBUG(handle, "cci_rc %d rc %d err %d",
@@ -53,22 +53,22 @@ ioc_open_ll_cb(struct ioc_request *request)
 
 out_err:
 	IOC_REPLY_ERR(request, request->rc);
-	iof_pool_release(request->fsh->fh_pool, handle);
+	dfuse_pool_release(request->fsh->fh_pool, handle);
 	return false;
 }
 
-static const struct ioc_request_api api = {
-	.on_result	= ioc_open_ll_cb,
-	.gah_offset	= offsetof(struct iof_open_in, gah),
+static const struct dfuse_request_api api = {
+	.on_result	= dfuse_open_ll_cb,
+	.gah_offset	= offsetof(struct dfuse_open_in, gah),
 	.have_gah	= true,
 };
 
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
-	struct iof_file_handle *handle = NULL;
-	struct iof_open_in *in;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_file_handle *handle = NULL;
+	struct dfuse_open_in *in;
 	int rc;
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
@@ -89,7 +89,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	handle = iof_pool_acquire(fs_handle->fh_pool);
+	handle = dfuse_pool_acquire(fs_handle->fh_pool);
 	if (!handle) {
 		D_GOTO(out_err, rc = ENOMEM);
 	}
@@ -110,17 +110,17 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	LOG_FLAGS(handle, fi->flags);
 
-	rc = iof_fs_send(&handle->open_req);
+	rc = dfuse_fs_send(&handle->open_req);
 	if (rc) {
 		D_GOTO(out_err, rc = EIO);
 	}
 
-	iof_pool_restock(fs_handle->fh_pool);
+	dfuse_pool_restock(fs_handle->fh_pool);
 
 	return;
 out_err:
 	IOC_REPLY_ERR_RAW(handle, req, rc);
 
 	if (handle)
-		iof_pool_release(fs_handle->fh_pool, handle);
+		dfuse_pool_release(fs_handle->fh_pool, handle);
 }

@@ -54,7 +54,7 @@ crt_proc_struct_ios_gah(crt_proc_t proc, void *arg)
 }
 
 int
-iof_proc_stat(crt_proc_t proc, void *arg)
+dfuse_proc_stat(crt_proc_t proc, void *arg)
 {
 	struct stat *data = arg;
 
@@ -68,7 +68,7 @@ struct crt_msg_field CMF_IOF_NAME = {
 
 struct crt_msg_field CMF_IOF_STAT = {
 	.cmf_size = sizeof(struct stat),
-	.cmf_proc = iof_proc_stat,
+	.cmf_proc = dfuse_proc_stat,
 };
 
 struct crt_msg_field *gah_string_in[] = {
@@ -167,10 +167,10 @@ struct crt_msg_field *readdir_out[] = {
 	&CMF_INT,
 };
 
-CRT_GEN_PROC_FUNC(iof_xtvec, IOF_STRUCT_XTVEC);
+CRT_GEN_PROC_FUNC(dfuse_xtvec, IOF_STRUCT_XTVEC);
 
-CRT_RPC_DEFINE(iof_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT);
-CRT_RPC_DEFINE(iof_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT);
+CRT_RPC_DEFINE(dfuse_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT);
+CRT_RPC_DEFINE(dfuse_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT);
 
 struct crt_msg_field *status_out[] = {
 	&CMF_INT,
@@ -220,36 +220,36 @@ IOF_RPCS_LIST
 		.prf_req_fmt = &IOF_CRF_##a,	\
 	},
 
-static struct crt_proto_rpc_format iof_write_rpc_types[] = {
+static struct crt_proto_rpc_format dfuse_write_rpc_types[] = {
 	IOF_RPCS_LIST
 };
 
 #undef X
 
-static struct crt_proto_rpc_format iof_io_rpc_types[] = {
+static struct crt_proto_rpc_format dfuse_io_rpc_types[] = {
 	{
-		.prf_req_fmt = &CQF_iof_readx,
+		.prf_req_fmt = &CQF_dfuse_readx,
 		.prf_flags = CRT_RPC_FEAT_NO_TIMEOUT,
 	},
 	{
-		.prf_req_fmt = &CQF_iof_writex,
+		.prf_req_fmt = &CQF_dfuse_writex,
 		.prf_flags = CRT_RPC_FEAT_NO_TIMEOUT,
 	}
 };
 
-static struct crt_proto_format iof_write_registry = {
+static struct crt_proto_format dfuse_write_registry = {
 	.cpf_name = "IOF_METADATA",
 	.cpf_ver = IOF_PROTO_WRITE_VERSION,
-	.cpf_count = ARRAY_SIZE(iof_write_rpc_types),
-	.cpf_prf = iof_write_rpc_types,
+	.cpf_count = ARRAY_SIZE(dfuse_write_rpc_types),
+	.cpf_prf = dfuse_write_rpc_types,
 	.cpf_base = IOF_PROTO_WRITE_BASE,
 };
 
-static struct crt_proto_format iof_io_registry = {
+static struct crt_proto_format dfuse_io_registry = {
 	.cpf_name = "IOF_IO",
 	.cpf_ver = IOF_PROTO_IO_VERSION,
-	.cpf_count = ARRAY_SIZE(iof_io_rpc_types),
-	.cpf_prf = iof_io_rpc_types,
+	.cpf_count = ARRAY_SIZE(dfuse_io_rpc_types),
+	.cpf_prf = dfuse_io_rpc_types,
 	.cpf_base = IOF_PROTO_IO_BASE,
 };
 
@@ -264,7 +264,7 @@ static struct crt_proto_format iof_io_registry = {
  * are not requried.
  */
 static int
-iof_core_register(struct crt_proto_format *reg,
+dfuse_core_register(struct crt_proto_format *reg,
 		  struct crt_proto_format **proto,
 		  crt_rpc_cb_t handlers[])
 {
@@ -284,20 +284,20 @@ iof_core_register(struct crt_proto_format *reg,
 }
 
 int
-iof_write_register(crt_rpc_cb_t handlers[])
+dfuse_write_register(crt_rpc_cb_t handlers[])
 {
-	return iof_core_register(&iof_write_registry, NULL, handlers);
+	return dfuse_core_register(&dfuse_write_registry, NULL, handlers);
 }
 
 int
-iof_io_register(struct crt_proto_format **proto,
+dfuse_io_register(struct crt_proto_format **proto,
 		crt_rpc_cb_t handlers[])
 {
-	return iof_core_register(&iof_io_registry, proto, handlers);
+	return dfuse_core_register(&dfuse_io_registry, proto, handlers);
 }
 
 struct sq_cb {
-	struct iof_tracker	tracker;
+	struct dfuse_tracker	tracker;
 	uint32_t		write_version;
 	int			write_rc;
 	uint32_t		io_version;
@@ -305,7 +305,7 @@ struct sq_cb {
 };
 
 static void
-iof_write_query_cb(struct crt_proto_query_cb_info *cb_info)
+dfuse_write_query_cb(struct crt_proto_query_cb_info *cb_info)
 {
 	struct sq_cb *cbi = cb_info->pq_arg;
 
@@ -314,11 +314,11 @@ iof_write_query_cb(struct crt_proto_query_cb_info *cb_info)
 		cbi->write_version = cb_info->pq_ver;
 	}
 
-	iof_tracker_signal(&cbi->tracker);
+	dfuse_tracker_signal(&cbi->tracker);
 }
 
 static void
-iof_io_query_cb(struct crt_proto_query_cb_info *cb_info)
+dfuse_io_query_cb(struct crt_proto_query_cb_info *cb_info)
 {
 	struct sq_cb *cbi = cb_info->pq_arg;
 
@@ -327,7 +327,7 @@ iof_io_query_cb(struct crt_proto_query_cb_info *cb_info)
 		cbi->io_version = cb_info->pq_ver;
 	}
 
-	iof_tracker_signal(&cbi->tracker);
+	dfuse_tracker_signal(&cbi->tracker);
 }
 
 /* Query the server side protocols in use, for now we only support one
@@ -337,7 +337,7 @@ iof_io_query_cb(struct crt_proto_query_cb_info *cb_info)
  * and then waiting for them both to complete.
  */
 int
-iof_client_register(crt_endpoint_t *tgt_ep,
+dfuse_client_register(crt_endpoint_t *tgt_ep,
 		    struct crt_proto_format **write,
 		    struct crt_proto_format **io)
 {
@@ -346,26 +346,26 @@ iof_client_register(crt_endpoint_t *tgt_ep,
 	struct sq_cb cbi = {0};
 	int rc;
 
-	iof_tracker_init(&cbi.tracker, 2);
+	dfuse_tracker_init(&cbi.tracker, 2);
 
 	rc = crt_proto_query(tgt_ep, IOF_PROTO_WRITE_BASE,
-			     &write_ver, 1, iof_write_query_cb, &cbi);
+			     &write_ver, 1, dfuse_write_query_cb, &cbi);
 	if (rc != -DER_SUCCESS) {
-		iof_tracker_signal(&cbi.tracker);
-		iof_tracker_signal(&cbi.tracker);
-		iof_tracker_wait(&cbi.tracker);
+		dfuse_tracker_signal(&cbi.tracker);
+		dfuse_tracker_signal(&cbi.tracker);
+		dfuse_tracker_wait(&cbi.tracker);
 		return rc;
 	}
 
 	rc = crt_proto_query(tgt_ep, IOF_PROTO_IO_BASE,
-			     &io_ver, 1, iof_io_query_cb, &cbi);
+			     &io_ver, 1, dfuse_io_query_cb, &cbi);
 	if (rc != -DER_SUCCESS) {
-		iof_tracker_signal(&cbi.tracker);
-		iof_tracker_wait(&cbi.tracker);
+		dfuse_tracker_signal(&cbi.tracker);
+		dfuse_tracker_wait(&cbi.tracker);
 		return rc;
 	}
 
-	iof_tracker_wait(&cbi.tracker);
+	dfuse_tracker_wait(&cbi.tracker);
 
 	if (cbi.write_rc != -DER_SUCCESS) {
 		return cbi.write_rc;
@@ -383,18 +383,18 @@ iof_client_register(crt_endpoint_t *tgt_ep,
 		return -DER_INVAL;
 	}
 
-	rc = crt_proto_register(&iof_write_registry);
+	rc = crt_proto_register(&dfuse_write_registry);
 	if (rc != -DER_SUCCESS) {
 		return rc;
 	}
 
-	rc = crt_proto_register(&iof_io_registry);
+	rc = crt_proto_register(&dfuse_io_registry);
 	if (rc != -DER_SUCCESS) {
 		return rc;
 	}
 
-	*write	= &iof_write_registry;
-	*io	= &iof_io_registry;
+	*write	= &dfuse_write_registry;
+	*io	= &dfuse_io_registry;
 
 	return -DER_SUCCESS;
 }

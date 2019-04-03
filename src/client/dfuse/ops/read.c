@@ -25,10 +25,10 @@
 #include "dfuse.h"
 
 static bool
-read_bulk_cb(struct ioc_request *request)
+read_bulk_cb(struct dfuse_request *request)
 {
-	struct iof_rb *rb = container_of(request, struct iof_rb, rb_req);
-	struct iof_readx_out *out = crt_reply_get(request->rpc);
+	struct dfuse_rb *rb = container_of(request, struct dfuse_rb, rb_req);
+	struct dfuse_readx_out *out = crt_reply_get(request->rpc);
 	int rc = 0;
 	size_t bytes_read = 0;
 	void *buff = NULL;
@@ -83,13 +83,13 @@ out:
 						rc, strerror(-rc));
 		}
 	}
-	iof_pool_release(rb->pt, rb);
+	dfuse_pool_release(rb->pt, rb);
 	return false;
 }
 
-static const struct ioc_request_api api = {
+static const struct dfuse_request_api api = {
 	.on_result	= read_bulk_cb,
-	.gah_offset	= offsetof(struct iof_readx_in, gah),
+	.gah_offset	= offsetof(struct dfuse_readx_in, gah),
 	.have_gah	= true,
 };
 
@@ -97,11 +97,11 @@ void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
 {
-	struct iof_file_handle *handle = (void *)fi->fh;
-	struct iof_projection_info *fs_handle = handle->open_req.fsh;
-	struct iof_readx_in *in;
-	struct iof_pool_type *pt;
-	struct iof_rb *rb = NULL;
+	struct dfuse_file_handle *handle = (void *)fi->fh;
+	struct dfuse_projection_info *fs_handle = handle->open_req.fsh;
+	struct dfuse_readx_in *in;
+	struct dfuse_pool_type *pt;
+	struct dfuse_rb *rb = NULL;
 	int rc;
 
 	IOF_TRACE_INFO(handle, "%#zx-%#zx " GAH_PRINT_STR, position,
@@ -112,7 +112,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	else
 		pt = fs_handle->rb_pool_large;
 
-	rb = iof_pool_acquire(pt);
+	rb = dfuse_pool_acquire(pt);
 	if (!rb)
 		D_GOTO(out_err, rc = ENOMEM);
 
@@ -129,13 +129,13 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	in->xtvec.xt_len = len;
 	in->data_bulk = rb->lb.handle;
 
-	rc = iof_fs_send(&rb->rb_req);
+	rc = dfuse_fs_send(&rb->rb_req);
 	if (rc != 0) {
 		IOC_REPLY_ERR(&rb->rb_req, rc);
-		iof_pool_release(pt, rb);
+		dfuse_pool_release(pt, rb);
 	}
 
-	iof_pool_restock(pt);
+	dfuse_pool_restock(pt);
 	return;
 
 out_err:

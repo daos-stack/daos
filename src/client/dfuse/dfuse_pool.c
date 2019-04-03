@@ -30,7 +30,7 @@
 #include "dfuse_pool.h"
 
 static void
-debug_dump(struct iof_pool_type *type)
+debug_dump(struct dfuse_pool_type *type)
 {
 	IOF_TRACE_INFO(type, "Pool type %p '%s'", type, type->reg.name);
 	IOF_TRACE_DEBUG(type, "size %d offset %d",
@@ -48,7 +48,7 @@ debug_dump(struct iof_pool_type *type)
 
 /* Create an object pool */
 int
-iof_pool_init(struct iof_pool *pool, void *arg)
+dfuse_pool_init(struct dfuse_pool *pool, void *arg)
 {
 	int rc;
 
@@ -58,7 +58,7 @@ iof_pool_init(struct iof_pool *pool, void *arg)
 	if (rc != -DER_SUCCESS)
 		return rc;
 
-	IOF_TRACE_UP(pool, arg, "iof_pool");
+	IOF_TRACE_UP(pool, arg, "dfuse_pool");
 	IOF_TRACE_DEBUG(pool, "Creating a pool");
 
 	pool->init = true;
@@ -68,9 +68,9 @@ iof_pool_init(struct iof_pool *pool, void *arg)
 
 /* Destroy an object pool */
 void
-iof_pool_destroy(struct iof_pool *pool)
+dfuse_pool_destroy(struct dfuse_pool *pool)
 {
-	struct iof_pool_type *type;
+	struct dfuse_pool_type *type;
 	int rc;
 	bool in_use;
 
@@ -81,12 +81,12 @@ iof_pool_destroy(struct iof_pool *pool)
 		debug_dump(type);
 	}
 
-	in_use = iof_pool_reclaim(pool);
+	in_use = dfuse_pool_reclaim(pool);
 	if (in_use)
 		IOF_TRACE_WARNING(pool, "Pool has active objects");
 
 	while ((type = d_list_pop_entry(&pool->list,
-					struct iof_pool_type,
+					struct dfuse_pool_type,
 					type_list))) {
 		if (type->count != 0)
 			IOF_TRACE_WARNING(type,
@@ -115,7 +115,7 @@ iof_pool_destroy(struct iof_pool *pool)
  * This function should be called with the type lock held.
  */
 static int
-restock(struct iof_pool_type *type, int count)
+restock(struct dfuse_pool_type *type, int count)
 {
 	d_list_t *entry, *enext;
 	int reset_calls = 0;
@@ -170,9 +170,9 @@ restock(struct iof_pool_type *type, int count)
  */
 
 bool
-iof_pool_reclaim(struct iof_pool *pool)
+dfuse_pool_reclaim(struct dfuse_pool *pool)
 {
-	struct iof_pool_type *type;
+	struct dfuse_pool_type *type;
 	int active_descriptors = false;
 
 	D_MUTEX_LOCK(&pool->lock);
@@ -221,7 +221,7 @@ iof_pool_reclaim(struct iof_pool *pool)
  * Returns a pointer to the object or NULL if allocation fails.
  */
 static void *
-create(struct iof_pool_type *type)
+create(struct dfuse_pool_type *type)
 {
 	void *ptr;
 
@@ -252,7 +252,7 @@ create(struct iof_pool_type *type)
  * there will be no on-path allocations.
  */
 static void
-create_many(struct iof_pool_type *type)
+create_many(struct dfuse_pool_type *type)
 {
 	while (type->free_count < (type->no_restock_hwm + 1)) {
 		void *ptr;
@@ -274,10 +274,10 @@ create_many(struct iof_pool_type *type)
 }
 
 /* Register a pool type */
-struct iof_pool_type *
-iof_pool_register(struct iof_pool *pool, struct iof_pool_reg *reg)
+struct dfuse_pool_type *
+dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
 {
-	struct iof_pool_type *type;
+	struct dfuse_pool_type *type;
 	int rc;
 
 	if (!reg->name)
@@ -334,7 +334,7 @@ iof_pool_register(struct iof_pool *pool, struct iof_pool_reg *reg)
  * as posslble.
  */
 void *
-iof_pool_acquire(struct iof_pool_type *type)
+dfuse_pool_acquire(struct dfuse_pool_type *type)
 {
 	void		*ptr = NULL;
 	d_list_t	*entry;
@@ -384,7 +384,7 @@ iof_pool_acquire(struct iof_pool_type *type)
  *
  */
 void
-iof_pool_release(struct iof_pool_type *type, void *ptr)
+dfuse_pool_release(struct dfuse_pool_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->reg.offset;
 
@@ -407,7 +407,7 @@ iof_pool_release(struct iof_pool_type *type, void *ptr)
  */
 
 void
-iof_pool_restock(struct iof_pool_type *type)
+dfuse_pool_restock(struct dfuse_pool_type *type)
 {
 	IOF_TRACE_DEBUG(type, "Count (%d/%d/%d)", type->pending_count,
 			type->free_count, type->count);

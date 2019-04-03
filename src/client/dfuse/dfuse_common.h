@@ -42,31 +42,31 @@ struct ios_name {
 	char name[NAME_MAX + 1];
 };
 
-struct iof_gah_string_in {
+struct dfuse_gah_string_in {
 	struct ios_gah gah;
 	struct ios_name name;
 };
 
-struct iof_imigrate_in {
+struct dfuse_imigrate_in {
 	struct ios_gah gah;
 	struct ios_name name;
 	int inode;
 };
 
-struct iof_string_out {
+struct dfuse_string_out {
 	d_string_t path;
 	int rc;
 	int err;
 };
 
-struct iof_entry_out {
+struct dfuse_entry_out {
 	struct ios_gah gah;
 	struct stat stat;
 	int rc;
 	int err;
 };
 
-struct iof_create_out {
+struct dfuse_create_out {
 	struct ios_gah gah;
 	struct ios_gah igah;
 	struct stat stat;
@@ -74,29 +74,29 @@ struct iof_create_out {
 	int err;
 };
 
-struct iof_two_string_in {
-	struct iof_gah_string_in common;
+struct dfuse_two_string_in {
+	struct dfuse_gah_string_in common;
 	d_string_t oldpath;
 };
 
-struct iof_create_in {
-	struct iof_gah_string_in common;
+struct dfuse_create_in {
+	struct dfuse_gah_string_in common;
 	uint32_t mode;
 	uint32_t flags;
 };
 
-/* We reuse iof_gah_string_in in a few input structs and we need to
+/* We reuse dfuse_gah_string_in in a few input structs and we need to
  * ensure compiler isn't adding padding.   This should always be
  * the case now unless we change the struct.  This assert is here
  * to force the modifier to ensure the same condition is met.
  */
-_Static_assert(sizeof(struct iof_gah_string_in) ==
+_Static_assert(sizeof(struct dfuse_gah_string_in) ==
 	       (sizeof(struct ios_gah) + sizeof(struct ios_name)),
-	       "iof_gah_string_in size unexpected");
+	       "dfuse_gah_string_in size unexpected");
 
 _Static_assert(NAME_MAX == 255, "NAME_MAX wrong size");
 
-struct iof_rename_in {
+struct dfuse_rename_in {
 	struct ios_gah old_gah;
 	struct ios_gah new_gah;
 	struct ios_name old_name;
@@ -104,37 +104,37 @@ struct iof_rename_in {
 	uint32_t flags;
 };
 
-struct iof_open_in {
+struct dfuse_open_in {
 	struct ios_gah gah;
 	uint32_t flags;
 };
 
-struct iof_unlink_in {
+struct dfuse_unlink_in {
 	struct ios_name name;
 	struct ios_gah gah;
 	uint32_t flags;
 };
 
-struct iof_attr_out {
+struct dfuse_attr_out {
 	struct stat stat;
 	int rc;
 	int err;
 };
 
-struct iof_opendir_out {
+struct dfuse_opendir_out {
 	struct ios_gah gah;
 	int rc;
 	int err;
 };
 
-struct iof_readdir_in {
+struct dfuse_readdir_in {
 	struct ios_gah gah;
 	crt_bulk_t bulk;
 	uint64_t offset;
 };
 
 /* Each READDIR rpc contains an array of these */
-struct iof_readdir_reply {
+struct dfuse_readdir_reply {
 	char d_name[NAME_MAX + 1];
 	struct stat stat;
 	off_t nextoff;
@@ -142,7 +142,7 @@ struct iof_readdir_reply {
 	int stat_rc;
 };
 
-struct iof_readdir_out {
+struct dfuse_readdir_out {
 	d_iov_t replies;
 	int last;
 	int iov_count;
@@ -150,28 +150,28 @@ struct iof_readdir_out {
 	int err;
 };
 
-struct iof_open_out {
+struct dfuse_open_out {
 	struct ios_gah gah;
 	int rc;
 	int err;
 };
 
-struct iof_data_out {
+struct dfuse_data_out {
 	d_iov_t data;
 	int rc;
 	int err;
 };
 
-struct iof_status_out {
+struct dfuse_status_out {
 	int rc;
 	int err;
 };
 
-struct iof_gah_in {
+struct dfuse_gah_in {
 	struct ios_gah gah;
 };
 
-struct iof_setattr_in {
+struct dfuse_setattr_in {
 	struct ios_gah gah;
 	struct stat stat;
 	uint32_t to_set;
@@ -213,11 +213,11 @@ enum {
 	((uint64_t)(xt_off) CRT_VAR)	\
 	((uint64_t)(xt_len) CRT_VAR)
 
-CRT_GEN_STRUCT(iof_xtvec, IOF_STRUCT_XTVEC);
+CRT_GEN_STRUCT(dfuse_xtvec, IOF_STRUCT_XTVEC);
 
 #define IOF_RPC_READX_IN					\
 	((struct ios_gah)(gah)		CRT_VAR)	\
-	((struct iof_xtvec)(xtvec)		CRT_VAR)	\
+	((struct dfuse_xtvec)(xtvec)		CRT_VAR)	\
 	((uint64_t)(xtvec_len)	CRT_VAR)	\
 	((uint64_t)(bulk_len)	CRT_VAR)	\
 	((crt_bulk_t)(xtvec_bulk)	CRT_VAR)	\
@@ -230,12 +230,12 @@ CRT_GEN_STRUCT(iof_xtvec, IOF_STRUCT_XTVEC);
 	((int)(rc) CRT_VAR)			\
 	((int)(err) CRT_VAR)
 
-CRT_RPC_DECLARE(iof_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT)
+CRT_RPC_DECLARE(dfuse_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT)
 
 #define IOF_RPC_WRITEX_IN					\
 	((struct ios_gah)(gah)		CRT_VAR)	\
 	((d_iov_t)(data)		CRT_VAR)	\
-	((struct iof_xtvec)(xtvec)		CRT_VAR)	\
+	((struct dfuse_xtvec)(xtvec)		CRT_VAR)	\
 	((uint64_t)(xtvec_len)	CRT_VAR)	\
 	((uint64_t)(bulk_len)	CRT_VAR)	\
 	((crt_bulk_t)(xtvec_bulk)	CRT_VAR)	\
@@ -248,17 +248,17 @@ CRT_RPC_DECLARE(iof_readx, IOF_RPC_READX_IN, IOF_RPC_READX_OUT)
 	((uint64_t)(pad0)	CRT_VAR)	\
 	((uint64_t)(pad1)	CRT_VAR)
 
-CRT_RPC_DECLARE(iof_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT)
+CRT_RPC_DECLARE(dfuse_writex, IOF_RPC_WRITEX_IN, IOF_RPC_WRITEX_OUT)
 
 int
-iof_write_register(crt_rpc_cb_t handlers[]);
+dfuse_write_register(crt_rpc_cb_t handlers[]);
 
 int
-iof_io_register(struct crt_proto_format **proto,
+dfuse_io_register(struct crt_proto_format **proto,
 		crt_rpc_cb_t handlers[]);
 
 int
-iof_client_register(crt_endpoint_t *tgt_ep,
+dfuse_client_register(crt_endpoint_t *tgt_ep,
 		    struct crt_proto_format **write,
 		    struct crt_proto_format **io);
 

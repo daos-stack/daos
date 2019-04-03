@@ -25,9 +25,9 @@
 #include "dfuse.h"
 
 static bool
-ioc_rename_cb(struct ioc_request *request)
+dfuse_rename_cb(struct dfuse_request *request)
 {
-	struct iof_status_out *out = crt_reply_get(request->rpc);
+	struct dfuse_status_out *out = crt_reply_get(request->rpc);
 
 	IOC_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
@@ -46,19 +46,19 @@ out:
 	return false;
 }
 
-static const struct ioc_request_api api = {
-	.on_result	= ioc_rename_cb,
+static const struct dfuse_request_api api = {
+	.on_result	= dfuse_rename_cb,
 	.have_gah	= true,
-	.gah_offset	= offsetof(struct iof_rename_in, old_gah),
+	.gah_offset	= offsetof(struct dfuse_rename_in, old_gah),
 };
 
 void
 dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		fuse_ino_t newparent, const char *newname, unsigned int flags)
 {
-	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
-	struct ioc_request	*request;
-	struct iof_rename_in	*in;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_request	*request;
+	struct dfuse_rename_in	*in;
 	int ret = EIO;
 	int rc;
 
@@ -100,7 +100,7 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	crt_req_addref(request->rpc);
 
-	rc = iof_fs_send(request);
+	rc = dfuse_fs_send(request);
 	if (rc != 0) {
 		D_GOTO(out_decref, ret = EIO);
 	}

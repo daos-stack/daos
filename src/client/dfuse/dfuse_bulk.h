@@ -26,20 +26,20 @@
 #include <stdbool.h>
 #include <cart/api.h>
 
-struct iof_local_bulk {
+struct dfuse_local_bulk {
 	void		*buf;
 	crt_bulk_t	 handle;
 	size_t		 len;
 };
 
-bool iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
+bool dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 		    bool read_only);
-void iof_bulk_free(void *ptr, off_t bulk_offset);
+void dfuse_bulk_free(void *ptr, off_t bulk_offset);
 
 #define IOF_BULK_ALLOC(ctx, ptr, field, len, read_only)			\
-	iof_bulk_alloc((ctx), (ptr), offsetof(__typeof__(*ptr), field),	\
+	dfuse_bulk_alloc((ctx), (ptr), offsetof(__typeof__(*ptr), field),	\
 		       (len), (read_only))
 #define IOF_BULK_FREE(ptr, field)	\
-	iof_bulk_free((ptr), offsetof(__typeof__(*ptr), field))
+	dfuse_bulk_free((ptr), offsetof(__typeof__(*ptr), field))
 
 #endif /* __IOF_BULK_H__ */

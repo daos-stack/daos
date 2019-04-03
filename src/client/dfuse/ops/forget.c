@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 static void
-ioc_forget_one(struct iof_projection_info *fs_handle,
+dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 	       fuse_ino_t ino, uintptr_t nlookup)
 {
 	d_list_t *rlink;
@@ -43,7 +43,7 @@ ioc_forget_one(struct iof_projection_info *fs_handle,
 		return;
 	}
 
-	IOF_TRACE_INFO(container_of(rlink, struct ioc_inode_entry, ie_htl),
+	IOF_TRACE_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
 		       "ino %lu count %lu",
 		       ino, nlookup);
 
@@ -51,25 +51,25 @@ ioc_forget_one(struct iof_projection_info *fs_handle,
 	if (rc != -DER_SUCCESS) {
 		IOF_TRACE_ERROR(fs_handle, "Invalid refcount %lu on %p",
 				nlookup,
-				container_of(rlink, struct ioc_inode_entry, ie_htl));
+				container_of(rlink, struct dfuse_inode_entry, ie_htl));
 	}
 }
 
 void
 dfuse_cb_forget(fuse_req_t req, fuse_ino_t ino, uintptr_t nlookup)
 {
-	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 
 	fuse_reply_none(req);
 
-	ioc_forget_one(fs_handle, ino, nlookup);
+	dfuse_forget_one(fs_handle, ino, nlookup);
 }
 
 void
 dfuse_cb_forget_multi(fuse_req_t req, size_t count,
 		    struct fuse_forget_data *forgets)
 {
-	struct iof_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	int i;
 
 	fuse_reply_none(req);
@@ -77,5 +77,5 @@ dfuse_cb_forget_multi(fuse_req_t req, size_t count,
 	IOF_TRACE_INFO(fs_handle, "Forgetting %zi", count);
 
 	for (i = 0; i < count; i++)
-		ioc_forget_one(fs_handle, forgets[i].ino, forgets[i].nlookup);
+		dfuse_forget_one(fs_handle, forgets[i].ino, forgets[i].nlookup);
 }

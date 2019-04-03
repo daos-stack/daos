@@ -28,7 +28,7 @@
 #include <gurt/list.h>
 
 /* A datastructure used to describe and register a type */
-struct iof_pool_reg {
+struct dfuse_pool_reg {
 	/* Perform any one-time setup or assigning constants.
 	 */
 	void	(*init)(void *, void *);
@@ -64,13 +64,13 @@ struct iof_pool_reg {
 /* A datastructure used to manage a type.  Includes both the
  * registration data and any live state
  */
-struct iof_pool_type {
-	struct iof_pool_reg	reg;
+struct dfuse_pool_type {
+	struct dfuse_pool_reg	reg;
 	d_list_t		type_list;
 	d_list_t		free_list;
 	d_list_t		pending_list;
 	pthread_mutex_t		lock;
-	struct iof_pool		*pool;
+	struct dfuse_pool		*pool;
 
 	/* Counters for current number of objects */
 	int			count; /* Total currently created */
@@ -90,7 +90,7 @@ struct iof_pool_type {
 	int			no_restock_hwm; /* High water mark */
 };
 
-struct iof_pool {
+struct dfuse_pool {
 	d_list_t	list;
 	void		*arg;
 	pthread_mutex_t	lock;
@@ -102,24 +102,24 @@ struct iof_pool {
  * Returns a CaRT error code.
  */
 int
-iof_pool_init(struct iof_pool *, void *arg)
+dfuse_pool_init(struct dfuse_pool *, void *arg)
 	__attribute((warn_unused_result, nonnull(1)));
 
 /* Destroy a pool, called once at shutdown */
 void
-iof_pool_destroy(struct iof_pool *);
+dfuse_pool_destroy(struct dfuse_pool *);
 
 /* Register a new type to a pool, called multiple times after init */
-struct iof_pool_type *
-iof_pool_register(struct iof_pool *, struct iof_pool_reg *);
+struct dfuse_pool_type *
+dfuse_pool_register(struct dfuse_pool *, struct dfuse_pool_reg *);
 
 /* Allocate a datastructure in performant way */
 void *
-iof_pool_acquire(struct iof_pool_type *);
+dfuse_pool_acquire(struct dfuse_pool_type *);
 
 /* Release a datastructure in a performant way */
 void
-iof_pool_release(struct iof_pool_type *, void *);
+dfuse_pool_release(struct dfuse_pool_type *, void *);
 
 /* Pre-allocate datastructures
  * This should be called off the critical path, after previous acquire/release
@@ -127,14 +127,14 @@ iof_pool_release(struct iof_pool_type *, void *);
  * transitions so it does not need calling in progress loops.
  */
 void
-iof_pool_restock(struct iof_pool_type *);
+dfuse_pool_restock(struct dfuse_pool_type *);
 
 /* Reclaim any memory possible across all types
  *
  * Returns true of there are any descriptors in use.
  */
 bool
-iof_pool_reclaim(struct iof_pool *)
+dfuse_pool_reclaim(struct dfuse_pool *)
 	__attribute((warn_unused_result, nonnull));
 
 #endif /*  __IOF_POOL_H__ */

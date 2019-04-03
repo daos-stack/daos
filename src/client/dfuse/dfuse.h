@@ -45,18 +45,18 @@
 /**
  * A common structure for holding a cart context and thread details.
  *
- * This is included in both iof_state for global values, and once per
+ * This is included in both dfuse_state for global values, and once per
  * projection for projection specific entries.
  */
-struct iof_ctx {
+struct dfuse_ctx {
 	/** cart context */
 	crt_context_t			crt_ctx;
 	/** pthread identifier */
 	pthread_t			thread;
 	/** Tracker to detect thread start */
-	struct iof_tracker		thread_start_tracker;
+	struct dfuse_tracker		thread_start_tracker;
 	/** Tracker to signal thread stop */
-	struct iof_tracker		thread_stop_tracker;
+	struct dfuse_tracker		thread_stop_tracker;
 	/** Poll interval to pass to crt_progress */
 	uint32_t			poll_interval;
 	/** Callback function to pass to crt_progress() */
@@ -67,23 +67,23 @@ struct iof_ctx {
  * IOF Group struct.
  */
 
-struct iof_group_info {
+struct dfuse_group_info {
 	/** Service group pointer */
-	struct iof_service_group	grp;
+	struct dfuse_service_group	grp;
 };
 
 /**
  * Global state for IOF client.
  *
  */
-struct iof_state {
+struct dfuse_state {
 	struct cnss_info *cnss_info;
 	/** CaRT RPC protocol used for metadata */
 	struct crt_proto_format		*proto;
 	/** CaRT RPC protocol used for I/O */
 	struct crt_proto_format		*io_proto;
-	/** iof_ctx for state */
-	struct iof_ctx			iof_ctx;
+	/** dfuse_ctx for state */
+	struct dfuse_ctx			dfuse_ctx;
 	/** CNSS Prefix.  Parent directory of projections */
 	char				*cnss_prefix;
 	/** ctrl_fs inoss directory handle */
@@ -91,14 +91,14 @@ struct iof_state {
 	/** ctrl_fs projections directory handle */
 	struct ctrl_dir			*projections_dir;
 	/** Group information */
-	struct iof_group_info		group;
+	struct dfuse_group_info		group;
 };
 
-struct iof_projection_info {
-	struct iof_projection		proj;
-	struct iof_ctx			*ctx_array;
+struct dfuse_projection_info {
+	struct dfuse_projection		proj;
+	struct dfuse_ctx			*ctx_array;
 	int ctx_num;
-	struct iof_state		*iof_state;
+	struct dfuse_state		*dfuse_state;
 	struct ios_gah			gah;
 	d_list_t			link;
 	struct fuse_session		*session;
@@ -110,18 +110,18 @@ struct iof_projection_info {
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
-	struct iof_pool			pool;
-	struct iof_pool_type		*dh_pool;
-	struct iof_pool_type		*fgh_pool;
-	struct iof_pool_type		*fsh_pool;
-	struct iof_pool_type		*close_pool;
-	struct iof_pool_type		*lookup_pool;
-	struct iof_pool_type		*mkdir_pool;
-	struct iof_pool_type		*symlink_pool;
-	struct iof_pool_type		*fh_pool;
-	struct iof_pool_type		*rb_pool_page;
-	struct iof_pool_type		*rb_pool_large;
-	struct iof_pool_type		*write_pool;
+	struct dfuse_pool			pool;
+	struct dfuse_pool_type		*dh_pool;
+	struct dfuse_pool_type		*fgh_pool;
+	struct dfuse_pool_type		*fsh_pool;
+	struct dfuse_pool_type		*close_pool;
+	struct dfuse_pool_type		*lookup_pool;
+	struct dfuse_pool_type		*mkdir_pool;
+	struct dfuse_pool_type		*symlink_pool;
+	struct dfuse_pool_type		*fh_pool;
+	struct dfuse_pool_type		*rb_pool_page;
+	struct dfuse_pool_type		*rb_pool_large;
+	struct dfuse_pool_type		*write_pool;
 	uint32_t			max_read;
 	uint32_t			max_iov_read;
 	uint32_t			readdir_size;
@@ -136,15 +136,15 @@ struct iof_projection_info {
 /*
  * Returns the correct RPC Type ID from the protocol registry.
  */
-#define FS_TO_OP(HANDLE, FN) (CRT_PROTO_OPC((HANDLE)->iof_state->proto->cpf_base, \
-					    (HANDLE)->iof_state->proto->cpf_ver, \
+#define FS_TO_OP(HANDLE, FN) (CRT_PROTO_OPC((HANDLE)->dfuse_state->proto->cpf_base, \
+					    (HANDLE)->dfuse_state->proto->cpf_ver, \
 					    DEF_RPC_TYPE(FN)))
 
 #define FS_TO_IOOP(HANDLE, IDX) (CRT_PROTO_OPC((HANDLE)->proj.io_proto->cpf_base, \
 					       (HANDLE)->proj.io_proto->cpf_ver, \
 					       IDX))
 
-struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t);
+struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
@@ -231,10 +231,10 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t);
 		IOF_TRACE_DOWN(req);			\
 	} while (0)
 
-#define IOC_REPLY_ERR(ioc_req, status)					\
+#define IOC_REPLY_ERR(dfuse_req, status)				\
 	do {								\
-		IOC_REPLY_ERR_RAW(ioc_req, (ioc_req)->req, status);	\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOC_REPLY_ERR_RAW(dfuse_req, (dfuse_req)->req, status);	\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
 #define IOF_FUSE_REPLY_ZERO(req)					\
@@ -249,40 +249,40 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t);
 		IOF_TRACE_DOWN(req);					\
 	} while (0)
 
-#define IOC_REPLY_ZERO(ioc_req)					\
+#define IOC_REPLY_ZERO(dfuse_req)					\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning 0");		\
-		__rc = fuse_reply_err((ioc_req)->req, 0);		\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning 0");		\
+		__rc = fuse_reply_err((dfuse_req)->req, 0);		\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_ATTR(ioc_req, attr)					\
+#define IOC_REPLY_ATTR(dfuse_req, attr)					\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning attr");		\
-		__rc = fuse_reply_attr((ioc_req)->req, attr, 0);	\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning attr");		\
+		__rc = fuse_reply_attr((dfuse_req)->req, attr, 0);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_READLINK(ioc_req, path)				\
+#define IOC_REPLY_READLINK(dfuse_req, path)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning path '%s'", path);	\
-		__rc = fuse_reply_readlink((ioc_req)->req, path);	\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning path '%s'", path); \
+		__rc = fuse_reply_readlink((dfuse_req)->req, path);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
 #define IOC_REPLY_WRITE(handle, req, bytes)				\
@@ -296,52 +296,52 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t);
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define IOC_REPLY_OPEN(ioc_req, fi)					\
+#define IOC_REPLY_OPEN(dfuse_req, fi)					\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning open");		\
-		__rc = fuse_reply_open((ioc_req)->req, &fi);		\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning open");		\
+		__rc = fuse_reply_open((dfuse_req)->req, &fi);		\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_CREATE(ioc_req, entry, fi)				\
+#define IOC_REPLY_CREATE(dfuse_req, entry, fi)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning create");		\
-		__rc = fuse_reply_create((ioc_req)->req, &entry, &fi);	\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning create");		\
+		__rc = fuse_reply_create((dfuse_req)->req, &entry, &fi); \
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_create returned %d:%s",\
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOC_REPLY_ENTRY(ioc_req, entry)					\
+#define IOC_REPLY_ENTRY(dfuse_req, entry)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning entry");		\
-		__rc = fuse_reply_entry((ioc_req)->req, &entry);	\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning entry");		\
+		__rc = fuse_reply_entry((dfuse_req)->req, &entry);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_entry returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
-#define IOF_FUSE_REPLY_STATFS(ioc_req, stat)				\
+#define IOF_FUSE_REPLY_STATFS(dfuse_req, stat)				\
 	do {								\
 		int __rc;						\
-		IOF_TRACE_DEBUG(ioc_req, "Returning statfs");		\
-		__rc = fuse_reply_statfs((ioc_req)->req, stat);		\
+		IOF_TRACE_DEBUG(dfuse_req, "Returning statfs");		\
+		__rc = fuse_reply_statfs((dfuse_req)->req, stat);	\
 		if (__rc != 0)						\
-			IOF_TRACE_ERROR(ioc_req,			\
+			IOF_TRACE_ERROR(dfuse_req,			\
 					"fuse_reply_statfs returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		IOF_TRACE_DOWN(ioc_req);				\
+		IOF_TRACE_DOWN(dfuse_req);				\
 	} while (0)
 
 #define IOC_REPLY_IOCTL(handle, req, gah_info)				\
@@ -355,28 +355,28 @@ struct fuse_lowlevel_ops *iof_get_fuse_ops(uint64_t);
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-struct ioc_request;
+struct dfuse_request;
 
 /**
  * IOF Request API.
  *
  * Set of callbacks invoked during the lifetime of a request.
  */
-struct ioc_request_api {
+struct dfuse_request_api {
 	/** Called once, per request with the result
 	 *
 	 * Should return true if ir_ht is set to RHS_INODE_NUM, and
 	 * an open reference should be kept on the inode after on_result
 	 * returns.
 	 */
-	bool	(*on_result)(struct ioc_request *req);
+	bool	(*on_result)(struct dfuse_request *req);
 	/** Offset of GAH in RPC input buffer */
 	off_t	gah_offset;
 	/** Set to true if gah_offset is set */
 	bool	have_gah;
 };
 
-enum ioc_request_state {
+enum dfuse_request_state {
 	RS_INIT = 1,
 	RS_RESET,
 	RS_LIVE
@@ -387,7 +387,7 @@ enum ioc_request_state {
  * If set to other than RHS_NONE then the GAH from the appropriate
  * pointer type will be used, rather than the PSR.
  */
-enum ioc_request_htype {
+enum dfuse_request_htype {
 	RHS_NONE,
 	RHS_ROOT,
 	RHS_INODE,
@@ -400,15 +400,15 @@ enum ioc_request_htype {
  * IOF Request descriptor.
  *
  */
-struct ioc_request {
+struct dfuse_request {
 	/** Pointer to projection for this request. */
-	struct iof_projection_info	*fsh;
+	struct dfuse_projection_info	*fsh;
 	/** Pointer to the RPC for this request. */
 	crt_rpc_t			*rpc;
 	/** Fuse request for this IOF request, may be 0 */
 	fuse_req_t			req;
 	/** Callbacks to use for this request */
-	const struct ioc_request_api	*ir_api;
+	const struct dfuse_request_api	*ir_api;
 	/** Error status of this request.
 	 *
 	 * This is a libc error number and is set before a call to
@@ -420,18 +420,18 @@ struct ioc_request {
 	 * Used to ensure REQUEST_INIT()/REQUEST_RESET() have been invoked
 	 * correctly.
 	 */
-	enum ioc_request_state		ir_rs;
+	enum dfuse_request_state		ir_rs;
 
 	/** Request handle type */
-	enum ioc_request_htype		ir_ht;
+	enum dfuse_request_htype		ir_ht;
 
 	union {
 		/** Optional pointer to handle.
 		 * Which one of these to use is set by the ir_ht value
 		 */
-		struct ioc_inode_entry	*ir_inode;
-		struct iof_file_handle	*ir_file;
-		struct iof_dir_handle	*ir_dir;
+		struct dfuse_inode_entry	*ir_inode;
+		struct dfuse_file_handle	*ir_file;
+		struct dfuse_dir_handle	*ir_dir;
 		fuse_ino_t		ir_inode_num;
 	};
 	/** List of requests.
@@ -495,7 +495,7 @@ struct ioc_request {
  * be a directory, file, symbolic link or anything else.
  */
 
-struct ioc_inode_entry {
+struct dfuse_inode_entry {
 	/** The GAH for this inode */
 	struct ios_gah	gah;
 	/** stat structure for this inode.
@@ -536,17 +536,17 @@ struct ioc_inode_entry {
  *
  * Describes a open directory, may be used for readdir() calls.
  */
-struct iof_dir_handle {
+struct dfuse_dir_handle {
 	/** The GAH to use when accessing the directory */
 	struct ios_gah			gah;
 	/** Request for opening the directory */
-	struct ioc_request		open_req;
+	struct dfuse_request		open_req;
 	/** Request for closing the directory */
-	struct ioc_request		close_req;
+	struct dfuse_request		close_req;
 	/** Any RPC reference held across readdir() calls */
 	crt_rpc_t			*rpc;
 	/** Pointer to any retreived data from readdir() RPCs */
-	struct iof_readdir_reply	*replies;
+	struct dfuse_readdir_reply	*replies;
 	int				reply_count;
 	void				*replies_base;
 	/** Set to True if the current batch of replies is the final one */
@@ -564,19 +564,19 @@ struct iof_dir_handle {
  *
  * Describes a file open for reading/writing.
  */
-struct iof_file_handle {
+struct dfuse_file_handle {
 	/** Common information for file handle, contains GAH and EP
 	 * information.  This is shared between CNSS and IL code to allow
 	 * use of some common code.
 	 */
-	struct iof_file_common		common;
+	struct dfuse_file_common		common;
 
 	/** Open request, with precreated RPC */
-	struct ioc_request		open_req;
+	struct dfuse_request		open_req;
 	/** Create request, with precreated RPC */
-	struct ioc_request		creat_req;
+	struct dfuse_request		creat_req;
 	/* Release request, with precreated RPC */
-	struct ioc_request		release_req;
+	struct dfuse_request		release_req;
 
 	d_list_t fh_free_list;
 
@@ -586,23 +586,23 @@ struct iof_file_handle {
 	 * allocated and then used on a successful create() call.  Once
 	 * the file handle is in use then this field will be NULL.
 	 */
-	struct ioc_inode_entry		*ie;
+	struct dfuse_inode_entry		*ie;
 };
 
 /** Read buffer descriptor */
-struct iof_rb {
-	struct ioc_request		rb_req;
+struct dfuse_rb {
+	struct dfuse_request		rb_req;
 	struct fuse_bufvec		fbuf;
-	struct iof_local_bulk		lb;
-	struct iof_pool_type		*pt;
+	struct dfuse_local_bulk		lb;
+	struct dfuse_pool_type		*pt;
 	size_t				buf_size;
 	bool				failure;
 };
 
 /** Write buffer descriptor */
-struct iof_wb {
-	struct ioc_request		wb_req;
-	struct iof_local_bulk		lb;
+struct dfuse_wb {
+	struct dfuse_request		wb_req;
+	struct dfuse_local_bulk		lb;
 	bool				failure;
 };
 
@@ -613,7 +613,7 @@ struct iof_wb {
  */
 struct common_req {
 	d_list_t			list;
-	struct ioc_request		request;
+	struct dfuse_request		request;
 	crt_opcode_t			opcode;
 };
 
@@ -621,9 +621,9 @@ struct common_req {
  *
  * Used so migrate callback function has access to the filesystem handle.
  */
-struct ioc_inode_migrate {
-	struct ioc_inode_entry *im_ie;
-	struct iof_projection_info *im_fsh;
+struct dfuse_inode_migrate {
+	struct dfuse_inode_entry *im_ie;
+	struct dfuse_projection_info *im_fsh;
 };
 
 /** Entry request type.
@@ -631,11 +631,11 @@ struct ioc_inode_migrate {
  * Request for all RPC types that can return a new inode.
  */
 struct entry_req {
-	struct ioc_inode_entry		*ie;
-	struct ioc_request		request;
+	struct dfuse_inode_entry		*ie;
+	struct dfuse_request		request;
 	d_list_t			list;
 	crt_opcode_t			opcode;
-	struct iof_pool_type		*pool;
+	struct dfuse_pool_type		*pool;
 	char				*dest;
 };
 
@@ -643,22 +643,22 @@ struct entry_req {
 
 /* Convert from a inode to a GAH using the hash table */
 int
-find_gah(struct iof_projection_info *, fuse_ino_t, struct ios_gah *);
+find_gah(struct dfuse_projection_info *, fuse_ino_t, struct ios_gah *);
 
 int
-find_inode(struct ioc_request *);
+find_inode(struct dfuse_request *);
 
 void
-ie_close(struct iof_projection_info *, struct ioc_inode_entry *);
+ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 
 int
-iof_fs_send(struct ioc_request *request);
+dfuse_fs_send(struct dfuse_request *request);
 
 int
-ioc_simple_resend(struct ioc_request *request);
+dfuse_simple_resend(struct dfuse_request *request);
 
 bool
-ioc_gen_cb(struct ioc_request *);
+dfuse_gen_cb(struct dfuse_request *);
 
 void
 dfuse_cb_lookup(fuse_req_t, fuse_ino_t, const char *);
@@ -696,7 +696,7 @@ void
 dfuse_cb_release(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
 
 void
-ioc_int_release(struct iof_file_handle *);
+dfuse_int_release(struct dfuse_file_handle *);
 
 void
 dfuse_cb_unlink(fuse_req_t, fuse_ino_t, const char *);
@@ -719,7 +719,7 @@ void
 dfuse_cb_releasedir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
 
 void
-ioc_int_releasedir(struct iof_dir_handle *);
+dfuse_int_releasedir(struct dfuse_dir_handle *);
 
 void
 dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
@@ -744,6 +744,6 @@ void
 dfuse_cb_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
 
 bool
-iof_entry_cb(struct ioc_request *);
+dfuse_entry_cb(struct dfuse_request *);
 
 #endif

@@ -32,9 +32,9 @@
 #define STAT_KEY setattr
 
 static bool
-ioc_setattr_result_fn(struct ioc_request *request)
+dfuse_setattr_result_fn(struct dfuse_request *request)
 {
-	struct iof_attr_out *out = crt_reply_get(request->rpc);
+	struct dfuse_attr_out *out = crt_reply_get(request->rpc);
 
 	IOC_REQUEST_RESOLVE(request, out);
 
@@ -43,13 +43,13 @@ ioc_setattr_result_fn(struct ioc_request *request)
 	else
 		IOC_REPLY_ERR(request, request->rc);
 
-	iof_pool_release(request->fsh->POOL_NAME, CONTAINER(request));
+	dfuse_pool_release(request->fsh->POOL_NAME, CONTAINER(request));
 	return false;
 }
 
-static const struct ioc_request_api setattr_api = {
-	.on_result	= ioc_setattr_result_fn,
-	.gah_offset	= offsetof(struct iof_setattr_in, gah),
+static const struct dfuse_request_api setattr_api = {
+	.on_result	= dfuse_setattr_result_fn,
+	.gah_offset	= offsetof(struct dfuse_setattr_in, gah),
 	.have_gah	= true,
 };
 
@@ -57,10 +57,10 @@ void
 dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		 struct fuse_file_info *fi)
 {
-	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct iof_file_handle		*handle = NULL;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_file_handle		*handle = NULL;
 	struct TYPE_NAME		*desc = NULL;
-	struct iof_setattr_in		*in;
+	struct dfuse_setattr_in		*in;
 	int rc;
 
 	if (fi)
@@ -84,12 +84,12 @@ dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	in->to_set = to_set;
 	in->stat = *attr;
 
-	rc = iof_fs_send(&desc->request);
+	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)
 		D_GOTO(err, rc);
 	return;
 err:
 	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc)
-		iof_pool_release(fs_handle->POOL_NAME, desc);
+		dfuse_pool_release(fs_handle->POOL_NAME, desc);
 }

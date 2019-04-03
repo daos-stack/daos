@@ -46,7 +46,7 @@ print_usage(const char *prog)
 	fprintf(fp, #name "64 ");
 
 #define SYMBOL_GEN_IOF(type, name, params) \
-	fprintf(fp, "iof_" #name " ");
+	fprintf(fp, "dfuse_" #name " ");
 
 int
 main(int argc, char **argv)

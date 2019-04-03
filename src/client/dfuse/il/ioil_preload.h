@@ -25,7 +25,7 @@
 #define __IOF_PRELOAD_H__
 
 #define IOF_DECLARE_WEAK
-#include <iof_api.h>
-#include <iof_io.h>
+#include <dfuse_api.h>
+#include <dfuse_io.h>
 
 #endif /* __IOF_PRELOAD_H__ */

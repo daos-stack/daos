@@ -48,7 +48,7 @@ static int
 signal_word;
 
 static void
-iof_signal_poke(int signal)
+dfuse_signal_poke(int signal)
 {
 	signal_word++;
 }
@@ -58,7 +58,7 @@ static void
 {
 	int			ret;
 	struct fs_info		*info = args;
-	const struct sigaction	act = {.sa_handler = iof_signal_poke};
+	const struct sigaction	act = {.sa_handler = dfuse_signal_poke};
 
 	D_MUTEX_LOCK(&info->fsi_lock);
 	info->fsi_running = true;
@@ -221,7 +221,7 @@ cnss_stop_fuse(struct fs_info *info)
 	rc = (uintptr_t)rcp;
 
 	{
-		int rcf = iof_deregister_fuse(info->fsi_handle);
+		int rcf = dfuse_deregister_fuse(info->fsi_handle);
 
 		if (rcf)
 			rc = rcf;
@@ -306,7 +306,7 @@ main(int argc, char **argv)
 
 	IOF_TRACE_ROOT(cnss_info, "cnss_info");
 
-	cnss_info->iof_state = iof_plugin_init();
+	cnss_info->dfuse_state = dfuse_plugin_init();
 
 	/*initialize CaRT*/
 	ret = crt_init(cnss, 0);
@@ -324,11 +324,11 @@ main(int argc, char **argv)
 	 * operations only.  Plugins can choose to disable themselves
 	 * at this point.
 	 */
-	iof_reg(cnss_info->iof_state, cnss_info);
+	dfuse_reg(cnss_info->dfuse_state, cnss_info);
 
-	iof_post_start(cnss_info->iof_state);
+	dfuse_post_start(cnss_info->dfuse_state);
 
-	iof_flush_fuse(cnss_info->ci_fsinfo.fsi_handle);
+	dfuse_flush_fuse(cnss_info->ci_fsinfo.fsi_handle);
 
 	ret = 0;
 
@@ -336,7 +336,7 @@ main(int argc, char **argv)
 	if (rc)
 		ret = 1;
 
-	iof_finish(cnss_info->iof_state);
+	dfuse_finish(cnss_info->dfuse_state);
 
 	rc = crt_finalize();
 	if (rc != -DER_SUCCESS)
@@ -352,7 +352,7 @@ main(int argc, char **argv)
 
 shutdown_ctrl_fs:
 
-	iof_finish(cnss_info->iof_state);
+	dfuse_finish(cnss_info->dfuse_state);
 
 shutdown_log:
 

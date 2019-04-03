@@ -83,7 +83,7 @@
 #define IOIL_DECL(name) name
 
 #define IOIL_DECLARE_ALIAS(type, name, params) \
-	IOF_PUBLIC type name params __attribute__((weak, alias("iof_" #name)));
+	IOF_PUBLIC type name params __attribute__((weak, alias("dfuse_" #name)));
 
 #define IOIL_DECLARE_ALIAS64(type, name, params) \
 	IOF_PUBLIC type name##64 params __attribute__((weak, alias(#name)));
@@ -112,7 +112,7 @@
 
 #define IOIL_DECLARE_ALIAS(type, name, params) \
 	IOF_PUBLIC type __wrap_##name params \
-		__attribute__((weak, alias("iof_" #name)));
+		__attribute__((weak, alias("dfuse_" #name)));
 
 #define IOIL_DECLARE_ALIAS64(type, name, params)                \
 	IOF_PUBLIC type __wrap_##name##64 params                \
@@ -122,15 +122,15 @@
 
 ssize_t
 ioil_do_pread(char *buff, size_t len, off_t position,
-	      struct iof_file_common *f_info, int *errcode);
+	      struct dfuse_file_common *f_info, int *errcode);
 ssize_t
 ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct iof_file_common *f_info, int *errcode);
+	       struct dfuse_file_common *f_info, int *errcode);
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct iof_file_common *f_info, int *errcode);
+	       struct dfuse_file_common *f_info, int *errcode);
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct iof_file_common *f_info, int *errcode);
+		struct dfuse_file_common *f_info, int *errcode);
 
 #endif /* __INTERCEPT_H__ */

@@ -31,11 +31,11 @@
 #include "dfuse_ops.h"
 
 bool
-iof_entry_cb(struct ioc_request *request)
+dfuse_entry_cb(struct dfuse_request *request)
 {
 	struct entry_req		*desc = container_of(request, struct entry_req, request);
-	struct iof_projection_info	*fs_handle = desc->request.fsh;
-	struct iof_entry_out		*out = crt_reply_get(request->rpc);
+	struct dfuse_projection_info	*fs_handle = desc->request.fsh;
+	struct dfuse_entry_out		*out = crt_reply_get(request->rpc);
 	struct fuse_entry_param		entry = {0};
 	d_list_t			*rlink;
 	bool				keep_ref = false;
@@ -69,7 +69,7 @@ iof_entry_cb(struct ioc_request *request)
 		 * the parent anyway, so keep that one, but drop one in the call
 		 * to ie_close().
 		 */
-		IOF_TRACE_INFO(container_of(rlink, struct ioc_inode_entry, ie_htl),
+		IOF_TRACE_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
 			       "Existing file %lu " GAH_PRINT_STR,
 			       entry.ino, GAH_PRINT_VAL(out->gah));
 		atomic_fetch_sub(&desc->ie->ie_ref, 1);
@@ -78,17 +78,17 @@ iof_entry_cb(struct ioc_request *request)
 	}
 
 	IOC_REPLY_ENTRY(request, entry);
-	iof_pool_release(desc->pool, desc);
+	dfuse_pool_release(desc->pool, desc);
 	return keep_ref;
 out:
 	IOC_REPLY_ERR(request, request->rc);
-	iof_pool_release(desc->pool, desc);
+	dfuse_pool_release(desc->pool, desc);
 	return false;
 }
 
-static const struct ioc_request_api api = {
-	.on_result	= iof_entry_cb,
-	.gah_offset	= offsetof(struct iof_gah_string_in, gah),
+static const struct dfuse_request_api api = {
+	.on_result	= dfuse_entry_cb,
+	.gah_offset	= offsetof(struct dfuse_gah_string_in, gah),
 	.have_gah	= true,
 };
 
@@ -97,9 +97,9 @@ static const struct ioc_request_api api = {
 void
 dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct TYPE_NAME		*desc = NULL;
-	struct iof_gah_string_in	*in;
+	struct dfuse_gah_string_in	*in;
 	int rc;
 
 	IOF_TRACE_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
@@ -117,12 +117,12 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	desc->ie->parent = parent;
 	desc->pool = fs_handle->lookup_pool;
 
-	rc = iof_fs_send(&desc->request);
+	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)
 		D_GOTO(err, 0);
 	return;
 err:
 	if (desc)
-		iof_pool_release(fs_handle->lookup_pool, desc);
+		dfuse_pool_release(fs_handle->lookup_pool, desc);
 	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
 }

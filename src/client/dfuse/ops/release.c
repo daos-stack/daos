@@ -25,9 +25,9 @@
 #include "dfuse.h"
 
 static bool
-ioc_release_cb(struct ioc_request *request)
+dfuse_release_cb(struct dfuse_request *request)
 {
-	struct iof_status_out *out = crt_reply_get(request->rpc);
+	struct dfuse_status_out *out = crt_reply_get(request->rpc);
 
 	IOC_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
@@ -36,20 +36,20 @@ ioc_release_cb(struct ioc_request *request)
 		IOC_REPLY_ZERO(request);
 	}
 
-	iof_pool_release(request->fsh->fh_pool, request->ir_file);
+	dfuse_pool_release(request->fsh->fh_pool, request->ir_file);
 	return false;
 }
 
-static const struct ioc_request_api api = {
-	.on_result	= ioc_release_cb,
-	.gah_offset	= offsetof(struct iof_gah_in, gah),
+static const struct dfuse_request_api api = {
+	.on_result	= dfuse_release_cb,
+	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
 	.have_gah	= true,
 };
 
 static void
-ioc_release_priv(struct iof_file_handle *handle)
+dfuse_release_priv(struct dfuse_file_handle *handle)
 {
-	struct iof_projection_info *fs_handle = handle->release_req.fsh;
+	struct dfuse_projection_info *fs_handle = handle->release_req.fsh;
 	int rc;
 
 	IOF_TRACE_UP(&handle->release_req, handle, "release_req");
@@ -59,7 +59,7 @@ ioc_release_priv(struct iof_file_handle *handle)
 
 	handle->release_req.ir_api = &api;
 
-	rc = iof_fs_send(&handle->release_req);
+	rc = dfuse_fs_send(&handle->release_req);
 	if (rc) {
 		D_GOTO(out_err, rc = EIO);
 	}
@@ -72,21 +72,21 @@ out_err:
 	} else {
 		IOF_TRACE_DOWN(&handle->release_req);
 	}
-	iof_pool_release(fs_handle->fh_pool, handle);
+	dfuse_pool_release(fs_handle->fh_pool, handle);
 }
 
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct iof_file_handle *handle = (struct iof_file_handle *)fi->fh;
+	struct dfuse_file_handle *handle = (struct dfuse_file_handle *)fi->fh;
 
 	handle->release_req.req = req;
-	ioc_release_priv(handle);
+	dfuse_release_priv(handle);
 }
 
 void
-ioc_int_release(struct iof_file_handle *handle)
+dfuse_int_release(struct dfuse_file_handle *handle)
 {
 
-	ioc_release_priv(handle);
+	dfuse_release_priv(handle);
 }

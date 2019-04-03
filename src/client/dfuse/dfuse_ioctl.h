@@ -30,7 +30,7 @@
 #define IOF_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
 #define IOF_IOCTL_VERSION 4       /* Version of ioctl protocol */
 
-struct iof_gah_info {
+struct dfuse_gah_info {
 	int version;
 	struct ios_gah gah;
 	int cnss_id;
@@ -39,6 +39,6 @@ struct iof_gah_info {
 
 /* Defines the IOCTL command to get the gah for a IOF file */
 #define IOF_IOCTL_GAH ((int)_IOR(IOF_IOCTL_TYPE, IOF_IOCTL_GAH_NUMBER, \
-				 struct iof_gah_info))
+				 struct dfuse_gah_info))
 
 #endif

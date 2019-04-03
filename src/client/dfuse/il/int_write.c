@@ -27,9 +27,9 @@
 #include "intercept.h"
 
 struct write_cb_r {
-	struct iof_file_common *f_info;
+	struct dfuse_file_common *f_info;
 	ssize_t len;
-	struct iof_tracker tracker;
+	struct dfuse_tracker tracker;
 	int err;
 	int rc;
 };
@@ -38,7 +38,7 @@ static void
 write_cb(const struct crt_cb_info *cb_info)
 {
 	struct write_cb_r *reply = cb_info->cci_arg;
-	struct iof_writex_out *out = crt_reply_get(cb_info->cci_rpc);
+	struct dfuse_writex_out *out = crt_reply_get(cb_info->cci_rpc);
 
 	if (cb_info->cci_rc != 0) {
 		/*
@@ -52,7 +52,7 @@ write_cb(const struct crt_cb_info *cb_info)
 			reply->err = EAGAIN;
 		else
 			reply->err = EIO;
-		iof_tracker_signal(&reply->tracker);
+		dfuse_tracker_signal(&reply->tracker);
 		return;
 	}
 
@@ -64,22 +64,22 @@ write_cb(const struct crt_cb_info *cb_info)
 		if (out->err == -DER_NOMEM)
 			reply->err = ENOMEM;
 
-		iof_tracker_signal(&reply->tracker);
+		dfuse_tracker_signal(&reply->tracker);
 		return;
 	}
 
 	reply->len = out->len;
 	reply->rc = out->rc;
-	iof_tracker_signal(&reply->tracker);
+	dfuse_tracker_signal(&reply->tracker);
 }
 
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct iof_file_common *f_info, int *errcode)
+	       struct dfuse_file_common *f_info, int *errcode)
 {
-	struct iof_projection		*fs_handle;
-	struct iof_service_group	*grp;
-	struct iof_writex_in		*in;
+	struct dfuse_projection		*fs_handle;
+	struct dfuse_service_group	*grp;
+	struct dfuse_writex_in		*in;
 	struct write_cb_r		reply = {0};
 	crt_rpc_t			*rpc = NULL;
 	crt_bulk_t			bulk;
@@ -137,7 +137,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 		}
 	}
 
-	iof_tracker_init(&reply.tracker, 1);
+	dfuse_tracker_init(&reply.tracker, 1);
 	in->xtvec.xt_off = position;
 
 	bulk = in->data_bulk;
@@ -150,7 +150,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 		*errcode = EIO;
 		return -1;
 	}
-	iof_fs_wait(fs_handle, &reply.tracker);
+	dfuse_fs_wait(fs_handle, &reply.tracker);
 
 	if (bulk) {
 		rc = crt_bulk_free(bulk);
@@ -175,7 +175,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct iof_file_common *f_info, int *errcode)
+		struct dfuse_file_common *f_info, int *errcode)
 {
 	ssize_t bytes_written;
 	ssize_t total_write = 0;

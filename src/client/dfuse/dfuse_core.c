@@ -26,12 +26,12 @@
 #include "dfuse_pool.h"
 
 int
-iof_fs_resend(struct ioc_request *request);
+dfuse_fs_resend(struct dfuse_request *request);
 
 bool
-ioc_gen_cb(struct ioc_request *request)
+dfuse_gen_cb(struct dfuse_request *request)
 {
-	struct iof_status_out *out = crt_reply_get(request->rpc);
+	struct dfuse_status_out *out = crt_reply_get(request->rpc);
 
 	IOC_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
@@ -58,9 +58,9 @@ out:
 static void
 generic_cb(const struct crt_cb_info *cb_info)
 {
-	struct ioc_request		*request = cb_info->cci_arg;
-	struct iof_projection_info	*fsh = request->fsh;
-	struct ioc_inode_entry		*ir_inode = NULL;
+	struct dfuse_request		*request = cb_info->cci_arg;
+	struct dfuse_projection_info	*fsh = request->fsh;
+	struct dfuse_inode_entry	*ir_inode = NULL;
 	bool				keep_ref;
 
 	D_ASSERT(request->ir_rs == RS_RESET);
@@ -91,7 +91,7 @@ generic_cb(const struct crt_cb_info *cb_info)
  *
  */
 int
-iof_fs_send(struct ioc_request *request)
+dfuse_fs_send(struct dfuse_request *request)
 {
 	int rc;
 
@@ -115,7 +115,7 @@ iof_fs_send(struct ioc_request *request)
 			request->ir_ht = RHS_INODE;
 		}
 	}
-	rc = iof_fs_resend(request);
+	rc = dfuse_fs_resend(request);
 	if (rc) {
 		D_GOTO(err, 0);
 	}
@@ -127,9 +127,9 @@ err:
 }
 
 int
-iof_fs_resend(struct ioc_request *request)
+dfuse_fs_resend(struct dfuse_request *request)
 {
-	struct iof_projection_info	*fs_handle = request->fsh;
+	struct dfuse_projection_info	*fs_handle = request->fsh;
 	crt_endpoint_t			ep;
 	int				ret;
 	int				rc;
@@ -214,10 +214,10 @@ static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	   const void *key, unsigned int ksize)
 {
-	const struct ioc_inode_entry	*ie;
+	const struct dfuse_inode_entry	*ie;
 	const ino_t			*ino = key;
 
-	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	return *ino == ie->stat.st_ino;
 }
@@ -225,10 +225,10 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct ioc_inode_entry	*ie;
-	int			oldref;
+	struct dfuse_inode_entry	*ie;
+	int				oldref;
 
-	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	oldref = atomic_fetch_add(&ie->ie_ref, 1);
 	IOF_TRACE_DEBUG(ie, "addref to %u", oldref + 1);
 }
@@ -236,10 +236,10 @@ ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct ioc_inode_entry	*ie;
-	int			oldref;
+	struct dfuse_inode_entry	*ie;
+	int				oldref;
 
-	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	oldref = atomic_fetch_sub(&ie->ie_ref, 1);
 	IOF_TRACE_DEBUG(ie, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -248,10 +248,10 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct iof_projection_info	*fs_handle = htable->ht_priv;
-	struct ioc_inode_entry		*ie;
+	struct dfuse_projection_info	*fs_handle = htable->ht_priv;
+	struct dfuse_inode_entry		*ie;
 
-	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	IOF_TRACE_DEBUG(ie, "parent %lu", ie->parent);
 	ie_close(fs_handle, ie);
@@ -267,7 +267,7 @@ d_hash_table_ops_t hops = {.hop_key_cmp = ih_key_cmp,
 static void
 dh_init(void *arg, void *handle)
 {
-	struct iof_dir_handle *dh = arg;
+	struct dfuse_dir_handle *dh = arg;
 
 	IOC_REQUEST_INIT(&dh->open_req, handle);
 	IOC_REQUEST_INIT(&dh->close_req, handle);
@@ -286,7 +286,7 @@ dh_init(void *arg, void *handle)
 		}						\
 	} while (0)
 
-/* As CHECK_AND_RESET_RPC but take a ioc_request as the second option
+/* As CHECK_AND_RESET_RPC but take a dfuse_request as the second option
  * and work on the RPC in the request
  */
 #define CHECK_AND_RESET_RRPC(HANDLE, REQUEST)			\
@@ -295,7 +295,7 @@ dh_init(void *arg, void *handle)
 static bool
 dh_reset(void *arg)
 {
-	struct iof_dir_handle	*dh = arg;
+	struct dfuse_dir_handle	*dh = arg;
 	int			rc;
 
 	dh->reply_count = 0;
@@ -340,7 +340,7 @@ dh_reset(void *arg)
 static void
 dh_release(void *arg)
 {
-	struct iof_dir_handle *dh = arg;
+	struct dfuse_dir_handle *dh = arg;
 
 	crt_req_decref(dh->open_req.rpc);
 	crt_req_decref(dh->close_req.rpc);
@@ -355,7 +355,7 @@ dh_release(void *arg)
 static void
 fh_init(void *arg, void *handle)
 {
-	struct iof_file_handle *fh = arg;
+	struct dfuse_file_handle *fh = arg;
 
 	IOC_REQUEST_INIT(&fh->open_req, handle);
 	IOC_REQUEST_INIT(&fh->creat_req, handle);
@@ -366,7 +366,7 @@ fh_init(void *arg, void *handle)
 static bool
 fh_reset(void *arg)
 {
-	struct iof_file_handle	*fh = arg;
+	struct dfuse_file_handle	*fh = arg;
 	int			rc;
 
 	IOC_REQUEST_RESET(&fh->open_req);
@@ -428,7 +428,7 @@ fh_reset(void *arg)
 static void
 fh_release(void *arg)
 {
-	struct iof_file_handle *fh = arg;
+	struct dfuse_file_handle *fh = arg;
 
 	crt_req_decref(fh->open_req.rpc);
 	crt_req_decref(fh->open_req.rpc);
@@ -557,7 +557,7 @@ entry_release(void *arg)
 static void
 rb_page_init(void *arg, void *handle)
 {
-	struct iof_rb *rb = arg;
+	struct dfuse_rb *rb = arg;
 
 	IOC_REQUEST_INIT(&rb->rb_req, handle);
 	rb->buf_size = 4096;
@@ -570,7 +570,7 @@ rb_page_init(void *arg, void *handle)
 static void
 rb_large_init(void *arg, void *handle)
 {
-	struct iof_rb *rb = arg;
+	struct dfuse_rb *rb = arg;
 
 	rb_page_init(arg, handle);
 	rb->buf_size = rb->rb_req.fsh->max_read;
@@ -579,7 +579,7 @@ rb_large_init(void *arg, void *handle)
 static bool
 rb_reset(void *arg)
 {
-	struct iof_rb	*rb = arg;
+	struct dfuse_rb	*rb = arg;
 	int		rc;
 
 	IOC_REQUEST_RESET(&rb->rb_req);
@@ -614,7 +614,7 @@ rb_reset(void *arg)
 static void
 rb_release(void *arg)
 {
-	struct iof_rb *rb = arg;
+	struct dfuse_rb *rb = arg;
 
 	IOF_BULK_FREE(rb, lb);
 
@@ -625,7 +625,7 @@ rb_release(void *arg)
 static void
 wb_init(void *arg, void *handle)
 {
-	struct iof_wb *wb = arg;
+	struct dfuse_wb *wb = arg;
 
 	IOC_REQUEST_INIT(&wb->wb_req, handle);
 	wb->failure = false;
@@ -635,7 +635,7 @@ wb_init(void *arg, void *handle)
 static bool
 wb_reset(void *arg)
 {
-	struct iof_wb	*wb = arg;
+	struct dfuse_wb	*wb = arg;
 	int		rc;
 
 	IOC_REQUEST_RESET(&wb->wb_req);
@@ -670,7 +670,7 @@ wb_reset(void *arg)
 static void
 wb_release(void *arg)
 {
-	struct iof_wb *wb = arg;
+	struct dfuse_wb *wb = arg;
 
 	crt_req_decref(wb->wb_req.rpc);
 	crt_req_decref(wb->wb_req.rpc);
@@ -684,20 +684,20 @@ wb_release(void *arg)
  * Returns -DER_SUCCESS on timeout or passes through any other errors.
  */
 static int
-iof_progress_drain(struct iof_ctx *iof_ctx)
+dfuse_progress_drain(struct dfuse_ctx *dfuse_ctx)
 {
 	int ctx_rc;
 
-	if (!iof_ctx->crt_ctx) {
-		IOF_TRACE_WARNING(iof_ctx, "Null context");
+	if (!dfuse_ctx->crt_ctx) {
+		IOF_TRACE_WARNING(dfuse_ctx, "Null context");
 		return -DER_SUCCESS;
 	}
 
 	do {
-		ctx_rc = crt_progress(iof_ctx->crt_ctx, 1000000, NULL, NULL);
+		ctx_rc = crt_progress(dfuse_ctx->crt_ctx, 1000000, NULL, NULL);
 
 		if (ctx_rc != -DER_TIMEDOUT && ctx_rc != -DER_SUCCESS) {
-			IOF_TRACE_WARNING(iof_ctx, "progress returned %d",
+			IOF_TRACE_WARNING(dfuse_ctx, "progress returned %d",
 					  ctx_rc);
 			return ctx_rc;
 		}
@@ -707,17 +707,17 @@ iof_progress_drain(struct iof_ctx *iof_ctx)
 }
 
 static void *
-iof_thread(void *arg)
+dfuse_thread(void *arg)
 {
-	struct iof_ctx	*iof_ctx = arg;
+	struct dfuse_ctx	*dfuse_ctx = arg;
 	int		rc;
 
-	iof_tracker_signal(&iof_ctx->thread_start_tracker);
+	dfuse_tracker_signal(&dfuse_ctx->thread_start_tracker);
 	do {
-		rc = crt_progress(iof_ctx->crt_ctx,
-				  iof_ctx->poll_interval,
-				  iof_ctx->callback_fn,
-				  &iof_ctx->thread_stop_tracker);
+		rc = crt_progress(dfuse_ctx->crt_ctx,
+				  dfuse_ctx->poll_interval,
+				  dfuse_ctx->callback_fn,
+				  &dfuse_ctx->thread_stop_tracker);
 
 		if (rc == -DER_TIMEDOUT) {
 			rc = 0;
@@ -725,13 +725,13 @@ iof_thread(void *arg)
 		}
 
 		if (rc != 0)
-			IOF_TRACE_ERROR(iof_ctx, "crt_progress failed rc: %d",
+			IOF_TRACE_ERROR(dfuse_ctx, "crt_progress failed rc: %d",
 					rc);
 
-	} while (!iof_tracker_test(&iof_ctx->thread_stop_tracker));
+	} while (!dfuse_tracker_test(&dfuse_ctx->thread_stop_tracker));
 
 	if (rc != 0)
-		IOF_TRACE_ERROR(iof_ctx, "crt_progress error on shutdown "
+		IOF_TRACE_ERROR(dfuse_ctx, "crt_progress error on shutdown "
 				"rc: %d", rc);
 
 	return (void *)(uintptr_t)rc;
@@ -739,26 +739,26 @@ iof_thread(void *arg)
 
 /* Start a progress thread, return true on success */
 static bool
-iof_thread_start(struct iof_ctx *iof_ctx)
+dfuse_thread_start(struct dfuse_ctx *dfuse_ctx)
 {
 	int rc;
 
-	iof_tracker_init(&iof_ctx->thread_start_tracker, 1);
-	iof_tracker_init(&iof_ctx->thread_stop_tracker, 1);
+	dfuse_tracker_init(&dfuse_ctx->thread_start_tracker, 1);
+	dfuse_tracker_init(&dfuse_ctx->thread_stop_tracker, 1);
 
-	rc = pthread_create(&iof_ctx->thread, NULL,
-			    iof_thread, iof_ctx);
+	rc = pthread_create(&dfuse_ctx->thread, NULL,
+			    dfuse_thread, dfuse_ctx);
 
 	if (rc != 0) {
-		IOF_TRACE_ERROR(iof_ctx, "Could not start progress thread");
+		IOF_TRACE_ERROR(dfuse_ctx, "Could not start progress thread");
 		return false;
 	}
 
-	rc = pthread_setname_np(iof_ctx->thread, "IOF thread");
+	rc = pthread_setname_np(dfuse_ctx->thread, "IOF thread");
 	if (rc != 0)
-		IOF_TRACE_ERROR(iof_ctx, "Could not set thread name");
+		IOF_TRACE_ERROR(dfuse_ctx, "Could not set thread name");
 
-	iof_tracker_wait(&iof_ctx->thread_start_tracker);
+	dfuse_tracker_wait(&dfuse_ctx->thread_start_tracker);
 	return true;
 }
 
@@ -767,111 +767,111 @@ iof_thread_start(struct iof_ctx *iof_ctx)
  * Returns the return code of crt_context_destroy()
  */
 static int
-iof_thread_stop(struct iof_ctx *iof_ctx)
+dfuse_thread_stop(struct dfuse_ctx *dfuse_ctx)
 {
 	void *rtn;
 
-	if (!iof_ctx->thread)
+	if (!dfuse_ctx->thread)
 		return 0;
 
-	IOF_TRACE_INFO(iof_ctx, "Stopping CRT thread");
-	iof_tracker_signal(&iof_ctx->thread_stop_tracker);
-	pthread_join(iof_ctx->thread, &rtn);
-	IOF_TRACE_INFO(iof_ctx,
+	IOF_TRACE_INFO(dfuse_ctx, "Stopping CRT thread");
+	dfuse_tracker_signal(&dfuse_ctx->thread_stop_tracker);
+	pthread_join(dfuse_ctx->thread, &rtn);
+	IOF_TRACE_INFO(dfuse_ctx,
 		       "CRT thread stopped with %d",
 		       (int)(uintptr_t)rtn);
 
-	iof_ctx->thread = 0;
+	dfuse_ctx->thread = 0;
 
 	return (int)(uintptr_t)rtn;
 }
 
 void
-iof_reg(struct iof_state *iof_state, struct cnss_info *cnss_info)
+dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 {
-	struct iof_group_info *group;
+	struct dfuse_group_info *group;
 	int ret;
 
-	iof_state->cnss_info = cnss_info;
-	ret = crt_context_create(&iof_state->iof_ctx.crt_ctx);
+	dfuse_state->cnss_info = cnss_info;
+	ret = crt_context_create(&dfuse_state->dfuse_ctx.crt_ctx);
 	if (ret != -DER_SUCCESS) {
-		IOF_TRACE_ERROR(iof_state, "Context not created");
+		IOF_TRACE_ERROR(dfuse_state, "Context not created");
 		return;
 	}
 
-	IOF_TRACE_UP(&iof_state->iof_ctx, iof_state, "iof_ctx");
+	IOF_TRACE_UP(&dfuse_state->dfuse_ctx, dfuse_state, "dfuse_ctx");
 
-	ret = crt_context_set_timeout(iof_state->iof_ctx.crt_ctx, 7);
+	ret = crt_context_set_timeout(dfuse_state->dfuse_ctx.crt_ctx, 7);
 	if (ret != -DER_SUCCESS) {
-		IOF_TRACE_ERROR(iof_state, "Context timeout not set");
+		IOF_TRACE_ERROR(dfuse_state, "Context timeout not set");
 		return;
 	}
 
-	if (!iof_thread_start(&iof_state->iof_ctx)) {
-		IOF_TRACE_ERROR(iof_state, "Failed to create progress thread");
+	if (!dfuse_thread_start(&dfuse_state->dfuse_ctx)) {
+		IOF_TRACE_ERROR(dfuse_state, "Failed to create progress thread");
 		return;
 	}
 
 	/* Despite the hard coding above, now we can do attaches in a loop */
-	group = &iof_state->group;
+	group = &dfuse_state->group;
 
-	ret = iof_client_register(&group->grp.psr_ep,
-				  &iof_state->proto,
-				  &iof_state->io_proto);
+	ret = dfuse_client_register(&group->grp.psr_ep,
+				  &dfuse_state->proto,
+				  &dfuse_state->io_proto);
 	if (ret) {
-		IOF_TRACE_ERROR(iof_state,
+		IOF_TRACE_ERROR(dfuse_state,
 				"RPC registration failed with ret: %d", ret);
 	}
 }
 
 static bool
-initialize_projection(struct iof_state *iof_state,
-		      struct iof_group_info *group)
+initialize_projection(struct dfuse_state *dfuse_state,
+		      struct dfuse_group_info *group)
 {
-	struct iof_projection_info	*fs_handle;
+	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
 	int				ret;
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
 	int				i;
 
-	struct iof_pool_reg pt = {.init = dh_init,
+	struct dfuse_pool_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
 				  .release = dh_release,
-				  POOL_TYPE_INIT(iof_dir_handle, dh_free_list)};
+				  POOL_TYPE_INIT(dfuse_dir_handle, dh_free_list)};
 
-	struct iof_pool_reg fh = {.init = fh_init,
+	struct dfuse_pool_reg fh = {.init = fh_init,
 				  .reset = fh_reset,
 				  .release = fh_release,
-				  POOL_TYPE_INIT(iof_file_handle, fh_free_list)};
+				  POOL_TYPE_INIT(dfuse_file_handle, fh_free_list)};
 
-	struct iof_pool_reg common_t = {.reset = common_reset,
+	struct dfuse_pool_reg common_t = {.reset = common_reset,
 					.release = common_release,
 					POOL_TYPE_INIT(common_req, list)};
 
-	struct iof_pool_reg entry_t = {.reset = entry_reset,
+	struct dfuse_pool_reg entry_t = {.reset = entry_reset,
 				       .release = entry_release,
 				       POOL_TYPE_INIT(entry_req, list)};
 
-	struct iof_pool_reg rb_page = {.init = rb_page_init,
+	struct dfuse_pool_reg rb_page = {.init = rb_page_init,
 				       .reset = rb_reset,
 				       .release = rb_release,
-				       POOL_TYPE_INIT(iof_rb, rb_req.ir_list)};
+				       POOL_TYPE_INIT(dfuse_rb, rb_req.ir_list)};
 
-	struct iof_pool_reg rb_large = {.init = rb_large_init,
+	struct dfuse_pool_reg rb_large = {.init = rb_large_init,
 					.reset = rb_reset,
 					.release = rb_release,
-					POOL_TYPE_INIT(iof_rb, rb_req.ir_list)};
+					POOL_TYPE_INIT(dfuse_rb, rb_req.ir_list)};
 
-	struct iof_pool_reg wb = {.init = wb_init,
+	struct dfuse_pool_reg wb = {.init = wb_init,
 				  .reset = wb_reset,
 				  .release = wb_release,
-				  POOL_TYPE_INIT(iof_wb, wb_req.ir_list)};
+				  POOL_TYPE_INIT(dfuse_wb, wb_req.ir_list)};
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
 		return false;
 
-	IOF_TRACE_UP(fs_handle, iof_state, "iof_projection");
+	IOF_TRACE_UP(fs_handle, dfuse_state, "dfuse_projection");
 
 	if (fs_handle->ctx_num == 0) {
 		fs_handle->ctx_num = 1;
@@ -885,15 +885,15 @@ initialize_projection(struct iof_state *iof_state,
 	}
 
 	for (i = 0; i < fs_handle->ctx_num; i++) {
-		IOF_TRACE_UP(&fs_handle->ctx_array[i], fs_handle, "iof_ctx");
+		IOF_TRACE_UP(&fs_handle->ctx_array[i], fs_handle, "dfuse_ctx");
 	}
 
-	ret = iof_pool_init(&fs_handle->pool, fs_handle);
+	ret = dfuse_pool_init(&fs_handle->pool, fs_handle);
 	if (ret != -DER_SUCCESS)
 		D_GOTO(err, 0);
 
-	fs_handle->iof_state = iof_state;
-	fs_handle->proj.io_proto = iof_state->io_proto;
+	fs_handle->dfuse_state = dfuse_state;
+	fs_handle->proj.io_proto = dfuse_state->io_proto;
 
 	IOF_TRACE_INFO(fs_handle, "%d cart threads",
 		       fs_handle->ctx_num);
@@ -922,14 +922,14 @@ initialize_projection(struct iof_state *iof_state,
 
 	for (i = 0; i < fs_handle->ctx_num; i++) {
 		fs_handle->ctx_array[i].crt_ctx       = fs_handle->proj.crt_ctx;
-		fs_handle->ctx_array[i].poll_interval = iof_state->iof_ctx.poll_interval;
-		fs_handle->ctx_array[i].callback_fn   = iof_state->iof_ctx.callback_fn;
+		fs_handle->ctx_array[i].poll_interval = dfuse_state->dfuse_ctx.poll_interval;
+		fs_handle->ctx_array[i].callback_fn   = dfuse_state->dfuse_ctx.callback_fn;
 
 		/* TODO: Much better error checking is required here, not least
 		 * terminating the thread if there are any failures in the rest
 		 * of this function
 		 */
-		if (!iof_thread_start(&fs_handle->ctx_array[i])) {
+		if (!dfuse_thread_start(&fs_handle->ctx_array[i])) {
 			IOF_TRACE_ERROR(fs_handle, "Could not create thread");
 			D_GOTO(err, 0);
 		}
@@ -958,7 +958,7 @@ initialize_projection(struct iof_state *iof_state,
 	if (!args.argv[3])
 		D_GOTO(err, 0);
 
-	fuse_ops = iof_get_fuse_ops(fs_handle->flags);
+	fuse_ops = dfuse_get_fuse_ops(fs_handle->flags);
 	if (!fuse_ops)
 		D_GOTO(err, 0);
 
@@ -967,57 +967,57 @@ initialize_projection(struct iof_state *iof_state,
 	 * This is done late on in the registration as the dh_int() and
 	 * dh_reset() functions require access to fs_handle.
 	 */
-	fs_handle->dh_pool = iof_pool_register(&fs_handle->pool, &pt);
+	fs_handle->dh_pool = dfuse_pool_register(&fs_handle->pool, &pt);
 	if (!fs_handle->dh_pool)
 		D_GOTO(err, 0);
 
 	common_t.init = getattr_common_init;
-	fs_handle->fgh_pool = iof_pool_register(&fs_handle->pool, &common_t);
+	fs_handle->fgh_pool = dfuse_pool_register(&fs_handle->pool, &common_t);
 	if (!fs_handle->fgh_pool)
 		D_GOTO(err, 0);
 
 	common_t.init = setattr_common_init;
-	fs_handle->fsh_pool = iof_pool_register(&fs_handle->pool, &common_t);
+	fs_handle->fsh_pool = dfuse_pool_register(&fs_handle->pool, &common_t);
 	if (!fs_handle->fsh_pool)
 		D_GOTO(err, 0);
 
 	common_t.init = close_common_init;
-	fs_handle->close_pool = iof_pool_register(&fs_handle->pool, &common_t);
+	fs_handle->close_pool = dfuse_pool_register(&fs_handle->pool, &common_t);
 	if (!fs_handle->close_pool)
 		D_GOTO(err, 0);
 
 	entry_t.init = lookup_entry_init;
-	fs_handle->lookup_pool = iof_pool_register(&fs_handle->pool, &entry_t);
+	fs_handle->lookup_pool = dfuse_pool_register(&fs_handle->pool, &entry_t);
 	if (!fs_handle->lookup_pool)
 		D_GOTO(err, 0);
 
 	entry_t.init = mkdir_entry_init;
-	fs_handle->mkdir_pool = iof_pool_register(&fs_handle->pool, &entry_t);
+	fs_handle->mkdir_pool = dfuse_pool_register(&fs_handle->pool, &entry_t);
 	if (!fs_handle->mkdir_pool)
 		D_GOTO(err, 0);
 
 	entry_t.init = symlink_entry_init;
-	fs_handle->symlink_pool = iof_pool_register(&fs_handle->pool, &entry_t);
+	fs_handle->symlink_pool = dfuse_pool_register(&fs_handle->pool, &entry_t);
 	if (!fs_handle->symlink_pool)
 		D_GOTO(err, 0);
 
-	fs_handle->fh_pool = iof_pool_register(&fs_handle->pool, &fh);
+	fs_handle->fh_pool = dfuse_pool_register(&fs_handle->pool, &fh);
 	if (!fs_handle->fh_pool)
 		D_GOTO(err, 0);
 
-	fs_handle->rb_pool_page = iof_pool_register(&fs_handle->pool, &rb_page);
+	fs_handle->rb_pool_page = dfuse_pool_register(&fs_handle->pool, &rb_page);
 	if (!fs_handle->rb_pool_page)
 		D_GOTO(err, 0);
 
-	fs_handle->rb_pool_large = iof_pool_register(&fs_handle->pool, &rb_large);
+	fs_handle->rb_pool_large = dfuse_pool_register(&fs_handle->pool, &rb_large);
 	if (!fs_handle->rb_pool_large)
 		D_GOTO(err, 0);
 
-	fs_handle->write_pool = iof_pool_register(&fs_handle->pool, &wb);
+	fs_handle->write_pool = dfuse_pool_register(&fs_handle->pool, &wb);
 	if (!fs_handle->write_pool)
 		D_GOTO(err, 0);
 
-	if (!cnss_register_fuse(fs_handle->iof_state->cnss_info,
+	if (!cnss_register_fuse(fs_handle->dfuse_state->cnss_info,
 				fuse_ops,
 				&args,
 				fs_handle->mnt_dir.name,
@@ -1035,26 +1035,26 @@ initialize_projection(struct iof_state *iof_state,
 
 	return true;
 err:
-	iof_pool_destroy(&fs_handle->pool);
+	dfuse_pool_destroy(&fs_handle->pool);
 	D_FREE(fuse_ops);
 	D_FREE(fs_handle);
 	return false;
 }
 
 void
-iof_post_start(struct iof_state *iof_state)
+dfuse_post_start(struct dfuse_state *dfuse_state)
 {
-	struct iof_group_info	*group = &iof_state->group;
+	struct dfuse_group_info	*group = &dfuse_state->group;
 
-	initialize_projection(iof_state, group);
+	initialize_projection(dfuse_state, group);
 }
 
 static int
 ino_flush(d_list_t *rlink, void *arg)
 {
-	struct iof_projection_info *fs_handle = arg;
-	struct ioc_inode_entry *ie = container_of(rlink,
-						  struct ioc_inode_entry,
+	struct dfuse_projection_info *fs_handle = arg;
+	struct dfuse_inode_entry *ie = container_of(rlink,
+						  struct dfuse_inode_entry,
 						  ie_htl);
 	int rc;
 
@@ -1090,7 +1090,7 @@ ino_flush(d_list_t *rlink, void *arg)
 
 /* Called once per projection, before the FUSE filesystem has been torn down */
 void
-iof_flush_fuse(struct iof_projection_info *fs_handle)
+dfuse_flush_fuse(struct dfuse_projection_info *fs_handle)
 {
 	int rc;
 
@@ -1104,7 +1104,7 @@ iof_flush_fuse(struct iof_projection_info *fs_handle)
 
 /* Called once per projection, after the FUSE filesystem has been torn down */
 int
-iof_deregister_fuse(struct iof_projection_info *fs_handle)
+dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 {
 	d_list_t	*rlink;
 	uint64_t	refs = 0;
@@ -1115,7 +1115,7 @@ iof_deregister_fuse(struct iof_projection_info *fs_handle)
 
 	IOF_TRACE_INFO(fs_handle, "Draining inode table");
 	do {
-		struct ioc_inode_entry *ie;
+		struct dfuse_inode_entry *ie;
 		uint ref;
 
 		rlink = d_hash_rec_first(&fs_handle->inode_ht);
@@ -1123,7 +1123,7 @@ iof_deregister_fuse(struct iof_projection_info *fs_handle)
 		if (!rlink)
 			break;
 
-		ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 		ref = atomic_load_consume(&ie->ie_ref);
 
@@ -1155,7 +1155,7 @@ iof_deregister_fuse(struct iof_projection_info *fs_handle)
 	 */
 
 	for (i = 0; i < fs_handle->ctx_num; i++) {
-		rc = iof_thread_stop(&fs_handle->ctx_array[i]);
+		rc = dfuse_thread_stop(&fs_handle->ctx_array[i]);
 		if (rc != 0)
 			IOF_TRACE_ERROR(fs_handle,
 					"thread[%d] stop returned %d", i, rc);
@@ -1169,9 +1169,9 @@ iof_deregister_fuse(struct iof_projection_info *fs_handle)
 		bool active;
 
 		do {
-			rc = iof_progress_drain(&fs_handle->ctx_array[0]);
+			rc = dfuse_progress_drain(&fs_handle->ctx_array[0]);
 
-			active = iof_pool_reclaim(&fs_handle->pool);
+			active = dfuse_pool_reclaim(&fs_handle->pool);
 
 			if (!active)
 				break;
@@ -1193,7 +1193,7 @@ iof_deregister_fuse(struct iof_projection_info *fs_handle)
 	if (rc != -DER_SUCCESS)
 		IOF_TRACE_ERROR(fs_handle, "Count not destroy context");
 
-	iof_pool_destroy(&fs_handle->pool);
+	dfuse_pool_destroy(&fs_handle->pool);
 
 	rc = pthread_mutex_destroy(&fs_handle->gah_lock);
 	if (rc != 0) {
@@ -1214,40 +1214,40 @@ iof_deregister_fuse(struct iof_projection_info *fs_handle)
 }
 
 void
-iof_finish(struct iof_state *iof_state)
+dfuse_finish(struct dfuse_state *dfuse_state)
 {
 	int rc;
 
 	/* Stop progress thread */
-	rc = iof_thread_stop(&iof_state->iof_ctx);
+	rc = dfuse_thread_stop(&dfuse_state->dfuse_ctx);
 	if (rc != 0)
-		IOF_TRACE_ERROR(iof_state,
+		IOF_TRACE_ERROR(dfuse_state,
 				"thread stop returned %d", rc);
 
-	if (iof_state->iof_ctx.crt_ctx) {
+	if (dfuse_state->dfuse_ctx.crt_ctx) {
 
-		rc = iof_progress_drain(&iof_state->iof_ctx);
+		rc = dfuse_progress_drain(&dfuse_state->dfuse_ctx);
 		if (rc != 0)
-			IOF_TRACE_ERROR(iof_state,
+			IOF_TRACE_ERROR(dfuse_state,
 					"could not drain context %d", rc);
 
-		rc = crt_context_destroy(iof_state->iof_ctx.crt_ctx, false);
+		rc = crt_context_destroy(dfuse_state->dfuse_ctx.crt_ctx, false);
 		if (rc != -DER_SUCCESS)
-			IOF_TRACE_ERROR(iof_state, "Could not destroy context %d",
+			IOF_TRACE_ERROR(dfuse_state, "Could not destroy context %d",
 					rc);
-		IOF_TRACE_DOWN(&iof_state->iof_ctx);
+		IOF_TRACE_DOWN(&dfuse_state->dfuse_ctx);
 	}
 
-	IOF_TRACE_DOWN(iof_state);
-	D_FREE(iof_state);
+	IOF_TRACE_DOWN(dfuse_state);
+	D_FREE(dfuse_state);
 }
 
-struct iof_state *
-iof_plugin_init()
+struct dfuse_state *
+dfuse_plugin_init()
 {
-	struct iof_state *iof_state;
+	struct dfuse_state *dfuse_state;
 
-	D_ALLOC_PTR(iof_state);
+	D_ALLOC_PTR(dfuse_state);
 
-	return iof_state;
+	return dfuse_state;
 }

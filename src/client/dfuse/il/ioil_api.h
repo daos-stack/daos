@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-enum iof_bypass_status {
+enum dfuse_bypass_status {
 	IOF_IO_EXTERNAL = 0,	/** File is not forwarded by IOF */
 	IOF_IO_BYPASS,		/** Kernel bypass is enabled */
 	IOF_IO_DIS_MMAP,	/** Bypass disabled for mmap'd file */
@@ -50,8 +50,8 @@ enum iof_bypass_status {
 };
 
 /** Return a value indicating the status of the file with respect to
- *  IOF.  Possible values are defined in /p enum iof_bypass_status
+ *  IOF.  Possible values are defined in /p enum dfuse_bypass_status
  */
-IOF_PUBLIC int iof_get_bypass_status(int fd);
+IOF_PUBLIC int dfuse_get_bypass_status(int fd);
 
 #endif /* __IOF_API_H__ */

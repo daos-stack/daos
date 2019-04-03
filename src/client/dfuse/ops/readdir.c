@@ -26,9 +26,9 @@
 
 struct readdir_cb_r {
 	crt_rpc_t *rpc;
-	struct iof_tracker tracker;
+	struct dfuse_tracker tracker;
 	int err;
-	struct iof_readdir_out *out;
+	struct dfuse_readdir_out *out;
 };
 
 /* The callback of the readdir RPC.
@@ -50,7 +50,7 @@ readdir_cb(const struct crt_cb_info *cb_info)
 			reply->err = EHOSTDOWN;
 		else
 			reply->err = EIO;
-		iof_tracker_signal(&reply->tracker);
+		dfuse_tracker_signal(&reply->tracker);
 		return;
 	}
 
@@ -58,7 +58,7 @@ readdir_cb(const struct crt_cb_info *cb_info)
 
 	reply->out = crt_reply_get(cb_info->cci_rpc);
 	reply->rpc = cb_info->cci_rpc;
-	iof_tracker_signal(&reply->tracker);
+	dfuse_tracker_signal(&reply->tracker);
 }
 
 /*
@@ -69,10 +69,10 @@ readdir_cb(const struct crt_cb_info *cb_info)
  * FUSE and the handle is marked as invalid.
  */
 static int
-readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
+readdir_get_data(struct dfuse_dir_handle *dir_handle, off_t offset)
 {
-	struct iof_projection_info *fs_handle = dir_handle->open_req.fsh;
-	struct iof_readdir_in *in;
+	struct dfuse_projection_info *fs_handle = dir_handle->open_req.fsh;
+	struct dfuse_readdir_in *in;
 	struct readdir_cb_r reply = {0};
 	crt_rpc_t *rpc = NULL;
 	crt_bulk_t bulk = 0;
@@ -117,7 +117,7 @@ readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
 		bulk = in->bulk;
 	}
 
-	iof_tracker_init(&reply.tracker, 1);
+	dfuse_tracker_init(&reply.tracker, 1);
 	rc = crt_req_send(rpc, readdir_cb, &reply);
 	if (rc) {
 		IOF_TRACE_ERROR(dir_handle,
@@ -125,7 +125,7 @@ readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
 		return EIO;
 	}
 
-	iof_fs_wait(&fs_handle->proj, &reply.tracker);
+	dfuse_fs_wait(&fs_handle->proj, &reply.tracker);
 
 	if (reply.err != 0)
 		D_GOTO(out, ret = reply.err);
@@ -144,7 +144,7 @@ readdir_get_data(struct iof_dir_handle *dir_handle, off_t offset)
 		dir_handle->reply_count = reply.out->iov_count;
 
 		if (reply.out->replies.iov_len != reply.out->iov_count *
-			sizeof(struct iof_readdir_reply)) {
+			sizeof(struct dfuse_readdir_reply)) {
 			IOF_TRACE_ERROR(dir_handle, "Incorrect iov reply");
 			D_GOTO(out, ret = EIO);
 		}
@@ -186,7 +186,7 @@ out_with_rpc:
  * Returns True if the consumed entry is the last one.
  */
 static int
-readdir_next_reply_consume(struct iof_dir_handle *dir_handle)
+readdir_next_reply_consume(struct dfuse_dir_handle *dir_handle)
 {
 	if (dir_handle->reply_count != 0) {
 		dir_handle->replies++;
@@ -220,8 +220,8 @@ readdir_next_reply_consume(struct iof_dir_handle *dir_handle)
  * can include zero or more replies.
  */
 static int
-readdir_next_reply(struct iof_dir_handle *dir_handle, off_t offset,
-		   struct iof_readdir_reply **reply)
+readdir_next_reply(struct dfuse_dir_handle *dir_handle, off_t offset,
+		   struct dfuse_readdir_reply **reply)
 {
 	int rc;
 
@@ -264,7 +264,7 @@ void
 dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		 struct fuse_file_info *fi)
 {
-	struct iof_dir_handle *dir_handle = (struct iof_dir_handle *)fi->fh;
+	struct dfuse_dir_handle *dir_handle = (struct dfuse_dir_handle *)fi->fh;
 	off_t next_offset = offset;
 	void *buf = NULL;
 	size_t b_offset = 0;
@@ -281,7 +281,7 @@ dfuse_cb_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		D_GOTO(out_err, ret = ENOMEM);
 
 	do {
-		struct iof_readdir_reply *dir_reply;
+		struct dfuse_readdir_reply *dir_reply;
 
 		rc = readdir_next_reply
 			(dir_handle, next_offset,

@@ -29,9 +29,9 @@
 #define TYPE_NAME entry_req
 #include "dfuse_ops.h"
 
-static const struct ioc_request_api api = {
-	.gah_offset	= offsetof(struct iof_create_in, common.gah),
-	.on_result	= iof_entry_cb,
+static const struct dfuse_request_api api = {
+	.gah_offset	= offsetof(struct dfuse_create_in, common.gah),
+	.on_result	= dfuse_entry_cb,
 	.have_gah	= true,
 };
 
@@ -40,9 +40,9 @@ static const struct ioc_request_api api = {
 void
 dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
-	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct entry_req		*desc = NULL;
-	struct iof_create_in		*in;
+	struct dfuse_create_in		*in;
 	int rc;
 
 	IOF_TRACE_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
@@ -59,7 +59,7 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	desc->request.ir_inode_num = parent;
 
-	rc = iof_fs_send(&desc->request);
+	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)
 		D_GOTO(err, 0);
 	return;
@@ -67,6 +67,6 @@ err:
 	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc) {
 		IOF_TRACE_DOWN(&desc->request);
-		iof_pool_release(fs_handle->mkdir_pool, desc);
+		dfuse_pool_release(fs_handle->mkdir_pool, desc);
 	}
 }

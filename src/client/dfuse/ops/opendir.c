@@ -26,16 +26,16 @@
 
 #define REQ_NAME open_req
 #define POOL_NAME dh_pool
-#define TYPE_NAME iof_dir_handle
+#define TYPE_NAME dfuse_dir_handle
 #include "dfuse_ops.h"
 
 #define STAT_KEY opendir
 
 static bool
-opendir_ll_cb(struct ioc_request *request)
+opendir_ll_cb(struct dfuse_request *request)
 {
 	struct TYPE_NAME	*dh = CONTAINER(request);
-	struct iof_opendir_out	*out = crt_reply_get(request->rpc);
+	struct dfuse_opendir_out	*out = crt_reply_get(request->rpc);
 	struct fuse_file_info	fi = {0};
 
 	IOC_REQUEST_RESOLVE(request, out);
@@ -46,21 +46,21 @@ opendir_ll_cb(struct ioc_request *request)
 		IOC_REPLY_OPEN(request, fi);
 	} else {
 		IOC_REPLY_ERR(request, request->rc);
-		iof_pool_release(dh->open_req.fsh->dh_pool, dh);
+		dfuse_pool_release(dh->open_req.fsh->dh_pool, dh);
 	}
 	return false;
 }
 
-static const struct ioc_request_api api = {
+static const struct dfuse_request_api api = {
 	.on_result	= opendir_ll_cb,
-	.gah_offset	= offsetof(struct iof_gah_in, gah),
+	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
 	.have_gah	= true,
 };
 
 void
 dfuse_cb_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct iof_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct TYPE_NAME		*dh = NULL;
 	int rc;
 
@@ -73,13 +73,13 @@ dfuse_cb_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	dh->inode_num = ino;
 
-	rc = iof_fs_send(&dh->open_req);
+	rc = dfuse_fs_send(&dh->open_req);
 	if (rc != 0)
 		D_GOTO(err, 0);
 	return;
 err:
 	if (dh)
-		iof_pool_release(fs_handle->dh_pool, dh);
+		dfuse_pool_release(fs_handle->dh_pool, dh);
 
 	IOC_REPLY_ERR_RAW(fs_handle, req, rc);
 }

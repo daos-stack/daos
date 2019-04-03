@@ -28,24 +28,24 @@
 #include "dfuse_fs.h"
 
 static int
-iof_check_complete(void *arg)
+dfuse_check_complete(void *arg)
 {
-	struct iof_tracker *tracker = arg;
+	struct dfuse_tracker *tracker = arg;
 
-	return iof_tracker_test(tracker);
+	return dfuse_tracker_test(tracker);
 }
 
 /* Progress until all callbacks are invoked */
 void
-iof_wait(crt_context_t crt_ctx, struct iof_tracker *tracker)
+dfuse_wait(crt_context_t crt_ctx, struct dfuse_tracker *tracker)
 {
 	int			rc;
 
 	for (;;) {
-		rc = crt_progress(crt_ctx, 1000 * 1000, iof_check_complete,
+		rc = crt_progress(crt_ctx, 1000 * 1000, dfuse_check_complete,
 				  tracker);
 
-		if (iof_tracker_test(tracker))
+		if (dfuse_tracker_test(tracker))
 			return;
 
 		/* TODO: Determine the best course of action on error.  In an

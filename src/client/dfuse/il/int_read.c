@@ -27,10 +27,10 @@
 #include "intercept.h"
 
 struct read_bulk_cb_r {
-	struct iof_readx_out *out;
-	struct iof_file_common *f_info;
+	struct dfuse_readx_out *out;
+	struct dfuse_file_common *f_info;
 	crt_rpc_t *rpc;
-	struct iof_tracker tracker;
+	struct dfuse_tracker tracker;
 	int err;
 	int rc;
 };
@@ -39,7 +39,7 @@ static void
 read_bulk_cb(const struct crt_cb_info *cb_info)
 {
 	struct read_bulk_cb_r *reply = cb_info->cci_arg;
-	struct iof_readx_out *out = crt_reply_get(cb_info->cci_rpc);
+	struct dfuse_readx_out *out = crt_reply_get(cb_info->cci_rpc);
 
 	if (cb_info->cci_rc != 0) {
 		/*
@@ -53,7 +53,7 @@ read_bulk_cb(const struct crt_cb_info *cb_info)
 			reply->err = EAGAIN;
 		else
 			reply->err = EIO;
-		iof_tracker_signal(&reply->tracker);
+		dfuse_tracker_signal(&reply->tracker);
 		return;
 	}
 
@@ -64,13 +64,13 @@ read_bulk_cb(const struct crt_cb_info *cb_info)
 			reply->err = ENOMEM;
 		else
 			reply->err = EIO;
-		iof_tracker_signal(&reply->tracker);
+		dfuse_tracker_signal(&reply->tracker);
 		return;
 	}
 
 	if (out->rc) {
 		reply->rc = out->rc;
-		iof_tracker_signal(&reply->tracker);
+		dfuse_tracker_signal(&reply->tracker);
 		return;
 	}
 
@@ -79,17 +79,17 @@ read_bulk_cb(const struct crt_cb_info *cb_info)
 	reply->out = out;
 	reply->rpc = cb_info->cci_rpc;
 
-	iof_tracker_signal(&reply->tracker);
+	dfuse_tracker_signal(&reply->tracker);
 }
 
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
-	  struct iof_file_common *f_info, int *errcode)
+	  struct dfuse_file_common *f_info, int *errcode)
 {
-	struct iof_projection		*fs_handle;
-	struct iof_service_group	*grp;
-	struct iof_readx_in		*in;
-	struct iof_readx_out		*out;
+	struct dfuse_projection		*fs_handle;
+	struct dfuse_service_group	*grp;
+	struct dfuse_readx_in		*in;
+	struct dfuse_readx_out		*out;
 	struct read_bulk_cb_r		reply = {0};
 	crt_rpc_t			*rpc = NULL;
 	crt_bulk_t			bulk;
@@ -132,7 +132,7 @@ read_bulk(char *buff, size_t len, off_t position,
 		return -1;
 	}
 
-	iof_tracker_init(&reply.tracker, 1);
+	dfuse_tracker_init(&reply.tracker, 1);
 	bulk = in->data_bulk;
 
 	reply.f_info = f_info;
@@ -143,7 +143,7 @@ read_bulk(char *buff, size_t len, off_t position,
 		*errcode = EIO;
 		return -1;
 	}
-	iof_fs_wait(fs_handle, &reply.tracker);
+	dfuse_fs_wait(fs_handle, &reply.tracker);
 
 	if (reply.err) {
 		*errcode = reply.err;
@@ -186,7 +186,7 @@ read_bulk(char *buff, size_t len, off_t position,
 }
 
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
-		      struct iof_file_common *f_info, int *errcode)
+		      struct dfuse_file_common *f_info, int *errcode)
 {
 	IOF_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position, position + len - 1,
 		     GAH_PRINT_VAL(f_info->gah));
@@ -196,7 +196,7 @@ ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
 
 ssize_t
 ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct iof_file_common *f_info, int *errcode)
+	       struct dfuse_file_common *f_info, int *errcode)
 {
 	ssize_t bytes_read;
 	ssize_t total_read = 0;

@@ -24,19 +24,19 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static const struct ioc_request_api api = {
-	.on_result	= ioc_gen_cb,
+static const struct dfuse_request_api api = {
+	.on_result	= dfuse_gen_cb,
 	.have_gah	= true,
-	.gah_offset	= offsetof(struct iof_gah_in, gah),
+	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
 };
 
 void
 dfuse_cb_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	     struct fuse_file_info *fi)
 {
-	struct iof_file_handle		*handle = (struct iof_file_handle *)fi->fh;
-	struct iof_projection_info	*fs_handle = handle->open_req.fsh;
-	struct ioc_request		*request;
+	struct dfuse_file_handle		*handle = (struct dfuse_file_handle *)fi->fh;
+	struct dfuse_projection_info	*fs_handle = handle->open_req.fsh;
+	struct dfuse_request		*request;
 	crt_opcode_t opcode;
 	int rc;
 	int ret;
@@ -74,7 +74,7 @@ dfuse_cb_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	}
 	crt_req_addref(request->rpc);
 
-	rc = iof_fs_send(request);
+	rc = dfuse_fs_send(request);
 	if (rc != 0) {
 		D_GOTO(out_decref, ret = EIO);
 	}

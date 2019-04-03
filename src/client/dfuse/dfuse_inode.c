@@ -32,9 +32,9 @@
 
 /* Find a GAH from a inode, return 0 if found */
 int
-find_gah(struct iof_projection_info *fs_handle, ino_t ino, struct ios_gah *gah)
+find_gah(struct dfuse_projection_info *fs_handle, ino_t ino, struct ios_gah *gah)
 {
-	struct ioc_inode_entry *ie;
+	struct dfuse_inode_entry *ie;
 	d_list_t *rlink;
 
 	if (ino == 1) {
@@ -48,7 +48,7 @@ find_gah(struct iof_projection_info *fs_handle, ino_t ino, struct ios_gah *gah)
 	if (!rlink)
 		return ENOENT;
 
-	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	IOF_TRACE_INFO(ie, "Inode %lu " GAH_PRINT_STR, ie->stat.st_ino,
 		       GAH_PRINT_VAL(ie->gah));
@@ -64,10 +64,10 @@ find_gah(struct iof_projection_info *fs_handle, ino_t ino, struct ios_gah *gah)
 }
 
 int
-find_inode(struct ioc_request *request)
+find_inode(struct dfuse_request *request)
 {
-	struct iof_projection_info *fs_handle = request->fsh;
-	struct ioc_inode_entry *ie;
+	struct dfuse_projection_info *fs_handle = request->fsh;
+	struct dfuse_inode_entry *ie;
 	d_list_t *rlink;
 
 	rlink = d_hash_rec_find(&fs_handle->inode_ht,
@@ -76,7 +76,7 @@ find_inode(struct ioc_request *request)
 	if (!rlink)
 		return ENOENT;
 
-	ie = container_of(rlink, struct ioc_inode_entry, ie_htl);
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	IOF_TRACE_INFO(ie, "Using inode %lu " GAH_PRINT_STR " parent %lu",
 		       ie->stat.st_ino, GAH_PRINT_VAL(ie->gah), ie->parent);
@@ -87,11 +87,11 @@ find_inode(struct ioc_request *request)
 
 /* Drop a reference on the GAH in the hash table
  *
- * TODO: Merge this with ioc_forget_one()
+ * TODO: Merge this with dfuse_forget_one()
  *
  */
 static void
-drop_ino_ref(struct iof_projection_info *fs_handle, ino_t ino)
+drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
 	d_list_t *rlink;
 
@@ -111,23 +111,23 @@ drop_ino_ref(struct iof_projection_info *fs_handle, ino_t ino)
 }
 
 static bool
-ie_close_cb(struct ioc_request *request)
+ie_close_cb(struct dfuse_request *request)
 {
 	struct TYPE_NAME	*desc = CONTAINER(request);
 
 	IOF_TRACE_DOWN(request);
-	iof_pool_release(desc->request.fsh->close_pool, desc);
+	dfuse_pool_release(desc->request.fsh->close_pool, desc);
 	return false;
 }
 
-static const struct ioc_request_api api = {
+static const struct dfuse_request_api api = {
 	.on_result	= ie_close_cb,
 };
 
-void ie_close(struct iof_projection_info *fs_handle, struct ioc_inode_entry *ie)
+void ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	struct TYPE_NAME	*desc = NULL;
-	struct iof_gah_in	*in;
+	struct dfuse_gah_in	*in;
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
@@ -150,7 +150,7 @@ void ie_close(struct iof_projection_info *fs_handle, struct ioc_inode_entry *ie)
 	in->gah = ie->gah;
 	D_MUTEX_UNLOCK(&fs_handle->gah_lock);
 
-	rc = iof_fs_send(&desc->request);
+	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
@@ -163,5 +163,5 @@ err:
 
 	IOF_TRACE_DOWN(ie);
 	if (desc)
-		iof_pool_release(fs_handle->close_pool, desc);
+		dfuse_pool_release(fs_handle->close_pool, desc);
 }

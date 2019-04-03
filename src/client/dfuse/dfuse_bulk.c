@@ -28,10 +28,10 @@
 #include "dfuse_bulk.h"
 
 bool
-iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
+dfuse_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 	       bool read_only)
 {
-	struct iof_local_bulk *bulk = (ptr + bulk_offset);
+	struct dfuse_local_bulk *bulk = (ptr + bulk_offset);
 	d_sg_list_t sgl = {0};
 	d_iov_t iov = {0};
 	int flags = CRT_BULK_RW;
@@ -73,7 +73,7 @@ iof_bulk_alloc(crt_context_t ctx, void *ptr, off_t bulk_offset, size_t len,
 }
 
 static void
-bulk_free_helper(void *ptr, struct iof_local_bulk *bulk)
+bulk_free_helper(void *ptr, struct dfuse_local_bulk *bulk)
 {
 	void *addr;
 	int rc;
@@ -104,9 +104,9 @@ bulk_free_helper(void *ptr, struct iof_local_bulk *bulk)
 }
 
 void
-iof_bulk_free(void *ptr, off_t bulk_offset)
+dfuse_bulk_free(void *ptr, off_t bulk_offset)
 {
-	struct iof_local_bulk *bulk = (ptr + bulk_offset);
+	struct dfuse_local_bulk *bulk = (ptr + bulk_offset);
 
 	bulk_free_helper(ptr, bulk);
 

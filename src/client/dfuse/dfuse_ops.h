@@ -35,7 +35,7 @@
 		rc = 0;							\
 		/* Acquire new object only if NULL */			\
 		if (!src) {						\
-			src = iof_pool_acquire(FSH->POOL_NAME);		\
+			src = dfuse_pool_acquire(FSH->POOL_NAME);		\
 			IOF_TRACE_UP(src, FSH, TRACE_TYPE);		\
 		}							\
 		if (!src) {						\
@@ -52,7 +52,7 @@
 		rc = 0;							\
 		/* Acquire new object only if NULL */			\
 		if (!(src)) {						\
-			src = iof_pool_acquire((fsh)->POOL_NAME);	\
+			src = dfuse_pool_acquire((fsh)->POOL_NAME);	\
 			if (!(src)) {					\
 				rc = ENOMEM;				\
 				break;					\

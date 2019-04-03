@@ -257,28 +257,28 @@ static void do_misc_tests(const char *fname, size_t len)
 	printf("Opened %s, fd = %d\n", fname, fd);
 	CU_ASSERT_NOT_EQUAL(fd, -1);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	new_fd = dup(fd);
 	printf("Duped %d, new_fd = %d\n", fd, new_fd);
 	CU_ASSERT_NOT_EQUAL(new_fd, -1);
 
-	status = iof_get_bypass_status(new_fd);
+	status = dfuse_get_bypass_status(new_fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	rc = close(new_fd);
 	printf("close returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	new_fd = dup2(fd, 80);
 	printf("dup2(%d, 80) returned %d\n", fd, new_fd);
 	CU_ASSERT_EQUAL(new_fd, 80);
 
-	status = iof_get_bypass_status(new_fd);
+	status = dfuse_get_bypass_status(new_fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	rc = close(new_fd);
@@ -289,7 +289,7 @@ static void do_misc_tests(const char *fname, size_t len)
 	printf("fcntl(%d, F_DUPFD, 80) returned %d\n", fd, new_fd);
 	CU_ASSERT(new_fd >= 80);
 
-	status = iof_get_bypass_status(new_fd);
+	status = dfuse_get_bypass_status(new_fd);
 	printf("status = %d\n", status);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
@@ -301,7 +301,7 @@ static void do_misc_tests(const char *fname, size_t len)
 	printf("fcntl(%d, F_DUPFD, 90) returned %d\n", fd, new_fd);
 	CU_ASSERT(new_fd >= 90);
 
-	status = iof_get_bypass_status(new_fd);
+	status = dfuse_get_bypass_status(new_fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	rc = close(new_fd);
@@ -312,21 +312,21 @@ static void do_misc_tests(const char *fname, size_t len)
 	printf("fsync returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	rc = fdatasync(fd);
 	printf("fdatasync returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	new_fd = dup(fd);
 	printf("Duped %d, new_fd = %d\n", fd, new_fd);
 	CU_ASSERT_NOT_EQUAL(new_fd, -1);
 
-	status = iof_get_bypass_status(new_fd);
+	status = dfuse_get_bypass_status(new_fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	address = mmap(NULL, BUF_SIZE, PROT_READ | PROT_WRITE,
@@ -345,11 +345,11 @@ static void do_misc_tests(const char *fname, size_t len)
 	printf("munmap returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_DIS_MMAP);
 
 	/* dup'd descriptor should also change status */
-	status = iof_get_bypass_status(new_fd);
+	status = dfuse_get_bypass_status(new_fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_DIS_MMAP);
 skip_mmap:
 	rc = close(fd);
@@ -364,14 +364,14 @@ skip_mmap:
 	printf("Opened %s, fd = %d\n", fname, fd);
 	CU_ASSERT_NOT_EQUAL(fd, -1);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	fp = fdopen(fd, "r");
 	printf("fdopen returned %p\n", fp);
 	CU_ASSERT_PTR_NOT_EQUAL(fp, NULL);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_DIS_STREAM);
 
 	if (fp != NULL) {
@@ -395,14 +395,14 @@ skip_mmap:
 	printf("Opened %s, fd = %d\n", fname, fd);
 	CU_ASSERT_NOT_EQUAL(fd, -1);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_BYPASS);
 
 	rc = fcntl(fd, F_SETFL, O_APPEND);
 	printf("fcntl F_SETFL returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
 
-	status = iof_get_bypass_status(fd);
+	status = dfuse_get_bypass_status(fd);
 	CU_ASSERT_EQUAL(status, IOF_IO_DIS_FCNTL);
 
 	rc = fcntl(fd, F_GETFL);
@@ -413,13 +413,13 @@ skip_mmap:
 	printf("close returned %d\n", rc);
 	CU_ASSERT_EQUAL(rc, 0);
 
-	status = iof_get_bypass_status(0);
+	status = dfuse_get_bypass_status(0);
 	CU_ASSERT_EQUAL(status, IOF_IO_EXTERNAL);
 
-	status = iof_get_bypass_status(1);
+	status = dfuse_get_bypass_status(1);
 	CU_ASSERT_EQUAL(status, IOF_IO_EXTERNAL);
 
-	status = iof_get_bypass_status(2);
+	status = dfuse_get_bypass_status(2);
 	CU_ASSERT_EQUAL(status, IOF_IO_EXTERNAL);
 }
 
