@@ -1019,9 +1019,6 @@ class IORequest(object):
             self.iod.iod_nr = 1
             #self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
             #                                ctypes.c_void_p)
-            _iod_ptr = ctypes.pointer(self.iod)
-        else:
-            _iod_ptr = None
 
         # now do it
         if dkey is not None:
@@ -2045,7 +2042,7 @@ if __name__ == '__main__':
     # this is strictly unit test code here in main, there is a lot
     # of rubbish but it makes it easy to try stuff out as we expand
     # this interface.  Will eventially be removed or formalized.
-    # """
+
     # try:
     #     # this works so long as this file is in its usual place
     #     with open('../../../.build_vars.json') as f:
@@ -2196,7 +2193,6 @@ if __name__ == '__main__':
     #     print ("Something horrible happened\n")
     #     print (traceback.format_exc())
     #     print (EXCEP)
-    # """
 
     print("running")
     raise DaosApiError("hit error, all good")
