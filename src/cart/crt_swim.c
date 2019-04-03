@@ -615,3 +615,39 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 	}
 	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
 }
+
+int
+crt_rank_state_get(crt_group_t *grp, d_rank_t rank,
+		   struct swim_member_state *state)
+{
+	struct crt_grp_priv	*grp_priv;
+	struct crt_swim_membs	*csm;
+	int			 rc = 0;
+
+	if (grp == NULL) {
+		D_ERROR("Passed group is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (state == NULL) {
+		D_ERROR("Passed state pointer is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (rank == CRT_NO_RANK) {
+		D_ERROR("Rank is invalid\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	grp_priv = crt_grp_pub2priv(grp);
+	if (!grp_priv->gp_primary) {
+		D_ERROR("Only available for primary groups\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	csm = &grp_priv->gp_membs_swim;
+	rc = crt_swim_get_member_state(csm->csm_ctx, (swim_id_t)rank, state);
+
+out:
+	return rc;
+}

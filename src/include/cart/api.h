@@ -54,6 +54,7 @@
 #include <cart/types.h>
 #include <gurt/errno.h>
 #include <cart/iv.h>
+#include <cart/swim.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -1791,6 +1792,20 @@ crt_rank_self_set(d_rank_t rank);
  */
 int
 crt_rank_uri_get(crt_group_t *grp, d_rank_t rank, int tag, char **uri);
+
+/**
+ * Get rank SWIM state.
+ *
+ * \param[in]  grp              Group identifier
+ * \param[in]  rank             Rank to get SWIM state for
+ * \param[out] state            The pointer to store SWIM state
+ *
+ * \return                      DER_SUCCESS on success, negative value on
+ *                              failure.
+ */
+int
+crt_rank_state_get(crt_group_t *grp, d_rank_t rank,
+		   struct swim_member_state *state);
 
 /**
  * Remove specified rank from the group.
