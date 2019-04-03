@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 
 #define	DAOS_ACL_VERSION		1
@@ -247,6 +248,19 @@ void
 daos_acl_dump(struct daos_acl *acl);
 
 /**
+ * Parse and sanity check the entire Access Control List for valid values and
+ * internal consistency.
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_validate(struct daos_acl *acl);
+
+/**
  * Allocate a new Access Control Entry with an appropriately aligned principal
  * name, if applicable.
  *
@@ -291,6 +305,17 @@ daos_ace_get_size(struct daos_ace *ace);
  */
 void
 daos_ace_dump(struct daos_ace *ace, uint tabs);
+
+/**
+ * Sanity check the Access Control Entry structure for valid values and internal
+ * consistency.
+ *
+ * \param	ace	Access Control Entry to be checked
+ *
+ * \return	True if the ACE is valid, false otherwise
+ */
+bool
+daos_ace_is_valid(struct daos_ace *ace);
 
 #if defined(__cplusplus)
 }

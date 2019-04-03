@@ -195,7 +195,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	}
 	server.CliOpts = append(
 		server.CliOpts,
-		"-c", strconv.Itoa(numCores),
+		"-t", strconv.Itoa(numCores),
 		"-g", c.SystemName,
 		"-s", server.ScmMount)
 	if c.Modules != "" {
@@ -203,9 +203,6 @@ func (c *configuration) populateCliOpts(i int) error {
 	}
 	if c.Attach != "" {
 		server.CliOpts = append(server.CliOpts, "-a", c.Attach)
-	}
-	if c.Targets > 0 {
-		server.CliOpts = append(server.CliOpts, "-t", strconv.Itoa(c.Targets))
 	}
 	if c.XShelpernr != 2 {
 		server.CliOpts = append(server.CliOpts, "-x", strconv.Itoa(c.XShelpernr))
@@ -258,18 +255,22 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		if opts.Cores > 0 {
 			c.Servers[i].Cpus, _ = setNumCores(int(opts.Cores))
 		}
+		// Targets should override Cores if specified in cmdline or
+		// config file.
+		if opts.Targets > 0 {
+			c.Servers[i].Cpus, _ = setNumCores(opts.Targets)
+		} else if c.Targets > 0 {
+			c.Servers[i].Cpus, _ = setNumCores(c.Targets)
+		}
 		if opts.Rank != nil {
 			// override first per-server config (doesn't make sense
 			// to reply to more than one server)
 			c.Servers[0].Rank = opts.Rank
 		}
 	}
-	if opts.Targets > 0 {
-		c.Targets = opts.Targets
-	}
 	if opts.XShelpernr > 2 {
 		log.Errorf("invalid XShelpernr %d exceed [0, 2], use default value of 2",
-			   opts.XShelpernr)
+			opts.XShelpernr)
 		c.XShelpernr = 2
 	} else {
 		c.XShelpernr = opts.XShelpernr

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ extern int mock_drpc_handler_call_count; /* how many times it was called */
 extern Drpc__Call *mock_drpc_handler_call; /* alloc copy of input param */
 extern void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
 extern Drpc__Response *mock_drpc_handler_resp_return; /* returned in *resp */
-void mock_drpc_handler(Drpc__Call *call, Drpc__Response **resp);
+void mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp);
 
 void mock_ABT_mutex_create_setup(void);
 extern int ABT_mutex_create_return; /* value to be returned */

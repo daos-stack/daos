@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,92 @@
 #include <fcntl.h>
 
 static int unixcomm_close(struct unixcomm *handle);
+
+/**
+ * Allocate and initialize a new dRPC call Protobuf structure for a given dRPC
+ * context.
+ *
+ * \param	ctx	Active dRPC context
+ * \param	module	Module ID for the new call
+ * \param	method	Method ID for the new call
+ *
+ * \return	Newly allocated Drpc__Call, or NULL if it couldn't be allocated
+ */
+Drpc__Call *
+drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
+{
+	Drpc__Call *call;
+
+	if (ctx == NULL) {
+		D_ERROR("Can't build a call from NULL context\n");
+		return NULL;
+	}
+
+	D_ALLOC_PTR(call);
+	if (call == NULL) {
+		D_ERROR("Could not allocate new drpc call\n");
+		return NULL;
+	}
+
+	drpc__call__init(call);
+	call->sequence = ctx->sequence;
+	call->module = module;
+	call->method = method;
+
+	return call;
+}
+
+/**
+ * Free a dRPC Call Protobuf structure.
+ *
+ * \param	call	dRPC call to be freed
+ */
+void
+drpc_call_free(Drpc__Call *call)
+{
+	drpc__call__free_unpacked(call, NULL);
+}
+
+/**
+ * Allocate and initialize a new dRPC Response to a given dRPC call.
+ *
+ * \param	call	dRPC call to be responded to
+ *
+ * \return	Newly allocated Drpc__Response, or NULL if it couldn't be
+ *			allocated.
+ */
+Drpc__Response *
+drpc_response_create(Drpc__Call *call)
+{
+	Drpc__Response *resp;
+
+	if (call == NULL) {
+		D_ERROR("Can't build a response from a NULL call\n");
+		return NULL;
+	}
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		D_ERROR("Could not allocate new drpc response\n");
+		return NULL;
+	}
+
+	drpc__response__init(resp);
+	resp->sequence = call->sequence;
+
+	return resp;
+}
+
+/**
+ * Free a dRPC Response Protobuf structure.
+ *
+ * \param	resp	dRPC response to be freed
+ */
+void
+drpc_response_free(Drpc__Response *resp)
+{
+	drpc__response__free_unpacked(resp, NULL);
+}
 
 static struct unixcomm *
 new_unixcomm_socket(int flags)
@@ -214,25 +300,6 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 	return ret;
 }
 
-static Drpc__Response *
-rpc_reply_create(int sequence, int status, int body_length, uint8_t *body)
-{
-	Drpc__Response *resp = NULL;
-
-	D_ALLOC_PTR(resp);
-	if (!resp) {
-		return NULL;
-	}
-	drpc__response__init(resp);
-	resp->sequence = sequence;
-	resp->status = status;
-	if (body) {
-		resp->body.len = body_length;
-		resp->body.data = body;
-	}
-	return resp;
-}
-
 static int
 drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 {
@@ -301,9 +368,8 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 	}
 
 	if (!(flags & R_SYNC)) {
-		response = rpc_reply_create(msg->sequence,
-						DRPC__STATUS__SUBMITTED,
-						0, NULL);
+		response = drpc_response_create(msg);
+		response->status = DRPC__STATUS__SUBMITTED;
 		*resp = response;
 		return 0;
 	}
@@ -486,17 +552,19 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 	request = drpc__call__unpack(NULL, message_len, buffer);
 	D_FREE(buffer);
 	if (request == NULL) {
-		/* Couldn't unpack into a Drpc__Call */
+		D_ERROR("Couldn't unpack message into Drpc__Call\n");
 		return -DER_MISC;
 	}
 
-	ctx->handler(request, response);
+	*response = drpc_response_create(request);
 	if (*response == NULL) {
-		/* Handler failed to allocate a response */
-		rc = -DER_NOMEM;
+		drpc_call_free(request);
+		return -DER_NOMEM;
 	}
 
-	drpc__call__free_unpacked(request, NULL);
+	ctx->handler(request, *response);
+
+	drpc_call_free(request);
 	return rc;
 }
 
@@ -517,7 +585,7 @@ int
 drpc_recv(struct drpc *session_ctx)
 {
 	int		rc;
-	Drpc__Response	*response = NULL;
+	Drpc__Response	*response;
 
 	if (!drpc_is_valid_listener(session_ctx)) {
 		return -DER_INVAL;
@@ -530,7 +598,7 @@ drpc_recv(struct drpc *session_ctx)
 
 	rc = send_response(session_ctx, response);
 
-	drpc__response__free_unpacked(response, NULL);
+	drpc_response_free(response);
 	return rc;
 }
 

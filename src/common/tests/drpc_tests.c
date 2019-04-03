@@ -588,17 +588,77 @@ test_drpc_recv_fails_if_sendmsg_fails(void **state)
 }
 
 static void
-test_drpc_recv_fails_if_handler_response_null(void **state)
+test_drpc_call_create_null_ctx(void **state)
 {
-	struct drpc *ctx = new_drpc_with_fd(200);
+	assert_null(drpc_call_create(NULL, 1, 2));
+}
 
-	mock_valid_drpc_call_in_recvmsg();
-	drpc__response__free_unpacked(mock_drpc_handler_resp_return, NULL);
-	mock_drpc_handler_resp_return = NULL;
+static void
+test_drpc_call_create_free(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(2);
+	int32_t		module = 3;
+	int32_t		method = 25;
+	uint64_t	sequence = 203;
+	Drpc__Call	*call;
 
-	assert_int_equal(drpc_recv(ctx), -DER_NOMEM);
+	ctx->sequence = sequence;
 
+	call = drpc_call_create(ctx, module, method);
+
+	assert_non_null(call);
+	assert_memory_equal(call->base.descriptor, &drpc__call__descriptor,
+			sizeof(ProtobufCMessageDescriptor));
+	assert_int_equal(call->sequence, sequence);
+	assert_int_equal(call->module, module);
+	assert_int_equal(call->method, method);
+	assert_int_equal(call->body.len, 0);
+	assert_null(call->body.data);
+
+	drpc_call_free(call);
 	free_drpc(ctx);
+}
+
+static void
+test_drpc_call_free_null(void **state)
+{
+	/* NULL input is a noop - just make sure no segfault */
+	drpc_call_free(NULL);
+}
+
+static void
+test_drpc_response_create_null_call(void **state)
+{
+	assert_null(drpc_response_create(NULL));
+}
+
+static void
+test_drpc_response_create_free_success(void **state)
+{
+	Drpc__Call	*call;
+	uint64_t	sequence = 12;
+	Drpc__Response	*resp;
+
+	call = new_drpc_call();
+	call->sequence = sequence;
+
+	resp = drpc_response_create(call);
+
+	assert_non_null(resp);
+	assert_memory_equal(resp->base.descriptor, &drpc__response__descriptor,
+			sizeof(ProtobufCMessageDescriptor));
+	assert_int_equal(resp->sequence, sequence);
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+
+	drpc_call_free(call);
+	drpc_response_free(resp);
+}
+
+static void
+test_drpc_response_free_null(void **state)
+{
+	/* NULL input is a noop - just make sure no segfault */
+	drpc_response_free(NULL);
 }
 
 /* Convenience macro for tests in this file */
@@ -639,7 +699,12 @@ main(void)
 		DRPC_UTEST(test_drpc_recv_fails_if_recvmsg_would_block),
 		DRPC_UTEST(test_drpc_recv_fails_if_incoming_call_malformed),
 		DRPC_UTEST(test_drpc_recv_fails_if_sendmsg_fails),
-		DRPC_UTEST(test_drpc_recv_fails_if_handler_response_null)
+		cmocka_unit_test(test_drpc_call_create_null_ctx),
+		cmocka_unit_test(test_drpc_call_create_free),
+		cmocka_unit_test(test_drpc_call_free_null),
+		cmocka_unit_test(test_drpc_response_create_null_call),
+		cmocka_unit_test(test_drpc_response_create_free_success),
+		cmocka_unit_test(test_drpc_response_free_null)
 	};
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }

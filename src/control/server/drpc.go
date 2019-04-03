@@ -97,9 +97,13 @@ func checkDrpcResponse(drpcResp *drpc.Response) error {
 // newDrpcCall creates a new drpc Call instance for specified module, with
 // the protobuf message marshalled in the body
 func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.Call, error) {
-	bodyBytes, err := proto.Marshal(bodyMessage)
-	if err != nil {
-		return nil, err
+	var bodyBytes []byte
+	if bodyMessage != nil {
+		var err error
+		bodyBytes, err = proto.Marshal(bodyMessage)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &drpc.Call{
