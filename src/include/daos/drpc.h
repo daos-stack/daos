@@ -42,7 +42,7 @@ struct unixcomm {
 	int flags; /** Flags set on unix domain socket */
 };
 
-typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response **);
+typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response *);
 
 /**
  * dRPC connection context. This includes all details needed to communicate
@@ -62,6 +62,12 @@ struct drpc {
 enum rpcflags {
 	R_SYNC = 1
 };
+
+Drpc__Call *drpc_call_create(struct drpc *ctx, int32_t module, int32_t method);
+void drpc_call_free(Drpc__Call *call);
+
+Drpc__Response *drpc_response_create(Drpc__Call *call);
+void drpc_response_free(Drpc__Response *resp);
 
 int drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		Drpc__Response **resp);

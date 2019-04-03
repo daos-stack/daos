@@ -40,22 +40,22 @@
  * Some dummy handlers so we have different ptrs for each test registration
  */
 static void
-dummy_drpc_handler1(Drpc__Call *request, Drpc__Response **response)
+dummy_drpc_handler1(Drpc__Call *request, Drpc__Response *response)
 {
 }
 
 static void
-dummy_drpc_handler2(Drpc__Call *request, Drpc__Response **response)
+dummy_drpc_handler2(Drpc__Call *request, Drpc__Response *response)
 {
 }
 
 static void
-dummy_drpc_handler3(Drpc__Call *request, Drpc__Response **response)
+dummy_drpc_handler3(Drpc__Call *request, Drpc__Response *response)
 {
 }
 
 static void
-dummy_drpc_handler4(Drpc__Call *request, Drpc__Response **response)
+dummy_drpc_handler4(Drpc__Call *request, Drpc__Response *response)
 {
 }
 
@@ -365,8 +365,8 @@ drpc_hdlr_unregister_all_with_multiple_items(void **state)
 static void
 drpc_hdlr_process_msg_success(void **state)
 {
-	Drpc__Response	*resp = NULL;
 	Drpc__Call	*request = new_drpc_call();
+	Drpc__Response	*resp = new_drpc_response();
 
 	/*
 	 * Make sure we have our mock registered as the handler for this msg.
@@ -374,7 +374,7 @@ drpc_hdlr_process_msg_success(void **state)
 	 */
 	drpc_hdlr_register(request->module, mock_drpc_handler);
 
-	drpc_hdlr_process_msg(request, &resp);
+	drpc_hdlr_process_msg(request, resp);
 
 	/* correct params passed down to the registered handler */
 	assert_int_equal(mock_drpc_handler_call_count, 1);
@@ -382,10 +382,9 @@ drpc_hdlr_process_msg_success(void **state)
 	assert_int_equal(mock_drpc_handler_call->method, request->method);
 	assert_int_equal(mock_drpc_handler_call->sequence, request->sequence);
 	assert_int_equal(mock_drpc_handler_call->body.len, request->body.len);
-	assert_ptr_equal(mock_drpc_handler_resp_ptr, &resp);
+	assert_ptr_equal(mock_drpc_handler_resp_ptr, resp);
 
 	/* Got back a copy of the mocked response */
-	assert_non_null(resp);
 	assert_int_equal(resp->sequence,
 			mock_drpc_handler_resp_return->sequence);
 	assert_int_equal(resp->status, mock_drpc_handler_resp_return->status);
@@ -399,7 +398,7 @@ drpc_hdlr_process_msg_success(void **state)
 static void
 drpc_hdlr_process_msg_unregistered_module(void **state)
 {
-	Drpc__Response	*resp = NULL;
+	Drpc__Response	*resp = new_drpc_response();
 	Drpc__Call	*request = new_drpc_call();
 
 	/*
@@ -407,15 +406,13 @@ drpc_hdlr_process_msg_unregistered_module(void **state)
 	 */
 	drpc_hdlr_register(request->module + 1, mock_drpc_handler);
 
-	drpc_hdlr_process_msg(request, &resp);
+	drpc_hdlr_process_msg(request, resp);
 
 	/* handler wasn't called */
 	assert_int_equal(mock_drpc_handler_call_count, 0);
 
 	/* Response should indicate no handler for the call */
-	assert_non_null(resp);
 	assert_int_equal(resp->status, DRPC__STATUS__UNKNOWN_MODULE);
-	assert_int_equal(resp->sequence, request->sequence);
 
 	drpc__call__free_unpacked(request, NULL);
 	drpc__response__free_unpacked(resp, NULL);
