@@ -85,7 +85,6 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   branch: "debug-patch-line-mapping",
                                    ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]"
                     }
                     post {

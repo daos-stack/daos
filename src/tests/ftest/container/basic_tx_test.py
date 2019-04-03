@@ -77,13 +77,11 @@ class BasicTxTest(Test):
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
-
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+        self.server_group = self.params.get("server_group", '/server/',
+                                            'daos_server')
 
         # start the DAOS servers
-        server_group = self.params.get("server_group", '/server/',
-                                       'daos_server')
-        ServerUtils.runServer(hostfile, server_group, self.basepath)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         try:
