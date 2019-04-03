@@ -792,7 +792,9 @@ rebuild_obj_ult(void *data)
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
-	dc_obj_shard2anchor(&anchor, arg->shard);
+	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+	daos_anchor_set_flags(&dkey_anchor,
+			      DAOS_ANCHOR_FLAGS_TO_LEADER);
 
 	/* Initialize enum_arg for VOS_ITER_DKEY. */
 	memset(&enum_arg, 0, sizeof(enum_arg));
