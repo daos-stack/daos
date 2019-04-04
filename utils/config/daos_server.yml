@@ -166,7 +166,14 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
-##
+## Format override when true will continue to format and start data plane
+## without waiting for client API storage format call (which formats
+## NVMe and SCM storage devices.
+#
+## default: true
+#format_override: false
+#
+#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will
