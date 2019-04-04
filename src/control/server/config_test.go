@@ -85,21 +85,22 @@ func uncommentServerConfig() {
 	}
 }
 
-// newMockConfig returns default configuration with mocked external interface
 func newMockConfig(
 	cmdRet error, getenvRet string, existsRet bool, mountRet error,
 	unmountRet error, mkdirRet error, removeRet error) configuration {
 
 	return newDefaultConfiguration(
-		&mockExt{
-			cmdRet, getenvRet, existsRet, mountRet, unmountRet,
-			mkdirRet, removeRet})
+		newMockExt(nil, "", false, nil, nil, nil, nil))
 }
 
-// defaultMockConfig returns MockConfig with default mock return values
+// defaultMoc2kConfig returns configuration populated from blank config file
+// with mocked external interface.
 func defaultMockConfig() configuration {
-	return newMockConfig(nil, "", false, nil, nil, nil, nil)
+
+	// pars
+	return newDefaultConfiguration(defaultMockExt())
 }
+
 func cmdFailsConfig() configuration {
 	return newMockConfig(errors.New("exit status 1"), "", false, nil, nil, nil, nil)
 }
@@ -107,7 +108,8 @@ func envExistsConfig() configuration {
 	return newMockConfig(nil, "somevalue", false, nil, nil, nil, nil)
 }
 
-func populateMockConfig(t *testing.T, c configuration, path string) configuration {
+// supply mock external interface, populates config from given file path
+func mockConfigFromFile(t *testing.T, e mockExt, path string) configuration {
 	c.Path = path
 	err := c.loadConfig()
 	if err != nil {

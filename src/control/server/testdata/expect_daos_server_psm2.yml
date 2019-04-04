@@ -1,8 +1,10 @@
 name: daos_server
 servers:
 - rank: null
-  cpus:
+  targets:
   - 0-7
+  nr_xs_helpers: 0
+  first_core: 0
   fabric_iface: ib0
   fabric_iface_port: 31416
   log_mask: ERR
@@ -44,11 +46,8 @@ hyperthreads: false
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
-targets: 0
 modules: ""
 attach: ""
-xshelpernr: 0
-firstcore: 0
 systemmap: ""
 path: ../../../utils/config/examples/daos_server_psm2.yml
 nvmeshmid: 0

@@ -27,6 +27,7 @@ import (
 	"fmt"
 )
 
+// mockExt implements the External interface.
 type mockExt struct {
 	// return error if cmd in shell fails
 	cmdRet error
@@ -92,4 +93,17 @@ func (m *mockExt) remove(path string) error {
 	commands = append(commands, "remove "+path)
 
 	return m.removeRet
+}
+
+func newMockExt(
+	cmdRet error, getenvRet string, existsRet bool, mountRet error,
+	unmountRet error, mkdirRet error, removeRet error) External {
+
+	return &mockExt{
+		cmdRet, getenvRet, existsRet, mountRet, unmountRet,
+		mkdirRet, removeRet}
+}
+
+func defaultMockExt() External {
+	return newMockExt(nil, "", false, nil, nil, nil, nil)
 }

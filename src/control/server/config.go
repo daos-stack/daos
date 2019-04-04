@@ -44,50 +44,63 @@ const (
 )
 
 func (c *configuration) loadConfig() error {
+	if c.Path == "" {
+		return errors.New("no config path set")
+	}
+
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
 		return err
 	}
+
 	if err = c.parse(bytes); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (c *configuration) saveConfig(filename string) error {
 	bytes, err := yaml.Marshal(c)
+
 	if err != nil {
 		return err
 	}
+
 	return ioutil.WriteFile(filename, bytes, 0644)
+}
+
+func (c *configuration) setPath(path string) error {
+	if path != "" {
+		c.Path = path
+	}
+
+	if !filepath.IsAbs(c.Path) {
+		newPath, err := common.GetAbsInstallPath(c.Path)
+		if err != nil {
+			return err
+		}
+		c.Path = newPath
+	}
+
+	return nil
 }
 
 // loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
-	config := newConfiguration()
+func loadConfigOpts(cliOpts *cliOptions, host string) (
+	config configuration, err error) {
 
-	if cliOpts.ConfigPath != "" {
-		config.Path = cliOpts.ConfigPath
-	}
-	if !filepath.IsAbs(config.Path) {
-		newPath, err := common.GetAbsInstallPath(config.Path)
-		if err != nil {
-			return config, err
-		}
-		config.Path = newPath
+	config = newConfiguration()
+
+	if err := config.setPath(cliOpts.ConfigPath); err != nil {
+		return config, errors.WithMessage(err, "set path")
 	}
 
-	err := config.loadConfig()
-	if err != nil {
-		return config, errors.Wrap(err, "failed to read config file")
+	if err := config.loadConfig(); err != nil {
+		return config, errors.Wrap(err, "read config file")
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
-
-	host, err := os.Hostname()
-	if err != nil {
-		return config, errors.Wrap(err, "failed to get hostname")
-	}
 
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
@@ -96,6 +109,7 @@ func loadConfigOpts(cliOpts *cliOptions) (configuration, error) {
 		return config, errors.Wrap(
 			err, "failed to retrieve I/O server params")
 	}
+
 	if len(config.Servers) == 0 {
 		return config, errors.New("missing I/O server params")
 	}
@@ -258,7 +272,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 
 	// override each per-server config
 	for i := range c.Servers {
-		srv := c.Servers[i]
+		srv := &c.Servers[i]
 
 		if opts.MountPath != "" {
 			// override each per-server config in addition to global value
@@ -315,12 +329,12 @@ func (c *configuration) validateConfig() (bool, error) {
 		return true, nil
 	}
 
-	// if provider or Servers are missing and we can't detect os envs, we don't
-	// have sufficient info to start io servers
+	// if provider or Servers are missing and we can't detect os envs,
+	// we don't have sufficient info to start io servers
 	if (c.Provider == "") || (len(c.Servers) == 0) {
 		return false, errors.Errorf(
-			"required parameters missing from config and os environment (%s)",
-			providerEnvKey)
+			"no servers specified in config file and missing os "+
+				"envvar %s", providerEnvKey)
 	}
 
 	return false, nil
@@ -329,12 +343,6 @@ func (c *configuration) validateConfig() (bool, error) {
 // getIOParams builds lists of commandline options and environment variables
 // to pass when invoking I/O server instances.
 func (c *configuration) getIOParams(cliOpts *cliOptions) error {
-	// if config doesn't specify server and/or provider we need to
-	// attempt to check if at least some of the envs exist and
-	// notify that IO server will run with user set env vars
-	//
-	// if provider not specified in config, make sure it is already
-	// set in os. If it is create default Server (envs will not be set)
 	skipEnv, err := c.validateConfig()
 	if err != nil {
 		return err
@@ -382,7 +390,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	return nil
 }
 
-// PopulateEnv adds envs from config options
+// populateEnv adds envs from config options
 func (c *configuration) populateEnv(i int, envs *[]string) {
 	for _, env := range c.Servers[i].EnvVars {
 		kv := strings.Split(env, "=")
@@ -392,4 +400,39 @@ func (c *configuration) populateEnv(i int, envs *[]string) {
 		}
 		*envs = append(*envs, env)
 	}
+}
+
+func (c *configuration) setLogging(name string) (*os.File, error) {
+	// Set log level mask for default logger from config.
+	switch c.ControlLogMask {
+	case cLogDebug:
+		log.Debugf("Switching control log level to DEBUG")
+		log.SetLevel(log.Debug)
+	case cLogError:
+		log.Debugf("Switching control log level to ERROR")
+		log.SetLevel(log.Error)
+	}
+
+	// Set log file for default logger if specified in config.
+	if c.ControlLogFile != "" {
+		f, err := common.AppendFile(c.ControlLogFile)
+		if err != nil {
+			return nil, errors.WithMessage(
+				err, "create log file")
+		}
+
+		log.Debugf(
+			"%s logging to file %s",
+			os.Args[0], c.ControlLogFile)
+
+		log.SetOutput(f)
+
+		return f, nil
+	}
+
+	// if no logfile specified, output from multiple hosts
+	// may get aggregated, prefix entries with hostname
+	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+
+	return nil, nil
 }
