@@ -21,7 +21,8 @@
     Any reproduction of computer software, computer software documentation, or
     portions thereof marked with this legend must also reproduce the markings.
     '''
-import os, shutil
+import os
+import shutil
 import subprocess
 import json
 import sys
@@ -46,11 +47,13 @@ def build_ior(basepath):
 
     try:
         # pulling daos branch of IOR
-        Repo.clone_from("https://github.com/daos-stack/ior-hpc.git", repo, branch='daos')
+        Repo.clone_from("https://github.com/daos-stack/ior-hpc.git", repo,
+                        branch='daos')
 
         cd_cmd = 'cd ' + repo
         bootstrap_cmd = cd_cmd + ' && ./bootstrap '
-        configure_cmd = cd_cmd + ' && ./configure --prefix={0} --with-daos={0}'.format(daos_dir)
+        configure_cmd = cd_cmd + ' && ./configure --prefix={0} ' \
+        '--with-daos={0}'.format(daos_dir)
         make_cmd = cd_cmd + ' &&  make install'
 
         # building ior
@@ -62,9 +65,10 @@ def build_ior(basepath):
         print "<IorBuildFailed> Exception occurred: {0}".format(str(e))
         raise IorFailed("IOR Build process Failed")
 
-def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_uuid, svc_list,
-            record_size, stripe_size, stripe_count, async_io, object_class, basepath, slots=1,
-            seg_count=1, filename="`uuidgen`", display_output=True):
+def run_ior(client_file, ior_flags, iteration, block_size, transfer_size,
+            pool_uuid, svc_list, record_size, stripe_size, stripe_count,
+            async_io, object_class, basepath, slots=1, seg_count=1,
+            filename="`uuidgen`", display_output=True):
     """ Running Ior tests
         Function Arguments
         client_file    --client file holding client hostname and slots
@@ -91,13 +95,15 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size, pool_u
     attach_info_path = basepath + "/install/tmp"
     try:
 
-        ior_cmd = orterun_bin + " -N {} --hostfile {} -x DAOS_SINGLETON_CLI=1 " \
-                  " -x CRT_ATTACH_INFO_PATH={} ior {} -s {} -i {} -a DAOS -o {} " \
-                  " -b {} -t {} -- -p {} -v {} -r {} -s {} -c {} -a {} -o {} "\
-                  .format(slots, client_file, attach_info_path, ior_flags, seg_count, iteration,
-                          filename, block_size, transfer_size, pool_uuid,
-                          svc_list, record_size, stripe_size,
-                          stripe_count, async_io, object_class)
+        ior_cmd = orterun_bin + " -N {} --hostfile {} -x DAOS_SINGLETON_CLI=1 "\
+                  " -x CRT_ATTACH_INFO_PATH={} ior {} -s {} -i {} -a DAOS -o " \
+                  " {} -b {} -t {} -- --daos.pool {} --daos.svcl {} " \
+                  "--daos.recordSize {} --daos.stripeSize {} "\
+                  "--daos.stripeCount {} --daos.aios {} --daos.objectClass {} "\
+                  .format(slots, client_file, attach_info_path, ior_flags,
+                          seg_count, iteration, filename, block_size,
+                          transfer_size, pool_uuid, svc_list, record_size,
+                          stripe_size, stripe_count, async_io, object_class)
         if display_output:
             print ("ior_cmd: {}".format(ior_cmd))
 
