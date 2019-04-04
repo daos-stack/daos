@@ -258,6 +258,7 @@ func newDefaultConfiguration(ext External) configuration {
 		Port:           10000,
 		Cert:           "./.daos/daos_server.crt",
 		Key:            "./.daos/daos_server.key",
+		FormatOverride: true,
 		ScmMountPath:   "/mnt/daos",
 		Hyperthreads:   false,
 		NrHugepages:    1024,

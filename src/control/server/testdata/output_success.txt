@@ -11,7 +11,7 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-format_override: false
+format_override: true
 scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []
@@ -30,7 +30,7 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-format_override: false
+format_override: true
 scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []
@@ -52,7 +52,7 @@ fault_cb: /tmp/daos_fault_cb.sh
 fabric_ifaces:
 - ib0
 - ib1
-format_override: false
+format_override: true
 scm_mount_path: /tmp/daos
 bdev_include:
 - pcie1000.0.0.0.8

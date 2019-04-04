@@ -88,6 +88,8 @@ func TestFormatStorage(t *testing.T) {
 			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
 			tt.mount, tt.class, tt.devs, tt.size)
 
+		config.FormatOverride = false
+
 		cs := mockControlService(config)
 		cs.Setup() // set cond var locked
 

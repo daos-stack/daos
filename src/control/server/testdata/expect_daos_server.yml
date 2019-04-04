@@ -11,7 +11,7 @@ key: ./.daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
-format_override: false
+format_override: true
 scm_mount_path: /mnt/daos
 bdev_include: []
 bdev_exclude: []

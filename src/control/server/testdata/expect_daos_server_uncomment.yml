@@ -59,7 +59,7 @@ fault_cb: ./.daos/fd_callback
 fabric_ifaces:
 - qib0
 - qib1
-format_override: false
+format_override: true
 scm_mount_path: /mnt/daosa
 bdev_include:
 - 0000:81:00.1
