@@ -39,6 +39,8 @@ import ServerUtils
 import WriteHostFile
 # pylint: enable=wrong-import-position,import-error
 
+CLIENT_LOG="/tmp/client.log"
+
 class DaosCoreTest(Test):
     """
     Runs the daos_test subtests with multiple servers.
@@ -60,6 +62,8 @@ class DaosCoreTest(Test):
                                             'daos_server')
         self.daos_test = self.basepath + '/install/bin/daos_test'
         self.orterun = self.basepath + '/install/bin/orterun'
+        #To generate the seperate client log file
+        self.orterun_env = '-x D_LOG_FILE={}'.format(CLIENT_LOG)
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
 
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
@@ -106,9 +110,9 @@ class DaosCoreTest(Test):
         if not args:
             args = ""
 
-        cmd = "{} -n {} {} -s {} -{} {}".format(self.orterun, num_clients,
-                                                self.daos_test, num_replicas,
-                                                subtest, args)
+        cmd = "{} -n {} {} {} -s {} -{} {}".format(self.orterun, num_clients,
+                                                   self.orterun_env, self.daos_test,
+                                                   num_replicas, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = self.workdir + "/%g_results.xml"
