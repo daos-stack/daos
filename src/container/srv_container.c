@@ -1186,133 +1186,16 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 }
 
 static int
-bulk_cb(const struct crt_bulk_cb_info *cb_info)
-{
-	ABT_eventual *eventual = cb_info->bci_arg;
-
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
-	return 0;
-}
-
-static int
-attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
-		   crt_bulk_t local_bulk, crt_bulk_t remote_bulk,
-		   off_t local_off, off_t remote_off, size_t length)
-{
-	ABT_eventual		 eventual;
-	int			*status;
-	int			 rc;
-	struct crt_bulk_desc	 bulk_desc = {
-				.bd_rpc		= rpc,
-				.bd_bulk_op	= op,
-				.bd_local_hdl	= local_bulk,
-				.bd_local_off	= local_off,
-				.bd_remote_hdl	= remote_bulk,
-				.bd_remote_off	= remote_off,
-				.bd_len		= length,
-			};
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
-	return rc;
-}
-
-static int
 cont_attr_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_attr_set_in		*in = crt_req_get(rpc);
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
-	daos_iov_t			 iov;
-	daos_sg_list_t			 sgl;
-	void				*data;
-	char				*names;
-	char				*values;
-	size_t				*sizes;
-	int				 rc;
-	int				 i;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid),
 		rpc, DP_UUID(in->casi_op.ci_hdl));
-	rc = crt_bulk_get_len(in->casi_bulk, &bulk_size);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	D_DEBUG(DF_DSMS, DF_CONT": count=%lu, size=%lu\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid),
-		in->casi_count, bulk_size);
-
-	D_ALLOC(data, bulk_size);
-	if (data == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = &iov;
-	daos_iov_set(&iov, data, bulk_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_mem, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
-				in->casi_bulk, 0, 0, bulk_size);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
-
-	names = data;
-	/* go to the end of names array */
-	for (values = names, i = 0; i < in->casi_count; ++values)
-		if (*values == '\0')
-			++i;
-	sizes = (size_t *)values;
-	values = (char *)(sizes + in->casi_count);
-
-	for (i = 0; i < in->casi_count; i++) {
-		size_t len;
-		daos_iov_t key;
-		daos_iov_t value;
-
-		len = strlen(names) /* trailing '\0' */ + 1;
-		daos_iov_set(&key, names, len);
-		names += len;
-		daos_iov_set(&value, values, sizes[i]);
-		values += sizes[i];
-
-		rc = rdb_tx_update(tx, &cont->c_user, &key, &value);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update attribute "
-				 "'%s': %d\n",
-				 DP_CONT(cont->c_svc->cs_pool_uuid,
-					 cont->c_uuid),
-				 (char *) key.iov_buf, rc);
-			D_GOTO(out_bulk, rc);
-		}
-	}
-
-out_bulk:
-	crt_bulk_free(local_bulk);
-out_mem:
-	D_FREE(data);
-out:
-	return rc;
+	return ds_rsvc_set_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				in->casi_bulk, rpc, in->casi_count);
 }
 
 static int
@@ -1320,161 +1203,13 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_attr_get_in		*in = crt_req_get(rpc);
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
-	daos_size_t			 input_size;
-	daos_iov_t			*iovs;
-	daos_sg_list_t			 sgl;
-	void				*data;
-	char				*names;
-	size_t				*sizes;
-	int				 rc;
-	int				 i;
-	int				 j;
-
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid),
 		rpc, DP_UUID(in->cagi_op.ci_hdl));
-	rc = crt_bulk_get_len(in->cagi_bulk, &bulk_size);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	D_DEBUG(DF_DSMS, DF_CONT": count=%lu, key_length=%lu, size=%lu\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid),
-		in->cagi_count, in->cagi_key_length, bulk_size);
-
-	input_size = in->cagi_key_length + in->cagi_count * sizeof(*sizes);
-	D_ASSERT(input_size <= bulk_size);
-
-	D_ALLOC(data, input_size);
-	if (data == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	/* for output sizes */
-	D_ALLOC_ARRAY(iovs, (int)(1 + in->cagi_count));
-	if (iovs == NULL)
-		D_GOTO(out_data, rc = -DER_NOMEM);
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = &iovs[0];
-	daos_iov_set(&iovs[0], data, input_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
-				in->cagi_bulk, 0, 0, input_size);
-	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	names = data;
-	sizes = (size_t *)(names + in->cagi_key_length);
-	daos_iov_set(&iovs[0], (void *)sizes,
-		     in->cagi_count * sizeof(*sizes));
-
-	for (i = 0, j = 1; i < in->cagi_count; ++i) {
-		size_t len;
-		daos_iov_t key;
-
-		len = strlen(names) + /* trailing '\0' */ 1;
-		daos_iov_set(&key, names, len);
-		names += len;
-		daos_iov_set(&iovs[j], NULL, 0);
-
-		rc = rdb_tx_lookup(tx, &cont->c_user, &key, &iovs[j]);
-
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to lookup attribute "
-				 "'%s': %d\n",
-				 DP_CONT(cont->c_svc->cs_pool_uuid,
-					 cont->c_uuid),
-				 (char *) key.iov_buf, rc);
-			D_GOTO(out_iovs, rc);
-		}
-		iovs[j].iov_buf_len = sizes[i];
-		sizes[i] = iovs[j].iov_len;
-
-		/* If buffer length is zero, send only size */
-		if (iovs[j].iov_buf_len > 0)
-			++j;
-	}
-
-	sgl.sg_nr = j;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = iovs;
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RO, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-				in->cagi_bulk, 0, in->cagi_key_length,
-				bulk_size - in->cagi_key_length);
-	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-out_iovs:
-	D_FREE(iovs);
-out_data:
-	D_FREE(data);
-out:
-	return rc;
-}
-
-struct attr_list_iter_args {
-	size_t		 alia_available; /* Remaining client buffer space */
-	size_t		 alia_length; /* Aggregate length of attribute names */
-	size_t		 alia_iov_index;
-	size_t		 alia_iov_count;
-	daos_iov_t	*alia_iovs;
-};
-
-static int
-attr_list_iter_cb(daos_handle_t ih,
-		  daos_iov_t *key, daos_iov_t *val, void *arg)
-{
-	struct attr_list_iter_args *i_args = arg;
-
-	i_args->alia_length += key->iov_len;
-
-	if (i_args->alia_available > key->iov_len && key->iov_len > 0) {
-		/*
-		 * Exponentially grow the array of IOVs if insufficient.
-		 * Considering the pathological case where each key is just
-		 * a single character, with one additional trailing '\0',
-		 * if the client buffer is 'N' bytes, it can hold at the most
-		 * N/2 keys, which requires that many IOVs to be allocated.
-		 * Thus, the upper limit on the space required for IOVs is:
-		 * sizeof(daos_iov_t) * N/2 = 24 * N/2 = 12*N bytes.
-		 */
-		if (i_args->alia_iov_index == i_args->alia_iov_count) {
-			void *ptr;
-
-			D_REALLOC(ptr, i_args->alia_iovs,
-				  i_args->alia_iov_count *
-				  2 * sizeof(daos_iov_t));
-			/*
-			 * TODO: Fail or continue transferring
-			 *	 iteratively using available memory?
-			 */
-			if (ptr == NULL)
-				return -DER_NOMEM;
-			i_args->alia_iovs = ptr;
-			i_args->alia_iov_count *= 2;
-		}
-
-		memcpy(&i_args->alia_iovs[i_args->alia_iov_index],
-		       key, sizeof(daos_iov_t));
-		i_args->alia_iovs[i_args->alia_iov_index]
-			.iov_buf_len = key->iov_len;
-		i_args->alia_available -= key->iov_len;
-		++i_args->alia_iov_index;
-	}
-	return 0;
+	return ds_rsvc_get_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				in->cagi_bulk, rpc, in->cagi_count,
+				in->cagi_key_length);
 }
 
 static int
@@ -1483,65 +1218,12 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_attr_list_in	*in	    = crt_req_get(rpc);
 	struct cont_attr_list_out	*out	    = crt_reply_get(rpc);
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
-	int				 rc;
-	struct attr_list_iter_args	 iter_args;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cali_op.ci_uuid),
 		rpc, DP_UUID(in->cali_op.ci_hdl));
-	/*
-	 * If remote bulk handle does not exist, only aggregate size is sent.
-	 */
-	if (in->cali_bulk) {
-		rc = crt_bulk_get_len(in->cali_bulk, &bulk_size);
-		if (rc != 0)
-			D_GOTO(out, rc);
-		D_DEBUG(DF_DSMS, DF_CONT": bulk_size=%lu\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cali_op.ci_uuid), bulk_size);
-
-		/* Start with 1 and grow as needed */
-		D_ALLOC_PTR(iter_args.alia_iovs);
-		if (iter_args.alia_iovs == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		iter_args.alia_iov_count = 1;
-	} else {
-		bulk_size = 0;
-		iter_args.alia_iovs = NULL;
-		iter_args.alia_iov_count = 0;
-	}
-	iter_args.alia_iov_index = 0;
-	iter_args.alia_length	 = 0;
-	iter_args.alia_available = bulk_size;
-	rc = rdb_tx_iterate(tx, &cont->c_user, false /* !backward */,
-			    attr_list_iter_cb, &iter_args);
-	out->calo_size = iter_args.alia_length;
-	if (rc != 0)
-		D_GOTO(out_mem, rc);
-
-	if (iter_args.alia_iov_index > 0) {
-		daos_sg_list_t	 sgl = {
-			.sg_nr_out = iter_args.alia_iov_index,
-			.sg_nr	   = iter_args.alia_iov_index,
-			.sg_iovs   = iter_args.alia_iovs
-		};
-		rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-				     CRT_BULK_RW, &local_bulk);
-		if (rc != 0)
-			D_GOTO(out_mem, rc);
-
-		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-					in->cali_bulk, 0, 0,
-					bulk_size - iter_args.alia_available);
-		crt_bulk_free(local_bulk);
-	}
-
-out_mem:
-	D_FREE(iter_args.alia_iovs);
-out:
-	return rc;
+	return ds_rsvc_list_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				 in->cali_bulk, rpc, &out->calo_size);
 }
 
 struct close_iter_arg {

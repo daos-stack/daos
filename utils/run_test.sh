@@ -95,9 +95,13 @@ if [ -d "/mnt/daos" ]; then
     export OFI_INTERFACE=lo
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
+    run_test build/src/security/tests/acl_api_tests
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
     run_test build/src/iosrv/tests/drpc_listener_tests
+    run_test "${SL_PREFIX}/bin/vos_size"
+    run_test "${SL_PREFIX}/bin/vos_size.py" \
+             "${SL_PREFIX}/etc/vos_size_input.yaml"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for

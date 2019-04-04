@@ -25,185 +25,172 @@ package client
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-// ClientFeatureMap is an alias for management features supported on server
-// connected to given client.
-type ClientFeatureMap map[string]FeatureMap
-
-// ClientNvmeMap is an alias for NVMe controllers (and any residing namespaces)
-// on server node connected to given client.
-type ClientNvmeMap map[string]NvmeControllers
-
-// ClientScmMap is an alias for SCM modules installed on server node
-// connected to given client.
-type ClientScmMap map[string]ScmModules
-
-// ErrorMap is an alias to return errors keyed on address.
-type ErrorMap map[string]error
-
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
 type Addresses []string
 
-// ConnFactory is an interface providing capability to create clients.
-type ConnFactory interface {
-	createConn(string) Control
+// ClientResult is a container for output of any type of client request.
+type ClientResult struct {
+	Address string
+	Value   interface{}
+	Err     error
 }
 
-// Connections is an interface providing functionality across multiple
-// connected clients.
-type Connections interface {
+// ResultMap map client addresses to method call ClientResults
+type ResultMap map[string]ClientResult
+
+// ControllerFactory is an interface providing capability to connect clients.
+type ControllerFactory interface {
+	create(string) (Control, error)
+}
+
+// controllerFactory as an implementation of ControllerFactory.
+type controllerFactory struct{}
+
+// create instantiates and connects a client to server at given address.
+func (c *controllerFactory) create(address string) (Control, error) {
+	return newControl(address)
+}
+
+// Connect is an interface providing functionality across multiple
+// connected clients (controllers).
+type Connect interface {
 	// ConnectClients attempts to connect a list of addresses, returns
-	// list of connected clients and map of any errors.
-	ConnectClients(Addresses) (Addresses, ErrorMap)
-	// GetActiveConns verifies states of stored conns and removes inactive
-	// from stored. Adds failure to failure map and returns active conns.
-	GetActiveConns(ErrorMap) (Addresses, ErrorMap)
-	ClearConns() ErrorMap
-	ListFeatures() (ClientFeatureMap, error)
-	ListNvme() (ClientNvmeMap, error)
-	ListScm() (ClientScmMap, error)
-	KillRank(uuid string, rank uint32) error
+	// list of connected clients (controllers) and map of any errors.
+	ConnectClients(Addresses) (Addresses, ResultMap)
+	// GetActiveConns verifies states of controllers and removes inactive
+	// from stored. Adds failure to failure map and returns active.
+	GetActiveConns(ResultMap) (Addresses, ResultMap)
+	ClearConns() ResultMap
+	ListFeatures() ClientFeatureMap
+	ListStorage() (ClientNvmeMap, ClientScmMap)
+	KillRank(uuid string, rank uint32) ResultMap
 }
 
-// connList is an implementation of Connections, a collection of connected
-// client instances, one per target server.
+// connList is an implementation of Connect and stores controllers
+// (connections to clients, one per target server).
 type connList struct {
-	factory ConnFactory
-	clients []Control
+	factory     ControllerFactory
+	controllers []Control
 }
 
-// connFactory as an implementation of ConnFactory.
-type connFactory struct{}
-
-// createConn instantiates and connects a client to server at given address.
-func (c *connFactory) createConn(address string) Control {
-	return &control{}
-}
-
-// ConnectClients populates collection of client-server connections.
+// ConnectClients populates collection of client-server controllers.
 //
 // Returns errors if server addresses doesn't resolve but will add
-// clients for any server addresses that are connectable.
-func (c *connList) ConnectClients(addresses Addresses) (
-	Addresses, ErrorMap) {
+// controllers for any server addresses that are connectable.
+func (c *connList) ConnectClients(addresses Addresses) (Addresses, ResultMap) {
+	errors := make(ResultMap)
+	ch := make(chan ClientResult)
 
-	failures := make(ErrorMap)
 	for _, address := range addresses {
-		client := c.factory.createConn(address)
-		if err := client.connect(address); err != nil {
-			failures[address] = err
+		go func(f ControllerFactory, addr string, ch chan ClientResult) {
+			c, err := f.create(addr)
+			ch <- ClientResult{addr, c, err}
+		}(c.factory, address, ch)
+	}
+
+	for range addresses {
+		res := <-ch
+
+		if res.Err != nil {
+			errors[res.Address] = res
 			continue
 		}
-		c.clients = append(c.clients, client)
+
+		controller, ok := res.Value.(Control)
+		if !ok {
+			res.Err = fmt.Errorf(
+				"type assertion failed, wanted %+v got %+v",
+				control{}, res.Value)
+
+			errors[res.Address] = res
+			continue
+		}
+
+		c.controllers = append(c.controllers, controller)
 	}
-	// small delay to allow correct states to register
-	time.Sleep(100 * time.Millisecond)
-	return c.GetActiveConns(failures)
+
+	return c.GetActiveConns(errors)
 }
 
-// GetActiveConns is an access method to verify active connections.
+// GetActiveConns verifies active connections and (re)builds connection list.
 //
-// Mutate client slice with only valid unique connected conns, return
-// addresses and map of failed connections.
-// todo: resolve hostname and compare destination IPs for duplicates.
-func (c *connList) GetActiveConns(failures ErrorMap) (
-	addresses Addresses, eMap ErrorMap) {
-
-	if failures == nil {
-		eMap = make(ErrorMap)
-	} else {
-		eMap = failures
+// TODO: resolve hostname and compare destination IPs for duplicates.
+func (c *connList) GetActiveConns(errors ResultMap) (Addresses, ResultMap) {
+	if errors == nil {
+		errors = make(ResultMap)
 	}
-	clients := c.clients[:0]
-	for _, mc := range c.clients {
+	addresses := []string{}
+
+	controllers := c.controllers[:0]
+	for _, mc := range c.controllers {
 		address := mc.getAddress()
 		if common.Include(addresses, address) {
-			eMap[address] = fmt.Errorf("duplicate connection to %s", address)
-			continue
+			continue // ignore duplicate
 		}
+
 		state, ok := mc.connected()
 		if ok {
 			addresses = append(addresses, address)
-			clients = append(clients, mc)
+			controllers = append(controllers, mc)
 			continue
 		}
-		eMap[address] = fmt.Errorf("socket connection is not active (%s)", state)
+
+		errors[address] = ClientResult{
+			address, state,
+			fmt.Errorf(
+				"socket connection is not active (%s)", state),
+		}
 	}
-	c.clients = clients
-	return
+
+	// purge inactive connections by replacing with active list
+	c.controllers = controllers
+	return Addresses(addresses), errors
 }
 
 // ClearConns clears all stored connections.
-func (c *connList) ClearConns() ErrorMap {
-	eMap := make(ErrorMap)
-	for _, client := range c.clients {
-		addr := client.getAddress()
-		if err := client.close(); err != nil {
-			eMap[addr] = err
+func (c *connList) ClearConns() ResultMap {
+	errors := make(ResultMap)
+	ch := make(chan ClientResult)
+
+	for _, controller := range c.controllers {
+		go func(c Control, ch chan ClientResult) {
+			err := c.disconnect()
+			ch <- ClientResult{c.getAddress(), nil, err}
+		}(controller, ch)
+	}
+
+	for range c.controllers {
+		res := <-ch
+
+		if res.Err != nil {
+			errors[res.Address] = res
 		}
 	}
-	c.clients = nil
-	return eMap
+	c.controllers = nil
+
+	return errors
 }
 
-// ListFeatures returns supported management features for each server connected.
-func (c *connList) ListFeatures() (ClientFeatureMap, error) {
-	cf := make(ClientFeatureMap)
-	for _, mc := range c.clients {
-		fMap, err := mc.listAllFeatures()
-		if err != nil {
-			return cf, err
-		}
-		cf[mc.getAddress()] = fMap
+// makeRequests performs supplied method over each controller in connList and
+// stores generic result object for each in map keyed on address.
+func (c *connList) makeRequests(
+	requestFn func(Control, chan ClientResult)) ResultMap {
+
+	cMap := make(ResultMap) // mapping of server host addresses to results
+	ch := make(chan ClientResult)
+
+	for _, mc := range c.controllers {
+		go requestFn(mc, ch)
 	}
-	return cf, nil
-}
 
-// ListNvme returns installed NVMe SSD controllers for each server connected.
-func (c *connList) ListNvme() (ClientNvmeMap, error) {
-	cCtrlrs := make(ClientNvmeMap)
-	for _, mc := range c.clients {
-		ctrlrs, err := mc.listNvmeCtrlrs()
-		if err != nil {
-			return cCtrlrs, err
-		}
-		cCtrlrs[mc.getAddress()] = ctrlrs
+	for range c.controllers {
+		res := <-ch
+		cMap[res.Address] = res
 	}
-	return cCtrlrs, nil
-}
 
-// ListScm returns installed SCM module details for each server connected.
-func (c *connList) ListScm() (ClientScmMap, error) {
-	cmms := make(ClientScmMap)
-	for _, mc := range c.clients {
-		mms, err := mc.listScmModules()
-		if err != nil {
-			return cmms, err
-		}
-		cmms[mc.getAddress()] = mms
-	}
-	return cmms, nil
-}
-
-// KillRank Will terminate server running at given rank on pool specified by
-// uuid.
-func (c *connList) KillRank(uuid string, rank uint32) error {
-	for _, mc := range c.clients {
-		err := mc.killRank(uuid, rank)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// NewConnections is a factory for Connections interface to operate over
-// multiple clients.
-func NewConnections() Connections {
-	var clients []Control
-	return &connList{factory: &connFactory{}, clients: clients}
+	return cMap
 }

@@ -465,6 +465,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 			print_error("Failed to update: %d\n", rc);
 		return rc;
 	}
+	/* Punch can't be zero copy */
+	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, dkey,
 			      1, iod, &ioh);
@@ -538,8 +540,9 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
-		memcpy(dst_iov->iov_buf + off, biov->bi_buf,
-		       biov->bi_data_len);
+		if (!bio_addr_is_hole(&biov->bi_addr))
+			memcpy(dst_iov->iov_buf + off, biov->bi_buf,
+			       biov->bi_data_len);
 		off += biov->bi_data_len;
 	}
 	dst_iov->iov_len = off;
@@ -2372,6 +2375,8 @@ static const struct CMUnitTest io_tests[] = {
 		csum_extent_not_chunk_aligned, NULL, NULL},
 	{ "VOS306: Some EVT Checksum Helper Functions",
 		evt_csum_helper_functions_tests, NULL, NULL},
+	{ "VOS307: Some input validation",
+		csum_invalid_input_tests, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {

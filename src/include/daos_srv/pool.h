@@ -35,6 +35,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/placement.h>
+#include <daos_srv/vos_types.h>
 
 /*
  * Pool object
@@ -46,7 +47,6 @@ struct ds_pool {
 	uuid_t			sp_uuid;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
-	struct pl_map	       *sp_pl_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
 	struct ds_iv_ns		*sp_iv_ns;
@@ -110,6 +110,7 @@ struct pool_prop_ugm {
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
+struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
 void ds_pool_child_put(struct ds_pool_child *child);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
@@ -155,9 +156,10 @@ int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
  */
 int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
-typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid,
-			     daos_epoch_t eph, void *arg);
-int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
+typedef int (*ds_iter_cb_t)(uuid_t cont_uuid, vos_iter_entry_t *ent,
+			     void *arg);
+int ds_pool_iter(uuid_t pool_uuid, ds_iter_cb_t callback, void *arg,
+		 uint32_t version, uint32_t intent);
 
 struct cont_svc;
 struct rsvc_hint;

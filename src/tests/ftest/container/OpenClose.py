@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2018 Intel Corporation.
+    (C) Copyright 2018-2019 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 import daos_api
@@ -44,6 +45,7 @@ class OpenClose(Test):
     Tests DAOS container open/close function with handle parameter.
     """
     def setUp(self):
+        self.agent_sessions = None
         # these are first since they are referenced in teardown
         self.pool = None
         self.hostlist = None
@@ -61,6 +63,7 @@ class OpenClose(Test):
 
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -69,6 +72,8 @@ class OpenClose(Test):
                 self.pool.destroy(1)
         finally:
             try:
+                if self.agent_sessions:
+                    AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
                 ServerUtils.stopServer(hosts=self.hostlist)
             except ServerFailed as e:
                 pass

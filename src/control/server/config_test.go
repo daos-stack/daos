@@ -37,23 +37,29 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
+const (
 	sConfig = "../../../utils/config/daos_server.yml"
-	// sConfigUncomment not written before tests start
+	// sConfigUncomment created on init
 	sConfigUncomment = "testdata/.daos_server_uncomment.yml"
 	socketsExample   = "../../../utils/config/examples/daos_server_sockets.yml"
 	psm2Example      = "../../../utils/config/examples/daos_server_psm2.yml"
 	defaultConfig    = "../../../utils/config/daos_server.yml"
 	tmpIn            = "testdata/.tmp_in.yml"
 	tmpOut           = "testdata/.tmp_out.yml"
-	testInit         = 0
+)
+
+var (
 	// files is a mock store of written file contents
 	files    = []string{}
 	commands = []string{}
+	testInit = 0
 )
 
 func init() {
 	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
+
+	// load uncommented version of canonical config file daos_server.yml
+	uncommentServerConfig()
 }
 
 func setupTest(t *testing.T) {
@@ -61,31 +67,33 @@ func setupTest(t *testing.T) {
 	commands = []string{}
 }
 
-func uncommentServerConfig(t *testing.T) {
-	if testInit == 0 {
-		// remove leading comment from daos_server.yml lines to verify setting all
-		// non-default params.
-		cmd := exec.Command(
-			"bash", "-c", fmt.Sprintf("sed s/^#//g %s > %s", sConfig, sConfigUncomment))
+// uncommentServerConfig removes leading comment chars from daos_server.yml
+// lines in order to verify parsing of all available params.
+func uncommentServerConfig() {
+	fail := func(e error) {
+		log.Errorf(e.Error())
+		os.Exit(1)
+	}
 
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			t.Fatal(err)
-		}
+	cmd := exec.Command(
+		"bash", "-c", fmt.Sprintf("sed s/^#//g %s > %s", sConfig, sConfigUncomment))
 
-		if err := cmd.Start(); err != nil {
-			t.Fatal(err)
-		}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fail(err)
+	}
 
-		slurp, _ := ioutil.ReadAll(stderr)
-		if string(slurp) != "" {
-			t.Error(slurp)
-		}
+	if err := cmd.Start(); err != nil {
+		fail(err)
+	}
 
-		if err := cmd.Wait(); err != nil {
-			t.Fatal(err)
-		}
-		testInit = 1
+	slurp, _ := ioutil.ReadAll(stderr)
+	if string(slurp) != "" {
+		fail(errors.New(string(slurp)))
+	}
+
+	if err := cmd.Wait(); err != nil {
+		fail(err)
 	}
 }
 
@@ -218,8 +226,6 @@ func TestParseConfigFail(t *testing.T) {
 // TestProvidedConfigs verifies that the provided server config matches what we expect
 // after being decoded.
 func TestProvidedConfigs(t *testing.T) {
-	uncommentServerConfig(t)
-
 	tests := []struct {
 		inConfig configuration
 		inPath   string
@@ -408,8 +414,6 @@ func TestCmdlineOverride(t *testing.T) {
 	a := "/some/file"
 	y := "/another/different/file"
 
-	uncommentServerConfig(t)
-
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
 	newC := func(t *testing.T) configuration {
@@ -429,16 +433,18 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig: newC(t),
 			outCliOpts: [][]string{
 				{
-					"-c", "21",
+					"-t", "21",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
+					"-x", "0",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
-					"-c", "20",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
+					"-x", "0",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -461,16 +467,18 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-c", "21",
+					"-t", "21",
 					"-g", "daos",
 					"-s", "/foo/bar",
+					"-x", "0",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
-					"-c", "20",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/foo/bar",
+					"-x", "0",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -483,16 +491,18 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-c", "21",
+					"-t", "21",
 					"-g", "testing123",
 					"-s", "/mnt/daos/1",
+					"-x", "0",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
-					"-c", "20",
+					"-t", "20",
 					"-g", "testing123",
 					"-s", "/mnt/daos/2",
+					"-x", "0",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -505,16 +515,18 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-c", "2",
+					"-t", "2",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
+					"-x", "0",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
-					"-c", "2",
+					"-t", "2",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
+					"-x", "0",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -527,16 +539,18 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-c", "21",
+					"-t", "21",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
+					"-x", "0",
 					"-r", "9",
 					"-d", "./.daos/daos_server",
 				},
 				{
-					"-c", "20",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
+					"-x", "0",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -554,17 +568,19 @@ func TestCmdlineOverride(t *testing.T) {
 			}(),
 			outCliOpts: [][]string{
 				{
-					"-c", "21",
+					"-t", "21",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
+					"-x", "0",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
 				},
 				{
-					"-c", "20",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
+					"-x", "0",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
@@ -578,21 +594,23 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-c", "21",
+					"-t", "21",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
+					"-x", "0",
 					"-y", "/another/different/file",
 					"-r", "0",
 					"-d", "/tmp/Jeremy",
 				},
 				{
-					"-c", "20",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
+					"-x", "0",
 					"-y", "/another/different/file",
 					"-r", "1",
 					"-d", "/tmp/Jeremy",
@@ -602,13 +620,66 @@ func TestCmdlineOverride(t *testing.T) {
 			desc:       "SocketDir Modules Attach Map",
 		},
 		{
+			inCliOpts: cliOptions{Cores: 2, Targets: 5},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "5",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "5",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "0",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			expNumCmds: 2,
+			desc:       "Targets cli overrides Cores cli",
+		},
+		{
+			inCliOpts: cliOptions{Cores: 2},
+			inConfig: func() configuration {
+				c := newDefaultMockConfig()
+				c.Targets = 3
+				return populateMockConfig(t, c, sConfigUncomment)
+			}(),
+			outCliOpts: [][]string{
+				{
+					"-t", "3",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "3",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "0",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			expNumCmds: 2,
+			desc:       "Targets config overrides Cores cli",
+		},
+		{
 			// no provider set but os env set mock getenv returns not empty string
 			inConfig: envExistsConfig(),
 			outCliOpts: [][]string{
 				{
-					"-c", "0",
+					"-t", "0",
 					"-g", "daos_server",
 					"-s", "/mnt/daos",
+					"-x", "0",
 					"-d", "/var/run/daos_server",
 				},
 			},
@@ -623,11 +694,12 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig: envExistsConfig(),
 			outCliOpts: [][]string{
 				{
-					"-c", "2",
+					"-t", "2",
 					"-g", "bob",
 					"-s", "/foo/bar",
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
+					"-x", "0",
 					"-y", "/another/different/file",
 					"-d", "/tmp/Jeremy",
 				},

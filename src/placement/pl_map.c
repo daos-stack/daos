@@ -148,6 +148,7 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param  tgt_rank [OUT]	spare target ranks
  * \param  shard_id [OUT]	shard ids to be rebuilt
  * \param  array_size [IN]	array size of tgt_rank & shard_id
+ * \prarm  myrank [IN]		rank of current server in communication group
 
  * \return	> 0	the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
@@ -158,7 +159,7 @@ int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size)
+		    uint32_t *shard_id, unsigned int array_size, int myrank)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -166,7 +167,8 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
-					       tgt_rank, shard_id, array_size);
+					       tgt_rank, shard_id, array_size,
+					       myrank);
 }
 
 /**
@@ -375,41 +377,6 @@ pl_htable_init()
 					   &pl_hash_ops, &pl_htable);
 }
 
-void
-pl_map_destroy_v2(struct pl_map **pl_mapp)
-{
-	if (*pl_mapp != NULL) {
-		struct pl_map	*map = *pl_mapp;
-		bool		 last;
-
-		*pl_mapp = NULL;
-		D_SPIN_LOCK(&map->pl_lock);
-		/* Drop the reference when create */
-		map->pl_ref--;
-		last = (map->pl_ref == 0);
-		D_SPIN_UNLOCK(&map->pl_lock);
-		if (last)
-			pl_map_destroy(map);
-	}
-}
-
-int
-pl_map_create_v2(struct pool_map *pool_map, struct pl_map **pl_mapp)
-{
-	struct pl_map		*pl_map = NULL;
-	struct pl_map_init_attr	 mia;
-	int			 rc;
-
-	pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
-	rc = pl_map_create_inited(pool_map, &mia, &pl_map);
-	if (rc == 0) {
-		pl_map_destroy_v2(pl_mapp);
-		*pl_mapp = pl_map;
-	}
-
-	return rc;
-}
-
 /**
  * Create a placement map based on attributes in \a mia
  */
@@ -472,9 +439,9 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 		tmp = container_of(link, struct pl_map, pl_link);
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
-			d_hash_rec_decref(&pl_htable, link);
 			if (connect)
 				tmp->pl_connects++;
+			d_hash_rec_decref(&pl_htable, link);
 			D_GOTO(out, rc = 0);
 		}
 
@@ -487,6 +454,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 		/* transfer the pool connection count */
 		map->pl_connects = tmp->pl_connects;
+
 		/* evict the old placement map for this pool */
 		d_hash_rec_delete_at(&pl_htable, link);
 		d_hash_rec_decref(&pl_htable, link);
@@ -523,10 +491,11 @@ pl_map_disconnect(uuid_t uuid)
 		map = container_of(link, struct pl_map, pl_link);
 		D_ASSERT(map->pl_connects > 0);
 		map->pl_connects--;
-		if (map->pl_connects == 0) {
+		if (map->pl_connects == 0)
 			d_hash_rec_delete_at(&pl_htable, link);
-			d_hash_rec_decref(&pl_htable, link);
-		}
+
+		/* Drop the reference held by above d_hash_rec_find(). */
+		d_hash_rec_decref(&pl_htable, link);
 	}
 	D_RWLOCK_UNLOCK(&pl_rwlock);
 }
@@ -563,9 +532,23 @@ pl_map_version(struct pl_map *map)
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
 }
 
+/**
+ * Select leader replica for the given object's shard.
+ *
+ * \param [IN]	oid		The object identifier.
+ * \param [IN]	shard_idx	The shard index.
+ * \param [IN]	shards_ns	Total count of the object's shards.
+ * \param [IN]	for_tgt_id	Require leader target id or leader shard index.
+ * \param [IN]	pl_get_shard	The callback function to parse out pl_obj_shard
+ *				from the given @data.
+ * \param [IN]	data		The parameter used by the @pl_get_shard.
+ *
+ * \return			The selected leader on success: its tgt_id or
+ *				shard index. Negative value if error.
+ */
 int
-pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
-		 pl_get_shard_t pl_get_shard, void *data, uint32_t *leader)
+pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard		*shard;
 	struct daos_oclass_attr		*oc_attr;
@@ -577,41 +560,39 @@ pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
 	int				 off;
 	int				 i;
 
-	if (nr <= oid->id_shard)
+	if (shards_nr <= shard_idx)
 		return -DER_INVAL;
 
-	oc_attr = daos_oclass_attr_find(oid->id_pub);
+	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
 		/* For non-replicated object, elect current shard as leader. */
-		shard = pl_get_shard(data, oid->id_shard);
+		shard = pl_get_shard(data, shard_idx);
 		if (for_tgt_id)
-			*leader = shard->po_target;
-		else
-			*leader = shard->po_shard;
-		return 0;
+			return shard->po_target;
+
+		return shard->po_shard;
 	}
 
 	replicas = oc_attr->u.repl.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = nr;
+		replicas = shards_nr;
 
 	if (replicas < 1)
 		return -DER_INVAL;
 
 	if (replicas == 1) {
-		shard = pl_get_shard(data, oid->id_shard);
+		shard = pl_get_shard(data, shard_idx);
 		if (shard->po_target == -1)
 			return -DER_NONEXIST;
 
 		/* Single replicated object will not rebuild. */
 		D_ASSERT(!shard->po_rebuilding);
-		D_ASSERT(shard->po_shard == oid->id_shard);
+		D_ASSERT(shard->po_shard == shard_idx);
 
 		if (for_tgt_id)
-			*leader = shard->po_target;
-		else
-			*leader = shard->po_shard;
-		return 0;
+			return shard->po_target;
+
+		return shard->po_shard;
 	}
 
 	/* XXX: The shards within [start, start + replicas) will search from
@@ -622,9 +603,9 @@ pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
 	 *	The one with the lowest f_seq will be elected as the leader
 	 *	to avoid leader switch.
 	 */
-	rdg_idx = oid->id_shard / replicas;
+	rdg_idx = shard_idx / replicas;
 	start = rdg_idx * replicas;
-	preferred = start + (oid->id_pub.lo + rdg_idx) % replicas;
+	preferred = start + (oid.lo + rdg_idx) % replicas;
 	for (i = 0, off = preferred, pos = -1; i < replicas;
 	     i++, off = (off + 1) % replicas + start) {
 		shard = pl_get_shard(data, off);
@@ -640,10 +621,9 @@ pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
 		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
 
 		if (for_tgt_id)
-			*leader = pl_get_shard(data, pos)->po_target;
-		else
-			*leader = pl_get_shard(data, pos)->po_shard;
-		return 0;
+			return pl_get_shard(data, pos)->po_target;
+
+		return pl_get_shard(data, pos)->po_shard;
 	}
 
 	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */

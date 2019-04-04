@@ -41,6 +41,13 @@
 #include <vos_layout.h>
 #include <vos_obj.h>
 
+#define VOS_CONT_ORDER		20	/* Order of container tree */
+#define VOS_OBJ_ORDER		20	/* Order of object tree */
+#define VOS_KTR_ORDER		23	/* order of d/a-key tree */
+#define VOS_SVT_ORDER		5	/* order of single value tree */
+#define VOS_EVT_ORDER		23	/* evtree order */
+
+
 #define DAOS_VOS_VERSION 1
 
 extern struct dss_module_key vos_module_key;
@@ -54,6 +61,11 @@ extern struct dss_module_key vos_module_key;
 
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
+/*
+ * When aggregate merge window reaches this size threshold, it will stop
+ * growing and trigger window flush immediately.
+ */
+#define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -150,6 +162,7 @@ struct vos_imem_strts {
 struct vos_imem_strts		*vsa_imems_inst;
 struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
+struct daos_tx_handle		*vsa_dth;
 bool vsa_nvme_init;
 
 static inline struct bio_xs_context *
@@ -200,13 +213,27 @@ struct vos_object {
 extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
+extern struct vos_iter_ops vos_dtx_iter_ops;
 
 /** VOS thread local storage structure */
 struct vos_tls {
 	/* in-memory structures TLS instance */
-	struct vos_imem_strts		vtl_imems_inst;
+	struct vos_imem_strts		 vtl_imems_inst;
 	/* PMDK transaction stage callback data */
-	struct umem_tx_stage_data	vtl_txd;
+	struct umem_tx_stage_data	 vtl_txd;
+	/** XXX: The DTX handle.
+	 *
+	 *	 Transferring DTX handle via TLS can avoid much changing
+	 *	 of existing functions' interfaces, and avoid the corner
+	 *	 cases that someone may miss to set the DTX handle when
+	 *	 operate related tree.
+	 *
+	 *	 But honestly, it is some hack to pass the DTX handle via
+	 *	 the TLS. It requires that there is no CPU yield during the
+	 *	 processing. Otherwise, the vtl_dth may be changed by other
+	 *	 ULTs. The user needs to guarantee that by itself.
+	 */
+	struct daos_tx_handle		*vtl_dth;
 };
 
 static inline struct vos_tls *
@@ -247,6 +274,30 @@ vos_txd_get(void)
 	return &vsa_txd_inst;
 #else
 	return &(vos_tls_get()->vtl_txd);
+#endif
+}
+
+static inline struct daos_tx_handle *
+vos_dth_get(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_dth;
+#else
+	return vos_tls_get()->vtl_dth;
+#endif
+}
+
+static inline void
+vos_dth_set(struct daos_tx_handle *dth)
+{
+#ifdef VOS_STANDALONE
+	D_ASSERT(dth == NULL || vsa_dth == NULL);
+
+	vsa_dth = dth;
+#else
+	D_ASSERT(dth == NULL || vos_tls_get()->vtl_dth == NULL);
+
+	vos_tls_get()->vtl_dth = dth;
 #endif
 }
 
@@ -429,28 +480,81 @@ int
 vos_dtx_table_register(void);
 
 /**
+ * Check whether the record (to be accessible) is available to outside or not.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param coh		[IN]	The container open handle.
+ * \param entry		[IN]	Address of the DTX to be checked.
+ * \param record	[IN]	Address of the record modified via the DTX.
+ * \param intent	[IN]	The request intent.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ *
+ * \return	positive value	If available to outside.
+ *		zero		If unavailable to outside.
+ *		-DER_INPROGRESS If the target record is in some
+ *				uncommitted DTX, the caller
+ *				needs to retry some time later.
+ *				Or the caller is not sure about whether
+ *				related DTX is committable or not, need
+ *				to check with leader replica.
+ *		negative value	For error cases.
+ */
+int
+vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
+			   umem_id_t entry, umem_id_t record, uint32_t intent,
+			   uint32_t type);
+
+/**
+ * Register the record (to be modified) to the DTX entry.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param record	[IN]	Address of the record (in SCM) to be modified.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_register_record(struct umem_instance *umm, umem_id_t record,
+			uint32_t type, uint32_t flags);
+
+/**
+ * Degister the record from the DTX entry.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param entry		[IN]	The DTX entry address.
+ * \param record	[IN]	Address of the record to be degistered.
+ * \param type		[IN]	The record type, vos_dtx_record_types.
+ */
+void
+vos_dtx_degister_record(struct umem_instance *umm,
+			umem_id_t entry, umem_id_t record, uint32_t type);
+
+/**
+ * Mark the DTX as prepared locally.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_prepared(struct daos_tx_handle *dth);
+
+void
+vos_dtx_commit_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+			int count);
+
+int
+vos_dtx_abort_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+		       int count, bool force);
+
+/**
  * Register dbtree class for DTX CoS, it is called within vos_init().
  *
  * \return		0 on success and negative on failure.
  */
 int
 vos_dtx_cos_register(void);
-
-/**
- * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
- *
- * \param cont	[IN]	Pointer to the container.
- * \param oid	[IN]	The target object (shard) ID.
- * \param dti	[IN]	The DTX identifier.
- * \param dkey	[IN]	The hashed dkey.
- * \param punch	[IN]	For punch DTX or not.
- *
- * \return		Zero on success and need not additional actions.
- * \return		Negative value if error.
- */
-int
-vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct daos_tx_id *dti, uint64_t dkey, bool punch);
 
 /**
  * Remove the DTX from the CoS cache.
@@ -851,6 +955,36 @@ vos_hdl2iter(daos_handle_t hdl)
 	return (struct vos_iterator *)hdl.cookie;
 }
 
+/** iterator for dkey/akey/recx */
+struct vos_obj_iter {
+	/* public part of the iterator */
+	struct vos_iterator	 it_iter;
+	/** handle of iterator */
+	daos_handle_t		 it_hdl;
+	/** condition of the iterator: epoch logic expression */
+	vos_it_epc_expr_t	 it_epc_expr;
+	/** iterator flags */
+	uint32_t		 it_flags;
+	/** condition of the iterator: epoch range */
+	daos_epoch_range_t	 it_epr;
+	/** condition of the iterator: attribute key */
+	daos_key_t		 it_akey;
+	/* reference on the object */
+	struct vos_object	*it_obj;
+};
+
+static inline struct vos_obj_iter *
+vos_iter2oiter(struct vos_iterator *iter)
+{
+	return container_of(iter, struct vos_obj_iter, it_iter);
+}
+
+static inline struct vos_obj_iter *
+vos_hdl2oiter(daos_handle_t hdl)
+{
+	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound key.
@@ -890,6 +1024,13 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 	       daos_iov_t *val_iov, int flags);
+
+/* vos_io.c */
+uint16_t
+vos_media_select(struct vos_object *obj, daos_iod_type_t type,
+		 daos_size_t size);
+int
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be
  * contiguous in the struct being updated.  This is ensured at present by

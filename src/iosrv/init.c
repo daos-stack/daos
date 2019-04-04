@@ -41,7 +41,7 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST		"vos,rdb,rsvc,security,mgmt,pool,cont,obj,rebuild"
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,pool,cont,dtx,obj,rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -77,6 +77,8 @@ hwloc_topology_t	dss_topo;
 int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
+/** start offset index of the first core for service XS */
+int			dss_core_offset;
 
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
@@ -86,6 +88,17 @@ static const char      *sys_map_path;
 
 /** Self rank */
 static d_rank_t		self_rank = -1;
+
+d_rank_t
+dss_self_rank(void)
+{
+	d_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL /* grp */, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	return rank;
+}
 
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
@@ -222,7 +235,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	return nr_default;
 }
 
-static void
+static int
 dss_topo_init()
 {
 	hwloc_topology_init(&dss_topo);
@@ -231,6 +244,15 @@ dss_topo_init()
 	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+
+	if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+			"should within range [0, %d]", dss_core_offset,
+			dss_core_nr - 1);
+		return -DER_INVAL;
+	}
+
+	return 0;
 }
 
 static int
@@ -240,6 +262,7 @@ server_init()
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
+	int		ctx_nr;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -250,7 +273,9 @@ server_init()
 		D_GOTO(exit_debug_init, rc);
 
 	/** initialize server topology data */
-	dss_topo_init();
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -262,8 +287,11 @@ server_init()
 	/* initialize the network layer */
 	if (sys_map_path != NULL)
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
+	ctx_nr = dss_sys_xs_nr + dss_tgt_nr;
+	if (dss_tgt_offload_xs_nr >= 1)
+		ctx_nr += dss_tgt_nr;
 	rc = crt_init_opt(server_group_id, flags,
-			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
+			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	if (sys_map_path != NULL) {
@@ -276,7 +304,7 @@ server_init()
 			D_ERROR("failed to set self rank %u: %d\n", self_rank,
 				rc);
 		rc = dss_sys_map_load(sys_map_path, server_group_id, self_rank,
-				      DSS_CTX_NR_TOTAL);
+				      ctx_nr);
 		if (rc) {
 			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
 			D_GOTO(exit_crt_init, rc);
@@ -308,9 +336,7 @@ server_init()
 		D_INFO("server group attach info saved\n");
 	}
 
-	rc = ds_iv_init();
-	if (rc)
-		D_GOTO(exit_crt_init, rc);
+	ds_iv_init();
 
 	/* load modules */
 	rc = modules_load(&dss_mod_facs);
@@ -360,8 +386,10 @@ server_init()
 	D_INFO("Modules successfully set up\n");
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target xstream set(s).\n",
-		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr);
+		"(out of %u) with %u target xstream set(s), %d helper XS "
+		"per target, firstcore %d.\n",
+		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
+		dss_tgt_offload_xs_nr, dss_core_offset);
 
 	return 0;
 
@@ -415,7 +443,13 @@ Options:\n\
   --modules=modules, -m modules\n\
       List of server modules to load (default \"%s\")\n\
   --cores=ncores, -c ncores\n\
-      Number of targets to use (default all)\n\
+      Number of targets to use (deprecated, please use -t instead)\n\
+  --targets=ntgts, -t ntargets\n\
+      Number of targets to use (use all cores by default)\n\
+  --xshelpernr=nhelpers, -x helpers\n\
+      Number of helper XS -per vos target (default 1)\n\
+  --firstcore=firstcore, -f firstcore\n\
+      index of first core for service thread (default 0)\n\
   --group=group, -g group\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
@@ -442,17 +476,20 @@ static int
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
-		{ "modules",		required_argument,	NULL,	'm' },
-		{ "cores",		required_argument,	NULL,	'c' },
-		{ "group",		required_argument,	NULL,	'g' },
-		{ "storage",		required_argument,	NULL,	's' },
-		{ "socket_dir",		required_argument,	NULL,	'd' },
-		{ "nvme",		required_argument,	NULL,	'n' },
-		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "attach_info",	required_argument,	NULL,	'a' },
-		{ "map",		required_argument,	NULL,	'y' },
-		{ "rank",		required_argument,	NULL,	'r' },
+		{ "cores",		required_argument,	NULL,	'c' },
+		{ "socket_dir",		required_argument,	NULL,	'd' },
+		{ "firstcore",		required_argument,	NULL,	'f' },
+		{ "group",		required_argument,	NULL,	'g' },
 		{ "help",		no_argument,		NULL,	'h' },
+		{ "shm_id",		required_argument,	NULL,	'i' },
+		{ "modules",		required_argument,	NULL,	'm' },
+		{ "nvme",		required_argument,	NULL,	'n' },
+		{ "rank",		required_argument,	NULL,	'r' },
+		{ "targets",		required_argument,	NULL,	't' },
+		{ "storage",		required_argument,	NULL,	's' },
+		{ "xshelpernr",		required_argument,	NULL,	'x' },
+		{ "map",		required_argument,	NULL,	'y' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -460,8 +497,11 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:d:n:i:a:y:r:h",
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:r:t:s:x:y:",
 			opts, NULL)) != -1) {
+		unsigned int	 nr;
+		char		*end;
+
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -471,10 +511,10 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", optarg);
 			break;
-		case 'c': {
-			unsigned int	 nr;
-			char		*end;
-
+		case 'c':
+			printf("\"-c\" option is deprecated, please use \"-t\" "
+			       "instead.\n");
+		case 't':
 			nr = strtoul(optarg, &end, 10);
 			if (end == optarg || nr == ULONG_MAX) {
 				rc = -DER_INVAL;
@@ -482,7 +522,28 @@ parse(int argc, char **argv)
 			}
 			nr_threads = nr;
 			break;
-		}
+		case 'x':
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			if (nr > 2) {
+				printf("invalid xshelpernr %u, should within "
+				       "[0, 2], user default value %u instead",
+				       nr, dss_tgt_offload_xs_nr);
+				break;
+			}
+			dss_tgt_offload_xs_nr = nr;
+			break;
+		case 'f':
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			dss_core_offset = nr;
+			break;
 		case 'g':
 			server_group_id = optarg;
 			break;

@@ -196,7 +196,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	}
 	server.CliOpts = append(
 		server.CliOpts,
-		"-c", strconv.Itoa(numCores),
+		"-t", strconv.Itoa(numCores),
 		"-g", c.SystemName,
 		"-s", server.ScmMount)
 	if c.Modules != "" {
@@ -204,6 +204,12 @@ func (c *configuration) populateCliOpts(i int) error {
 	}
 	if c.Attach != "" {
 		server.CliOpts = append(server.CliOpts, "-a", c.Attach)
+	}
+	if c.XShelpernr != 2 {
+		server.CliOpts = append(server.CliOpts, "-x", strconv.Itoa(c.XShelpernr))
+	}
+	if c.Firstcore > 0 {
+		server.CliOpts = append(server.CliOpts, "-f", strconv.Itoa(c.Firstcore))
 	}
 	if c.SystemMap != "" {
 		server.CliOpts = append(server.CliOpts, "-y", c.SystemMap)
@@ -250,11 +256,28 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		if opts.Cores > 0 {
 			c.Servers[i].Cpus, _ = setNumCores(int(opts.Cores))
 		}
+		// Targets should override Cores if specified in cmdline or
+		// config file.
+		if opts.Targets > 0 {
+			c.Servers[i].Cpus, _ = setNumCores(opts.Targets)
+		} else if c.Targets > 0 {
+			c.Servers[i].Cpus, _ = setNumCores(c.Targets)
+		}
 		if opts.Rank != nil {
 			// override first per-server config (doesn't make sense
 			// to reply to more than one server)
 			c.Servers[0].Rank = opts.Rank
 		}
+	}
+	if opts.XShelpernr > 2 {
+		log.Errorf("invalid XShelpernr %d exceed [0, 2], use default value of 2",
+			opts.XShelpernr)
+		c.XShelpernr = 2
+	} else {
+		c.XShelpernr = opts.XShelpernr
+	}
+	if opts.Firstcore > 0 {
+		c.Firstcore = opts.Firstcore
 	}
 	if opts.Group != "" {
 		c.SystemName = opts.Group
@@ -340,8 +363,8 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
-		log.Debugf(
-			"Warning: using os env vars, specify params in config instead: ",
+		log.Errorf(
+			"using os env vars, specify params in config instead: %s",
 			examplesPath)
 		server.EnvVars = []string{}
 	}
@@ -353,7 +376,7 @@ func (c *configuration) populateEnv(ioIdx int, envs *[]string) {
 	for _, env := range c.Servers[ioIdx].EnvVars {
 		kv := strings.Split(env, "=")
 		if kv[1] == "" {
-			log.Debugf("Warning: empty value for env %s detected", kv[0])
+			log.Debugf("empty value for env %s detected", kv[0])
 		}
 		*envs = append(*envs, env)
 	}

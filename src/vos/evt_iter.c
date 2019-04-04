@@ -90,6 +90,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	iter->it_forward = true;
 	if (evt_iter_is_sorted(iter))
 		iter->it_forward = (options & EVT_ITER_REVERSE) == 0;
+	iter->it_skip_move = 0;
 	iter->it_filter.fr_ex.ex_hi = ~(0ULL);
 	iter->it_filter.fr_ex.ex_lo = 0;
 	iter->it_filter.fr_epr.epr_lo = 0;
@@ -214,15 +215,16 @@ evt_iter_intent(struct evt_iterator *iter)
 static int
 evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 {
-	struct evt_entry	*entry;
-	struct evt_rect		*rect;
-	struct evt_trace	*trace;
 	uint32_t		 intent;
 	int			 rc = 0;
+	int			 rc1;
 	bool			 found;
 
+	intent = evt_iter_intent(iter);
 	if (evt_iter_is_sorted(iter)) {
 		for (;;) {
+			struct evt_entry	*entry;
+
 			iter->it_index +=
 				iter->it_forward ? 1 : -1;
 			if (iter->it_index < 0 ||
@@ -230,22 +232,47 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 				iter->it_state = EVT_ITER_FINI;
 				D_GOTO(out, rc = -DER_NONEXIST);
 			}
-			if (iter->it_options & EVT_ITER_SKIP_HOLES) {
-				entry = evt_ent_array_get(&iter->it_entries,
-							  iter->it_index);
-				if (bio_addr_is_hole(&entry->en_addr))
-					continue;
-			}
+
+			entry = evt_ent_array_get(&iter->it_entries,
+						  iter->it_index);
+			rc1 = evt_dtx_check_availability(tcx, entry->en_dtx,
+							 intent);
+			if (rc1 < 0)
+				return rc1;
+
+			if (rc1 == ALB_UNAVAILABLE)
+				continue;
+
+			if (iter->it_options & EVT_ITER_SKIP_HOLES &&
+			    bio_addr_is_hole(&entry->en_addr))
+				continue;
+
 			break;
 		}
 		goto ready;
 	}
 
-	intent = evt_iter_intent(iter);
-	while ((found = evt_move_trace(tcx, intent))) {
-		trace = &tcx->tc_trace[tcx->tc_depth - 1];
-		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
+	while ((found = evt_move_trace(tcx))) {
+		struct evt_trace	*trace;
+		struct evt_rect		*rect;
+		struct evt_node		*nd;
 
+		trace = &tcx->tc_trace[tcx->tc_depth - 1];
+		nd = evt_off2node(tcx, trace->tr_node);
+		if (evt_node_is_leaf(tcx, nd)) {
+			struct evt_desc		*desc;
+
+			desc = evt_node_desc_at(tcx, nd, trace->tr_at);
+			rc1 = evt_dtx_check_availability(tcx, desc->dc_dtx,
+							 intent);
+			if (rc1 < 0)
+				return rc1;
+
+			if (rc1 == ALB_UNAVAILABLE)
+				continue;
+		}
+
+		rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 		if (evt_filter_rect(&iter->it_filter, rect, true))
 			continue;
 		break;
@@ -406,6 +433,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rc = -DER_NONEXIST;
 	} else {
 		iter->it_state = EVT_ITER_READY;
+		iter->it_skip_move = 0;
 	}
  out:
 	return rc;
@@ -430,6 +458,12 @@ evt_iter_next(daos_handle_t ih)
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
 		return rc;
+
+	if (iter->it_skip_move) {
+		D_ASSERT(!evt_iter_is_sorted(iter));
+		iter->it_skip_move = 0;
+		return 0;
+	}
 
 	return evt_iter_move(tcx, iter);
 }
@@ -504,6 +538,7 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 		goto out;
 	}
 
+	iter->it_skip_move = 1;
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	rect  = evt_nd_off_rect_at(tcx, trace->tr_node, trace->tr_at);
 	if (!evt_filter_rect(&iter->it_filter, rect, true))

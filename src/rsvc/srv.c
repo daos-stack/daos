@@ -75,7 +75,6 @@ alloc_init(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
 	D_ASSERT(svc->s_id.iov_len > 0);
 	D_ASSERT(svc->s_id.iov_buf_len >= svc->s_id.iov_len);
 	uuid_copy(svc->s_db_uuid, db_uuid);
-	svc->s_ref = 1;
 	svc->s_state = DS_RSVC_DOWN;
 
 	rc = rsvc_class(class)->sc_name(&svc->s_id, &svc->s_name);
@@ -125,7 +124,6 @@ err:
 	return rc;
 }
 
-/* Finalize and free an ds_rsvc object. */
 static void
 fini_free(struct ds_rsvc *svc)
 {
@@ -540,6 +538,7 @@ start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid, bool create,
 			goto err_db;
 	}
 
+	svc->s_ref = 1;
 	*svcp = svc;
 	return 0;
 

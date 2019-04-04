@@ -99,8 +99,6 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 };
 
-int pl_map_create_v2(struct pool_map *pool_map, struct pl_map **pl_mapp);
-void pl_map_destroy_v2(struct pl_map **pl_mapp);
 int pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		  struct pl_map **pl_mapp);
 void pl_map_destroy(struct pl_map *map);
@@ -126,7 +124,8 @@ int pl_obj_find_rebuild(struct pl_map *map,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size);
+			uint32_t *shard_id, unsigned int array_size,
+			int myrank);
 
 int pl_obj_find_reint(struct pl_map *map,
 		      struct daos_obj_md *md,
@@ -136,7 +135,15 @@ int pl_obj_find_reint(struct pl_map *map,
 
 typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
 
-int pl_select_leader(daos_unit_oid_t *oid, int nr, bool for_tgt_id,
-		     pl_get_shard_t pl_get_shard, void *data, uint32_t *leader);
+static inline struct pl_obj_shard *
+pl_obj_get_shard(void *data, int idx)
+{
+	struct pl_obj_layout	*layout = data;
+
+	return &layout->ol_shards[idx];
+}
+
+int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 #endif /* __DAOS_PLACEMENT_H__ */

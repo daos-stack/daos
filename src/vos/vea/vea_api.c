@@ -384,6 +384,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	if (d_list_empty(resrvd_list))
 		return 0;
 
+	vfe.vfe_blk_off = 0;
 	vfe.vfe_blk_cnt = 0;
 
 	d_list_for_each_entry(resrvd, resrvd_list, vre_link) {
@@ -402,26 +403,25 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		seq_max = resrvd->vre_hint_seq;
 		off_p = resrvd->vre_blk_off + resrvd->vre_blk_cnt;
 
-		if (vfe.vfe_blk_cnt == 0) {
-			vfe.vfe_blk_off = resrvd->vre_blk_off;
-			vfe.vfe_blk_cnt = resrvd->vre_blk_cnt;
-		} else if (vfe.vfe_blk_off + vfe.vfe_blk_cnt ==
-			   resrvd->vre_blk_off) {
+		if (vfe.vfe_blk_off + vfe.vfe_blk_cnt == resrvd->vre_blk_off) {
 			vfe.vfe_blk_cnt += resrvd->vre_blk_cnt;
-		} else if (vfe.vfe_blk_cnt != 0) {
+			continue;
+		}
+
+		if (vfe.vfe_blk_cnt != 0) {
 			rc = publish ? persistent_alloc(vsi, &vfe) :
 				       compound_free(vsi, &vfe, flags);
-			vfe.vfe_blk_cnt = 0;
 			if (rc)
 				goto error;
-
 		}
+
+		vfe.vfe_blk_off = resrvd->vre_blk_off;
+		vfe.vfe_blk_cnt = resrvd->vre_blk_cnt;
 	}
 
 	if (vfe.vfe_blk_cnt != 0) {
 		rc = publish ? persistent_alloc(vsi, &vfe) :
 			       compound_free(vsi, &vfe, flags);
-		vfe.vfe_blk_cnt = 0;
 		if (rc)
 			goto error;
 	}

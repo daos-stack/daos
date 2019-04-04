@@ -39,7 +39,7 @@
 #define SMD_STAB_ORDER 72
 
 static int
-stab_df_hkey_size(struct btr_instance *tins)
+stab_df_hkey_size(void)
 {
 	return sizeof(int);
 }

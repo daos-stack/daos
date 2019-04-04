@@ -36,6 +36,7 @@
 #include <daos/drpc_modules.h>
 
 #include "srv_internal.h"
+#include "srv.pb-c.h"
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
@@ -60,28 +61,88 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 #undef X
 
 static void
-mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
+process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
 {
-	Drpc__Response *resp;
+	Mgmt__DaosRank	*pb_rank = NULL;
 
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		D_ERROR("Failed to allocate response\n");
+	mgmt__daos_response__init(daos_resp);
+
+	/* Unpack the daos request from the drpc call body */
+	pb_rank = mgmt__daos_rank__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (pb_rank == NULL) {
+		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("Failed to extract rank from request\n");
+
 		return;
 	}
 
-	drpc__response__init(resp);
-	resp->sequence = request->sequence;
-	resp->status = DRPC__STATUS__SUCCESS;
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to kill rank (%u) on pool (%s)\n",
+		pb_rank->rank, pb_rank->pool_uuid);
 
-	*response = resp;
-	D_DEBUG(DB_MGMT, "empty successful response set in mgmt drpc hdlr\n");
+	/* TODO: do something with request and populate daos response status */
+
+	mgmt__daos_rank__free_unpacked(pb_rank, NULL);
+}
+
+static void
+process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DaosResponse	*daos_resp = NULL;
+	uint8_t			*body = NULL;
+	size_t			len = 0;
+
+	D_ALLOC_PTR(daos_resp);
+	if (daos_resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+
+		return;
+	}
+
+	switch (drpc_req->method) {
+	case DRPC_METHOD_MGMT_KILL_RANK:
+		/**
+		 * Process drpc request and populate daos response,
+		 * command errors should be indicated inside daos response.
+		 */
+		process_killrank_request(drpc_req, daos_resp);
+
+		len = mgmt__daos_response__get_packed_size(daos_resp);
+		D_ALLOC(body, len);
+		if (body == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate drpc response body\n");
+
+			break;
+		}
+
+		if (mgmt__daos_response__pack(daos_resp, body) != len) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Unexpected num bytes for daos resp\n");
+
+			break;
+		}
+
+		/* Populate drpc response body with packed daos response */
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+
+		break;
+	default:
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
+		D_ERROR("Unknown method\n");
+	}
+
+	D_FREE(daos_resp);
 }
 
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
 	{
 		.module_id = DRPC_MODULE_MGMT,
-		.handler = mgmt_drpc_handler
+		.handler = process_drpc_request
 	},
 	{
 		.module_id = 0,

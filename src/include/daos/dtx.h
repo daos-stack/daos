@@ -39,14 +39,19 @@ struct daos_tx_id {
 };
 
 static inline void
-daos_generate_dti(struct daos_tx_id *dti)
+daos_dti_gen(struct daos_tx_id *dti, bool zero)
 {
-	uuid_generate(dti->dti_uuid);
-	dti->dti_sec = time(NULL);
+	if (zero) {
+		memset(dti, 0, sizeof(*dti));
+	} else {
+		/* It will be replaced by HLC when it is ready. */
+		uuid_generate(dti->dti_uuid);
+		dti->dti_sec = time(NULL);
+	}
 }
 
 static inline void
-daos_copy_dti(struct daos_tx_id *des, struct daos_tx_id *src)
+daos_dti_copy(struct daos_tx_id *des, struct daos_tx_id *src)
 {
 	if (src != NULL)
 		*des = *src;
@@ -63,7 +68,16 @@ enum daos_ops_intent {
 	DAOS_INTENT_UPDATE	= 2,	/* write/insert */
 	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
 	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
-	DAOS_INTENT_PROBE	= 5,	/* check aborted or not */
+	DAOS_INTENT_CHECK	= 5,	/* check aborted or not */
+};
+
+enum daos_dtx_alb {
+	/* unavailable case */
+	ALB_UNAVAILABLE		= 0,
+	/* available, no (or not care) pending modification */
+	ALB_AVAILABLE_CLEAN	= 1,
+	/* available but with dirty modification or garbage */
+	ALB_AVAILABLE_DIRTY	= 2,
 };
 
 #endif /* __DAOS_DTX_H__ */

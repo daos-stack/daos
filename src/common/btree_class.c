@@ -213,7 +213,7 @@ nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 }
 
 static int
-nv_hkey_size(struct btr_instance *tins)
+nv_hkey_size(void)
 {
 	return sizeof(uint32_t);
 }
@@ -558,7 +558,7 @@ uv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
 }
 
 static int
-uv_hkey_size(struct btr_instance *tins)
+uv_hkey_size(void)
 {
 	return sizeof(uuid_t);
 }
@@ -1077,7 +1077,7 @@ kv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
 }
 
 static int
-kv_hkey_size(struct btr_instance *tins)
+kv_hkey_size(void)
 {
 	return sizeof(uint64_t);
 }

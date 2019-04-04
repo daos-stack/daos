@@ -31,6 +31,25 @@ import (
 	"github.com/pkg/errors"
 )
 
+// cliOptions struct defined flags that can be used when invoking daos_server.
+type cliOptions struct {
+	Port        uint16             `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string             `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string             `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string            `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16             `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Targets     int                `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
+	XShelpernr  int                `short:"x" long:"xshelpernr" default:"2" description:"number of helper XS per VOS target (default 2)"`
+	Firstcore   int                `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
+	Group       string             `short:"g" long:"group" description:"Server group name"`
+	Attach      *string            `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string            `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
+	PrepNvme    PrepNvmeCommand    `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
+}
+
 // ShowStorageCommand is the struct representing the command to list storage.
 // Retrieves and prints details of locally attached SCM and NVMe storage.
 type ShowStorageCommand struct{}
@@ -89,7 +108,7 @@ type PrepNvmeCommand struct {
 func (p *PrepNvmeCommand) Execute(args []string) error {
 	ok, usr := common.CheckSudo()
 	if !ok {
-		return errors.New("This subcommand must be run as root or sudo!")
+		return errors.New("subcommand must be run as root or sudo")
 	}
 
 	// falls back to sudoer or root if TargetUser is unspecified

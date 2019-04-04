@@ -37,7 +37,6 @@
 #include <daos/lru.h>
 #include "vos_layout.h"
 
-#define OT_BTREE_ORDER 20
 #define LRU_CACHE_BITS 16
 
 /**
