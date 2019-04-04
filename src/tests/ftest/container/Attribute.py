@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
 import WriteHostFile
+import AgentUtils
 from GeneralUtils import DaosTestError
 
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -84,6 +85,7 @@ class ContainerAttributeTest(Test):
     Tests DAOS container attribute get/set/list.
     """
     def setUp(self):
+        self.agent_sessions = None
         self.pool = None
         self.container = None
         self.hostlist = None
@@ -100,6 +102,7 @@ class ContainerAttributeTest(Test):
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
+        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.Context)
@@ -120,6 +123,8 @@ class ContainerAttributeTest(Test):
             if self.container:
                 self.container.close()
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     def create_data_set(self):
