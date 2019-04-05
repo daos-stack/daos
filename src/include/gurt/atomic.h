@@ -52,7 +52,7 @@
 
 /* stdatomic interface for compare_and_exchange doesn't quite align */
 #define atomic_compare_exchange(ptr, oldvalue, newvalue) \
-	atomic_compare_exchange_weak(ptr, &oldvalue, newvalue, \
+	atomic_compare_exchange_weak_explicit(ptr, &oldvalue, newvalue, \
 				memory_order_relaxed, memory_order_relaxed)
 #define atomic_store_release(ptr, value) \
 	atomic_store_explicit(ptr, value, memory_order_release)
