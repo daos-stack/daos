@@ -1,0 +1,58 @@
+#
+# Copyright 2018, Intel Corporation
+#
+# 'recipe' for Docker to build an RPM
+#
+
+# Pull base image
+FROM centos:7
+MAINTAINER Brian J. Murrell <brian.murrell@intel.com>
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Update distribution
+#Nothing to do for CentOS
+
+# Install basic tools
+RUN yum install -y epel-release
+RUN yum install -y mock make rpm-build curl createrepo rpmlint git
+
+# Add build user (to keep rpmbuild happy)
+ENV USER build
+ENV PASSWD build
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+# add the user to the mock group so it can run mock
+RUN usermod -a -G mock $USER
+
+# mock in Docker needs to use the old-chroot option
+RUN echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
+
+RUN echo -e "config_opts['yum.conf'] += \"\"\"\n\
+[openpa]\n\
+name=openpa\n\
+baseurl=https://build.hpdd.intel.com/job/daos-stack/job/openpa/job/master/lastSuccessfulBuild/artifact/artifacts/\n\
+enabled=1\n\
+gpgcheck = False\n\
+\n\
+[libfabric]\n\
+name=libfabric\n\
+baseurl=https://build.hpdd.intel.com/job/daos-stack/job/libfabric/job/master/lastSuccessfulBuild/artifact/artifacts/\n\
+enabled=1\n\
+gpgcheck = False\n\
+[pmix]\n\
+name=pmix\n\
+baseurl=https://build.hpdd.intel.com/job/daos-stack/job/pmix/job/master/lastSuccessfulBuild/artifact/artifacts/\n\
+enabled=1\n\
+gpgcheck = False\n\
+[ompi]\n\
+name=ompi\n\
+baseurl=https://build.hpdd.intel.com/job/daos-stack/job/ompi/job/master/lastSuccessfulBuild/artifact/artifacts/\n\
+enabled=1\n\
+gpgcheck = False\n\
+[mercury]\n\
+name=mercury\n\
+baseurl=https://build.hpdd.intel.com/job/daos-stack/job/mercury/job/master/lastSuccessfulBuild/artifact/artifacts/\n\
+enabled=1\n\
+gpgcheck = False\n\"\"\"" >> /etc/mock/default.cfg

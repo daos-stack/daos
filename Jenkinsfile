@@ -65,7 +65,9 @@ def singleNodeTest(test_mode) {
                            else
                                rc=\\\${PIPESTATUS[0]}
                                echo \"run_test.sh exited failure with \\\$rc\"
-                           fi"
+                           fi
+                           exit \\\$rc"
+                       rc=\${PIPESTATUS[0]}
                        mkdir -p install/Linux/TESTING/
                        scp -i ci_key -r jenkins@\$NODE:\$CART_BASE/install/Linux/TESTING/testLogs \
                                         install/Linux/TESTING/
@@ -91,7 +93,6 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
-        timestamps ()
     }
 
     stages {
@@ -158,6 +159,40 @@ pipeline {
 	     */
             //failFast true
             parallel {
+                stage('Build RPM on CentOS 7') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-mockbuild.centos:7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs  '--build-arg UID=$(id -u)'
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        sh '''rm -rf artifacts/
+                              mkdir -p artifacts/
+                              if make srpm; then
+                                  if make mockbuild; then
+                                      (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
+                                      createrepo artifacts/
+                                  else
+                                      rc=\${PIPESTATUS[0]}
+                                      (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
+                                      cp -af _topdir/SRPMS artifacts/
+                                      exit \$rc
+                                  fi
+                              else
+                                  exit \${PIPESTATUS[0]}
+                              fi'''
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'artifacts/**'
+                        }
+                    }
+
+                }
                 stage('Build on CentOS 7') {
                     agent {
                         dockerfile {

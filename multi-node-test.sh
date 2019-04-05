@@ -127,7 +127,7 @@ while [ $i -gt 0 ]; do
     let i-=1
 done' EXIT
 
-CART_BASE=${SL_OMPI_PREFIX%/install/*}
+CART_BASE=${SL_PREFIX%/install/*}
 if ! pdsh -l jenkins -R ssh -S \
           -w "$(IFS=','; echo "${nodes[*]:0:$1}")" "set -ex
 ulimit -c unlimited

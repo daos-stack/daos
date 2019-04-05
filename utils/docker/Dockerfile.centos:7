@@ -43,32 +43,32 @@
 FROM centos:7
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
-# Build arguments can be set via -build-arg
-# set NOBUILD to disable git clone & build
-ARG NOBUILD
+# Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
-ARG DONT_USE_RPMS=true
-
 
 # for good measure, clean the metadata
 RUN yum clean metadata
 
 # Install basic tools
 RUN yum -y install epel-release
-RUN yum -y install git gcc gcc-c++ make cmake golang libtool scons boost-devel   \
-                   libuuid-devel openssl-devel libevent-devel libtool-ltdl-devel \
-                   libcmocka libcmocka-devel readline-devel                      \
-                   doxygen pandoc flex patch nasm yasm ninja-build meson         \
-                   CUnit-devel libaio-devel python-pep8 lcov                     \
-                   python clang-analyzer sg3_utils libiscsi-devel                \
-                   numactl-devel doxygen graphviz pylint python2-pygithub        \
-                   python34 python34-pylint python34-PyYAML.x86_64 PyYAML        \
-                   python2-paramiko python34-paramiko valgrind rsync             \
-                   libyaml-devel file ShellCheck yum-plugin-copr
+RUN yum -y install                                                 \
+           git gcc gcc-c++ make cmake golang libtool boost-devel   \
+           libuuid-devel openssl-devel libevent-devel              \
+           libtool-ltdl-devel libcmocka-devel readline-devel       \
+           doxygen pandoc flex patch nasm yasm ninja-build meson   \
+           CUnit-devel libaio-devel clang-analyzer sg3_utils       \
+           libiscsi-devel numactl-devel graphviz                   \
+           libyaml-devel                                           \
+           scons pylint file ShellCheck python-pep8 lcov  python   \
+           python2-pygithub yum-plugin-copr
+
 RUN yum -y copr enable jhli/ipmctl
 RUN yum -y copr enable jhli/safeclib
-RUN yum -y install libsafec libipmctl-devel
+RUN yum -y install libipmctl-devel
+
+RUN yum -y install python34 python34-pylint python34-PyYAML.x86_64 \
+           PyYAML python2-paramiko python34-paramiko valgrind rsync
 
 # Add CaRT user
 ENV USER cart
@@ -79,6 +79,9 @@ RUN echo "$USER:$PASSWD" | chpasswd
 # Switch to new user
 USER $USER
 WORKDIR /home/$USER
+
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
 
 # Fetch CaRT code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/cart.git; fi
