@@ -35,7 +35,7 @@ dfuse_entry_cb(struct dfuse_request *request)
 {
 	struct entry_req		*desc = container_of(request, struct entry_req, request);
 	struct dfuse_projection_info	*fs_handle = desc->request.fsh;
-	struct dfuse_entry_out		*out = crt_reply_get(request->rpc);
+	struct dfuse_entry_out		*out = request->out;
 	struct fuse_entry_param		entry = {0};
 	d_list_t			*rlink;
 	bool				keep_ref = false;
@@ -48,7 +48,6 @@ dfuse_entry_cb(struct dfuse_request *request)
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
 
-	desc->ie->gah = out->gah;
 	desc->ie->stat = out->stat;
 	DFUSE_TRA_UP(desc->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
@@ -57,8 +56,6 @@ dfuse_entry_cb(struct dfuse_request *request)
 				       &desc->ie->ie_htl);
 
 	if (rlink == &desc->ie->ie_htl) {
-		DFUSE_TRA_INFO(desc->ie, "New file %lu " GAH_PRINT_STR,
-			       entry.ino, GAH_PRINT_VAL(out->gah));
 		desc->ie = NULL;
 		keep_ref = true;
 	} else {
@@ -69,9 +66,6 @@ dfuse_entry_cb(struct dfuse_request *request)
 		 * the parent anyway, so keep that one, but drop one in the call
 		 * to ie_close().
 		 */
-		DFUSE_TRA_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
-			       "Existing file %lu " GAH_PRINT_STR,
-			       entry.ino, GAH_PRINT_VAL(out->gah));
 		atomic_fetch_sub(&desc->ie->ie_ref, 1);
 		keep_ref = true;
 		ie_close(fs_handle, desc->ie);
@@ -88,18 +82,13 @@ out:
 
 static const struct dfuse_request_api api = {
 	.on_result	= dfuse_entry_cb,
-	.gah_offset	= offsetof(struct dfuse_gah_string_in, gah),
-	.have_gah	= true,
 };
-
-#define STAT_KEY lookup
 
 void
 dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct TYPE_NAME		*desc = NULL;
-	struct dfuse_gah_string_in	*in;
 	int rc;
 
 	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
@@ -111,8 +100,6 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	desc->request.ir_inode_num = parent;
 
-	in = crt_req_get(desc->request.rpc);
-	strncpy(in->name.name, name, NAME_MAX);
 	strncpy(desc->ie->name, name, NAME_MAX);
 	desc->ie->parent = parent;
 	desc->da = fs_handle->lookup_da;

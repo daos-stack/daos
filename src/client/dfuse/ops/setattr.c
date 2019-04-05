@@ -29,12 +29,10 @@
 #define TYPE_NAME common_req
 #include "dfuse_ops.h"
 
-#define STAT_KEY setattr
-
 static bool
 dfuse_setattr_result_fn(struct dfuse_request *request)
 {
-	struct dfuse_attr_out *out = crt_reply_get(request->rpc);
+	struct dfuse_attr_out *out = request->out;
 
 	DFUSE_REQUEST_RESOLVE(request, out);
 
@@ -49,8 +47,6 @@ dfuse_setattr_result_fn(struct dfuse_request *request)
 
 static const struct dfuse_request_api setattr_api = {
 	.on_result	= dfuse_setattr_result_fn,
-	.gah_offset	= offsetof(struct dfuse_setattr_in, gah),
-	.have_gah	= true,
 };
 
 void
@@ -58,9 +54,8 @@ dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		 struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_file_handle		*handle = NULL;
+	struct dfuse_file_handle	*handle = NULL;
 	struct TYPE_NAME		*desc = NULL;
-	struct dfuse_setattr_in		*in;
 	int rc;
 
 	if (fi)
@@ -79,10 +74,6 @@ dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		desc->request.ir_ht = RHS_INODE_NUM;
 		desc->request.ir_inode_num = ino;
 	}
-
-	in = crt_req_get(desc->request.rpc);
-	in->to_set = to_set;
-	in->stat = *attr;
 
 	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)

@@ -26,8 +26,6 @@
 
 static const struct dfuse_request_api api = {
 	.on_result	= dfuse_gen_cb,
-	.have_gah	= true,
-	.gah_offset	= offsetof(struct dfuse_unlink_in, gah),
 };
 
 static void
@@ -35,7 +33,6 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_request		*request;
-	struct dfuse_unlink_in		*in;
 	int rc;
 	int ret = EIO;
 
@@ -53,31 +50,12 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 	request->req = req;
 	request->ir_api = &api;
 
-	rc = crt_req_create(fs_handle->proj.crt_ctx, NULL,
-			    FS_TO_OP(fs_handle, unlink), &request->rpc);
-	if (rc || !request->rpc) {
-		DFUSE_LOG_ERROR("Could not create request, rc = %d", rc);
-		D_GOTO(out_err, ret = EIO);
-	}
-
 	request->ir_inode_num = parent;
 	request->ir_ht = RHS_INODE_NUM;
 
-	in = crt_req_get(request->rpc);
-	strncpy(in->name.name, name, NAME_MAX);
-	if (dir)
-		in->flags = 1;
-
-	/* Find the GAH of the parent */
-	rc = find_gah(fs_handle, parent, &in->gah);
-	if (rc != 0)
-		D_GOTO(out_decref, ret = rc);
-
-	crt_req_addref(request->rpc);
-
 	rc = dfuse_fs_send(request);
 	if (rc != 0) {
-		D_GOTO(out_decref, ret = EIO);
+		D_GOTO(out_err, ret = EIO);
 	}
 
 	return;
@@ -85,9 +63,6 @@ dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
 out_no_request:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
 	return;
-
-out_decref:
-	crt_req_decref(request->rpc);
 
 out_err:
 	DFUSE_REPLY_ERR(request, ret);

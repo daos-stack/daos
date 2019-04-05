@@ -38,7 +38,6 @@
 #include <string.h>
 #include "dfuse_log.h"
 #include <gurt/list.h>
-#include <cart/api.h>
 #include "intercept.h"
 #include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
@@ -50,11 +49,8 @@ static bool ioil_initialized;
 static __thread int saved_errno;
 static vector_t fd_table;
 static const char *cnss_prefix;
-static crt_context_t crt_ctx;
 static int cnss_id;
-static struct dfuse_service_group ionss_grp;
 static struct dfuse_projection *projections;
-static struct crt_proto_format *dfuse_proto;
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -189,33 +185,6 @@ ioil_init(void)
 		return;
 	}
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
-	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not initialize crt, rc = %d,"
-				" disabling kernel bypass", rc);
-		return;
-	}
-
-	rc = crt_context_create(&crt_ctx);
-	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not create crt context, rc = %d,"
-				" disabling kernel bypass", rc);
-		crt_finalize();
-		return;
-	}
-
-	/* TODO: This needs to call the crt_proto_query() to ensure the server
-	 * supports the same version of the protocol
-	 */
-	rc = dfuse_io_register(&dfuse_proto, NULL);
-	if (rc != 0) {
-		crt_context_destroy(crt_ctx, 0);
-		crt_finalize();
-		DFUSE_LOG_ERROR("Could not create crt context, rc = %d,"
-				" disabling kernel bypass", rc);
-		return;
-	}
-
 	DFUSE_LOG_INFO("Using IONSS: cnss_prefix at %s, cnss_id is %d",
 		       cnss_prefix, cnss_id);
 
@@ -228,9 +197,6 @@ static __attribute__((destructor)) void
 ioil_fini(void)
 {
 	if (ioil_initialized) {
-		crt_group_detach(ionss_grp.dest_grp);
-		crt_context_destroy(crt_ctx, 0);
-		crt_finalize();
 		free(projections);
 	}
 	ioil_initialized = false;
@@ -267,11 +233,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		return false;
 	}
 
-	DFUSE_LOG_INFO("IOF file opened fd=%d." GAH_PRINT_STR ", bypass=%s",
-		       fd, GAH_PRINT_VAL(gah_info.gah), bypass_status[status]);
-	entry->common.gah = gah_info.gah;
 	entry->common.projection = &projections[gah_info.cli_fs_id];
-	entry->common.ep = entry->common.projection->grp->psr_ep;
 	entry->pos = 0;
 	entry->flags = flags;
 	entry->status = DFUSE_IO_BYPASS;

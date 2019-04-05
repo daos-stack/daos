@@ -23,36 +23,15 @@
 
 #include "dfuse_log.h"
 
-#include <cart/api.h>
-
 #include "dfuse_fs.h"
-
-static int
-dfuse_check_complete(void *arg)
-{
-	struct dfuse_tracker *tracker = arg;
-
-	return dfuse_tracker_test(tracker);
-}
 
 /* Progress until all callbacks are invoked */
 void
-dfuse_wait(crt_context_t crt_ctx, struct dfuse_tracker *tracker)
+dfuse_wait(void *arg, struct dfuse_tracker *tracker)
 {
-	int			rc;
-
 	for (;;) {
-		rc = crt_progress(crt_ctx, 1000 * 1000, dfuse_check_complete,
-				  tracker);
 
 		if (dfuse_tracker_test(tracker))
 			return;
-
-		/* TODO: Determine the best course of action on error.  In an
-		 * audit of cart code, it seems like this would only happen
-		 * under somewhat catostrophic circumstances.
-		 */
-		if (rc != 0 && rc != -DER_TIMEDOUT)
-			DFUSE_LOG_ERROR("crt_progress failed rc: %d", rc);
 	}
 }

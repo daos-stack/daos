@@ -130,7 +130,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t flags)
 	fuse_ops->release = dfuse_cb_release;
 	fuse_ops->opendir = dfuse_cb_opendir;
 	fuse_ops->releasedir = dfuse_cb_releasedir;
-	fuse_ops->readdir = dfuse_cb_readdir;
 	fuse_ops->ioctl = dfuse_cb_ioctl;
 	fuse_ops->destroy = dfuse_fuse_destroy;
 	fuse_ops->symlink = dfuse_cb_symlink;

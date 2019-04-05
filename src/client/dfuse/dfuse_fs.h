@@ -26,13 +26,10 @@
 
 #include <stdbool.h>
 #include <sched.h>
-#include <cart/types.h>
-#include <gurt/atomic.h>
 #include "dfuse_gah.h"
+#include <gurt/atomic.h>
 
 struct dfuse_service_group {
-	crt_group_t		*dest_grp; /* Server group */
-	crt_endpoint_t		psr_ep;    /* Server PSR endpoint */
 	bool			enabled;   /* Indicates group is available */
 };
 
@@ -43,10 +40,6 @@ struct dfuse_service_group {
 struct dfuse_projection {
 	/** Server group info */
 	struct dfuse_service_group	*grp;
-	/** Protocol used for I/O RPCs */
-	struct crt_proto_format		*io_proto;
-	/** context to use */
-	crt_context_t			crt_ctx;
 	/** bulk threshold */
 	uint32_t			max_iov_write;
 	/** max write size */
@@ -63,7 +56,6 @@ struct dfuse_projection {
 struct dfuse_file_common {
 	struct dfuse_projection	*projection;
 	struct ios_gah		gah;
-	crt_endpoint_t		ep;
 };
 
 /* Tracks remaining events for completion */
@@ -100,7 +92,7 @@ static inline void dfuse_tracker_wait(struct dfuse_tracker *tracker)
 }
 
 /* Progress until all events have signaled */
-void dfuse_wait(crt_context_t, struct dfuse_tracker *);
+void dfuse_wait(void *, struct dfuse_tracker *);
 
 /* Progress until all events have signaled */
 static inline void dfuse_fs_wait(struct dfuse_projection *dfuse_state,
@@ -110,7 +102,7 @@ static inline void dfuse_fs_wait(struct dfuse_projection *dfuse_state,
 	 * this function, else just wait
 	 */
 	if (!dfuse_state->progress_thread) {
-		dfuse_wait(dfuse_state->crt_ctx, tracker);
+		dfuse_wait(NULL, tracker);
 		return;
 	}
 

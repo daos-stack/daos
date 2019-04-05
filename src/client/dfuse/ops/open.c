@@ -28,7 +28,7 @@ static bool
 dfuse_open_ll_cb(struct dfuse_request *request)
 {
 	struct dfuse_file_handle	*handle = container_of(request, struct dfuse_file_handle, open_req);
-	struct dfuse_open_out	*out = crt_reply_get(request->rpc);
+	struct dfuse_open_out	*out = request->out;
 	struct fuse_file_info	fi = {0};
 
 	DFUSE_TRA_DEBUG(handle, "cci_rc %d rc %d err %d",
@@ -44,8 +44,6 @@ dfuse_open_ll_cb(struct dfuse_request *request)
 	 */
 
 	fi.fh = (uint64_t)handle;
-	handle->common.gah = out->gah;
-	handle->common.ep = request->rpc->cr_ep;
 
 	DFUSE_REPLY_OPEN(&handle->open_req, fi);
 
@@ -59,8 +57,6 @@ out_err:
 
 static const struct dfuse_request_api api = {
 	.on_result	= dfuse_open_ll_cb,
-	.gah_offset	= offsetof(struct dfuse_open_in, gah),
-	.have_gah	= true,
 };
 
 void
@@ -68,7 +64,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	struct dfuse_file_handle *handle = NULL;
-	struct dfuse_open_in *in;
 	int rc;
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
@@ -101,11 +96,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	handle->open_req.ir_api = &api;
 	handle->inode_num = ino;
 
-	in = crt_req_get(handle->open_req.rpc);
-
 	handle->open_req.ir_inode_num = ino;
 
-	in->flags = fi->flags;
 	DFUSE_TRA_INFO(handle, "flags 0%o", fi->flags);
 
 	LOG_FLAGS(handle, fi->flags);

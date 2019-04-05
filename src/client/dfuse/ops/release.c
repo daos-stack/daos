@@ -27,7 +27,7 @@
 static bool
 dfuse_release_cb(struct dfuse_request *request)
 {
-	struct dfuse_status_out *out = crt_reply_get(request->rpc);
+	struct dfuse_status_out *out = request->out;
 
 	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
@@ -42,8 +42,6 @@ dfuse_release_cb(struct dfuse_request *request)
 
 static const struct dfuse_request_api api = {
 	.on_result	= dfuse_release_cb,
-	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
-	.have_gah	= true,
 };
 
 static void

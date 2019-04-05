@@ -27,13 +27,8 @@
 static bool
 statfs_cb(struct dfuse_request *request)
 {
-	struct dfuse_data_out *out = crt_reply_get(request->rpc);
+	struct dfuse_data_out *out = request->out;
 
-	/* Drop the two refs that this code has taken, one from the
-	 * req_create() call and a second from addref
-	 */
-	crt_req_decref(request->rpc);
-	crt_req_decref(request->rpc);
 	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
 		D_GOTO(out_err, 0);
@@ -51,8 +46,6 @@ out_err:
 
 static const struct dfuse_request_api api = {
 	.on_result	= statfs_cb,
-	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
-	.have_gah	= true,
 };
 
 void
@@ -77,22 +70,6 @@ dfuse_cb_statfs(fuse_req_t req, fuse_ino_t ino)
 	request->req = req;
 	request->ir_api = &api;
 	request->ir_ht = RHS_ROOT;
-
-	rc = crt_req_create(fs_handle->proj.crt_ctx, NULL,
-			    FS_TO_OP(fs_handle, statfs), &request->rpc);
-	if (rc || !request->rpc) {
-		DFUSE_TRA_ERROR(request,
-				"Could not create request, rc = %d",
-				rc);
-		D_GOTO(out_err, ret = EIO);
-	}
-
-	/* Add a second ref as that's what the dfuse_fs_send() function
-	 * expects.  In the case of failover the RPC might be completed,
-	 * and a copy made the the RPC seen in statfs_cb might not be
-	 * the same one as seen here.
-	 */
-	crt_req_addref(request->rpc);
 
 	rc = dfuse_fs_send(request);
 	if (rc != 0) {

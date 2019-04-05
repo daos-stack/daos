@@ -30,12 +30,8 @@
 #include "dfuse_ops.h"
 
 static const struct dfuse_request_api api = {
-	.gah_offset	= offsetof(struct dfuse_two_string_in, common.gah),
 	.on_result	= dfuse_entry_cb,
-	.have_gah	= true,
 };
-
-#define STAT_KEY symlink
 
 void
 dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
@@ -43,7 +39,6 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct entry_req		*desc = NULL;
-	struct dfuse_two_string_in	*in;
 	int rc;
 
 	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
@@ -51,13 +46,9 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 	if (rc)
 		D_GOTO(err, rc);
 
-	in = crt_req_get(desc->request.rpc);
-
-	strncpy(in->common.name.name, name, NAME_MAX);
 	D_STRNDUP(desc->dest, link, 4096);
 	if (!desc->dest)
 		D_GOTO(err, rc = ENOMEM);
-	in->oldpath = desc->dest;
 
 	desc->da = fs_handle->symlink_da;
 	strncpy(desc->ie->name, name, NAME_MAX);

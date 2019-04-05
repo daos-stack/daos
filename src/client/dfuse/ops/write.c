@@ -28,17 +28,13 @@ static bool
 write_cb(struct dfuse_request *request)
 {
 	struct dfuse_wb		*wb = container_of(request, struct dfuse_wb, wb_req);
-	struct dfuse_writex_out	*out = crt_reply_get(request->rpc);
-	struct dfuse_writex_in	*in = crt_req_get(request->rpc);
+	struct dfuse_writex_out	*out = request->out;
 
 	if (out->err) {
 		/* Convert the error types, out->err is a CaRT error code
 		 * so translate it to a errno we can pass back to FUSE.
 		 */
 		DFUSE_TRA_ERROR(wb, "Error from target %d", out->err);
-
-		if (in->data_bulk)
-			wb->failure = true;
 
 		D_GOTO(err, request->rc = EIO);
 	}
@@ -62,25 +58,14 @@ err:
 
 static const struct dfuse_request_api api = {
 	.on_result = write_cb,
-	.gah_offset = offsetof(struct dfuse_writex_in, gah),
-	.have_gah = true,
+
 };
 
 static void
 dfuse_writex(size_t len, off_t position, struct dfuse_wb *wb)
 {
-	struct dfuse_writex_in *in = crt_req_get(wb->wb_req.rpc);
 	int rc;
 
-	in->xtvec.xt_len = len;
-	if (len <= wb->wb_req.fsh->proj.max_iov_write) {
-		d_iov_set(&in->data, wb->lb.buf, len);
-	} else {
-		in->bulk_len = len;
-		in->data_bulk = wb->lb.handle;
-	}
-
-	in->xtvec.xt_off = position;
 	wb->wb_req.ir_api = &api;
 
 	rc = dfuse_fs_send(&wb->wb_req);
@@ -114,8 +99,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 
 	wb->wb_req.req = req;
 	wb->wb_req.ir_file = handle;
-
-	memcpy(wb->lb.buf, buff, len);
 
 	dfuse_writex(len, position, wb);
 
@@ -162,7 +145,6 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	wb->wb_req.ir_file = handle;
 
 	dst.buf[0].size = len;
-	dst.buf[0].mem = wb->lb.buf;
 	rc = fuse_buf_copy(&dst, bufv, 0);
 	if (rc != len)
 		D_GOTO(err, rc = EIO);

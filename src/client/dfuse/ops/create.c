@@ -27,9 +27,9 @@
 static bool
 dfuse_create_ll_cb(struct dfuse_request *request)
 {
-	struct dfuse_file_handle		*handle = container_of(request, struct dfuse_file_handle, creat_req);
+	struct dfuse_file_handle	*handle = container_of(request, struct dfuse_file_handle, creat_req);
 	struct dfuse_projection_info	*fs_handle = request->fsh;
-	struct dfuse_create_out		*out = crt_reply_get(request->rpc);
+	struct dfuse_create_out		*out = request->out;
 	struct fuse_file_info		fi = {0};
 	struct fuse_entry_param		entry = {0};
 	d_list_t			*rlink;
@@ -52,14 +52,11 @@ dfuse_create_ll_cb(struct dfuse_request *request)
 	entry.ino = entry.attr.st_ino;
 
 	fi.fh = (uint64_t)handle;
-	handle->common.gah = out->gah;
 	handle->inode_num = entry.ino;
-	handle->common.ep = request->rpc->cr_ep;
 
 	/* Populate the inode table with the GAH from the duplicate file
 	 * so that it can still be accessed after the file is closed
 	 */
-	handle->ie->gah = out->igah;
 	handle->ie->stat = out->stat;
 	DFUSE_TRA_UP(handle->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
@@ -68,9 +65,6 @@ dfuse_create_ll_cb(struct dfuse_request *request)
 				       &handle->ie->ie_htl);
 
 	if (rlink == &handle->ie->ie_htl) {
-		DFUSE_TRA_INFO(handle->ie, "New file %lu " GAH_PRINT_STR,
-			       entry.ino, GAH_PRINT_VAL(out->gah));
-
 		handle->ie = NULL;
 		keep_ref = true;
 	} else {
@@ -89,9 +83,6 @@ dfuse_create_ll_cb(struct dfuse_request *request)
 		 * the file, so even if it had been unlinked it would still
 		 * exist and thus the inode was unlikely to be reused.
 		 */
-		DFUSE_TRA_INFO(request, "Existing file rlink %p %lu "
-			       GAH_PRINT_STR, rlink, entry.ino,
-			       GAH_PRINT_VAL(out->gah));
 		ie_close(fs_handle, handle->ie);
 	}
 
@@ -106,8 +97,6 @@ out_err:
 
 static const struct dfuse_request_api api = {
 	.on_result = dfuse_create_ll_cb,
-	.gah_offset = offsetof(struct dfuse_create_in, common.gah),
-	.have_gah = true,
 };
 
 void
@@ -116,7 +105,6 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	struct dfuse_file_handle *handle = NULL;
-	struct dfuse_create_in *in;
 	int rc;
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
@@ -158,13 +146,8 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	DFUSE_TRA_INFO(handle, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
-	in = crt_req_get(handle->creat_req.rpc);
 
 	handle->creat_req.ir_inode_num = parent;
-
-	strncpy(in->common.name.name, name, NAME_MAX);
-	in->mode = mode;
-	in->flags = fi->flags;
 
 	strncpy(handle->ie->name, name, NAME_MAX);
 	handle->ie->parent = parent;

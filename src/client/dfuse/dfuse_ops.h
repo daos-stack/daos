@@ -27,8 +27,6 @@
 #define STR_H(s) #s
 #define TO_STR(s) STR_H(s)
 #define TRACE_TYPE TO_STR(TYPE_NAME)
-#define TRACE_FREQ TO_STR(STAT_KEY) "_fuse_req"
-#define TRACE_REQ TO_STR(STAT_KEY) "_req"
 
 #define DFUSE_REQ_INIT(src, FSH, api, in, rc)				\
 	do {								\
@@ -43,7 +41,6 @@
 			break;						\
 		}							\
 		(src)->REQ_NAME.ir_api = &api;				\
-		in = crt_req_get((src)->REQ_NAME.rpc);			\
 	} while (0)
 
 /* Initialise a descriptor and make the dfuse_request a child of it */
@@ -61,7 +58,6 @@
 		}							\
 		(src)->REQ_NAME.ir_api = &(api);			\
 		(src)->REQ_NAME.req = fuse_req;				\
-		DFUSE_TRA_UP(&(src)->REQ_NAME, src, TRACE_REQ);		\
 	} while (0)
 
 #define CONTAINER(req) container_of(req, struct TYPE_NAME, REQ_NAME)

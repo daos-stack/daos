@@ -32,7 +32,6 @@
 
 #include "dfuse_gah.h"
 #include "dfuse_fs.h"
-#include "dfuse_bulk.h"
 #include "dfuse_da.h"
 
 #include "dfuse_common.h"
@@ -86,11 +85,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
  *
  */
 struct dfuse_state {
-	struct cnss_info *cnss_info;
-	/** CaRT RPC protocol used for metadata */
-	struct crt_proto_format		*proto;
-	/** CaRT RPC protocol used for I/O */
-	struct crt_proto_format		*io_proto;
+	struct cnss_info		*cnss_info;
 	/** CNSS Prefix.  Parent directory of projections */
 	char				*cnss_prefix;
 	/** ctrl_fs inoss directory handle */
@@ -104,14 +99,8 @@ struct dfuse_state {
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
 	struct dfuse_state		*dfuse_state;
-	struct ios_gah			gah;
 	d_list_t			link;
 	struct fuse_session		*session;
-	/** The basename of the mount point */
-	struct ios_name			mnt_dir;
-
-	/** The name of the ctrlfs directory */
-	struct ios_name			ctrl_dir;
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
@@ -129,27 +118,9 @@ struct dfuse_projection_info {
 	struct dfuse_da_type		*write_da;
 	uint32_t			max_read;
 	uint32_t			max_iov_read;
-	uint32_t			readdir_size;
 	/** Hash table of open inodes */
 	struct d_hash_table		inode_ht;
-
-	/** Held for any access/modification to a gah on any inode/file/dir */
-	pthread_mutex_t			gah_lock;
-
 };
-
-/*
- * Returns the correct RPC Type ID from the protocol registry.
- */
-#define FS_TO_OP(HANDLE, FN) \
-	(CRT_PROTO_OPC((HANDLE)->dfuse_state->proto->cpf_base,		\
-		(HANDLE)->dfuse_state->proto->cpf_ver,			\
-		DEF_RPC_TYPE(FN)))
-
-#define FS_TO_IOOP(HANDLE, IDX) \
-	(CRT_PROTO_OPC((HANDLE)->proj.io_proto->cpf_base,		\
-		(HANDLE)->proj.io_proto->cpf_ver,			\
-		IDX))
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 
@@ -378,10 +349,6 @@ struct dfuse_request_api {
 	 * returns.
 	 */
 	bool	(*on_result)(struct dfuse_request *req);
-	/** Offset of GAH in RPC input buffer */
-	off_t	gah_offset;
-	/** Set to true if gah_offset is set */
-	bool	have_gah;
 };
 
 enum dfuse_request_state {
@@ -411,12 +378,15 @@ enum dfuse_request_htype {
 struct dfuse_request {
 	/** Pointer to projection for this request. */
 	struct dfuse_projection_info	*fsh;
-	/** Pointer to the RPC for this request. */
-	crt_rpc_t			*rpc;
 	/** Fuse request for this DFUSE request, may be 0 */
 	fuse_req_t			req;
 	/** Callbacks to use for this request */
 	const struct dfuse_request_api	*ir_api;
+
+	/* Mock entry, to avoid having to call crt_req_get() in code
+	 * which doesn't have a RPC pointer.
+	 */
+	void *out;
 	/** Error status of this request.
 	 *
 	 * This is a libc error number and is set before a call to
@@ -454,7 +424,6 @@ struct dfuse_request {
 #define DFUSE_REQUEST_INIT(REQUEST, FSH)		\
 	do {						\
 		(REQUEST)->fsh = FSH;			\
-		(REQUEST)->rpc = NULL;			\
 		(REQUEST)->ir_rs = RS_INIT;		\
 		D_INIT_LIST_HEAD(&(REQUEST)->ir_list);	\
 	} while (0)
@@ -504,8 +473,6 @@ struct dfuse_request {
  */
 
 struct dfuse_inode_entry {
-	/** The GAH for this inode */
-	struct ios_gah	gah;
 	/** stat structure for this inode.
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
@@ -545,24 +512,16 @@ struct dfuse_inode_entry {
  * Describes a open directory, may be used for readdir() calls.
  */
 struct dfuse_dir_handle {
-	/** The GAH to use when accessing the directory */
-	struct ios_gah			gah;
 	/** Request for opening the directory */
 	struct dfuse_request		open_req;
 	/** Request for closing the directory */
 	struct dfuse_request		close_req;
-	/** Any RPC reference held across readdir() calls */
-	crt_rpc_t			*rpc;
-	/** Pointer to any retreived data from readdir() RPCs */
-	struct dfuse_readdir_reply	*replies;
 	int				reply_count;
 	void				*replies_base;
 	/** Set to True if the current batch of replies is the final one */
 	int				last_replies;
 	/** The inode number of the directory */
 	ino_t				inode_num;
-	/** Endpoint for this directory handle */
-	crt_endpoint_t			ep;
 
 	d_list_t dh_free_list;
 };
@@ -601,7 +560,6 @@ struct dfuse_file_handle {
 struct dfuse_rb {
 	struct dfuse_request		rb_req;
 	struct fuse_bufvec		fbuf;
-	struct dfuse_local_bulk		lb;
 	struct dfuse_da_type		*pt;
 	size_t				buf_size;
 	bool				failure;
@@ -610,7 +568,6 @@ struct dfuse_rb {
 /** Write buffer descriptor */
 struct dfuse_wb {
 	struct dfuse_request		wb_req;
-	struct dfuse_local_bulk		lb;
 	bool				failure;
 };
 
@@ -622,7 +579,6 @@ struct dfuse_wb {
 struct common_req {
 	d_list_t			list;
 	struct dfuse_request		request;
-	crt_opcode_t			opcode;
 };
 
 /** Callback structure for inode migrate RPC.
@@ -639,19 +595,14 @@ struct dfuse_inode_migrate {
  * Request for all RPC types that can return a new inode.
  */
 struct entry_req {
-	struct dfuse_inode_entry		*ie;
+	struct dfuse_inode_entry	*ie;
 	struct dfuse_request		request;
 	d_list_t			list;
-	crt_opcode_t			opcode;
 	struct dfuse_da_type		*da;
 	char				*dest;
 };
 
 /* inode.c */
-
-/* Convert from a inode to a GAH using the hash table */
-int
-find_gah(struct dfuse_projection_info *, fuse_ino_t, struct ios_gah *);
 
 int
 find_inode(struct dfuse_request *);
@@ -714,10 +665,6 @@ dfuse_cb_rmdir(fuse_req_t, fuse_ino_t, const char *);
 
 void
 dfuse_cb_opendir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
-
-void
-dfuse_cb_readdir(fuse_req_t, fuse_ino_t, size_t, off_t,
-		 struct fuse_file_info *);
 
 void
 dfuse_cb_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,

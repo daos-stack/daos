@@ -27,42 +27,7 @@
 #define POOL_NAME close_da
 #define TYPE_NAME common_req
 #define REQ_NAME request
-#define STAT_KEY release
 #include "dfuse_ops.h"
-
-/* Find a GAH from a inode, return 0 if found */
-int
-find_gah(struct dfuse_projection_info *fs_handle, ino_t ino,
-	 struct ios_gah *gah)
-{
-	struct dfuse_inode_entry *ie;
-	d_list_t *rlink;
-
-	if (ino == 1) {
-		D_MUTEX_LOCK(&fs_handle->gah_lock);
-		*gah = fs_handle->gah;
-		D_MUTEX_UNLOCK(&fs_handle->gah_lock);
-		return 0;
-	}
-
-	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
-	if (!rlink)
-		return ENOENT;
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	DFUSE_TRA_INFO(ie, "Inode %lu " GAH_PRINT_STR, ie->stat.st_ino,
-		       GAH_PRINT_VAL(ie->gah));
-
-	D_MUTEX_LOCK(&fs_handle->gah_lock);
-	*gah = ie->gah;
-	D_MUTEX_UNLOCK(&fs_handle->gah_lock);
-
-	/* Once the GAH has been copied drop the reference on the parent inode
-	 */
-	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
-	return 0;
-}
 
 int
 find_inode(struct dfuse_request *request)
@@ -79,18 +44,10 @@ find_inode(struct dfuse_request *request)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_INFO(ie, "Using inode %lu " GAH_PRINT_STR " parent %lu",
-		       ie->stat.st_ino, GAH_PRINT_VAL(ie->gah), ie->parent);
-
 	request->ir_inode = ie;
 	return 0;
 }
 
-/* Drop a reference on the GAH in the hash table
- *
- * TODO: Merge this with dfuse_forget_one()
- *
- */
 static void
 drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
@@ -129,7 +86,6 @@ void ie_close(struct dfuse_projection_info *fs_handle,
 	      struct dfuse_inode_entry *ie)
 {
 	struct TYPE_NAME	*desc = NULL;
-	struct dfuse_gah_in	*in;
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
@@ -140,17 +96,11 @@ void ie_close(struct dfuse_projection_info *fs_handle,
 
 	drop_ino_ref(fs_handle, ie->parent);
 
-	DFUSE_TRA_INFO(ie, GAH_PRINT_STR, GAH_PRINT_VAL(ie->gah));
-
 	DFUSE_REQ_INIT(desc, fs_handle, api, in, rc);
 	if (rc)
 		D_GOTO(err, 0);
 
 	DFUSE_TRA_UP(&desc->request, ie, "close_req");
-
-	D_MUTEX_LOCK(&fs_handle->gah_lock);
-	in->gah = ie->gah;
-	D_MUTEX_UNLOCK(&fs_handle->gah_lock);
 
 	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)
@@ -160,9 +110,6 @@ void ie_close(struct dfuse_projection_info *fs_handle,
 	return;
 
 err:
-	DFUSE_TRA_ERROR(ie, "Failed to close " GAH_PRINT_STR " %d",
-			GAH_PRINT_VAL(ie->gah), rc);
-
 	DFUSE_TRA_DOWN(ie);
 	if (desc)
 		dfuse_da_release(fs_handle->close_da, desc);

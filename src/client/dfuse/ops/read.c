@@ -28,7 +28,7 @@ static bool
 read_bulk_cb(struct dfuse_request *request)
 {
 	struct dfuse_rb *rb = container_of(request, struct dfuse_rb, rb_req);
-	struct dfuse_readx_out *out = crt_reply_get(request->rpc);
+	struct dfuse_readx_out *out = request->out;
 	int rc = 0;
 	size_t bytes_read = 0;
 	void *buff = NULL;
@@ -50,7 +50,6 @@ read_bulk_cb(struct dfuse_request *request)
 		bytes_read = out->data.iov_len;
 	} else if (out->bulk_len > 0) {
 		bytes_read = out->bulk_len;
-		buff = rb->lb.buf;
 	}
 
 out:
@@ -89,8 +88,6 @@ out:
 
 static const struct dfuse_request_api api = {
 	.on_result	= read_bulk_cb,
-	.gah_offset	= offsetof(struct dfuse_readx_in, gah),
-	.have_gah	= true,
 };
 
 void
@@ -99,7 +96,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 {
 	struct dfuse_file_handle *handle = (void *)fi->fh;
 	struct dfuse_projection_info *fs_handle = handle->open_req.fsh;
-	struct dfuse_readx_in *in;
 	struct dfuse_da_type *pt;
 	struct dfuse_rb *rb = NULL;
 	int rc;
@@ -122,12 +118,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	rb->rb_req.ir_api = &api;
 	rb->rb_req.ir_file = handle;
 	rb->pt = pt;
-
-	in = crt_req_get(rb->rb_req.rpc);
-
-	in->xtvec.xt_off = position;
-	in->xtvec.xt_len = len;
-	in->data_bulk = rb->lb.handle;
 
 	rc = dfuse_fs_send(&rb->rb_req);
 	if (rc != 0) {

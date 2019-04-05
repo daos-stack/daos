@@ -25,13 +25,10 @@
 #include "dfuse.h"
 #include "dfuse_da.h"
 
-int
-dfuse_fs_resend(struct dfuse_request *request);
-
 bool
 dfuse_gen_cb(struct dfuse_request *request)
 {
-	struct dfuse_status_out *out = crt_reply_get(request->rpc);
+	struct dfuse_status_out *out = request->out;
 
 	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
@@ -42,43 +39,9 @@ dfuse_gen_cb(struct dfuse_request *request)
 	DFUSE_REPLY_ZERO(request);
 
 out:
-	/* Clean up the two refs this code holds on the rpc */
-	crt_req_decref(request->rpc);
-	crt_req_decref(request->rpc);
 
 	D_FREE(request);
 	return false;
-}
-
-/* A generic callback function to handle completion of RPCs sent from FUSE,
- * and replay the RPC to a different end point in case the target has been
- * evicted (denoted by an "Out Of Group" return code). For all other failures
- * and in case of success, it invokes a custom handler (if defined).
- */
-static void
-generic_cb(const struct crt_cb_info *cb_info)
-{
-	struct dfuse_request		*request = cb_info->cci_arg;
-	struct dfuse_projection_info	*fsh = request->fsh;
-	struct dfuse_inode_entry	*ir_inode = NULL;
-	bool				keep_ref;
-
-	D_ASSERT(request->ir_rs == RS_RESET);
-	request->ir_rs = RS_LIVE;
-
-	DFUSE_TRA_INFO(request, "cci_rc %d -%s",
-		       cb_info->cci_rc, d_errstr(cb_info->cci_rc));
-
-	if (request->ir_ht == RHS_INODE) {
-		ir_inode = request->ir_inode;
-	}
-
-	keep_ref = request->ir_api->on_result(request);
-
-	if (ir_inode && !keep_ref) {
-		d_hash_rec_decref(&fsh->inode_ht, &ir_inode->ie_htl);
-	}
-
 }
 
 /*
@@ -103,8 +66,6 @@ dfuse_fs_send(struct dfuse_request *request)
 	 */
 	if (request->ir_ht == RHS_INODE_NUM) {
 
-		D_ASSERT(request->ir_api->have_gah);
-
 		if (request->ir_inode_num == 1) {
 			request->ir_ht = RHS_ROOT;
 		} else {
@@ -115,99 +76,11 @@ dfuse_fs_send(struct dfuse_request *request)
 			request->ir_ht = RHS_INODE;
 		}
 	}
-	rc = dfuse_fs_resend(request);
-	if (rc) {
-		D_GOTO(err, 0);
-	}
 	return 0;
 err:
 	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", rc);
 
 	return rc;
-}
-
-int
-dfuse_fs_resend(struct dfuse_request *request)
-{
-	struct dfuse_projection_info	*fs_handle = request->fsh;
-	crt_endpoint_t			ep;
-	int				ret;
-	int				rc;
-
-	if (request->ir_api->have_gah) {
-		void *in = crt_req_get(request->rpc);
-		struct ios_gah *gah = in + request->ir_api->gah_offset;
-
-		DFUSE_TRA_DEBUG(request,
-				"loading gah from %d %p", request->ir_ht,
-				request->ir_inode);
-
-		D_MUTEX_LOCK(&request->fsh->gah_lock);
-
-		switch (request->ir_ht) {
-		case RHS_ROOT:
-			*gah = request->fsh->gah;
-			break;
-		case RHS_INODE:
-			*gah = request->ir_inode->gah;
-			break;
-		case RHS_FILE:
-			*gah = request->ir_file->common.gah;
-			break;
-		case RHS_DIR:
-			*gah = request->ir_dir->gah;
-			break;
-		default:
-			DFUSE_TRA_ERROR(request,
-					"Invalid request type %d",
-					request->ir_ht);
-			D_MUTEX_UNLOCK(&request->fsh->gah_lock);
-			D_GOTO(err, ret = EIO);
-		}
-
-		D_MUTEX_UNLOCK(&request->fsh->gah_lock);
-		DFUSE_TRA_DEBUG(request, GAH_PRINT_STR, GAH_PRINT_VAL(*gah));
-	}
-
-	ep.ep_tag = 0;
-	ep.ep_grp = fs_handle->proj.grp->dest_grp;
-
-	/* Pick an appropriate rank, for most cases this is the root of the GAH
-	 * however if that is not known then send to the PSR
-	 */
-	switch (request->ir_ht) {
-	case RHS_INODE:
-		ep.ep_rank = request->ir_inode->gah.root;
-		break;
-	case RHS_FILE:
-		ep.ep_rank = request->ir_file->common.gah.root;
-		break;
-	case RHS_DIR:
-		ep.ep_rank = request->ir_dir->gah.root;
-		break;
-	case RHS_ROOT:
-	default:
-		ep.ep_rank = fs_handle->gah.root;
-	}
-
-	/* Defer clean up until the output is copied. */
-	rc = crt_req_set_endpoint(request->rpc, &ep);
-	if (rc) {
-		D_GOTO(err, ret = EIO);
-	}
-	DFUSE_TRA_INFO(request, "Sending RPC to rank %d",
-		       request->rpc->cr_ep.ep_rank);
-
-	crt_req_addref(request->rpc);
-	rc = crt_req_send(request->rpc, generic_cb, request);
-	if (rc) {
-		D_GOTO(err, ret = EIO);
-	}
-	return 0;
-err:
-	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", ret);
-
-	return ret;
 }
 
 static bool
@@ -271,61 +144,18 @@ dh_init(void *arg, void *handle)
 
 	DFUSE_REQUEST_INIT(&dh->open_req, handle);
 	DFUSE_REQUEST_INIT(&dh->close_req, handle);
-	dh->rpc = NULL;
 }
-
-/* Reset a RPC in a re-usable descriptor.  If the RPC pointer is valid
- * then drop the two references and zero the pointer.
- */
-#define CHECK_AND_RESET_RPC(HANDLE, RPC)			\
-	do {							\
-		if ((HANDLE)->RPC) {				\
-			crt_req_decref((HANDLE)->RPC);		\
-			crt_req_decref((HANDLE)->RPC);		\
-			(HANDLE)->RPC = NULL;			\
-		}						\
-	} while (0)
-
-/* As CHECK_AND_RESET_RPC but take a dfuse_request as the second option
- * and work on the RPC in the request
- */
-#define CHECK_AND_RESET_RRPC(HANDLE, REQUEST)			\
-	CHECK_AND_RESET_RPC(HANDLE, REQUEST.rpc)
 
 static bool
 dh_reset(void *arg)
 {
 	struct dfuse_dir_handle	*dh = arg;
-	int			rc;
 
 	dh->reply_count = 0;
 
 	/* If there has been an error on the local handle, or readdir() is not
 	 * exhausted then ensure that all resources are freed correctly
 	 */
-	if (dh->rpc)
-		crt_req_decref(dh->rpc);
-	dh->rpc = NULL;
-
-	if (dh->open_req.rpc)
-		crt_req_decref(dh->open_req.rpc);
-
-	if (dh->close_req.rpc)
-		crt_req_decref(dh->close_req.rpc);
-
-	rc = crt_req_create(dh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(dh->open_req.fsh, opendir),
-			    &dh->open_req.rpc);
-	if (rc || !dh->open_req.rpc)
-		return false;
-
-	rc = crt_req_create(dh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(dh->open_req.fsh, closedir),
-			    &dh->close_req.rpc);
-	if (rc || !dh->close_req.rpc) {
-		crt_req_decref(dh->open_req.rpc);
-		return false;
-	}
 
 	DFUSE_REQUEST_RESET(&dh->open_req);
 	DFUSE_REQUEST_RESET(&dh->close_req);
@@ -335,15 +165,6 @@ dh_reset(void *arg)
 	dh->close_req.ir_dir = dh;
 
 	return true;
-}
-
-static void
-dh_release(void *arg)
-{
-	struct dfuse_dir_handle *dh = arg;
-
-	crt_req_decref(dh->open_req.rpc);
-	crt_req_decref(dh->close_req.rpc);
 }
 
 /* Create a getattr descriptor for use with descriptor allocators.
@@ -367,26 +188,19 @@ static bool
 fh_reset(void *arg)
 {
 	struct dfuse_file_handle	*fh = arg;
-	int			rc;
 
 	DFUSE_REQUEST_RESET(&fh->open_req);
-	CHECK_AND_RESET_RRPC(fh, open_req);
 
 	fh->open_req.ir_ht = RHS_INODE_NUM;
 
 	DFUSE_REQUEST_RESET(&fh->creat_req);
-	CHECK_AND_RESET_RRPC(fh, creat_req);
 
 	fh->creat_req.ir_ht = RHS_INODE_NUM;
 
 	DFUSE_REQUEST_RESET(&fh->release_req);
-	CHECK_AND_RESET_RRPC(fh, release_req);
 
 	fh->release_req.ir_ht = RHS_FILE;
 	fh->release_req.ir_file = fh;
-
-	/* Used by creat but not open */
-	fh->common.ep = fh->open_req.fsh->proj.grp->psr_ep;
 
 	if (!fh->ie) {
 		D_ALLOC_PTR(fh->ie);
@@ -395,36 +209,6 @@ fh_reset(void *arg)
 		atomic_fetch_add(&fh->ie->ie_ref, 1);
 	}
 
-	rc = crt_req_create(fh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(fh->open_req.fsh, open),
-			    &fh->open_req.rpc);
-	if (rc || !fh->open_req.rpc) {
-		D_FREE(fh->ie);
-		return false;
-	}
-
-	rc = crt_req_create(fh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(fh->open_req.fsh, create),
-			    &fh->creat_req.rpc);
-	if (rc || !fh->creat_req.rpc) {
-		D_FREE(fh->ie);
-		crt_req_decref(fh->open_req.rpc);
-		return false;
-	}
-
-	rc = crt_req_create(fh->open_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_OP(fh->open_req.fsh, close),
-			    &fh->release_req.rpc);
-	if (rc || !fh->release_req.rpc) {
-		D_FREE(fh->ie);
-		crt_req_decref(fh->open_req.rpc);
-		crt_req_decref(fh->creat_req.rpc);
-		return false;
-	}
-
-	crt_req_addref(fh->open_req.rpc);
-	crt_req_addref(fh->creat_req.rpc);
-	crt_req_addref(fh->release_req.rpc);
 	return true;
 }
 
@@ -433,12 +217,6 @@ fh_release(void *arg)
 {
 	struct dfuse_file_handle *fh = arg;
 
-	crt_req_decref(fh->open_req.rpc);
-	crt_req_decref(fh->open_req.rpc);
-	crt_req_decref(fh->creat_req.rpc);
-	crt_req_decref(fh->creat_req.rpc);
-	crt_req_decref(fh->release_req.rpc);
-	crt_req_decref(fh->release_req.rpc);
 	D_FREE(fh->ie);
 }
 
@@ -447,7 +225,6 @@ fh_release(void *arg)
 	{								\
 		struct common_req *req = arg;				\
 		DFUSE_REQUEST_INIT(&req->request, handle);		\
-		req->opcode = FS_TO_OP(req->request.fsh, type);		\
 	}
 COMMON_INIT(getattr);
 COMMON_INIT(setattr);
@@ -458,32 +235,12 @@ static bool
 common_reset(void *arg)
 {
 	struct common_req *req = arg;
-	int rc;
 
 	req->request.req = NULL;
 
 	DFUSE_REQUEST_RESET(&req->request);
-	CHECK_AND_RESET_RRPC(req, request);
-
-	rc = crt_req_create(req->request.fsh->proj.crt_ctx, NULL,
-			    req->opcode, &req->request.rpc);
-	if (rc || !req->request.rpc) {
-		DFUSE_TRA_ERROR(req, "Could not create request, rc = %d", rc);
-		return false;
-	}
-	crt_req_addref(req->request.rpc);
 
 	return true;
-}
-
-/* Destroy a descriptor which could be either getattr or close */
-static void
-common_release(void *arg)
-{
-	struct common_req *req = arg;
-
-	crt_req_decref(req->request.rpc);
-	crt_req_decref(req->request.rpc);
 }
 
 #define ENTRY_INIT(type)						\
@@ -491,7 +248,6 @@ common_release(void *arg)
 	{								\
 		struct entry_req *req = arg;				\
 		DFUSE_REQUEST_INIT(&req->request, handle);		\
-		req->opcode = FS_TO_OP(req->request.fsh, type);		\
 		req->dest = NULL;					\
 		req->ie = NULL;						\
 	}
@@ -503,13 +259,11 @@ static bool
 entry_reset(void *arg)
 {
 	struct entry_req	*req = arg;
-	int			rc;
 
 	/* If this descriptor has previously been used then destroy the
 	 * existing RPC
 	 */
 	DFUSE_REQUEST_RESET(&req->request);
-	CHECK_AND_RESET_RRPC(req, request);
 
 	req->request.ir_ht = RHS_INODE_NUM;
 	/* Free any destination string on this descriptor.  This is only used
@@ -524,25 +278,6 @@ entry_reset(void *arg)
 		atomic_fetch_add(&req->ie->ie_ref, 1);
 	}
 
-	/* Create a new RPC ready for later use.  Take an initial reference
-	 * to the RPC so that it is not cleaned up after a successful send.
-	 *
-	 * After calling send the lookup code will re-take the dropped
-	 * reference which means that on all subsequent calls to reset()
-	 * or release() the ref count will be two.
-	 *
-	 * This means that both descriptor creation and destruction are
-	 * done off the critical path.
-	 */
-	rc = crt_req_create(req->request.fsh->proj.crt_ctx, NULL, req->opcode,
-			    &req->request.rpc);
-	if (rc || !req->request.rpc) {
-		DFUSE_TRA_ERROR(req, "Could not create request, rc = %d", rc);
-		D_FREE(req->ie);
-		return false;
-	}
-	crt_req_addref(req->request.rpc);
-
 	return true;
 }
 
@@ -552,8 +287,6 @@ entry_release(void *arg)
 {
 	struct entry_req *req = arg;
 
-	crt_req_decref(req->request.rpc);
-	crt_req_decref(req->request.rpc);
 	D_FREE(req->ie);
 }
 
@@ -566,8 +299,6 @@ rb_page_init(void *arg, void *handle)
 	rb->buf_size = 4096;
 	rb->fbuf.count = 1;
 	rb->fbuf.buf[0].fd = -1;
-	rb->failure = false;
-	rb->lb.buf = NULL;
 }
 
 static void
@@ -583,46 +314,12 @@ static bool
 rb_reset(void *arg)
 {
 	struct dfuse_rb	*rb = arg;
-	int		rc;
 
 	DFUSE_REQUEST_RESET(&rb->rb_req);
-	CHECK_AND_RESET_RRPC(rb, rb_req);
 
 	rb->rb_req.ir_ht = RHS_FILE;
 
-	if (rb->failure) {
-		DFUSE_BULK_FREE(rb, lb);
-		rb->failure = false;
-	}
-
-	if (!rb->lb.buf) {
-		DFUSE_BULK_ALLOC(rb->rb_req.fsh->proj.crt_ctx, rb, lb,
-				 rb->buf_size, false);
-		if (!rb->lb.buf)
-			return false;
-	}
-
-	rc = crt_req_create(rb->rb_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_IOOP(rb->rb_req.fsh, 0), &rb->rb_req.rpc);
-	if (rc || !rb->rb_req.rpc) {
-		DFUSE_TRA_ERROR(rb, "Could not create request, rc = %d", rc);
-		DFUSE_BULK_FREE(rb, lb);
-		return false;
-	}
-	crt_req_addref(rb->rb_req.rpc);
-
 	return true;
-}
-
-static void
-rb_release(void *arg)
-{
-	struct dfuse_rb *rb = arg;
-
-	DFUSE_BULK_FREE(rb, lb);
-
-	crt_req_decref(rb->rb_req.rpc);
-	crt_req_decref(rb->rb_req.rpc);
 }
 
 static void
@@ -631,74 +328,24 @@ wb_init(void *arg, void *handle)
 	struct dfuse_wb *wb = arg;
 
 	DFUSE_REQUEST_INIT(&wb->wb_req, handle);
-	wb->failure = false;
-	wb->lb.buf = NULL;
 }
 
 static bool
 wb_reset(void *arg)
 {
 	struct dfuse_wb	*wb = arg;
-	int		rc;
 
 	DFUSE_REQUEST_RESET(&wb->wb_req);
-	CHECK_AND_RESET_RRPC(wb, wb_req);
 
 	wb->wb_req.ir_ht = RHS_FILE;
 
-	if (wb->failure) {
-		DFUSE_BULK_FREE(wb, lb);
-		wb->failure = false;
-	}
-
-	if (!wb->lb.buf) {
-		DFUSE_BULK_ALLOC(wb->wb_req.fsh->proj.crt_ctx, wb, lb,
-				 wb->wb_req.fsh->proj.max_write, true);
-		if (!wb->lb.buf)
-			return false;
-	}
-
-	rc = crt_req_create(wb->wb_req.fsh->proj.crt_ctx, NULL,
-			    FS_TO_IOOP(wb->wb_req.fsh, 1), &wb->wb_req.rpc);
-	if (rc || !wb->wb_req.rpc) {
-		DFUSE_TRA_ERROR(wb, "Could not create request, rc = %d", rc);
-		DFUSE_BULK_FREE(wb, lb);
-		return false;
-	}
-	crt_req_addref(wb->wb_req.rpc);
-
 	return true;
-}
-
-static void
-wb_release(void *arg)
-{
-	struct dfuse_wb *wb = arg;
-
-	crt_req_decref(wb->wb_req.rpc);
-	crt_req_decref(wb->wb_req.rpc);
-
-	DFUSE_BULK_FREE(wb, lb);
 }
 
 void
 dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 {
-	struct dfuse_service_group *group;
-	int ret;
-
 	dfuse_state->cnss_info = cnss_info;
-
-	/* Despite the hard coding above, now we can do attaches in a loop */
-	group = &dfuse_state->grp;
-
-	ret = dfuse_client_register(&group->psr_ep,
-				    &dfuse_state->proto,
-				    &dfuse_state->io_proto);
-	if (ret) {
-		DFUSE_TRA_ERROR(dfuse_state,
-				"RPC registration failed with ret: %d", ret);
-	}
 }
 
 static bool
@@ -712,7 +359,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 
 	struct dfuse_da_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
-				  .release = dh_release,
 				  POOL_TYPE_INIT(dfuse_dir_handle,
 						 dh_free_list)};
 
@@ -723,7 +369,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 						 fh_free_list)};
 
 	struct dfuse_da_reg common_t = {.reset = common_reset,
-					.release = common_release,
 					POOL_TYPE_INIT(common_req, list)};
 
 	struct dfuse_da_reg entry_t = {.reset = entry_reset,
@@ -732,19 +377,16 @@ initialize_projection(struct dfuse_state *dfuse_state)
 
 	struct dfuse_da_reg rb_page = {.init = rb_page_init,
 				       .reset = rb_reset,
-				       .release = rb_release,
 				       POOL_TYPE_INIT(dfuse_rb,
 						      rb_req.ir_list)};
 
 	struct dfuse_da_reg rb_large = {.init = rb_large_init,
 					.reset = rb_reset,
-					.release = rb_release,
 					POOL_TYPE_INIT(dfuse_rb,
 						       rb_req.ir_list)};
 
 	struct dfuse_da_reg wb = {.init = wb_init,
 				  .reset = wb_reset,
-				  .release = wb_release,
 				  POOL_TYPE_INIT(dfuse_wb, wb_req.ir_list)};
 
 	D_ALLOC_PTR(fs_handle);
@@ -758,7 +400,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 		D_GOTO(err, 0);
 
 	fs_handle->dfuse_state = dfuse_state;
-	fs_handle->proj.io_proto = dfuse_state->io_proto;
 
 	ret = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
 					  D_HASH_FT_EPHEMERAL,
@@ -768,19 +409,10 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (ret != 0)
 		D_GOTO(err, 0);
 
-	ret = D_MUTEX_INIT(&fs_handle->gah_lock, NULL);
-	if (ret != 0)
-		D_GOTO(err, 0);
-
 	fs_handle->proj.progress_thread = 1;
 
 	fs_handle->proj.grp = group;
 
-	ret = crt_context_create(&fs_handle->proj.crt_ctx);
-	if (ret) {
-		DFUSE_TRA_ERROR(fs_handle, "Could not create context");
-		D_GOTO(err, 0);
-	}
 
 	args.argc = 4;
 
@@ -872,7 +504,7 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (!cnss_register_fuse(fs_handle->dfuse_state->cnss_info,
 				fuse_ops,
 				&args,
-				fs_handle->mnt_dir.name,
+				NULL,
 				(fs_handle->flags & DFUSE_CNSS_MT) != 0,
 				fs_handle,
 				&fs_handle->session)) {
@@ -881,9 +513,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	}
 
 	D_FREE(fuse_ops);
-
-	DFUSE_TRA_DEBUG(fs_handle, "Fuse mount installed at: '%s'",
-			fs_handle->mnt_dir.name);
 
 	return true;
 err:
@@ -1019,27 +648,12 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 
 		} while (active && rc == -DER_SUCCESS);
 
-		rc = crt_context_destroy(fs_handle->proj.crt_ctx, false);
-		if (rc == -DER_BUSY)
-			DFUSE_TRA_INFO(fs_handle, "RPCs in flight, waiting");
-		else if (rc != DER_SUCCESS)
-			DFUSE_TRA_ERROR(fs_handle,
-					"Could not destroy context %d",
-					rc);
 	} while (rc == -DER_BUSY);
 
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(fs_handle, "Count not destroy context");
 
 	dfuse_da_destroy(&fs_handle->da);
-
-	rc = pthread_mutex_destroy(&fs_handle->gah_lock);
-	if (rc != 0) {
-		DFUSE_TRA_ERROR(fs_handle,
-				"Failed to destroy lock %d %s",
-				rc, strerror(rc));
-		rcp = rc;
-	}
 
 	d_list_del_init(&fs_handle->link);
 

@@ -4,8 +4,6 @@ import os
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
            'ioil_api.h', 'ioil_preload.h']
 COMMON_SRC = ['dfuse_fs.c',
-              'dfuse_rpc.c',
-              'dfuse_bulk.c',
               'dfuse_da.c',
               'dfuse_obj_da.c',
               'dfuse_vector.c']
@@ -24,7 +22,6 @@ OPS_SRC = ['closedir',
            'open',
            'opendir',
            'read',
-           'readdir',
            'readlink',
            'release',
            'rename',
@@ -114,8 +111,6 @@ def scons():
     dfuse_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
 
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
-
-    prereqs.require(dfuse_env, 'cart')
 
     libs = build_client_libs_shared(dfuse_env)
 

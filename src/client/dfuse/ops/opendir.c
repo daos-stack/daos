@@ -29,19 +29,15 @@
 #define TYPE_NAME dfuse_dir_handle
 #include "dfuse_ops.h"
 
-#define STAT_KEY opendir
-
 static bool
 opendir_ll_cb(struct dfuse_request *request)
 {
 	struct TYPE_NAME	*dh = CONTAINER(request);
-	struct dfuse_opendir_out	*out = crt_reply_get(request->rpc);
+	struct dfuse_opendir_out	*out = request->out;
 	struct fuse_file_info	fi = {0};
 
 	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc == 0) {
-		dh->gah = out->gah;
-		dh->ep = dh->open_req.fsh->proj.grp->psr_ep;
 		fi.fh = (uint64_t)dh;
 		DFUSE_REPLY_OPEN(request, fi);
 	} else {
@@ -53,8 +49,6 @@ opendir_ll_cb(struct dfuse_request *request)
 
 static const struct dfuse_request_api api = {
 	.on_result	= opendir_ll_cb,
-	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
-	.have_gah	= true,
 };
 
 void

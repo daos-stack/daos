@@ -50,7 +50,7 @@ def scons():
     tenv.AppendUnique(CPPPATH='../il')
     tenv.AppendUnique(RPATH='$PREFIX/lib')
 
-    prereqs.require(tenv, 'cart', 'cunit')
+    prereqs.require(tenv, 'cunit')
 
     il_test = []
 

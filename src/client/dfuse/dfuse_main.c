@@ -34,7 +34,6 @@
 #include "daos_fs.h"
 #include "daos_api.h"
 
-#include <cart/api.h>
 #include <gurt/common.h>
 #include <signal.h>
 
@@ -251,7 +250,6 @@ show_help(const char *prog)
 int
 main(int argc, char **argv)
 {
-	char			*cnss = "CNSS";
 	const char		*prefix = NULL;
 	struct cnss_info	*cnss_info;
 	int			ret;
@@ -313,14 +311,6 @@ main(int argc, char **argv)
 
 	cnss_info->dfuse_state = dfuse_plugin_init();
 
-	/*initialize CaRT*/
-	ret = crt_init(cnss, 0);
-	if (ret) {
-		DFUSE_TRA_ERROR(cnss_info,
-				"crt_init failed with ret = %d", ret);
-		D_GOTO(shutdown_ctrl_fs, 0);
-	}
-
 	/* Call start for each plugin which should perform node-local
 	 * operations only.  Plugins can choose to disable themselves
 	 * at this point.
@@ -339,10 +329,6 @@ main(int argc, char **argv)
 
 	dfuse_finish(cnss_info->dfuse_state);
 
-	rc = crt_finalize();
-	if (rc != -DER_SUCCESS)
-		ret = 1;
-
 	DFUSE_TRA_INFO(cnss_info, "Exiting with status %d", ret);
 
 	DFUSE_TRA_DOWN(cnss_info);
@@ -350,10 +336,6 @@ main(int argc, char **argv)
 	D_FREE(cnss_info);
 
 	return ret;
-
-shutdown_ctrl_fs:
-
-	dfuse_finish(cnss_info->dfuse_state);
 
 shutdown_log:
 

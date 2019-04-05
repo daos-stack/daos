@@ -29,12 +29,10 @@
 #define TYPE_NAME dfuse_dir_handle
 #include "dfuse_ops.h"
 
-#define STAT_KEY closedir
-
 static bool
 closedir_ll_cb(struct dfuse_request *request)
 {
-	struct dfuse_status_out *out	= crt_reply_get(request->rpc);
+	struct dfuse_status_out	   *out = request->out;
 	struct TYPE_NAME *dh		= CONTAINER(request);
 
 	DFUSE_REQUEST_RESOLVE(request, out);
@@ -53,8 +51,6 @@ out:
 
 static const struct dfuse_request_api api = {
 	.on_result	= closedir_ll_cb,
-	.gah_offset	= offsetof(struct dfuse_gah_in, gah),
-	.have_gah	= true,
 };
 
 void

@@ -27,7 +27,7 @@
 static bool
 dfuse_rename_cb(struct dfuse_request *request)
 {
-	struct dfuse_status_out *out = crt_reply_get(request->rpc);
+	struct dfuse_status_out *out = request->out;
 
 	DFUSE_REQUEST_RESOLVE(request, out);
 	if (request->rc) {
@@ -38,9 +38,6 @@ dfuse_rename_cb(struct dfuse_request *request)
 	DFUSE_REPLY_ZERO(request);
 
 out:
-	/* Clean up the two refs this code holds on the rpc */
-	crt_req_decref(request->rpc);
-	crt_req_decref(request->rpc);
 
 	D_FREE(request);
 	return false;
@@ -48,8 +45,6 @@ out:
 
 static const struct dfuse_request_api api = {
 	.on_result	= dfuse_rename_cb,
-	.have_gah	= true,
-	.gah_offset	= offsetof(struct dfuse_rename_in, old_gah),
 };
 
 void
@@ -58,7 +53,6 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	struct dfuse_request	*request;
-	struct dfuse_rename_in	*in;
 	int ret = EIO;
 	int rc;
 
@@ -76,32 +70,12 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	request->req = req;
 	request->ir_api = &api;
 
-	rc = crt_req_create(fs_handle->proj.crt_ctx,
-			    NULL,
-			    FS_TO_OP(fs_handle, rename), &request->rpc);
-	if (rc || !request->rpc) {
-		DFUSE_LOG_ERROR("Could not create request, rc = %d", rc);
-		D_GOTO(out_err, ret = EIO);
-	}
-
-	in = crt_req_get(request->rpc);
-
-	strncpy(in->old_name.name, name, NAME_MAX);
-	strncpy(in->new_name.name, newname, NAME_MAX);
-	in->flags = flags;
-
 	request->ir_inode_num = parent;
 	request->ir_ht = RHS_INODE_NUM;
 
-	rc = find_gah(fs_handle, newparent, &in->new_gah);
-	if (rc != 0)
-		D_GOTO(out_decref, ret = rc);
-
-	crt_req_addref(request->rpc);
-
 	rc = dfuse_fs_send(request);
 	if (rc != 0) {
-		D_GOTO(out_decref, ret = EIO);
+		D_GOTO(out_err, ret = EIO);
 	}
 
 	return;
@@ -109,9 +83,6 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 out_no_request:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
 	return;
-
-out_decref:
-	crt_req_decref(request->rpc);
 
 out_err:
 	DFUSE_REPLY_ERR(request, ret);
