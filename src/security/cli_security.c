@@ -116,7 +116,9 @@ process_credential_response(Drpc__Response *response,
 	}
 
 	if (response->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("dRPC response error: %d\n", response->status);
+		/* Recipient could not parse our message */
+		D_ERROR("Agent credential drpc request failed: %d\n",
+			response->status);
 		return -DER_MISC;
 	}
 
