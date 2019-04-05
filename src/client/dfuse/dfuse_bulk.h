@@ -23,7 +23,6 @@
 #ifndef __DFUSE_BULK_H__
 #define __DFUSE_BULK_H__
 
-#include <stdbool.h>
 #include <cart/api.h>
 
 struct dfuse_local_bulk {

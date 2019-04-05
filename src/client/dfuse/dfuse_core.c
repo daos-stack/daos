@@ -792,7 +792,7 @@ dfuse_thread_stop(struct dfuse_ctx *dfuse_ctx)
 void
 dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 {
-	struct dfuse_group_info *group;
+	struct dfuse_service_group *group;
 	int ret;
 
 	dfuse_state->cnss_info = cnss_info;
@@ -817,9 +817,9 @@ dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 	}
 
 	/* Despite the hard coding above, now we can do attaches in a loop */
-	group = &dfuse_state->group;
+	group = &dfuse_state->grp;
 
-	ret = dfuse_client_register(&group->grp.psr_ep,
+	ret = dfuse_client_register(&group->psr_ep,
 				    &dfuse_state->proto,
 				    &dfuse_state->io_proto);
 	if (ret) {
@@ -829,9 +829,9 @@ dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 }
 
 static bool
-initialize_projection(struct dfuse_state *dfuse_state,
-		      struct dfuse_group_info *group)
+initialize_projection(struct dfuse_state *dfuse_state)
 {
+	struct dfuse_service_group	*group = &dfuse_state->grp;
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
 	int				ret;
@@ -920,7 +920,7 @@ initialize_projection(struct dfuse_state *dfuse_state,
 
 	fs_handle->proj.progress_thread = 1;
 
-	fs_handle->proj.grp = &group->grp;
+	fs_handle->proj.grp = group;
 
 	ret = crt_context_create(&fs_handle->proj.crt_ctx);
 	if (ret) {
@@ -1057,9 +1057,7 @@ err:
 void
 dfuse_post_start(struct dfuse_state *dfuse_state)
 {
-	struct dfuse_group_info	*group = &dfuse_state->group;
-
-	initialize_projection(dfuse_state, group);
+	initialize_projection(dfuse_state);
 }
 
 static int

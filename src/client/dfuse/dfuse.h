@@ -114,15 +114,6 @@ struct dfuse_ctx {
 };
 
 /**
- * DFUSE Group struct.
- */
-
-struct dfuse_group_info {
-	/** Service group pointer */
-	struct dfuse_service_group	grp;
-};
-
-/**
  * Global state for DFUSE client.
  *
  */
@@ -141,7 +132,7 @@ struct dfuse_state {
 	/** ctrl_fs projections directory handle */
 	struct ctrl_dir			*projections_dir;
 	/** Group information */
-	struct dfuse_group_info		group;
+	struct dfuse_service_group	grp;
 };
 
 struct dfuse_projection_info {
