@@ -30,11 +30,67 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#include "dfuse_cnss.h"
 #include "dfuse_gah.h"
 #include "dfuse_fs.h"
 #include "dfuse_bulk.h"
 #include "dfuse_pool.h"
+
+/**
+ * These pre-date -DER_* codes, and are used for exit status on failure so
+ * keep them for now until we can test a replacement.
+ */
+
+#define CNSS_SUCCESS           0
+#define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
+#define CNSS_ERR_NOMEM         2 /*no memory*/
+#define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
+#define CNSS_ERR_CART          4 /*CaRT failed*/
+
+#include "dfuse_common.h"
+#include "dfuse.h"
+
+struct fs_info {
+	char			*fsi_mnt;
+	struct fuse		*fsi_fuse;
+	struct fuse_session	*fsi_session;
+	pthread_t		fsi_thread;
+	pthread_mutex_t		fsi_lock;
+	struct dfuse_projection_info *fsi_handle;
+	bool			fsi_running;
+	bool			fsi_mt;
+};
+
+struct cnss_info {
+	struct dfuse_state	*dfuse_state;
+	struct fs_info		ci_fsinfo;
+};
+
+bool
+cnss_register_fuse(struct cnss_info *cnss_info,
+		   struct fuse_lowlevel_ops *flo,
+		   struct fuse_args *args,
+		   const char *mnt,
+		   bool threaded,
+		   void *private_data,
+		   struct fuse_session **sessionp);
+
+struct dfuse_state *
+dfuse_plugin_init();
+
+void
+dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info);
+
+void
+dfuse_post_start(struct dfuse_state *dfuse_state);
+
+void
+dfuse_finish(struct dfuse_state *dfuse_state);
+
+void
+dfuse_flush_fuse(struct dfuse_projection_info *fs_handle);
+
+int
+dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
 
 /**
  * A common structure for holding a cart context and thread details.

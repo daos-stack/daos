@@ -29,7 +29,7 @@
 
 #define D_LOGFAC DD_FAC(dfuse)
 
-#include "dfuse_cnss.h"
+#include "dfuse.h"
 
 #include "daos_fs.h"
 #include "daos_api.h"
