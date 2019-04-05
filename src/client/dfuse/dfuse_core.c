@@ -413,7 +413,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 
 	fs_handle->proj.grp = group;
 
-
 	args.argc = 4;
 
 	args.allocated = 1;

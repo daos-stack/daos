@@ -182,7 +182,7 @@ vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 	if (rc != 0)
 		return -DER_INVAL;
 	rc = obj_da_initialize(&realv->da,
-				 sizeof(struct entry) + sizeof_entry);
+			       sizeof(struct entry) + sizeof_entry);
 	if (rc != -DER_SUCCESS)
 		return -DER_NOMEM;
 	rc = expand_vector(realv, 0);
@@ -376,7 +376,7 @@ vector_set_(vector_t *vector, unsigned int index, void *ptr, size_t size)
 	}
 
 	rc = obj_da_get_(&realv->da, (void **)&entry,
-			   sizeof(*entry) + realv->entry_size);
+			 sizeof(*entry) + realv->entry_size);
 	if (rc != -DER_SUCCESS) {
 		rc = -DER_NOMEM;
 		entry = NULL;

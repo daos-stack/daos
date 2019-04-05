@@ -146,7 +146,6 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	DFUSE_TRA_INFO(handle, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
-
 	handle->creat_req.ir_inode_num = parent;
 
 	strncpy(handle->ie->name, name, NAME_MAX);
