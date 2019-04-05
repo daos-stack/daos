@@ -110,12 +110,9 @@ func (e *ext) mount(
 func (e *ext) unmount(mntPoint string) error {
 	log.Debugf("calling unmount with %s, MNT_DETACH", mntPoint)
 
-	if err := syscall.Unmount(mntPoint, syscall.MNT_DETACH); err != nil {
-		// will return EINVAL if mount doesn't exist, treat as success
-		e, ok := err.(syscall.Errno)
-		if ok && (e == syscall.EINVAL) {
-			return nil
-		}
+	// ignore NOENT errors, treat as success
+	if err := syscall.Unmount(
+		mntPoint, syscall.MNT_DETACH); err != nil && !os.IsNotExist(err) {
 
 		return os.NewSyscallError("umount", err)
 	}
