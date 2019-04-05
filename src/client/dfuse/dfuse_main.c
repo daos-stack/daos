@@ -257,6 +257,11 @@ main(int argc, char **argv)
 	int			ret;
 	int			rc;
 
+	rc = daos_debug_init(NULL);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(out, ret = rc);
+	}
+
 	while (1) {
 		static struct option long_options[] = {
 			{"help", no_argument, 0, 'h'},
@@ -288,7 +293,7 @@ main(int argc, char **argv)
 	}
 	if (prefix == NULL) {
 		DFUSE_LOG_ERROR("CNSS prefix is required");
-		return CNSS_ERR_PREFIX;
+		D_GOTO(out, ret = -DER_INVAL);
 	}
 
 	/* chdir to the cnss_prefix, as that allows all future I/O access
@@ -297,12 +302,12 @@ main(int argc, char **argv)
 	ret = chdir(prefix);
 	if (ret != 0) {
 		DFUSE_LOG_ERROR("Could not chdir to CNSS_PREFIX");
-		return CNSS_ERR_PREFIX;
+		D_GOTO(out, ret = -DER_INVAL);
 	}
 
 	D_ALLOC_PTR(cnss_info);
 	if (!cnss_info)
-		D_GOTO(shutdown_log, ret = CNSS_ERR_NOMEM);
+		D_GOTO(shutdown_log, ret = -DER_NOMEM);
 
 	DFUSE_TRA_ROOT(cnss_info, "cnss_info");
 
@@ -313,11 +318,7 @@ main(int argc, char **argv)
 	if (ret) {
 		DFUSE_TRA_ERROR(cnss_info,
 				"crt_init failed with ret = %d", ret);
-		if (ret == -DER_NOMEM)
-			ret = CNSS_ERR_NOMEM;
-		else
-			ret = CNSS_ERR_CART;
-		goto shutdown_ctrl_fs;
+		D_GOTO(shutdown_ctrl_fs, 0);
 	}
 
 	/* Call start for each plugin which should perform node-local
@@ -360,5 +361,10 @@ shutdown_log:
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	D_FREE(cnss_info);
 
-	return ret;
+out:
+	/* Convert CaRT error numbers to something that can be returned to the
+	 * user.  This needs to be less than 256 so only works for CaRT, not
+	 * DAOS error numbers.
+	 */
+	return -(ret + DER_ERR_GURT_BASE);
 }

@@ -35,17 +35,6 @@
 #include "dfuse_bulk.h"
 #include "dfuse_pool.h"
 
-/**
- * These pre-date -DER_* codes, and are used for exit status on failure so
- * keep them for now until we can test a replacement.
- */
-
-#define CNSS_SUCCESS           0
-#define CNSS_ERR_PREFIX        1 /*CNSS prefix is not set in the environment*/
-#define CNSS_ERR_NOMEM         2 /*no memory*/
-#define CNSS_ERR_PLUGIN        3 /*failed to load or initialize plugin*/
-#define CNSS_ERR_CART          4 /*CaRT failed*/
-
 #include "dfuse_common.h"
 #include "dfuse.h"
 
