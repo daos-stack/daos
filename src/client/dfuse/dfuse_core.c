@@ -681,114 +681,6 @@ wb_release(void *arg)
 	DFUSE_BULK_FREE(wb, lb);
 }
 
-/* Call crt_progress() on a context until it returns timeout
- * or an error.
- *
- * Returns -DER_SUCCESS on timeout or passes through any other errors.
- */
-static int
-dfuse_progress_drain(struct dfuse_ctx *dfuse_ctx)
-{
-	int ctx_rc;
-
-	if (!dfuse_ctx->crt_ctx) {
-		DFUSE_TRA_WARNING(dfuse_ctx, "Null context");
-		return -DER_SUCCESS;
-	}
-
-	do {
-		ctx_rc = crt_progress(dfuse_ctx->crt_ctx, 1000000, NULL, NULL);
-
-		if (ctx_rc != -DER_TIMEDOUT && ctx_rc != -DER_SUCCESS) {
-			DFUSE_TRA_WARNING(dfuse_ctx, "progress returned %d",
-					  ctx_rc);
-			return ctx_rc;
-		}
-
-	} while (ctx_rc != -DER_TIMEDOUT);
-	return -DER_SUCCESS;
-}
-
-static void *
-dfuse_thread(void *arg)
-{
-	struct dfuse_ctx	*dfuse_ctx = arg;
-	int		rc;
-
-	dfuse_tracker_signal(&dfuse_ctx->thread_start_tracker);
-	do {
-		rc = crt_progress(dfuse_ctx->crt_ctx,
-				  dfuse_ctx->poll_interval,
-				  dfuse_ctx->callback_fn,
-				  &dfuse_ctx->thread_stop_tracker);
-
-		if (rc == -DER_TIMEDOUT) {
-			rc = 0;
-			sched_yield();
-		}
-
-		if (rc != 0)
-			DFUSE_TRA_ERROR(dfuse_ctx, "crt_progress failed rc: %d",
-					rc);
-
-	} while (!dfuse_tracker_test(&dfuse_ctx->thread_stop_tracker));
-
-	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_ctx, "crt_progress error on shutdown "
-				"rc: %d", rc);
-
-	return (void *)(uintptr_t)rc;
-}
-
-/* Start a progress thread, return true on success */
-static bool
-dfuse_thread_start(struct dfuse_ctx *dfuse_ctx)
-{
-	int rc;
-
-	dfuse_tracker_init(&dfuse_ctx->thread_start_tracker, 1);
-	dfuse_tracker_init(&dfuse_ctx->thread_stop_tracker, 1);
-
-	rc = pthread_create(&dfuse_ctx->thread, NULL,
-			    dfuse_thread, dfuse_ctx);
-
-	if (rc != 0) {
-		DFUSE_TRA_ERROR(dfuse_ctx, "Could not start progress thread");
-		return false;
-	}
-
-	rc = pthread_setname_np(dfuse_ctx->thread, "IOF thread");
-	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_ctx, "Could not set thread name");
-
-	dfuse_tracker_wait(&dfuse_ctx->thread_start_tracker);
-	return true;
-}
-
-/* Stop the progress thread, and destroy the cart context
- *
- * Returns the return code of crt_context_destroy()
- */
-static int
-dfuse_thread_stop(struct dfuse_ctx *dfuse_ctx)
-{
-	void *rtn;
-
-	if (!dfuse_ctx->thread)
-		return 0;
-
-	DFUSE_TRA_INFO(dfuse_ctx, "Stopping CRT thread");
-	dfuse_tracker_signal(&dfuse_ctx->thread_stop_tracker);
-	pthread_join(dfuse_ctx->thread, &rtn);
-	DFUSE_TRA_INFO(dfuse_ctx,
-		       "CRT thread stopped with %d",
-		       (int)(uintptr_t)rtn);
-
-	dfuse_ctx->thread = 0;
-
-	return (int)(uintptr_t)rtn;
-}
-
 void
 dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 {
@@ -796,25 +688,6 @@ dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
 	int ret;
 
 	dfuse_state->cnss_info = cnss_info;
-	ret = crt_context_create(&dfuse_state->dfuse_ctx.crt_ctx);
-	if (ret != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfuse_state, "Context not created");
-		return;
-	}
-
-	DFUSE_TRA_UP(&dfuse_state->dfuse_ctx, dfuse_state, "dfuse_ctx");
-
-	ret = crt_context_set_timeout(dfuse_state->dfuse_ctx.crt_ctx, 7);
-	if (ret != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfuse_state, "Context timeout not set");
-		return;
-	}
-
-	if (!dfuse_thread_start(&dfuse_state->dfuse_ctx)) {
-		DFUSE_TRA_ERROR(dfuse_state,
-				"Failed to create progress thread");
-		return;
-	}
 
 	/* Despite the hard coding above, now we can do attaches in a loop */
 	group = &dfuse_state->grp;
@@ -836,7 +709,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	struct fuse_args		args = {0};
 	int				ret;
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
-	int				i;
 
 	struct dfuse_da_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
@@ -881,30 +753,12 @@ initialize_projection(struct dfuse_state *dfuse_state)
 
 	DFUSE_TRA_UP(fs_handle, dfuse_state, "dfuse_projection");
 
-	if (fs_handle->ctx_num == 0) {
-		fs_handle->ctx_num = 1;
-	}
-
-	D_ALLOC_ARRAY(fs_handle->ctx_array, fs_handle->ctx_num);
-	if (!fs_handle->ctx_array) {
-		DFUSE_TRA_DOWN(fs_handle);
-		D_FREE(fs_handle);
-		return false;
-	}
-
-	for (i = 0; i < fs_handle->ctx_num; i++) {
-		DFUSE_TRA_UP(&fs_handle->ctx_array[i], fs_handle, "dfuse_ctx");
-	}
-
 	ret = dfuse_da_init(&fs_handle->da, fs_handle);
 	if (ret != -DER_SUCCESS)
 		D_GOTO(err, 0);
 
 	fs_handle->dfuse_state = dfuse_state;
 	fs_handle->proj.io_proto = dfuse_state->io_proto;
-
-	DFUSE_TRA_INFO(fs_handle, "%d cart threads",
-		       fs_handle->ctx_num);
 
 	ret = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
 					  D_HASH_FT_EPHEMERAL,
@@ -926,21 +780,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (ret) {
 		DFUSE_TRA_ERROR(fs_handle, "Could not create context");
 		D_GOTO(err, 0);
-	}
-
-	for (i = 0; i < fs_handle->ctx_num; i++) {
-		fs_handle->ctx_array[i].crt_ctx       = fs_handle->proj.crt_ctx;
-		fs_handle->ctx_array[i].poll_interval = dfuse_state->dfuse_ctx.poll_interval;
-		fs_handle->ctx_array[i].callback_fn   = dfuse_state->dfuse_ctx.callback_fn;
-
-		/* TODO: Much better error checking is required here, not least
-		 * terminating the thread if there are any failures in the rest
-		 * of this function
-		 */
-		if (!dfuse_thread_start(&fs_handle->ctx_array[i])) {
-			DFUSE_TRA_ERROR(fs_handle, "Could not create thread");
-			D_GOTO(err, 0);
-		}
 	}
 
 	args.argc = 4;
@@ -1122,7 +961,6 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	int		handles = 0;
 	int		rc;
 	int		rcp = 0;
-	int		i;
 
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
@@ -1162,16 +1000,6 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 		rcp = EINVAL;
 	}
 
-	/* Stop the progress thread for this projection and delete the context
-	 */
-
-	for (i = 0; i < fs_handle->ctx_num; i++) {
-		rc = dfuse_thread_stop(&fs_handle->ctx_array[i]);
-		if (rc != 0)
-			DFUSE_TRA_ERROR(fs_handle,
-					"thread[%d] stop returned %d", i, rc);
-	}
-
 	do {
 		/* If this context has a da associated with it then reap
 		 * any descriptors with it so there are no pending RPCs when
@@ -1180,7 +1008,6 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 		bool active;
 
 		do {
-			rc = dfuse_progress_drain(&fs_handle->ctx_array[0]);
 
 			active = dfuse_da_reclaim(&fs_handle->da);
 
@@ -1214,12 +1041,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 		rcp = rc;
 	}
 
-	for (i = 0; i < fs_handle->ctx_num; i++) {
-		DFUSE_TRA_DOWN(&fs_handle->ctx_array[i]);
-	}
 	d_list_del_init(&fs_handle->link);
-
-	D_FREE(fs_handle->ctx_array);
 
 	return rcp;
 }
@@ -1227,29 +1049,6 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 void
 dfuse_finish(struct dfuse_state *dfuse_state)
 {
-	int rc;
-
-	/* Stop progress thread */
-	rc = dfuse_thread_stop(&dfuse_state->dfuse_ctx);
-	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_state,
-				"thread stop returned %d", rc);
-
-	if (dfuse_state->dfuse_ctx.crt_ctx) {
-
-		rc = dfuse_progress_drain(&dfuse_state->dfuse_ctx);
-		if (rc != 0)
-			DFUSE_TRA_ERROR(dfuse_state,
-					"could not drain context %d", rc);
-
-		rc = crt_context_destroy(dfuse_state->dfuse_ctx.crt_ctx, false);
-		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfuse_state,
-					"Could not destroy context %d",
-					rc);
-		DFUSE_TRA_DOWN(&dfuse_state->dfuse_ctx);
-	}
-
 	DFUSE_TRA_DOWN(dfuse_state);
 	D_FREE(dfuse_state);
 }

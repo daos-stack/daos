@@ -82,27 +82,6 @@ int
 dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
 
 /**
- * A common structure for holding a cart context and thread details.
- *
- * This is included in both dfuse_state for global values, and once per
- * projection for projection specific entries.
- */
-struct dfuse_ctx {
-	/** cart context */
-	crt_context_t			crt_ctx;
-	/** pthread identifier */
-	pthread_t			thread;
-	/** Tracker to detect thread start */
-	struct dfuse_tracker		thread_start_tracker;
-	/** Tracker to signal thread stop */
-	struct dfuse_tracker		thread_stop_tracker;
-	/** Poll interval to pass to crt_progress */
-	uint32_t			poll_interval;
-	/** Callback function to pass to crt_progress() */
-	crt_progress_cond_cb_t		callback_fn;
-};
-
-/**
  * Global state for DFUSE client.
  *
  */
@@ -112,8 +91,6 @@ struct dfuse_state {
 	struct crt_proto_format		*proto;
 	/** CaRT RPC protocol used for I/O */
 	struct crt_proto_format		*io_proto;
-	/** dfuse_ctx for state */
-	struct dfuse_ctx			dfuse_ctx;
 	/** CNSS Prefix.  Parent directory of projections */
 	char				*cnss_prefix;
 	/** ctrl_fs inoss directory handle */
@@ -126,8 +103,6 @@ struct dfuse_state {
 
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
-	struct dfuse_ctx			*ctx_array;
-	int ctx_num;
 	struct dfuse_state		*dfuse_state;
 	struct ios_gah			gah;
 	d_list_t			link;
