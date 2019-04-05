@@ -53,7 +53,7 @@ dfuse_open_ll_cb(struct dfuse_request *request)
 
 out_err:
 	DFUSE_REPLY_ERR(request, request->rc);
-	dfuse_pool_release(request->fsh->fh_pool, handle);
+	dfuse_da_release(request->fsh->fh_da, handle);
 	return false;
 }
 
@@ -89,11 +89,11 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	handle = dfuse_pool_acquire(fs_handle->fh_pool);
+	handle = dfuse_da_acquire(fs_handle->fh_da);
 	if (!handle) {
 		D_GOTO(out_err, rc = ENOMEM);
 	}
-	DFUSE_TRA_UP(handle, fs_handle, fs_handle->fh_pool->reg.name);
+	DFUSE_TRA_UP(handle, fs_handle, fs_handle->fh_da->reg.name);
 	DFUSE_TRA_UP(&handle->open_req, handle, "open_req");
 
 	handle->common.projection = &fs_handle->proj;
@@ -115,12 +115,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(out_err, rc = EIO);
 	}
 
-	dfuse_pool_restock(fs_handle->fh_pool);
+	dfuse_da_restock(fs_handle->fh_da);
 
 	return;
 out_err:
 	DFUSE_REPLY_ERR_RAW(handle, req, rc);
 
 	if (handle)
-		dfuse_pool_release(fs_handle->fh_pool, handle);
+		dfuse_da_release(fs_handle->fh_da, handle);
 }

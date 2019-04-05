@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <gurt/common.h> /* container_of */
 #include <gurt/atomic.h>
-#include "dfuse_obj_pool.h"
+#include "dfuse_obj_da.h"
 #include "dfuse_vector.h"
 
 #define CAS(valuep, old, new) \
@@ -89,13 +89,13 @@ struct entry {
 #define MAGIC 0xd3f211dc
 
 struct vector {
-	union ptr_lock *data;        /* entries in vector */
-	obj_pool_t pool;             /* Pool of free entries */
-	pthread_rwlock_t lock;       /* reader/writer lock for vector */
-	int magic;                   /* Magic number for sanity */
-	unsigned int entry_size;     /* Size of entries in vector */
-	unsigned int num_entries;    /* Current number of allocated entries */
-	unsigned int max_entries;    /* limit on size of vector */
+	union ptr_lock *data;		/* entries in vector */
+	obj_da_t da;			/* Applocator of free entries */
+	pthread_rwlock_t lock;		/* reader/writer lock for vector */
+	int magic;			/* Magic number for sanity */
+	unsigned int entry_size;	/* Size of entries in vector */
+	unsigned int num_entries;	/* Current number of allocated entries */
+	unsigned int max_entries;	/* limit on size of vector */
 };
 
 _Static_assert(sizeof(struct vector) <= sizeof(vector_t),
@@ -181,7 +181,7 @@ vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 	rc = pthread_rwlock_init(&realv->lock, NULL);
 	if (rc != 0)
 		return -DER_INVAL;
-	rc = obj_pool_initialize(&realv->pool,
+	rc = obj_da_initialize(&realv->da,
 				 sizeof(struct entry) + sizeof_entry);
 	if (rc != -DER_SUCCESS)
 		return -DER_NOMEM;
@@ -210,7 +210,7 @@ vector_destroy(vector_t *vector)
 	realv->magic = 0;
 
 	rc = pthread_rwlock_destroy(&realv->lock);
-	obj_pool_destroy(&realv->pool);
+	obj_da_destroy(&realv->da);
 	D_FREE(realv->data);
 
 	if (rc == 0)
@@ -306,7 +306,7 @@ vector_dup_(vector_t *vector, unsigned int src_idx, unsigned int dst_idx,
 	if (tmp != NULL) {
 		/* We will replace the existing entry */
 		if (atomic_fetch_sub(&tmp->refcount, 1) == 1)
-			obj_pool_put(&realv->pool, tmp);
+			obj_da_put(&realv->da, tmp);
 	}
 
 	if (entry != NULL)
@@ -338,7 +338,7 @@ vector_decref(vector_t *vector, void *ptr)
 	old_value = atomic_fetch_sub(&entry->refcount, 1);
 
 	if (old_value == 1)
-		obj_pool_put(&realv->pool, entry);
+		obj_da_put(&realv->da, entry);
 
 	return -DER_SUCCESS;
 }
@@ -372,10 +372,10 @@ vector_set_(vector_t *vector, unsigned int index, void *ptr, size_t size)
 		/* We will replace the existing entry */
 		rc = atomic_fetch_sub(&entry->refcount, 1);
 		if (rc == 1)
-			obj_pool_put(&realv->pool, entry);
+			obj_da_put(&realv->da, entry);
 	}
 
-	rc = obj_pool_get_(&realv->pool, (void **)&entry,
+	rc = obj_da_get_(&realv->da, (void **)&entry,
 			   sizeof(*entry) + realv->entry_size);
 	if (rc != -DER_SUCCESS) {
 		rc = -DER_NOMEM;
@@ -425,7 +425,7 @@ vector_remove_(vector_t *vector, unsigned int index, void **ptr)
 		/* keep the reference if returning the entry */
 		if (ptr == NULL) {
 			if (atomic_fetch_sub(&entry->refcount, 1) == 1)
-				obj_pool_put(&realv->pool, entry);
+				obj_da_put(&realv->da, entry);
 		} else {
 			*ptr = &entry->data[0];
 		}

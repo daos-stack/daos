@@ -49,14 +49,14 @@ write_cb(struct dfuse_request *request)
 
 	DFUSE_REPLY_WRITE(wb, request->req, out->len);
 
-	dfuse_pool_release(request->fsh->write_pool, wb);
+	dfuse_da_release(request->fsh->write_da, wb);
 
 	return false;
 
 err:
 	DFUSE_REPLY_ERR(request, request->rc);
 
-	dfuse_pool_release(request->fsh->write_pool, wb);
+	dfuse_da_release(request->fsh->write_da, wb);
 	return false;
 }
 
@@ -92,7 +92,7 @@ dfuse_writex(size_t len, off_t position, struct dfuse_wb *wb)
 
 err:
 	DFUSE_REPLY_ERR_RAW(wb, wb->wb_req.req, rc);
-	dfuse_pool_release(wb->wb_req.fsh->write_pool, wb);
+	dfuse_da_release(wb->wb_req.fsh->write_da, wb);
 }
 
 void
@@ -103,7 +103,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	struct dfuse_wb *wb;
 	int rc;
 
-	wb = dfuse_pool_acquire(handle->open_req.fsh->write_pool);
+	wb = dfuse_da_acquire(handle->open_req.fsh->write_da);
 	if (!wb)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -150,7 +150,7 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	DFUSE_TRA_INFO(handle, "Count %zi [0].flags %#x",
 		       bufv->count, bufv->buf[0].flags);
 
-	wb = dfuse_pool_acquire(handle->open_req.fsh->write_pool);
+	wb = dfuse_da_acquire(handle->open_req.fsh->write_da);
 	if (!wb)
 		D_GOTO(err, rc = ENOMEM);
 	DFUSE_TRA_UP(wb, handle, "writebuf");
@@ -173,5 +173,5 @@ dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 err:
 	DFUSE_REPLY_ERR_RAW(handle, req, rc);
 	if (wb)
-		dfuse_pool_release(handle->open_req.fsh->write_pool, wb);
+		dfuse_da_release(handle->open_req.fsh->write_da, wb);
 }

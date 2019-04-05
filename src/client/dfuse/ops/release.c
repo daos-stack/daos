@@ -36,7 +36,7 @@ dfuse_release_cb(struct dfuse_request *request)
 		DFUSE_REPLY_ZERO(request);
 	}
 
-	dfuse_pool_release(request->fsh->fh_pool, request->ir_file);
+	dfuse_da_release(request->fsh->fh_da, request->ir_file);
 	return false;
 }
 
@@ -72,7 +72,7 @@ out_err:
 	} else {
 		DFUSE_TRA_DOWN(&handle->release_req);
 	}
-	dfuse_pool_release(fs_handle->fh_pool, handle);
+	dfuse_da_release(fs_handle->fh_da, handle);
 }
 
 void

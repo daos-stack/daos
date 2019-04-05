@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME request
-#define POOL_NAME mkdir_pool
+#define POOL_NAME mkdir_da
 #define TYPE_NAME entry_req
 #include "dfuse_ops.h"
 
@@ -53,7 +53,7 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	in = crt_req_get(desc->request.rpc);
 	strncpy(desc->ie->name, name, NAME_MAX);
 	desc->ie->parent = parent;
-	desc->pool = fs_handle->mkdir_pool;
+	desc->da = fs_handle->mkdir_da;
 	strncpy(in->common.name.name, name, NAME_MAX);
 	in->mode = mode;
 
@@ -67,6 +67,6 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc) {
 		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_pool_release(fs_handle->mkdir_pool, desc);
+		dfuse_da_release(fs_handle->mkdir_da, desc);
 	}
 }

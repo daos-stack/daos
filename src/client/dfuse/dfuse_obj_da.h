@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_OBJ_POOL_H__
-#define __DFUSE_OBJ_POOL_H__
+#ifndef __DFUSE_OBJ_DA_H__
+#define __DFUSE_OBJ_DA_H__
 
 #include <gurt/errno.h>
 
@@ -31,34 +31,34 @@
 
 typedef struct {
 	char data[128];
-} obj_pool_t;
+} obj_da_t;
 
-/* Initialize an object obj_pool
- * \param pool[out] Pool to initialize
- * \param obj_size[in] Size of objects in pool
+/* Initialize an object obj_da
+ * \param da[out] Allocator to initialize
+ * \param obj_size[in] Size of objects in da
  */
 int
-obj_pool_initialize(obj_pool_t *pool, size_t obj_size);
-/* Destroy a pool and all objects in pool */
+obj_da_initialize(obj_da_t *da, size_t obj_size);
+/* Destroy a da and all objects in da */
 int
-obj_pool_destroy(obj_pool_t *pool);
+obj_da_destroy(obj_da_t *da);
 
-/* Get a zero initialized item from the pool
- * \param [in] Pool from which to get item
+/* Get a zero initialized item from the da
+ * \param [in] Allocator from which to get item
  * \param [out] Pointer in which to store pointer to item
  */
-#define obj_pool_get(pool, itempp)             \
-	obj_pool_get_(pool, (void **)(itempp), \
+#define obj_da_get(da, itempp)             \
+	obj_da_get_(da, (void **)(itempp), \
 		      sizeof(**(itempp)))
 
-/* Return an item to the pool
- * \param [in] Item to return to pool
+/* Return an item to the da
+ * \param [in] Item to return to da
  */
 int
-obj_pool_put(obj_pool_t *pool, void *item);
+obj_da_put(obj_da_t *da, void *item);
 
-/* Internal routine.  Use pool_allocate instead */
+/* Internal routine.  Use da_allocate instead */
 int
-obj_pool_get_(obj_pool_t *pool, void **item, size_t size);
+obj_da_get_(obj_da_t *da, void **item, size_t size);
 
-#endif /*  __DFUSE_OBJ_POOL_H__ */
+#endif /*  __DFUSE_OBJ_DA_H__ */

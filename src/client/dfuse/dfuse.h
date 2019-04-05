@@ -33,7 +33,7 @@
 #include "dfuse_gah.h"
 #include "dfuse_fs.h"
 #include "dfuse_bulk.h"
-#include "dfuse_pool.h"
+#include "dfuse_da.h"
 
 #include "dfuse_common.h"
 #include "dfuse.h"
@@ -140,18 +140,18 @@ struct dfuse_projection_info {
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
-	struct dfuse_pool			pool;
-	struct dfuse_pool_type		*dh_pool;
-	struct dfuse_pool_type		*fgh_pool;
-	struct dfuse_pool_type		*fsh_pool;
-	struct dfuse_pool_type		*close_pool;
-	struct dfuse_pool_type		*lookup_pool;
-	struct dfuse_pool_type		*mkdir_pool;
-	struct dfuse_pool_type		*symlink_pool;
-	struct dfuse_pool_type		*fh_pool;
-	struct dfuse_pool_type		*rb_pool_page;
-	struct dfuse_pool_type		*rb_pool_large;
-	struct dfuse_pool_type		*write_pool;
+	struct dfuse_da			da;
+	struct dfuse_da_type		*dh_da;
+	struct dfuse_da_type		*fgh_da;
+	struct dfuse_da_type		*fsh_da;
+	struct dfuse_da_type		*close_da;
+	struct dfuse_da_type		*lookup_da;
+	struct dfuse_da_type		*mkdir_da;
+	struct dfuse_da_type		*symlink_da;
+	struct dfuse_da_type		*fh_da;
+	struct dfuse_da_type		*rb_da_page;
+	struct dfuse_da_type		*rb_da_large;
+	struct dfuse_da_type		*write_da;
 	uint32_t			max_read;
 	uint32_t			max_iov_read;
 	uint32_t			readdir_size;
@@ -627,7 +627,7 @@ struct dfuse_rb {
 	struct dfuse_request		rb_req;
 	struct fuse_bufvec		fbuf;
 	struct dfuse_local_bulk		lb;
-	struct dfuse_pool_type		*pt;
+	struct dfuse_da_type		*pt;
 	size_t				buf_size;
 	bool				failure;
 };
@@ -668,7 +668,7 @@ struct entry_req {
 	struct dfuse_request		request;
 	d_list_t			list;
 	crt_opcode_t			opcode;
-	struct dfuse_pool_type		*pool;
+	struct dfuse_da_type		*da;
 	char				*dest;
 };
 

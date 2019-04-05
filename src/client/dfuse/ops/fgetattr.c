@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME request
-#define POOL_NAME fgh_pool
+#define POOL_NAME fgh_da
 #define TYPE_NAME common_req
 #include "dfuse_ops.h"
 
@@ -43,7 +43,7 @@ dfuse_getattr_result_fn(struct dfuse_request *request)
 	else
 		DFUSE_REPLY_ERR(request, request->rc);
 
-	dfuse_pool_release(request->fsh->POOL_NAME, CONTAINER(request));
+	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
 	return false;
 }
 
@@ -85,6 +85,6 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc) {
 		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_pool_release(fs_handle->POOL_NAME, desc);
+		dfuse_da_release(fs_handle->POOL_NAME, desc);
 	}
 }

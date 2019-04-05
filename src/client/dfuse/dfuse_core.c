@@ -23,7 +23,7 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "dfuse_pool.h"
+#include "dfuse_da.h"
 
 int
 dfuse_fs_resend(struct dfuse_request *request);
@@ -346,9 +346,9 @@ dh_release(void *arg)
 	crt_req_decref(dh->close_req.rpc);
 }
 
-/* Create a getattr descriptor for use with mempool.
+/* Create a getattr descriptor for use with descriptor allocators.
  *
- * Two pools of descriptors are used here, one for getattr and a second
+ * Two das of descriptors are used here, one for getattr and a second
  * for getfattr.  The only difference is the RPC id so the datatypes are
  * the same, as are the init and release functions.
  */
@@ -838,39 +838,39 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
 	int				i;
 
-	struct dfuse_pool_reg pt = {.init = dh_init,
+	struct dfuse_da_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
 				  .release = dh_release,
 				  POOL_TYPE_INIT(dfuse_dir_handle,
 						 dh_free_list)};
 
-	struct dfuse_pool_reg fh = {.init = fh_init,
+	struct dfuse_da_reg fh = {.init = fh_init,
 				  .reset = fh_reset,
 				  .release = fh_release,
 				  POOL_TYPE_INIT(dfuse_file_handle,
 						 fh_free_list)};
 
-	struct dfuse_pool_reg common_t = {.reset = common_reset,
+	struct dfuse_da_reg common_t = {.reset = common_reset,
 					.release = common_release,
 					POOL_TYPE_INIT(common_req, list)};
 
-	struct dfuse_pool_reg entry_t = {.reset = entry_reset,
+	struct dfuse_da_reg entry_t = {.reset = entry_reset,
 				       .release = entry_release,
 				       POOL_TYPE_INIT(entry_req, list)};
 
-	struct dfuse_pool_reg rb_page = {.init = rb_page_init,
+	struct dfuse_da_reg rb_page = {.init = rb_page_init,
 				       .reset = rb_reset,
 				       .release = rb_release,
 				       POOL_TYPE_INIT(dfuse_rb,
 						      rb_req.ir_list)};
 
-	struct dfuse_pool_reg rb_large = {.init = rb_large_init,
+	struct dfuse_da_reg rb_large = {.init = rb_large_init,
 					.reset = rb_reset,
 					.release = rb_release,
 					POOL_TYPE_INIT(dfuse_rb,
 						       rb_req.ir_list)};
 
-	struct dfuse_pool_reg wb = {.init = wb_init,
+	struct dfuse_da_reg wb = {.init = wb_init,
 				  .reset = wb_reset,
 				  .release = wb_release,
 				  POOL_TYPE_INIT(dfuse_wb, wb_req.ir_list)};
@@ -896,7 +896,7 @@ initialize_projection(struct dfuse_state *dfuse_state)
 		DFUSE_TRA_UP(&fs_handle->ctx_array[i], fs_handle, "dfuse_ctx");
 	}
 
-	ret = dfuse_pool_init(&fs_handle->pool, fs_handle);
+	ret = dfuse_da_init(&fs_handle->da, fs_handle);
 	if (ret != -DER_SUCCESS)
 		D_GOTO(err, 0);
 
@@ -975,59 +975,59 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	 * This is done late on in the registration as the dh_int() and
 	 * dh_reset() functions require access to fs_handle.
 	 */
-	fs_handle->dh_pool = dfuse_pool_register(&fs_handle->pool, &pt);
-	if (!fs_handle->dh_pool)
+	fs_handle->dh_da = dfuse_da_register(&fs_handle->da, &pt);
+	if (!fs_handle->dh_da)
 		D_GOTO(err, 0);
 
 	common_t.init = getattr_common_init;
-	fs_handle->fgh_pool = dfuse_pool_register(&fs_handle->pool, &common_t);
-	if (!fs_handle->fgh_pool)
+	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common_t);
+	if (!fs_handle->fgh_da)
 		D_GOTO(err, 0);
 
 	common_t.init = setattr_common_init;
-	fs_handle->fsh_pool = dfuse_pool_register(&fs_handle->pool, &common_t);
-	if (!fs_handle->fsh_pool)
+	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common_t);
+	if (!fs_handle->fsh_da)
 		D_GOTO(err, 0);
 
 	common_t.init = close_common_init;
-	fs_handle->close_pool = dfuse_pool_register(&fs_handle->pool,
+	fs_handle->close_da = dfuse_da_register(&fs_handle->da,
 						    &common_t);
-	if (!fs_handle->close_pool)
+	if (!fs_handle->close_da)
 		D_GOTO(err, 0);
 
 	entry_t.init = lookup_entry_init;
-	fs_handle->lookup_pool = dfuse_pool_register(&fs_handle->pool,
+	fs_handle->lookup_da = dfuse_da_register(&fs_handle->da,
 						     &entry_t);
-	if (!fs_handle->lookup_pool)
+	if (!fs_handle->lookup_da)
 		D_GOTO(err, 0);
 
 	entry_t.init = mkdir_entry_init;
-	fs_handle->mkdir_pool = dfuse_pool_register(&fs_handle->pool, &entry_t);
-	if (!fs_handle->mkdir_pool)
+	fs_handle->mkdir_da = dfuse_da_register(&fs_handle->da, &entry_t);
+	if (!fs_handle->mkdir_da)
 		D_GOTO(err, 0);
 
 	entry_t.init = symlink_entry_init;
-	fs_handle->symlink_pool = dfuse_pool_register(&fs_handle->pool,
+	fs_handle->symlink_da = dfuse_da_register(&fs_handle->da,
 						      &entry_t);
-	if (!fs_handle->symlink_pool)
+	if (!fs_handle->symlink_da)
 		D_GOTO(err, 0);
 
-	fs_handle->fh_pool = dfuse_pool_register(&fs_handle->pool, &fh);
-	if (!fs_handle->fh_pool)
+	fs_handle->fh_da = dfuse_da_register(&fs_handle->da, &fh);
+	if (!fs_handle->fh_da)
 		D_GOTO(err, 0);
 
-	fs_handle->rb_pool_page = dfuse_pool_register(&fs_handle->pool,
+	fs_handle->rb_da_page = dfuse_da_register(&fs_handle->da,
 						      &rb_page);
-	if (!fs_handle->rb_pool_page)
+	if (!fs_handle->rb_da_page)
 		D_GOTO(err, 0);
 
-	fs_handle->rb_pool_large = dfuse_pool_register(&fs_handle->pool,
+	fs_handle->rb_da_large = dfuse_da_register(&fs_handle->da,
 						       &rb_large);
-	if (!fs_handle->rb_pool_large)
+	if (!fs_handle->rb_da_large)
 		D_GOTO(err, 0);
 
-	fs_handle->write_pool = dfuse_pool_register(&fs_handle->pool, &wb);
-	if (!fs_handle->write_pool)
+	fs_handle->write_da = dfuse_da_register(&fs_handle->da, &wb);
+	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
 	if (!cnss_register_fuse(fs_handle->dfuse_state->cnss_info,
@@ -1048,7 +1048,7 @@ initialize_projection(struct dfuse_state *dfuse_state)
 
 	return true;
 err:
-	dfuse_pool_destroy(&fs_handle->pool);
+	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
 	D_FREE(fs_handle);
 	return false;
@@ -1173,7 +1173,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	}
 
 	do {
-		/* If this context has a pool associated with it then reap
+		/* If this context has a da associated with it then reap
 		 * any descriptors with it so there are no pending RPCs when
 		 * we call context_destroy.
 		 */
@@ -1182,7 +1182,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 		do {
 			rc = dfuse_progress_drain(&fs_handle->ctx_array[0]);
 
-			active = dfuse_pool_reclaim(&fs_handle->pool);
+			active = dfuse_da_reclaim(&fs_handle->da);
 
 			if (!active)
 				break;
@@ -1204,7 +1204,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(fs_handle, "Count not destroy context");
 
-	dfuse_pool_destroy(&fs_handle->pool);
+	dfuse_da_destroy(&fs_handle->da);
 
 	rc = pthread_mutex_destroy(&fs_handle->gah_lock);
 	if (rc != 0) {

@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME request
-#define POOL_NAME symlink_pool
+#define POOL_NAME symlink_da
 #define TYPE_NAME entry_req
 #include "dfuse_ops.h"
 
@@ -59,7 +59,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 		D_GOTO(err, rc = ENOMEM);
 	in->oldpath = desc->dest;
 
-	desc->pool = fs_handle->symlink_pool;
+	desc->da = fs_handle->symlink_da;
 	strncpy(desc->ie->name, name, NAME_MAX);
 	desc->ie->parent = parent;
 
@@ -73,6 +73,6 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	if (desc) {
 		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_pool_release(fs_handle->symlink_pool, desc);
+		dfuse_da_release(fs_handle->symlink_da, desc);
 	}
 }

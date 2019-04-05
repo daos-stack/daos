@@ -21,14 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_POOL_H__
-#define __DFUSE_POOL_H__
+#ifndef __DFUSE_DA_H__
+#define __DFUSE_DA_H__
 
 #include <pthread.h>
 #include <gurt/list.h>
 
 /* A datastructure used to describe and register a type */
-struct dfuse_pool_reg {
+struct dfuse_da_reg {
 	/* Perform any one-time setup or assigning constants.
 	 */
 	void	(*init)(void *, void *);
@@ -64,13 +64,13 @@ struct dfuse_pool_reg {
 /* A datastructure used to manage a type.  Includes both the
  * registration data and any live state
  */
-struct dfuse_pool_type {
-	struct dfuse_pool_reg	reg;
+struct dfuse_da_type {
+	struct dfuse_da_reg	reg;
 	d_list_t		type_list;
 	d_list_t		free_list;
 	d_list_t		pending_list;
 	pthread_mutex_t		lock;
-	struct dfuse_pool		*pool;
+	struct dfuse_da		*da;
 
 	/* Counters for current number of objects */
 	int			count; /* Total currently created */
@@ -90,36 +90,36 @@ struct dfuse_pool_type {
 	int			no_restock_hwm; /* High water mark */
 };
 
-struct dfuse_pool {
+struct dfuse_da {
 	d_list_t	list;
 	void		*arg;
 	pthread_mutex_t	lock;
 	bool		init;
 };
 
-/* Create a new pool, called once at startup
+/* Create a new da, called once at startup
  *
  * Returns a CaRT error code.
  */
 int
-dfuse_pool_init(struct dfuse_pool *, void *arg)
+dfuse_da_init(struct dfuse_da *, void *arg)
 	__attribute((warn_unused_result, nonnull(1)));
 
-/* Destroy a pool, called once at shutdown */
+/* Destroy a da, called once at shutdown */
 void
-dfuse_pool_destroy(struct dfuse_pool *);
+dfuse_da_destroy(struct dfuse_da *);
 
-/* Register a new type to a pool, called multiple times after init */
-struct dfuse_pool_type *
-dfuse_pool_register(struct dfuse_pool *, struct dfuse_pool_reg *);
+/* Register a new type to a da, called multiple times after init */
+struct dfuse_da_type *
+dfuse_da_register(struct dfuse_da *, struct dfuse_da_reg *);
 
 /* Allocate a datastructure in performant way */
 void *
-dfuse_pool_acquire(struct dfuse_pool_type *);
+dfuse_da_acquire(struct dfuse_da_type *);
 
 /* Release a datastructure in a performant way */
 void
-dfuse_pool_release(struct dfuse_pool_type *, void *);
+dfuse_da_release(struct dfuse_da_type *, void *);
 
 /* Pre-allocate datastructures
  * This should be called off the critical path, after previous acquire/release
@@ -127,14 +127,14 @@ dfuse_pool_release(struct dfuse_pool_type *, void *);
  * transitions so it does not need calling in progress loops.
  */
 void
-dfuse_pool_restock(struct dfuse_pool_type *);
+dfuse_da_restock(struct dfuse_da_type *);
 
 /* Reclaim any memory possible across all types
  *
  * Returns true of there are any descriptors in use.
  */
 bool
-dfuse_pool_reclaim(struct dfuse_pool *)
+dfuse_da_reclaim(struct dfuse_da *)
 	__attribute((warn_unused_result, nonnull));
 
-#endif /*  __DFUSE_POOL_H__ */
+#endif /*  __DFUSE_DA_H__ */

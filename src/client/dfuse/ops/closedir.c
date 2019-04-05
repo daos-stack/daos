@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME close_req
-#define POOL_NAME dh_pool
+#define POOL_NAME dh_da
 #define TYPE_NAME dfuse_dir_handle
 #include "dfuse_ops.h"
 
@@ -47,7 +47,7 @@ closedir_ll_cb(struct dfuse_request *request)
 	else
 		DFUSE_REPLY_ERR(request, request->rc);
 out:
-	dfuse_pool_release(dh->open_req.fsh->dh_pool, dh);
+	dfuse_da_release(dh->open_req.fsh->dh_da, dh);
 	return false;
 }
 
@@ -79,7 +79,7 @@ err:
 		DFUSE_TRA_DOWN(&dh->close_req);
 	}
 
-	dfuse_pool_release(fs_handle->dh_pool, dh);
+	dfuse_da_release(fs_handle->dh_da, dh);
 
 }
 

@@ -83,7 +83,7 @@ out:
 						rc, strerror(-rc));
 		}
 	}
-	dfuse_pool_release(rb->pt, rb);
+	dfuse_da_release(rb->pt, rb);
 	return false;
 }
 
@@ -100,7 +100,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct dfuse_file_handle *handle = (void *)fi->fh;
 	struct dfuse_projection_info *fs_handle = handle->open_req.fsh;
 	struct dfuse_readx_in *in;
-	struct dfuse_pool_type *pt;
+	struct dfuse_da_type *pt;
 	struct dfuse_rb *rb = NULL;
 	int rc;
 
@@ -108,11 +108,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
 
 	if (len <= 4096)
-		pt = fs_handle->rb_pool_page;
+		pt = fs_handle->rb_da_page;
 	else
-		pt = fs_handle->rb_pool_large;
+		pt = fs_handle->rb_da_large;
 
-	rb = dfuse_pool_acquire(pt);
+	rb = dfuse_da_acquire(pt);
 	if (!rb)
 		D_GOTO(out_err, rc = ENOMEM);
 
@@ -132,10 +132,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	rc = dfuse_fs_send(&rb->rb_req);
 	if (rc != 0) {
 		DFUSE_REPLY_ERR(&rb->rb_req, rc);
-		dfuse_pool_release(pt, rb);
+		dfuse_da_release(pt, rb);
 	}
 
-	dfuse_pool_restock(pt);
+	dfuse_da_restock(pt);
 	return;
 
 out_err:

@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME open_req
-#define POOL_NAME dh_pool
+#define POOL_NAME dh_da
 #define TYPE_NAME dfuse_dir_handle
 #include "dfuse_ops.h"
 
@@ -46,7 +46,7 @@ opendir_ll_cb(struct dfuse_request *request)
 		DFUSE_REPLY_OPEN(request, fi);
 	} else {
 		DFUSE_REPLY_ERR(request, request->rc);
-		dfuse_pool_release(dh->open_req.fsh->dh_pool, dh);
+		dfuse_da_release(dh->open_req.fsh->dh_da, dh);
 	}
 	return false;
 }
@@ -79,7 +79,7 @@ dfuse_cb_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	return;
 err:
 	if (dh)
-		dfuse_pool_release(fs_handle->dh_pool, dh);
+		dfuse_da_release(fs_handle->dh_da, dh);
 
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

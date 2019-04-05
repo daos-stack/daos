@@ -26,7 +26,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME request
-#define POOL_NAME lookup_pool
+#define POOL_NAME lookup_da
 #define TYPE_NAME entry_req
 #include "dfuse_ops.h"
 
@@ -78,11 +78,11 @@ dfuse_entry_cb(struct dfuse_request *request)
 	}
 
 	DFUSE_REPLY_ENTRY(request, entry);
-	dfuse_pool_release(desc->pool, desc);
+	dfuse_da_release(desc->da, desc);
 	return keep_ref;
 out:
 	DFUSE_REPLY_ERR(request, request->rc);
-	dfuse_pool_release(desc->pool, desc);
+	dfuse_da_release(desc->da, desc);
 	return false;
 }
 
@@ -115,7 +115,7 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	strncpy(in->name.name, name, NAME_MAX);
 	strncpy(desc->ie->name, name, NAME_MAX);
 	desc->ie->parent = parent;
-	desc->pool = fs_handle->lookup_pool;
+	desc->da = fs_handle->lookup_da;
 
 	rc = dfuse_fs_send(&desc->request);
 	if (rc != 0)
@@ -123,6 +123,6 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	return;
 err:
 	if (desc)
-		dfuse_pool_release(fs_handle->lookup_pool, desc);
+		dfuse_da_release(fs_handle->lookup_da, desc);
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

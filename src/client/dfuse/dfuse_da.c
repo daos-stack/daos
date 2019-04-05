@@ -27,12 +27,12 @@
 #include "dfuse_log.h"
 #include <gurt/common.h>
 
-#include "dfuse_pool.h"
+#include "dfuse_da.h"
 
 static void
-debug_dump(struct dfuse_pool_type *type)
+debug_dump(struct dfuse_da_type *type)
 {
-	DFUSE_TRA_INFO(type, "Pool type %p '%s'", type, type->reg.name);
+	DFUSE_TRA_INFO(type, "DescAlloc type %p '%s'", type, type->reg.name);
 	DFUSE_TRA_DEBUG(type, "size %d offset %d",
 			type->reg.size, type->reg.offset);
 	DFUSE_TRA_DEBUG(type, "Count: free %d pending %d total %d",
@@ -46,47 +46,47 @@ debug_dump(struct dfuse_pool_type *type)
 			type->no_restock_hwm);
 }
 
-/* Create an object pool */
+/* Create an object da */
 int
-dfuse_pool_init(struct dfuse_pool *pool, void *arg)
+dfuse_da_init(struct dfuse_da *da, void *arg)
 {
 	int rc;
 
-	D_INIT_LIST_HEAD(&pool->list);
+	D_INIT_LIST_HEAD(&da->list);
 
-	rc = D_MUTEX_INIT(&pool->lock, NULL);
+	rc = D_MUTEX_INIT(&da->lock, NULL);
 	if (rc != -DER_SUCCESS)
 		return rc;
 
-	DFUSE_TRA_UP(pool, arg, "dfuse_pool");
-	DFUSE_TRA_DEBUG(pool, "Creating a pool");
+	DFUSE_TRA_UP(da, arg, "dfuse_da");
+	DFUSE_TRA_DEBUG(da, "Creating a da");
 
-	pool->init = true;
-	pool->arg = arg;
+	da->init = true;
+	da->arg = arg;
 	return -DER_SUCCESS;
 }
 
-/* Destroy an object pool */
+/* Destroy an object da */
 void
-dfuse_pool_destroy(struct dfuse_pool *pool)
+dfuse_da_destroy(struct dfuse_da *da)
 {
-	struct dfuse_pool_type *type;
+	struct dfuse_da_type *type;
 	int rc;
 	bool in_use;
 
-	if (!pool->init)
+	if (!da->init)
 		return;
 
-	d_list_for_each_entry(type, &pool->list, type_list) {
+	d_list_for_each_entry(type, &da->list, type_list) {
 		debug_dump(type);
 	}
 
-	in_use = dfuse_pool_reclaim(pool);
+	in_use = dfuse_da_reclaim(da);
 	if (in_use)
-		DFUSE_TRA_WARNING(pool, "Pool has active objects");
+		DFUSE_TRA_WARNING(da, "Allocator has active objects");
 
-	while ((type = d_list_pop_entry(&pool->list,
-					struct dfuse_pool_type,
+	while ((type = d_list_pop_entry(&da->list,
+					struct dfuse_da_type,
 					type_list))) {
 		if (type->count != 0)
 			DFUSE_TRA_WARNING(type,
@@ -99,12 +99,12 @@ dfuse_pool_destroy(struct dfuse_pool *pool)
 		DFUSE_TRA_DOWN(type);
 		D_FREE(type);
 	}
-	rc = pthread_mutex_destroy(&pool->lock);
+	rc = pthread_mutex_destroy(&da->lock);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(pool,
+		DFUSE_TRA_ERROR(da,
 				"Failed to destroy lock %d %s",
 				rc, strerror(rc));
-	DFUSE_TRA_DOWN(pool);
+	DFUSE_TRA_DOWN(da);
 }
 
 /* Helper function for migrating objects from pending list to free list.
@@ -115,7 +115,7 @@ dfuse_pool_destroy(struct dfuse_pool *pool)
  * This function should be called with the type lock held.
  */
 static int
-restock(struct dfuse_pool_type *type, int count)
+restock(struct dfuse_da_type *type, int count)
 {
 	d_list_t *entry, *enext;
 	int reset_calls = 0;
@@ -170,13 +170,13 @@ restock(struct dfuse_pool_type *type, int count)
  */
 
 bool
-dfuse_pool_reclaim(struct dfuse_pool *pool)
+dfuse_da_reclaim(struct dfuse_da *da)
 {
-	struct dfuse_pool_type *type;
+	struct dfuse_da_type *type;
 	int active_descriptors = false;
 
-	D_MUTEX_LOCK(&pool->lock);
-	d_list_for_each_entry(type, &pool->list, type_list) {
+	D_MUTEX_LOCK(&da->lock);
+	d_list_for_each_entry(type, &da->list, type_list) {
 		d_list_t *entry, *enext;
 
 		DFUSE_TRA_DEBUG(type, "Resetting type");
@@ -212,7 +212,7 @@ dfuse_pool_reclaim(struct dfuse_pool *pool)
 		}
 		D_MUTEX_UNLOCK(&type->lock);
 	}
-	D_MUTEX_UNLOCK(&pool->lock);
+	D_MUTEX_UNLOCK(&da->lock);
 	return active_descriptors;
 }
 
@@ -221,7 +221,7 @@ dfuse_pool_reclaim(struct dfuse_pool *pool)
  * Returns a pointer to the object or NULL if allocation fails.
  */
 static void *
-create(struct dfuse_pool_type *type)
+create(struct dfuse_da_type *type)
 {
 	void *ptr;
 
@@ -231,7 +231,7 @@ create(struct dfuse_pool_type *type)
 
 	type->init_count++;
 	if (type->reg.init)
-		type->reg.init(ptr, type->pool->arg);
+		type->reg.init(ptr, type->da->arg);
 
 	if (type->reg.reset) {
 		if (!type->reg.reset(ptr)) {
@@ -252,7 +252,7 @@ create(struct dfuse_pool_type *type)
  * there will be no on-path allocations.
  */
 static void
-create_many(struct dfuse_pool_type *type)
+create_many(struct dfuse_da_type *type)
 {
 	while (type->free_count < (type->no_restock_hwm + 1)) {
 		void *ptr;
@@ -273,11 +273,11 @@ create_many(struct dfuse_pool_type *type)
 	}
 }
 
-/* Register a pool type */
-struct dfuse_pool_type *
-dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
+/* Register a da type */
+struct dfuse_da_type *
+dfuse_da_register(struct dfuse_da *da, struct dfuse_da_reg *reg)
 {
-	struct dfuse_pool_type *type;
+	struct dfuse_da_type *type;
 	int rc;
 
 	if (!reg->name)
@@ -293,11 +293,11 @@ dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
 		return NULL;
 	}
 
-	DFUSE_TRA_UP(type, pool, reg->name);
+	DFUSE_TRA_UP(type, da, reg->name);
 
 	D_INIT_LIST_HEAD(&type->free_list);
 	D_INIT_LIST_HEAD(&type->pending_list);
-	type->pool = pool;
+	type->da = da;
 
 	type->count = 0;
 	type->reg = *reg;
@@ -321,9 +321,9 @@ dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
 		return NULL;
 	}
 
-	D_MUTEX_LOCK(&pool->lock);
-	d_list_add_tail(&type->type_list, &pool->list);
-	D_MUTEX_UNLOCK(&pool->lock);
+	D_MUTEX_LOCK(&da->lock);
+	d_list_add_tail(&type->type_list, &da->list);
+	D_MUTEX_UNLOCK(&da->lock);
 
 	return type;
 }
@@ -334,7 +334,7 @@ dfuse_pool_register(struct dfuse_pool *pool, struct dfuse_pool_reg *reg)
  * as posslble.
  */
 void *
-dfuse_pool_acquire(struct dfuse_pool_type *type)
+dfuse_da_acquire(struct dfuse_da_type *type)
 {
 	void		*ptr = NULL;
 	d_list_t	*entry;
@@ -384,7 +384,7 @@ dfuse_pool_acquire(struct dfuse_pool_type *type)
  *
  */
 void
-dfuse_pool_release(struct dfuse_pool_type *type, void *ptr)
+dfuse_da_release(struct dfuse_da_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->reg.offset;
 
@@ -407,7 +407,7 @@ dfuse_pool_release(struct dfuse_pool_type *type, void *ptr)
  */
 
 void
-dfuse_pool_restock(struct dfuse_pool_type *type)
+dfuse_da_restock(struct dfuse_da_type *type)
 {
 	DFUSE_TRA_DEBUG(type, "Count (%d/%d/%d)", type->pending_count,
 			type->free_count, type->count);

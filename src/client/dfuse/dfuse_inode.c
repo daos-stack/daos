@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define POOL_NAME close_pool
+#define POOL_NAME close_da
 #define TYPE_NAME common_req
 #define REQ_NAME request
 #define STAT_KEY release
@@ -117,7 +117,7 @@ ie_close_cb(struct dfuse_request *request)
 	struct TYPE_NAME	*desc = CONTAINER(request);
 
 	DFUSE_TRA_DOWN(request);
-	dfuse_pool_release(desc->request.fsh->close_pool, desc);
+	dfuse_da_release(desc->request.fsh->close_da, desc);
 	return false;
 }
 
@@ -165,5 +165,5 @@ err:
 
 	DFUSE_TRA_DOWN(ie);
 	if (desc)
-		dfuse_pool_release(fs_handle->close_pool, desc);
+		dfuse_da_release(fs_handle->close_da, desc);
 }
