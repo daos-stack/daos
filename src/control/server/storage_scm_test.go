@@ -24,11 +24,18 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
+
+func init() {
+	log.NewDefaultLogger(log.Error, "storage_scm_test: ", os.Stderr)
+}
 
 // MockModule returns a mock SCM module of type exported from go-ipmctl.
 func MockModule() DeviceDiscovery {
@@ -51,12 +58,47 @@ func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 	return m.modules, nil
 }
 
+// build config with mock external method behaviour relevant to this file
+func mockScmConfig(
+	mountRet error, unmountRet error, mkdirRet error, removeRet error) configuration {
+
+	config := newDefaultConfiguration(
+		&mockExt{
+			nil, "", false, mountRet, unmountRet, mkdirRet, removeRet})
+
+	return config
+}
+
+// return config reference with specified external method behaviour and scm config params
+func newMockScmConfig(
+	mountRet error, unmountRet error, mkdirRet error, removeRet error,
+	mount string, class ScmClass, devs []string, size int) *configuration {
+
+	c := mockScmConfig(mountRet, unmountRet, mkdirRet, removeRet)
+	c.Servers = append(c.Servers, newDefaultServer())
+	c.Servers[0].ScmMount = mount
+	c.Servers[0].ScmClass = class
+	c.Servers[0].ScmList = devs
+	c.Servers[0].ScmSize = size
+
+	return &c
+}
+
 // mockScmStorage factory
-func newMockScmStorage(mms []DeviceDiscovery, inited bool) *scmStorage {
+func newMockScmStorage(
+	mms []DeviceDiscovery, inited bool, c *configuration) *scmStorage {
+
 	return &scmStorage{
 		ipmCtl:      &mockIpmCtl{modules: mms},
 		initialized: inited,
+		config:      c,
 	}
+}
+
+func defaultMockScmStorage(config *configuration) *scmStorage {
+	m := MockModule()
+
+	return newMockScmStorage([]DeviceDiscovery{m}, false, config)
 }
 
 func TestDiscoveryScm(t *testing.T) {
@@ -76,9 +118,10 @@ func TestDiscoveryScm(t *testing.T) {
 
 	mPB := MockModulePB()
 	m := MockModule()
+	config := defaultMockConfig()
 
 	for _, tt := range tests {
-		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited)
+		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited, &config)
 
 		if err := ss.Discover(); err != nil {
 			if tt.errMsg != "" {
@@ -90,5 +133,109 @@ func TestDiscoveryScm(t *testing.T) {
 
 		AssertEqual(t, len(ss.modules), 1, "unexpected number of modules")
 		AssertEqual(t, ss.modules[int32(mPB.Physicalid)], mPB, "unexpected module values")
+	}
+}
+
+func TestFormatScm(t *testing.T) {
+	tests := []struct {
+		mountRet    error
+		unmountRet  error
+		mkdirRet    error
+		removeRet   error
+		mount       string
+		class       ScmClass
+		devs        []string
+		size        int
+		expSyscalls []string // expected arguments in syscall methods
+		desc        string
+		errMsg      string
+	}{
+		{
+			desc:   "zero values",
+			errMsg: "scm mount must be specified in config",
+		},
+		{
+			desc:   "no class",
+			mount:  "/mnt/daos",
+			errMsg: "unsupported ScmClass",
+		},
+		{
+			desc:  "ram success",
+			mount: "/mnt/daos",
+			class: scmRAM,
+			size:  6,
+			expSyscalls: []string{
+				"umount /mnt/daos",
+				"remove /mnt/daos",
+				"mkdir /mnt/daos",
+				"mount tmpfs /mnt/daos tmpfs size=6g",
+			},
+		},
+		{
+			desc:  "dcpm success",
+			mount: "/mnt/daos",
+			class: scmDCPM,
+			devs:  []string{"/dev/pmem0"},
+			expSyscalls: []string{
+				"umount /mnt/daos",
+				"remove /mnt/daos",
+				"wipefs -a /dev/pmem0",
+				"mkfs.ext4 /dev/pmem0",
+				"mkdir /mnt/daos",
+				"mount /dev/pmem0 /mnt/daos ext4 dax",
+			},
+		},
+		{
+			desc:   "dcpm missing dev",
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string{},
+			errMsg: "expecting one scm dcpm pmem device per-server in config",
+		},
+		{
+			desc:   "dcpm nil devs",
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string(nil),
+			errMsg: "expecting one scm dcpm pmem device per-server in config",
+		},
+		{
+			desc:   "dcpm empty dev",
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string{""},
+			errMsg: "scm dcpm device list must contain path",
+		},
+	}
+
+	serverIdx := 0
+
+	for _, tt := range tests {
+		commands = []string{}
+
+		config := newMockScmConfig(
+			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
+			tt.mount, tt.class, tt.devs, tt.size)
+
+		ss := newMockScmStorage([]DeviceDiscovery{}, true, config)
+
+		if err := ss.Format(serverIdx); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err)
+		}
+
+		for i, s := range commands {
+			AssertEqual(
+				t, s, tt.expSyscalls[i],
+				fmt.Sprintf("commands don't match (%s)", tt.desc))
+		}
+
+		// in case extra values were expected
+		AssertEqual(
+			t, len(commands), len(tt.expSyscalls),
+			fmt.Sprintf("unexpected number of commands (%s)", tt.desc))
 	}
 }

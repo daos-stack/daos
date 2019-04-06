@@ -11,12 +11,16 @@ servers:
   - ABT_MAX_NUM_XSTREAMS=100
   - CRT_TIMEOUT=30
   scm_mount: /mnt/daos/1
+  scm_class: ram
+  scm_list: []
+  scm_size: 16
   bdev_class: nvme
   bdev_list:
   - 0000:81:00.0
   bdev_number: 0
   bdev_size: 0
   cliopts: []
+  formatcond: null
 - rank: 1
   cpus:
   - 21-40
@@ -28,6 +32,10 @@ servers:
   - ABT_MAX_NUM_XSTREAMS=200
   - CRT_TIMEOUT=100
   scm_mount: /mnt/daos/2
+  scm_class: dcpm
+  scm_list:
+  - /dev/pmem0
+  scm_size: 0
   bdev_class: kdev
   bdev_list:
   - /dev/sdc
@@ -35,6 +43,7 @@ servers:
   bdev_number: 1
   bdev_size: 16
   cliopts: []
+  formatcond: null
 provider: ofi+verbs;ofi_rxm
 socket_dir: ./.daos/daos_server
 access_points:
@@ -50,6 +59,7 @@ fault_cb: ./.daos/fd_callback
 fabric_ifaces:
 - qib0
 - qib1
+format_override: false
 scm_mount_path: /mnt/daosa
 bdev_include:
 - 0000:81:00.1

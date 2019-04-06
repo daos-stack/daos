@@ -91,7 +91,7 @@ func (c *configuration) parseNvme() error {
 	for i := range c.Servers {
 		s := &c.Servers[i]
 		switch s.BdevClass {
-		case bdNvme:
+		case bdNVMe:
 			if len(s.BdevList) == 0 {
 				continue
 			}
