@@ -48,7 +48,6 @@ func parseCliOpts(opts *cliOptions) error {
 	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
 
-	fmt.Printf("%+v %+v", opts, p)
 	// Parse commandline flags which override options loaded from config.
 	_, err := p.Parse()
 	if err != nil {
