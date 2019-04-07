@@ -675,7 +675,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	}
 	RPC_TRACE(DB_NET, rpc_priv, "reset_timer enabled.\n");
 
-	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
+	crt_set_timeout(rpc_priv);
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
@@ -866,7 +866,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
+	crt_set_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
@@ -918,6 +918,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	struct crt_ep_inflight	*epi;
 	int64_t			 credits, inflight;
 	d_list_t		 submit_list;
+	struct crt_rpc_priv	*tmp_rpc;
 	int			 rc;
 
 	D_ASSERT(crt_ctx != NULL);
@@ -966,6 +967,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	}
 
+	rpc_priv->crp_ctx_tracked = 0;
+
 	/* decref corresponding to addref in crt_context_req_track */
 	RPC_DECREF(rpc_priv);
 
@@ -981,49 +984,48 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	credits = crt_gdata.cg_credit_ep_ctx - inflight;
 	while (credits > 0 && !d_list_empty(&epi->epi_req_waitq)) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
-		rpc_priv = d_list_entry(epi->epi_req_waitq.next,
+		tmp_rpc = d_list_entry(epi->epi_req_waitq.next,
 					struct crt_rpc_priv, crp_epi_link);
-		rpc_priv->crp_state = RPC_STATE_INITED;
-		rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
+		tmp_rpc->crp_state = RPC_STATE_INITED;
+		crt_set_timeout(tmp_rpc);
 
 		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-		rc = crt_req_timeout_track(rpc_priv);
+		rc = crt_req_timeout_track(tmp_rpc);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc != 0)
 			D_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
 
 		/* remove from waitq and add to in-flight queue */
-		d_list_move_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
+		d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
 		epi->epi_req_wait_num--;
 		D_ASSERT(epi->epi_req_wait_num >= 0);
 		epi->epi_req_num++;
 		D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 		/* add to resend list */
-		d_list_add_tail(&rpc_priv->crp_tmp_link, &submit_list);
+		d_list_add_tail(&tmp_rpc->crp_tmp_link, &submit_list);
 		credits--;
 	}
 
-	rpc_priv->crp_ctx_tracked = 0;
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((rpc_priv = d_list_pop_entry(&submit_list,
+	while ((tmp_rpc = d_list_pop_entry(&submit_list,
 					    struct crt_rpc_priv,
 					    crp_tmp_link))) {
 
-		rc = crt_req_send_internal(rpc_priv);
+		rc = crt_req_send_internal(tmp_rpc);
 		if (rc == 0)
 			continue;
 
-		RPC_ADDREF(rpc_priv);
-		D_ERROR("crt_req_send_internal failed, rc: %d, opc: %#x.\n",
-			rc, rpc_priv->crp_pub.cr_opc);
-		rpc_priv->crp_state = RPC_STATE_INITED;
-		crt_context_req_untrack(rpc_priv);
+		RPC_ADDREF(tmp_rpc);
+		RPC_ERROR(tmp_rpc, "crt_req_send_internal failed, rc: %d\n",
+			rc);
+		tmp_rpc->crp_state = RPC_STATE_INITED;
+		crt_context_req_untrack(tmp_rpc);
 		/* for error case here */
-		crt_rpc_complete(rpc_priv, rc);
-		RPC_DECREF(rpc_priv);
+		crt_rpc_complete(tmp_rpc, rc);
+		RPC_DECREF(tmp_rpc);
 	}
 }
 

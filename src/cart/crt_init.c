@@ -93,8 +93,14 @@ static int data_init(crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
-	credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
-	d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
+	/* Override defaults and environment if option is set */
+	if (opt && opt->cio_use_credits) {
+		credits = opt->cio_ep_credits;
+	} else {
+		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
+		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
+	}
+
 	if (credits == 0) {
 		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control "
 			"disabled.\n");

@@ -596,7 +596,7 @@ crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	if (!crt_req_timedout(rpc_priv))
 		crt_req_timeout_untrack(rpc_priv);
-	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
+	crt_set_timeout(rpc_priv);
 	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
