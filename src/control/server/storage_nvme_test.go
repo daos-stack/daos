@@ -139,7 +139,7 @@ func TestDiscoveryNvmeSingle(t *testing.T) {
 	c := MockControllerPB("1.0.0")
 
 	for _, tt := range tests {
-		config := defaultMockConfig()
+		config := defaultMockConfig(t)
 		sn := newMockNvmeStorage(defaultMockSpdkNvme(), tt.inited, &config)
 
 		if err := sn.Discover(); err != nil {
@@ -199,7 +199,7 @@ func TestDiscoveryNvmeMulti(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		config := defaultMockConfig()
+		config := defaultMockConfig(t)
 		sn := newMockNvmeStorage(
 			newMockSpdkNvme("1.0.0", "1.0.1", tt.ctrlrs, tt.nss),
 			false,
@@ -264,7 +264,7 @@ func TestUpdateNvme(t *testing.T) {
 	c := MockControllerPB("1.0.1")
 
 	for _, tt := range tests {
-		config := defaultMockConfig()
+		config := defaultMockConfig(t)
 		sn := defaultMockNvmeStorage(&config)
 
 		if tt.inited {
@@ -319,7 +319,7 @@ func TestBurnInNvme(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		config := defaultMockConfig()
+		config := defaultMockConfig(t)
 		sn := defaultMockNvmeStorage(&config)
 
 		if tt.inited {

@@ -38,9 +38,9 @@ type cliOptions struct {
 	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
 	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
 	Cores       uint16  `short:"c" long:"cores" default:"0" description:"option deprecated, please use targets instead"`
-	Targets     int     `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
-	NrXsHelpers int     `short:"x" long:"xshelpernr" default:"2" description:"number of helper XS per VOS target (default 2)"`
-	FirstCore   int     `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
+	Targets     uint16  `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
+	NrXsHelpers *uint16 `short:"x" long:"xshelpernr" default:"2" description:"number of helper XS per VOS target (default 2)"`
+	FirstCore   uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
 	Group       string  `short:"g" long:"group" description:"Server group name"`
 	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
 	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`

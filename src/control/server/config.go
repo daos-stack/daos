@@ -289,13 +289,13 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		// Targets should override Cores if specified in cmdline or
 		// config file.
 		if opts.Targets > 0 {
-			srv.Targets, _ = setNumCores(opts.Targets)
+			srv.Targets, _ = setNumCores(int(opts.Targets))
 		}
-		if opts.NrXsHelpers != 2 {
-			srv.NrXsHelpers = opts.NrXsHelpers
+		if *opts.NrXsHelpers != 2 {
+			srv.NrXsHelpers = int(*opts.NrXsHelpers)
 		}
 		if opts.FirstCore > 0 {
-			srv.FirstCore = opts.FirstCore
+			srv.FirstCore = int(opts.FirstCore)
 		}
 	}
 

@@ -50,8 +50,8 @@ const (
 	bdKdev   BdClass = "kdev"
 	bdFile   BdClass = "file"
 
-	// todo: implement Provider discriminated union
-	// todo: implement LogMask discriminated union
+	// TODO: implement Provider discriminated union
+	// TODO: implement LogMask discriminated union
 )
 
 // rank represents a rank of an I/O server or a nil rank.
@@ -116,7 +116,7 @@ func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error
 // ScmClass enum specifing device type for Storage Class Memory
 type ScmClass string
 
-// UnmarshalYAML implements yaml.Unmarshaler on ScmClass struct
+// UnmarshalYAML implements yaml.Unmarshaler on ScmClass type
 func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var class string
 	if err := unmarshal(&class); err != nil {
@@ -138,7 +138,7 @@ func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // BdClass enum specifing block device type for storage
 type BdClass string
 
-// UnmarshalYAML implements yaml.Unmarshaler on BdClass struct
+// UnmarshalYAML implements yaml.Unmarshaler on BdClass type
 func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var class string
 	if err := unmarshal(&class); err != nil {
@@ -156,7 +156,7 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// todo: implement UnMarshal for LogMask discriminated union
+// TODO: implement UnMarshal for LogMask discriminated union
 
 // server defines configuration options for DAOS IO Server instances
 type server struct {
@@ -184,13 +184,32 @@ type server struct {
 	FormatCond *sync.Cond
 }
 
-// newDefaultServer creates a new instance of server struct
-// populated with defaults.
+// newDefaultServer creates a new instance of server struct with default values.
 func newDefaultServer() server {
 	return server{
-		ScmClass:  scmDCPM,
-		BdevClass: bdNVMe,
+		ScmClass:    scmDCPM,
+		BdevClass:   bdNVMe,
+		NrXsHelpers: 2,
 	}
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler on server struct.
+//
+// Type alias used to prevent recursive calls to UnmarshalYAML.
+func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type serverAlias server
+	srv := &serverAlias{
+		ScmClass:    scmDCPM,
+		BdevClass:   bdNVMe,
+		NrXsHelpers: 2,
+	}
+
+	if err := unmarshal(&srv); err != nil {
+		return err
+	}
+
+	*s = server(*srv)
+	return nil
 }
 
 type configuration struct {

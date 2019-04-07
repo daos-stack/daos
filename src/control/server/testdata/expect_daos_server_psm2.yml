@@ -3,7 +3,7 @@ servers:
 - rank: null
   targets:
   - 0-7
-  nr_xs_helpers: 0
+  nr_xs_helpers: 2
   first_core: 0
   fabric_iface: ib0
   fabric_iface_port: 31416

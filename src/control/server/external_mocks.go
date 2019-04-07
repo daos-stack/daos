@@ -25,6 +25,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/pkg/errors"
 )
 
 // mockExt implements the External interface.
@@ -106,4 +108,12 @@ func newMockExt(
 
 func defaultMockExt() External {
 	return newMockExt(nil, "", false, nil, nil, nil, nil)
+}
+
+func cmdFailMockExt() External {
+	return newMockExt(errors.New("exit status 1"), "", false, nil, nil, nil, nil)
+}
+
+func envExistsMockExt() External {
+	return newMockExt(nil, "somevalue", false, nil, nil, nil, nil)
 }

@@ -36,15 +36,12 @@ func init() {
 	log.NewDefaultLogger(log.Debug, "mgmt_test: ", os.Stdout)
 }
 
-func newMockControlService() *controlService {
-	config := defaultMockConfig()
-	return mockControlService(&config)
+func defaultMockControlService(t *testing.T) *controlService {
+	c := defaultMockConfig(t)
+	return mockControlService(&c)
 }
 
 func mockControlService(config *configuration) *controlService {
-	server := newDefaultServer()
-	config.Servers = append(config.Servers, server)
-
 	cs := controlService{
 		nvme:   defaultMockNvmeStorage(config),
 		scm:    defaultMockScmStorage(config),
