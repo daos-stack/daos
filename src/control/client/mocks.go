@@ -32,16 +32,22 @@ import (
 
 // implement mock/stub behaviour for Control
 type mockControl struct {
-	address   string
-	connState connectivity.State
-	features  []*pb.Feature
-	ctrlrs    NvmeControllers
-	modules   ScmModules
+	address    string
+	connState  connectivity.State
+	features   []*pb.Feature
+	ctrlrs     NvmeControllers
+	modules    ScmModules
+	formatRet  error
+	killRet    error
+	connectRet error
 }
 
 func (m *mockControl) connect(addr string) error {
-	m.address = addr
-	return nil
+	if m.connectRet == nil {
+		m.address = addr
+	}
+
+	return m.connectRet
 }
 func (m *mockControl) disconnect() error { return nil }
 func (m *mockControl) connected() (connectivity.State, bool) {
@@ -62,15 +68,22 @@ func (m *mockControl) listNvmeCtrlrs() (NvmeControllers, error) {
 func (m *mockControl) listScmModules() (ScmModules, error) {
 	return m.modules, nil
 }
+func (m *mockControl) formatStorage() error {
+	return m.formatRet
+}
 func (m *mockControl) killRank(uuid string, rank uint32) error {
-	return nil
+	return m.killRet
 }
 
 func newMockControl(
 	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules) (Control, error) {
+	ctrlrs NvmeControllers, modules ScmModules,
+	formatRet error, killRet error, connectRet error) Control {
 
-	return &mockControl{address, state, features, ctrlrs, modules}, nil
+	return &mockControl{
+		address, state, features, ctrlrs, modules,
+		formatRet, killRet, connectRet,
+	}
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.

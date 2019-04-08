@@ -218,6 +218,8 @@ typedef struct {
 			uint32_t		ie_recx_flags;
 		};
 	};
+	/** Child iterator type */
+	vos_iter_type_t		ie_child_type;
 } vos_iter_entry_t;
 
 /**

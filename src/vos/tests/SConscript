@@ -26,7 +26,7 @@ def scons():
                                   LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, 'vos_size.py'])
-    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
+    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml', 'vos_dfs_sample.yaml'])
 
 if __name__ == "SCons.Script":
     scons()

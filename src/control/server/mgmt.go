@@ -26,13 +26,15 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
-
-	"github.com/pkg/errors"
+	"os"
+	"sync"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
@@ -42,11 +44,20 @@ type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
 	supportedFeatures FeatureMap
+	config            *configuration
 	drpc              drpc.DomainSocketClient
 }
 
-// Setup delegates to Storage implementation's Setup methods
+// Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
+	// init condition variables used to wait on storage formatting
+	for idx := range c.config.Servers {
+		cv := sync.NewCond(&sync.Mutex{})
+		cv.L.Lock()
+
+		c.config.Servers[idx].FormatCond = cv
+	}
+
 	if err := c.nvme.Setup(); err != nil {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
@@ -58,7 +69,7 @@ func (c *controlService) Setup() {
 	}
 }
 
-// Teardown delegates to Storage implementation's Teardown methods
+// Teardown delegates to Storage implementation's Teardown methods.
 func (c *controlService) Teardown() {
 	if err := c.nvme.Teardown(); err != nil {
 		log.Debugf(
@@ -69,6 +80,79 @@ func (c *controlService) Teardown() {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
+}
+
+func errAnnotate(err error, msg string) (e error) {
+	e = err
+	if os.IsPermission(e) {
+		e = errors.WithMessage(
+			e,
+			"daos_server needs root privileges to format")
+	}
+
+	e = errors.WithMessage(e, msg)
+
+	// log with context of previous frame
+	log.Errordf(common.UtilLogDepth, e.Error())
+
+	return
+}
+
+func (c *controlService) doFormat(i int) error {
+	cond := c.config.Servers[i].FormatCond
+	// wait for lock to be released when main is ready
+	cond.L.Lock()
+	defer cond.L.Unlock()
+
+	if err := c.nvme.Format(i); err != nil {
+		return errAnnotate(err, "nvme format")
+	}
+
+	if err := c.scm.Format(i); err != nil {
+		return errAnnotate(err, "scm format")
+	}
+
+	// storage subsystem format successful, signal to alert main.
+	cond.Signal()
+
+	return nil
+}
+
+// Format delegates to Storage implementation's Format methods to prepare
+// storage for use by DAOS data plane.
+func (c *controlService) FormatStorage(
+	ctx context.Context, params *pb.FormatStorageParams) (
+	*pb.FormatStorageResponse, error) {
+
+	if c.config.FormatOverride {
+		return nil, errors.New(
+			"FormatStorage call unsupported when " +
+				"format_override set in server config file, ")
+	}
+
+	// TODO: execute in parallel across servers
+	for i := range c.config.Servers {
+		// verify superblock don't exist
+		if _, err := os.Stat(
+			iosrvSuperPath(c.config.Servers[i].ScmMount)); err == nil {
+
+			return nil, errors.Errorf(
+				"FormatStorage: server %d already formatted", i)
+		} else if !os.IsNotExist(err) {
+			return nil, errors.Wrap(err, "FormatStorage")
+		}
+
+		if err := c.doFormat(i); err != nil {
+			return nil, err
+		}
+
+		log.Debugf(
+			"FormatStorage: storage format successful on server %d\n",
+			i)
+	}
+
+	// TODO: return something useful like ack in response
+	return &pb.FormatStorageResponse{}, nil
 }
 
 // loadInitData retrieves initial data from relative file path.
@@ -107,16 +191,16 @@ func newControlService(
 		return
 	}
 
-	nvmeStorage, err := newNvmeStorage(
-		config.NvmeShmID, config.NrHugepages)
+	nvmeStorage, err := newNvmeStorage(config)
 	if err != nil {
 		return
 	}
 
 	cs = &controlService{
 		nvme:              nvmeStorage,
-		scm:               newScmStorage(),
+		scm:               newScmStorage(config),
 		supportedFeatures: fMap,
+		config:            config,
 		drpc:              client,
 	}
 	return

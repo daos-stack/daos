@@ -396,7 +396,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 {
 	d_rank_t	       *buf;
 	int			cap = 8;
-	d_rank_list_t	       *ranks;
+	d_rank_list_t	       *ranks = NULL;
 	char		       *s, *s_saved;
 	char		       *p;
 	int			n = 0;
@@ -428,11 +428,12 @@ daos_rank_list_parse(const char *str, const char *sep)
 		s = NULL;
 	}
 
-	ranks = daos_rank_list_alloc(n);
-	if (ranks == NULL)
-		D_GOTO(out_s, ranks = NULL);
-	memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
-
+	if (n > 0) {
+		ranks = daos_rank_list_alloc(n);
+		if (ranks == NULL)
+			D_GOTO(out_s, ranks = NULL);
+		memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
+	}
 out_s:
 	D_FREE(s_saved);
 out_buf:

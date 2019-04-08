@@ -48,7 +48,8 @@
 #define UPDATE_DKEY		"dkey"
 #define UPDATE_AKEY_SIZE	32
 #define UPDATE_AKEY		"akey"
-#define UPDATE_AKEY_FIXED	"akey.fixed"
+#define UPDATE_AKEY_SV		"akey.sv"
+#define UPDATE_AKEY_ARRAY	"akey.array"
 #define	UPDATE_BUF_SIZE		64
 #define UPDATE_REC_SIZE		16
 #define UPDATE_CSUM_SIZE	32

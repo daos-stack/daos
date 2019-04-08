@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -84,11 +83,11 @@ func drpcSetup(sockDir string, iosrv *iosrv) error {
 // checkDrpcResponse checks for some basic formatting errors
 func checkDrpcResponse(drpcResp *drpc.Response) error {
 	if drpcResp == nil {
-		return fmt.Errorf("dRPC returned no response")
+		return errors.Errorf("dRPC returned no response")
 	}
 
 	if drpcResp.Status != drpc.Status_SUCCESS {
-		return fmt.Errorf("bad dRPC response status: %v",
+		return errors.Errorf("bad dRPC response status: %v",
 			drpcResp.Status.String())
 	}
 

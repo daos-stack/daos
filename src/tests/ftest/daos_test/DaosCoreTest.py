@@ -35,6 +35,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 # pylint: disable=wrong-import-position,import-error
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 # pylint: enable=wrong-import-position,import-error
@@ -48,6 +49,7 @@ class DaosCoreTest(Test):
     subtest_name = None
 
     def setUp(self):
+        self.agent_sessions = None
         self.hostlist = None
         self.subtest_name = self.params.get("test_name", '/run/daos_tests/Tests/*')
 
@@ -60,11 +62,14 @@ class DaosCoreTest(Test):
         self.daos_test = self.basepath + '/install/bin/daos_test'
         self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
+        if self.agent_sessions:
+            AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
         ServerUtils.stopServer(hosts=self.hostlist)
 
         # collect up a debug log so that we have a separate one for each

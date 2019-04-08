@@ -160,8 +160,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
 #define DAOS_ISEQ_POOL_CONNECT	/* input fields */		 \
 	((struct pool_op_in)	(pci_op)		CRT_VAR) \
-	((uint32_t)		(pci_uid)		CRT_VAR) \
-	((uint32_t)		(pci_gid)		CRT_VAR) \
+	((daos_iov_t)		(pci_cred)		CRT_VAR) \
 	((uint64_t)		(pci_capas)		CRT_VAR) \
 	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR)
 

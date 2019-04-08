@@ -425,25 +425,24 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 	umem_tx_add_ptr(umm, tgt_key, sizeof(*tgt_key));
 
 	if (key->kr_bmap & KREC_BF_EVT) {
-		umem_tx_add_ptr(umm, &tgt_key->kr_evt[0],
-				sizeof(tgt_key->kr_evt[0]));
-		tgt_key->kr_evt[0] = key->kr_evt[0];
-
-		umem_tx_add_ptr(umm, &key->kr_evt[0],
-				sizeof(key->kr_evt[0]));
-		memset(&key->kr_evt[0], 0, sizeof(key->kr_evt[0]));
+		tgt_key->kr_evt = key->kr_evt;
+		D_ASSERT(tgt_key->kr_bmap & KREC_BF_EVT);
+		/* The @key which epoch is MAX will be removed later. */
+		memset(&key->kr_evt, 0, sizeof(key->kr_evt));
+	} else {
+		D_ASSERT(tgt_key->kr_bmap & KREC_BF_BTR);
+		tgt_key->kr_btr = key->kr_btr;
+		/* The @key which epoch is MAX will be removed later. */
+		memset(&key->kr_btr, 0, sizeof(key->kr_btr));
 	}
 
 	/* The @tgt_key which epoch is current DTX's epoch will be
 	 * visibile to outside of VOS. Set its kr_earliest as @key
 	 * kr_earliest.
 	 */
-	tgt_key->kr_btr = key->kr_btr;
 	tgt_key->kr_earliest = key->kr_earliest;
 	tgt_key->kr_latest = dtx->te_epoch;
 
-	/* The @key which epoch is MAX will be removed later. */
-	memset(&key->kr_btr, 0, sizeof(key->kr_btr));
 	key->kr_latest = 0;
 	key->kr_earliest = DAOS_EPOCH_MAX;
 
