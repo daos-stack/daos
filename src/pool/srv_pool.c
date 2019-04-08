@@ -1528,7 +1528,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	/* duplicate the default properties, overwrite it with pool create
 	 * parameter and then write to pool meta data.
 	 */
-	lazy_init_default_pool_props();
 	prop_dup = daos_prop_dup(&pool_prop_default, true);
 	if (prop_dup == NULL) {
 		D_ERROR("daos_prop_dup failed.\n");

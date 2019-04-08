@@ -80,9 +80,17 @@ struct pool_hdl {
 extern daos_prop_t pool_prop_default;
 
 /**
- * Performs lazy initialization of any pool props that need to be dynamically
- * allocated.
+ * Initializes the default pool properties.
+ *
+ * \return	0		Success
+ *		-DER_NOMEM	Could not allocate
  */
-void lazy_init_default_pool_props(void);
+int ds_pool_prop_default_init(void);
+
+/**
+ * Finalizes the default pool properties.
+ * Frees any properties that were dynamically allocated.
+ */
+void ds_pool_prop_default_fini(void);
 
 #endif /* __POOL_SRV_LAYOUT_H__ */

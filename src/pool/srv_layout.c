@@ -29,6 +29,7 @@
 #include "srv_layout.h"
 #include <daos_types.h>
 #include <daos_security.h>
+#include <gurt/debug.h>
 
 /** Root KVS */
 RDB_STRING_KEY(ds_pool_prop_, uid);
@@ -121,17 +122,37 @@ get_default_daos_acl(void)
 	return default_acl;
 }
 
-void
-lazy_init_default_pool_props(void)
+int
+ds_pool_prop_default_init(void)
 {
-	int i;
+	int			i;
+	struct daos_prop_entry	*current;
 
 	for (i = 0; i < POOL_PROP_NUM; i++) {
-		if (pool_prop_entries_default[i].dpe_type == DAOS_PROP_PO_ACL &&
-		    pool_prop_entries_default[i].dpe_val_ptr == NULL) {
-			D_DEBUG("Initializing default ACL pool prop\n");
-			pool_prop_entries_default[i].dpe_val_ptr =
-					get_default_daos_acl();
+		current = &pool_prop_entries_default[i];
+		if (current->dpe_type == DAOS_PROP_PO_ACL) {
+			D_DEBUG(DB_MGMT,
+				"Initializing default ACL pool prop\n");
+			current->dpe_val_ptr = get_default_daos_acl();
+			if (current->dpe_val_ptr == NULL)
+				return -DER_NOMEM;
+		}
+	}
+
+	return 0;
+}
+
+void
+ds_pool_prop_default_fini(void)
+{
+	int			i;
+	struct daos_prop_entry	*current;
+
+	for (i = 0; i < POOL_PROP_NUM; i++) {
+		current = &pool_prop_entries_default[i];
+		if (current->dpe_type == DAOS_PROP_PO_ACL) {
+			D_DEBUG(DB_MGMT, "Freeing default ACL pool prop\n");
+			D_FREE(current->dpe_val_ptr);
 		}
 	}
 }
