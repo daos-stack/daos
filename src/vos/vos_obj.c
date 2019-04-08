@@ -395,7 +395,8 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 
 		case IT_OPC_NEXT:
 			/* move to the next tree record */
-			rc = dbtree_iter_next(oiter->it_hdl);
+			rc = dbtree_iter_next_with_intent(oiter->it_hdl,
+					vos_iter_intent(&oiter->it_iter));
 			if (rc)
 				goto out;
 			break;
@@ -429,7 +430,8 @@ key_iter_next(struct vos_obj_iter *oiter)
 {
 	int	rc;
 
-	rc = dbtree_iter_next(oiter->it_hdl);
+	rc = dbtree_iter_next_with_intent(oiter->it_hdl,
+					  vos_iter_intent(&oiter->it_iter));
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -863,13 +865,13 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	/*
 	 * Set 'iov_len' beforehand, cause it will be used as copy
-	 * size in bio_readv().
+	 * size in bio_read().
 	 */
 	iov_out->iov_len = biov->bi_data_len;
 	bioc = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
 	D_ASSERT(bioc != NULL);
 
-	return bio_readv(bioc, biov->bi_addr, iov_out);
+	return bio_read(bioc, biov->bi_addr, iov_out);
 }
 
 static int

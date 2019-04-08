@@ -153,6 +153,37 @@ func (c *connList) ListStorage() (ClientNvmeMap, ClientScmMap) {
 	return cCtrlrs, cModules
 }
 
+func (c *control) formatStorage() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := c.client.FormatStorage(ctx, &pb.FormatStorageParams{})
+
+	return err
+}
+
+// FormatStorage prepares nonvolatile storage devices attached to each
+// remote server for use with DAOS.
+func (c *connList) FormatStorage() ResultMap {
+	results := make(ResultMap)
+	ch := make(chan ClientResult)
+
+	for _, mc := range c.controllers {
+		go func(mc Control, ch chan ClientResult) {
+			ch <- ClientResult{
+				mc.getAddress(), nil, mc.formatStorage(),
+			}
+		}(mc, ch)
+	}
+
+	for range c.controllers {
+		res := <-ch
+		results[res.Address] = res
+	}
+
+	return results
+}
+
 // UpdateNvmeCtrlr updates firmware of a given controller.
 // Returns new firmware revision.
 func (c *control) UpdateNvmeCtrlr(

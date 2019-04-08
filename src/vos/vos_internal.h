@@ -479,6 +479,30 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
 int
 vos_dtx_table_register(void);
 
+/**
+ * Check whether the record (to be accessible) is available to outside or not.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param coh		[IN]	The container open handle.
+ * \param entry		[IN]	Address of the DTX to be checked.
+ * \param record	[IN]	Address of the record modified via the DTX.
+ * \param intent	[IN]	The request intent.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ *
+ * \return	positive value	If available to outside.
+ *		zero		If unavailable to outside.
+ *		-DER_INPROGRESS If the target record is in some
+ *				uncommitted DTX, the caller
+ *				needs to retry some time later.
+ *				Or the caller is not sure about whether
+ *				related DTX is committable or not, need
+ *				to check with leader replica.
+ *		negative value	For error cases.
+ */
+int
+vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
+			   umem_id_t entry, umem_id_t record, uint32_t intent,
+			   uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.

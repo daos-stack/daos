@@ -25,12 +25,12 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	pb "github.com/daos-stack/daos/src/control/security/proto"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // Module id for the Server security module
@@ -54,7 +54,7 @@ func processValidateCredentials(body []byte) ([]byte, error) {
 	// Check our verifier
 	hash, err := security.HashFromToken(credential.Token)
 	if bytes.Compare(hash, credential.Verifier.Data) != 0 {
-		return nil, fmt.Errorf("Verifier does not match token")
+		return nil, errors.Errorf("Verifier does not match token")
 	}
 
 	responseBytes, err := proto.Marshal(credential.Token)
@@ -67,7 +67,7 @@ func processValidateCredentials(body []byte) ([]byte, error) {
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
 	if method != methodValidateCredentials {
-		return nil, fmt.Errorf("Attempt to call unregistered function")
+		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
 	responseBytes, err := processValidateCredentials(body)

@@ -27,9 +27,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
@@ -140,19 +138,11 @@ func serverMain() error {
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Format the unformatted servers.
+	// Format the unformatted servers and related hardware.
 	if err = formatIosrvs(&config, false); err != nil {
 		log.Errorf("Failed to format servers: %s", err)
 		return err
 	}
-
-	// Create a channel to retrieve signals.
-	sigchan := make(chan os.Signal, 2)
-	signal.Notify(sigchan,
-		syscall.SIGTERM,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGHUP)
 
 	// Process configurations parameters for Nvme.
 	if err = config.parseNvme(); err != nil {

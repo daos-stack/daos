@@ -51,6 +51,7 @@ type Control interface {
 	listAllFeatures() (FeatureMap, error)
 	listScmModules() (ScmModules, error)
 	listNvmeCtrlrs() (NvmeControllers, error)
+	formatStorage() error
 	killRank(uuid string, rank uint32) error
 }
 
@@ -60,14 +61,6 @@ type Control interface {
 type control struct {
 	client pb.MgmtControlClient
 	gconn  *grpc.ClientConn
-}
-
-func newControl(address string) (Control, error) {
-	c := &control{}
-	if err := c.connect(address); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 // connect provides an easy interface to connect to Mgmt DAOS server.

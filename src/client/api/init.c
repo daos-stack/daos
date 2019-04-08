@@ -105,6 +105,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dac_kv_get, sizeof(daos_kv_get_t)},
 	{dac_kv_put, sizeof(daos_kv_put_t)},
 	{dac_kv_remove, sizeof(daos_kv_remove_t)},
+	{dac_kv_list, sizeof(daos_kv_list_t)},
 	{dac_obj_fetch_multi, sizeof(daos_obj_multi_io_t)},
 	{dac_obj_update_multi, sizeof(daos_obj_multi_io_t)},
 };

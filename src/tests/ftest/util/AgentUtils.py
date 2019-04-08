@@ -21,14 +21,18 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import time
 import subprocess
 import json
 import signal
-
-sessions = {}
+import getpass
+import socket
+import errno
+import fcntl
+import re
 
 class AgentFailed(Exception):
     pass
@@ -59,15 +63,20 @@ def node_setup_okay(node_list, node_server_type):
         raise AgentFailed("Unknown node type, exiting")
 
     okay = True
+    failed_node = None
     for node in node_list:
         cmd = "test -d " + socket_dir
         resp = subprocess.call(["ssh", node, cmd])
         if resp != 0:
             okay = False
+            failed_node = node
             break
-    return okay
+    return okay, failed_node, socket_dir
 
-def run_agent(basepath, client_list, server_list):
+# pylint: disable=too-many-locals
+# Disabling check for this function as in this case, more variables is more
+# clear than encapsulating in dict or object
+def run_agent(basepath, server_list, client_list=None):
     """
     Makes sure the environment is setup for the security agent and then launches
     it on the compute nodes.
@@ -78,18 +87,33 @@ def run_agent(basepath, client_list, server_list):
     basepath    --root directory for DAOS repo or installation
     client_list --those nodes that are acting as compute nodes in the test
     server_list --those nodes that are acting as server nodes in the test
-
     """
-    if not node_setup_okay(client_list, NodeListType.CLIENT):
-        raise AgentFailed("A compute node isn't configured properly")
+    sessions = {}
 
-    if not node_setup_okay(server_list, NodeListType.SERVER):
-        raise AgentFailed("A server node isn't configured properly")
+    user = getpass.getuser()
 
+    retcode, node, agent_dir = node_setup_okay(server_list, NodeListType.SERVER)
+    if not retcode:
+        raise AgentFailed("Server node " + node + " does not have directory "
+                          + agent_dir + " set up correctly for user "
+                          + user + ".")
+
+    # if empty client list, 'self' is effectively client
+    if client_list is None:
+        client_list = [socket.gethostname().split('.', 1)[0]]
+
+    retcode, node, agent_dir = node_setup_okay(client_list, NodeListType.CLIENT)
+    if not retcode:
+        raise AgentFailed("Client node " + node + " does not have directory "
+                          + agent_dir + " set up correctly for user "
+                          + user + ".")
+
+    # launch the agent
     with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
         build_vars = json.load(json_vars)
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 
+    client = None
     for client in client_list:
         cmd = [
             "ssh",
@@ -102,20 +126,70 @@ def run_agent(basepath, client_list, server_list):
                              stderr=subprocess.PIPE)
         sessions[client] = p
 
+    # double check agent launched successfully
+    file_desc = sessions[client].stderr.fileno()
+    flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
+    fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    timeout = 5
+    start_time = time.time()
+    result = 0
+    pattern = "Starting daos_agent"
+    expected_data = ""
+    while True:
+        output = ""
+        try:
+            output = sessions[client].stderr.read()
+        except IOError as excpn:
+            if excpn.errno != errno.EAGAIN:
+                raise excpn
+            continue
+        match = re.findall(pattern, output)
+        expected_data += output
+        result += len(match)
+        if not output or time.time() - start_time > timeout:
+            print("<AGENT>: {}".format(expected_data))
+            raise AgentFailed("DAOS Agent didn't start!")
+        break
+    print("<AGENT> agent started and took %s seconds to start" % \
+            (time.time() - start_time))
 
-def stop_agent(client_list):
+    return sessions
+# pylint: enable=too-many-locals
+
+
+def stop_agent(client_list, sessions):
     """
     This should kill ssh and the agent.  This is temporary; presuming the
     agent will deamonize at somepoint and can be started killed more
     appropriately.
 
     client_list -- kill daos_agent on these hosts
+    sessions    -- set of subprocess sessions returned by run_agent()
     """
-
-    if len(sessions) == 0:
-        return
 
     # this kills the agent
     for client in client_list:
         cmd = "pkill daos_agent"
         resp = subprocess.call(["ssh", client, cmd])
+
+    for client in sessions:
+        if sessions[client].poll() is None:
+            sessions[client].kill()
+        sessions[client].wait()
+
+    # check to make sure it's dead
+    time.sleep(5)
+    found_hosts = []
+    for host in client_list:
+        proc = subprocess.Popen(["ssh", host,
+                                 "pgrep 'daos_agent'"],
+                                stdout=subprocess.PIPE)
+        stdout = proc.communicate()[0]
+        resp = proc.wait()
+        if resp == 0:
+            found_hosts.append(host)
+
+    if found_hosts:
+        raise AgentFailed("Attempt to kill daos_agent processes {} on hosts "
+                          "{} was unsuccessful"
+                          .format(', '.join(stdout.splitlines()), found_hosts))

@@ -120,3 +120,7 @@ message ScmModule {
 	// The firmware revision of the module.
 	//string fwrev = 10;
 }
+
+message FormatStorageParams {}
+
+message FormatStorageResponse {}
