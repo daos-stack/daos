@@ -58,7 +58,7 @@ For instructions on building and running DAOS see the [Quickstart guide](../../d
 
 Checkout the DAOS source code:
 
-'git clone https://github.com/daos-stack/daos.git'
+'git clone <https://github.com/daos-stack/daos.git>'
 
 Checkout the SPDK source code on branch v18.07.x:
 
