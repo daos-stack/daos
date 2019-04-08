@@ -39,8 +39,8 @@ import (
 )
 
 const (
-	spdkSetupPath      = "share/control/setup_spdk.sh"
-	spdkFioPluginDir   = "share/spdk/fio_plugin"
+	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
+	spdkFioPluginDir   = "share/daos/spdk/fio_plugin"
 	fioExecPath        = "bin/fio"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
