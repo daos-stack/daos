@@ -39,7 +39,7 @@ import ServerUtils
 import WriteHostFile
 # pylint: enable=wrong-import-position,import-error
 
-CLIENT_LOG="/tmp/client.log"
+CLIENT_LOG = "/tmp/client.log"
 
 class DaosCoreTest(Test):
     """
@@ -111,7 +111,8 @@ class DaosCoreTest(Test):
             args = ""
 
         cmd = "{} -n {} {} {} -s {} -{} {}".format(self.orterun, num_clients,
-                                                   self.orterun_env, self.daos_test,
+                                                   self.orterun_env,
+                                                   self.daos_test,
                                                    num_replicas, subtest, args)
 
         env = {}
