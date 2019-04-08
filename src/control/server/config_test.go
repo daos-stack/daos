@@ -84,14 +84,6 @@ func uncommentServerConfig() {
 	}
 }
 
-// apply defaults as flags.parse would
-func mockCliParse(opts *cliOptions) {
-	if opts.NrXsHelpers == nil {
-		var i uint16 = 2
-		opts.NrXsHelpers = &i
-	}
-}
-
 func newMockConfig(
 	cmdRet error, getenvRet string, existsRet bool, mountRet error,
 	unmountRet error, mkdirRet error, removeRet error) configuration {
@@ -305,7 +297,6 @@ func TestProvidedConfigs(t *testing.T) {
 		}
 
 		opts := new(cliOptions)
-		mockCliParse(opts)
 
 		err = config.getIOParams(opts)
 		if tt.errMsg != "" {
@@ -405,16 +396,16 @@ func TestSetNumCores(t *testing.T) {
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
-	//r := rank(9)
+	r := rank(9)
 	m := "moduleA moduleB"
 	a := "/some/file"
 	y := "/another/different/file"
 
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
-	//	newC := func(t *testing.T) configuration {
-	//		return mockConfigFromFile(t, defaultMockExt(), sConfigUncomment)
-	//	}
+	newC := func(t *testing.T) configuration {
+		return mockConfigFromFile(t, defaultMockExt(), sConfigUncomment)
+	}
 
 	tests := []struct {
 		inCliOpts  cliOptions
@@ -423,271 +414,271 @@ func TestCmdlineOverride(t *testing.T) {
 		desc       string
 		errMsg     string
 	}{
-		//		{
-		//			inConfig: newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "None",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{MountPath: "/foo/bar"},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/foo/bar",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/foo/bar",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "MountPath",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{Group: "testing123"},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "testing123",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "testing123",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "Group",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{Cores: 2},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "2",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "2",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "Cores override Targets set in config file",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{Targets: 3},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "3",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "3",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "Override Targets set in config file",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{Rank: &r},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "9",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "Rank",
-		//		},
-		//		{
-		//			// currently not provided as config or cli option, set
-		//			// directly in configuration
-		//			inConfig: func() configuration {
-		//				c := mockConfigFromFile(t, defaultMockExt(), sConfigUncomment)
-		//				c.NvmeShmID = 1
-		//				return c
-		//			}(),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//					"-i", "1",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//					"-i", "1",
-		//				},
-		//			},
-		//			desc: "NvmeShmID",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-m", "moduleA moduleB",
-		//					"-a", "/some/file",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-y", "/another/different/file",
-		//					"-r", "0",
-		//					"-d", "/tmp/Jeremy",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-m", "moduleA moduleB",
-		//					"-a", "/some/file",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-y", "/another/different/file",
-		//					"-r", "1",
-		//					"-d", "/tmp/Jeremy",
-		//				},
-		//			},
-		//			desc: "SocketDir Modules Attach Map",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{Cores: 2, Targets: 5},
-		//			inConfig:  newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "5",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-x", "0",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "5",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-x", "1",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "Targets cli overrides Cores cli",
-		//		},
-		//		{
-		//			inCliOpts: cliOptions{
-		//				NrXsHelpers: func() *uint16 {
-		//					var i uint16 = 3
-		//					return &i
-		//				}(),
-		//			},
-		//			inConfig: newC(t),
-		//			outCliOpts: [][]string{
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/1",
-		//					"-f", "1",
-		//					"-r", "0",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//				{
-		//					"-t", "20",
-		//					"-g", "daos",
-		//					"-s", "/mnt/daos/2",
-		//					"-f", "21",
-		//					"-r", "1",
-		//					"-d", "./.daos/daos_server",
-		//				},
-		//			},
-		//			desc: "exceed max NrXsHelpers results in default and no option",
-		//		},
+		{
+			inConfig: newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "None",
+		},
+		{
+			inCliOpts: cliOptions{MountPath: "/foo/bar"},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/foo/bar",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/foo/bar",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "MountPath",
+		},
+		{
+			inCliOpts: cliOptions{Group: "testing123"},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "testing123",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "20",
+					"-g", "testing123",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "Group",
+		},
+		{
+			inCliOpts: cliOptions{Cores: 2},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "2",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "2",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "Cores override Targets set in config file",
+		},
+		{
+			inCliOpts: cliOptions{Targets: 3},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "3",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "3",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "Override Targets set in config file",
+		},
+		{
+			inCliOpts: cliOptions{Rank: &r},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "9",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "Rank",
+		},
+		{
+			// currently not provided as config or cli option, set
+			// directly in configuration
+			inConfig: func() configuration {
+				c := mockConfigFromFile(t, defaultMockExt(), sConfigUncomment)
+				c.NvmeShmID = 1
+				return c
+			}(),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+					"-i", "1",
+				},
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+					"-i", "1",
+				},
+			},
+			desc: "NvmeShmID",
+		},
+		{
+			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-m", "moduleA moduleB",
+					"-a", "/some/file",
+					"-x", "0",
+					"-f", "1",
+					"-y", "/another/different/file",
+					"-r", "0",
+					"-d", "/tmp/Jeremy",
+				},
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-m", "moduleA moduleB",
+					"-a", "/some/file",
+					"-x", "1",
+					"-f", "21",
+					"-y", "/another/different/file",
+					"-r", "1",
+					"-d", "/tmp/Jeremy",
+				},
+			},
+			desc: "SocketDir Modules Attach Map",
+		},
+		{
+			inCliOpts: cliOptions{Cores: 2, Targets: 5},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "5",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "5",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "Targets cli overrides Cores cli",
+		},
+		{
+			inCliOpts: cliOptions{
+				NrXsHelpers: func() *uint16 {
+					var i uint16 = 3
+					return &i
+				}(),
+			},
+			inConfig: newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "20",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "exceed max NrXsHelpers results in default and no option",
+		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
 			inConfig: mockConfigFromFile(t, envExistsMockExt(), socketsExample),
@@ -734,8 +725,6 @@ func TestCmdlineOverride(t *testing.T) {
 	for _, tt := range tests {
 		config := tt.inConfig
 		opts := &tt.inCliOpts
-
-		mockCliParse(opts)
 
 		err := config.getIOParams(opts)
 		if tt.errMsg != "" {
@@ -922,7 +911,7 @@ func TestPopulateEnv(t *testing.T) {
 
 		// optionally add to server EnvVars from config (with empty cliOptions)
 		opts := &cliOptions{}
-		mockCliParse(opts)
+
 		err = config.getIOParams(opts)
 		if err != nil {
 			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)

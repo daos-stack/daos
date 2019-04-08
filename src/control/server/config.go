@@ -243,9 +243,9 @@ func (c *configuration) populateCliOpts(i int) error {
 		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
 	}
 	if c.NvmeShmID > 0 {
-		// Add shm_id so io_srv can share spdk access to controllers
-		// with mgmtControlsrv process. Currently not user
-		// configurable when starting daos_srv, use default.
+		// Add shm_id so io_server can share spdk access to controllers
+		// with mgmtControlServer process. Currently not user
+		// configurable when starting daos_server, use default.
 		srv.CliOpts = append(
 			srv.CliOpts, "-i", strconv.Itoa(c.NvmeShmID))
 	}
@@ -291,7 +291,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		if opts.Targets > 0 {
 			srv.Targets, _ = setNumCores(int(opts.Targets))
 		}
-		if *opts.NrXsHelpers != 2 {
+		if opts.NrXsHelpers != nil {
 			srv.NrXsHelpers = int(*opts.NrXsHelpers)
 		}
 		if opts.FirstCore > 0 {
