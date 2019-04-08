@@ -154,7 +154,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
  *		allocated
  */
 struct daos_acl *
-daos_acl_copy(struct daos_acl *acl);
+daos_acl_dup(struct daos_acl *acl);
 
 /**
  * Free a DAOS Access Control List.

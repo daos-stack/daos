@@ -396,7 +396,7 @@ test_acl_alloc_null_ace(void **state)
 static void
 test_acl_copy_null_acl(void **state)
 {
-	assert_null(daos_acl_copy(NULL));
+	assert_null(daos_acl_dup(NULL));
 }
 
 static void
@@ -405,7 +405,7 @@ test_acl_copy_empty_acl(void **state)
 	struct daos_acl *acl = daos_acl_create(NULL, 0);
 	struct daos_acl *copy;
 
-	copy = daos_acl_copy(acl);
+	copy = daos_acl_dup(acl);
 
 	assert_non_null(copy);
 	assert_memory_equal(acl, copy, sizeof(struct daos_acl));
@@ -425,7 +425,7 @@ test_acl_copy_with_aces(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	copy = daos_acl_copy(acl);
+	copy = daos_acl_dup(acl);
 
 	assert_non_null(copy);
 	assert_int_equal(copy->dal_len, acl->dal_len);
@@ -846,7 +846,7 @@ expect_empty_acl_adds_ace_as_only_item(struct daos_ace *ace)
 
 	ace_len = daos_ace_get_size(ace);
 	acl = daos_acl_create(NULL, 0);
-	original_acl = daos_acl_copy(acl);
+	original_acl = daos_acl_dup(acl);
 
 	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
 
@@ -936,7 +936,7 @@ expect_ace_inserted_at_correct_location(struct daos_ace *ace[], int num_aces,
 
 	expected_len = get_total_ace_list_size(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
-	orig_acl = daos_acl_copy(acl);
+	orig_acl = daos_acl_dup(acl);
 
 	/* Add some permission bits for testing */
 	new_ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
@@ -1076,7 +1076,7 @@ expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
 	acl = daos_acl_create(ace, num_aces);
-	orig_acl = daos_acl_copy(acl);
+	orig_acl = daos_acl_dup(acl);
 
 	/* Create an exact duplicate */
 	D_ALLOC(new_ace, daos_ace_get_size(ace[type]));
@@ -1126,7 +1126,7 @@ test_acl_add_ace_replace(void **state)
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
 	acl = daos_acl_create(ace, num_aces);
-	orig_acl = daos_acl_copy(acl);
+	orig_acl = daos_acl_dup(acl);
 
 	/* Create an updated ACE */
 	new_ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
@@ -1277,7 +1277,7 @@ test_acl_remove_ace_multi_user(void **state)
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
-	orig_acl = daos_acl_copy(acl);
+	orig_acl = daos_acl_dup(acl);
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
 			ace[removed_idx]->dae_principal_type,
@@ -1323,7 +1323,7 @@ expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 
 	fill_ace_list_with_all_types(ace, "user1@", "group1@");
 	acl = daos_acl_create(ace, num_aces);
-	orig_acl = daos_acl_copy(acl);
+	orig_acl = daos_acl_dup(acl);
 
 	assert_int_equal(daos_acl_remove_ace(&acl, type, principal), 0);
 

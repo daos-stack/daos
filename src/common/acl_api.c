@@ -185,7 +185,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces)
 }
 
 struct daos_acl *
-daos_acl_copy(struct daos_acl *acl)
+daos_acl_dup(struct daos_acl *acl)
 {
 	struct daos_acl	*acl_copy;
 	size_t		acl_len;

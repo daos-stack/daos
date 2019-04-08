@@ -858,7 +858,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
-			entry_dup->dpe_val_ptr = (void *)daos_acl_copy(
+			entry_dup->dpe_val_ptr = (void *)daos_acl_dup(
 					(struct daos_acl *)entry->dpe_val_ptr);
 			if (entry_dup->dpe_val_ptr == NULL) {
 				D_ERROR("failed to dup ACL\n");
@@ -949,7 +949,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		} else if (type == DAOS_PROP_PO_ACL ||
 			   type == DAOS_PROP_CO_ACL) {
 			acl = (struct daos_acl *)entry_reply->dpe_val_ptr;
-			entry_req->dpe_val_ptr = (void *)daos_acl_copy(acl);
+			entry_req->dpe_val_ptr = (void *)daos_acl_dup(acl);
 			if (entry_req->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			acl_alloc = entry_req->dpe_val_ptr;
