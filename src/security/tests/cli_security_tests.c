@@ -301,7 +301,7 @@ test_request_credentials_connects_to_env_socket(void **state)
 
 	/* Make sure we asked for the right env variable */
 	assert_non_null(getenv_name);
-	assert_string_equal(getenv_name, DAOS_AGENT_DRPC_SOCK_ENV);
+	assert_string_equal(getenv_name, DAOS_AGENT_DRPC_DIR_ENV);
 
 	daos_iov_free(&creds);
 }

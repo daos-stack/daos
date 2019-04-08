@@ -34,7 +34,7 @@
 /**
  * Environment variable for specifying an alternate dRPC socket path
  */
-#define DAOS_AGENT_DRPC_SOCK_ENV "DAOS_AGENT_DRPC_SOCK"
+#define DAOS_AGENT_DRPC_DIR_ENV "DAOS_AGENT_DRPC_DIR"
 
 /**
  * dRPC definitions for DAOS agent.
