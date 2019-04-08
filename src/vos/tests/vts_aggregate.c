@@ -354,9 +354,8 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	assert_non_null(buf_u);
 
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
-		if (punch_nr > 0 && punch_epoch[punch_idx] == epoch) {
+		if (punch_idx < punch_nr && punch_epoch[punch_idx] == epoch) {
 			arg->ta_flags |= TF_PUNCH;
-			assert_true(punch_idx < punch_nr);
 			punch_idx++;
 		} else if (punch_nr < 0 && (rand() % 2) &&
 			   epoch != epr_u->epr_lo) {
@@ -980,33 +979,6 @@ discard_12(void **state)
 }
 
 /*
- * Discard mixed SV, EV on multiple objects, keys.
- */
-static void
-discard_13(void **state)
-{
-	struct io_test_args	*arg = *state;
-	struct agg_tst_dataset	 ds = { 0 };
-	daos_recx_t		 recx_tot;
-
-	recx_tot.rx_idx = 0;
-	recx_tot.rx_nr = 30;
-
-	ds.td_type = DAOS_IOD_NONE;	/* random type */
-	ds.td_iod_size = 0;		/* random iod_size */
-	ds.td_expected_recs = 0;
-	ds.td_recx_nr = 1;
-	ds.td_recx = &recx_tot;
-	ds.td_upd_epr.epr_lo = 1;
-	ds.td_upd_epr.epr_hi = 1000;
-	ds.td_agg_epr.epr_lo = 750;
-	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
-	ds.td_discard = true;
-
-	aggregate_multi(arg, &ds);
-}
-
-/*
  * Aggregate on single akey-SV with epr [A, B].
  */
 static void
@@ -1474,33 +1446,6 @@ aggregate_13(void **state)
 	aggregate_multi(arg, &ds);
 }
 
-/*
- * Aggregate mixed SV, EV on multiple objects, keys.
- */
-static void
-aggregate_14(void **state)
-{
-	struct io_test_args	*arg = *state;
-	struct agg_tst_dataset	 ds = { 0 };
-	daos_recx_t		 recx_tot;
-
-	recx_tot.rx_idx = 0;
-	recx_tot.rx_nr = 30;
-
-	ds.td_type = DAOS_IOD_NONE;	/* random type */
-	ds.td_iod_size = 0;		/* random iod_size */
-	ds.td_expected_recs = -1;
-	ds.td_recx_nr = 1;
-	ds.td_recx = &recx_tot;
-	ds.td_upd_epr.epr_lo = 1;
-	ds.td_upd_epr.epr_hi = 1000;
-	ds.td_agg_epr.epr_lo = 750;
-	ds.td_agg_epr.epr_hi = 1000;
-	ds.td_discard = false;
-
-	aggregate_multi(arg, &ds);
-}
-
 static int
 agg_tst_teardown(void **state)
 {
@@ -1533,8 +1478,6 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_11, NULL, agg_tst_teardown },
 	{ "VOS312: Discard EV, multiple objects, keys",
 	  discard_12, NULL, agg_tst_teardown },
-	{ "VOS313: Discard mixed SV/EV, multiple objects, keys",
-	  discard_13, NULL, agg_tst_teardown },
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
@@ -1564,8 +1507,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_12, NULL, agg_tst_teardown },
 	{ "VOS413: Aggregate EV, multiple objects, keys",
 	  aggregate_13, NULL, agg_tst_teardown },
-	{ "VOS414: Aggregate mixed SV/EV, multiple objects, keys",
-	  aggregate_14, NULL, agg_tst_teardown },
 };
 
 int
