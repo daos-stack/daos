@@ -170,6 +170,7 @@ pipeline {
                         }
                     }
                     steps {
+                        checkoutScm withSubmodules: true
                         sh '''rm -rf artifacts/
                               mkdir -p artifacts/
                               if make srpm; then
