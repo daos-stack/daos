@@ -129,7 +129,7 @@ lazy_init_default_pool_props(void)
 	for (i = 0; i < POOL_PROP_NUM; i++) {
 		if (pool_prop_entries_default[i].dpe_type == DAOS_PROP_PO_ACL &&
 		    pool_prop_entries_default[i].dpe_val_ptr == NULL) {
-			D_INFO("Initializing default ACL pool prop\n");
+			D_DEBUG("Initializing default ACL pool prop\n");
 			pool_prop_entries_default[i].dpe_val_ptr =
 					get_default_daos_acl();
 		}

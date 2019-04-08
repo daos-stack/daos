@@ -689,7 +689,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 {
 	uint32_t	type;
 	uint64_t	val;
-	void		*val_ptr;
+	struct daos_acl	*acl_ptr;
 	int		i;
 
 	if (prop == NULL) {
@@ -740,11 +740,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
-			val_ptr = prop->dpp_entries[i].dpe_val_ptr;
-			if (daos_acl_validate(
-					(struct daos_acl *)val_ptr) != 0) {
+			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
+			if (daos_acl_validate(acl_ptr) != 0)
 				return false;
-			}
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
 			val = prop->dpp_entries[i].dpe_val;
@@ -833,6 +831,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
+	struct daos_acl		*acl_ptr;
 
 	if (!daos_prop_valid(prop, pool, true))
 		return NULL;
@@ -858,8 +857,8 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
-			entry_dup->dpe_val_ptr = (void *)daos_acl_dup(
-					(struct daos_acl *)entry->dpe_val_ptr);
+			acl_ptr = entry->dpe_val_ptr;
+			entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
 			if (entry_dup->dpe_val_ptr == NULL) {
 				D_ERROR("failed to dup ACL\n");
 				daos_prop_free(prop_dup);
@@ -948,8 +947,8 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			label_alloc = entry_req->dpe_str;
 		} else if (type == DAOS_PROP_PO_ACL ||
 			   type == DAOS_PROP_CO_ACL) {
-			acl = (struct daos_acl *)entry_reply->dpe_val_ptr;
-			entry_req->dpe_val_ptr = (void *)daos_acl_dup(acl);
+			acl = entry_reply->dpe_val_ptr;
+			entry_req->dpe_val_ptr = daos_acl_dup(acl);
 			if (entry_req->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			acl_alloc = entry_req->dpe_val_ptr;

@@ -380,9 +380,8 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			if (entry->dpe_val_ptr != NULL) {
 				pool_prop_copy_ptr(entry_def, entry,
 					pool_prop_acl_get_length(entry));
-				if (entry_def->dpe_val_ptr == NULL) {
+				if (entry_def->dpe_val_ptr == NULL)
 					return -DER_NOMEM;
-				}
 			}
 			break;
 		default:
@@ -1458,7 +1457,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
-				value.iov_buf_len);
+		       value.iov_buf_len);
 		idx++;
 	}
 	return 0;
