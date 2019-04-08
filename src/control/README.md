@@ -76,7 +76,7 @@ Setup environment variables:
 
 'export CGO_CFLAGS=-I${SPDK_REPO}/include/'
 
-'export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:/daos/src/control/vendor/github.com/daos-stack/go-spdk/spdk"'
+'export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk"'
 
 Build NVME libs:
 
