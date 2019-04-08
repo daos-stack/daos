@@ -54,6 +54,50 @@ For instructions on building and running DAOS see the [Quickstart guide](../../d
 
 * Run the tests `go test` within each directory containing tests
 
+### Run unit tests locally
+
+Checkout the DAOS source code:
+
+'git clone https://github.com/daos-stack/daos.git'
+
+Checkout the SPDK source code on branch v18.07.x:
+
+'git clone --single-branch --branch v18.07.x git@github.com:spdk/spdk.git'
+
+Continue installing SPDK with the procedure in the repository on branch v18.07.x: [SPDK-v18.07.x](https://github.com/spdk/spdk/tree/v18.07.x)
+
+Setup environment variables:
+
+'DAOS_REPO="/path/to/daos_repo"'
+
+'SPDK_REPO="/path/to/spdk_repo"'
+
+'export CGO_LDFLAGS="-L${SPDK_REPO}/build/lib"'
+
+'export CGO_CFLAGS=-I${SPDK_REPO}/include/'
+
+'export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:/daos/src/control/vendor/github.com/daos-stack/go-spdk/spdk"'
+
+Build NVME libs:
+
+'cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk'
+
+'gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk'
+
+'gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -shared -o libnvme_control.so *.o'
+
+To run suite of control plane unit tests:
+
+'cd ${DAOS_REPO}/src/control'
+
+'./run_go_tests.sh'
+
+To run go-spdk tests:
+
+'cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk'
+
+'go test -v'
+
 ## Coding Guidelines
 
 ### daos_server and daos_agent
