@@ -269,6 +269,9 @@ struct crt_rpc_priv {
 	X(CRT_OPC_MEMB_SAMPLE,						\
 		0, &CQF_crt_lm_memb_sample,				\
 		crt_hdlr_memb_sample, NULL),				\
+	X(CRT_OPC_CTL_GET_URI_CACHE,					\
+		0, &CQF_crt_ctl_get_uri_cache,				\
+		crt_hdlr_ctl_get_uri_cache, NULL),			\
 	X(CRT_OPC_CTL_LS,						\
 		0, &CQF_crt_ctl_ep_ls, crt_hdlr_ctl_ls, NULL),		\
 	X(CRT_OPC_CTL_GET_HOSTNAME,					\
@@ -296,6 +299,13 @@ enum {
 };
 
 #undef X
+
+#define CRT_SEQ_GRP_CACHE					 \
+	((d_rank_t)		(gc_rank)		CRT_VAR) \
+	((uint32_t)		(gc_tag)		CRT_VAR) \
+	((d_string_t)		(gc_uri)		CRT_VAR)
+
+CRT_GEN_STRUCT(crt_grp_cache, CRT_SEQ_GRP_CACHE)
 
 /* CRT internal RPC definitions */
 #define CRT_ISEQ_GRP_CREATE	/* input fields */		 \
@@ -514,6 +524,12 @@ CRT_RPC_DECLARE(crt_lm_memb_sample,
 	((int32_t)		(cel_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_ctl_ep_ls, CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
+
+#define CRT_OSEQ_CTL_GET_URI_CACHE /* output fields */		 \
+	((struct crt_grp_cache)	(cguc_grp_cache)	CRT_ARRAY) \
+	((int32_t)		(cguc_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
 
 #define CRT_OSEQ_CTL_GET_HOST	/* output fields */		 \
 	((d_iov_t)		(cgh_hostname)		CRT_VAR) \

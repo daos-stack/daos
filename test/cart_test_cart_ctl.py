@@ -120,6 +120,15 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
         self.logger.info("Server running")
+
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='../bin/cart_ctl get_uri_cache' + \
+                                           ' --group-name service-group' + \
+                                           ' --rank 0,2-3,4')
+        if procrtn:
+            self.fail("crt_ctl get_uri_cache failed, return codes %d" % procrtn)
+
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=client, \
                                    cli_arg='../bin/cart_ctl list_ctx' + \
@@ -159,6 +168,15 @@ class TestCartCtl(commontestsuite.CommonTestSuite):
             procrtn = self.stop_process(testmsg, server_proc)
             self.fail("Server did not launch, return code %s" % procrtn)
         self.logger.info("Server running")
+
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=client, \
+                                   cli_arg='../bin/cart_ctl get_uri_cache' + \
+                                           ' --group-name service-group' + \
+                                           ' --rank 0')
+        if procrtn:
+            self.fail("crt_ctl get_uri_cache failed, return codes %d" % procrtn)
+
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=client, \
                                    cli_arg='../bin/cart_ctl list_ctx' + \

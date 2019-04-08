@@ -468,6 +468,8 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 
 struct crt_lookup_item *crt_li_link2ptr(d_list_t *rlink);
 
+struct crt_uri_item *crt_ui_link2ptr(d_list_t *rlink);
+
 static inline uint64_t
 crt_get_subgrp_id()
 {

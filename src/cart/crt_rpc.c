@@ -166,13 +166,16 @@ CRT_RPC_DEFINE(crt_lm_evict, CRT_ISEQ_LM_EVICT, CRT_OSEQ_LM_EVICT)
 CRT_RPC_DEFINE(crt_lm_memb_sample,
 		CRT_ISEQ_LM_MEMB_SAMPLE, CRT_OSEQ_LM_MEMB_SAMPLE)
 
-/* !! All of three following RPC definition should have the same input fields !!
+CRT_GEN_PROC_FUNC(crt_grp_cache, CRT_SEQ_GRP_CACHE);
+
+/* !! All of the following 4 RPC definition should have the same input fields !!
  * All of them are verified in one function:
  * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
  */
-CRT_RPC_DEFINE(crt_ctl_ep_ls,    CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
-CRT_RPC_DEFINE(crt_ctl_get_host, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
-CRT_RPC_DEFINE(crt_ctl_get_pid,  CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
+CRT_RPC_DEFINE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
+CRT_RPC_DEFINE(crt_ctl_ep_ls,         CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
+CRT_RPC_DEFINE(crt_ctl_get_host,      CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
+CRT_RPC_DEFINE(crt_ctl_get_pid,       CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
 
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 

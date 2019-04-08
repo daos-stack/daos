@@ -100,6 +100,19 @@ struct crt_ctl_get_pid_out {
 	int32_t cgp_rc;
 };
 
+struct crt_ctl_get_uri_cache_in {
+	crt_group_id_t cel_grp_id;
+	d_rank_t cel_rank;
+};
+
+struct crt_ctl_get_uri_cache_out {
+	struct {
+	uint64_t ca_count;
+	struct crt_grp_cache *ca_arrays;
+	} cguc_grp_cache;
+	int32_t cguc_rc;
+};
+
 struct crt_grp_create_in {
 	crt_group_id_t gc_grp_id;
 	uint64_t gc_int_grpid;

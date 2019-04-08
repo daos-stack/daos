@@ -75,6 +75,113 @@ out:
 	return rc;
 }
 
+static int
+crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
+{
+	struct crt_uri_item	*ui;
+	int			*idx;
+	struct crt_uri_cache	*uri_cache = arg;
+	int			 i;
+	int			 rc = 0;
+
+	D_ASSERT(rlink != NULL);
+	D_ASSERT(arg != NULL);
+
+	ui = crt_ui_link2ptr(rlink);
+
+	D_MUTEX_LOCK(&ui->ui_mutex);
+
+	idx = &uri_cache->idx;
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		if (ui->ui_uri[i] == NULL)
+			continue;
+
+		uri_cache->grp_cache[*idx].gc_rank = ui->ui_rank;
+		uri_cache->grp_cache[*idx].gc_tag = i;
+		uri_cache->grp_cache[*idx].gc_uri = ui->ui_uri[i];
+
+		*idx += 1;
+	}
+
+	D_MUTEX_UNLOCK(&ui->ui_mutex);
+
+	return rc;
+}
+
+static int
+crt_ctl_get_uri_cache_size_cb(d_list_t *rlink, void *arg)
+{
+	struct crt_uri_item	*ui;
+	uint32_t		*nuri = arg;
+	int			 i;
+	int			 rc = 0;
+
+	D_ASSERT(rlink != NULL);
+	D_ASSERT(arg != NULL);
+
+	ui = crt_ui_link2ptr(rlink);
+
+	D_MUTEX_LOCK(&ui->ui_mutex);
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		if (ui->ui_uri[i] == NULL)
+			continue;
+
+		*nuri += 1;
+	}
+	D_MUTEX_UNLOCK(&ui->ui_mutex);
+
+	return rc;
+}
+
+void
+crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_get_uri_cache_out	*out_args;
+	struct crt_grp_priv			*grp_priv = NULL;
+	uint32_t				 nuri = 0;
+	struct crt_uri_cache			 uri_cache = {0};
+	int					 rc = 0;
+
+	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
+	out_args = crt_reply_get(rpc_req);
+
+	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+
+	rc = verify_ctl_in_args(crt_req_get(rpc_req));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = d_hash_table_traverse(&grp_priv->gp_uri_lookup_cache,
+				   crt_ctl_get_uri_cache_size_cb, &nuri);
+	if (rc != 0)
+		D_GOTO(out, 0);
+
+	D_ALLOC_ARRAY(uri_cache.grp_cache, nuri);
+	if (uri_cache.grp_cache == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uri_cache.idx = 0;
+
+	rc = d_hash_table_traverse(&grp_priv->gp_uri_lookup_cache,
+				   crt_ctl_fill_buffer_cb, &uri_cache);
+	if (rc != 0)
+		D_GOTO(out, 0);
+
+	out_args->cguc_grp_cache.ca_arrays = uri_cache.grp_cache;
+	out_args->cguc_grp_cache.ca_count  = nuri;
+
+out:
+	out_args->cguc_rc = rc;
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+	D_DEBUG(DB_TRACE, "sent reply to get uri cache request\n");
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+	D_FREE(uri_cache.grp_cache);
+}
+
 void
 crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req)
 {
