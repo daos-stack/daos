@@ -39,5 +39,6 @@ service MgmtControl {
 	rpc FetchFioConfigPaths(EmptyParams) returns (stream FioConfigPath) {};
 	rpc BurnInNvme(BurnInNvmeParams) returns (stream BurnInNvmeReport) {};
 	rpc ListScmModules(EmptyParams) returns (stream ScmModule) {};
+	rpc FormatStorage(FormatStorageParams) returns (FormatStorageResponse) {};
 	rpc KillRank(DaosRank) returns (DaosResponse) {}; // Kill server of rank
 }

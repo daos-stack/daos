@@ -33,6 +33,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 
@@ -47,6 +48,7 @@ class ObjectDataValidation(avocado.Test):
     """
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
+        self.agent_sessions = None
         self.pool = None
         self.container = None
         self.obj = None
@@ -73,6 +75,7 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
+        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
@@ -104,6 +107,8 @@ class ObjectDataValidation(avocado.Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     def reconnect(self):

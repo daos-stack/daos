@@ -7,6 +7,7 @@ socket_dir: /tmp/daos_psm2
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
+format_override: true       # don't require manual storage format over client API
 
 # single server instance per config file for now
 servers:
@@ -32,7 +33,16 @@ servers:
 
   # Storage definitions
 
-  scm_mount: /mnt/daos  # map to -s /mnt/daos
+  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+  # The size of ram is specified by scm_size in GB units.
+  scm_mount: /mnt/daos	# map to -s /mnt/daos
+  scm_class: ram
+  scm_size: 6
+
+  # When scm_class is set to dcpm, scm_list is the list of device paths for
+  # AppDirect pmem namespaces (currently only one per server supported).
+  # scm_class: dcpm
+  # scm_list: [/dev/pmem0]
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
   # service with -n <path>)

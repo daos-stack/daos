@@ -88,9 +88,10 @@ struct daos_task_args {
 		daos_array_io_t		array_io;
 		daos_array_get_size_t	array_get_size;
 		daos_array_set_size_t	array_set_size;
-		daos_kv_get_t		obj_get;
-		daos_kv_put_t		obj_put;
-		daos_kv_remove_t	obj_remove;
+		daos_kv_get_t		kv_get;
+		daos_kv_put_t		kv_put;
+		daos_kv_remove_t	kv_remove;
+		daos_kv_list_t		kv_list;
 		daos_obj_multi_io_t	obj_fetch_multi;
 		daos_obj_multi_io_t	obj_update_multi;
 	}		 ta_u;

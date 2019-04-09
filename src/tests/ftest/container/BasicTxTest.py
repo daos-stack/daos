@@ -36,6 +36,7 @@ sys.path.append('./../../utils/py')
 
 import ServerUtils
 import WriteHostFile
+import AgentUtils
 import fault_config_utils
 from conversion import c_uuid_to_str
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -48,7 +49,7 @@ class BasicTxTest(Test):
     """
 
     def setUp(self):
-
+        self.agent_sessions = None
         self.hostlist = None
         self.fault_file = None
 
@@ -71,21 +72,19 @@ class BasicTxTest(Test):
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
-        # figure out which hosts are used to run the test
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
+        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist, self.workdir)
 
         # start the DAOS servers
         server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
-        ServerUtils.runServer(hostfile, server_group, self.basepath)
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        ServerUtils.runServer(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
-        try:
-            ServerUtils.stopServer(hosts=self.hostlist)
-        finally:
-            if self.fault_file:
-                os.remove(self.fault_file)
+        if self.agent_sessions:
+            AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+        ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_tx_basics(self):
         """

@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -133,7 +132,7 @@ func hash(s string) int {
 // setNumCores takes number of cores and converts to list of ranges
 func setNumCores(num int) (rs []string, err error) {
 	if num < 1 {
-		return rs, fmt.Errorf(
+		return rs, errors.Errorf(
 			"invalid number of cpus (cores) specified: %d", num)
 	}
 	if num == 1 {
@@ -174,7 +173,7 @@ func getNumCores(rs []string) (num int, err error) {
 				continue
 			}
 		}
-		return num, fmt.Errorf(
+		return num, errors.Errorf(
 			"unsupported range format %s, need <int>-<int> e.g. 1-10", s)
 	}
 	return
@@ -192,11 +191,11 @@ func (c *configuration) populateCliOpts(i int) error {
 	var numCores int
 	numCores, err := getNumCores(server.Cpus)
 	if err != nil {
-		return fmt.Errorf("server%d cpus invalid: %s", i, err)
+		return errors.Errorf("server%d cpus invalid: %s", i, err)
 	}
 	server.CliOpts = append(
 		server.CliOpts,
-		"-c", strconv.Itoa(numCores),
+		"-t", strconv.Itoa(numCores),
 		"-g", c.SystemName,
 		"-s", server.ScmMount)
 	if c.Modules != "" {
@@ -204,6 +203,12 @@ func (c *configuration) populateCliOpts(i int) error {
 	}
 	if c.Attach != "" {
 		server.CliOpts = append(server.CliOpts, "-a", c.Attach)
+	}
+	if c.XShelpernr != 2 {
+		server.CliOpts = append(server.CliOpts, "-x", strconv.Itoa(c.XShelpernr))
+	}
+	if c.Firstcore > 0 {
+		server.CliOpts = append(server.CliOpts, "-f", strconv.Itoa(c.Firstcore))
 	}
 	if c.SystemMap != "" {
 		server.CliOpts = append(server.CliOpts, "-y", c.SystemMap)
@@ -250,11 +255,28 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		if opts.Cores > 0 {
 			c.Servers[i].Cpus, _ = setNumCores(int(opts.Cores))
 		}
+		// Targets should override Cores if specified in cmdline or
+		// config file.
+		if opts.Targets > 0 {
+			c.Servers[i].Cpus, _ = setNumCores(opts.Targets)
+		} else if c.Targets > 0 {
+			c.Servers[i].Cpus, _ = setNumCores(c.Targets)
+		}
 		if opts.Rank != nil {
 			// override first per-server config (doesn't make sense
 			// to reply to more than one server)
 			c.Servers[0].Rank = opts.Rank
 		}
+	}
+	if opts.XShelpernr > 2 {
+		log.Errorf("invalid XShelpernr %d exceed [0, 2], use default value of 2",
+			opts.XShelpernr)
+		c.XShelpernr = 2
+	} else {
+		c.XShelpernr = opts.XShelpernr
+	}
+	if opts.Firstcore > 0 {
+		c.Firstcore = opts.Firstcore
 	}
 	if opts.Group != "" {
 		c.SystemName = opts.Group
@@ -287,7 +309,7 @@ func (c *configuration) validateConfig() (bool, error) {
 	// if provider or Servers are missing and we can't detect os envs, we don't
 	// have sufficient info to start io servers
 	if (c.Provider == "") || (len(c.Servers) == 0) {
-		return false, fmt.Errorf(
+		return false, errors.Errorf(
 			"required parameters missing from config and os environment (%s)",
 			providerEnvKey)
 	}
@@ -316,13 +338,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		// avoid mutating subject during iteration, instead access through
 		// config/parent object
 		server := &c.Servers[i]
-		// verify scm mount path is valid
-		mntpt := server.ScmMount
-		if err = c.checkMount(mntpt); err != nil {
-			return fmt.Errorf(
-				"server%d scm mount path (%s) not mounted: %s",
-				i, mntpt, err)
-		}
+
 		if err = c.populateCliOpts(i); err != nil {
 			return err
 		}
@@ -338,6 +354,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			continue
 		}
 		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
+
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
 		log.Errorf(
