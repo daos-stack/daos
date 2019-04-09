@@ -245,12 +245,14 @@ struct vos_cont_df {
 
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
-	/* The record has an evtree */
+	/* Array value (evtree) */
 	KREC_BF_EVT			= (1 << 0),
+	/* Single Value or Key (btree) */
+	KREC_BF_BTR			= (1 << 1),
 	/* The key is punched at time kr_latest */
-	KREC_BF_PUNCHED			= (1 << 1),
+	KREC_BF_PUNCHED			= (1 << 2),
 	/* The key has been (or will be) removed */
-	KREC_BF_REMOVED			= (1 << 2),
+	KREC_BF_REMOVED			= (1 << 3),
 };
 
 /**
@@ -278,10 +280,12 @@ struct vos_krec_df {
 	uint32_t			kr_dtx_shares;
 	/** For 64-bits alignment. */
 	uint32_t			kr_padding;
-	/** btree root under the key */
-	struct btr_root			kr_btr;
-	/** evtree root, which is only used by akey */
-	struct evt_root			kr_evt[0];
+	union {
+		/** btree root under the key */
+		struct btr_root			kr_btr;
+		/** evtree root, which is only used by akey */
+		struct evt_root			kr_evt;
+	};
 	/* Checksum and key are stored after tree root */
 };
 

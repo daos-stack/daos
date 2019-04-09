@@ -675,11 +675,13 @@ typedef struct {
 	/*
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
-	 * records where the record is updated atomically. Note than an akey can
-	 * have both type of values, but to access both would require a separate
-	 * iod for each. If \a iod_type == DAOS_IOD_SINGLE, then iod_nr has to
-	 * be 1, and \a iod_size would be the size of the single atomic
-	 * value. The idx is ignored and the rx_nr is also required to be 1.
+	 * records where the record is updated atomically. Note that an akey can
+	 * only support one type of value which is set on the first update. If
+	 * user attempts to mix types in the same akey, the behavior is
+	 * undefined, even after the object, key, or value is punched. If
+	 * \a iod_type == DAOS_IOD_SINGLE, then iod_nr has to be 1, and
+	 * \a iod_size would be the size of the single atomic value. The idx is
+	 * ignored and the rx_nr is also required to be 1.
 	 */
 	daos_iod_type_t		iod_type;
 	/** Size of the single value or the record size of the array */

@@ -138,7 +138,7 @@ func serverMain() error {
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Format the unformatted servers.
+	// Format the unformatted servers and related hardware.
 	if err = formatIosrvs(&config, false); err != nil {
 		log.Errorf("Failed to format servers: %s", err)
 		return err

@@ -33,31 +33,36 @@ import (
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
 type cliOptions struct {
-	Port        uint16             `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath   string             `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath  string             `short:"o" long:"config_path" description:"Server config file path"`
-	Modules     *string            `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores       uint16             `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Targets     int                `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
-	XShelpernr  int                `short:"x" long:"xshelpernr" default:"2" description:"number of helper XS per VOS target (default 2)"`
-	Firstcore   int                `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
-	Group       string             `short:"g" long:"group" description:"Server group name"`
-	Attach      *string            `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string            `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *rank              `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir   string             `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	ShowStorage ShowStorageCommand `command:"show-storage" alias:"ss" description:"List attached SCM and NVMe storage"`
-	PrepNvme    PrepNvmeCommand    `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
+	Port       uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath  string  `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath string  `short:"o" long:"config_path" description:"Server config file path"`
+	Modules    *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores      uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
+	Targets    int     `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
+	XShelpernr int     `short:"x" long:"xshelpernr" default:"2" description:"number of helper XS per VOS target (default 2)"`
+	Firstcore  int     `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
+	Group      string  `short:"g" long:"group" description:"Server group name"`
+	Attach     *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map        *string `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank       *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir  string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	Storage    StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
 }
 
-// ShowStorageCommand is the struct representing the command to list storage.
-// Retrieves and prints details of locally attached SCM and NVMe storage.
-type ShowStorageCommand struct{}
+// StorCmd is the struct representing the top-level storage subcommand.
+type StorCmd struct {
+	List     ListStorCmd `command:"list" alias:"l" description:"List SCM and NVMe storage attached to local server"`
+	PrepNvme PrepNvmeCmd `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
+}
 
-// Execute is run when ShowStorageCommand activates
+// ListStorCmd is the struct representing the command to list storage.
+// Retrieves and prints details of locally attached SCM and NVMe storage.
+type ListStorCmd struct{}
+
+// Execute is run when ListStorCmd activates
 //
 // Perform task then exit immediately. No config parsing performed.
-func (s *ShowStorageCommand) Execute(args []string) (errs error) {
+func (s *ListStorCmd) Execute(args []string) (errs error) {
 	config := newConfiguration()
 
 	server, err := newControlService(
@@ -94,18 +99,18 @@ func (s *ShowStorageCommand) Execute(args []string) (errs error) {
 	return
 }
 
-// PrepNvmeCommand is the struct representing the command to prep NVMe SSDs
+// PrepNvmeCmd is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
-type PrepNvmeCommand struct {
+type PrepNvmeCmd struct {
 	NrHugepages int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
 	TargetUser  string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	Reset       bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
 }
 
-// Execute is run when PrepNvmeCommand activates
+// Execute is run when PrepNvmeCmd activates
 //
 // Perform task then exit immediately. No config parsing performed.
-func (p *PrepNvmeCommand) Execute(args []string) error {
+func (p *PrepNvmeCmd) Execute(args []string) error {
 	ok, usr := common.CheckSudo()
 	if !ok {
 		return errors.New("subcommand must be run as root or sudo")

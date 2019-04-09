@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -133,7 +132,7 @@ func hash(s string) int {
 // setNumCores takes number of cores and converts to list of ranges
 func setNumCores(num int) (rs []string, err error) {
 	if num < 1 {
-		return rs, fmt.Errorf(
+		return rs, errors.Errorf(
 			"invalid number of cpus (cores) specified: %d", num)
 	}
 	if num == 1 {
@@ -174,7 +173,7 @@ func getNumCores(rs []string) (num int, err error) {
 				continue
 			}
 		}
-		return num, fmt.Errorf(
+		return num, errors.Errorf(
 			"unsupported range format %s, need <int>-<int> e.g. 1-10", s)
 	}
 	return
@@ -192,7 +191,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	var numCores int
 	numCores, err := getNumCores(server.Cpus)
 	if err != nil {
-		return fmt.Errorf("server%d cpus invalid: %s", i, err)
+		return errors.Errorf("server%d cpus invalid: %s", i, err)
 	}
 	server.CliOpts = append(
 		server.CliOpts,
@@ -310,7 +309,7 @@ func (c *configuration) validateConfig() (bool, error) {
 	// if provider or Servers are missing and we can't detect os envs, we don't
 	// have sufficient info to start io servers
 	if (c.Provider == "") || (len(c.Servers) == 0) {
-		return false, fmt.Errorf(
+		return false, errors.Errorf(
 			"required parameters missing from config and os environment (%s)",
 			providerEnvKey)
 	}
@@ -339,13 +338,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 		// avoid mutating subject during iteration, instead access through
 		// config/parent object
 		server := &c.Servers[i]
-		// verify scm mount path is valid
-		mntpt := server.ScmMount
-		if err = c.checkMount(mntpt); err != nil {
-			return fmt.Errorf(
-				"server%d scm mount path (%s) not mounted: %s",
-				i, mntpt, err)
-		}
+
 		if err = c.populateCliOpts(i); err != nil {
 			return err
 		}
@@ -361,6 +354,7 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			continue
 		}
 		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
+
 		// user environment variable detected for provider, assume all
 		// necessary environment already exists and clear server config EnvVars
 		log.Errorf(

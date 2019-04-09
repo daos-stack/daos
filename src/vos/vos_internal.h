@@ -671,21 +671,20 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static inline uint64_t
-vos_krec_size(enum vos_tree_class tclass, struct vos_rec_bundle *rbund)
+vos_krec_size(struct vos_rec_bundle *rbund)
 {
 	daos_iov_t	*key;
-	uint64_t	 size;
-	bool		 has_evt = (tclass == VOS_BTR_AKEY);
+	daos_size_t	 psize;
 
 	key = rbund->rb_iov;
-	size = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
-	return size + offsetof(struct vos_krec_df, kr_evt[has_evt]);
+	psize = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
+	return sizeof(struct vos_krec_df) + psize;
 }
 
 static inline void *
 vos_krec2payload(struct vos_krec_df *krec)
 {
-	return (void *)&krec->kr_evt[!!(krec->kr_bmap & KREC_BF_EVT)];
+	return (void *)&krec[1];
 }
 
 static inline char *
