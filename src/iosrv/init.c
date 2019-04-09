@@ -87,6 +87,17 @@ static const char      *sys_map_path;
 /** Self rank */
 static d_rank_t		self_rank = -1;
 
+d_rank_t
+dss_self_rank(void)
+{
+	d_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL /* grp */, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	return rank;
+}
+
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
  * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
@@ -308,9 +319,7 @@ server_init()
 		D_INFO("server group attach info saved\n");
 	}
 
-	rc = ds_iv_init();
-	if (rc)
-		D_GOTO(exit_crt_init, rc);
+	ds_iv_init();
 
 	/* load modules */
 	rc = modules_load(&dss_mod_facs);

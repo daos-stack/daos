@@ -2375,6 +2375,8 @@ static const struct CMUnitTest io_tests[] = {
 		csum_extent_not_chunk_aligned, NULL, NULL},
 	{ "VOS306: Some EVT Checksum Helper Functions",
 		evt_csum_helper_functions_tests, NULL, NULL},
+	{ "VOS307: Some input validation",
+		csum_invalid_input_tests, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {

@@ -334,7 +334,7 @@ test_acl_alloc_type_order(void **state)
 	struct daos_acl			*acl;
 	int				i;
 	ssize_t				ace_len = 0;
-	size_t				num_aces = DAOS_ACL_EVERYONE + 1;
+	size_t				num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace			*ace[num_aces];
 	const char			group_name[] = "mygroup@";
 	const char			user_name[] = "me@";
@@ -604,7 +604,7 @@ test_acl_get_ace_invalid_type(void **state)
 
 	/* bad type */
 	assert_int_equal(daos_acl_get_ace_for_principal(acl,
-			DAOS_ACL_EVERYONE + 1,
+			NUM_DAOS_ACL_TYPES,
 			ace[0]->dae_principal, &result), -DER_INVAL);
 
 	assert_null(result);
@@ -707,7 +707,7 @@ static void
 test_acl_get_ace_name_needed(void **state)
 {
 	struct daos_acl *acl;
-	size_t		num_aces = DAOS_ACL_EVERYONE + 1;
+	size_t		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace *ace[num_aces];
 	struct daos_ace *result = NULL;
 
@@ -744,7 +744,7 @@ static void
 test_acl_get_ace_name_not_needed(void **state)
 {
 	struct daos_acl *acl;
-	size_t		num_aces = DAOS_ACL_EVERYONE + 1;
+	size_t		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace *ace[num_aces];
 
 	fill_ace_list_with_all_types_shuffled(ace, "user1@", "group1@");
@@ -858,7 +858,7 @@ fill_ace_list_with_all_types(struct daos_ace *ace[],
 {
 	int i;
 
-	for (i = 0; i < (DAOS_ACL_EVERYONE + 1); i++) {
+	for (i = 0; i < NUM_DAOS_ACL_TYPES; i++) {
 		if (i == DAOS_ACL_USER) {
 			ace[i] = daos_ace_create(DAOS_ACL_USER, user_name);
 		} else if (i == DAOS_ACL_GROUP) {
@@ -923,7 +923,7 @@ expect_ace_inserted_at_correct_location(struct daos_ace *ace[], int num_aces,
 static void
 test_acl_add_ace_user_to_existing_list(void **state)
 {
-	int		num_aces = DAOS_ACL_EVERYONE + 1;
+	int		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
 	const char	new_ace_name[] = "newuser@";
@@ -942,7 +942,7 @@ test_acl_add_ace_user_to_existing_list(void **state)
 static void
 test_acl_add_ace_group_to_existing_list(void **state)
 {
-	int		num_aces = DAOS_ACL_EVERYONE + 1;
+	int		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
 	const char	new_ace_name[] = "newgroup@";
@@ -1030,7 +1030,7 @@ test_acl_add_ace_everyone_to_existing_list(void **state)
 static void
 expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 {
-	int		num_aces = DAOS_ACL_EVERYONE + 1;
+	int		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
 	struct daos_acl	*acl;
@@ -1078,7 +1078,7 @@ test_acl_add_ace_duplicate_no_name(void **state)
 static void
 test_acl_add_ace_replace(void **state)
 {
-	int		num_aces = DAOS_ACL_EVERYONE + 1;
+	int		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace	*ace[num_aces];
 	struct daos_ace	*new_ace;
 	struct daos_acl	*acl;
@@ -1151,7 +1151,7 @@ test_acl_remove_ace_invalid_type(void **state)
 	acl = daos_acl_create(ace, num_aces);
 
 	assert_int_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_EVERYONE + 1, ace[0]->dae_principal),
+			NUM_DAOS_ACL_TYPES, ace[0]->dae_principal),
 			-DER_INVAL);
 
 	/* cleanup */
@@ -1276,7 +1276,7 @@ static void
 expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 		const char *principal)
 {
-	int		num_aces = DAOS_ACL_EVERYONE + 1;
+	int		num_aces = NUM_DAOS_ACL_TYPES;
 	struct daos_ace	*ace[num_aces];
 	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;

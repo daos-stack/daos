@@ -10,7 +10,7 @@ def scons():
 
     # dtx
     dtx = daos_build.library(denv, 'dtx',
-                             ['dtx_srv.c', 'dtx_rpc.c'])
+                             ['dtx_srv.c', 'dtx_rpc.c', 'dtx_resync.c'])
     denv.Install('$PREFIX/lib/daos_srv', dtx)
 
 if __name__ == "SCons.Script":

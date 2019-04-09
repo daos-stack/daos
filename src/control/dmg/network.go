@@ -21,28 +21,9 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package main
 
-import (
-	"time"
+// TODO: provide implementation to this placeholder
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
-)
-
-func (c *control) killRank(uuid string, rank uint32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	resp, err := c.client.KillRank(ctx, &pb.DaosRank{PoolUuid: uuid, Rank: rank})
-	if err != nil {
-		return err
-	}
-	if resp.Status != pb.DaosRequestStatus_SUCCESS {
-		return errors.New("DAOS request status " + resp.Status.String())
-	}
-
-	return nil
-}
+// NetCmd is the struct representing the top-level network subcommand.
+type NetCmd struct{}

@@ -165,6 +165,13 @@ class DaosIODescriptor(ctypes.Structure):
                 ("iod_csums", ctypes.POINTER(CheckSum)),
                 ("iod_eprs", ctypes.c_void_p)]
 
+class Anchor(ctypes.Structure):
+    """ Class to represent a C daos_anchor_t struct. """
+    _fields_ = [('da_type', ctypes.c_uint16),
+                ('da_shard', ctypes.c_uint16),
+                ('da_padding', ctypes.c_uint32),
+                ('da_buff', ctypes.c_uint8*128)]
+
 class CallbackEvent(object):
     def __init__(self, obj, event):
         self.obj = obj
