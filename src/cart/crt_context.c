@@ -745,7 +745,16 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		RPC_DECREF(rpc_priv);
 		break;
 	default:
-		/* At this point, RPC should always be completed by Mercury */
+		if (rpc_priv->crp_on_wire) {
+			/* At this point, RPC should always be completed by
+			 * Mercury
+			 */
+			RPC_ERROR(rpc_priv,
+				  "aborting to group %s, rank %d, tgt_uri %s\n",
+				  grp_priv->gp_pub.cg_grpid,
+				  tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+			crt_req_abort(&rpc_priv->crp_pub);
+		}
 		break;
 	}
 }
