@@ -559,6 +559,8 @@ d_fault_inject_init(void)
 			config_file);
 		d_fault_config_file = 1;
 		d_fault_inject = 1;
+	} else {
+		D_ERROR("Failed to parse fault config file.\n");
 		D_GOTO(out, rc);
 	}
 
