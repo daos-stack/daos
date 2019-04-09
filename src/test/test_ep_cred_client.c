@@ -171,20 +171,20 @@ test_fini()
 {
 	int	rc;
 
-	if (test.tg_should_attach) {
-		rc = crt_group_detach(test.tg_remote_group);
-		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
-	}
-
 	test.tg_shutdown = 1;
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
 	D_DEBUG(DB_TRACE, "joined progress thread.\n");
 
-
 	rc = crt_context_destroy(test.tg_crt_ctx, 1);
 	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
+
+
+	if (test.tg_should_attach) {
+		rc = crt_group_detach(test.tg_remote_group);
+		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+	}
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
