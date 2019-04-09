@@ -35,8 +35,6 @@
 /** #define OID_IV_DEBUG */
 #define OID_BLOCK 32
 
-static d_rank_t		myrank;
-
 struct oid_iv_key {
 	/** The Key ID, being the container uuid */
 	uuid_t		key_id;
@@ -100,7 +98,7 @@ oid_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **_priv)
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
 #ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: ON REFRESH %zu\n", myrank, num_oids);
+	fprintf(stderr, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
 #endif
 	D_ASSERT(num_oids != 0);
 
@@ -139,6 +137,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
 	struct oid_iv_range	*oids;
 	struct oid_iv_range	*avail;
 	daos_size_t		num_oids;
+	d_rank_t		myrank = dss_self_rank();
 	int			rc;
 
 	D_ASSERT(priv != NULL);
@@ -156,7 +155,6 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
 		myrank, avail->num_oids, avail->oid);
 #endif
 
-	rc = crt_group_rank(NULL, &myrank);
 	if (ns_entry->ns->iv_master_rank == myrank) {
 		struct oid_iv_key *key;
 
@@ -226,7 +224,7 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 	struct oid_iv_priv	*priv;
 
 #ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: OID GET\n", myrank);
+	fprintf(stderr, "%u: OID GET\n", dss_self_rank());
 #endif
 
 	D_ALLOC_PTR(priv);
@@ -243,7 +241,7 @@ oid_iv_ent_put(struct ds_iv_entry *entry, void **_priv)
 	struct oid_iv_priv *priv = (struct oid_iv_priv *)_priv;
 
 #ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: ON PUT\n", myrank);
+	fprintf(stderr, "%u: ON PUT\n", dss_self_rank());
 #endif
 
 	D_FREE(priv);
@@ -342,7 +340,7 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 
 #ifdef OID_IV_DEBUG
 	fprintf(stderr, "%d: OID alloc CoUUID "DF_UUIDF" num_oids %"PRIu64"\n",
-		myrank, DP_UUID(co_uuid), num_oids);
+		dss_self_rank(), DP_UUID(co_uuid), num_oids);
 #endif
 
 	memset(&key, 0, sizeof(key));
@@ -367,7 +365,6 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 int
 ds_oid_iv_init(void)
 {
-	crt_group_rank(NULL, &myrank);
 	return ds_iv_class_register(IV_OID, &iv_cache_ops, &oid_iv_ops);
 }
 

@@ -27,6 +27,7 @@ import (
 	"net"
 	"syscall"
 
+	"github.com/daos-stack/daos/src/control/log"
 	"golang.org/x/sys/unix"
 )
 
@@ -49,14 +50,21 @@ func DomainInfoFromUnixConn(sock *net.UnixConn) (*DomainInfo, error) {
 	}
 	defer f.Close()
 
+	log.Debugf("Client Socket Credentials:\n")
 	fd := int(f.Fd())
 	creds, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
 	if err != nil {
 		return nil, err
 	}
+	log.Debugf("Pid: %d\n", creds.Pid)
+	log.Debugf("Uid: %d\n", creds.Uid)
+	log.Debugf("Gid: %d", creds.Gid)
+
 	ctx, err := unix.GetsockoptString(fd, syscall.SOL_SOCKET, syscall.SO_PEERSEC)
 	if err != nil {
-		return nil, err
+		log.Debugf("Unable to obtain peer context: %s\n", err)
+		ctx = ""
 	}
+	log.Debugf("Context: %s", ctx)
 	return InitDomainInfo(creds, ctx), nil
 }

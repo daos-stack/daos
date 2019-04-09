@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -33,7 +32,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var sockFileName = "daos_server.sock"
+const sockFileName = "daos_server.sock"
 
 func getDrpcClientSocket(sockDir string) string {
 	return filepath.Join(sockDir, "daos_io_server.sock")
@@ -84,11 +83,11 @@ func drpcSetup(sockDir string, iosrv *iosrv) error {
 // checkDrpcResponse checks for some basic formatting errors
 func checkDrpcResponse(drpcResp *drpc.Response) error {
 	if drpcResp == nil {
-		return fmt.Errorf("dRPC returned no response")
+		return errors.Errorf("dRPC returned no response")
 	}
 
 	if drpcResp.Status != drpc.Status_SUCCESS {
-		return fmt.Errorf("bad dRPC response status: %v",
+		return errors.Errorf("bad dRPC response status: %v",
 			drpcResp.Status.String())
 	}
 
@@ -98,9 +97,13 @@ func checkDrpcResponse(drpcResp *drpc.Response) error {
 // newDrpcCall creates a new drpc Call instance for specified module, with
 // the protobuf message marshalled in the body
 func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.Call, error) {
-	bodyBytes, err := proto.Marshal(bodyMessage)
-	if err != nil {
-		return nil, err
+	var bodyBytes []byte
+	if bodyMessage != nil {
+		var err error
+		bodyBytes, err = proto.Marshal(bodyMessage)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &drpc.Call{

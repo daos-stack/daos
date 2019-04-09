@@ -38,16 +38,15 @@ sanity_check_validation_response(Drpc__Response *response)
 {
 	int rc = DER_SUCCESS;
 
-	/* Unpack the response body for a basic sanity check */
 	AuthToken *pb_auth = auth_token__unpack(NULL,
 			response->body.len, response->body.data);
 	if (pb_auth == NULL) {
-		/* Malformed body */
+		D_ERROR("Response body was not an AuthToken\n");
 		return -DER_MISC;
 	}
 
-	/* Not super useful if we didn't get token data*/
 	if (!pb_auth->has_data) {
+		D_ERROR("AuthToken did not include data\n");
 		rc = -DER_MISC;
 	}
 
@@ -56,28 +55,27 @@ sanity_check_validation_response(Drpc__Response *response)
 }
 
 static Drpc__Call *
-new_validation_request(daos_iov_t *creds)
+new_validation_request(struct drpc *ctx, daos_iov_t *creds)
 {
 	uint8_t		*body;
 	Drpc__Call	*request;
 
-	D_ALLOC_PTR(request);
-
+	request = drpc_call_create(ctx,
+			DRPC_MODULE_SECURITY_SERVER,
+			DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS);
 	if (request == NULL) {
+		D_ERROR("Could not allocate dRPC call\n");
 		return NULL;
 	}
 
 	D_ALLOC(body, creds->iov_len);
 	if (body == NULL) {
+		D_ERROR("Could not allocate dRPC call body\n");
+		drpc_call_free(request);
 		return NULL;
 	}
 
 	memcpy(body, creds->iov_buf, creds->iov_len);
-	drpc__call__init(request);
-
-	request->module = DRPC_MODULE_SECURITY_SERVER;
-	request->method =
-		DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS;
 	request->body.len = creds->iov_len;
 	request->body.data = body;
 
@@ -85,38 +83,27 @@ new_validation_request(daos_iov_t *creds)
 }
 
 static int
-send_drpc_message(Drpc__Call *message, Drpc__Response **response)
+validate_credentials_via_drpc(Drpc__Response **response, daos_iov_t *creds)
 {
 	struct drpc	*server_socket;
+	Drpc__Call	*request;
 	int		rc;
 
 	server_socket = drpc_connect(ds_sec_server_socket_path);
 	if (server_socket == NULL) {
-		/* can't connect to agent socket */
+		D_ERROR("Couldn't connect to daos_server socket\n");
 		return -DER_BADPATH;
 	}
 
-	rc = drpc_call(server_socket, R_SYNC, message, response);
-	drpc_close(server_socket);
-
-	return rc;
-}
-
-static int
-validate_credentials_via_drpc(Drpc__Response **response, daos_iov_t *creds)
-{
-	Drpc__Call	*request;
-	int		rc;
-
-	request = new_validation_request(creds);
-
+	request = new_validation_request(server_socket, creds);
 	if (request == NULL) {
 		return -DER_NOMEM;
 	}
 
-	rc = send_drpc_message(request, response);
+	rc = drpc_call(server_socket, R_SYNC, request, response);
 
-	drpc__call__free_unpacked(request, NULL);
+	drpc_close(server_socket);
+	drpc_call_free(request);
 	return rc;
 }
 
@@ -128,11 +115,12 @@ process_validation_response(Drpc__Response *response,
 	AuthToken	*auth;
 
 	if (response == NULL) {
+		D_ERROR("Response was NULL\n");
 		return -DER_NOREPLY;
 	}
 
 	if (response->status != DRPC__STATUS__SUCCESS) {
-		/* Recipient could not parse our message */
+		D_ERROR("dRPC response error: %d\n", response->status);
 		return -DER_MISC;
 	}
 
@@ -144,6 +132,7 @@ process_validation_response(Drpc__Response *response,
 	auth = auth_token__unpack(NULL, response->body.len,
 					response->body.data);
 	if (auth == NULL) {
+		D_ERROR("Failed to unpack response body\n");
 		return -DER_MISC;
 	}
 	*token = auth;
@@ -168,12 +157,12 @@ ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token)
 
 	rc = process_validation_response(response, token);
 
-	drpc__response__free_unpacked(response, NULL);
+	drpc_response_free(response);
 	return rc;
 }
 
 int
-ds_sec_can_pool_connect(const struct pool_prop_ugm *attr, d_iov_t *cred,
+ds_sec_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
 				uint64_t access)
 {
 	int		rc;
@@ -182,7 +171,7 @@ ds_sec_can_pool_connect(const struct pool_prop_ugm *attr, d_iov_t *cred,
 	AuthToken	*sec_token = NULL;
 	AuthSys		*sys_creds = NULL;
 
-	if (attr == NULL || cred == NULL) {
+	if (ugm == NULL || cred == NULL) {
 		return -DER_INVAL;
 	}
 
@@ -198,16 +187,20 @@ ds_sec_can_pool_connect(const struct pool_prop_ugm *attr, d_iov_t *cred,
 	 * Determine which set of capability bits applies. See also the
 	 * comment/diagram for ds_pool_attr_mode in src/pool/srv_layout.h.
 	 */
-	if (sys_creds->uid == attr->pp_uid)
+	if (sys_creds->uid == ugm->pp_uid)
 		shift = DAOS_PC_NBITS * 2;	/* user */
-	else if (sys_creds->gid == attr->pp_gid)
+	else if (sys_creds->gid == ugm->pp_gid)
 		shift = DAOS_PC_NBITS;		/* group */
 	else
 		shift = 0;			/* other */
 
 	/* Extract the applicable set of capability bits. */
-	access_permitted = (attr->pp_mode >> shift) & DAOS_PC_MASK;
+	access_permitted = (ugm->pp_mode >> shift) & DAOS_PC_MASK;
 
 	/* Only if all requested capability bits are permitted... */
-	return (access & access_permitted) == access;
+	if ((access & access_permitted) == access) {
+		return 0;
+	}
+
+	return -DER_NO_PERM;
 }

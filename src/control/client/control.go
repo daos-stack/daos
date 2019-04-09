@@ -34,9 +34,6 @@ import (
 
 var errConnect = fmt.Errorf("no client connection was found, please connect")
 
-// FeatureMap is an alias for mgmt features supported by gRPC server.
-type FeatureMap map[string]string
-
 // ScmModules is an alias for protobuf ScmModule message slice representing
 // a number of SCM modules installed on a storage node.
 type ScmModules []*pb.ScmModule
@@ -54,6 +51,7 @@ type Control interface {
 	listAllFeatures() (FeatureMap, error)
 	listScmModules() (ScmModules, error)
 	listNvmeCtrlrs() (NvmeControllers, error)
+	formatStorage() error
 	killRank(uuid string, rank uint32) error
 }
 
@@ -63,14 +61,6 @@ type Control interface {
 type control struct {
 	client pb.MgmtControlClient
 	gconn  *grpc.ClientConn
-}
-
-func newControl(address string) (Control, error) {
-	c := &control{}
-	if err := c.connect(address); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 // connect provides an easy interface to connect to Mgmt DAOS server.

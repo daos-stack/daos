@@ -387,12 +387,6 @@ dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
 			DP_UUID(array_glob->cont_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (uuid_compare(coh_uuid, array_glob->coh_uuid) != 0) {
-		D_ERROR("Container handle mismatch, in coh: "DF_UUID", "
-			"in array_glob:" DF_UUID"\n", DP_UUID(coh_uuid),
-			DP_UUID(array_glob->coh_uuid));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	/** create an array open handle */
 	array = array_alloc();

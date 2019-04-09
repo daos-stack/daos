@@ -33,6 +33,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from daos_api import DaosPool, DaosContext, DaosApiError
@@ -45,6 +46,7 @@ class SimpleCreateDeleteTest(Test):
     """
     # super wasteful since its doing this for every variation
     def setUp(self):
+        self.agent_sessions = None
         self.pool = None
         self.hostlist = None
 
@@ -58,6 +60,7 @@ class SimpleCreateDeleteTest(Test):
 
         server_group = self.params.get("server_group", '/server/', 'daos_server')
 
+        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
         ServerUtils.runServer(self.hostfile, server_group, basepath)
 
     def tearDown(self):
@@ -65,6 +68,8 @@ class SimpleCreateDeleteTest(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             ServerUtils.stopServer(hosts=self.hostlist)
 
     def test_create(self):

@@ -89,7 +89,7 @@
 #
 ## Storage mount directory
 #
-## TODO: If no pre-configured mountpoins are specified, DAOS will auto-detect
+## TODO: If no pre-configured mountpoints are specified, DAOS will auto-detect
 ## NVDIMMs, configure them in interleave mode, format with ext4 and
 ## mount with the DAX extension creating a subdirectory within scm_mount_path.
 #
@@ -166,7 +166,14 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
-##
+## Format override when true will continue to format and start data plane
+## without waiting for client API storage format call (which formats
+## NVMe and SCM storage devices.
+#
+## default: true
+#format_override: false
+#
+#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will
@@ -221,23 +228,37 @@
 #
 #  scm_mount: /mnt/daos/1
 #
+#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
+#  # modules configured in interleaved mode (AppDirect regions) or emulated
+#  # tmpfs in RAM.
+#  # Options are:
+#  # - "dcpm" for real SCM (preferred option), scm_size ignored
+#  # - "ram" to emulate SCM with memory, scm_list ignored
+#  # Immutable after reformat.
+#
+#  # default: dcpm
+#  scm_class: ram
+#
+#  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+#  # The size of ram is specified by scm_size in GB units.
+#  scm_size: 16
+#
 #  # Backend block device type. Force a SPDK driver to be used by this server
 #  # instance.
 #  # Options are:
-#  # - "nvme" for NVMe SSDs (preferred option)
-#  # - "malloc" to emulate a NVMe SSD with memory
-#  # - "file" to emulate a NVMe SSD with a regular file
-#  # - "kdev" to use a kernel block device
+#  # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
+#  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
+#  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
+#  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
 #  # default: nvme
 #  bdev_class: nvme
 #
 #  # Backend block device configuration to be used by this server instance.
-#  # Immutable after reformat.
 #  # When bdev_class is set to nvme, bdev_list is the list of unique NVMe IDs
 #  # that should be different across different server instance.
-#  # Colons replaced by dots in PCI identifiers.
+#  # Immutable after reformat.
 #  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 #-
 #  # Rank to be assigned as identifier for server.
@@ -286,13 +307,28 @@
 #
 #  scm_mount: /mnt/daos/2
 #
+#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
+#  # modules configured in interleaved mode (AppDirect regions) or emulated
+#  # tmpfs in RAM.
+#  # Options are:
+#  # - "dcpm" for real SCM (preferred option), scm_size is ignored
+#  # - "ram" to emulate SCM with memory, scm_list is ignored
+#  # Immutable after reformat.
+#
+#  # default: dcpm
+#  scm_class: dcpm
+#
+#  # When scm_class is set to dcpm, scm_list is the list of device paths for
+#  # AppDirect pmem namespaces (currently only one per server supported).
+#  scm_list: [/dev/pmem0]
+#
 #  # Backend block device type. Force a SPDK driver to be used by this server
 #  # instance.
 #  # Options are:
-#  # - "nvme" for NVMe SSDs (preferred option)
-#  # - "malloc" to emulate a NVMe SSD with memory
-#  # - "file" to emulate a NVMe SSD with a regular file
-#  # - "kdev" to use a kernel block device
+#  # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
+#  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
+#  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
+#  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
 #  # When bdev_class is set to malloc, bdev_number is the number of devices

@@ -26,27 +26,32 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
 
-	"golang.org/x/net/context"
-
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 // ListNvmeCtrlrs lists all NVMe controllers.
 func (c *controlService) ListNvmeCtrlrs(
 	empty *pb.EmptyParams, stream pb.MgmtControl_ListNvmeCtrlrsServer) error {
+
+	log.Debugf("ControlService.ListNvmeCtrlrs dispatch")
+
 	if err := c.nvme.Discover(); err != nil {
 		return err
 	}
+
 	for _, ctrlr := range c.nvme.controllers {
 		if err := stream.Send(ctrlr); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -65,12 +70,12 @@ func (c *controlService) UpdateNvmeCtrlr(
 		if ctrlr.Pciaddr == pciAddr {
 			// TODO: verify at caller
 			//			if ctrlr.Fwrev == fwRev {
-			//				return nil, fmt.Errorf("update failed, firmware revision unchanged")
+			//				return nil, errors.Errorf("update failed, firmware revision unchanged")
 			//			}
 			return ctrlr, nil
 		}
 	}
-	return nil, fmt.Errorf("update failed, no matching controller found")
+	return nil, errors.Errorf("update failed, no matching controller found")
 }
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
@@ -113,7 +118,7 @@ func (c *controlService) BurnInNvme(
 	cmd.Stderr = &stderr
 	cmdReader, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Error creating StdoutPipe for Cmd %v", err)
+		return errors.Errorf("Error creating StdoutPipe for Cmd %v", err)
 	}
 	// run text scanner as goroutine
 	scanner := bufio.NewScanner(cmdReader)
@@ -125,13 +130,13 @@ func (c *controlService) BurnInNvme(
 	// start command and wait for finish
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf(
+		return errors.Errorf(
 			"Error starting Cmd: %s, Args: %v, Env: %s (%v)",
 			cmdName, args, env, err)
 	}
 	err = cmd.Wait()
 	if err != nil {
-		return fmt.Errorf(
+		return errors.Errorf(
 			"Error waiting for completion of Cmd: %s, Args: %v, Env: %s (%v, %q)",
 			cmdName, args, env, err, stderr.String())
 	}

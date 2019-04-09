@@ -44,6 +44,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/security.h>
 #include <cart/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -986,9 +987,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		    pool_map_get_version(pool->sp_map) < map_version) {
 			struct pool_map *tmp;
 
-			/* Need to update pool->sp_map. Swap with map. */
-			pool->sp_map_version = map_version;
-			rc = pl_map_update(pool->sp_uuid, map, false, true);
+			rc = pl_map_update(pool->sp_uuid, map,
+					   pool->sp_map != NULL ? false : true);
 			if (rc != 0) {
 				svc->ps_pool = NULL;
 				ABT_rwlock_unlock(pool->sp_lock);
@@ -996,9 +996,11 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 				goto out;
 			}
 
+			/* Need to update pool->sp_map. Swap with map. */
 			tmp = pool->sp_map;
 			pool->sp_map = map;
 			map = tmp;
+			pool->sp_map_version = map_version;
 		}
 	} else {
 		map = NULL; /* taken over by pool */
@@ -1544,31 +1546,6 @@ out:
 }
 
 static int
-permitted(const struct pool_prop_ugm *ugm, uint32_t uid, uint32_t gid,
-	  uint64_t capas)
-{
-	int		shift;
-	uint32_t	capas_permitted;
-
-	/*
-	 * Determine which set of capability bits applies. See also the
-	 * comment/diagram for ds_pool_prop_mode in src/pool/srv_layout.h.
-	 */
-	if (uid == ugm->pp_uid)
-		shift = DAOS_PC_NBITS * 2;	/* user */
-	else if (gid == ugm->pp_gid)
-		shift = DAOS_PC_NBITS;		/* group */
-	else
-		shift = 0;			/* other */
-
-	/* Extract the applicable set of capability bits. */
-	capas_permitted = (ugm->pp_mode >> shift) & DAOS_PC_MASK;
-
-	/* Only if all requested capability bits are permitted... */
-	return (capas & capas_permitted) == capas;
-}
-
-static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas,
 		   daos_iov_t *global_ns, struct daos_pool_space *ps,
@@ -1812,10 +1789,11 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
-	if (!permitted(&ugm, in->pci_uid, in->pci_gid, in->pci_capas)) {
-		D_ERROR(DF_UUID": refusing connect attempt for uid %u gid %u "
-			DF_X64"\n", DP_UUID(in->pci_op.pi_uuid), in->pci_uid,
-			in->pci_gid, in->pci_capas);
+	rc = ds_sec_check_pool_access(&ugm, &in->pci_cred, in->pci_capas);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": refusing connect attempt for "
+			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
+			in->pci_capas, rc);
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
@@ -2297,7 +2275,8 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	 * new pool map with the old one in the cache.
 	 */
 	ABT_rwlock_wrlock(svc->ps_pool->sp_lock);
-	rc = pl_map_update(pool_uuid, map, false, true);
+	rc = pl_map_update(pool_uuid, map,
+			   svc->ps_pool->sp_map != NULL ? false : true);
 	if (rc == 0) {
 		map_tmp = svc->ps_pool->sp_map;
 		svc->ps_pool->sp_map = map;
@@ -2924,14 +2903,6 @@ out:
 	crt_reply_send(rpc);
 }
 
-static inline struct pl_obj_shard*
-ds_pool_get_shard(void *data, int idx)
-{
-	struct pl_obj_layout	*layout = data;
-
-	return &layout->ol_shards[idx];
-}
-
 /**
  * Check whether the leader replica of the given object resides
  * on current server or not.
@@ -2977,7 +2948,7 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 		goto out;
 
 	leader = pl_select_leader(oid->id_pub, oid->id_shard, layout->ol_nr,
-				  true, ds_pool_get_shard, layout);
+				  true, pl_obj_get_shard, layout);
 	if (leader < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",

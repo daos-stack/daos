@@ -24,6 +24,8 @@
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
+#include <gurt/hash.h>
+#include <stdio.h>
 
 /*
  * Comparison function for qsort. Compares by principal type.
@@ -243,8 +245,14 @@ ace_matches_principal(struct daos_ace *ace,
 static bool
 principals_match(struct daos_ace *ace1, struct daos_ace *ace2)
 {
+	const char *principal_name = NULL;
+
+	if (ace2->dae_principal_len > 0) {
+		principal_name = ace2->dae_principal;
+	}
+
 	return ace_matches_principal(ace1, ace2->dae_principal_type,
-			ace2->dae_principal);
+			principal_name);
 }
 
 /*
@@ -360,7 +368,7 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace)
 static bool
 type_is_valid(enum daos_acl_principal_type type)
 {
-	bool result = false;
+	bool result;
 
 	switch (type) {
 	case DAOS_ACL_USER:
@@ -369,6 +377,11 @@ type_is_valid(enum daos_acl_principal_type type)
 	case DAOS_ACL_OWNER_GROUP:
 	case DAOS_ACL_EVERYONE:
 		result = true;
+		break;
+
+	case NUM_DAOS_ACL_TYPES:
+	default:
+		result = false;
 		break;
 	}
 
@@ -515,6 +528,211 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
 	return 0;
 }
 
+void
+daos_acl_dump(struct daos_acl *acl)
+{
+	struct daos_ace *current;
+
+	printf("Access Control List:\n");
+	if (acl == NULL) {
+		printf("\tNULL\n");
+		return;
+	}
+
+	printf("\tVersion: %hu\n", acl->dal_ver);
+	printf("\tLength: %u\n", acl->dal_len);
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	while (current != NULL) {
+		daos_ace_dump(current, 1);
+
+		current = daos_acl_get_next_ace(acl, current);
+	}
+
+}
+
+/*
+ * Internal structure for hash table entries
+ */
+struct ace_hash_entry {
+	d_list_t	entry;
+	int		refcount;
+	struct daos_ace	*ace;
+};
+
+struct ace_hash_entry *
+ace_hash_entry(d_list_t *rlink)
+{
+	return (struct ace_hash_entry *)container_of(rlink,
+			struct ace_hash_entry, entry);
+}
+
+/*
+ * Key comparison for hash table - Checks whether the principals match.
+ * Body of the ACE doesn't need to match.
+ */
+bool
+hash_ace_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
+		 const void *key, unsigned int ksize)
+{
+	struct daos_ace		*ace;
+	struct ace_hash_entry	*entry;
+
+	entry = ace_hash_entry(rlink);
+	ace = (struct daos_ace *)key;
+
+	return principals_match(ace, entry->ace);
+}
+
+void
+hash_ace_add_ref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ace_hash_entry *entry;
+
+	entry = ace_hash_entry(rlink);
+	entry->refcount++;
+}
+
+bool
+hash_ace_dec_ref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ace_hash_entry *entry;
+
+	entry = ace_hash_entry(rlink);
+	entry->refcount--;
+
+	return entry->refcount <= 0;
+}
+
+void
+hash_ace_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ace_hash_entry *entry;
+
+	entry = ace_hash_entry(rlink);
+	D_FREE(entry);
+}
+
+/*
+ * Checks if the given daos_ace is a duplicate of one already we've already
+ * seen.
+ */
+static int
+check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
+{
+	struct ace_hash_entry	*entry;
+	d_list_t		*link;
+	int			rc;
+
+	D_ALLOC_PTR(entry);
+	if (entry == NULL) {
+		D_ERROR("Failed to allocate hash table entry\n");
+		return -DER_NOMEM;
+	}
+
+	D_INIT_LIST_HEAD(&entry->entry);
+	entry->ace = ace;
+
+	link = d_hash_rec_find(found_aces, ace, daos_ace_get_size(ace));
+	if (link != NULL) { /* Duplicate */
+		hash_ace_dec_ref(found_aces, link);
+		D_FREE(entry);
+		return -DER_INVAL;
+	}
+
+	rc = d_hash_rec_insert(found_aces, ace,
+			daos_ace_get_size(ace),
+			&entry->entry, true);
+	if (rc != 0) {
+		D_ERROR("Failed to insert new hash entry, rc=%d\n", rc);
+		D_FREE(entry);
+	}
+
+	return rc;
+}
+
+/*
+ * Walks the list of ACEs and checks them for validity.
+ */
+static int
+validate_aces(struct daos_acl *acl)
+{
+	struct daos_ace		*current;
+	int			last_type;
+	int			rc;
+	struct d_hash_table	found;
+	d_hash_table_ops_t	ops = {
+			.hop_key_cmp = hash_ace_key_cmp,
+			.hop_rec_addref = hash_ace_add_ref,
+			.hop_rec_decref = hash_ace_dec_ref,
+			.hop_rec_free = hash_ace_free
+	};
+
+	last_type = -1;
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
+			8, NULL, &ops, &found);
+	if (rc != 0) {
+		D_ERROR("Failed to create hash table, rc=%d\n", rc);
+		return rc;
+	}
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	while (current != NULL) {
+		if (!daos_ace_is_valid(current)) {
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		/* Type order is in order of the enum */
+		if (current->dae_principal_type < last_type) {
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		rc = check_ace_is_duplicate(current, &found);
+		if (rc != 0) {
+			goto out;
+		}
+
+		last_type = current->dae_principal_type;
+		current = daos_acl_get_next_ace(acl, current);
+	}
+
+out:
+	d_hash_table_destroy_inplace(&found, true);
+	return rc;
+}
+
+int
+daos_acl_validate(struct daos_acl *acl)
+{
+	int rc;
+
+	if (acl == NULL) {
+		return -DER_INVAL;
+	}
+
+	if (acl->dal_ver != DAOS_ACL_VERSION) {
+		return -DER_INVAL;
+	}
+
+	if (acl->dal_len > 0 && acl->dal_len < sizeof(struct daos_ace)) {
+		return -DER_INVAL;
+	}
+
+	/* overall structure must be 64-bit aligned */
+	if (acl->dal_len % 8 != 0) {
+		return -DER_INVAL;
+	}
+
+	rc = validate_aces(acl);
+	if (rc != 0) {
+		return rc;
+	}
+
+	return 0;
+}
+
 static bool
 type_is_group(enum daos_acl_principal_type type)
 {
@@ -574,4 +792,363 @@ daos_ace_get_size(struct daos_ace *ace)
 	}
 
 	return sizeof(struct daos_ace) + ace->dae_principal_len;
+}
+
+
+static void
+indent(uint num_tabs)
+{
+	uint i;
+
+	for (i = 0; i < num_tabs; i++) {
+		printf("\t");
+	}
+}
+
+static const char *
+get_principal_type_string(uint8_t type)
+{
+	switch (type) {
+	case DAOS_ACL_OWNER:
+		return "Owner";
+
+	case DAOS_ACL_USER:
+		return "User";
+
+	case DAOS_ACL_OWNER_GROUP:
+		return "Owner Group";
+
+	case DAOS_ACL_GROUP:
+		return "Group";
+
+	case DAOS_ACL_EVERYONE:
+		return "Everyone";
+
+	default:
+		break;
+	}
+
+	return "Unknown Principal Type";
+}
+
+static void
+print_principal(uint indent_tabs, struct daos_ace *ace)
+{
+	indent(indent_tabs);
+	printf("Principal Type: %s (%hhu)\n",
+		get_principal_type_string(ace->dae_principal_type),
+		ace->dae_principal_type);
+
+	indent(indent_tabs);
+	printf("Principal Length: %hu\n", ace->dae_principal_len);
+
+	if (ace->dae_principal_len > 0) {
+		indent(indent_tabs);
+		printf("Principal Name: \"%s\"\n", ace->dae_principal);
+	}
+}
+
+static const char *
+get_access_type_string(uint8_t type)
+{
+	switch (type) {
+	case DAOS_ACL_ACCESS_ALLOW:
+		return "Allow";
+
+	case DAOS_ACL_ACCESS_AUDIT:
+		return "Audit";
+
+	case DAOS_ACL_ACCESS_ALARM:
+		return "Alarm";
+
+	default:
+		break;
+	}
+
+	return "Unknown Access Type";
+}
+
+static void
+print_access_type(uint indent_tabs, uint8_t type)
+{
+	indent(indent_tabs);
+	printf("%s (0x%hhx)\n", get_access_type_string(type), type);
+}
+
+static void
+print_all_access_types(uint indent_tabs, struct daos_ace *ace)
+{
+	int i;
+
+	indent(indent_tabs);
+	printf("Access Types:\n");
+
+	if (ace->dae_access_types == 0) {
+		indent(indent_tabs + 1);
+		printf("None\n");
+		return;
+	}
+
+	for (i = 0; i < 8; i++) {
+		uint8_t type = (uint8_t)1 << i;
+
+		if (ace->dae_access_types & type) {
+			print_access_type(indent_tabs + 1, type);
+		}
+	}
+}
+
+static const char *
+get_flag_string(uint16_t flag)
+{
+	switch (flag) {
+	case DAOS_ACL_FLAG_POOL_INHERIT:
+		return "Pool Inherit";
+
+	case DAOS_ACL_FLAG_GROUP:
+		return "Group";
+
+	case DAOS_ACL_FLAG_ACCESS_SUCCESS:
+		return "Access Success";
+
+	case DAOS_ACL_FLAG_ACCESS_FAIL:
+		return "Access Fail";
+
+	default:
+		break;
+	}
+
+	return "Unknown Flag";
+}
+
+static void
+print_flag(uint indent_tabs, uint16_t flag)
+{
+	indent(indent_tabs);
+	printf("%s (0x%hx)\n", get_flag_string(flag), flag);
+}
+
+static void
+print_all_flags(uint indent_tabs, struct daos_ace *ace)
+{
+	int i;
+
+	indent(indent_tabs);
+	printf("Flags:\n");
+
+	if (ace->dae_access_flags == 0) {
+		indent(indent_tabs + 1);
+		printf("None\n");
+		return;
+	}
+
+	for (i = 0; i < 16; i++) {
+		uint16_t flag = (uint16_t)1 << i;
+
+		if (ace->dae_access_flags & flag) {
+			print_flag(indent_tabs + 1, flag);
+		}
+	}
+}
+
+static const char *
+get_perm_string(uint64_t perm)
+{
+	switch (perm) {
+	case DAOS_ACL_PERM_READ:
+		return "Read";
+
+	case DAOS_ACL_PERM_WRITE:
+		return "Write";
+
+	default:
+		break;
+	}
+
+	return "Unknown Permission";
+}
+
+static void
+print_permissions(uint indent_tabs, const char *name, uint64_t perms)
+{
+	int i;
+
+	indent(indent_tabs);
+	printf("%s Permissions:\n", name);
+
+	if (perms == 0) {
+		indent(indent_tabs + 1);
+		printf("None\n");
+		return;
+	}
+
+	for (i = 0; i < 64; i++) {
+		uint64_t bit = (uint64_t)1 << i;
+
+		if (perms & bit) {
+			indent(indent_tabs + 1);
+			printf("%s (0x%lx)\n", get_perm_string(bit),
+					bit);
+		}
+	}
+}
+
+static void
+print_all_perm_types(uint indent_tabs, struct daos_ace *ace)
+{
+	print_permissions(indent_tabs, "Allow", ace->dae_allow_perms);
+	print_permissions(indent_tabs, "Audit", ace->dae_audit_perms);
+	print_permissions(indent_tabs, "Alarm", ace->dae_alarm_perms);
+}
+
+void
+daos_ace_dump(struct daos_ace *ace, uint tabs)
+{
+	indent(tabs);
+	printf("Access Control Entry:\n");
+
+	if (ace == NULL) {
+		indent(tabs + 1);
+		printf("NULL\n");
+		return;
+	}
+
+	print_principal(tabs + 1, ace);
+	print_all_access_types(tabs + 1, ace);
+	print_all_flags(tabs + 1, ace);
+	print_all_perm_types(tabs + 1, ace);
+}
+
+static bool
+principal_is_null_terminated(struct daos_ace *ace)
+{
+	uint16_t i;
+
+	for (i = 0; i < ace->dae_principal_len; i++) {
+		if (ace->dae_principal[i] == '\0') {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static uint64_t
+get_permissions(struct daos_ace *ace, enum daos_acl_access_type type)
+{
+	switch (type) {
+	case DAOS_ACL_ACCESS_ALLOW:
+		return ace->dae_allow_perms;
+
+	case DAOS_ACL_ACCESS_AUDIT:
+		return ace->dae_audit_perms;
+
+	case DAOS_ACL_ACCESS_ALARM:
+		return ace->dae_alarm_perms;
+
+	default:
+		D_ASSERTF(false, "Invalid type %d", type);
+		break;
+	}
+
+	return 0;
+}
+
+static bool
+permissions_match_access_type(struct daos_ace *ace,
+		enum daos_acl_access_type type)
+{
+	uint64_t perms;
+
+	perms = get_permissions(ace, type);
+	if (!(ace->dae_access_types & type) && (perms != 0)) {
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+access_matches_flags(struct daos_ace *ace)
+{
+	uint16_t	alert_flags;
+	uint8_t		alert_access_types;
+	bool		is_alert_type;
+	bool		has_flags;
+
+	alert_flags = DAOS_ACL_FLAG_ACCESS_FAIL | DAOS_ACL_FLAG_ACCESS_SUCCESS;
+	alert_access_types = DAOS_ACL_ACCESS_ALARM | DAOS_ACL_ACCESS_AUDIT;
+
+	is_alert_type = (ace->dae_access_types & alert_access_types) != 0;
+	has_flags = (ace->dae_access_flags & alert_flags) != 0;
+
+	return (is_alert_type == has_flags);
+}
+
+bool
+daos_ace_is_valid(struct daos_ace *ace)
+{
+	uint8_t		valid_types =	DAOS_ACL_ACCESS_ALLOW |
+					DAOS_ACL_ACCESS_AUDIT |
+					DAOS_ACL_ACCESS_ALARM;
+	uint16_t	valid_flags =	DAOS_ACL_FLAG_GROUP |
+					DAOS_ACL_FLAG_POOL_INHERIT |
+					DAOS_ACL_FLAG_ACCESS_FAIL |
+					DAOS_ACL_FLAG_ACCESS_SUCCESS;
+	uint64_t	valid_perms =	DAOS_ACL_PERM_READ |
+					DAOS_ACL_PERM_WRITE;
+	bool		name_exists;
+	bool		flag_exists;
+
+	if (ace == NULL) {
+		return false;
+	}
+
+	/* Check for invalid bits in bit fields */
+	if (ace->dae_access_types & ~valid_types) {
+		return false;
+	}
+
+	if (ace->dae_access_flags & ~valid_flags) {
+		return false;
+	}
+
+	if ((ace->dae_allow_perms & ~valid_perms) ||
+	    (ace->dae_audit_perms & ~valid_perms) ||
+	    (ace->dae_alarm_perms & ~valid_perms)) {
+		return false;
+	}
+
+	/* Name should only exist for types that require it */
+	name_exists = ace->dae_principal_len != 0;
+	if (type_needs_name(ace->dae_principal_type) != name_exists) {
+		return false;
+	}
+
+	/* Only principal types that are groups should have the group flag */
+	flag_exists = (ace->dae_access_flags & DAOS_ACL_FLAG_GROUP) != 0;
+	if (type_is_group(ace->dae_principal_type) != flag_exists) {
+		return false;
+	}
+
+	/* overall structure must be kept 64-bit aligned */
+	if (ace->dae_principal_len % 8 != 0) {
+		return false;
+	}
+
+	if (ace->dae_principal_len > 0 && !principal_is_null_terminated(ace)) {
+		return false;
+	}
+
+	if (!permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALLOW) ||
+	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_AUDIT) ||
+	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALARM)) {
+		return false;
+	}
+
+	if (!access_matches_flags(ace)) {
+		return false;
+	}
+
+	return true;
 }

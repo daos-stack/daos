@@ -956,6 +956,26 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 	return rc;
 }
 
+static int
+evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
+{
+	struct evt_desc	*desc;
+	int		 rc;
+
+	if (ne->ne_child == 0)
+		return 0;
+
+	desc = evt_off2desc(tcx, ne->ne_child);
+	vos_dtx_degister_record(evt_umm(tcx), desc->dc_dtx,
+				umem_ptr2id(evt_umm(tcx), desc), DTX_RT_EVT);
+	rc = evt_desc_free(tcx, desc,
+			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+	if (rc == 0)
+		rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, ne->ne_child));
+
+	return rc;
+}
+
 /** check if a node is full */
 static bool
 evt_node_is_full(struct evt_context *tcx, struct evt_node *nd)
@@ -970,33 +990,6 @@ evt_node_unset(struct evt_context *tcx, struct evt_node *nd, unsigned int bits)
 	nd->tn_flags &= ~bits;
 }
 
-static inline bool
-evt_node_is_set(struct evt_context *tcx, struct evt_node *node,
-		unsigned int bits)
-{
-	return node->tn_flags & bits;
-}
-
-static inline bool
-evt_node_is_leaf(struct evt_context *tcx, struct evt_node *node)
-{
-	return evt_node_is_set(tcx, node, EVT_NODE_LEAF);
-}
-
-static inline bool
-evt_node_is_root(struct evt_context *tcx, struct evt_node *node)
-{
-	return evt_node_is_set(tcx, node, EVT_NODE_ROOT);
-}
-
-/** Return the rectangle at the offset of @at */
-struct evt_node_entry *
-evt_node_entry_at(struct evt_context *tcx, struct evt_node *node,
-		  unsigned int at)
-{
-	return &node->tn_rec[at];
-}
-
 /** Return the address of child umem offset at the offset of @at */
 static uint64_t
 evt_node_child_at(struct evt_context *tcx, struct evt_node *node,
@@ -1006,18 +999,6 @@ evt_node_child_at(struct evt_context *tcx, struct evt_node *node,
 
 	D_ASSERT(!evt_node_is_leaf(tcx, node));
 	return ne->ne_child;
-}
-
-/** Return the data pointer at the offset of @at */
-static struct evt_desc *
-evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
-		 unsigned int at)
-{
-	struct evt_node_entry	*ne = evt_node_entry_at(tcx, node, at);
-
-	D_ASSERT(evt_node_is_leaf(tcx, node));
-
-	return evt_off2desc(tcx, ne->ne_child);
 }
 
 /** Return the rectangle at the offset of @at */
@@ -1123,7 +1104,6 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 {
 	struct evt_node_entry	*ne;
 	struct evt_node		*nd;
-	struct evt_rect		*rect;
 	bool			 leaf;
 	int			 i;
 	int			 rc = 0;
@@ -1136,22 +1116,13 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 
 	for (i = 0; i < nd->tn_nr; i++) {
 		ne = evt_node_entry_at(tcx, nd, i);
-		rect = evt_node_rect_at(tcx, nd, i);
-		if (leaf) {
+		if (leaf)
 			/* NB: This will be replaced with a callback */
-			rc = evt_desc_free(tcx, evt_off2desc(tcx, ne->ne_child),
-					   tcx->tc_inob * evt_rect_width(rect));
-			if (rc != 0)
-				return rc;
-			rc = umem_free(evt_umm(tcx),
-				       evt_off2mmid(tcx, ne->ne_child));
-			if (rc != 0)
-				return rc;
-		} else {
+			rc = evt_node_entry_free(tcx, ne);
+		else
 			rc = evt_node_destroy(tcx, ne->ne_child, level + 1);
-			if (rc != 0)
-				return rc;
-		}
+		if (rc != 0)
+			return rc;
 	}
 	return evt_node_free(tcx, nd_off);
 }
@@ -1161,6 +1132,14 @@ static struct evt_rect *
 evt_node_mbr_get(struct evt_context *tcx, struct evt_node *node)
 {
 	return &node->tn_mbr;
+}
+
+int
+evt_dtx_check_availability(struct evt_context *tcx, umem_id_t entry,
+			   uint32_t intent)
+{
+	return vos_dtx_check_availability(evt_umm(tcx), tcx->tc_coh, entry,
+					  UMMID_NULL, intent, DTX_RT_EVT);
 }
 
 /** (Re)compute MBR for a tree node */
@@ -1817,6 +1796,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
+	entry->en_dtx = desc->dc_dtx;
 	evt_entry_csum_fill(tcx, desc, entry);
 
 	if (offset != 0) {
@@ -1872,6 +1852,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		for (i = at; i < node->tn_nr; i++, ne++) {
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
+			struct evt_desc		*desc;
 			int			 time_overlap;
 			int			 range_overlap;
 
@@ -1921,6 +1902,13 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			}
 			V_TRACE(DB_TRACE, "Found overlapped leaf rect\n");
 
+			desc = evt_node_desc_at(tcx, node, i);
+			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
+							intent);
+			/* Skip the unavailable record. */
+			if (rc == ALB_UNAVAILABLE)
+				continue;
+
 			/* early check */
 			switch (find_opc) {
 			default:
@@ -1928,6 +1916,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			case EVT_FIND_OVERWRITE:
 				if (time_overlap != RT_OVERLAP_SAME)
 					continue; /* not same epoch, skip */
+
+				/* If the availability is unknown, go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
+
 				/* NB: This is temporary to allow full overwrite
 				 * in same epoch to avoid breaking rebuild.
 				 * Without some sequence number and client
@@ -1954,8 +1947,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					continue;
 				if (time_overlap != RT_OVERLAP_SAME)
 					continue;
+
+				/* If the availability is unknown, go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
+
 				break;
 			case EVT_FIND_FIRST:
+				/* If the availability is unknown, go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
 			case EVT_FIND_ALL:
 				break;
 			}
@@ -2055,7 +2056,7 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 
 /** move the probing trace forward */
 bool
-evt_move_trace(struct evt_context *tcx, uint32_t intent)
+evt_move_trace(struct evt_context *tcx)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
@@ -2377,9 +2378,11 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		uint64_t in_off, const struct evt_entry_in *ent)
 {
 	struct evt_node_entry	*ne = NULL;
+	struct evt_desc		*desc = NULL;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
+	bool			 reuse = false;
 
 	D_ASSERT(!evt_node_is_full(tcx, nd));
 
@@ -2394,19 +2397,57 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (rc < 0)
 			continue;
 
-		nr = nd->tn_nr - i;
-		memmove(ne + 1, ne, nr * sizeof(*ne));
+		if (!leaf) {
+			nr = nd->tn_nr - i;
+			memmove(ne + 1, ne, nr * sizeof(*ne));
+			break;
+		}
+
+		desc = evt_off2desc(tcx, ne->ne_child);
+		rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
+						DAOS_INTENT_CHECK);
+		if (rc != ALB_UNAVAILABLE) {
+			nr = nd->tn_nr - i;
+			memmove(ne + 1, ne, nr * sizeof(*ne));
+		} else {
+			/* We do not know whether the former @desc has checksum
+			 * buffer or not, and do not know whether such buffer
+			 * is large enough or not even if it had. So we have to
+			 * free the former @desc and re-allocate it properly.
+			 */
+			rc = evt_node_entry_free(tcx, ne);
+			if (rc != 0)
+				return rc;
+
+			reuse = true;
+		}
+
 		break;
 	}
 
 	if (i == nd->tn_nr) { /* attach at the end */
-		ne = evt_node_entry_at(tcx, nd, nd->tn_nr);
+		/* Check whether the previous one is an aborted one. */
+		if (i != 0 && leaf) {
+			ne = evt_node_entry_at(tcx, nd, i - 1);
+			desc = evt_off2desc(tcx, ne->ne_child);
+			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
+							DAOS_INTENT_CHECK);
+			if (rc == ALB_UNAVAILABLE) {
+				rc = evt_node_entry_free(tcx, ne);
+				if (rc != 0)
+					return rc;
+
+				reuse = true;
+			}
+		}
+
+		if (!reuse)
+			ne = evt_node_entry_at(tcx, nd, nd->tn_nr);
 	}
 
 	ne->ne_rect = ent->ei_rect;
 	if (leaf) {
 		TMMID(struct evt_desc)	 desc_mmid;
-		struct evt_desc		*desc;
 
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
@@ -2434,6 +2475,16 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 			return -DER_NOMEM;
 		ne->ne_child = desc_mmid.oid.off;
 		desc = evt_tmmid2ptr(tcx, desc_mmid);
+		rc = vos_dtx_register_record(evt_umm(tcx),
+					     umem_ptr2id(evt_umm(tcx), desc),
+					     DTX_RT_EVT, 0);
+		if (rc != 0)
+			/* It is unnecessary to free the PMEM that will be
+			 * dropped automatically when the PMDK transaction
+			 * is aborted.
+			 */
+			return rc;
+
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
 		evt_desc_csum_fill(tcx, desc, ent);
@@ -2442,7 +2493,9 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		ne->ne_child = in_off;
 	}
 
-	nd->tn_nr++;
+	if (!reuse)
+		nd->tn_nr++;
+
 	return 0;
 }
 
@@ -2844,7 +2897,8 @@ void
 evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		    struct evt_entry *entry)
 {
-	if (tcx->tc_root->tr_csum_len > 0) {
+	if (tcx->tc_root->tr_csum_len > 0 &&
+		tcx->tc_root->tr_csum_chunk_size) {
 		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 		daos_off_t lo_offset = evt_entry_selected_offset(entry);
 		uint32_t csum_count = evt_csum_count(tcx, &entry->en_ext);
@@ -2862,4 +2916,19 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 			&desc->pt_csum[0] + csum_start *
 					    tcx->tc_root->tr_csum_len;
 	}
+}
+
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd)
+{
+	if (ovhd == NULL) {
+		D_ERROR("Invalid ovhd argument\n");
+		return -DER_INVAL;
+	}
+
+	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
+	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
+		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_order = tree_order;
+	return 0;
 }

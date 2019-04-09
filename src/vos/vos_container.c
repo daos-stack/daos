@@ -38,8 +38,6 @@
 #include <vos_internal.h>
 #include <vos_obj.h>
 
-#define CT_BTREE_ORDER 20
-
 /**
  * Parameters for vos_cont_df btree
  */
@@ -49,10 +47,17 @@ struct cont_df_args {
 };
 
 static int
-cont_df_hkey_size(struct btr_instance *tins)
+cont_df_hkey_size(void)
 {
 	return sizeof(struct d_uuid);
 }
+
+static int
+cont_df_rec_msize(int alloc_overhead)
+{
+	return alloc_overhead + sizeof(struct vos_cont_df);
+}
+
 
 static void
 cont_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
@@ -146,6 +151,7 @@ cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t vct_ops = {
+	.to_rec_msize	= cont_df_rec_msize,
 	.to_hkey_size	= cont_df_hkey_size,
 	.to_hkey_gen	= cont_df_hkey_gen,
 	.to_rec_alloc	= cont_df_rec_alloc,
@@ -398,7 +404,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	memset(&cont->vc_dtx_cos_btr, 0, sizeof(cont->vc_dtx_cos_btr));
-	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, OT_BTREE_ORDER, &uma,
+	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, VOS_CONT_ORDER, &uma,
 				   &cont->vc_dtx_cos_btr,
 				   &cont->vc_dtx_cos_hdl);
 	if (rc != 0) {
@@ -580,7 +586,7 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
 	D_ASSERT(ctab_df->ctb_btree.tr_class == 0);
 	D_DEBUG(DB_DF, "Create container table, type=%d\n", VOS_BTR_CONT_TABLE);
 
-	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, CT_BTREE_ORDER,
+	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, VOS_CONT_ORDER,
 				   p_umem_attr, &ctab_df->ctb_btree, &btr_hdl);
 	if (rc) {
 		D_ERROR("DBtree create failed\n");
@@ -692,6 +698,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));
 	uuid_copy(it_entry->ie_couuid, args.ca_cont_df->cd_id);
+	it_entry->ie_child_type = VOS_ITER_OBJ;
 
 	return rc;
 }

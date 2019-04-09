@@ -659,12 +659,14 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct evt_entry_in	*ent_in = &lgc_seg->ls_ent_in;
 	struct agg_phy_ent	*phy_ent;
 	struct bio_io_context	*bio_ctxt;
+	struct bio_sglist	 bsgl;
+	daos_sg_list_t		 sgl;
 	daos_iov_t		 iov;
 	bio_addr_t		 addr_dst, addr_src;
 	daos_size_t		 seg_size, copy_size, buf_max;
 	struct evt_extent	 ext = { 0 };
 	daos_off_t		 phy_lo;
-	unsigned int		 i;
+	unsigned int		 i, biov_idx = 0;
 	int			 rc;
 
 	D_ASSERT(obj != NULL);
@@ -702,8 +704,14 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	bio_ctxt = obj->obj_cont->vc_pool->vp_io_ctxt;
 	D_ASSERT(bio_ctxt != NULL);
 
-	iov.iov_buf = io->ic_buf;
-	iov.iov_buf_len = io->ic_buf_len;
+	rc = bio_sgl_init(&bsgl, lgc_seg->ls_idx_end -
+			  lgc_seg->ls_idx_start + 1);
+	if (rc) {
+		D_ERROR("Init bsgl error: %d\n", rc);
+		return rc;
+	}
+
+	iov.iov_buf_len = io->ic_buf_len; /* for sanity check */
 
 	i = lgc_seg->ls_idx_start;
 	while (i <= lgc_seg->ls_idx_end) {
@@ -737,24 +745,30 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		D_ASSERT(iov.iov_buf_len >= copy_size);
 
 		mark_yield(&addr_src, acts);
-		/*
-		 * Set 'iov_len' beforehand, cause it will be used as copy
-		 * size in bio_readv().
-		 */
-		iov.iov_len = copy_size;
-		rc = bio_readv(bio_ctxt, addr_src, &iov);
-		if (rc) {
-			D_ERROR("Read "DF_RECT" "DF_EXT" error: %d\n",
-				DP_RECT(&phy_ent->pe_rect), DP_EXT(&ext), rc);
-			return rc;
-		}
-		D_ASSERT(iov.iov_len == copy_size);
+		D_ASSERT(biov_idx < bsgl.bs_nr);
+		bsgl.bs_iovs[biov_idx].bi_buf = NULL;
+		bsgl.bs_iovs[biov_idx].bi_addr = addr_src;
+		bsgl.bs_iovs[biov_idx].bi_data_len = copy_size;
+		biov_idx++;
 
 		D_ASSERT(iov.iov_buf_len >= copy_size);
 		iov.iov_buf_len -= copy_size;
-		iov.iov_buf += copy_size;
 	}
 	D_ASSERT(seg_size == (io->ic_buf_len - iov.iov_buf_len));
+
+	iov.iov_buf = io->ic_buf;
+	iov.iov_len = 0;
+	iov.iov_buf_len = io->ic_buf_len;
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	rc = bio_readv(bio_ctxt, &bsgl, &sgl);
+	if (rc) {
+		D_ERROR("Readv for "DF_RECT" error: %d\n",
+			DP_RECT(&ent_in->ei_rect), rc);
+		bio_sgl_fini(&bsgl);
+		return rc;
+	}
+	D_ASSERT(iov.iov_len == seg_size);
 
 	addr_dst = ent_in->ei_addr;
 	D_ASSERT(!bio_addr_is_hole(&addr_dst));
@@ -763,11 +777,12 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	iov.iov_buf = io->ic_buf;
 	iov.iov_buf_len = io->ic_buf_len;
 	iov.iov_len = seg_size;
-	rc = bio_writev(bio_ctxt, addr_dst, &iov);
+	rc = bio_write(bio_ctxt, addr_dst, &iov);
 	if (rc)
-		D_ERROR("Write "DF_RECT" "DF_EXT" error: %d\n",
-			DP_RECT(&ent_in->ei_rect), DP_EXT(&ext), rc);
+		D_ERROR("Write "DF_RECT" error: %d\n",
+			DP_RECT(&ent_in->ei_rect), rc);
 
+	bio_sgl_fini(&bsgl);
 	return rc;
 }
 

@@ -28,9 +28,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -234,4 +236,18 @@ func CheckSudo() (bool, string) {
 	}
 
 	return (os.Geteuid() == 0), usr
+}
+
+// Run executes command in os and builds useful error message.
+func Run(cmd string) error {
+	log.Debugdf(UtilLogDepth, "exec '%s'\n", cmd)
+
+	// executing as subshell enables pipes in cmd string
+	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		err = errors.Wrapf(
+			err, "Error running %s: %s", cmd, out)
+	}
+
+	return err
 }

@@ -253,17 +253,19 @@ struct vos_cont_df {
 
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
-	/* The record has an evtree */
+	/* Array value (evtree) */
 	KREC_BF_EVT			= (1 << 0),
+	/* Single Value or Key (btree) */
+	KREC_BF_BTR			= (1 << 1),
 	/* The key is punched at time kr_latest */
-	KREC_BF_PUNCHED			= (1 << 1),
+	KREC_BF_PUNCHED			= (1 << 2),
 	/* The key has been (or will be) removed */
-	KREC_BF_REMOVED			= (1 << 2),
+	KREC_BF_REMOVED			= (1 << 3),
 };
 
 /**
- * Persisted VOS (d)key record, it is referenced by btr_record::rec_mmid
- * of btree VOS_BTR_KEY.
+ * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_mmid
+ * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.
  */
 struct vos_krec_df {
 	/** record bitmap, e.g. has evtree, see vos_krec_bf */
@@ -282,14 +284,16 @@ struct vos_krec_df {
 	daos_epoch_t			kr_earliest;
 	/** The DTX entry in SCM. */
 	umem_id_t			kr_dtx;
-	/** The count of uncommitted DTXs that share the object. */
+	/** The count of uncommitted DTXs that share the key. */
 	uint32_t			kr_dtx_shares;
 	/** For 64-bits alignment. */
 	uint32_t			kr_padding;
-	/** btree root under the key */
-	struct btr_root			kr_btr;
-	/** evtree root, which is only used by akey */
-	struct evt_root			kr_evt[0];
+	union {
+		/** btree root under the key */
+		struct btr_root			kr_btr;
+		/** evtree root, which is only used by akey */
+		struct evt_root			kr_evt;
+	};
 	/* Checksum and key are stored after tree root */
 };
 
@@ -301,8 +305,8 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
 	  sizeof(((struct vos_krec_df *)0)->kr_latest));
 
 /**
- * Persisted VOS index & epoch record, it is referenced by btr_record::rec_mmid
- * of btree VOS_BTR_IDX.
+ * Persisted VOS single value & epoch record, it is referenced by
+ * btr_record::rec_mmid of btree VOS_BTR_SINGV.
  */
 struct vos_irec_df {
 	/** key checksum size (in bytes) */
