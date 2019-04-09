@@ -663,11 +663,13 @@ daos_prop_free(daos_prop_t *prop)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			D_FREE(entry->dpe_str);
+			if (entry->dpe_str)
+				D_FREE(entry->dpe_str);
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
-			D_FREE(entry->dpe_val_ptr);
+			if (entry->dpe_val_ptr)
+				D_FREE(entry->dpe_val_ptr);
 			break;
 		default:
 			break;

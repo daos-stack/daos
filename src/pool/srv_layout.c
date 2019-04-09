@@ -125,18 +125,15 @@ get_default_daos_acl(void)
 int
 ds_pool_prop_default_init(void)
 {
-	int			i;
-	struct daos_prop_entry	*current;
+	struct daos_prop_entry	*entry;
 
-	for (i = 0; i < POOL_PROP_NUM; i++) {
-		current = &pool_prop_entries_default[i];
-		if (current->dpe_type == DAOS_PROP_PO_ACL) {
-			D_DEBUG(DB_MGMT,
-				"Initializing default ACL pool prop\n");
-			current->dpe_val_ptr = get_default_daos_acl();
-			if (current->dpe_val_ptr == NULL)
-				return -DER_NOMEM;
-		}
+	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT,
+			"Initializing default ACL pool prop\n");
+		entry->dpe_val_ptr = get_default_daos_acl();
+		if (entry->dpe_val_ptr == NULL)
+			return -DER_NOMEM;
 	}
 
 	return 0;
@@ -145,14 +142,11 @@ ds_pool_prop_default_init(void)
 void
 ds_pool_prop_default_fini(void)
 {
-	int			i;
-	struct daos_prop_entry	*current;
+	struct daos_prop_entry	*entry;
 
-	for (i = 0; i < POOL_PROP_NUM; i++) {
-		current = &pool_prop_entries_default[i];
-		if (current->dpe_type == DAOS_PROP_PO_ACL) {
-			D_DEBUG(DB_MGMT, "Freeing default ACL pool prop\n");
-			D_FREE(current->dpe_val_ptr);
-		}
+	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT, "Freeing default ACL pool prop\n");
+		D_FREE(entry->dpe_val_ptr);
 	}
 }
