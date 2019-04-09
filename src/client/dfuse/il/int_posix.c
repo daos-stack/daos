@@ -48,8 +48,8 @@ FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 static bool ioil_initialized;
 static __thread int saved_errno;
 static vector_t fd_table;
-static const char *cnss_prefix;
-static int cnss_id;
+static const char *dfuse_prefix;
+static int dfuse_id;
 static struct dfuse_projection *projections;
 
 #define SAVE_ERRNO(is_error)                 \
@@ -185,8 +185,8 @@ ioil_init(void)
 		return;
 	}
 
-	DFUSE_LOG_INFO("Using IONSS: cnss_prefix at %s, cnss_id is %d",
-		       cnss_prefix, cnss_id);
+	DFUSE_LOG_INFO("Using IONSS: dfuse_prefix at %s, dfuse_id is %d",
+		       dfuse_prefix, dfuse_id);
 
 	__sync_synchronize();
 
@@ -226,10 +226,10 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		return false;
 	}
 
-	if (gah_info.cnss_id != cnss_id) {
+	if (gah_info.dfuse_id != dfuse_id) {
 		DFUSE_LOG_INFO("IOF ioctl (fd=%d) received from another CNSS: "
-			     "expected %d got %d", fd, cnss_id,
-			     gah_info.cnss_id);
+			     "expected %d got %d", fd, dfuse_id,
+			     gah_info.dfuse_id);
 		return false;
 	}
 

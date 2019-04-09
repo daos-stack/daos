@@ -92,7 +92,7 @@ static void
  * Returns 0 on success, or non-zero on error.
  */
 bool
-cnss_register_fuse(struct cnss_info *cnss_info,
+dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		   struct fuse_lowlevel_ops *flo,
 		   struct fuse_args *args,
 		   const char *mnt,
@@ -100,7 +100,7 @@ cnss_register_fuse(struct cnss_info *cnss_info,
 		   void *private_data,
 		   struct fuse_session **sessionp)
 {
-	struct fs_info	*info = &cnss_info->ci_fsinfo;
+	struct fs_info	*info = &dfuse_info->ci_fsinfo;
 	int		rc;
 
 	errno = 0;
@@ -112,7 +112,7 @@ cnss_register_fuse(struct cnss_info *cnss_info,
 	info->fsi_mt = threaded;
 
 	/* TODO: The plugin should provide the sub-directory only, not the
-	 * entire mount point and this function should add the cnss_prefix
+	 * entire mount point and this function should add the dfuse_prefix
 	 */
 	D_STRNDUP(info->fsi_mnt, mnt, 1024);
 	if (!info->fsi_mnt)
@@ -158,7 +158,7 @@ cleanup_no_mutex:
 }
 
 static int
-cnss_stop_fuse(struct fs_info *info)
+dfuse_stop_fuse(struct fs_info *info)
 {
 	struct timespec	wait_time;
 	void		*rcp = NULL;
@@ -251,7 +251,7 @@ int
 main(int argc, char **argv)
 {
 	const char		*prefix = NULL;
-	struct cnss_info	*cnss_info;
+	struct dfuse_info	*dfuse_info;
 	int			ret;
 	int			rc;
 
@@ -294,7 +294,7 @@ main(int argc, char **argv)
 		D_GOTO(out, ret = -DER_INVAL);
 	}
 
-	/* chdir to the cnss_prefix, as that allows all future I/O access
+	/* chdir to the dfuse_prefix, as that allows all future I/O access
 	 * to use relative paths.
 	 */
 	ret = chdir(prefix);
@@ -303,45 +303,45 @@ main(int argc, char **argv)
 		D_GOTO(out, ret = -DER_INVAL);
 	}
 
-	D_ALLOC_PTR(cnss_info);
-	if (!cnss_info)
+	D_ALLOC_PTR(dfuse_info);
+	if (!dfuse_info)
 		D_GOTO(shutdown_log, ret = -DER_NOMEM);
 
-	DFUSE_TRA_ROOT(cnss_info, "cnss_info");
+	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	cnss_info->dfuse_state = dfuse_plugin_init();
+	dfuse_info->dfuse_state = dfuse_plugin_init();
 
 	/* Call start for each plugin which should perform node-local
 	 * operations only.  Plugins can choose to disable themselves
 	 * at this point.
 	 */
-	dfuse_reg(cnss_info->dfuse_state, cnss_info);
+	dfuse_reg(dfuse_info->dfuse_state, dfuse_info);
 
-	dfuse_post_start(cnss_info->dfuse_state);
+	dfuse_post_start(dfuse_info->dfuse_state);
 
-	dfuse_flush_fuse(cnss_info->ci_fsinfo.fsi_handle);
+	dfuse_flush_fuse(dfuse_info->ci_fsinfo.fsi_handle);
 
 	ret = 0;
 
-	rc = cnss_stop_fuse(&cnss_info->ci_fsinfo);
+	rc = dfuse_stop_fuse(&dfuse_info->ci_fsinfo);
 	if (rc)
 		ret = 1;
 
-	dfuse_finish(cnss_info->dfuse_state);
+	dfuse_finish(dfuse_info->dfuse_state);
 
-	DFUSE_TRA_INFO(cnss_info, "Exiting with status %d", ret);
+	DFUSE_TRA_INFO(dfuse_info, "Exiting with status %d", ret);
 
-	DFUSE_TRA_DOWN(cnss_info);
+	DFUSE_TRA_DOWN(dfuse_info);
 
-	D_FREE(cnss_info);
+	D_FREE(dfuse_info);
 
 	return ret;
 
 shutdown_log:
 
-	DFUSE_TRA_DOWN(cnss_info);
+	DFUSE_TRA_DOWN(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
-	D_FREE(cnss_info);
+	D_FREE(dfuse_info);
 
 out:
 	/* Convert CaRT error numbers to something that can be returned to the

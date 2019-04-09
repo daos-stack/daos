@@ -343,9 +343,9 @@ wb_reset(void *arg)
 }
 
 void
-dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info)
+dfuse_reg(struct dfuse_state *dfuse_state, struct dfuse_info *dfuse_info)
 {
-	dfuse_state->cnss_info = cnss_info;
+	dfuse_state->dfuse_info = dfuse_info;
 }
 
 static bool
@@ -500,7 +500,7 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
-	if (!cnss_register_fuse(fs_handle->dfuse_state->cnss_info,
+	if (!dfuse_register_fuse(fs_handle->dfuse_state->dfuse_info,
 				fuse_ops,
 				&args,
 				NULL,

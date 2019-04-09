@@ -33,7 +33,7 @@
 struct dfuse_gah_info {
 	int version;
 	struct ios_gah gah;
-	int cnss_id;
+	int dfuse_id;
 	int cli_fs_id;
 };
 

@@ -48,13 +48,13 @@ struct fs_info {
 	bool			fsi_mt;
 };
 
-struct cnss_info {
+struct dfuse_info {
 	struct dfuse_state	*dfuse_state;
 	struct fs_info		ci_fsinfo;
 };
 
 bool
-cnss_register_fuse(struct cnss_info *cnss_info,
+dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		   struct fuse_lowlevel_ops *flo,
 		   struct fuse_args *args,
 		   const char *mnt,
@@ -66,7 +66,7 @@ struct dfuse_state *
 dfuse_plugin_init();
 
 void
-dfuse_reg(struct dfuse_state *dfuse_state, struct cnss_info *cnss_info);
+dfuse_reg(struct dfuse_state *dfuse_state, struct dfuse_info *dfuse_info);
 
 void
 dfuse_post_start(struct dfuse_state *dfuse_state);
@@ -85,9 +85,9 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
  *
  */
 struct dfuse_state {
-	struct cnss_info		*cnss_info;
+	struct dfuse_info		*dfuse_info;
 	/** CNSS Prefix.  Parent directory of projections */
-	char				*cnss_prefix;
+	char				*dfuse_prefix;
 	/** ctrl_fs inoss directory handle */
 	struct ctrl_dir			*ionss_dir;
 	/** ctrl_fs projections directory handle */

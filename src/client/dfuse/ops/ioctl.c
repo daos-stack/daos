@@ -44,7 +44,7 @@ handle_gah_ioctl(int cmd, struct dfuse_file_handle *handle,
 		       fs_handle->fs_id,
 		       fs_handle->proj.cli_fs_id);
 	gah_info->version = DFUSE_IOCTL_VERSION;
-	gah_info->cnss_id = getpid();
+	gah_info->dfuse_id = getpid();
 	gah_info->cli_fs_id = fs_handle->proj.cli_fs_id;
 }
 
