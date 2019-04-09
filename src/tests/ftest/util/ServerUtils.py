@@ -35,6 +35,7 @@ import fcntl
 import errno
 import getpass
 import yaml
+import threading
 
 from SSHConnection import Ssh
 from avocado.utils import genio
@@ -313,11 +314,11 @@ def killServer(hosts):
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
 
-class Nvme(object):
+class Nvme(threading.Thread):
     """
-    This is the NVMe class
+    NVMe thread class for setting/cleaning up NVMe on servers
     """
-    def __init__(self, host, debug=False):
+    def __init__(self, host, operation, debug=False):
         """
         Initialize the remote machine for SSH Connection.
         Args:
@@ -328,7 +329,9 @@ class Nvme(object):
         return:
             None
         """
+        threading.Thread.__init__(self)
         self.machine = host
+        self.operation = operation
         self.host = Ssh(host, sudo=True, debug=debug)
 
     def init_spdk(self, enable):
@@ -398,6 +401,15 @@ class Nvme(object):
                                                                      rccode))
         self.host.disconnect()
 
+    def run(self):
+        """
+        Thread Run method for setup or cleanup
+        """
+        if self.operation == "setup":
+            self.setup()
+        elif self.operation == "cleanup":
+            self.cleanup()
+
 def nvme_setup(hostlist):
     """
     nvme_setup function called from Avocado test
@@ -415,10 +427,12 @@ def nvme_setup(hostlist):
     host_nvme = []
     for _hosts in hostlist:
         host_nvme.append(Nvme(_hosts,
+                              "setup",
                               debug=True))
-
-    for host in host_nvme:
-        host.setup()
+    for setup_thread in host_nvme:
+        setup_thread.start()
+    for setup_thread in host_nvme:
+        setup_thread.join()
     print("NVMe server Setup Finished......")
 
 def nvme_cleanup(hostlist):
@@ -433,8 +447,13 @@ def nvme_cleanup(hostlist):
     host_nvme = []
     for _hosts in hostlist:
         host_nvme.append(Nvme(_hosts,
+                              "cleanup",
                               debug=True))
 
-    for host in host_nvme:
-        host.cleanup()
+    for cleanup_thread in host_nvme:
+        cleanup_thread.start()
+
+    for cleanup_thread in host_nvme:
+        cleanup_thread.join()
+
     print("NVMe server cleanup Finished......")
