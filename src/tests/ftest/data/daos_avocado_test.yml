@@ -19,7 +19,7 @@ servers:
   - FI_SOCKETS_CONN_TIMEOUT=2000
   fabric_iface: eth0
   fabric_iface_port: 31416
-  log_file: /tmp/server.log
-  log_mask: ERR
+  log_file: /tmp/daos.log
+  log_mask: DEBUG,RPC=ERR,MEM=ERR
   scm_mount: /mnt/daos
 socket_dir: /tmp/daos_sockets

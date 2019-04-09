@@ -175,12 +175,8 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         server_cmd.extend(env_args)
         server_cmd.extend([daos_srv_bin,
                            "-a", os.path.join(basepath, "install", "tmp"),
-<<<<<<< HEAD
-                           "-o", '{}/{}'.format(basepath, AVOCADO_YAML_FILE)])
-=======
                            "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
 
->>>>>>> DAOS-1893
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
         resource.setrlimit(
@@ -304,7 +300,6 @@ def killServer(hosts):
     for host in hosts:
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
-<<<<<<< HEAD
 
 class Nvme(threading.Thread):
     """
@@ -449,5 +444,3 @@ def nvme_cleanup(hostlist):
         cleanup_thread.join()
 
     print("NVMe server cleanup Finished......")
-=======
->>>>>>> DAOS-1893
