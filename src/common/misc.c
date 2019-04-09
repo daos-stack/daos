@@ -742,10 +742,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			break;
 		case DAOS_PROP_PO_ACL:
-		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
 			if (daos_acl_validate(acl_ptr) != 0)
 				return false;
+			break;
+		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
 			val = prop->dpp_entries[i].dpe_val;
@@ -859,7 +861,6 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 			}
 			break;
 		case DAOS_PROP_PO_ACL:
-		case DAOS_PROP_CO_ACL:
 			acl_ptr = entry->dpe_val_ptr;
 			entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
 			if (entry_dup->dpe_val_ptr == NULL) {
@@ -867,6 +868,9 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 				daos_prop_free(prop_dup);
 				return NULL;
 			}
+			break;
+		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
 			break;
 		default:
 			entry_dup->dpe_val = entry->dpe_val;
@@ -948,13 +952,14 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			label_alloc = entry_req->dpe_str;
-		} else if (type == DAOS_PROP_PO_ACL ||
-			   type == DAOS_PROP_CO_ACL) {
+		} else if (type == DAOS_PROP_PO_ACL) {
 			acl = entry_reply->dpe_val_ptr;
 			entry_req->dpe_val_ptr = daos_acl_dup(acl);
 			if (entry_req->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			acl_alloc = entry_req->dpe_val_ptr;
+		} else if (type == DAOS_PROP_CO_ACL) {
+			/* TODO: Implement container ACL */
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
