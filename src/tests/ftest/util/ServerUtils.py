@@ -310,7 +310,8 @@ def killServer(hosts):
                  "sleep 5",
                  "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
-        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
+                        shell=True)
 
 class Nvme(object):
     """
@@ -366,8 +367,10 @@ class Nvme(object):
 
         permission_cmd = ["sudo /usr/bin/chmod 777 /dev/hugepages",
                           "sudo /usr/bin/chmod 666 /dev/uio*",
-                          "sudo /usr/bin/chmod 666 /sys/class/uio/uio*/device/config",
-                          "sudo /usr/bin/chmod 666 /sys/class/uio/uio*/device/resource*",
+                          "sudo /usr/bin/chmod 666 \
+                          /sys/class/uio/uio*/device/config",
+                          "sudo /usr/bin/chmod 666 \
+                          /sys/class/uio/uio*/device/resource*",
                           "sudo /usr/bin/rm -f /dev/hugepages/*"]
 
         rccode = self.host.call("&&".join(permission_cmd))
