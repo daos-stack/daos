@@ -32,6 +32,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import server_utils
 import write_host_file
 import ior_utils
@@ -79,6 +80,9 @@ class SegCount(Test):
                                             self.slots))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath,
+                                                   self.hostlist_servers,
+                                                   self.hostlist_clients)
         server_utils.run_server(hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -90,6 +94,9 @@ class SegCount(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist_clients,
+                                      self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_segcount(self):

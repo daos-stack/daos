@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 import os
+import re
 import json
 from pathlib import Path
 from errno import ENOENT
@@ -49,6 +50,45 @@ def get_file_path(bin_name, dir_path=""):
                       .format(bin_name, basepath))
     else:
         return file_path
+
+def process_host_list(hoststr):
+    """
+    This utility function takes a slurm style host string and returns a list
+    of individual hosts.
+
+    e.g. boro-[26-27] becomes a list with entries boro-26, boro-27
+
+    This works for every thing that has come up so far but I don't know what
+    all slurmfinds acceptable so it might not parse everything possible.
+    """
+
+    # 1st split into cluster name and range of hosts
+    split_loc = hoststr.index('-')
+    cluster = hoststr[0:split_loc]
+    num_range = hoststr[split_loc+1:]
+
+    # if its just a single host then nothing to do
+    if num_range.isdigit():
+        return [hoststr]
+
+    # more than 1 host, remove the brackets
+    host_list = []
+    num_range = re.sub('\[|\]', '', num_range)
+
+    # differentiate between ranges and single numbers
+    hosts_and_ranges = num_range.split(',')
+    for item in hosts_and_ranges:
+        if item.isdigit():
+            hostname = cluster + '-' + item
+            host_list.append(hostname)
+        else:
+            # split the two ends of the range
+            host_range = item.split('-')
+            for hostnum in range(int(host_range[0]), int(host_range[1])+1):
+                hostname = "{}-{}".format(cluster, hostnum)
+                host_list.append(hostname)
+
+    return host_list
 
 class DaosTestError(Exception):
     """

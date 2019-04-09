@@ -24,12 +24,10 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 // FeatureMap is a type alias
@@ -40,7 +38,7 @@ func (s *controlService) GetFeature(
 	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
 	f, exists := s.supportedFeatures[name.Name]
 	if !exists {
-		return nil, fmt.Errorf("no feature with name %s", name.Name)
+		return nil, errors.Errorf("no feature with name %s", name.Name)
 	}
 	return f, nil
 }

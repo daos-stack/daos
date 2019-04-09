@@ -486,8 +486,6 @@ A Lookup operation on a KV will verify the checksum by computing the checksum fo
 
 VOS provides a tool vos_stats.py that can take a set of assumptions about how many keys and objects and VOS pools are in use and provide an estimate of metadata overhead.
 
-TODO: Provide more discussion
-
 To run an example, first setup the paths
 ```
 [~/daos]$ source ./scons_local/utils/setup_local.sh
@@ -501,19 +499,22 @@ Then run vos_size to create vos_size.yaml with metadata size information
 ```
 
 Finally, execute vos_size.py to get a meta data estimate for the use cases in an input.yaml.
-An example input yaml is installed to /etc.
+An example input yaml is installed to /etc.  This file has comments documenting configuration
+options.
 ```
 [~/daos]$ vos_size.py "${SL_PREFIX}/etc/vos_size_input.yaml"
 Metadata totals:
-	pool                :          2 K ( 0.00%)
-	container           :          9 K ( 0.00%)
-	object              :         11 K ( 0.00%)
-	dkey                :         13 K ( 0.00%)
-	akey                :         42 K ( 0.00%)
-	single_value        :         40 K ( 0.00%)
-	array               :        248 K ( 0.01%)
-	total_meta          :        367 K ( 0.02%)
-Total bytes with user data: 2053492K
+	pool                :       6.09 K ( 0.00%)
+	container           :      27.19 K ( 0.00%)
+	object              :      33.52 K ( 0.00%)
+	dkey                :     540.62 K ( 0.00%)
+	akey                :     283.81 M ( 0.01%)
+	single_value        :       3.64 G ( 0.18%)
+	array               :       7.10 G ( 0.36%)
+	total_meta          :       1.94 T (99.97%)
+	user_key            :     610.35 M ( 0.03%)
+	user_value          :       1.92 T (99.41%)
+Total bytes with user data: 2079047482K
 ```
 
 <a id="81"></a>

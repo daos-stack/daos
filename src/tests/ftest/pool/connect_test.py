@@ -32,6 +32,7 @@ from avocado import Test
 from avocado.utils import process
 
 sys.path.append('./util')
+import AgentUtils
 import server_utils
 import check_for_pool
 import write_host_file
@@ -58,9 +59,12 @@ class ConnectTest(Test):
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
+        if self.agent_sessions:
+            AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist)
 
     def test_connect(self):

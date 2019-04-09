@@ -35,6 +35,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -45,7 +46,7 @@ class ObjFetchBadParam(Test):
     Pass an assortment of bad parameters to the daos_obj_fetch function.
     """
     def setUp(self):
-
+        self.agent_sessions = None
         self.pool = None
         self.container = None
         self.hostlist = None
@@ -65,6 +66,7 @@ class ObjFetchBadParam(Test):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
         time.sleep(5)
 
@@ -127,6 +129,8 @@ class ObjFetchBadParam(Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def test_bad_handle(self):

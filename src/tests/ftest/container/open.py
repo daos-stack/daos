@@ -37,6 +37,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
+import AgentUtils
 import server_utils
 import write_host_file
 
@@ -88,6 +90,7 @@ class OpenContainerTest(Test):
         self.createuid2 = self.params.get("uid", '/run/createtests/createuid2/')
         self.creategid2 = self.params.get("gid", '/run/createtests/creategid2/')
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -101,6 +104,8 @@ class OpenContainerTest(Test):
             if self.pool2 is not None and self.pool2.attached:
                 self.pool2.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def test_container_open(self):

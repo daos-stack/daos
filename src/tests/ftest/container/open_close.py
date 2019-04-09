@@ -34,6 +34,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
+import AgentUtils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -67,6 +69,7 @@ class OpenClose(Test):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -75,6 +78,8 @@ class OpenClose(Test):
                 self.pool.destroy(1)
         finally:
             try:
+                if self.agent_sessions:
+                    AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
                 server_utils.stop_server(hosts=self.hostlist)
             except server_utils.ServerFailed:
                 pass

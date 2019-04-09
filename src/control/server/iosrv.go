@@ -68,20 +68,56 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	return nil
 }
 
-func formatIosrv(config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+// formatIosrv will prepare DAOS IO servers and store relevant metadata.
+//
+// If superblock exists and reformat not explicitly requested, no
+// formatting of storage is required.
+//
+// If superblock does not exist, executing thread wait until administrator
+// takes action to format storage via client API over gRPC channel.
+//
+// If format_override has been set in config and superblock does not exist,
+// continue to create a new superblock without formatting.
+func formatIosrv(
+	config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+
+	srv := config.Servers[i]
+
 	op := "format"
 	if reformat {
 		op = "reformat"
 	}
-	op += " server " + config.Servers[i].ScmMount
+	op += " server " + srv.ScmMount
 
-	if _, err := os.Stat(iosrvSuperPath(config.Servers[i].ScmMount)); err == nil {
+	if _, err := os.Stat(iosrvSuperPath(srv.ScmMount)); err == nil {
+		log.Debugf("server %d has already been formatted\n", i)
+
 		if reformat {
 			return errors.New(op + ": reformat not implemented yet")
 		}
 		return nil
 	} else if !os.IsNotExist(err) {
 		return errors.Wrap(err, op)
+	}
+
+	if !config.FormatOverride {
+		log.Debugf("waiting for storage format on server %d\n", i)
+
+		// wait on format storage grpc call before creating superblock
+		srv.FormatCond.Wait()
+	} else {
+		log.Debugf(
+			"continuing without storage format on server %d "+
+				"(format_override set in config)\n", i)
+
+		// check scm has been mounted if skipping storage format
+		if err := config.checkMount(srv.ScmMount); err != nil {
+			return errors.WithMessage(
+				err,
+				fmt.Sprintf(
+					"server%d scm mount path (%s) not mounted",
+					i, srv.ScmMount))
+		}
 	}
 
 	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)

@@ -37,9 +37,11 @@
 void
 print_help(char *bin_name)
 {
-	fprintf(stderr, "Usage: %s <socket_addr> <module>\n", bin_name);
+	fprintf(stderr, "Usage: %s <socket_addr> <module> <method>\n",
+			bin_name);
 	fprintf(stderr, "socket_addr: path in filesystem to domain socket\n");
 	fprintf(stderr, "module: numeric dRPC module ID for message\n");
+	fprintf(stderr, "method: numeric dRPC method ID for message\n");
 }
 
 void
@@ -92,11 +94,12 @@ main(int argc, char **argv)
 	struct drpc	*ctx;
 	char		*socket_path;
 	int		module_id;
+	int		method_id;
 	Drpc__Call	*call = NULL;
 	Drpc__Response	*response = NULL;
 	const int64_t	sequence_num = 25;
 
-	if (argc < 3) {
+	if (argc < 4) {
 		goto syntax_err;
 	}
 
@@ -104,6 +107,11 @@ main(int argc, char **argv)
 
 	if (sscanf(argv[2], "%d", &module_id) != 1) {
 		fprintf(stderr, "Bad module ID: %s\n", argv[2]);
+		goto syntax_err;
+	}
+
+	if (sscanf(argv[3], "%d", &method_id) != 1) {
+		fprintf(stderr, "Bad method ID: %s\n", argv[3]);
 		goto syntax_err;
 	}
 
@@ -116,11 +124,7 @@ main(int argc, char **argv)
 	/* Sequence number is copied from ctx to Drpc Call under the covers */
 	ctx->sequence = sequence_num;
 
-	D_ALLOC_PTR(call);
-	drpc__call__init(call);
-	call->module = module_id;
-	call->method = 1;
-	call->sequence = sequence_num; /* just for us to print out */
+	call = drpc_call_create(ctx, module_id, method_id);
 	print_drpc_call(call);
 
 	rc = drpc_call(ctx, R_SYNC, call, &response);
@@ -134,8 +138,8 @@ main(int argc, char **argv)
 	print_drpc_response(response);
 
 cleanup:
-	drpc__call__free_unpacked(call, NULL);
-	drpc__response__free_unpacked(response, NULL);
+	drpc_call_free(call);
+	drpc_response_free(response);
 	drpc_close(ctx);
 	printf("Done.\n");
 	return rc;

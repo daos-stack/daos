@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
+import AgentUtils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -68,6 +69,7 @@ class ContainerAsync(Test):
         self.container2 = None
 
     def setUp(self):
+        self.agent_sessions = None
         self.hostlist = None
         self.pool = None
 
@@ -88,6 +90,7 @@ class ContainerAsync(Test):
                                                         self.workdir)
         print("Host file is: {}".format(self.hostfile))
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
         time.sleep(10)
 
@@ -96,6 +99,8 @@ class ContainerAsync(Test):
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             time.sleep(5)
             server_utils.stop_server(hosts=self.hostlist)
 

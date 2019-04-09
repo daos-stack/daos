@@ -30,12 +30,14 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 )
 
 var (
 	runtimeDir = flag.String("runtime_dir", "/var/run/daos_agent", "The path to runtime socket directory for daos_agent")
+	logFile    = flag.String("logfile", "/tmp/daos_agent.log", "Path for the daos agent log file")
 )
 
 func main() {
@@ -48,7 +50,17 @@ func agentMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
+	log.Debugf("Starting daos_agent:")
+
 	flag.Parse()
+
+	f, err := common.AppendFile(*logFile)
+	if err != nil {
+		log.Errorf("Failure creating log file: %s", err)
+		return err
+	}
+	defer f.Close()
+	log.SetOutput(f)
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
@@ -70,6 +82,8 @@ func agentMain() error {
 		log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
 		return err
 	}
+
+	log.Debugf("Listening on %s", sockPath)
 
 	// Anonymous goroutine to wait on the signals channel and tell the
 	// program to finish when it receives a signal. Since we only notify on

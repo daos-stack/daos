@@ -35,6 +35,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
+import AgentUtils
 import server_utils
 import write_host_file
 import ior_utils
@@ -101,6 +103,7 @@ class ObjectMetadata(avocado.Test):
     """
 
     def setUp(self):
+        self.agent_sessions = None
         self.pool = None
         self.hostlist = None
         self.hostfile_clients = None
@@ -120,9 +123,11 @@ class ObjectMetadata(avocado.Test):
         self.hostlist = self.params.get("servers", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
-        hostlist_clients = self.params.get("clients", '/run/hosts/*')
+        self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
         self.hostfile_clients = (
             write_host_file.write_host_file(hostlist_clients, self.workdir))
+        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist,
+                                                   self.hostlist_clients)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
         self.pool = DaosPool(self.context)
@@ -141,6 +146,9 @@ class ObjectMetadata(avocado.Test):
             if self.pool:
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist_clients,
+                                      self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     @avocado.skip("Skipping until DAOS-1936/DAOS-1946 is fixed.")
@@ -261,7 +269,12 @@ class ObjectMetadata(avocado.Test):
             self.fail(" IOR write Thread FAIL")
 
         #Server Restart
+        if self.agent_sessions:
+            AgentUtils.stop_agent(self.hostlist_clients, self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist)
+        self.agent_sessions = AgentUtils.run_agent(self.basepath,
+                                                   self.hostlist_clients,
+                                                   self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
         #Read IOR with verification with same number of threads

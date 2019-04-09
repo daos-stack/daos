@@ -36,8 +36,10 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
 import server_utils
 import write_host_file
+import AgentUtils
 from general_utils import DaosTestError
 
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
@@ -85,6 +87,7 @@ class ContainerAttributeTest(Test):
     Tests DAOS container attribute get/set/list.
     """
     def setUp(self):
+        self.agent_sessions = None
         self.pool = None
         self.container = None
         self.hostlist = None
@@ -102,6 +105,7 @@ class ContainerAttributeTest(Test):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
 
+        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
         server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
@@ -123,6 +127,8 @@ class ContainerAttributeTest(Test):
             if self.container:
                 self.container.close()
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def create_data_set(self):

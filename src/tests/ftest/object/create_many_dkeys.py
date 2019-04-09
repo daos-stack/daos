@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+
+import AgentUtils
 import server_utils
 import write_host_file
 
@@ -48,6 +50,7 @@ class CreateManyDkeys(Test):
 
     """
     def setUp(self):
+        self.agent_sessions = None
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
@@ -60,6 +63,7 @@ class CreateManyDkeys(Test):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
 
+        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
         server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
@@ -78,6 +82,8 @@ class CreateManyDkeys(Test):
             if self.pool:
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def write_a_bunch_of_values(self, how_many):
