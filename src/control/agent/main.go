@@ -39,15 +39,12 @@ var (
 )
 
 func main() {
-	var err error
-	defer func() {
-		status := 0
-		if err != nil {
-			status = 1
-		}
-		os.Exit(status)
-	}()
+	if agentMain() != nil {
+		os.Exit(1)
+	}
+}
 
+func agentMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
@@ -62,7 +59,7 @@ func main() {
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
-		return
+		return err
 	}
 
 	module := &SecurityModule{}
@@ -71,7 +68,7 @@ func main() {
 	err = drpcServer.Start()
 	if err != nil {
 		log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return
+		return err
 	}
 
 	// Anonymous goroutine to wait on the signals channel and tell the
@@ -85,4 +82,6 @@ func main() {
 	}()
 	<-finish
 	drpcServer.Shutdown()
+
+	return nil
 }

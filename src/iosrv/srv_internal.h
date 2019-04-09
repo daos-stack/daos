@@ -56,8 +56,8 @@ void dss_tls_fini(struct dss_thread_local_storage *dtls);
 struct dss_thread_local_storage *dss_tls_init(int tag);
 
 /* server_iv.c */
-int ds_iv_init(void);
-int ds_iv_fini(void);
+void ds_iv_init(void);
+void ds_iv_fini(void);
 
 /* system.c */
 int dss_sys_map_load(const char *path, crt_group_id_t grpid, d_rank_t self_rank,

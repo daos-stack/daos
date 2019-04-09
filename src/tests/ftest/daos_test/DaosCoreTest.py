@@ -81,7 +81,7 @@ class DaosCoreTest(Test):
                     subprocess.check_call(['ssh', host,
                                            '[ -f \"{0}\" ] && '
                                            '    mv \"{0}\" '
-                                           '    \"{1}\"'.format(logfile,
+                                           '    \"{1}\"'.format("/tmp/daos.log",
                                                                 new_logfile)])
             except KeyError:
                 pass

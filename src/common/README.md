@@ -9,6 +9,73 @@ Common functionality and infrastructure shared across all DAOS components are pr
 
 ## Task Scheduler Engine (TSE)
 
+The TSE is a generic library to create generic tasks with function callbacks,
+optionally add dependencies between those tasks, and schedule them in an engine
+that is progressed to execute those tasks in an order determined by a dependency
+graph in which they were inserted in. The task dependency graph is the integral
+part of the scheduler to allow users to create several tasks and progress them
+in a non-blocking manner.
+
+The TSE is not DAOS specific, but used to be part of the DAOS core and was later
+extracted into the common src as a standalone API. The API is generic and allows
+creation of tasks in an engine without any DAOS specific functionality. The DAOS
+library does provide a task API that is built on top of the TSE. For more
+information on that see [here](/src/client/api/README.md). Furthermore, DAOS
+uses the TSE internally to track and progress all API tasks that are associated
+with the API event and, in some cases, to schedule several inflight "child"
+tasks corresponding to a single API task and add a dependency on that task to
+track all those inflight "child" tasks. An example of that would be the Array
+API in the DAOS addons library and the object update with multiple replicas.
+
+### Scheduler API
+
+The scheduler API allows a user to create a generic scheduler and add tasks to
+it. At the time of scheduler creation, the user can register a completion
+callback to be called when the scheduler is finalized.
+
+The tasks that are added to the scheduler do not progress on their own. There
+has to be explicit calls to a progress function (daos_sched_progress) on the
+scheduler to make progress on the tasks in the engine. This progress function
+can be called by the user occasionally in their program, or a single thread can
+be forked that calls the progress function repeatedly.
+
+### Task API
+
+The task API allows the creation of tasks with generic body functions and adding
+them to a scheduler. Once a task is created within a scheduler, it will not be
+actually scheduled to run without an explicit call from the user to the task
+schedule function, unless it's part of a task dependency graph where in this
+case the explicit schedule call is required only to the first task in the
+graph. After creating the task, the user can register any number of dependencies
+for the task that would be required to complete before the task can be scheduled
+to run. In addition, the user will be able to register preparation and
+completion callback on the task:
+
+- Preparation Callbacks are executed when the task is ready to run but has not
+  been executed yet, meaning the dependencies that the task was created with are
+  done and the scheduler is ready to schedule the task. This is useful when the
+  task to be scheduled needs information that is not available at the time of
+  task creation but will be available after the dependencies of the task
+  complete; for example setting some input parameters for the task body
+  function.
+
+- Completion Callbacks are executed when the task is finished executing and the
+  user needs to do more work or handling when that happens. An example where
+  this would be useful is setting the completion of a higher level event or
+  request that is built on top of the TSE, or to track error status of multiple
+  tasks in a dependency list.
+
+Several other functionality on the task API exists to support:
+
+- setting some private data on the task itself that can be queried.
+
+- pushing and popping data on/from task stack space without data copy
+
+- generic task lists
+
+More detail about that functionality can be found in the TSE header in the DAOS
+code [here](/src/include/daos/tse.h).
+
 ## dRPC C API
 
 For a general overview of dRPC concepts and the corresponding Golang API, see [here](/src/control/drpc/README.md).

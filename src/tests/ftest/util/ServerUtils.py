@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import traceback
 import sys
@@ -44,10 +45,10 @@ DAOS_PATH = os.environ['DAOS_PATH']
 SPDK_SETUP_SCRIPT = "/opt/daos/spdk/scripts/setup.sh"
 DAOS_CONF_FILE = "/etc/daos_nvme.conf"
 
-sessions = {}
+SESSIONS = {}
 
-DEFAULT_YAML_FILE = "src/tests/ftest/data/daos_server_baseline.yml"
-AVOCADO_YAML_FILE = "src/tests/ftest/data/daos_avocado_test.yml"
+DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yml"
+AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yml"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -57,30 +58,17 @@ class ServerFailed(Exception):
 def printFunc(thestring):
     print("<SERVER>" + thestring)
 
-def nvme_yaml_config(default_value, bdev, enabled=False):
+def nvme_yaml_config(default_value_set, bdev, enabled=False):
     """
     Enable/Disable NVMe Mode.
-    By default it's Enabled in yaml file so disable to run with ofi+sockets.
+    NVMe is enabled by default in yaml file.So disable it for CI runs.
     """
-    if 'bdev_class' in default_value['servers'][0]:
-        if (default_value['servers'][0]['bdev_class'] == bdev and
+    if 'bdev_class' in default_value_set['servers'][0]:
+        if (default_value_set['servers'][0]['bdev_class'] == bdev and
                 not enabled):
-            del default_value['servers'][0]['bdev_class']
+            del default_value_set['servers'][0]['bdev_class']
     if enabled:
-        default_value['servers'][0]['bdev_class'] = bdev
-
-def remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp):
-    """
-    Function to remove "!mux" from yaml file and create new tmp file
-    Args:
-        avocado_yaml_file: Avocado test yaml file
-        avocado_yaml_file_tmp: Avocado temporary test yaml file
-    """
-    with open(avocado_yaml_file, 'r') as rfile:
-        filedata = rfile.read()
-    filedata = filedata.replace('!mux', '')
-    with open(avocado_yaml_file_tmp, 'w') as wfile:
-        wfile.write(filedata)
+        default_value_set['servers'][0]['bdev_class'] = bdev
 
 def create_server_yaml(basepath):
     """
@@ -92,65 +80,63 @@ def create_server_yaml(basepath):
     #Read the baseline conf file data/daos_server_baseline.yml
     try:
         with open('{}/{}'.format(basepath,
-                                 DEFAULT_YAML_FILE), 'r') as read_file:
-            default_value = yaml.safe_load(read_file)
+                                 DEFAULT_FILE), 'r') as read_file:
+            default_value_set = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         raise ServerFailed("Failed to Read {}/{}".format(basepath,
-                                                         DEFAULT_YAML_FILE))
+                                                         DEFAULT_FILE))
 
     #Read the values from avocado_testcase.yaml file if test ran with Avocado.
-    avocado_yaml_value = ""
+    new_value_set = {}
     if "AVOCADO_TEST_DATADIR" in os.environ:
         avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
                                 split(".")[0] + ".yaml"
-        avocado_yaml_file_tmp = '{}.tmp'.format(avocado_yaml_file)
-
-        # Yaml Python module is not able to read !mux so need to
-        # remove !mux before reading.
-        remove_mux_from_yaml(avocado_yaml_file, avocado_yaml_file_tmp)
 
         # Read avocado test yaml file.
         try:
-            with open('{}'.format(avocado_yaml_file_tmp), 'r') as read_file:
-                avocado_yaml_value = yaml.safe_load(read_file)
+            with open(avocado_yaml_file, 'r') as rfile:
+                filedata = rfile.read()
+            #Remove !mux for yaml load
+            new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
         except Exception as excpn:
             print("<SERVER> Exception occurred: {0}".format(str(excpn)))
             traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
             raise ServerFailed("Failed to Read {}"
                                .format('{}.tmp'.format(avocado_yaml_file)))
-        #Remove temporary file
-        os.remove(avocado_yaml_file_tmp)
+
     #Update values from avocado_testcase.yaml in DAOS yaml variables.
-    for key in avocado_yaml_value['server_config']:
-        if key in default_value['servers'][0]:
-            default_value['servers'][0][key] = avocado_yaml_value\
-            ['server_config'][key]
-        elif key in default_value:
-            default_value[key] = avocado_yaml_value['server_config'][key]
+    if new_value_set:
+        for key in new_value_set['server_config']:
+            if key in default_value_set['servers'][0]:
+                default_value_set['servers'][0][key] = new_value_set\
+                ['server_config'][key]
+            elif key in default_value_set:
+                default_value_set[key] = new_value_set['server_config'][key]
 
     #Disable NVMe from baseline data/daos_server_baseline.yml
-    nvme_yaml_config(default_value, "nvme")
+    nvme_yaml_config(default_value_set, "nvme")
 
-    #Write default_value dictionary in to AVOCADO_YAML_FILE
+    #Write default_value_set dictionary in to AVOCADO_FILE
     #This will be used to start with daos_server -o option.
     try:
         with open('{}/{}'.format(basepath,
-                                 AVOCADO_YAML_FILE), 'w') as write_file:
-            yaml.dump(default_value, write_file, default_flow_style=False)
+                                 AVOCADO_FILE), 'w') as write_file:
+            yaml.dump(default_value_set, write_file, default_flow_style=False)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         raise ServerFailed("Failed to Write {}/{}".format(basepath,
-                                                          AVOCADO_YAML_FILE))
+                                                          AVOCADO_FILE))
+
 
 def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     Launches DAOS servers in accordance with the supplied hostfile.
 
     """
-    global sessions
+    global SESSIONS
     try:
         servers = [line.split(' ')[0]
                    for line in genio.read_all_lines(hostfile)]
@@ -178,9 +164,9 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         env_args = []
         # Add any user supplied environment
         if env_dict is not None:
-            for k, v in env_dict.items():
-                os.environ[k] = v
-                env_args.extend(["-x", "{}={}".format(k, v)])
+            for key, value in env_dict.items():
+                os.environ[key] = value
+                env_args.extend(["-x", "{}={}".format(key, value)])
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
@@ -189,19 +175,24 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         server_cmd.extend(env_args)
         server_cmd.extend([daos_srv_bin,
                            "-a", os.path.join(basepath, "install", "tmp"),
+<<<<<<< HEAD
                            "-o", '{}/{}'.format(basepath, AVOCADO_YAML_FILE)])
+=======
+                           "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
+
+>>>>>>> DAOS-1893
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
         resource.setrlimit(
             resource.RLIMIT_CORE,
             (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
 
-        sessions[setname] = subprocess.Popen(server_cmd,
+        SESSIONS[setname] = subprocess.Popen(server_cmd,
                                              stdout=subprocess.PIPE,
                                              stderr=subprocess.PIPE)
-        fd = sessions[setname].stdout.fileno()
-        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        fdesc = SESSIONS[setname].stdout.fileno()
+        fstat = fcntl.fcntl(fdesc, fcntl.F_GETFL)
+        fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
         timeout = 600
         start_time = time.time()
         result = 0
@@ -210,7 +201,7 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
         while True:
             output = ""
             try:
-                output = sessions[setname].stdout.read()
+                output = SESSIONS[setname].stdout.read()
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
                     raise excpn
@@ -226,18 +217,18 @@ def runServer(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 break
         print("<SERVER> server started and took %s seconds to start" % \
               (time.time() - start_time))
-    except Exception as excpn:
-        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
+        traceback.print_exception(excpn.__class__, error, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
-            sessions[setname].send_signal(signal.SIGINT)
+            SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
             # get the stderr
-            error = sessions[setname].stderr.read()
-            if sessions[setname].poll() is None:
-                sessions[setname].kill()
-            retcode = sessions[setname].wait()
+            error = SESSIONS[setname].stderr.read()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            retcode = SESSIONS[setname].wait()
             print("<SERVER> server start return code: {}\n" \
                   "stderr:\n{}".format(retcode, error))
         except KeyError:
@@ -251,24 +242,24 @@ def stopServer(setname=None, hosts=None):
     has spawned.  Doesn't always work though.
     """
 
-    global sessions
+    global SESSIONS
     try:
-        if setname == None:
-            for k, v in sessions.items():
-                v.send_signal(signal.SIGINT)
+        if setname is None:
+            for _key, value in SESSIONS.items():
+                value.send_signal(signal.SIGINT)
                 time.sleep(5)
-                if v.poll() == None:
-                    v.kill()
-                v.wait()
+                if value.poll() is None:
+                    value.kill()
+                value.wait()
         else:
-            sessions[setname].send_signal(signal.SIGINT)
+            SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
-            if sessions[setname].poll() == None:
-                sessions[setname].kill()
-            sessions[setname].wait()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            SESSIONS[setname].wait()
         print("<SERVER> server stopped")
-    except Exception as e:
-        print("<SERVER> Exception occurred: {0}".format(str(e)))
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
         raise ServerFailed("Server didn't stop!")
 
     if not hosts:
@@ -313,6 +304,7 @@ def killServer(hosts):
     for host in hosts:
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
+<<<<<<< HEAD
 
 class Nvme(threading.Thread):
     """
@@ -457,3 +449,5 @@ def nvme_cleanup(hostlist):
         cleanup_thread.join()
 
     print("NVMe server cleanup Finished......")
+=======
+>>>>>>> DAOS-1893

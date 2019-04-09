@@ -1787,6 +1787,86 @@ class DaosContainer(object):
 
         return results
 
+class DaosSnapshot(object):
+    """ A python object that can represent a DAOS snapshot. We do not save the
+    coh in the snapshot since it is different each time the container is opened.
+    """
+    def __init__(self, context, name=None):
+        """The epoch is represented as a Python integer so when sending it to
+        libdaos we know to always convert it to a ctype.
+        """
+        self.context = context
+        self.name = name # currently unused
+        self.epoch = 0
+
+    def create(self, coh, epoch):
+        """ Send a snapshot creation request and store the info in the
+        DaosSnapshot object.
+        coh     --ctype.u_long handle on an open container
+        epoch   --the epoch number of the obj to be snapshotted
+        """
+        func = self.context.get_function('create-snap')
+        epoch = ctypes.c_uint64(epoch)
+        retcode = func(coh, ctypes.byref(epoch), None, None)
+        self.epoch = epoch.value
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+
+    # TODO Generalize this function to accept and return the number of
+    #  snapshots and the epochs and names lists. See description of
+    #  daos_cont_list_snap in src/include/daos_api.h. This must be done for
+    #  DAOS-1336 Verify container snapshot info.
+    def list(self, coh):
+        """ Call daos_cont_snap_list and make sure there is a snapshot in the
+        list.
+        coh --ctype.u_long handle on an open container
+        Returns the value of the epoch for this DaosSnapshot object.
+        """
+        func = self.context.get_function('list-snap')
+        num = ctypes.c_uint64(1)
+        epoch = ctypes.c_uint64(self.epoch)
+        anchor = Anchor()
+        retcode = func(coh, ctypes.byref(num), ctypes.byref(epoch), None,
+                       ctypes.byref(anchor), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                               .format(retcode))
+        return epoch.value
+
+    def open(self, coh):
+        """ Get a tx handle for the snapshot and return it.
+        coh --ctype.u_long handle on an open container
+        returns a handle on the snapshot represented by this DaosSnapshot
+        object.
+        """
+        func = self.context.get_function('open-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        txhndl = ctypes.c_uint64(0)
+        retcode = func(coh, epoch, ctypes.byref(txhndl), None)
+        if retcode != 0:
+            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}"
+                               .format(retcode))
+        return txhndl
+
+    def destroy(self, coh, evnt=None):
+        """ Destroy the snapshot. The "epoch range" is a struct with the lowest
+        epoch and the highest epoch to destroy. We have only one epoch for this
+        single snapshot object.
+        coh     --ctype.u_long open container handle
+        evnt    --event (may be None)
+        # need container handle coh, and the epoch range
+        """
+        func = self.context.get_function('destroy-snap')
+        epoch = ctypes.c_uint64(self.epoch)
+        epr = EpochRange()
+        epr.epr_lo = epoch
+        epr.epr_hi = epoch
+        retcode = func(coh, epr, evnt)
+        if retcode != 0:
+            raise Exception("Failed to destroy the snapshot. RC: {0}"
+                            .format(retcode))
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -1814,7 +1894,7 @@ class DaosContext(object):
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.0.2",
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.4.0",
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
@@ -1837,10 +1917,12 @@ class DaosContext(object):
             'create-cont'    : self.libdaos.daos_cont_create,
             'create-eq'      : self.libdaos.daos_eq_create,
             'create-pool'    : self.libdaos.daos_pool_create,
+            'create-snap'    : self.libdaos.daos_cont_create_snap,
             'd_log'          : self.libtest.dts_log,
             'destroy-cont'   : self.libdaos.daos_cont_destroy,
             'destroy-eq'     : self.libdaos.daos_eq_destroy,
             'destroy-pool'   : self.libdaos.daos_pool_destroy,
+            'destroy-snap'   : self.libdaos.daos_cont_destroy_snap,
             'destroy-tx'     : self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'evict-client'   : self.libdaos.daos_pool_evict,
@@ -1854,10 +1936,13 @@ class DaosContext(object):
             'init-event'     : self.libdaos.daos_event_init,
             'kill-server'    : self.libdaos.daos_mgmt_svc_rip,
             'kill-target'    : self.libdaos.daos_pool_tgt_exclude_out,
+            'list-attr'      : self.libdaos.daos_cont_list_attr,
             'list-cont-attr' : self.libdaos.daos_cont_list_attr,
             'list-pool-attr' : self.libdaos.daos_pool_list_attr,
+            'list-snap'      : self.libdaos.daos_cont_list_snap,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
+            'open-snap'      : self.libdaos.daos_tx_open_snap,
             'open-tx'        : self.libdaos.daos_tx_open,
             'poll-eq'        : self.libdaos.daos_eq_poll,
             'punch-akeys'    : self.libdaos.daos_obj_punch_akeys,

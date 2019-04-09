@@ -85,7 +85,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*"
+                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]"
                     }
                     post {
                         always {
@@ -136,7 +136,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}"
+                        sconsBuild clean: "_build.external${arch}",
+                                   failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -222,7 +223,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
                         always {
@@ -283,7 +285,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}"
+                        sconsBuild clean: "_build.external${arch}",
+                                   failure_artifacts: 'config.log-ubuntu18.04-gcc'
                     }
                     post {
                         always {
@@ -343,7 +346,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   failure_artifacts: 'config.log-ubuntu18.04-clag'
                     }
                     post {
                         always {
@@ -404,7 +408,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}"
+                        sconsBuild clean: "_build.external${arch}",
+                                   failure_artifacts: 'config.log-leap15-gcc'
                     }
                     post {
                         always {
@@ -465,7 +470,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang"
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                                   failure_artifacts: 'config.log-leap15-clang'
                     }
                     post {
                         always {
@@ -526,7 +532,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc"
+                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
+                                   failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
                         always {
@@ -677,7 +684,8 @@ pipeline {
                                                test_tag=regression,vm
                                            fi
                                            ./ftest.sh "$test_tag" ''' + env.NODELIST,
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml"
+                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml",
+                                failure_artifacts: 'Functional'
                     }
                     post {
                         always {

@@ -32,6 +32,7 @@
 #include <daos_errno.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
+#include <daos_srv/vos_types.h>
 
 /**
  * Tree node types.
@@ -47,6 +48,8 @@ enum btr_probe_rc {
 	PROBE_RC_NONE,
 	PROBE_RC_OK,
 	PROBE_RC_ERR,
+	PROBE_RC_INPROGRESS,
+	PROBE_RC_UNAVAILABLE	= PROBE_RC_UNKNOWN,
 };
 
 /**
@@ -173,16 +176,20 @@ btr_has_tx(struct btr_context *tcx)
 	return umem_has_tx(btr_umm(tcx));
 }
 
+#define BTR_IS_DIRECT_KEY(feats) ((feats) & BTR_FEAT_DIRECT_KEY)
+
 static bool
 btr_is_direct_key(struct btr_context *tcx)
 {
-	return (tcx->tc_feats & BTR_FEAT_DIRECT_KEY);
+	return BTR_IS_DIRECT_KEY(tcx->tc_feats);
 }
+
+#define BTR_IS_UINT_KEY(feats) ((feats) & BTR_FEAT_UINT_KEY)
 
 static bool
 btr_is_int_key(struct btr_context *tcx)
 {
-	return (tcx->tc_feats & BTR_FEAT_UINT_KEY);
+	return BTR_IS_UINT_KEY(tcx->tc_feats);
 }
 
 static bool
@@ -218,6 +225,14 @@ btr_hdl2tcx(daos_handle_t toh)
 {
 	/* XXX use handle table */
 	return (struct btr_context *)toh.cookie;
+}
+
+struct umem_instance *
+btr_hdl2umm(daos_handle_t toh)
+{
+	struct btr_context *tcx = btr_hdl2tcx(toh);
+
+	return tcx != NULL ? &tcx->tc_tins.ti_umm : NULL;
 }
 
 void
@@ -373,24 +388,30 @@ do {									\
 		(trace)->tr_at,	## __VA_ARGS__);			\
 } while (0)
 
+static inline int
+btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
+{
+	int size;
+
+	if (BTR_IS_DIRECT_KEY(feats))
+		return sizeof(TMMID(struct btr_node));
+
+	if (BTR_IS_UINT_KEY(feats))
+		return sizeof(uint64_t);
+
+	size = ops->to_hkey_size();
+
+	D_ASSERT(size <= DAOS_HKEY_MAX);
+	return size;
+}
+
 /**
  * Wrapper for customized tree functions
  */
 static int
 btr_hkey_size(struct btr_context *tcx)
 {
-	int size;
-
-	if (btr_is_direct_key(tcx))
-		return sizeof(TMMID(struct btr_node));
-
-	if (btr_is_int_key(tcx))
-		return sizeof(uint64_t);
-
-	size = btr_ops(tcx)->to_hkey_size(&tcx->tc_tins);
-
-	D_ASSERT(size <= DAOS_HKEY_MAX);
-	return size;
+	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
 }
 
 static void
@@ -897,6 +918,63 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	return 0;
 }
 
+struct btr_check_alb {
+	TMMID(struct btr_node)	nd_mmid;
+	int			at;
+	uint32_t		intent;
+};
+
+static int
+btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
+{
+	struct btr_record	*rec;
+	int			 rc;
+
+	if (btr_ops(tcx)->to_check_availability == NULL)
+		return PROBE_RC_OK;
+
+	if (TMMID_IS_NULL(alb->nd_mmid)) { /* compare the leaf trace */
+		struct btr_trace *trace = &tcx->tc_traces[BTR_TRACE_MAX - 1];
+
+		alb->nd_mmid = trace->tr_node;
+		alb->at = trace->tr_at;
+	}
+
+	if (!btr_node_is_leaf(tcx, alb->nd_mmid))
+		return PROBE_RC_OK;
+
+	rec = btr_node_rec_at(tcx, alb->nd_mmid, alb->at);
+	rc = btr_ops(tcx)->to_check_availability(&tcx->tc_tins, rec,
+						 alb->intent);
+	if (rc == -DER_INPROGRESS) /* Unceration */
+		return PROBE_RC_INPROGRESS;
+
+	if (rc < 0) /* Failure */
+		return PROBE_RC_ERR;
+
+	switch (rc) {
+	case ALB_AVAILABLE_DIRTY:
+		/* XXX: This case is mainly used for purge operation.
+		 *	There are some uncommitted modifications that
+		 *	may belong to some old crashed operations. We
+		 *	hope that the caller can make further check
+		 *	about whether can remove them from the system
+		 *	or not.
+		 *
+		 *	Currently, the main caller with purge intent
+		 *	is the aggregation. We need more handling
+		 *	for the case in the new aggregation logic.
+		 *	But before that, just make it fall through.
+		 */
+	case ALB_AVAILABLE_CLEAN:
+		return PROBE_RC_OK;
+	case ALB_UNAVAILABLE:
+	default:
+		/* Invisibile */
+		return PROBE_RC_UNAVAILABLE;
+	}
+}
+
 static void
 btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			 struct btr_record *rec)
@@ -905,6 +983,7 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	struct btr_record *rec_b;
 	struct btr_node   *nd;
 	bool		   leaf;
+	bool		   reuse = false;
 	char		   sbuf[BTR_PRINT_BUF];
 
 	/* NB: assume trace->tr_node has been added to TX */
@@ -919,11 +998,28 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	rec_b = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at + 1);
 
 	nd = btr_mmid2ptr(tcx, trace->tr_node);
-	if (trace->tr_at != nd->tn_keyn)
-		btr_rec_move(tcx, rec_b, rec_a, nd->tn_keyn - trace->tr_at);
+	if (trace->tr_at != nd->tn_keyn) {
+		struct btr_check_alb	alb;
+		int			rc;
+
+		alb.nd_mmid = trace->tr_node;
+		alb.at = trace->tr_at;
+		alb.intent = DAOS_INTENT_CHECK;
+		rc = btr_check_availability(tcx, &alb);
+		if (rc == PROBE_RC_UNAVAILABLE)
+			reuse = true;
+	}
+
+	if (reuse) {
+		btr_rec_free(tcx, rec_a, NULL);
+	} else {
+		if (trace->tr_at != nd->tn_keyn)
+			btr_rec_move(tcx, rec_b, rec_a,
+				     nd->tn_keyn - trace->tr_at);
+		nd->tn_keyn++;
+	}
 
 	btr_rec_copy(tcx, rec_a, rec, 1);
-	nd->tn_keyn++;
 }
 
 /**
@@ -1149,7 +1245,9 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	int			 rc;
 	int			 cmp;
 	int			 level;
+	int			 saved = -1;
 	bool			 next_level;
+	struct btr_check_alb	 alb;
 	struct btr_trace	 traces[BTR_TRACE_MAX];
 	struct btr_trace	*trace = NULL;
 	TMMID(struct btr_node)	 nd_mmid;
@@ -1249,60 +1347,123 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		D_ASSERTF(cmp == BTR_CMP_EQ, "Hash collision is unsupported\n");
 	}
 
+	alb.nd_mmid = nd_mmid;
+	alb.at = at;
+	alb.intent = intent;
+
+again:
 	switch (probe_opc & ~BTR_PROBE_MATCHED) {
 	default:
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
+		do {
+			alb.nd_mmid = tcx->tc_trace[level].tr_node;
+			alb.at = tcx->tc_trace[level].tr_at;
+			rc = btr_check_availability(tcx, &alb);
+		} while (rc == PROBE_RC_UNAVAILABLE && btr_probe_next(tcx));
+
+		if (rc == PROBE_RC_UNAVAILABLE)
+			rc = PROBE_RC_NONE;
+		goto out;
+
 	case BTR_PROBE_LAST:
-		rc = PROBE_RC_OK;
+		do {
+			alb.nd_mmid = tcx->tc_trace[level].tr_node;
+			alb.at = tcx->tc_trace[level].tr_at;
+			rc = btr_check_availability(tcx, &alb);
+		} while (rc == PROBE_RC_UNAVAILABLE && btr_probe_prev(tcx));
+
+		if (rc == PROBE_RC_UNAVAILABLE)
+			rc = PROBE_RC_NONE;
 		goto out;
 
 	case BTR_PROBE_EQ:
 		if (cmp == BTR_CMP_EQ) {
-			rc = PROBE_RC_OK;
-			goto out;
+			rc = btr_check_availability(tcx, &alb);
+			if (rc != PROBE_RC_UNAVAILABLE)
+				goto out;
+
+			/* Current pos is unavailable, it can be used for the
+			 * follow-on insert if applicable.
+			 */
+		} else {
+			/* Point at the first key which is larger than the
+			 * probed one, this if for the follow-on insert if
+			 * applicable.
+			 */
+			btr_trace_set(tcx, level, nd_mmid,
+				      at + !(cmp & BTR_CMP_GT));
 		}
-		/* point at the first key which is larger than the probed one,
-		 * this if for follow-on insert if applicable.
-		 */
-		btr_trace_set(tcx, level, nd_mmid, at + !(cmp & BTR_CMP_GT));
+
 		rc = PROBE_RC_NONE;
 		goto out;
 
 	case BTR_PROBE_GE:
 		if (cmp == BTR_CMP_EQ) {
-			rc = PROBE_RC_OK;
-			goto out;
+			rc = btr_check_availability(tcx, &alb);
+			if (rc != PROBE_RC_UNAVAILABLE)
+				goto out;
+
+			/* Current pos is unavailable, it can be used for the
+			 * follow-on insert if applicable.
+			 */
+			if (saved == -1)
+				saved = at;
 		}
 		/* fall through */
 	case BTR_PROBE_GT:
-		if (cmp & BTR_CMP_GT)
-			break;
+		if (cmp & BTR_CMP_GT) {
+			rc = btr_check_availability(tcx, &alb);
+			if (rc != PROBE_RC_UNAVAILABLE) {
+				if (rc == PROBE_RC_OK)
+					break;
 
-		/* point at the next position in the current leaf node, this is
-		 * for follow-on insert if applicable.
-		 */
-		at += 1;
+				goto out;
+			}
+
+			/* Current pos is unavailable, it can be used for the
+			 * follow-on insert if applicable.
+			 */
+			if (saved == -1)
+				saved = at;
+		} else {
+			/* Point at the next position in the current leaf node,
+			 * this is for the follow-on insert if applicable.
+			 */
+			if (saved == -1)
+				saved = at + 1;
+		}
+
 		/* backup the probe trace because probe_next will change it */
-		memcpy(traces, tcx->tc_trace, sizeof(*trace) * tcx->tc_depth);
+		if (trace == NULL)
+			memcpy(traces, tcx->tc_trace,
+			       sizeof(*trace) * tcx->tc_depth);
 		if (btr_probe_next(tcx)) {
 			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
-		btr_trace_set(tcx, level, nd_mmid, at);
+		btr_trace_set(tcx, level, nd_mmid, saved);
 		rc = PROBE_RC_NONE;
 		goto out;
 
 	case BTR_PROBE_LE:
 		if (cmp == BTR_CMP_EQ) {
-			rc = PROBE_RC_OK;
-			goto out;
+			rc = btr_check_availability(tcx, &alb);
+			if (rc != PROBE_RC_UNAVAILABLE)
+				goto out;
 		}
 		/* fall through */
 	case BTR_PROBE_LT:
-		if (cmp & BTR_CMP_LT)
-			break;
+		if (cmp & BTR_CMP_LT) {
+			rc = btr_check_availability(tcx, &alb);
+			if (rc != PROBE_RC_UNAVAILABLE) {
+				if (rc == PROBE_RC_OK)
+					break;
+
+				goto out;
+			}
+		}
 
 		if (btr_probe_prev(tcx)) {
 			cmp = BTR_CMP_UNKNOWN;
@@ -1312,8 +1473,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		goto out;
 	}
 
-	if (cmp == BTR_CMP_UNKNOWN) /* position changed, compare again */
+	if (cmp == BTR_CMP_UNKNOWN) {/* position changed, compare again */
 		cmp = btr_cmp(tcx, BTR_NODE_NULL, -1, hkey, key);
+		alb.nd_mmid = BTR_NODE_NULL;
+		alb.at = -1;
+		goto again;
+	}
 
 	D_ASSERT(cmp != BTR_CMP_EQ);
 	if (cmp & BTR_CMP_MATCHED) {
@@ -1323,9 +1488,11 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			rc = PROBE_RC_NONE;
 			/* restore the probe trace for follow-on insert. */
 			if (trace) {
+				D_ASSERT(saved != -1);
+
 				memcpy(tcx->tc_trace, trace,
 				       tcx->tc_depth * sizeof(*trace));
-				btr_trace_set(tcx, level, nd_mmid, at);
+				btr_trace_set(tcx, level, nd_mmid, saved);
 			}
 		} else {
 			/* GT/GE/LT/LE without MATCHED */
@@ -1502,6 +1669,10 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		return -DER_NO_HDL;
 
 	rc = btr_probe_key(tcx, opc, intent, key);
+	if (rc == PROBE_RC_INPROGRESS) {
+		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
+		return -DER_INPROGRESS;
+	}
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -1650,6 +1821,9 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			"operation.\n");
 		rc = -DER_INVAL;
 		break;
+	case PROBE_RC_INPROGRESS:
+		D_DEBUG(DB_TRACE, "The target is in some uncommitted DTX.");
+		return -DER_INPROGRESS;
 	}
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
@@ -2452,6 +2626,11 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 		return -DER_NO_HDL;
 
 	rc = btr_probe_key(tcx, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key);
+	if (rc == PROBE_RC_INPROGRESS) {
+		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
+		return -DER_INPROGRESS;
+	}
+
 	if (rc != PROBE_RC_OK) {
 		D_DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
@@ -3022,6 +3201,11 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		rc = btr_probe(tcx, opc, intent, key, hkey);
 	}
 
+	if (rc == PROBE_RC_INPROGRESS) {
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_INPROGRESS;
+	}
+
 	if (rc == PROBE_RC_NONE || rc == PROBE_RC_ERR) {
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
@@ -3086,6 +3270,58 @@ int
 dbtree_iter_prev(daos_handle_t ih)
 {
 	return btr_iter_move(ih, false);
+}
+
+static int
+btr_iter_move_with_intent(daos_handle_t ih, uint32_t intent, bool forward)
+{
+	struct btr_context	*tcx;
+	struct btr_trace	*trace;
+	struct btr_iterator	*itr;
+	struct btr_check_alb	 alb;
+	int			 rc;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	itr = &tcx->tc_itr;
+	alb.intent = intent;
+
+again:
+	rc = btr_iter_move(ih, forward);
+	if (rc != 0)
+		return rc;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	alb.nd_mmid = trace->tr_node;
+	alb.at = trace->tr_at;
+	rc = btr_check_availability(tcx, &alb);
+	switch (rc) {
+	case PROBE_RC_UNAVAILABLE:
+		goto again;
+	case PROBE_RC_INPROGRESS:
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_INPROGRESS;
+	case PROBE_RC_OK:
+		return 0;
+	case PROBE_RC_ERR:
+	default:
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_INVAL;
+	}
+}
+
+int
+dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent)
+{
+	return btr_iter_move_with_intent(ih, intent, true);
+}
+
+int
+dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
+{
+	return btr_iter_move_with_intent(ih, intent, false);
 }
 
 /**
@@ -3387,3 +3623,40 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 
 	return 0;
 }
+
+int
+dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
+		    int tree_order, struct daos_tree_overhead *ovhd)
+{
+	btr_ops_t	*ops;
+	size_t		 hkey_size;
+
+	if (ovhd == NULL) {
+		D_ERROR("Invalid ovhd argument\n");
+		return -DER_INVAL;
+	}
+
+	if (tclass >= BTR_TYPE_MAX) {
+		D_ERROR("Invalid class id: %d\n", tclass);
+		return -DER_INVAL;
+	}
+
+	ops = btr_class_registered[tclass].tc_ops;
+
+	if (ops->to_rec_msize == NULL) {
+		D_ERROR("No record meta size callback for tree class: %d\n",
+			tclass);
+		return -DER_INVAL;
+	}
+
+	hkey_size = btr_hkey_size_const(ops, ofeat);
+
+	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
+
+	ovhd->to_order = tree_order;
+	ovhd->to_node_size = alloc_overhead + sizeof(struct btr_node) +
+		(sizeof(struct btr_record) + hkey_size) * tree_order;
+
+	return 0;
+}
+

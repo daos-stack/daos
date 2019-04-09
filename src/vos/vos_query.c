@@ -108,9 +108,11 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 			break;
 
 		if (query->qt_flags & DAOS_GET_MAX)
-			rc = dbtree_iter_prev(ih);
+			rc = dbtree_iter_prev_with_intent(ih,
+						DAOS_INTENT_DEFAULT);
 		else
-			rc = dbtree_iter_next(ih);
+			rc = dbtree_iter_next_with_intent(ih,
+						DAOS_INTENT_DEFAULT);
 	} while (rc == 0);
 out:
 	fini_rc = dbtree_iter_finish(ih);
@@ -208,8 +210,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	if (to_open->tr_class == 0)
 		return -DER_NONEXIST;
 
-	rc = dbtree_open_inplace(to_open, query->qt_uma, toh);
-
+	rc = dbtree_open_inplace_ex(to_open, query->qt_uma,
+				    query->qt_coh, NULL, toh);
 	if (rc != 0)
 		return rc;
 

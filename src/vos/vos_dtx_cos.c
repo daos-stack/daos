@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/btree.h>
+#include <daos_srv/vos.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
 
@@ -77,7 +78,7 @@ struct dtx_cos_key {
 };
 
 static int
-dtx_cos_hkey_size(struct btr_instance *tins)
+dtx_cos_hkey_size(void)
 {
 	return sizeof(struct dtx_cos_key);
 }
@@ -254,9 +255,10 @@ vos_dtx_cos_register(void)
 }
 
 int
-vos_dtx_list_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
 		 daos_key_t *dkey, uint32_t types, struct daos_tx_id **dtis)
 {
+	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
 	daos_iov_t			 kiov;
 	daos_iov_t			 riov;
@@ -269,6 +271,9 @@ vos_dtx_list_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 
 	if (dkey == NULL)
 		return 0;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
 
 	D_ASSERT(dkey->iov_buf != NULL);
 	D_ASSERT(dkey->iov_len != 0);
@@ -326,9 +331,10 @@ vos_dtx_list_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 }
 
 int
-vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
 		struct daos_tx_id *dti, uint64_t dkey, bool punch)
 {
+	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
 	struct dtx_cos_rec_bundle	 rbund;
 	daos_iov_t			 kiov;
@@ -336,6 +342,9 @@ vos_dtx_add_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 	int				 rc;
 
 	D_ASSERT(dkey != 0);
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
 
 	key.oid = *oid;
 	key.dkey = dkey;

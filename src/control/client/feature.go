@@ -33,6 +33,19 @@ import (
 	"golang.org/x/net/context"
 )
 
+// FeatureMap is an alias for mgmt features supported by gRPC server.
+type FeatureMap map[string]string
+
+// FeatureResult contains results and error of a request
+type FeatureResult struct {
+	Fm  FeatureMap
+	Err error
+}
+
+// ClientFeatureMap is an alias for management features supported on server
+// connected to given client.
+type ClientFeatureMap map[string]FeatureResult
+
 // getFeature returns a feature from a requested name.
 func (c *control) getFeature(name string) (*pb.Feature, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -93,4 +106,37 @@ func (c *control) listFeatures(category string) (
 		fm[f.Fname.Name] = f.Description
 	}
 	return
+}
+
+// listFeaturesRequest is to be called as a goroutine and returns result
+// containing supported server features over channel.
+func listFeaturesRequest(controller Control, ch chan ClientResult) {
+	fMap, err := controller.listAllFeatures()
+	ch <- ClientResult{controller.getAddress(), fMap, err}
+}
+
+// ListFeatures returns supported management features for each server connected.
+func (c *connList) ListFeatures() ClientFeatureMap {
+	var err error
+	cResults := c.makeRequests(listFeaturesRequest)
+	cFeatures := make(ClientFeatureMap) // mapping of server addresses to features
+
+	for _, res := range cResults {
+		if res.Err != nil {
+			cFeatures[res.Address] = FeatureResult{nil, res.Err}
+			continue
+		}
+
+		// extract obj from generic ClientResult type returned over channel
+		fMap, ok := res.Value.(FeatureMap)
+		if !ok {
+			err = fmt.Errorf(
+				"type assertion failed, wanted %+v got %+v",
+				FeatureMap{}, res.Value)
+		}
+
+		cFeatures[res.Address] = FeatureResult{fMap, err}
+	}
+
+	return cFeatures
 }

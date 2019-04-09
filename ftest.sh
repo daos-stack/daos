@@ -177,21 +177,11 @@ ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
-export CRT_ATTACH_INFO_PATH=$DAOS_BASE/install/tmp
-export DAOS_SINGLETON_CLI=1
-export CRT_CTX_SHARE_ADDR=1
 export CRT_PHY_ADDR_STR=ofi+sockets
-export ABT_ENV_MAX_NUM_XSTREAMS=100
-export ABT_MAX_NUM_XSTREAMS=100
 export OFI_INTERFACE=eth0
-export OFI_PORT=23350
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!
-export DD_LOG=/tmp/Functional_$TEST_TAG/daos.log
-export DD_SUBSYS=\"\"
-export DD_MASK=all
 export D_LOG_FILE=/tmp/Functional_$TEST_TAG/daos.log
-export D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
