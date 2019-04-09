@@ -187,6 +187,21 @@ TODO: return details of AppDirect memory regions
 
 Format can be triggered through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is will be performed as specified in config file parameters prefixed with `scm_`.
 
+##### `format_override` == true
+
+If `format_override` IS SET to `true` in config file, control plane will attempt to use whatever is mounted at `scm_mount` location specified in config file and start data plane instances regardless of whether the server has been formatted.
+If `scm_mount` IS NOT mounted, control plane will fail to start data plane.
+If `scm_mount` IS mounted but no superblock exists, control plane will attempt to create superblock and start data plane.
+
+##### `format_override` == false
+
+If `format_override` IS SET to `false` in config file, control plane will attempt to start the data plane instances ONLY if the DAOS superblock exists within the specified `scm_mount`.
+Otherwise, the control plane will wait until an administrator calls FormatStorage over the client API from the management tool.
+If FormatStorage call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
+If a superblock exists in `scm_mount`, but the location is not actively mounted, the control plane will fail (so as to not inadvertently wipe a useful SCM location).
+whatever is mounted at `scm_mount` location specified in config file and start data plane instances.
+and the location is an active mountpoint.
+
 #### SCM Firmware Update
 
 #### SCM Burn-in Validation
@@ -214,6 +229,8 @@ In the context of what is required from the control plane to prepare NVMe device
 Formatting will be performed on devices identified by PCI addresses specified in config file parameter `bdev_list` when `bdev_class` is equal to `nvme`.
 
 The SPDK "[blobcli](https://github.com/spdk/spdk/tree/master/examples/blob/cli)" can be used to initiate and manipulate blobstores for testing and verification purposes.
+
+In order to designate NVMe devices to be used by DAOS data plane instances, the control plane will generate an `nvme.conf` file to be consumed by SPDK which will be written to the `scm_mount` (persistent) mounted location as a final stage of formatting before the superblock is written, signifying the server has been formatted.
 
 #### NVMe Controller Firmware Update
 

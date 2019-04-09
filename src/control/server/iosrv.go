@@ -120,6 +120,12 @@ func formatIosrv(
 		}
 	}
 
+	// after mounting scm, process config parameters for nvme and store
+	// nvme.conf in persistent scm location
+	if err := config.parseNvme(i); err != nil {
+		return errors.Wrap(err, "nvme config could not be processed")
+	}
+
 	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
 
 	if err := createIosrvSuper(config, i, reformat, createMS, bootstrapMS); err != nil {

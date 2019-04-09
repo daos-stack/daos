@@ -25,16 +25,10 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 )
-
-func init() {
-	log.NewDefaultLogger(log.Debug, "mgmt_test: ", os.Stdout)
-}
 
 func defaultMockControlService(t *testing.T) *controlService {
 	c := defaultMockConfig(t)

@@ -25,21 +25,15 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
 	. "github.com/daos-stack/go-spdk/spdk"
 )
 
 var nvmeFormatCalls []string
-
-func init() {
-	log.NewDefaultLogger(log.Error, "storage_nvme_test: ", os.Stderr)
-}
 
 // MockController is a mock NVMe SSD controller of type exported from go-spdk.
 func MockController(fwrev string) Controller {
