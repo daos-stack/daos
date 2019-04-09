@@ -227,8 +227,8 @@ fi
 
 pushd src/tests/ftest
 
-# make sure no lingering corefiles exist
-rm -f core.*
+# make sure no lingering corefiles or junit files exist
+rm -f core.* *_results.xml
 
 # now run it!
 if ! ./launch.py -s \"$TEST_TAG\"; then

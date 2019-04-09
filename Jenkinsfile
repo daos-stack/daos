@@ -684,7 +684,7 @@ pipeline {
                                                test_tag=regression,vm
                                            fi
                                            ./ftest.sh "$test_tag" ''' + env.NODELIST,
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml",
+                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
                                 failure_artifacts: 'Functional'
                     }
                     post {
@@ -694,7 +694,7 @@ pipeline {
                                   ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* Functional/
                                   mv src/tests/ftest/avocado/job-results/* \
                                      $(ls src/tests/ftest/*.stacktrace || true) Functional/'''
-                            junit 'Functional/*/results.xml'
+                            junit 'Functional/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: 'Functional/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203

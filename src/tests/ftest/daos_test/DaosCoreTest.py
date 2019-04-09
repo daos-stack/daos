@@ -115,7 +115,7 @@ class DaosCoreTest(Test):
                                                 subtest, args)
 
         env = {}
-        env['CMOCKA_XML_FILE'] = self.workdir + "/%g_results.xml"
+        env['CMOCKA_XML_FILE'] = "%g_results.xml"
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
 
         try:
@@ -123,7 +123,7 @@ class DaosCoreTest(Test):
         except process.CmdError as result:
             if result.result.exit_status is not 0:
                 # fake a JUnit failure output
-                with open(self.workdir + "/" + self.subtest_name +
+                with open(self.subtest_name +
                           "_results.xml", "w") as results_xml:
                     results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="{0}" errors="1" failures="0" skipped="0" tests="1" time="0.0">
