@@ -86,31 +86,64 @@ int dss_sys_map_load(const char *path, crt_group_id_t grpid, d_rank_t self_rank,
  * Get the service xstream xs_id to schedule the ULT for specific ULT type and
  * target index.
  *
- * \param[in]	req_type	ULT type (enum daos_ult_type)
+ * \param[in]	ult_type	ULT type (enum daos_ult_type)
  * \param[in]	tgt_idx		target VOS index (main xstream index)
  *
  * \return			XS (xstream) xs_id to be used for the ULT
  */
 static inline int
-dss_tgt2xs(int ult_type, int tgt_id)
+dss_ult_xs(int ult_type, int tgt_id)
 {
-	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
-
-	switch (ult_type) {
-	case DSS_ULT_SELF:
+	if (tgt_id == DSS_TGT_SELF || ult_type == DSS_ULT_DTX_RESYNC)
 		return DSS_XS_SELF;
+
+	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
+	switch (ult_type) {
 	case DSS_ULT_IOFW:
+	case DSS_ULT_MISC:
 		return (DSS_MAIN_XS_ID(tgt_id) + 1) % DSS_XS_NR_TOTAL;
 	case DSS_ULT_EC:
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
 		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
 	case DSS_ULT_POOL_SRV:
+	case DSS_ULT_RDB:
 	case DSS_ULT_DRPC:
 		return 0;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
 		return DSS_MAIN_XS_ID(tgt_id);
+	default:
+		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);
+		return -DER_INVAL;
+	}
+}
+
+/**
+ * Get the pool index to schedule the ULT for specific ULT type.
+ *
+ * \param[in]	ult_type	ULT type (enum daos_ult_type)
+ *
+ * \return			pool index to be used for the ULT
+ */
+static inline int
+dss_ult_pool(int ult_type)
+{
+	switch (ult_type) {
+	case DSS_ULT_DTX_RESYNC:
+		return DSS_POOL_URGENT;
+	case DSS_ULT_IOFW:
+	case DSS_ULT_EC:
+	case DSS_ULT_CHECKSUM:
+	case DSS_ULT_COMPRESS:
+	case DSS_ULT_POOL_SRV:
+	case DSS_ULT_DRPC:
+	case DSS_ULT_RDB:
+	case DSS_ULT_MISC:
+		return DSS_POOL_SHARE;
+	case DSS_ULT_REBUILD:
+	case DSS_ULT_AGGREGATE:
+		return DSS_POOL_REBUILD;
 	default:
 		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);
 		return -DER_INVAL;

@@ -820,8 +820,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	rpt_get(rpt);
-	rc = dss_rebuild_ult_create(rebuild_tgt_status_check, rpt,
-				    DSS_ULT_SELF, 0, 0, NULL);
+	rc = dss_ult_create(rebuild_tgt_status_check, rpt, DSS_ULT_REBUILD,
+			    DSS_TGT_SELF, 0, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
@@ -852,8 +852,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
 	/* step-3: start scann leader */
-	rc = dss_ult_create(rebuild_scan_leader, scan_arg, DSS_ULT_SELF, 0, 0,
-			    NULL);
+	rc = dss_ult_create(rebuild_scan_leader, scan_arg, DSS_ULT_REBUILD,
+			    DSS_TGT_SELF, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
 		D_GOTO(out_tree, rc);

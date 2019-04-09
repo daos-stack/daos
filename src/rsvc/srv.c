@@ -483,7 +483,8 @@ rsvc_stop_cb(struct rdb *db, int err, void *arg)
 	int		rc;
 
 	ds_rsvc_get(svc);
-	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_SELF, 0, 0, NULL);
+	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_MISC, DSS_TGT_SELF,
+			    0, NULL);
 	if (rc != 0) {
 		D_ERROR("%s: failed to create service stopper: %d\n",
 			svc->s_name, rc);

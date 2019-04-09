@@ -583,8 +583,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		ddra->pool = ds_pool_child_get(hdl->sch_pool);
 		uuid_copy(ddra->co_uuid, cont_uuid);
-		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_ULT_SELF,
-				    dss_get_module_info()->dmi_tgt_id, 0, NULL);
+		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_ULT_DTX_RESYNC,
+				    DSS_TGT_SELF, 0, NULL);
 		if (rc != 0) {
 			ds_pool_child_put(hdl->sch_pool);
 			D_FREE(ddra);
