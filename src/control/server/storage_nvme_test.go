@@ -35,6 +35,8 @@ import (
 	. "github.com/daos-stack/go-spdk/spdk"
 )
 
+var nvmeFormatCalls []string
+
 func init() {
 	log.NewDefaultLogger(log.Error, "storage_nvme_test: ", os.Stderr)
 }
@@ -43,7 +45,6 @@ func init() {
 func MockController(fwrev string) Controller {
 	c := MockControllerPB(fwrev)
 	return Controller{
-		ID:      c.Id,
 		Model:   c.Model,
 		Serial:  c.Serial,
 		PCIAddr: c.Pciaddr,
@@ -74,6 +75,10 @@ type mockSpdkNvme struct {
 }
 
 func (m *mockSpdkNvme) Discover() ([]Controller, []Namespace, error) {
+	return m.initCtrlrs, m.initNss, nil
+}
+func (m *mockSpdkNvme) Format(pciAddr string) ([]Controller, []Namespace, error) {
+	nvmeFormatCalls = append(nvmeFormatCalls, pciAddr)
 	return m.initCtrlrs, m.initNss, nil
 }
 func (m *mockSpdkNvme) Update(pciAddr string, path string, slot int32) (
@@ -167,8 +172,8 @@ func TestDiscoveryNvmeMulti(t *testing.T) {
 	}{
 		{
 			[]Controller{
-				{0, "", "", "1.2.3.4.5", "1.0.0"},
-				{0, "", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0"},
+				{"", "", "1.2.3.4.6", "1.0.0"},
 			},
 			[]Namespace{
 				{0, 100, "1.2.3.4.5"},
@@ -177,15 +182,15 @@ func TestDiscoveryNvmeMulti(t *testing.T) {
 		},
 		{
 			[]Controller{
-				{0, "", "", "1.2.3.4.5", "1.0.0"},
-				{0, "", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0"},
+				{"", "", "1.2.3.4.6", "1.0.0"},
 			},
 			[]Namespace{},
 		},
 		{
 			[]Controller{
-				{0, "", "", "1.2.3.4.5", "1.0.0"},
-				{0, "", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0"},
+				{"", "", "1.2.3.4.6", "1.0.0"},
 			},
 			[]Namespace{
 				{0, 100, "1.2.3.4.5"},
@@ -241,6 +246,74 @@ func TestDiscoveryNvmeMulti(t *testing.T) {
 				t.Fatalf("namespace not found: %v", n)
 			}
 		}
+	}
+}
+
+func TestFormatNvme(t *testing.T) {
+	tests := []struct {
+		inited    bool
+		formatted bool
+		pciAddrs  []string
+		errMsg    string
+	}{
+		{
+			true,
+			false,
+			[]string{},
+			"",
+		},
+		{
+			false,
+			true,
+			[]string{},
+			"nvme storage not initialized",
+		},
+		{
+			true,
+			true,
+			[]string{},
+			"nvme storage has already been formatted and reformat " +
+				"not implemented",
+		},
+		{
+			true,
+			false,
+			[]string{"0000:81:00.0", "0000:83:00.0"},
+			"",
+		},
+	}
+
+	c := MockControllerPB("1.0.0")
+	srvIdx := 0 // assume just a single io_server (index 0)
+
+	for _, tt := range tests {
+		nvmeFormatCalls = []string{}
+
+		config := defaultMockConfig(t)
+		config.Servers[srvIdx].BdevList = tt.pciAddrs
+		sn := defaultMockNvmeStorage(&config)
+
+		if tt.inited {
+			if err := sn.Discover(); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := sn.Format(srvIdx); err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err)
+		}
+
+		AssertEqual(
+			t, nvmeFormatCalls, tt.pciAddrs,
+			"unexpected list of pci addresses in format calls")
+		AssertEqual(t, sn.formatted, true, "expect formatted state")
+		AssertEqual(
+			t, sn.controllers, []*pb.NvmeController{c},
+			"unexpected list of protobuf format controllers")
 	}
 }
 

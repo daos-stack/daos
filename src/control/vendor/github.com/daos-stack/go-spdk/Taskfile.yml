@@ -17,7 +17,7 @@ tasks:
   unit-tests:
     dir: spdk
     cmds:
-      - go test
+      - LD_LIBRARY_PATH=. go test
 
   build-spdk:
     dir: spdk

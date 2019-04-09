@@ -136,13 +136,45 @@ init_ret(void)
 	return ret;
 }
 
-static void
+static int
 check_size(int written, int max, char *msg, struct ret_t *ret)
 {
 	if (written >= max) {
 		snprintf(ret->err, sizeof(ret->err), "%s", msg);
-		ret->rc = 1;
+		ret->rc = -NVMEC_ERR_CHK_SIZE;
+		return ret->rc;
 	}
+
+	return NVMEC_SUCCESS;
+}
+
+static int
+set_pci_addr(
+	struct spdk_nvme_ctrlr *ctrlr, char *ctrlr_pci_addr, size_t size,
+	struct ret_t *ret)
+{
+	int 			rc;
+	struct spdk_pci_device	*pci_dev;
+	struct spdk_pci_addr	pci_addr;
+
+	pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr);
+	if (!pci_dev) {
+		snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+		ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+		return ret->rc;
+	}
+
+	// populate ns_t.ctrlr_pci_addr to map ns->ctrlr
+	pci_addr = spdk_pci_device_get_addr(pci_dev);
+	rc = spdk_pci_addr_fmt(ctrlr_pci_addr, size, &pci_addr);
+	if (rc != 0) {
+		snprintf(ret->err, sizeof(ret->err),
+			"spdk_pci_addr_fmt: rc %d", rc);
+		ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
+		return ret->rc;
+	}
+
+	return NVMEC_SUCCESS;
 }
 
 static void
@@ -151,10 +183,7 @@ collect(struct ret_t *ret)
 	struct ns_entry				*ns_entry;
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
-	struct spdk_pci_device			*pci_dev;
-	struct spdk_pci_addr			pci_addr;
 	int					written;
-	int					rc;
 
 	ns_entry = g_namespaces;
 	ctrlr_entry = g_controllers;
@@ -165,8 +194,9 @@ collect(struct ret_t *ret)
 		ns_tmp = malloc(sizeof(struct ns_t));
 
 		if (ns_tmp == NULL) {
-			perror("ns_t malloc");
-			exit(1);
+			snprintf(ret->err, sizeof(ret->err), "ns_t malloc");
+			ret->rc = -ENOMEM;
+			return;
 		}
 
 		cdata = spdk_nvme_ctrlr_get_data(ns_entry->ctrlr);
@@ -176,18 +206,11 @@ collect(struct ret_t *ret)
 		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) / \
 			       NVMECONTROL_GBYTE_BYTES;
 
-		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
-		if (!pci_dev) {
-			perror("get_pci_device");
-			exit(1);
-		}
-		pci_addr = spdk_pci_device_get_addr(pci_dev);
-		rc = spdk_pci_addr_fmt(ns_tmp->ctrlr_pci_addr,
-				sizeof(ns_tmp->ctrlr_pci_addr),
-				&pci_addr);
-		if (rc != 0) {
-			perror("pci_addr_fmt");
-			exit(1);
+		if (set_pci_addr(
+			ns_entry->ctrlr, ns_tmp->ctrlr_pci_addr,
+			sizeof(ns_tmp->ctrlr_pci_addr), ret) != 0) {
+
+			return;
 		}
 
 		ns_tmp->next = ret->nss;
@@ -203,44 +226,53 @@ collect(struct ret_t *ret)
 
 		if (ctrlr_tmp == NULL) {
 			perror("ctrlr_t malloc");
-			exit(1);
+			ret->rc = -ENOMEM;
+			return;
 		}
 
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
 		written = snprintf(
-			ctrlr_tmp->model,
-			sizeof(ctrlr_tmp->model),
-			"%-20.20s",
-			cdata->mn
+			ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
+			"%-20.20s", cdata->mn
 		);
-		check_size(written, sizeof(ctrlr_tmp->model), "model truncated", ret);
+		if (check_size(
+			written, sizeof(ctrlr_tmp->model),
+			"model truncated", ret) != 0) {
+
+			return;
+		}
 
 		written = snprintf(
-			ctrlr_tmp->serial,
-			sizeof(ctrlr_tmp->serial),
-			"%-20.20s",
-			cdata->sn
+			ctrlr_tmp->serial, sizeof(ctrlr_tmp->serial),
+			"%-20.20s", cdata->sn
 		);
-		check_size(written, sizeof(ctrlr_tmp->serial), "serial truncated", ret);
+		if (check_size(
+			written, sizeof(ctrlr_tmp->serial),
+			"serial truncated", ret) != 0) {
+
+			return;
+		}
 
 		written = snprintf(
-			ctrlr_tmp->fw_rev,
-			sizeof(ctrlr_tmp->fw_rev),
-			"%s",
-			cdata->fr
+			ctrlr_tmp->fw_rev, sizeof(ctrlr_tmp->fw_rev),
+			"%s", cdata->fr
 		);
-		check_size(written, sizeof(ctrlr_tmp->fw_rev), "firmware revision truncated", ret);
+		if (check_size(
+			written, sizeof(ctrlr_tmp->fw_rev),
+			"firmware revision truncated", ret) != 0) {
 
-		written = snprintf(
-			ctrlr_tmp->tr_addr,
-			sizeof(ctrlr_tmp->tr_addr),
-			"%s",
-			ctrlr_entry->tr_addr
-		);
-		check_size(written, sizeof(ctrlr_tmp->tr_addr), "transport address truncated", ret);
+			return;
+		}
 
-		ctrlr_tmp->id = cdata->cntlid;
+		if (set_pci_addr(
+			ctrlr_entry->ctrlr, ctrlr_tmp->pci_addr,
+			sizeof(ctrlr_tmp->pci_addr), ret) != 0) {
+
+			return;
+		}
+
+		// cdata->cntlid is not unique per host, only per subsystem
 		ctrlr_tmp->next = ret->ctrlrs;
 		ret->ctrlrs = ctrlr_tmp;
 
@@ -309,8 +341,50 @@ nvme_discover(void)
 	return ret;
 }
 
+static int
+get_controller(char *addr, struct ctrlr_entry *ctrlr_entry, struct ret_t *ret)
+{
+	struct spdk_pci_device			*pci_dev;
+	struct spdk_pci_addr			pci_addr, entry_pci_addr;
+
+	if (spdk_pci_addr_parse(&pci_addr, addr) < 0) {
+		snprintf(
+			ret->err, sizeof(ret->err),
+			"pci addr could not be parsed: %s", addr);
+		ret->rc = -NVMEC_ERR_PCI_ADDR_PARSE;
+
+		return ret->rc;
+	}
+
+	while (ctrlr_entry) {
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
+		if (!pci_dev) {
+			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+
+			return ret->rc;
+		}
+
+		entry_pci_addr = spdk_pci_device_get_addr(pci_dev);
+
+		if (spdk_pci_addr_compare(&pci_addr, &entry_pci_addr) == 0)
+			break;
+
+		ctrlr_entry = ctrlr_entry->next;
+	}
+
+	if (ctrlr_entry == NULL) {
+		snprintf(ret->err, sizeof(ret->err), "controller not found");
+		ret->rc = -NVMEC_ERR_CTRLR_NOT_FOUND;
+
+		return ret->rc;
+	}
+
+	return NVMEC_SUCCESS;
+}
+
 struct ret_t *
-nvme_fwupdate(char * ctrlr_pci_addr, char *path, unsigned int slot)
+nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 {
 	int					rc = 1;
 	int					fd = -1;
@@ -319,30 +393,15 @@ nvme_fwupdate(char * ctrlr_pci_addr, char *path, unsigned int slot)
 	void					*fw_image;
 	enum spdk_nvme_fw_commit_action		commit_action;
 	struct spdk_nvme_status			status;
-	//const struct spdk_nvme_ctrlr_data	*cdata;
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ctrlr_entry = g_controllers;
 	ret = init_ret();
+	ctrlr_entry = g_controllers;
 
-	// TODO: receive controller pci address instead of ID, parse string
-	// buffer as addr type then compare with spdk_pci_addr_compare
-	while (ctrlr_entry) {
-		//cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
-
-//		if (cdata->cntlid == ctrlr_id)
-//			break;
-
-		ctrlr_entry = ctrlr_entry->next;
-	}
-
-	if (ctrlr_entry == NULL) {
-		sprintf(ret->err, "specified controller not found"); //, ctrlr_id)
-		ret->rc = 1;
-
+	rc = get_controller(ctrlr_pci_addr, ctrlr_entry, ret);
+	if (rc != 0)
 		return ret;
-	}
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
@@ -402,6 +461,76 @@ nvme_fwupdate(char * ctrlr_pci_addr, char *path, unsigned int slot)
 	spdk_dma_free(fw_image);
 
 	ret->rc = rc;
+	collect(ret);
+
+	return ret;
+}
+
+struct ret_t *
+nvme_format(char *ctrlr_pci_addr)
+{
+	int					rc;
+	int					ns_id;
+	const struct spdk_nvme_ctrlr_data	*cdata;
+	struct spdk_nvme_ns			*ns;
+	struct spdk_nvme_format 		format = {};
+	struct ctrlr_entry			*ctrlr_entry;
+	struct ret_t				*ret;
+
+	ret = init_ret();
+	ctrlr_entry = g_controllers;
+
+	rc = get_controller(ctrlr_pci_addr, ctrlr_entry, ret);
+	if (rc != 0)
+		return ret;
+
+	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
+
+	if (!cdata->oacs.format) {
+		snprintf(ret->err, sizeof(ret->err),
+			"Controller does not support Format NVM command\n");
+		ret->rc = -NVMEC_ERR_NOT_SUPPORTED;
+
+		return ret;
+	}
+
+	if (cdata->fna.format_all_ns) {
+		ns_id = SPDK_NVME_GLOBAL_NS_TAG;
+		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, 1);
+	} else {
+		ns_id = 1; // just format first ns
+		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, ns_id);
+	}
+
+	if (ns == NULL) {
+		snprintf(ret->err, sizeof(ret->err),
+			"Namespace ID %d not found", ns_id);
+		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
+
+		return ret;
+	}
+
+	// TODO: move this consent to caller
+	printf("Warning: use this utility at your own risk.\n"
+	       "This command will format your namespace and all data will be lost.\n"
+	       "This command may take several minutes to complete,\n"
+	       "so do not interrupt the utility until it completes.\n");
+	//      "Press 'Y' to continue with the format operation.\n");
+
+	format.lbaf	= 0; // LBA format defaulted to 0
+	format.ms	= 0; // metadata transferred as part of a separate buffer
+	format.pi	= 0; // protection information is not enabled
+	format.pil	= 0; // protection information location N/A
+	format.ses	= 0; // no secure erase operation requested
+
+	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
+
+	if (ret->rc != 0) {
+		snprintf(ret->err, sizeof(ret->err), "format failed");
+
+		return ret;
+	}
+
 	collect(ret);
 
 	return ret;

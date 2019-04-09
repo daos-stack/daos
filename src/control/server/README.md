@@ -163,205 +163,65 @@ In order to run the tool to perform administrative tasks, build and run the `dao
 
 See `daos_shell --help` for usage and [here](../dmg) for package details.
 
-## NVMe management capabilities
+## Storage management
 
-Operations on NVMe SSD devices are performed using [go-spdk bindings](./go-spdk/README.md) to issue commands over the SPDK framework.
+The DAOS data plane utilises two forms of non-volatile storage, storage class memory (SCM) in the form of persistent memory modules and NVMe in the form of high-performance SSDs.
 
-### NVMe Controller and Namespace Discovery
+### SCM management capabilities
 
-The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
+Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
+
+Provisioning SCM occurs by configuring modules in AppDirect memory regions (interleaved mode) in groups of modules local to a specific socket (NUMA) and resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
+
+Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
+
+Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
+
+#### SCM Module Discovery
+
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned.
+
+TODO: return details of AppDirect memory regions
+
+#### SCM Format
+
+Format can be triggered through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is will be performed as specified in config file parameters prefixed with `scm_`.
+
+#### SCM Firmware Update
+
+#### SCM Burn-in Validation
+
+### NVMe management capabilities
+
+Operations on NVMe SSD devices are performed using [go-spdk bindings](https://github.com/daos-stack/go-spdk) to issue commands over the SPDK framework.
+
+The DAOS data plane utilises NVMe devices as block storage using the SPDK "[blobstore](https://spdk.io/doc/blob.html)" abstraction, creation and management of the blobstore and blobs is performed by the data plane.
+
+#### NVMe Controller and Namespace Discovery
+
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned.
+
+The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
 ![Demo: List NVMe Controllers and Namespaces](/doc/graph/daosshellnamespaces.svg)
 
-### NVMe Controller Firmware Update
+#### NVMe Format
 
-The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart_guide instructions have already been performed):
+Format can be triggered through the management tool at DAOS system installation time.
+
+In the context of what is required from the control plane to prepare NVMe devices for operation with DAOS data plane, "formatting" refers to the low level reset of storage media which will remove blobstores and remove any filesystem signatures from the SSD controller namespaces.
+
+Formatting will be performed on devices identified by PCI addresses specified in config file parameter `bdev_list` when `bdev_class` is equal to `nvme`.
+
+The SPDK "[blobcli](https://github.com/spdk/spdk/tree/master/examples/blob/cli)" can be used to initiate and manipulate blobstores for testing and verification purposes.
+
+#### NVMe Controller Firmware Update
+
+The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
 ![Demo: Updating NVMe Controller Firmware](/doc/graph/daosshellfwupdate.svg)
 
-### NVMe Controller Burn-in Validation
+#### NVMe Controller Burn-in Validation
 
-Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio_plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
+Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
 
-## SCM management capabilities
-
-### SCM Module Discovery
-
-### SCM Module Firmware Update
-
-### SCM Module Burn-in Validation
-
-Go app which can either be invoked with a subcommand to perform a specific task or without a subcommand which will launch an interactive shell.
-Command-line subcommands are implemented with the [go-flags](https://github.com/jessevdk/go-flags) package and interactive shell with [ishell](https://github.com/abiosoft/ishell).
-
-The management tool uses the [client API](../client) to interact with many [server](../server) instances as a gRPC client.
-The management tool has no storage library dependencies and as such is suitable to be run from a login node to interact with storage nodes.
-
-<details>
-<summary>Usage info from app help</summary>
-<p>
-
-```
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell --help
-Usage:
-  daos_shell [OPTIONS] [command]
-
-Application Options:
-  -l, --hostlist=    comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
-  -f, --hostfile=    path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
-  -o, --config-path= Client config file path
-
-Help Options:
-  -h, --help         Show this help message
-
-Available commands:
-  network  Perform tasks related to locally-attached network devices (aliases: n)
-  pool     Perform tasks related to DAOS pools (aliases: p)
-  service  Perform distributed tasks related to DAOS system (aliases: sv)
-  storage  Perform tasks related to locally-attached storage (aliases: st)
-
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell storage --help
-Usage:
-  daos_shell [OPTIONS] storage <list>
-
-Application Options:
-  -l, --hostlist=    comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
-  -f, --hostfile=    path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
-  -o, --config-path= Client config file path
-
-Help Options:
-  -h, --help         Show this help message
-
-Available commands:
-  list  List locally-attached SCM and NVMe storage (aliases: l)
-
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell service --help
-Usage:
-  daos_shell [OPTIONS] service <kill-rank>
-
-Application Options:
-  -l, --hostlist=    comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
-  -f, --hostfile=    path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
-  -o, --config-path= Client config file path
-
-Help Options:
-  -h, --help         Show this help message
-
-Available commands:
-  kill-rank  Terminate server running as specific rank on a DAOS pool (aliases: kr)
-
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell service kill-rank --help
-Usage:
-  daos_shell [OPTIONS] service kill-rank [kill-rank-OPTIONS]
-
-Application Options:
-  -l, --hostlist=      comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
-  -f, --hostfile=      path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
-  -o, --config-path=   Client config file path
-
-Help Options:
-  -h, --help           Show this help message
-
-[kill-rank command options]
-      -r, --rank=      Rank identifying DAOS server
-      -p, --pool-uuid= Pool uuid that rank relates to
-```
-
-</p>
-</details>
-
-<details>
-<summary>Example output from invoking "storage list" subcommand</summary>
-<p>
-
-```
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-44:10001,boro-45:10001 storage list
-Active connections: [boro-45:10001 boro-44:10001]
-
-Listing NVMe SSD controller and constituent namespaces on connected storage servers:
-boro-44:10001:
-- id: 0
-  model: 'INTEL SSDPED1K375GA '
-  serial: 'PHKS73350016375AGN  '
-  pciaddr: 0000:81:00.0
-  fwrev: E2010324
-  namespace:
-  - id: 1
-    capacity: 375
-boro-45:10001:
-- id: 0
-  model: 'INTEL SSDPED1K375GA '
-  serial: 'PHKS7335006W375AGN  '
-  pciaddr: 0000:81:00.0
-  fwrev: E2010420
-  namespace:
-  - id: 1
-    capacity: 375
-
-
-Listing SCM modules on connected storage servers:
-boro-44:10001: []
-boro-45:10001: []
-```
-
-</p>
-</details>
-
-<details>
-<summary>Example output when listing storage in interactive shell mode</summary>
-<p>
-
-```bash
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell
-Active connections: [localhost:10001]
-
-DAOS Management Shell
->>> help
-
-Commands:
-  addconns          Command to create connections to servers by supplying a space separated list of addresses <ipv4addr/hostname:port>
-  clear             clear the screen
-  clearconns        Command to clear stored server connections
-  exit              exit the program
-  getconns          Command to list active server connections
-  help              display help
-  killrank          Command to terminate server running as specific rank on a DAOS pool
-  listfeatures      Command to retrieve supported management features on connected servers
-  liststorage       Command to list locally-attached NVMe SSD controllers and SCM modules
-
-
->>> addconns boro-44:10001 boro-45:10001
-failed to connect to localhost:10001 (socket connection is not active (TRANSIENT_FAILURE))
-Active connections: [boro-45:10001 boro-44:10001]
-
->>> liststorage
-Active connections: [boro-45:10001 boro-44:10001]
-
-Listing NVMe SSD controller and constituent namespaces on connected storage servers:
-boro-44:10001:
-- id: 0
-  model: 'INTEL SSDPED1K375GA '
-  serial: 'PHKS73350016375AGN  '
-  pciaddr: 0000:81:00.0
-  fwrev: E2010324
-  namespace:
-  - id: 1
-    capacity: 375
-boro-45:10001:
-- id: 0
-  model: 'INTEL SSDPED1K375GA '
-  serial: 'PHKS7335006W375AGN  '
-  pciaddr: 0000:81:00.0
-  fwrev: E2010420
-  namespace:
-  - id: 1
-    capacity: 375
-
-
-Listing SCM modules on connected storage servers:
-boro-44:10001: []
-boro-45:10001: []
-```
-
-</p>
-</details>
