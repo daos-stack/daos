@@ -1,0 +1,92 @@
+#
+# Copyright 2019, Intel Corporation
+#
+# 'recipe' for Docker to build an RPM
+#
+
+# Pull base image
+FROM suse/sles:12.3
+MAINTAINER Brian J. Murrell <brian.murrell@intel.com>
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Add build user (to keep rpmbuild happy)
+ENV USER build
+ENV PASSWD build
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN groupadd -g $UID $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+
+# Install basic tools
+RUN zypper --non-interactive update
+# basic building
+RUN zypper --non-interactive install make rpm-build curl createrepo git    \
+                                     lsb-release autoconf automake libtool \
+                                     ca-certificates-mozilla
+# libfabric
+RUN zypper --non-interactive install rdma-core-devel libnl3-devel        \
+                                     infinipath-psm-devel valgrind-devel
+# mercury
+RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/openpa/job/PR-4/lastSuccessfulBuild/artifact/artifacts/sles12.3/ openpa; \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/libfabric/job/PR-4/lastSuccessfulBuild/artifact/artifacts/sles12.3/ libfabric; \
+    zypper --non-interactive ref openpa libfabric
+# our libfabric conflicts with libfabric1
+# TODO: consider if we should rename ours or replace libfabric1, etc.
+RUN if rpm -q libfabric1; then zypper --non-interactive remove libfabric1; fi
+RUN zypper --non-interactive install gcc-c++
+RUN zypper --non-interactive --no-gpg-check install openpa-devel      \
+                                                    libfabric-devel   \
+                                                    cmake boost-devel
+# pmix
+RUN zypper --non-interactive install libevent-devel
+
+# ompi
+RUN zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc;                                                   \
+    zypper --non-interactive --gpg-auto-import-keys ref hwloc;                                                                                                                    \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/pmix/job/PR-4/lastSuccessfulBuild/artifact/artifacts/sles12.3/ pmix; \
+    zypper --non-interactive ref pmix
+RUN zypper --non-interactive install hwloc-devel pmix-devel flex
+
+# scons
+RUN zypper --non-interactive install fdupes
+
+# cart
+RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/mercury/job/PR-5/lastSuccessfulBuild/artifact/artifacts/sles12.3/ mercury; \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/ompi/job/PR-4/lastSuccessfulBuild/artifact/artifacts/sles12.3/ ompi; \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/scons/job/PR-1/lastSuccessfulBuild/artifact/artifacts/sles12.3/ scons; \
+    zypper --non-interactive --gpg-auto-import-keys ref mercury ompi scons
+RUN zypper --non-interactive install scons libyaml-devel mercury-devel    \
+                                     ompi-devel openssl-devel
+RUN zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo; \
+    zypper --non-interactive --gpg-auto-import-keys ref 'A project for basic libraries shared among multiple projects (SLE_12_SP3)'
+RUN zypper --non-interactive install libcmocka-devel
+
+# fio
+RUN zypper --non-interactive install libpmem-devel libaio-devel     \
+                                     libpmemblk-devel librbd-devel  \
+                                     libnuma-devel
+
+# isa-l
+RUN zypper --non-interactive install yasm
+
+# spdk
+RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/dpdk/job/PR-2/lastSuccessfulBuild/artifact/artifacts/sles12.3/ dpdk; \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/fio/job/PR-3/lastSuccessfulBuild/artifact/artifacts/sles12.3/ fio; \
+    zypper --non-interactive --gpg-auto-import-keys ref dpdk fio
+RUN zypper --non-interactive install dpdk-devel fio-src libiscsi-devel cunit-devel
+
+# meson
+RUN zypper --non-interactive install python-rpm-macros python3-base
+
+# fuse
+RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f https://build.hpdd.intel.com/job/daos-stack/job/meson/job/PR-1/lastSuccessfulBuild/artifact/artifacts/sles12.3/ meson; \
+    zypper --non-interactive --gpg-auto-import-keys ref meson
+RUN zypper --non-interactive install meson ninja
+
+# pmdk
+RUN zypper --non-interactive install man libunwind-devel gdb bc
+
+# force an upgrade to get any newly built RPMs
+ARG CACHEBUST=1
+RUN zypper --non-interactive up

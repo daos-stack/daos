@@ -9,7 +9,6 @@ PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 
 dist: $(SOURCES)
 
-COMMON_RPM_ARGS := --define "%_topdir $$PWD/_topdir"
 DIST    := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 ifeq ($(DIST),)
 SED_EXPR := 1p
@@ -35,10 +34,16 @@ _topdir/SOURCES/%: % | _topdir/SOURCES/
 
 scons_local-$(VERSION).tar:
 	cd scons_local && \
-	git archive --format tar --prefix scons_local/ -o ../$@ HEAD ./
+	git archive --format tar --prefix scons_local/ -o ../$@ HEAD
 
 $(NAME)-$(VERSION).tar:
-	git archive --format tar --prefix $(NAME)-$(VERSION)/ -o $@ HEAD ./
+	git archive --format tar --prefix $(NAME)-$(VERSION)/ -o $@ HEAD
+
+v$(VERSION).tar.$(SRC_EXT):
+	curl -f -L -O '$(SOURCE)'
+
+$(VERSION).tar.$(SRC_EXT):
+	curl -f -L -O '$(SOURCE)'
 
 # see https://stackoverflow.com/questions/2973445/ for why we subst
 # the "rpm" for "%" to effectively turn this into a multiple matching
@@ -64,6 +69,19 @@ mockbuild: $(SRPM) Makefile
 rpmlint: $(SPEC)
 	rpmlint $<
 
-dist: $(SOURCES)
+show_version:
+	@echo $(VERSION)
 
-.PHONY: srpm rpms ls mockbuild rpmlint FORCE dist
+show_release:
+	@echo $(RELEASE)
+
+show_rpms:
+	@echo $(RPMS)
+
+show_source:
+	@echo $(SOURCE)
+
+show_sources:
+	@echo $(SOURCES)
+
+.PHONY: srpm rpms ls mockbuild rpmlint FORCE dist show_version show_release show_rpms show_source show_sources
