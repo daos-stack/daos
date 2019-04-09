@@ -38,18 +38,21 @@ struct drpc *dss_drpc_ctx;
 static int
 notify_ready(void)
 {
-	Drpc__Call	req = DRPC__CALL__INIT;
+	Drpc__Call     *req;
 	Drpc__Response *resp;
 	int		rc;
 
-	req.module = DRPC_MODULE_SRV;
-	req.method = DRPC_METHOD_SRV_NOTIFY_READY;
+	req = drpc_call_create(dss_drpc_ctx,
+			       DRPC_MODULE_SRV,
+			       DRPC_METHOD_SRV_NOTIFY_READY);
+	if (req == NULL) {
+		return -DER_NOMEM;
+	}
 
-	rc = drpc_call(dss_drpc_ctx, R_SYNC, &req, &resp);
-	if (rc != 0)
-		return rc;
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, req, &resp);
 
-	drpc__response__free_unpacked(resp, NULL);
+	drpc_call_free(req);
+	drpc_response_free(resp);
 	return rc;
 }
 

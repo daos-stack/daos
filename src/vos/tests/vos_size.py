@@ -25,115 +25,229 @@ Prerequisite
 Run vos_size to generate vos_size.yaml
 Usage: vos_size.py input.yaml [alternate vos_size.yaml]
 
-Sample input yaml
----
-# yaml sample
-num_pools: 10
-updates:
-  - array:
-      rec_per_akey: 100
-      avgsize: 1000000
-      container: a
-      object: a
-      dkey: 20
-      dkey_type: "integer_dkey"
-      akey_per_dkey: 1
-  - single_value:
-      avgsize: 512000
-      container: a
-      object: a
-      dkey: 20
-      akey_per_dkey: 10
+See vos_size_input.yaml sample input
 '''
 import sys
 import yaml
+import random
 
-def print_total(name, pool_stats):
+def convert(stat):
+    """Convert byte value to pretty string"""
+    size = 1024 * 1024 * 1024 * 1024 * 1024
+    for mag in ['P', 'T', 'G', 'M', 'K']:
+        if stat > size:
+            return "%10.2f %s" % (float(stat) / size, mag)
+        size = size / 1024
+    return "%10d  " % stat
+
+def print_total(name, stat, total):
     "Pretty print"
-    stat = pool_stats[name]
-    total = pool_stats["total"]
+    print "\t%-20s: %s (%5.2f%%)" % (name, convert(stat),
+                                     100 * float(stat) / total)
 
-    print "\t%-20s: %10d K (%5.2f%%)" % (name, stat / 1024,
-                                         100 * float(stat) / total)
+def check_key_type(spec):
+    """check key type field"""
+    if spec.get("type", "hashed") not in ["hashed", "integer"]:
+        raise RuntimeError("Invalid key type key spec %s" % spec)
+    if spec.get("type", "hashed") != "hashed":
+        return
+    if "size" not in spec:
+        raise RuntimeError("Size required for hashed key %s" % spec)
+
+class Stats(object):
+    """Class for calculating and storing stats"""
+    def __init__(self):
+        """Construct a stat object"""
+        self.stats = {
+            "pool": 0,
+            "container": 0,
+            "object": 0,
+            "dkey": 0,
+            "akey": 0,
+            "array": 0,
+            "single_value": 0,
+            "user_value": 0,
+            "user_key": 0,
+            "total_meta": 0,
+            "total": 0
+        }
+
+    def mult(self, multiplier):
+        """multiply all stats by a value"""
+        for key in self.stats:
+            self.stats[key] *= multiplier
+
+    def add_meta(self, stat, count):
+        """add a single meta data stat"""
+        self.stats[stat] += count
+        self.stats["total"] += count
+        self.stats["total_meta"] += count
+
+    def add_user_value(self, count):
+        """add a user data"""
+        self.stats["user_value"] += count
+        self.stats["total"] += count
+
+    def add_user_key(self, count):
+        """add a user key"""
+        self.stats["user_key"] += count
+        self.stats["total"] += count
+
+    def merge(self, child):
+        """add child stats to this object"""
+        for key in self.stats:
+            self.stats[key] += child.get(key)
+
+    def get(self, key):
+        """get a stat"""
+        return self.stats[key]
+
+    def print_stat(self, name):
+        """print the statistic"""
+        print_total(name, self.stats[name], self.stats["total"])
+
+    def pretty_print(self):
+        """Pretty print statistics"""
+        print "Metadata totals:"
+        self.print_stat("pool")
+        self.print_stat("container")
+        self.print_stat("object")
+        self.print_stat("dkey")
+        self.print_stat("akey")
+        self.print_stat("single_value")
+        self.print_stat("array")
+        self.print_stat("total_meta")
+        self.print_stat("user_key")
+        self.print_stat("user_value")
+        print "Total bytes with user data: %dK" % (self.stats["total"] / 1024)
 
 # pylint: disable=too-many-instance-attributes
 class MetaOverhead(object):
     """Class for calculating overheads"""
     def __init__(self, num_pools, meta_yaml):
         """class for keeping track of overheads"""
+        self.csum_size = 0
         self.meta = meta_yaml
         self.num_pools = num_pools
         self.pools = []
         for _index in range(0, self.num_pools):
-            self.pools.append({"key" : "container", "count" : 0})
-        self.next_cont = 1341344
-        self.next_object = 1341344
-        self.value_size = 0
-        self.unique_entries = 0
-        self.container_key = None
+            self.pools.append({"trees": [], "dup" : 1, "key" : "container",
+                               "count" : 0})
+        self.next_cont = 1
+        self.next_object = 1
 
-    def init_container(self, array_spec):
-        """ Ensure the existence of container records"""
-        if "container" in array_spec:
-            key = array_spec["container"]
-        else:
-            key = self.next_cont
-            self.next_cont += 1
+    def init_container(self, cont_spec):
+        """Handle a container specification"""
+        if "objects" not in cont_spec:
+            raise RuntimeError("No objects in container spec %s" % cont_spec)
 
         for pool in self.pools:
-            if key not in pool:
-                pool[key] = {"key" : "object", "count": 0} #object count
-                pool["count"] += 1
+            pool["count"] += 1
+            cont = {"dup": int(cont_spec.get("count", 1)), "key": "object",
+                    "count": 0, "csum_size": int(cont_spec.get("csum_size", 0)),
+                    "csum_gran": int(cont_spec.get("csum_gran", 16384)),
+                    "trees": []}
+            pool["trees"].append(cont)
 
-        self.container_key = key
+        for obj_spec in cont_spec.get("objects"):
+            self.init_object(obj_spec)
 
-    def update_object(self, array_spec, dkey_type, pool_num):
-        """Ensure existence of the object"""
-        cont = self.pools[pool_num][self.container_key]
-        if "object" in array_spec:
-            key = array_spec["object"]
-        else:
-            key = self.next_object
-            self.next_object += 1
+    def init_object(self, obj_spec):
+        """Handle an object specification"""
+        if "dkeys" not in obj_spec:
+            raise RuntimeError("No dkeys in object spec %s" % obj_spec)
 
-        if key not in cont:
-            cont[key] = {"key" : dkey_type, "count": 0} #dkey count
-            cont["count"] += 1
+        oid = self.next_object
+        self.next_object += 1
 
-        return cont[key]
+        self.init_dkeys(oid, obj_spec)
 
-    def update_value(self, array_spec, value_type):
-        """Update the value according to the spec"""
-        dkey_type = array_spec.get("dkey_type", "dkey")
-        akey_type = array_spec.get("akey_type", "akey")
+    def init_dkeys(self, oid, obj_spec):
+        """Handle akey specification"""
+        pool_idx = random.randint(0, self.num_pools - 1)
 
-        dkeys = int(array_spec.get("dkey", 1))
-        akeys = int(array_spec.get("akey_per_dkey", 1))
-        records = int(array_spec.get("rec_per_akey", 1))
+        for dkey_spec in obj_spec.get("dkeys"):
+            if "akeys" not in dkey_spec:
+                raise RuntimeError("No akeys in dkey spec %s" % dkey_spec)
+            check_key_type(dkey_spec)
+            dkey_count = int(dkey_spec.get("count", 1))
+            num_pools = self.num_pools
+            full_count = dkey_count / num_pools
+            partial_count = dkey_count % num_pools
+            if full_count == 0:
+                num_pools = partial_count
 
-        for dkey in range(0, dkeys):
-            pool_num = (dkey % self.num_pools)
-            obj = self.update_object(array_spec, dkey_type, pool_num)
-            if dkey not in obj:
-                obj[dkey] = {"key": akey_type, "count": 0} #akey count
+            for idx in range(0, num_pools):
+                pool = self.pools[pool_idx]
+                pool_idx = (pool_idx + 1) % self.num_pools
+                cont = pool["trees"][-1]
+                if cont["trees"] == [] or cont["trees"][-1]["oid"] != oid:
+                    obj = {"dup": int(obj_spec.get("count", 1)), "key": "dkey",
+                           "count": 0, "trees": [], "oid": oid}
+                    cont["trees"].append(obj)
+                    cont["count"] += 1
+                dup = full_count
+                if partial_count > idx:
+                    dup += 1
+                obj = cont["trees"][-1]
+                dkey = {"dup": dup, "key": "akey", "count": 0, "trees": [],
+                        "type": dkey_spec.get("type", "hashed"),
+                        "size": int(dkey_spec.get("size", 0))}
+                obj["trees"].append(dkey)
                 obj["count"] += 1
-            dkey_tree = obj[dkey]
-            for akey in range(0, akeys):
-                if akey not in dkey_tree:
-                    dkey_tree[akey] = {"key" : value_type, "count": 0}
-                    dkey_tree["count"] += 1
-                akey_tree = dkey_tree[akey]
-                akey_tree["count"] += records
-        unique = dkeys * akeys * records
-        self.unique_entries += unique
-        self.value_size += unique * int(array_spec.get("avgsize"))
+                for akey_spec in dkey_spec.get("akeys"):
+                    MetaOverhead.init_akey(cont, dkey, akey_spec)
 
-    def update(self, value_type, array_spec):
+    @staticmethod
+    def init_akey(cont, dkey, akey_spec):
+        """Handle akey specification"""
+        check_key_type(akey_spec)
+        if "values" not in akey_spec:
+            raise RuntimeError("No values in akey spec %s" % akey_spec)
+        if "value_type" not in akey_spec:
+            raise RuntimeError("No value_type in akey spec %s" % akey_spec)
+        akey = {"dup": int(akey_spec.get("count", 1)),
+                "key": akey_spec.get("value_type"), "count": 0,
+                "type": akey_spec.get("type", "hashed"),
+                "size": int(akey_spec.get("size", 0)),
+                "value_size": 0}
+        dkey["trees"].append(akey)
+        dkey["count"] += 1
+        for value_spec in akey_spec.get("values"):
+            MetaOverhead.init_value(cont, akey, value_spec)
+
+    @staticmethod
+    def init_value(cont, akey, value_spec):
+        """Handle value specification"""
+        if "size" not in value_spec:
+            raise RuntimeError("No size in value spec %s" % value_spec)
+        size = value_spec.get("size")
+        csum_size = cont["csum_size"]
+        if csum_size != 0:
+            if akey["key"] == "single_value" or size < cont["csum_gran"]:
+                size += csum_size
+            else:
+                size += (size / cont["csum_gran"]) * csum_size
+                if value_spec.get("aligned", "Yes") == "No":
+                    size += (csum_size * 2)
+        akey["count"] += value_spec.get("count", 1) # Number of values
+        akey["value_size"] += size * value_spec.get("count", 1) # total size
+
+    def load_container(self, cont_spec):
         """calculate metadata for update(s)"""
-        self.init_container(array_spec)
-        self.update_value(array_spec, value_type)
+        self.init_container(cont_spec)
 
-    def calc_tree(self, tree, pool_stats):
+    def calc_subtrees(self, parent, mult):
+        """Calculate for subtrees"""
+        stats = Stats()
+        for tree in parent["trees"]:
+            if parent["key"] == "container":
+                self.csum_size = tree["csum_size"]
+            self.calc_tree(stats, tree)
+        stats.mult(mult)
+        return stats
+
+    def calc_tree(self, stats, tree):
         """calculate the totals"""
         key = tree["key"]
         num_values = tree["count"]
@@ -143,48 +257,26 @@ class MetaOverhead(object):
         rec_overhead = num_values * record_size
         tree_nodes = (num_values * 2 + order -1) / order
         overhead = tree_nodes * node_size + rec_overhead
-        key = key.replace("integer_", "")
-        pool_stats[key] += overhead
-        pool_stats["total"] += overhead
-        pool_stats["total_meta"] += overhead
+        if key == "akey" or key == "single_value" or key == "array":
+            #key refers to child tree
+            stats.add_user_key(num_values * tree["size"])
+            overhead += self.csum_size * num_values
+        stats.add_meta(key, overhead)
         if key == "array" or key == "single_value":
+            stats.add_user_value(tree["value_size"])
             return
-        for key in tree.keys():
-            if key == "count":
-                continue
-            if key == "key":
-                continue
-            self.calc_tree(tree[key], pool_stats)
+        tree_stats = self.calc_subtrees(tree, tree["dup"])
+        stats.merge(tree_stats)
 
     def print_report(self):
         """Calculate and pretty print a report"""
-        pool_stats = {"pool" : 0,
-                      "container" : 0,
-                      "object" : 0,
-                      "dkey" : 0,
-                      "akey" : 0,
-                      "array" : 0,
-                      "single_value" : 0,
-                      "total_meta" : 0,
-                      "total" : self.value_size
-                     }
+        stats = Stats()
 
         for pool in range(0, self.num_pools):
-            pool_stats["pool"] += int(self.meta.get("root"))
-            pool_stats["total_meta"] += int(self.meta.get("root"))
-            pool_stats["total"] += int(self.meta.get("root"))
-            self.calc_tree(self.pools[pool], pool_stats)
+            stats.add_meta("pool", int(self.meta.get("root")))
+            self.calc_tree(stats, self.pools[pool])
 
-        print "Metadata totals:"
-        print_total("pool", pool_stats)
-        print_total("container", pool_stats)
-        print_total("object", pool_stats)
-        print_total("dkey", pool_stats)
-        print_total("akey", pool_stats)
-        print_total("single_value", pool_stats)
-        print_total("array", pool_stats)
-        print_total("total_meta", pool_stats)
-        print "Total bytes with user data: %dK" % (pool_stats["total"] / 1024)
+        stats.pretty_print()
 
 # pylint: enable=too-many-instance-attributes
 
@@ -207,10 +299,12 @@ def run_vos_size():
 
     overheads = MetaOverhead(num_pools, meta_yaml)
 
-    for update in config_yaml.get("updates"):
-        for update_type in update.keys():
-            if update_type == "array" or update_type == "single_value":
-                overheads.update(update_type, update[update_type])
+    if "containers" not in config_yaml:
+        print "No \"containers\" key in %s.  Nothing to do" % config_name
+        return
+
+    for container in config_yaml.get("containers"):
+        overheads.load_container(container)
 
     overheads.print_report()
 

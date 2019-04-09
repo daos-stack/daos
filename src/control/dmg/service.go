@@ -44,13 +44,9 @@ type KillRankSvcCmd struct {
 
 // run kill rank command with specified parameters on all connected servers
 func killRankSvc(uuid string, rank uint32) {
-	errors := conns.KillRank(uuid, rank)
-
-	if len(errors) == 0 {
-		fmt.Println("Kill Rank succeeding on all active connections!")
-	} else {
-		fmt.Printf(unpackFormat(errors), "Kill Rank command failures")
-	}
+	fmt.Printf(
+		unpackFormat(conns.KillRank(uuid, rank)),
+		"Kill Rank command results")
 }
 
 // Execute is run when KillRankSvcCmd activates

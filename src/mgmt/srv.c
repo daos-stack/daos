@@ -139,31 +139,10 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_FREE(daos_resp);
 }
 
-static void
-mgmt_drpc_handler(Drpc__Call *request, Drpc__Response **response)
-{
-	Drpc__Response		*drpc_resp = NULL;
-
-	D_ALLOC_PTR(drpc_resp);
-	if (drpc_resp == NULL) {
-		D_ERROR("Failed to allocate drpc response ref\n");
-
-		return;
-	}
-
-	drpc__response__init(drpc_resp);
-	drpc_resp->sequence = request->sequence;
-	drpc_resp->status = DRPC__STATUS__SUCCESS;
-
-	process_drpc_request(request, drpc_resp);
-
-	*response = drpc_resp;
-}
-
 static struct dss_drpc_handler mgmt_drpc_handlers[] = {
 	{
 		.module_id = DRPC_MODULE_MGMT,
-		.handler = mgmt_drpc_handler
+		.handler = process_drpc_request
 	},
 	{
 		.module_id = 0,
