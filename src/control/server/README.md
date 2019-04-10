@@ -164,8 +164,8 @@ Implemented as a gRPC client application it connects and interacts with multiple
 
 In order to run the tool to perform administrative tasks from non-storage nodes (e.g. login nodes) over an out-of-band management network;
 
-1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
-2. run `daos_shell` from a login node
+ 1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
+ 2. run `daos_shell` from a login node
 
 See `daos_shell --help` for usage and [here](../dmg) for package details.
 
@@ -400,4 +400,3 @@ The following animation illustrates starting the control server and using the ma
 #### NVMe Controller Burn-in Validation
 
 Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
-

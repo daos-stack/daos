@@ -100,4 +100,4 @@ go test -v
 
 ### daos_server and daos_agent
 
-- Avoid calling `os.Exit` (or function with equivalent effects), except for assertion purposes. Fatal errors shall be returned back to `main`, who calls `os.Exit` accordingly.
+Avoid calling `os.Exit` (or function with equivalent effects), except for assertion purposes. Fatal errors shall be returned back to `main`, who calls `os.Exit` accordingly.
