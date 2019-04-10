@@ -32,7 +32,7 @@ import (
 )
 
 func TestUpdateNvmeCtrlr(t *testing.T) {
-	cs := newMockControlService()
+	cs := defaultMockControlService(t)
 
 	if err := cs.nvme.Setup(); err != nil {
 		t.Fatal(err)

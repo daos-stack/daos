@@ -1530,11 +1530,13 @@ rebuild_master_failure(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	assert_int_equal(rc, 0);
 	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
+	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo_new);
 	assert_int_equal(rc, 0);
 	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);

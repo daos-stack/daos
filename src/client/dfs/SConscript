@@ -19,11 +19,12 @@ def scons():
     libraries = libraries + ['dfs']
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
-    dfuse_libs = libraries + ['fuse3']
+    dfuse_hl_libs = libraries + ['fuse3']
 
-    dfuse_src = ['dfuse.c']
-    dfuse = daos_build.program(denv, 'dfuse', dfuse_src, LIBS=dfuse_libs)
-    denv.Install('$PREFIX/bin/', dfuse)
+    dfuse_hl_src = ['dfuse_hl.c']
+    dfuse_hl = daos_build.program(denv, 'dfuse_hl', dfuse_hl_src,
+                                  LIBS=dfuse_hl_libs)
+    denv.Install('$PREFIX/bin/', dfuse_hl)
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib/', duns)

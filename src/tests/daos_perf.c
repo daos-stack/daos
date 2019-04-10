@@ -650,6 +650,7 @@ ts_rebuild_wait()
 
 	while (1) {
 		memset(&pinfo, 0, sizeof(pinfo));
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
 		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
 		if (rst->rs_done || rc != 0) {
 			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
