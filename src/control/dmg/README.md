@@ -10,7 +10,7 @@ The management tool has no storage library dependencies and as such is suitable 
 <summary>Usage info from app help</summary>
 <p>
 
-```
+```bash
 [tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell --help
 Usage:
   daos_shell [OPTIONS] [command]
@@ -82,12 +82,80 @@ Help Options:
 ## Subcommands
 
 <details>
-<summary>Example output from invoking "storage list" subcommand</summary>
+<summary>Example output from invoking "storage list" subcommand on a single host</summary>
 <p>
 
+```bash
+[root@wolf-72 ~]# /root/daos_m/install/bin/daos_shell storage list
+Active connections: [localhost:10001]
+
+Listing NVMe SSD controller and constituent namespaces on connected storage servers:
+localhost:10001:
+- id: 0
+  model: 'INTEL SSDPED1K375GA '
+  serial: 'PHKS7335008X375AGN  '
+  pciaddr: 0000:87:00.0
+  fwrev: E2010324
+  namespace:
+  - id: 1
+    capacity: 375
+- id: 0
+  model: 'INTEL SSDPEDMD016T4 '
+  serial: 'CVFT6010002F1P6DGN  '
+  pciaddr: 0000:81:00.0
+  fwrev: 8DV10171
+  namespace:
+  - id: 1
+    capacity: 1600
+- id: 0
+  model: 'INTEL SSDPEDMD016T4 '
+  serial: 'CVFT5392000G1P6DGN  '
+  pciaddr: 0000:da:00.0
+  fwrev: 8DV10171
+  namespace:
+  - id: 1
+    capacity: 1600
+
+
+Listing SCM modules on connected storage servers:
+localhost:10001:
+- physicalid: 28
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 0
+  capacity: 539661172736
+- physicalid: 40
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 0
+  capacity: 539661172736
+- physicalid: 50
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 1
+  capacity: 539661172736
+- physicalid: 62
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 1
+  capacity: 539661172736
 ```
+
+</p>
+</details>
+
+<details>
+<summary>Example output from invoking "storage list" subcommand on multiple hosts</summary>
+<p>
+
+```bash
 [tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-44:10001,boro-45:10001 storage list
 Active connections: [boro-45:10001 boro-44:10001]
+
 
 Listing NVMe SSD controller and constituent namespaces on connected storage servers:
 boro-44:10001:
@@ -122,7 +190,7 @@ boro-45:10001: []
 <summary>Example output from invoking "storage format" subcommand</summary>
 <p>
 
-```
+```bash
 [tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-45:10001 storage format
 Active connections: [boro-45:10001]
 

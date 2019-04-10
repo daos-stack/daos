@@ -205,12 +205,151 @@ If `format_override` IS SET to `true` in config file, control plane will attempt
 If `scm_mount` IS NOT mounted, control plane will fail to start data plane.
 If `scm_mount` IS mounted but no superblock exists, control plane will attempt to create superblock and start data plane.
 
+<details>
+<summary>Example output from invoking `daos_server` on single host with `format_override` TRUE when `scm_mount` IS NOT mounted</summary>
+<p>
+
+```bash
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 04:04:05 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 04:04:05 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
+2019/04/10 04:04:05 config.go:405: debug: Switching control log level to DEBUG
+Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
+[ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk1319116020 --base-virtaddr=0x200000000000 --proc-type=auto ]
+EAL: Detected 96 lcore(s)
+EAL: Auto-detected process type: PRIMARY
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Multi-process socket /var/run/.spdk1319116020_unix
+EAL: Probing VFIO support...
+EAL: PCI device 0000:81:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+EAL: PCI device 0000:87:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:2701 spdk_nvme
+EAL: PCI device 0000:da:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:09 iosrv.go:104: debug: continuing without storage format on server 0 (format_override set in config)
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:09 external.go:54: debug: exec 'mount | grep ' /mnt/daos ''
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:09 external.go:54: debug: exec 'mount | grep ' /mnt ''
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:09 main.go:129: error: Failed to format servers: server0 scm mount path (/mnt/daos) not mounted: Error running mount | grep ' /mnt ': : exit status 1
+```
+
+</details>
+</p>
+
+<details>
+<summary>Example output from invoking `daos_server` on single host with `format_override` TRUE when `scm_mount` IS mounted</summary>
+<p>
+
+```bash
+[root@wolf-72 daos_m]# mkdir /mnt/daos
+[root@wolf-72 daos_m]# mount -t tmpfs -o size=68719476736 tmpfs /mnt/daos
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 04:04:50 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 04:04:50 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
+2019/04/10 04:04:50 config.go:405: debug: Switching control log level to DEBUG
+Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
+[ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk1234882151 --base-virtaddr=0x200000000000 --proc-type=auto ]
+EAL: Detected 96 lcore(s)
+EAL: Auto-detected process type: PRIMARY
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Multi-process socket /var/run/.spdk1234882151_unix
+EAL: Probing VFIO support...
+EAL: PCI device 0000:81:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+EAL: PCI device 0000:87:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:2701 spdk_nvme
+EAL: PCI device 0000:da:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 iosrv.go:104: debug: continuing without storage format on server 0 (format_override set in config)
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 external.go:54: debug: exec 'mount | grep ' /mnt/daos ''
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 iosrv.go:128: debug: format server /mnt/daos (createMS=false bootstrapMS=false)
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
+DAOS I/O server (v0.4.0) process 135939 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
+```
+
+</details>
+</p>
+
 ##### `format_override` == false
 
 If `format_override` IS SET to `false` in config file, control plane will attempt to start the data plane instances ONLY if the DAOS superblock exists within the specified `scm_mount`.
 Otherwise, the control plane will wait until an administrator calls "[storage format](../dmg/README.md#subcommands)" over the client API from the management tool.
 If `storage format` call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
 If a superblock exists in `scm_mount`, and the location is mounted, the control plane will fail (so as to not inadvertently wipe a useful SCM location).
+
+<details>
+<summary>Example output from invoking `daos_server` on single host with `format_override` FALSE when superblock already exists</summary>
+<p>
+
+```bash
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 03:34:22 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 03:34:22 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
+2019/04/10 03:34:22 config.go:405: debug: Switching control log level to DEBUG
+Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
+[ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk850287469 --base-virtaddr=0x200000000000 --proc-type=auto ]
+EAL: Detected 96 lcore(s)
+EAL: Auto-detected process type: PRIMARY
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Multi-process socket /var/run/.spdk850287469_unix
+EAL: Probing VFIO support...
+EAL: PCI device 0000:81:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+EAL: PCI device 0000:87:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:2701 spdk_nvme
+EAL: PCI device 0000:da:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+wolf-72.wolf.hpdd.intel.com 2019/04/10 03:34:25 iosrv.go:93: debug: server 0 has already been formatted
+wolf-72.wolf.hpdd.intel.com 2019/04/10 03:34:26 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
+DAOS I/O server (v0.4.0) process 135671 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
+```
+
+</p>
+</details>
+
+<details>
+<summary>Example output from invoking `daos_server` on single host with `format_override` FALSE when `scm_mount` location is not mounted</summary>
+<p>
+
+```bash
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 03:34:22 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/04/10 03:34:22 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
+2019/04/10 03:34:22 config.go:405: debug: Switching control log level to DEBUG
+Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
+[ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk850287469 --base-virtaddr=0x200000000000 --proc-type=auto ]
+EAL: Detected 96 lcore(s)
+EAL: Auto-detected process type: PRIMARY
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Multi-process socket /var/run/.spdk850287469_unix
+EAL: Probing VFIO support...
+EAL: PCI device 0000:81:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+EAL: PCI device 0000:87:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:2701 spdk_nvme
+EAL: PCI device 0000:da:00.0 on NUMA socket 1
+EAL:   probe driver: 8086:953 spdk_nvme
+wolf-72.wolf.hpdd.intel.com 2019/04/10 03:49:19 iosrv.go:108: debug: waiting for storage format on server 0
+```
+...after [`storage format`](../dmg/README.md#subcommands) gets called, data plane is started...
+```bash
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 mgmt.go:108: debug: performing nvme format, may take several minutes!
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 mgmt.go:114: debug: performing scm format, should be quick!
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 external.go:111: debug: calling unmount with /mnt/daos, MNT_DETACH
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 storage_scm.go:140: debug: wiping all fs identifiers on device /dev/pmem4
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 external.go:54: debug: exec 'wipefs -a /dev/pmem4'
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 external.go:54: debug: exec 'mkfs.ext4 /dev/pmem4'
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 external.go:98: debug: calling mount with /dev/pmem4, /mnt/daos, ext4, 33806, dax
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 external.go:54: debug: exec 'mount | grep ' /mnt/daos ''
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 mgmt.go:153: debug: FormatStorage: storage format successful on server 0
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 iosrv.go:128: debug: format server /mnt/daos (createMS=false bootstrapMS=false)
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:23 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
+DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
+```
+
+</p>
+</details>
 
 #### SCM Firmware Update
 
