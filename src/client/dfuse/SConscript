@@ -139,7 +139,7 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
-    progs = cenv.Program('dfuse/dfusel', common + dfuse_obj)
+    progs = cenv.Program('dfuse/dfuse', common + dfuse_obj)
 
     Default(progs + libs)
 
