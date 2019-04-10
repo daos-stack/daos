@@ -253,7 +253,7 @@ def define_components(reqs):
                 commands=pmdk_build,
                 libs=["pmemobj"])
 
-    retriever = GitRepoRetriever("http://git.mcs.anl.gov/argo/argobots.git",
+    retriever = GitRepoRetriever("https://github.com/pmodels/argobots.git",
                                  True)
     reqs.define('argobots',
                 retriever=retriever,
