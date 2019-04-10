@@ -103,7 +103,7 @@ static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
 }
 
 static inline bool
-daos_csum_isvalid(daos_csum_buf_t *csum)
+daos_csum_isvalid(const daos_csum_buf_t *csum)
 {
 	return csum != NULL &&
 	       csum->cs_len > 0 &&
