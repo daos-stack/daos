@@ -1,21 +1,23 @@
 hosts:
    test_machines:
         test_servers:
-            - boro-A
+            - boro-64
         diff_clients: !mux
-            single_client:
+            single_client_node:
                 clients:
-                    - boro-B
-            two_clients:
+                    - boro-62
+            four_client_nodes:
                 clients:
-                    - boro-B
-                    - boro-C
-            four_clients:
-                clients:
-                    - boro-B
-                    - boro-C
-                    - boro-D
-                    - boro-E
+                    - boro-60
+                    - boro-61
+                    - boro-62
+#                    - boro-64
+#            four_clients:
+#                clients:
+#                    - boro-B
+#                    - boro-C
+#                    - boro-D
+#                    - boro-E
 timeout: 540
 server:
     server_group: daos_server

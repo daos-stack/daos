@@ -70,8 +70,8 @@ class IorSingleServer(Test):
                                                    self.hostlist_clients)
         ServerUtils.runServer(self.hostfile_servers, self.server_group, self.basepath)
 
-        if int(str(self.name).split("-")[0]) == 1:
-            IorUtils.build_ior(self.basepath)
+        #if int(str(self.name).split("-")[0]) == 1:
+        #    IorUtils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -129,12 +129,12 @@ class IorSingleServer(Test):
                 block_size = '12g'
             elif len(self.hostlist_clients) == 2:
                 block_size = '6g'
-            elif len(self.hostlist_clients) == 4:
+            elif len(self.hostlist_clients) == 3:
                 block_size = '3g'
 
-            IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration, block_size, transfer_size,
-                             pool_uuid, svc_list, record_size, segment_count, stripe_count,
-                             async_io, object_class, self.basepath)
+            IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration,
+                             block_size, transfer_size, pool_uuid, svc_list,
+                             object_class, self.basepath)
 
         except (DaosApiError, IorUtils.IorFailed) as e:
             self.fail("<Single Server Test FAILED>\n {}".format(e))
