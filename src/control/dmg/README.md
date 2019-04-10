@@ -79,6 +79,8 @@ Help Options:
 </p>
 </details>
 
+## Subcommands
+
 <details>
 <summary>Example output from invoking "storage list" subcommand</summary>
 <p>
@@ -115,6 +117,26 @@ boro-45:10001: []
 
 </p>
 </details>
+
+<details>
+<summary>Example output from invoking "storage format" subcommand</summary>
+<p>
+
+```
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-45:10001 storage format
+Active connections: [boro-45:10001]
+
+This is a destructive operation and storage devices specified in the server
+config file will be erased. Are you sure you want to continue? (yes/no)
+yes
+Listing Format Storage command results on connected storage servers:
+boro-45:10001: 'Success!'
+```
+
+</p>
+</details>
+
+## Interactive shell
 
 <details>
 <summary>Example output when listing storage in interactive mode</summary>

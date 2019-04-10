@@ -10,7 +10,7 @@ For instructions on building and running DAOS see the [Quickstart guide](../../d
 <summary>Example output from invoking `daos_server` on multiple hosts with `orterun` (with logging to stdout for illustration purposes)</summary>
 <p>
 
-```
+```bash
 [tanabarr@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -c 1  -o /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
@@ -65,7 +65,7 @@ DAOS I/O server (v0.0.2) process 23680 started on rank 0 (out of 2) with 1 targe
 </p>
 </details>
 
-## Configuration
+## Configuration files
 
 `daos_server` config file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`-o` option) or default location (`<daos install dir>/install/etc/daos_server.yml`).
 
@@ -83,20 +83,20 @@ It is strongly recommended to specify all parameters and environment for running
 
 To clarify with respect to environment variables affecting the behaviour of `daos_io_server` instances:
 
-*  If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell. The config file will be ignored.
-*  If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
+- If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell. The config file will be ignored.
+- If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
 
-### Configuring logging through the config file
+### Logging
 
 Log file and level mask for both data (`daos_io_server`) and control (`daos_server`) planes can be set in the server config file.
 TODO: examples for global (control) and per-server (data) log parameters in config including DAOS specific syntax (D_LOG_MASK=ERR,mgmt=DEBUG).
 
-### Selecting and formatting NVMe/block device storage through the config file
+### NVMe/block-device storage
 
 Parameters prefixed with `nvme_` in the per-server section of the config file determine how NVMe storage will be assigned for use by DAOS on the storage node.
 TODO: examples for NVMe and AIO (emulation) classes including config file syntax and results/logging of formatting operations including generated nvme.conf file and SPDK device format through language bindings.
 
-### Selecting and formatting SCM/pmem storage through the config file
+### SCM/pmem storage
 
 Parameters prefixed with `scm_` in the per-server section of the config file determine how SCM storage will be assigned for use by DAOS on the storage node.
 TODO: examples for both DCPM and RAM (emulation) SCM classes including config file syntax and results/logging of formatting operations.
@@ -114,7 +114,8 @@ NVMe access through SPDK as an unprivileged user can be enabled by first running
 The configuration commands that require elevated permissions are in `src/control/mgmt/init/setup_spdk.sh` (script is installed as `install/share/setup_spdk.sh`).
 
 The sudoers file can be accessed with command `visudo` and permissions can be granted to a user to execute a specific command pattern (requires prior knowledge of `daos_server` binary location):
-```
+
+```bash
 linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 ```
 
@@ -126,7 +127,7 @@ See `daos_server prep-nvme --help` for usage.
 <summary>List NVMe SSDs and SCM modules locally attached to the host.</summary>
 <p>
 
-```
+```bash
 [tanabarr@boro-45 daos_m]$ daos_server storage list
 Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 [ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk_pid29193 ]
@@ -157,9 +158,14 @@ See `daos_server show-storage --help` for usage.
 
 ## Management Tool (client) Usage
 
-In order to run the tool to perform administrative tasks, build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md).
+[`daos_shell`](../dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
+The tool is lightweight and doesn't depend on storage libraries.
+Implemented as a gRPC client application it connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
-[`daos_shell`](../dmg) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user. The tool is lightweight and doesn't depend on storage libraries. The tool (a gRPC client application) connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
+In order to run the tool to perform administrative tasks from non-storage nodes (e.g. login nodes) over an out-of-band management network;
+
+1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
+2. run `daos_shell` from a login node
 
 See `daos_shell --help` for usage and [here](../dmg) for package details.
 
@@ -167,25 +173,31 @@ See `daos_shell --help` for usage and [here](../dmg) for package details.
 
 The DAOS data plane utilises two forms of non-volatile storage, storage class memory (SCM) in the form of persistent memory modules and NVMe in the form of high-performance SSDs.
 
+The DAOS control plane provides capability to provision and manage the non-volatile storage including the allocation of resources to data plane instances.
+
 ### SCM management capabilities
 
 Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
 
-Provisioning SCM occurs by configuring modules in AppDirect memory regions (interleaved mode) in groups of modules local to a specific socket (NUMA) and resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
+[SCM provisioning](#scm-provision) is to be performed prior to formatting and allocating SCM through the DAOS control plane.
 
 Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
 
 Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
 
-#### SCM Module Discovery
+The DAOS control plane willa also provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
 
-Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned.
+#### SCM module discovery
+
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage list` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 TODO: return details of AppDirect memory regions
 
-#### SCM Format
+#### SCM format
 
-Format can be triggered through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is will be performed as specified in config file parameters prefixed with `scm_`.
+Format can be [triggered](../dmg/README.md#subcommands) through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is performed as specified in config file parameters prefixed with `scm_`.
+
+SCM device format is expected only to be performed when installing DAOS system for the first time.
 
 ##### `format_override` == true
 
@@ -196,15 +208,19 @@ If `scm_mount` IS mounted but no superblock exists, control plane will attempt t
 ##### `format_override` == false
 
 If `format_override` IS SET to `false` in config file, control plane will attempt to start the data plane instances ONLY if the DAOS superblock exists within the specified `scm_mount`.
-Otherwise, the control plane will wait until an administrator calls FormatStorage over the client API from the management tool.
-If FormatStorage call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
-If a superblock exists in `scm_mount`, but the location is not actively mounted, the control plane will fail (so as to not inadvertently wipe a useful SCM location).
-whatever is mounted at `scm_mount` location specified in config file and start data plane instances.
-and the location is an active mountpoint.
+Otherwise, the control plane will wait until an administrator calls "[storage format](../dmg/README.md#subcommands)" over the client API from the management tool.
+If `storage format` call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
+If a superblock exists in `scm_mount`, and the location is mounted, the control plane will fail (so as to not inadvertently wipe a useful SCM location).
 
 #### SCM Firmware Update
 
 #### SCM Burn-in Validation
+
+#### SCM Provisioning
+
+Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions (interleaved mode) in groups of modules local to a specific socket (NUMA) and resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0). This can be performed through the [ipmctl](https://github.com/intel/ipmctl) tool.
+
+TODO: implement set-interleaved command
 
 ### NVMe management capabilities
 
@@ -212,9 +228,11 @@ Operations on NVMe SSD devices are performed using [go-spdk bindings](https://gi
 
 The DAOS data plane utilises NVMe devices as block storage using the SPDK "[blobstore](https://spdk.io/doc/blob.html)" abstraction, creation and management of the blobstore and blobs is performed by the data plane.
 
+The DAOS control plane will provide NVMe storage management capabilities enabling the discovery, format, initial burn-in testing, firmware update and allocation of devices to data plane instances.
+
 #### NVMe Controller and Namespace Discovery
 
-Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned.
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage list` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
@@ -222,7 +240,9 @@ The following animation illustrates starting the control server and using the ma
 
 #### NVMe Format
 
-Format can be triggered through the management tool at DAOS system installation time.
+Format can be [triggered](../dmg/README.md#subcommands) through the management tool at DAOS system installation time.
+
+NVMe device format is expected only to be performed when installing DAOS system for the first time.
 
 In the context of what is required from the control plane to prepare NVMe devices for operation with DAOS data plane, "formatting" refers to the low level reset of storage media which will remove blobstores and remove any filesystem signatures from the SSD controller namespaces.
 
