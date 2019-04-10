@@ -510,13 +510,6 @@ nvme_format(char *ctrlr_pci_addr)
 		return ret;
 	}
 
-	// TODO: move this consent to caller
-	printf("Warning: use this utility at your own risk.\n"
-	       "This command will format your namespace and all data will be lost.\n"
-	       "This command may take several minutes to complete,\n"
-	       "so do not interrupt the utility until it completes.\n");
-	//      "Press 'Y' to continue with the format operation.\n");
-
 	format.lbaf	= 0; // LBA format defaulted to 0
 	format.ms	= 0; // metadata transferred as part of a separate buffer
 	format.pi	= 0; // protection information is not enabled
