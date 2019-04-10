@@ -311,7 +311,7 @@ class Nvme(threading.Thread):
         Initialize the remote machine for SSH Connection.
         Args:
             host : Remote machine IP address or hostname.
-            operation: NVMe function for "setup" or "cleanup" 
+            operation: NVMe function for "setup" or "cleanup"
             debug : To print the command on console for debug purpose.
         return:
             None
@@ -436,4 +436,3 @@ def nvme_cleanup(hostlist):
     for cleanup_thread in host_nvme:
         cleanup_thread.join()
     print("NVMe server cleanup Finished......")
-
