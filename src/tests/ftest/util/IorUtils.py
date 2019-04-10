@@ -99,10 +99,10 @@ def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
     return ior_cmd
 
 
-def run_ior(client_file, ior_flags, iteration, block_size, transfer_size,
-            pool_uuid, svc_list, object_class, basepath, cont_uuid="`uuidgen`",
-            slots=1, seg_count=1, chunk_size=1048576, cont_destroy=True,
-            display_output=True):
+def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
+                 pool_uuid, svc_list, object_class, basepath, client_processes,
+                 cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
+                 cont_destroy=True, display_output=True):
 
     """ Running Ior tests
         Function Arguments
@@ -130,12 +130,12 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size,
     attach_info_path = basepath + "/install/tmp"
     try:
 
-        ior_cmd = orterun_bin + " -N {} --hostfile {} -x DAOS_SINGLETON_CLI=1 "\
+        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node -x DAOS_SINGLETON_CLI=1 "\
                   " -x CRT_ATTACH_INFO_PATH={} /home/standan/mpiio/install/ior-hpc_daos_new/bin/ior {} -s {} -i {} -a DAOS" \
-                  " -b {} -t {} -- --daos.pool {} --daos.svcl {} " \
+                  " -b {} -t {} --daos.pool {} --daos.svcl {} " \
                   "--daos.cont {} --daos.destroy "\
                   "--daos.chunk_size {} --daos.oclass {} "\
-                  .format(slots, client_file, attach_info_path, ior_flags,
+                  .format(client_processes, client_file, attach_info_path, ior_flags,
                           seg_count, iteration, block_size,
                           transfer_size, pool_uuid, svc_list, cont_uuid,
                           chunk_size, object_class)

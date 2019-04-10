@@ -61,8 +61,8 @@ class IorSingleServer(Test):
         self.hostfile_servers = WriteHostFile.WriteHostFile(self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(self.hostfile_servers))
 
-        self.hostlist_clients = self.params.get("clients", '/run/hosts/test_machines/diff_clients/*')
-        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir)
+        self.hostlist_clients = self.params.get("test_clients", '/run/hosts/test_machines/*')
+        self.hostfile_clients = WriteHostFile.WriteHostFile(self.hostlist_clients, self.workdir, None)
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
         self.agent_sessions = AgentUtils.run_agent(self.basepath,
@@ -101,13 +101,13 @@ class IorSingleServer(Test):
         createsetid = self.params.get("setname", '/run/createtests/createset/')
         createsize = self.params.get("size", '/run/createtests/createsize/')
         createsvc = self.params.get("svcn", '/run/createtests/createsvc/')
+
+        # ior parameters
+        client_processes = self.params.get("np", '/run/ior/client_processes/*/')
         iteration = self.params.get("iter", '/run/ior/iteration/')
         ior_flags = self.params.get("F", '/run/ior/iorflags/')
-        transfer_size = self.params.get("t", '/run/ior/transfersize/')
-        record_size = self.params.get("r", '/run/ior/recordsize/')
-        segment_count = self.params.get("s", '/run/ior/segmentcount/')
-        stripe_count = self.params.get("c", '/run/ior/stripecount/')
-        async_io = self.params.get("a", '/run/ior/asyncio/')
+        transfer_size = self.params.get("t", '/run/ior/transfersize_blocksize/*/')
+        block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
         object_class = self.params.get("o", '/run/ior/objectclass/')
 
         try:
@@ -125,16 +125,9 @@ class IorSingleServer(Test):
                 svc_list += str(list[i]) + ":"
             svc_list = svc_list[:-1]
 
-            if len(self.hostlist_clients) == 1:
-                block_size = '12g'
-            elif len(self.hostlist_clients) == 2:
-                block_size = '6g'
-            elif len(self.hostlist_clients) == 3:
-                block_size = '3g'
+            IorUtils.run_ior_daos(self.hostfile_clients, ior_flags, iteration,
+                                  block_size, transfer_size, pool_uuid, svc_list,
+                                  object_class, self.basepath, client_processes)
 
-            IorUtils.run_ior(self.hostfile_clients, ior_flags, iteration,
-                             block_size, transfer_size, pool_uuid, svc_list,
-                             object_class, self.basepath)
-
-        except (DaosApiError, IorUtils.IorFailed) as e:
-            self.fail("<Single Server Test FAILED>\n {}".format(e))
+        except (DaosApiError, IorUtils.IorFailed) as error:
+            self.fail("<Single Server Test FAILED>\n {}".format(error))
