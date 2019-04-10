@@ -118,7 +118,7 @@ func TestDiscoveryScm(t *testing.T) {
 
 	mPB := MockModulePB()
 	m := MockModule()
-	config := defaultMockConfig()
+	config := defaultMockConfig(t)
 
 	for _, tt := range tests {
 		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited, &config)
