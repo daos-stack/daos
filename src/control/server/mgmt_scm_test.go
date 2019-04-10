@@ -43,7 +43,7 @@ func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
 }
 
 func TestListScmModules(t *testing.T) {
-	cs := newMockControlService()
+	cs := defaultMockControlService(t)
 	cs.scm = newMockScmStorage([]DeviceDiscovery{MockModule()}, true, cs.config)
 
 	m := MockModulePB()
