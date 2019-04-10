@@ -35,13 +35,17 @@ import signal
 import fcntl
 import errno
 import yaml
+import getpass
+import threading
 
+from SSHConnection import Ssh
 from avocado.utils import genio
 
 SESSIONS = {}
 
 DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yml"
 AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yml"
+SPDK_SETUP_SCRIPT = "/opt/daos/spdk/scripts/setup.sh"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
@@ -72,7 +76,7 @@ def create_server_yaml(basepath):
     This function is to create DAOS server configuration YAML file
     based on Avocado test Yaml file.
     Args:
-        - basepath = DAOS install basepath
+        - basepath: DAOS install basepath
     """
     #Read the baseline conf file data/daos_server_baseline.yml
     try:
@@ -297,3 +301,139 @@ def killServer(hosts):
     for host in hosts:
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
+
+class Nvme(threading.Thread):
+    """
+    NVMe thread class for setting/cleaning up NVMe on servers
+    """
+    def __init__(self, host, operation, debug=False):
+        """
+        Initialize the remote machine for SSH Connection.
+        Args:
+            host : Remote machine IP address or hostname.
+            operation: NVMe function for "setup" or "cleanup" 
+            debug : To print the command on console for debug purpose.
+        return:
+            None
+        """
+        threading.Thread.__init__(self)
+        self.machine = host
+        self.operation = operation
+        self.host = Ssh(host, sudo=True, debug=debug)
+
+    def init_spdk(self, enable):
+        """
+        Enabled/Disable SPDK on host
+        Args:
+            enable [True/False]: True will setup the SPDK and False will disable
+                                 SPDK on host
+        return:
+            None
+        Raises:
+            generic if spdk enabled/disabled failed
+        """
+        cmd = ("sudo HUGEMEM=4096 " +
+               "TARGET_USER=\"{0}\" {1}".format(getpass.getuser(),
+                                                SPDK_SETUP_SCRIPT))
+        if enable is False:
+            cmd = cmd + " reset"
+        rccode = self.host.call(cmd)
+        if rccode is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd,
+                                                                     rccode))
+
+    def setup(self):
+        """
+        NVMe setup function
+        Args:
+            None:
+        return:
+            None
+        Raises:
+            generic if permission commands fail on server.
+        """
+        self.host.connect()
+        self.init_spdk(enable=True)
+
+        permission_cmd = ["sudo /usr/bin/chmod 777 /dev/hugepages",
+                          "sudo /usr/bin/chmod 666 /dev/uio*",
+                          "sudo /usr/bin/chmod 666 \
+                          /sys/class/uio/uio*/device/config",
+                          "sudo /usr/bin/chmod 666 \
+                          /sys/class/uio/uio*/device/resource*",
+                          "sudo /usr/bin/rm -f /dev/hugepages/*"]
+
+        rccode = self.host.call("&&".join(permission_cmd))
+        if rccode is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}"
+                               .format(permission_cmd, rccode))
+        self.host.disconnect()
+
+    def cleanup(self):
+        """
+        NVMe cleanup function
+        Args:
+            None:
+        return:
+            None
+        Raises:
+            generic if cleanup (rm) commands fail on server.
+        """
+        self.host.connect()
+        self.init_spdk(enable=False)
+        cmd = "sudo /usr/bin/rm -f /dev/hugepages/*"
+        rccode = self.host.call(cmd)
+        if rccode is not 0:
+            raise ServerFailed("ERROR Command = {0} RC = {1}".format(cmd,
+                                                                     rccode))
+        self.host.disconnect()
+
+    def run(self):
+        """
+        Thread run method for setup or cleanup.
+        """
+        if self.operation == "setup":
+            self.setup()
+        elif self.operation == "cleanup":
+            self.cleanup()
+
+def nvme_setup(hostlist):
+    """
+    nvme_setup function called from Avocado test
+    Args:
+        hostlist[list]: List of servers hostname.
+    return:
+        None
+    """
+    print("NVMe server Setup Started......")
+    host_nvme = []
+    for _hosts in hostlist:
+        host_nvme.append(Nvme(_hosts,
+                              "setup",
+                              debug=True))
+    for setup_thread in host_nvme:
+        setup_thread.start()
+    for setup_thread in host_nvme:
+        setup_thread.join()
+    print("NVMe server Setup Finished......")
+
+def nvme_cleanup(hostlist):
+    """
+    nvme_cleanup function called from Avocado test
+    Args:
+        hostlist[list]: List of servers hostname.
+    return:
+        None
+    """
+    print("NVMe server cleanup Started......")
+    host_nvme = []
+    for _hosts in hostlist:
+        host_nvme.append(Nvme(_hosts,
+                              "cleanup",
+                              debug=True))
+    for cleanup_thread in host_nvme:
+        cleanup_thread.start()
+    for cleanup_thread in host_nvme:
+        cleanup_thread.join()
+    print("NVMe server cleanup Finished......")
+

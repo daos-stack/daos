@@ -12,6 +12,7 @@ hosts:
 timeout: 28800
 server_config:
  name: daos_server
+ bdev_class: nvme
 pool:
  createmode:
   mode: 511
