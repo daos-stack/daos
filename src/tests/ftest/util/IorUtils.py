@@ -132,13 +132,12 @@ def run_ior(client_file, ior_flags, iteration, block_size, transfer_size,
 
         ior_cmd = orterun_bin + " -N {} --hostfile {} -x DAOS_SINGLETON_CLI=1 "\
                   " -x CRT_ATTACH_INFO_PATH={} ior {} -s {} -i {} -a DAOS -o " \
-                  " {} -b {} -t {} -- --daos.pool {} --daos.svcl {} " \
-                  "--daos.recordSize {} --daos.stripeSize {} "\
-                  "--daos.stripeCount {} --daos.aios {} --daos.objectClass {} "\
+                  " {} -b {} -t {} --daos.pool {} --daos.svcl {} " \
+                  " --daos.oclass {} --daos.cont `uuidgen`"\
                   .format(slots, client_file, attach_info_path, ior_flags,
                           seg_count, iteration, filename, block_size,
-                          transfer_size, pool_uuid, svc_list, record_size,
-                          stripe_size, stripe_count, async_io, object_class)
+                          transfer_size, pool_uuid, svc_list, object_class)
+
         if display_output:
             print ("ior_cmd: {}".format(ior_cmd))
 

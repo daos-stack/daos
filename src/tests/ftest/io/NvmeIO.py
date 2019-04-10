@@ -67,6 +67,11 @@ class NvmeIo(avocado.Test):
         self.hostlist = self.params.get("servers", '/run/hosts/*')
         self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
                                                     self.workdir)
+        #This is for NVMe Setup
+        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
+        if self.nvme_parameter == "nvme":
+            ServerUtils.nvme_setup(self.hostlist)
+
         #Start Server
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
@@ -77,6 +82,9 @@ class NvmeIo(avocado.Test):
                 self.pool.destroy(1)
         finally:
             ServerUtils.stopServer(hosts=self.hostlist)
+        #For NVMe Cleanup
+        if self.nvme_parameter == "nvme":
+            ServerUtils.nvme_cleanup(self.hostlist)
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """
