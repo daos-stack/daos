@@ -102,7 +102,7 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvme(ctrlrs, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- id: 12345\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- id: 12345\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n\n\n",
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- id: 0\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- id: 0\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n\n\n",
 		},
 		{
 			NewClientScm(modules, addresses),

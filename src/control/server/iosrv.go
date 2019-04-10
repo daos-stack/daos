@@ -100,28 +100,27 @@ func formatIosrv(
 		return errors.Wrap(err, op)
 	}
 
-	if !config.FormatOverride {
+	if config.FormatOverride {
+		log.Debugf(
+			"continuing without storage format on server %d "+
+				"(format_override set in config)\n", i)
+	} else {
 		log.Debugf("waiting for storage format on server %d\n", i)
 
 		// wait on format storage grpc call before creating superblock
 		srv.FormatCond.Wait()
-	} else {
-		log.Debugf(
-			"continuing without storage format on server %d "+
-				"(format_override set in config)\n", i)
-
-		// check scm has been mounted if skipping storage format
-		if err := config.checkMount(srv.ScmMount); err != nil {
-			return errors.WithMessage(
-				err,
-				fmt.Sprintf(
-					"server%d scm mount path (%s) not mounted",
-					i, srv.ScmMount))
-		}
 	}
 
-	// after mounting scm, process config parameters for nvme and store
-	// nvme.conf in persistent scm location
+	// check scm has been mounted before proceeding to write to it
+	if err := config.checkMount(srv.ScmMount); err != nil {
+		return errors.WithMessage(
+			err,
+			fmt.Sprintf(
+				"server%d scm mount path (%s) not mounted",
+				i, srv.ScmMount))
+	}
+
+	// process config parameters for nvme and persist nvme.conf in scm
 	if err := config.parseNvme(i); err != nil {
 		return errors.Wrap(err, "nvme config could not be processed")
 	}
