@@ -256,7 +256,73 @@ dss_topo_init()
 }
 
 static int
-server_init()
+abt_max_num_xstreams(void)
+{
+	char   *env;
+
+	env = getenv("ABT_MAX_NUM_XSTREAMS");
+	if (env == NULL)
+		env = getenv("ABT_ENV_MAX_NUM_XSTREAMS");
+	if (env != NULL)
+		return atoi(env);
+	return 0;
+}
+
+static int
+set_abt_max_num_xstreams(int n)
+{
+	char   *name = "ABT_MAX_NUM_XSTREAMS";
+	char   *value;
+	int	rc;
+
+	D_ASSERTF(n > 0, "%d\n", n);
+	D_ASPRINTF(value, "%d", n);
+	if (value == NULL)
+		return -DER_NOMEM;
+	D_INFO("Setting %s to %s\n", name, value);
+	rc = setenv(name, value, 1 /* overwrite */);
+	D_FREE(value);
+	if (rc != 0)
+		return daos_errno2der(errno);
+	return 0;
+}
+
+static int
+abt_init(int argc, char *argv[])
+{
+	int	nrequested = abt_max_num_xstreams();
+	int	nrequired = 1 /* primary xstream */ + DSS_XS_NR_TOTAL;
+	int	rc;
+
+	/*
+	 * Set ABT_MAX_NUM_XSTREAMS to the larger of nrequested and nrequired.
+	 * If we don't do this, Argobots may use a default or requested value
+	 * less than nrequired. We may then hit Argobots assertion failures
+	 * because xstream_data.xd_mutex's internal queue has fewer slots than
+	 * some xstreams' rank numbers need.
+	 */
+	rc = set_abt_max_num_xstreams(max(nrequested, nrequired));
+	if (rc != 0)
+		return daos_errno2der(errno);
+
+	/* Now, initialize Argobots. */
+	rc = ABT_init(argc, argv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to init ABT: %d\n", rc);
+		return dss_abterr2der(rc);
+	}
+
+	return 0;
+}
+
+static void
+abt_fini(void)
+{
+	ABT_finalize();
+}
+
+static int
+server_init(int argc, char *argv[])
 {
 	int		rc;
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
@@ -277,10 +343,14 @@ server_init()
 	if (rc != 0)
 		D_GOTO(exit_debug_init, rc);
 
+	rc = abt_init(argc, argv);
+	if (rc != 0)
+		goto exit_debug_init;
+
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc)
-		D_GOTO(exit_debug_init, rc);
+		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
 
@@ -409,6 +479,8 @@ exit_crt_init:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
+exit_abt_init:
+	abt_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -429,6 +501,7 @@ server_fini(bool force)
 	ds_iv_fini();
 	crt_finalize();
 	dss_module_fini(force);
+	abt_fini();
 	daos_debug_fini();
 }
 
@@ -711,13 +784,8 @@ main(int argc, char **argv)
 	daos_register_sighand(SIGSEGV, print_backtrace);
 	daos_register_sighand(SIGABRT, print_backtrace);
 
-	rc = ABT_init(argc, argv);
-	if (rc != 0) {
-		D_ERROR("failed to init ABT: %d\n", rc);
-		exit(EXIT_FAILURE);
-	}
 	/** server initialization */
-	rc = server_init();
+	rc = server_init(argc, argv);
 	if (rc)
 		exit(EXIT_FAILURE);
 
@@ -749,6 +817,5 @@ main(int argc, char **argv)
 	/** shutdown */
 	server_fini(true);
 
-	ABT_finalize();
 	exit(EXIT_SUCCESS);
 }

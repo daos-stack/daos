@@ -233,7 +233,6 @@
 #  # Empty by default.
 #
 #  env_vars:
-#      - ABT_MAX_NUM_XSTREAMS=100
 #      - CRT_TIMEOUT=30
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used
@@ -328,7 +327,6 @@
 #  # Empty by default.
 #
 #  env_vars:
-#      - ABT_MAX_NUM_XSTREAMS=200
 #      - CRT_TIMEOUT=100
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used

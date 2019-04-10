@@ -786,8 +786,6 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
-				"ABT_ENV_MAX_NUM_XSTREAMS=100",
-				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
 				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
@@ -809,7 +807,6 @@ func TestPopulateEnv(t *testing.T) {
 			// result in no change
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
@@ -822,7 +819,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
@@ -842,8 +838,6 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
-				"ABT_ENV_MAX_NUM_XSTREAMS=100",
-				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
 				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
@@ -864,7 +858,6 @@ func TestPopulateEnv(t *testing.T) {
 			// result in no change, as provider is set in os, no changes made
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
@@ -877,7 +870,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				// "CRT_CREDIT_EP_CTX=0", // whilst this is a new env, it is ignored
