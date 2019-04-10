@@ -79,17 +79,20 @@ def scons():
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
+    print "woot! %s %s" % (denv.subst("$SPDK_PREFIX"), denv.subst("$PREFIX"))
     if denv.subst("$SPDK_PREFIX") != "/usr":
         if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
             for subdir in ["scripts", "fio_plugin"]:
                 sharedir = join("share", "spdk", subdir)
                 tpath = join(denv.subst("$PREFIX"), sharedir)
+                print "woot! tpath: %s" % tpath
                 if not check_dir_exists(tpath):
                     denv.Command(
                         tpath,
                         join(denv.subst("$SPDK_PREFIX"), sharedir),
                         Copy("$TARGET", "$SOURCE"))
         tpath = join(denv.subst("$PREFIX"), "include")
+        print "woot! %s" % tpath
         if not check_dir_exists(tpath):
             denv.Command(
                 tpath,
