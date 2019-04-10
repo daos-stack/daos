@@ -306,6 +306,21 @@ struct daos_rebuild_status {
 };
 
 /**
+ * Pool info query bits.
+ * The basic pool info like fields from pi_uuid to pi_leader will always be
+ * queried for each daos_pool_query() calling. But the pi_space and
+ * pi_rebuild_st are optional based on pi_mask's value.
+ */
+enum daos_pool_info_bit {
+	/** true to query pool space usage */
+	DPI_SPACE		= 1ULL << 0,
+	/** true to query rebuild status */
+	DPI_REBUILD_STATUS	= 1ULL << 1,
+	/** query all above optional info */
+	DPI_ALL			= -1,
+};
+
+/**
  * Storage pool
  */
 typedef struct {
@@ -327,6 +342,8 @@ typedef struct {
 	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
+	/** pool info bits, see daos_pool_info_bit */
+	uint64_t			pi_bits;
 	/** Space usage */
 	struct daos_pool_space		pi_space;
 	/** rebuild status */
