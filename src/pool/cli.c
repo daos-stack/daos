@@ -287,20 +287,17 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		D_GOTO(out_unlock, rc);
 
 	/* Scan all targets for info->pi_ndisabled and/or tgts. */
-	if (info != NULL || tgts != NULL) {
+	if (info != NULL) {
 		struct pool_target     *ts;
 		int			i;
 
-		if (info != NULL)
-			memset(info, 0, sizeof(*info));
-
 		rc = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &ts);
 		D_ASSERTF(rc > 0, "%d\n", rc);
+		info->pi_ndisabled = 0;
 		for (i = 0; i < rc; i++) {
 			int status = ts[i].ta_comp.co_status;
 
-			if (info != NULL &&
-			    (status == PO_COMP_ST_DOWN ||
+			if ((status == PO_COMP_ST_DOWN ||
 			     status == PO_COMP_ST_DOWNOUT))
 				info->pi_ndisabled++;
 			/* TODO: Take care of tgts. */
@@ -325,8 +322,10 @@ out_unlock:
 		info->pi_gid		= gid;
 		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
-		info->pi_space		= *ps;
-		info->pi_rebuild_st	= *rs;
+		if (info->pi_bits & DPI_SPACE)
+			info->pi_space		= *ps;
+		if (info->pi_bits & DPI_REBUILD_STATUS)
+			info->pi_rebuild_st	= *rs;
 	}
 
 	return rc;
@@ -1293,16 +1292,25 @@ out:
 }
 
 static uint64_t
-pool_query_bits(daos_prop_t *prop)
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
 	uint64_t		 bits = 0;
 	int			 i;
 
+	if (po_info != NULL) {
+		if (po_info->pi_bits & DPI_SPACE)
+			bits |= DAOS_PO_QUERY_SPACE;
+		if (po_info->pi_bits & DPI_REBUILD_STATUS)
+			bits |= DAOS_PO_QUERY_REBUILD_STATUS;
+	}
+
 	if (prop == NULL)
-		return 0;
-	if (prop->dpp_entries == NULL)
-		return DAOS_PO_QUERY_PROP_ALL;
+		goto out;
+	if (prop->dpp_entries == NULL) {
+		bits |= DAOS_PO_QUERY_PROP_ALL;
+		goto out;
+	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
@@ -1327,6 +1335,8 @@ pool_query_bits(daos_prop_t *prop)
 			break;
 		}
 	}
+
+out:
 	return bits;
 }
 
@@ -1385,7 +1395,7 @@ dc_pool_query(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->pqi_op.pi_hdl, pool->dp_pool_hdl);
-	in->pqi_query_bits = pool_query_bits(args->prop);
+	in->pqi_query_bits = pool_query_bits(args->info, args->prop);
 
 	/** +1 for args */
 	crt_req_addref(rpc);

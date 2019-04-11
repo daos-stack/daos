@@ -385,12 +385,7 @@ daos_sync_ranks(MPI_Comm comm)
 
 #define MAX_KILLS	3
 extern d_rank_t ranks_to_kill[MAX_KILLS];
-bool test_runable(test_arg_t *arg, unsigned int required_tgts);
-int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
-int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 d_rank_t test_get_last_svr_rank(test_arg_t *arg);
-bool test_rebuild_query(test_arg_t **args, int args_cnt);
-void test_rebuild_wait(test_arg_t **args, int args_cnt);
 
 /* make dir including its parent dir */
 static inline int
