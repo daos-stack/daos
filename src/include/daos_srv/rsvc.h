@@ -47,9 +47,6 @@ struct ds_rsvc;
 
 /** Replicated service class */
 struct ds_rsvc_class {
-	/** Name of the service class. */
-	const char *const sc_classname;
-
 	/**
 	 * Name the service identified by the generic \a id. The returned name
 	 * string will later be passed to D_FREE.
@@ -140,10 +137,10 @@ int ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy);
 int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
 			struct rsvc_hint *hint);
-int ds_rsvc_dist_start(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
+int ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 		       const uuid_t dbid, const d_rank_list_t *ranks,
 		       bool create, bool bootstrap, size_t size);
-int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
+int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
 		      const d_rank_list_t *ranks, bool destroy);
 int ds_rsvc_lookup(enum ds_rsvc_class_id class, daos_iov_t *id,
 		   struct ds_rsvc **svc);

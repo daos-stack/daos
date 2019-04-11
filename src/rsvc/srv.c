@@ -584,11 +584,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
 	impl = rsvc_class(class);
 	if (!create) {
 		rc = impl->sc_load_uuid(id, db_uuid_buf);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to load DB UUID: %d\n",
-				DP_UUID(id->iov_buf), rc);
+		if (rc != 0)
 			goto out;
-		}
 		db_uuid = db_uuid_buf;
 	}
 
@@ -620,20 +617,15 @@ ds_rsvc_start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
 	if (create) {
 		rc = impl->sc_store_uuid(id, db_uuid);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to store DB UUID: %d\n",
-				DP_UUID(id->iov_buf), rc);
 			stop(svc, create /* destroy */);
 			goto out;
 		}
 	}
+	D_DEBUG(DB_MD, "%s: started replicated service\n", svc->s_name);
 	ds_rsvc_put(svc);
 out:
-	if (rc == 0)
-		D_DEBUG(DB_MD, "started pool service "DF_UUID"\n",
-			DP_UUID(id->iov_buf));
-	else if (rc != -DER_ALREADY && !(create && rc == -DER_EXIST))
-		D_ERROR(DF_UUID": failed to start %s service: %d\n",
-			DP_UUID(id->iov_buf), impl->sc_classname, rc);
+	if (rc != 0 && rc != -DER_ALREADY && !(create && rc == -DER_EXIST))
+		D_ERROR("Failed to start replicated service: %d\n", rc);
 	return rc;
 }
 
@@ -693,23 +685,15 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy)
 
 	impl = rsvc_class(class);
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
-	if (entry == NULL) {
-		rc = -DER_ALREADY;
-		goto out;
-	}
+	if (entry == NULL)
+		return -DER_ALREADY;
 	svc = rsvc_obj(entry);
 
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
 
 	rc = stop(svc, destroy);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to stop %s service: %d\n",
-			DP_UUID(id->iov_buf), impl->sc_classname, rc);
-		goto out;
-	}
-	if (destroy)
+	if (!rc && destroy)
 		rc = impl->sc_delete_uuid(id);
-out:
 	return rc;
 }
 
@@ -777,7 +761,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
 	}
 
 	if (rc != 0)
-		D_ERROR("failed to stop all pool services: %d\n", rc);
+		D_ERROR("failed to stop all replicated services: %d\n", rc);
 	return rc;
 }
 
@@ -838,7 +822,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
  * be called on any rank. If \a create is false, \a ranks may be NULL.
  *
  * \param[in]	class		replicated service class
- * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
+ * \param[in]	id		replicated service ID
  * \param[in]	dbid		database UUID
  * \param[in]	ranks		list of replica ranks
  * \param[in]	create		create replicas first
@@ -846,7 +830,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
-ds_rsvc_dist_start(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
+ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 		   const uuid_t dbid, const d_rank_list_t *ranks, bool create,
 		   bool bootstrap, size_t size)
 {
@@ -856,8 +840,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
 	int			 rc;
 
 	D_ASSERT(!create || ranks != NULL);
-	D_DEBUG(DB_MD, DF_UUID": %s db "DF_UUIDF"\n", DP_UUID(pool_uuid),
-		create ? "creating" : "starting", DP_UUID(dbid));
+	D_DEBUG(DB_MD, DF_UUID": %s DB\n",
+		DP_UUID(dbid), create ? "creating" : "starting");
 
 	/*
 	 * If ranks doesn't include myself, creating a group with ranks will
@@ -868,7 +852,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
 		goto out;
 	in = crt_req_get(rpc);
 	in->sai_class = class;
-	uuid_copy(in->sai_svc_uuid, pool_uuid);
+	daos_iov_copy(&in->sai_svc_id, id);
 	uuid_copy(in->sai_db_uuid, dbid);
 	if (create)
 		in->sai_flags |= RDB_AF_CREATE;
@@ -886,7 +870,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start%s %d replicas\n",
 			DP_UUID(dbid), create ? "/create" : "", rc);
-		ds_rsvc_dist_stop(class, pool_uuid, ranks, create);
+		ds_rsvc_dist_stop(class, id, ranks, create);
 		rc = -DER_IO;
 	}
 
@@ -901,7 +885,6 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 {
 	struct rsvc_start_in	*in = crt_req_get(rpc);
 	struct rsvc_start_out	*out = crt_reply_get(rpc);
-	daos_iov_t		 id;
 	bool			 create = in->sai_flags & RDB_AF_CREATE;
 	int			 rc;
 
@@ -921,9 +904,9 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 			goto out;
 	}
 
-	daos_iov_set(&id, in->sai_svc_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_start(in->sai_class, &id, in->sai_db_uuid, create,
-			   in->sai_size, (in->sai_flags & RDB_AF_BOOTSTRAP) ?
+	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid,
+			   create, in->sai_size,
+			   (in->sai_flags & RDB_AF_BOOTSTRAP) ?
 			   in->sai_ranks : NULL, NULL /* arg */);
 out:
 	out->sao_rc = (rc == 0 ? 0 : 1);
@@ -948,12 +931,12 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * any rank. \a ranks may be NULL.
  *
  * \param[in]	class		replicated service class
- * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
+ * \param[in]	id		replicated service ID
  * \param[in]	ranks		list of \a ranks->rl_nr replica ranks
  * \param[in]	destroy		destroy after close
  */
 int
-ds_rsvc_dist_stop(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
+ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
 		  const d_rank_list_t *ranks, bool destroy)
 {
 	crt_rpc_t		*rpc;
@@ -970,7 +953,7 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
 		goto out;
 	in = crt_req_get(rpc);
 	in->soi_class = class;
-	uuid_copy(in->soi_svc_uuid, pool_uuid);
+	daos_iov_copy(&in->soi_svc_id, id);
 	if (destroy)
 		in->soi_flags |= RDB_OF_DESTROY;
 	in->soi_ranks = (d_rank_list_t *)ranks;
@@ -982,8 +965,8 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, const uuid_t pool_uuid,
 	out = crt_reply_get(rpc);
 	rc = out->soo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to stop%s %d replicas\n",
-			DP_UUID(pool_uuid), destroy ? "/destroy" : "", rc);
+		D_ERROR("failed to stop%s %d replicas\n",
+			destroy ? "/destroy" : "", rc);
 		rc = -DER_IO;
 	}
 
@@ -998,7 +981,6 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 {
 	struct rsvc_stop_in	*in = crt_req_get(rpc);
 	struct rsvc_stop_out	*out = crt_reply_get(rpc);
-	daos_iov_t		 id;
 	int			 rc = 0;
 
 	if (in->soi_ranks != NULL) {
@@ -1012,8 +994,8 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 			goto out;
 	}
 
-	daos_iov_set(&id, in->soi_svc_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_stop(in->soi_class, &id, in->soi_flags & RDB_OF_DESTROY);
+	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
+			  in->soi_flags & RDB_OF_DESTROY);
 out:
 	out->soo_rc = (rc == 0 || rc == -DER_ALREADY ? 0 : 1);
 	crt_reply_send(rpc);

@@ -617,6 +617,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 {
 	d_rank_list_t	       *ranks;
 	uuid_t			rdb_uuid;
+	daos_iov_t		psid;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -634,7 +635,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		D_GOTO(out, rc);
 
 	uuid_generate(rdb_uuid);
-	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, pool_uuid, rdb_uuid, ranks,
+	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, rdb_uuid, ranks,
 				true /* create */, true /* bootstrap */,
 				get_md_cap());
 	if (rc != 0)
@@ -696,7 +698,7 @@ out_client:
 	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, pool_uuid, ranks,
+		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
 				  true /* destroy */);
 out_ranks:
 	daos_rank_list_free(ranks);
@@ -708,11 +710,13 @@ int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
 	char		id[DAOS_UUID_STR_SIZE];
+	daos_iov_t	psid;
 	crt_group_t    *group;
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
-	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, pool_uuid, NULL /* ranks */,
+	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
 			       true /* destroy */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
@@ -1063,7 +1067,6 @@ pool_svc_drain_cb(struct ds_rsvc *rsvc)
 }
 
 static struct ds_rsvc_class pool_svc_rsvc_class = {
-	.sc_classname	= "pool",
 	.sc_name	= pool_svc_name_cb,
 	.sc_load_uuid	= pool_svc_load_uuid_cb,
 	.sc_store_uuid	= pool_svc_store_uuid_cb,
@@ -2795,8 +2798,9 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	struct pool_svc			*svc;
 	struct rdb			*db;
 	d_rank_list_t			*ranks;
-	uuid_t				 dbid;
-	uuid_t				 psid;
+	uuid_t				 db_uuid;
+	uuid_t				 pool_uuid;
+	daos_iov_t			 psid;
 	int				 rc;
 
 	D_DEBUG(DB_MD, DF_UUID": Replica Rank: %u\n", DP_UUID(in->pmi_uuid),
@@ -2816,13 +2820,14 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	/* TODO: Use rdb_get() to track references? */
 	db = svc->ps_rsvc.s_db;
-	rdb_get_uuid(db, dbid);
-	uuid_copy(psid, svc->ps_uuid);
+	rdb_get_uuid(db, db_uuid);
+	uuid_copy(pool_uuid, svc->ps_uuid);
 	pool_svc_put_leader(svc);
+	daos_iov_set(&psid, pool_uuid, sizeof(uuid_t));
 
 	switch (opc) {
 	case POOL_REPLICAS_ADD:
-		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, psid, dbid,
+		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, db_uuid,
 					in->pmi_targets, true /* create */,
 					false /* bootstrap */, get_md_cap());
 		if (rc != 0)
@@ -2835,7 +2840,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 		if (rc != 0)
 			break;
 		/* ignore return code */
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, psid, in->pmi_targets,
+		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, in->pmi_targets,
 				  true /*destroy*/);
 		break;
 
