@@ -92,10 +92,7 @@ message BurnInNvmeParams {
 	FioConfigPath path = 2;
 }
 
-message BurnInNvmeReport {
-	// Report from running burn-in reported by fio
-	string report = 1;
-}
+message BurninScmParams {}
 
 // ScmModule represent Storage Class Memory modules installed.
 message ScmModule {
@@ -121,6 +118,67 @@ message ScmModule {
 	//string fwrev = 10;
 }
 
+enum ResponseStatus {
+	SUCCESS = 0;
+	IN_PROGRESS = 1;
+	WAITING = 2;
+	ERR_APP = -1;			// Application error
+	ERR_UNKNOWN = -2;		// Unknown error
+}
+
+message ResponseState {
+	ResponseStatus status = 1;
+	string error = 2;
+	string info = 3;
+}
+
+message NvmeControllerResp {
+	string pciaddr = 1;		// PCI address of NVMe controller
+	ResponseState state = 2;
+}
+
+message ScmMountResp {
+	string mntpoint = 1;		// Whene device or tmpfs is mounted
+	ResponseState state = 2;
+}
+
+message ScmModuleResp {
+	string physicalid = 1;		// SCM module identifier
+	ResponseState state = 2;
+}
+
+message ScanStorageParams {}
+
+message ScanStorageResp {
+	repeated NvmeControllers ctrlr = 1;
+	ResponseState nvmestate = 2;
+	repeated ScmModule module = 3;
+	ResponseState scmstate = 4;
+}
+
 message FormatStorageParams {}
 
-message FormatStorageResponse {}
+message FormatStorageResp {
+	repeated NvmeControllerResp = 1;	// One per controller format attempt
+	repeated ScmMountResp = 2;		// One per scm format and mount attempt
+}
+
+message UpdateStorageParams {
+	UpdateNvmeParams nvme = 1;
+	UpdateScmParams scm = 2;
+}
+
+message UpdateStorageResp {
+	repeated NvmeControllerResp = 1;	// One per controller firmware update attempt
+	repeated ScmModuleResp = 2;		// One per scm device firmware update attempt
+}
+
+message BurninStorageParams {
+	BurninNvmeParams nvme = 1;
+	BurninScmParams scm = 2;
+}
+
+message BurninStorageResp {
+	repeated NvmeControllerResp = 1;	// One per controller burnin test, report in state.info
+	repeated ScmModuleResp = 2;		// One per scm mount burnin test
+}
