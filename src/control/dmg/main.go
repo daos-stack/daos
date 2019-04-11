@@ -28,6 +28,8 @@ import (
 	"os"
 	"strings"
 
+        "path/filepath"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
 
@@ -39,7 +41,6 @@ type cliOptions struct {
 	Hostlist string `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	// TODO: implement host file parsing
 	Hostfile string `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
-	// TODO: implement client side configuration file parsing
 	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
 	Storage    StorCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
 	Service    SvcCmd  `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
@@ -53,6 +54,7 @@ var (
 )
 
 func connectHosts() error {
+
 	if opts.Hostfile != "" {
 		return errors.New("hostfile option not implemented")
 	}
@@ -62,6 +64,31 @@ func connectHosts() error {
 	}
 	fmt.Println(sprintConns(conns.ConnectClients(hosts)))
 	return nil
+}
+
+// LoadConfigOpts derives file location and parses configuration options
+// from both config file and commandline flags.
+func loadConfigOpts(cliOpts *cliOptions) (client.ClientConfiguration, error) {
+        config := client.NewConfiguration()
+        if cliOpts.ConfigPath != "" {
+                log.Debugf("Overriding default config path with: %s", cliOpts.ConfigPath)
+                config.Path = cliOpts.ConfigPath
+        }
+
+        if !filepath.IsAbs(config.Path) {
+                newPath, err := common.GetAbsInstallPath(config.Path)
+                if err != nil {
+                        return config, err
+                }
+                config.Path = newPath
+        }
+
+        err := config.LoadConfig()
+        if err != nil {
+                return config, errors.Wrap(err, "failed to read config file")
+        }
+
+        return config, nil
 }
 
 func main() {
@@ -83,12 +110,14 @@ func dmgMain() error {
 		return err
 	}
 
-	// TODO: implement configuration file parsing
-	if opts.ConfigPath != "" {
-		err = errors.New("config-path option not implemented")
-		log.Errorf(err.Error())
+	config, err := loadConfigOpts(opts)
+	if err != nil {
+		log.Errorf("Failed to load client config options: %s", err)
 		return err
 	}
+
+        log.Debugf("Configuration read from %s", config.Path)
+
 	err = connectHosts()
 	if err != nil {
 		log.Errorf("unable to connect to hosts: %v", err)

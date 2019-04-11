@@ -24,22 +24,58 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-
+	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
 )
+
+type cliOptions struct {
+	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	SocketDir string `short:"s" long:"socket-dir" description:"Path to agent communications socket"`
+	LogFile string `short:"l" long:"logfile" default:"/tmp/daos_agent.log" description:"Full path and filename for daos agent log file"`	
+}
 
 var (
-	runtimeDir = flag.String("runtime_dir", "/var/run/daos_agent", "The path to runtime socket directory for daos_agent")
-	logFile    = flag.String("logfile", "/tmp/daos_agent.log", "Path for the daos agent log file")
+	opts = new(cliOptions)
 )
 
+// LoadConfigOpts derives file location and parses configuration options
+// from both config file and commandline flags.
+func loadConfigOpts(cliOpts *cliOptions) (client.ClientConfiguration, error) {
+	config := client.NewConfiguration()
+	if cliOpts.ConfigPath != "" {
+			log.Debugf("Overriding default config path with: %s", cliOpts.ConfigPath)
+			config.Path = cliOpts.ConfigPath
+	}
+
+	if !filepath.IsAbs(config.Path) {
+			newPath, err := common.GetAbsInstallPath(config.Path)
+			if err != nil {
+					return config, err
+			}
+			config.Path = newPath
+	}
+
+	err := config.LoadConfig()
+	if err != nil {
+			return config, errors.Wrap(err, "failed to read config file")
+	}
+	log.Debugf("DAOS Client config read from %s", config.Path)
+
+	if cliOpts.SocketDir != "" {
+			log.Debugf("Overriding socket path from config file with %s", cliOpts.SocketDir)
+			config.SocketDir = cliOpts.SocketDir
+	}
+
+	return config, nil
+}
 func main() {
 	if agentMain() != nil {
 		os.Exit(1)
@@ -52,9 +88,29 @@ func agentMain() error {
 
 	log.Debugf("Starting daos_agent:")
 
-	flag.Parse()
+	p := flags.NewParser(opts, flags.Default)
+	p.SubcommandsOptional = true
 
-	f, err := common.AppendFile(*logFile)
+	_, err := p.Parse()
+	if err != nil {
+		return err
+	}
+
+	config, err := loadConfigOpts(opts)
+	if err != nil {
+		log.Errorf("Failed to load agent config options %s", err)
+		return err
+	}
+
+	res := client.ProcessEnvOverrides(&config)
+	log.Debugf("Found %d environment variable overrides", res)
+
+	sockPath := filepath.Join(config.SocketDir, "agent.sock")
+	log.Debugf("Full socket path is now: %s", sockPath)
+
+	
+	log.Debugf("Using logfile: %s", opts.LogFile)
+	f, err := common.AppendFile(opts.LogFile)
 	if err != nil {
 		log.Errorf("Failure creating log file: %s", err)
 		return err
@@ -67,7 +123,6 @@ func agentMain() error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	sockPath := filepath.Join(*runtimeDir, "agent.sock")
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
