@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_test.h"
+#include <daos_security.h>
 
 /** connect to non-existing pool */
 static void
@@ -390,6 +391,74 @@ init_fini_conn(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static bool
+ace_has_default_permissions(struct daos_ace *ace)
+{
+	if (ace->dae_access_types != DAOS_ACL_ACCESS_ALLOW) {
+		print_message("Expected access type allow for ACE\n");
+		daos_ace_dump(ace, 0);
+		return false;
+	}
+
+	if (ace->dae_allow_perms != (uint64_t)(DAOS_ACL_PERM_READ |
+					       DAOS_ACL_PERM_WRITE)) {
+		print_message("Expected allow RW perms for ACE\n");
+		daos_ace_dump(ace, 0);
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+is_acl_prop_default(struct daos_acl *prop)
+{
+	struct daos_ace *ace;
+	ssize_t		acl_expected_len = 0;
+
+	if (daos_acl_validate(prop) != 0) {
+		print_message("ACL property not valid\n");
+		daos_acl_dump(prop);
+		return false;
+	}
+
+	if (daos_acl_get_ace_for_principal(prop, DAOS_ACL_OWNER,
+					   NULL, &ace) != 0) {
+		print_message("Owner ACE not found\n");
+		return false;
+	}
+
+	acl_expected_len += daos_ace_get_size(ace);
+
+	if (!ace_has_default_permissions(ace)) {
+		print_message("Owner ACE was wrong\n");
+		return false;
+	}
+
+	if (daos_acl_get_ace_for_principal(prop, DAOS_ACL_OWNER_GROUP,
+					   NULL, &ace) != 0) {
+		print_message("Owner Group ACE not found\n");
+		return false;
+	}
+
+	acl_expected_len += daos_ace_get_size(ace);
+
+	if (!ace_has_default_permissions(ace)) {
+		print_message("Owner Group ACE was wrong\n");
+		return false;
+	}
+
+	if (prop->dal_len != acl_expected_len) {
+		print_message("More ACEs in list than expected, expected len = "
+			      "%ld, actual len = %u\n", acl_expected_len,
+			      prop->dal_len);
+		return false;
+	}
+
+	print_message("ACL prop matches expected defaults\n");
+	return true;
+}
+
 /** create pool with properties and query */
 static void
 pool_properties(void **state)
@@ -422,7 +491,7 @@ pool_properties(void **state)
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, 4);
+	assert_int_equal(prop_query->dpp_nr, 5);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -445,6 +514,13 @@ pool_properties(void **state)
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
 	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_SNAPSHOT) {
 		print_message("reclaim verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL ||
+	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
+		print_message("ACL prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
