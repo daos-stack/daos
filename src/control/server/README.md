@@ -185,7 +185,7 @@ Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
 
 Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
 
-The DAOS control plane willa also provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
+The DAOS control plane wil provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
 
 #### SCM module discovery
 
