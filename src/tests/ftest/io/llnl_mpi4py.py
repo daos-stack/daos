@@ -32,6 +32,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
+import AgentUtils
 import ServerUtils
 import WriteHostFile
 from MpioUtils import MpioUtils, MpioFailed
@@ -51,6 +52,7 @@ class LlnlMpi4py(Test):
         self.context = None
         self.pool = None
         self.mpio = None
+        self.agent_sessions = None
         self.hostlist_servers = None
         self.hostfile_servers = None
         self.hostlist_clients = None
@@ -62,7 +64,7 @@ class LlnlMpi4py(Test):
             build_paths = json.load(var_file)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("name", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server_config/', 'daos_server')
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
@@ -77,11 +79,21 @@ class LlnlMpi4py(Test):
                                                             self.workdir, None)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
+        self.agent_sessions = AgentUtils.run_agent(self.basepath,
+                                                   self.hostlist_servers,
+                                                   self.hostlist_clients)
         # start servers
         ServerUtils.runServer(self.hostfile_servers, self.server_group,
                               self.basepath)
 
     def tearDown(self):
+        #try:
+        #    if self.pool is not None:
+        #        self.pool.destroy(1)
+        #finally:
+        #    if self.agent_sessions:
+        #        AgentUtils.stop_agent(self.hostlist_clients,
+        #                              self.agent_sessions)
         ServerUtils.stopServer(hosts=self.hostlist_servers)
 
     def executable(self, test_repo, test_name):

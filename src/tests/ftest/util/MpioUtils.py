@@ -46,7 +46,7 @@ class MpioUtils():
                                                   "which mpichversion"])
 
             # Obtaning the location where mpich is installed by
-            # removing "mpichversion"
+            # executing "mpichversion"
             self.mpichinstall = checkmpich[:-17]
             print (self.mpichinstall)
             return True
@@ -110,7 +110,7 @@ class MpioUtils():
                 hostfile          --client hostfile
                 pool_uuid         --Pool UUID
                 test_repo         --test repo location
-                display_output    --print output.
+                test_name         --name of test to be tested
         """
 
         # environment variables only to be set on client node
