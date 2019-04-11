@@ -911,4 +911,9 @@ int vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
 /** Return the size of the pool metadata in persistent memory on-disk format */
 int vos_pool_get_msize(void);
 
+/** Return the cutoff size for SCM allocation.  Larger blocks are allocated to
+ *  NVME.
+ */
+int vos_pool_get_scm_cutoff(void);
+
 #endif /* __VOS_API_H */
