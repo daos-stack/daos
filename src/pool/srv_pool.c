@@ -1982,8 +1982,8 @@ out:
 }
 
 static int
-pool_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
-		 struct daos_pool_space *ps)
+pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		       struct daos_pool_space *ps)
 {
 	struct pool_tgt_query_in	*in;
 	struct pool_tgt_query_out	*out;
@@ -2043,9 +2043,11 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_rebuild_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_st);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
+	if (in->pqi_query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = ds_rebuild_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_st);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -2095,9 +2097,10 @@ out_lock:
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	/* See comment above, rebuild doesn't connect the pool */
-	if (rc == 0 && !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
-		rc = pool_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
-				      &out->pqo_space);
+	if (rc == 0 && (in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
+	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
+		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
+					    &out->pqo_space);
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
