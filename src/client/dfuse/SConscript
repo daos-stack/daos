@@ -1,5 +1,6 @@
 """Build DFuse"""
 import os
+import daos_build
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
            'ioil_api.h', 'ioil_preload.h']
@@ -61,11 +62,12 @@ def build_client_libs_shared(env):
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
-    il_lib = ilenv.SharedLibrary('il/libioil', il_obj + common)
+    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), il_lib)
-    dfuse_lib = ilenv.SharedLibrary('common/libdfuse', common)
+    dfuse_lib = daos_build.library(ilenv, 'common/libdfuse', common)
 
-    gen_script = ilenv.Program(['il/gen_script.c'])
+    gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'],
+                                    LIBS=[])
     script = ilenv.Command('il/check_ioil_syms', gen_script,
                            "$SOURCE -s $TARGET")
     env.Install('$PREFIX/TESTING/scripts', script)
@@ -129,6 +131,7 @@ def scons():
     # Set the define in SConscript so that it's in place for the prereqs.require
     # check which will verify fuse3/fuse.h can be loaded.
     cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+    cenv.AppendUnique(LIBPATH=["../dfs"])
 
     cenv.AppendUnique(LIBS=['dfs'])
 
@@ -139,7 +142,7 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
-    progs = cenv.Program('dfuse/dfuse', common + dfuse_obj)
+    progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
 
     Default(progs + libs)
 
