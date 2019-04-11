@@ -54,7 +54,8 @@ def singleNodeTest(test_mode) {
                        NODELIST=$nodelist
                        NODE=\${NODELIST%%,*}
                        trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
-                       ssh -i ci_key jenkins@\$NODE "set -x
+                       rc=0
+                       if ! ssh -i ci_key jenkins@\$NODE "set -x
                            set -e
                            sudo mkdir -p \$CART_BASE
                            sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
@@ -66,8 +67,9 @@ def singleNodeTest(test_mode) {
                                rc=\\\${PIPESTATUS[0]}
                                echo \"run_test.sh exited failure with \\\$rc\"
                            fi
-                           exit \\\$rc"
-                       rc=\${PIPESTATUS[0]}
+                           exit \\\$rc"; then
+                           rc=\${PIPESTATUS[0]}
+                       fi
                        mkdir -p install/Linux/TESTING/
                        scp -i ci_key -r jenkins@\$NODE:\$CART_BASE/install/Linux/TESTING/testLogs \
                                         install/Linux/TESTING/
