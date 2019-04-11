@@ -67,14 +67,17 @@ notify_ready(void)
 		D_FREE(reqb);
 		goto out_uri;
 	}
-	dreq->module = DRPC_MODULE_SRV;
-	dreq->method = DRPC_METHOD_SRV_NOTIFY_READY;
 	dreq->body.len = reqb_size;
 	dreq->body.data = reqb;
 
 	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
 	if (rc != 0)
 		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+	}
 
 	drpc_response_free(dresp);
 out_dreq:

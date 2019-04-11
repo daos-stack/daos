@@ -31,4 +31,4 @@ message NotifyReadyReq {
 	uint32 nctxs = 2;
 }
 
-// message NotifyReadyResp == nil
+// NotifyReadyResp is nil.
