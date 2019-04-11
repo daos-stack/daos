@@ -48,7 +48,6 @@ class InfoTests(Test):
                                "../../../../.build_vars.json")) as build_file:
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
         self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 

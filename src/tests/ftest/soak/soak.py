@@ -33,7 +33,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
-import WriteHostFile
+import write_host_file
 import IorUtils
 import slurm_utils
 import dmg_utils
@@ -162,8 +162,8 @@ class Soak(Test):
         # start the servers
         self.hostlist_servers = self.params.get("daos_servers",
                                                 '/run/hosts/test_machines/*')
-        filename = WriteHostFile.WriteHostFile(self.hostlist_servers,
-                                               self.workdir)
+        filename = write_host_file.write_host_file(self.hostlist_servers,
+                                                   self.workdir)
         self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         print("Servers {} group {} basepath {}".format(self.hostlist_servers,

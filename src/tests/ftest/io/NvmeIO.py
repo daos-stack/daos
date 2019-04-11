@@ -36,7 +36,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import ServerUtils
-import WriteHostFile
+import write_host_file
 import IorUtils
 
 from GeneralUtils import DaosTestError
@@ -65,8 +65,8 @@ class NvmeIo(avocado.Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
-                                                    self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
         #Start Server
         ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
 
@@ -129,7 +129,7 @@ class NvmeIo(avocado.Test):
         #Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                self.hostfile_clients = WriteHostFile.WriteHostFile(
+                self.hostfile_clients = write_host_file.write_host_file(
                     hostlist_clients,
                     self.workdir,
                     ior_param[4])
