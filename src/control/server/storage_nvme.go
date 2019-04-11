@@ -50,6 +50,22 @@ const (
 	targetUserEnv      = "_TARGET_USER"
 )
 
+var (
+	ErrBdevNotFound          = errors.New("controller at pci addr not found")
+	ErrBdevEmpty             = errors.New("bdev device list entry empty")
+	ErrNvmeNotInited         = errors.New("nvme storage not initialized")
+	ErrBdevClassNotSupported = errors.New("operation unsupported on bdev class")
+)
+
+// newNvmeStorageErrLogger is a factory creating context aware local log util
+func newNvmeStorageErrLogger(op string) func(e error) {
+	return func(e error) {
+		log.Errordf(
+			common.UtilLogDepth,
+			errors.WithMessage(e, "nvme storage "+op).Error())
+	}
+}
+
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
 type SpdkSetup interface {
@@ -61,27 +77,6 @@ type SpdkSetup interface {
 type spdkSetup struct {
 	scriptPath  string
 	nrHugePages int
-}
-
-// NvmeStorage interface specifies basic functionality for subsystem
-type NvmeStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-}
-
-// nvmeStorage gives access to underlying SPDK interfaces
-// for accessing Nvme devices (API) as well as storing device
-// details.
-type nvmeStorage struct {
-	env         spdk.ENV       // SPDK ENV interface
-	nvme        spdk.NVME      // SPDK NVMe interface
-	spdk        SpdkSetup      // SPDK shell configuration interface
-	config      *configuration // server configuration structure
-	controllers []*pb.NvmeController
-	initialized bool
-	formatted   bool
 }
 
 // prep executes setup script to allocate hugepages and bind PCI devices
@@ -125,6 +120,37 @@ func (s *spdkSetup) reset() error {
 		srv.Run(),
 		"spdk reset failed (%s)",
 		stderr.String())
+}
+
+// NvmeStorage interface specifies basic functionality for subsystem
+type NvmeStorage interface {
+	Setup() error
+	Teardown() error
+	Format(int) error
+	Discover() error
+	Update(string) error
+}
+
+// nvmeStorage gives access to underlying SPDK interfaces
+// for accessing Nvme devices (API) as well as storing device
+// details.
+type nvmeStorage struct {
+	env         spdk.ENV       // SPDK ENV interface
+	nvme        spdk.NVME      // SPDK NVMe interface
+	spdk        SpdkSetup      // SPDK shell configuration interface
+	config      *configuration // server configuration structure
+	controllers []*pb.NvmeController
+	initialized bool
+	formatted   bool
+}
+
+func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
+	for _, c := range n.controllers {
+		if c.Pciaddr == pciAddr {
+			return c
+		}
+	}
+	return nil
 }
 
 // Setup method implementation for nvmeStorage.
@@ -184,9 +210,12 @@ func (n *nvmeStorage) Discover() error {
 
 // Format attempts to format (forcefully) NVMe devices on a given server
 // as specified in config file.
-func (n *nvmeStorage) Format(idx int) error {
+func (n *nvmeStorage) Format(i int) error {
+	eLog := newNvmeStorageErrLogger("format")
+	srv := n.config.Servers[i]
+
 	if !n.initialized {
-		return errors.New("nvme storage not initialized")
+		return ErrNvmeNotInited
 	}
 	if n.formatted {
 		return errors.New(
@@ -194,42 +223,88 @@ func (n *nvmeStorage) Format(idx int) error {
 				"not implemented")
 	}
 
-	srv := n.config.Servers[idx]
-
 	switch srv.BdevClass {
 	case bdNVMe:
 		for _, pciAddr := range srv.BdevList {
 			if pciAddr == "" {
-				return errors.New("bdev nvme device list entry empty")
+				eLog(ErrBdevEmpty)
+				continue
+			}
+
+			ctrlr := n.getController(pciAddr)
+			if ctrlr == nil {
+				eLog(errors.WithMessage(
+					ErrBdevNotFound, pciAddr))
+				continue
 			}
 
 			cs, ns, err := n.nvme.Format(pciAddr)
 			if err != nil {
-				return errors.Wrap(err, "nvme format")
+				// in case of a failure in the format process
+				// itself, return failure and don't continue
+				return err
 			}
 			n.controllers = loadControllers(cs, ns)
 		}
 	default:
-		return errors.Errorf(
-			"format unsupported on BdevClass %v", srv.BdevClass)
+		return errors.WithMessage(
+			ErrBdevClassNotSupported, string(srv.BdevClass))
 	}
 
 	n.formatted = true
 	return nil
 }
 
-// Update method implementation for nvmeStorage
-func (n *nvmeStorage) Update(pciAddr string, path string, slot int32) error {
+// Update method implementation for nvmeStorage attempts to update firmware on
+// NVMe controllers attached to a given server identified by PCI addresses as
+// specified in per-server section of the config file.
+//
+// Firmware will only be updated if the controller reports the current fw rev
+// to be the same as the "startRev" fn parameter. path and slot refer to the
+// fw image file location and controller fw register to update respectively.
+func (n *nvmeStorage) Update(
+	i int, startRev string, path string, slot int32) error {
+
+	eLog := newNvmeStorageErrLogger("update")
+	srv := n.config.Servers[i]
+
 	if !n.initialized {
-		return errors.New("nvme storage not initialized")
+		return ErrNvmeNotInited
 	}
 
-	cs, ns, err := n.nvme.Update(pciAddr, path, slot)
-	if err != nil {
-		return err
+	switch srv.BdevClass {
+	case bdNVMe:
+		for _, pciAddr := range srv.BdevList {
+			if pciAddr == "" {
+				eLog(ErrBdevEmpty)
+				continue
+			}
+
+			ctrlr := n.getController(pciAddr)
+			if ctrlr == nil {
+				eLog(errors.WithMessage(
+					ErrBdevNotFound, pciAddr))
+				continue
+			}
+			if ctrlr.Fwrev != startRev {
+				eLog(errors.WithMessage(
+					ErrBdevNotFound, pciAddr))
+				continue
+			}
+
+			cs, ns, err := n.nvme.Update(pciAddr, path, slot)
+			if err != nil {
+				// in case of a failure in the update process
+				// itself, return failure and don't continue
+				return err
+			}
+			n.controllers = loadControllers(cs, ns)
+		}
+	default:
+		return errors.WithMessage(
+			ErrBdevClassNotSupported, string(srv.BdevClass))
 	}
 
-	n.controllers = loadControllers(cs, ns)
 	return nil
 }
 
@@ -239,7 +314,7 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
 
 	if !n.initialized {
-		err = errors.New("nvme storage not initialized")
+		err = ErrNvmeNotInited
 		return
 	}
 

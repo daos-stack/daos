@@ -123,7 +123,7 @@ func defaultMockNvmeStorage(config *configuration) *nvmeStorage {
 		config)
 }
 
-func TestDiscoveryNvmeSingle(t *testing.T) {
+func TestDiscoveryNvmeStorageSingle(t *testing.T) {
 	tests := []struct {
 		inited bool
 	}{
@@ -159,7 +159,7 @@ func TestDiscoveryNvmeSingle(t *testing.T) {
 }
 
 // Verify correct mapping of namespaces to multiple controllers
-func TestDiscoveryNvmeMulti(t *testing.T) {
+func TestDiscoveryNvmeStorageMulti(t *testing.T) {
 	tests := []struct {
 		ctrlrs []Controller
 		nss    []Namespace
@@ -243,7 +243,7 @@ func TestDiscoveryNvmeMulti(t *testing.T) {
 	}
 }
 
-func TestFormatNvme(t *testing.T) {
+func TestFormatNvmeStorage(t *testing.T) {
 	tests := []struct {
 		inited    bool
 		formatted bool
@@ -311,7 +311,7 @@ func TestFormatNvme(t *testing.T) {
 	}
 }
 
-func TestUpdateNvme(t *testing.T) {
+func TestUpdateNvmeStorage(t *testing.T) {
 	tests := []struct {
 		inited bool
 		errMsg string
@@ -329,6 +329,7 @@ func TestUpdateNvme(t *testing.T) {
 	// expected Controller protobuf representation should have updated
 	// firmware revision
 	c := MockControllerPB("1.0.1")
+	srvIdx := 0
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
@@ -340,7 +341,7 @@ func TestUpdateNvme(t *testing.T) {
 			}
 		}
 
-		if err := sn.Update(c.Pciaddr, "", 0); err != nil {
+		if err := sn.Update(srvIdx, c.Pciaddr, "", 0); err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, "")
 				continue
@@ -357,7 +358,7 @@ func TestUpdateNvme(t *testing.T) {
 // TestBurnInNvme verifies a corner case because BurnIn does not call out
 // to SPDK via bindings.
 // In this case the real NvmeStorage is used as opposed to a mockNvmeStorage.
-func TestBurnInNvme(t *testing.T) {
+func TestBurnInNvmeStorage(t *testing.T) {
 	tests := []struct {
 		inited bool
 		errMsg string
