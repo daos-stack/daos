@@ -852,7 +852,9 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 		goto out;
 	in = crt_req_get(rpc);
 	in->sai_class = class;
-	daos_iov_copy(&in->sai_svc_id, id);
+	rc = daos_iov_copy(&in->sai_svc_id, id);
+	if (rc != 0)
+		goto out_rpc;
 	uuid_copy(in->sai_db_uuid, dbid);
 	if (create)
 		in->sai_flags |= RDB_AF_CREATE;
@@ -863,7 +865,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
-		goto out_rpc;
+		goto out_mem;
 
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
@@ -874,6 +876,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 		rc = -DER_IO;
 	}
 
+out_mem:
+	daos_iov_free(&in->sai_svc_id);
 out_rpc:
 	crt_req_decref(rpc);
 out:
@@ -953,14 +957,16 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
 		goto out;
 	in = crt_req_get(rpc);
 	in->soi_class = class;
-	daos_iov_copy(&in->soi_svc_id, id);
+	rc = daos_iov_copy(&in->soi_svc_id, id);
+	if (rc != 0)
+		goto out_rpc;
 	if (destroy)
 		in->soi_flags |= RDB_OF_DESTROY;
 	in->soi_ranks = (d_rank_list_t *)ranks;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
-		goto out_rpc;
+		goto out_mem;
 
 	out = crt_reply_get(rpc);
 	rc = out->soo_rc;
@@ -969,7 +975,8 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
 			destroy ? "/destroy" : "", rc);
 		rc = -DER_IO;
 	}
-
+out_mem:
+	daos_iov_free(&in->soi_svc_id);
 out_rpc:
 	crt_req_decref(rpc);
 out:
