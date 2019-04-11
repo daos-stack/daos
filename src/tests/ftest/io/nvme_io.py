@@ -35,11 +35,11 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
-import IorUtils
+import server_utils
+import write_host_file
+import ior_utils
 
-from GeneralUtils import DaosTestError
+from general_utils import DaosTestError
 from daos_api import DaosContext, DaosPool, DaosApiError, DaosLog
 
 class NvmeIo(avocado.Test):
@@ -65,10 +65,10 @@ class NvmeIo(avocado.Test):
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = WriteHostFile.WriteHostFile(self.hostlist,
-                                                    self.workdir)
+        self.hostfile = write_host_file.write_host_file(self.hostlist,
+                                                        self.workdir)
         #Start Server
-        ServerUtils.runServer(self.hostfile, self.server_group, self.basepath)
+        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
         try:
@@ -76,7 +76,7 @@ class NvmeIo(avocado.Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
-            ServerUtils.stopServer(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist)
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """
@@ -129,7 +129,7 @@ class NvmeIo(avocado.Test):
         #Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                self.hostfile_clients = WriteHostFile.WriteHostFile(
+                self.hostfile_clients = write_host_file.write_host_file(
                     hostlist_clients,
                     self.workdir,
                     ior_param[4])
@@ -179,24 +179,24 @@ class NvmeIo(avocado.Test):
                 #--daos.recordSize and Transfer size.
                 try:
                     size_before_ior = self.pool.pool_query()
-                    IorUtils.run_ior(ior_args['client_hostfile'],
-                                     ior_args['iorflags'],
-                                     ior_args['iteration'],
-                                     ior_args['block_size'],
-                                     ior_args['stripe_size'],
-                                     ior_args['pool_uuid'],
-                                     ior_args['svc_list'],
-                                     ior_args['stripe_size'],
-                                     ior_args['stripe_size'],
-                                     ior_args['stripe_count'],
-                                     ior_args['async_io'],
-                                     ior_args['object_class'],
-                                     ior_args['basepath'],
-                                     ior_args['slots'],
-                                     filename=str(uuid.uuid4()),
-                                     display_output=True)
+                    ior_utils.run_ior(ior_args['client_hostfile'],
+                                      ior_args['iorflags'],
+                                      ior_args['iteration'],
+                                      ior_args['block_size'],
+                                      ior_args['stripe_size'],
+                                      ior_args['pool_uuid'],
+                                      ior_args['svc_list'],
+                                      ior_args['stripe_size'],
+                                      ior_args['stripe_size'],
+                                      ior_args['stripe_count'],
+                                      ior_args['async_io'],
+                                      ior_args['object_class'],
+                                      ior_args['basepath'],
+                                      ior_args['slots'],
+                                      filename=str(uuid.uuid4()),
+                                      display_output=True)
                     self.verify_pool_size(size_before_ior, ior_args)
-                except IorUtils.IorFailed as exe:
+                except ior_utils.IorFailed as exe:
                     print (exe)
                     print (traceback.format_exc())
                     self.fail()
