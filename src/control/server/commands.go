@@ -33,20 +33,20 @@ import (
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
 type cliOptions struct {
-	Port       uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath  string  `short:"s" long:"storage" description:"Storage path"`
-	ConfigPath string  `short:"o" long:"config_path" description:"Server config file path"`
-	Modules    *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Cores      uint16  `short:"c" long:"cores" default:"0" description:"number of cores to use (default all)"`
-	Targets    int     `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
-	XShelpernr int     `short:"x" long:"xshelpernr" default:"2" description:"number of helper XS per VOS target (default 2)"`
-	Firstcore  int     `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
-	Group      string  `short:"g" long:"group" description:"Server group name"`
-	Attach     *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map        *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank       *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
-	SocketDir  string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	Storage    StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
+	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
+	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`
+	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Cores       uint16  `short:"c" long:"cores" default:"0" description:"option deprecated, please use targets instead"`
+	Targets     uint16  `short:"t" long:"targets" default:"0" description:"number of targets to use (default use all cores)"`
+	NrXsHelpers *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target (default 2)"`
+	FirstCore   uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
+	Group       string  `short:"g" long:"group" description:"Server group name"`
+	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
+	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
+	Rank        *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
+	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	Storage     StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
 }
 
 // StorCmd is the struct representing the top-level storage subcommand.
