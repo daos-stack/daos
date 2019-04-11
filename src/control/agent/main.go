@@ -24,20 +24,29 @@
 package main
 
 import (
-	"flag"
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/jessevdk/go-flags"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
+const (
+	agentSockName = "agent.sock"
+)
+
+type cliOptions struct {
+	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	SocketDir  string `short:"s" long:"socket-dir" description:"Path to agent communications socket"`
+	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+}
+
 var (
-	runtimeDir = flag.String("runtime_dir", "/var/run/daos_agent", "The path to runtime socket directory for daos_agent")
-	logFile    = flag.String("logfile", "/tmp/daos_agent.log", "Path for the daos agent log file")
+	opts = new(cliOptions)
 )
 
 func main() {
@@ -52,9 +61,37 @@ func agentMain() error {
 
 	log.Debugf("Starting daos_agent:")
 
-	flag.Parse()
+	p := flags.NewParser(opts, flags.Default)
 
-	f, err := common.AppendFile(*logFile)
+	_, err := p.Parse()
+	if err != nil {
+		return err
+	}
+
+	// Load the configuration file using the supplied path or the default path if none provided.
+	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	if err != nil {
+		log.Errorf("Failed to load agent config options %s", err)
+		return err
+	}
+
+	// Override the default SocketDir and LogFile with any commandline values given
+	err = config.ApplyCmdLineOverrides(opts.SocketDir, opts.LogFile)
+	if err != nil {
+		log.Errorf("Failed to apply command line overrides %s", err)
+		return err
+	}
+
+	// Override configuration file and command line options with environment variables
+	// if the providerEnvKey is defined in the shell environment
+	res := config.ProcessEnvOverrides()
+	log.Debugf("Found %d environment variable overrides", res)
+
+	sockPath := filepath.Join(config.SocketDir, agentSockName)
+	log.Debugf("Full socket path is now: %s", sockPath)
+
+	log.Debugf("Using logfile: %s", config.LogFile)
+	f, err := common.AppendFile(config.LogFile)
 	if err != nil {
 		log.Errorf("Failure creating log file: %s", err)
 		return err
@@ -67,7 +104,6 @@ func agentMain() error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	sockPath := filepath.Join(*runtimeDir, "agent.sock")
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
