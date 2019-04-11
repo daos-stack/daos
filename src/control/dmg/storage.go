@@ -32,16 +32,16 @@ import (
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	List   ListStorCmd   `command:"list" alias:"l" description:"List SCM and NVMe storage attached to remote servers."`
+	Scan   ScanStorCmd   `command:"scan" alias:"l" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 }
 
-// ListStorCmd is the struct representing the list storage subcommand.
-type ListStorCmd struct{}
+// ScanStorCmd is the struct representing the scan storage subcommand.
+type ScanStorCmd struct{}
 
 // run NVMe and SCM storage query on all connected servers
-func listStor() {
-	cCtrlrs, cModules := conns.ListStorage()
+func scanStor() {
+	cCtrlrs, cModules := conns.ScanStorage()
 
 	fmt.Printf(
 		unpackFormat(cCtrlrs),
@@ -50,13 +50,13 @@ func listStor() {
 	fmt.Printf(unpackFormat(cModules), "SCM module")
 }
 
-// Execute is run when ListStorCmd activates
-func (s *ListStorCmd) Execute(args []string) error {
+// Execute is run when ScanStorCmd activates
+func (s *ScanStorCmd) Execute(args []string) error {
 	if err := connectHosts(); err != nil {
 		return errors.Wrap(err, "unable to connect to hosts")
 	}
 
-	listStor()
+	scanStor()
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
@@ -76,9 +76,9 @@ func formatStor() {
 			"Are you sure you want to continue? (yes/no)")
 
 	if getConsent() {
-		fmt.Printf(
-			unpackFormat(conns.FormatStorage()),
-			"storage format result")
+		nvme, scm := conns.FormatStorage()
+		fmt.Printf(unpackFormat(nvme), "NVMe storage format result")
+		fmt.Printf(unpackFormat(scm), "SCM storage format result")
 	}
 }
 

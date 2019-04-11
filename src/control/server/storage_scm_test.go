@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
@@ -36,11 +37,12 @@ func MockModule() DeviceDiscovery {
 	m := MockModulePB()
 	dd := DeviceDiscovery{}
 	dd.Physical_id = uint16(m.Physicalid)
-	dd.Channel_id = uint16(m.Channel)
-	dd.Channel_pos = uint16(m.Channelpos)
-	dd.Memory_controller_id = uint16(m.Memctrlr)
-	dd.Socket_id = uint16(m.Socket)
+	dd.Channel_id = uint16(m.Loc.Channel)
+	dd.Channel_pos = uint16(m.Loc.Channelpos)
+	dd.Memory_controller_id = uint16(m.Loc.Memctrlr)
+	dd.Socket_id = uint16(m.Loc.Socket)
 	dd.Capacity = m.Capacity
+
 	return dd
 }
 
@@ -50,32 +52,6 @@ type mockIpmCtl struct {
 
 func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
 	return m.modules, nil
-}
-
-// build config with mock external method behaviour relevant to this file
-func mockScmConfig(
-	mountRet error, unmountRet error, mkdirRet error, removeRet error) configuration {
-
-	config := newDefaultConfiguration(
-		&mockExt{
-			nil, "", false, mountRet, unmountRet, mkdirRet, removeRet})
-
-	return config
-}
-
-// return config reference with specified external method behaviour and scm config params
-func newMockScmConfig(
-	mountRet error, unmountRet error, mkdirRet error, removeRet error,
-	mount string, class ScmClass, devs []string, size int) *configuration {
-
-	c := mockScmConfig(mountRet, unmountRet, mkdirRet, removeRet)
-	c.Servers = append(c.Servers, newDefaultServer())
-	c.Servers[0].ScmMount = mount
-	c.Servers[0].ScmClass = class
-	c.Servers[0].ScmList = devs
-	c.Servers[0].ScmSize = size
-
-	return &c
 }
 
 // mockScmStorage factory
@@ -95,24 +71,28 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 	return newMockScmStorage([]DeviceDiscovery{m}, false, config)
 }
 
-func TestDiscoveryScm(t *testing.T) {
+func TestDiscoverScm(t *testing.T) {
+	mPB := MockModulePB()
+	m := MockModule()
+	config := defaultMockConfig(t)
+
 	tests := []struct {
-		inited bool
-		errMsg string
+		inited     bool
+		errMsg     string
+		expModules []*pb.ScmModule
 	}{
 		{
 			true,
 			"",
+			[]*pb.ScmModule(nil),
 		},
 		{
 			false,
-			"scm storage not initialized",
+			"",
+			[]*pb.ScmModule{mPB},
 		},
+		// TODO: test errors return from ipmctl subsystem
 	}
-
-	mPB := MockModulePB()
-	m := MockModule()
-	config := defaultMockConfig(t)
 
 	for _, tt := range tests {
 		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited, &config)
@@ -125,111 +105,226 @@ func TestDiscoveryScm(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		AssertEqual(t, len(ss.modules), 1, "unexpected number of modules")
-		AssertEqual(t, ss.modules[int32(mPB.Physicalid)], mPB, "unexpected module values")
+		AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
 	}
 }
 
 func TestFormatScm(t *testing.T) {
 	tests := []struct {
-		mountRet    error
-		unmountRet  error
-		mkdirRet    error
-		removeRet   error
-		mount       string
-		class       ScmClass
-		devs        []string
-		size        int
-		expSyscalls []string // expected arguments in syscall methods
-		desc        string
-		errMsg      string
+		inited     bool
+		formatted  bool
+		mountRet   error
+		unmountRet error
+		mkdirRet   error
+		removeRet  error
+		mount      string
+		class      ScmClass
+		devs       []string
+		size       int
+		expCmds    []string // expected arguments in syscall methods
+		expResults []*pb.ScmMountResult
+		desc       string
 	}{
 		{
-			desc:   "zero values",
-			errMsg: "scm mount must be specified in config",
+			inited: false,
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_APP,
+						Error:  msgScmNotInited,
+					},
+				},
+			},
+			desc: "not initialised",
 		},
 		{
-			desc:   "no class",
+			inited:    true,
+			formatted: true,
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_APP,
+						Error:  msgScmAlreadyFormatted,
+					},
+				},
+			},
+			desc: "already formatted",
+		},
+		{
+			inited: true,
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  msgScmMountEmpty,
+					},
+				},
+			},
+			desc: "missing mount point",
+		},
+		{
+			inited: true,
 			mount:  "/mnt/daos",
-			errMsg: "unsupported ScmClass",
-		},
-		{
-			desc:  "ram success",
-			mount: "/mnt/daos",
-			class: scmRAM,
-			size:  6,
-			expSyscalls: []string{
-				"umount /mnt/daos",
-				"remove /mnt/daos",
-				"mkdir /mnt/daos",
-				"mount tmpfs /mnt/daos tmpfs size=6g",
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  ": " + msgScmClassNotSupported,
+					},
+				},
 			},
+			desc: "no class",
 		},
 		{
-			desc:  "dcpm success",
-			mount: "/mnt/daos",
-			class: scmDCPM,
-			devs:  []string{"/dev/pmem0"},
-			expSyscalls: []string{
-				"umount /mnt/daos",
-				"remove /mnt/daos",
-				"wipefs -a /dev/pmem0",
-				"mkfs.ext4 /dev/pmem0",
-				"mkdir /mnt/daos",
-				"mount /dev/pmem0 /mnt/daos ext4 dax",
+			inited: true,
+			mount:  "/mnt/daos",
+			class:  scmRAM,
+			size:   6,
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State:    &pb.ResponseState{},
+				},
 			},
+			expCmds: []string{
+				"syscall: calling unmount with /mnt/daos, MNT_DETACH",
+				"os: removeall /mnt/daos",
+				"os: mkdirall /mnt/daos, 0777",
+				// 33806 is the combination of the following
+				// syscall flags: MS_NOATIME|MS_SILENT|MS_NODEV
+				// |MS_NOEXEC|MS_NOSUID
+				"syscall: mount tmpfs, /mnt/daos, tmpfs, 33806, size=6g",
+			},
+			desc: "ram success",
 		},
 		{
-			desc:   "dcpm missing dev",
+			inited: true,
+			mount:  "/mnt/daos",
+			class:  scmDCPM,
+			devs:   []string{"/dev/pmem0"},
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State:    &pb.ResponseState{},
+				},
+			},
+			expCmds: []string{
+				"syscall: calling unmount with /mnt/daos, MNT_DETACH",
+				"os: removeall /mnt/daos",
+				"cmd: wipefs -a /dev/pmem0",
+				"cmd: mkfs.ext4 /dev/pmem0",
+				"os: mkdirall /mnt/daos, 0777",
+				// 33806 is the combination of the following
+				// syscall flags: MS_NOATIME|MS_SILENT|MS_NODEV
+				// |MS_NOEXEC|MS_NOSUID
+				"syscall: mount /dev/pmem0, /mnt/daos, ext4, 33806, dax",
+			},
+			desc: "dcpm success",
+		},
+		{
+			inited: true,
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{},
-			errMsg: "expecting one scm dcpm pmem device per-server in config",
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  msgScmBadDevList,
+					},
+				},
+			},
+			desc: "dcpm missing dev",
 		},
 		{
-			desc:   "dcpm nil devs",
+			inited: true,
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string(nil),
-			errMsg: "expecting one scm dcpm pmem device per-server in config",
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  msgScmBadDevList,
+					},
+				},
+			},
+			desc: "dcpm nil devs",
 		},
 		{
-			desc:   "dcpm empty dev",
+			inited: true,
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{""},
-			errMsg: "scm dcpm device list must contain path",
+			expResults: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  msgScmDevEmpty,
+					},
+				},
+			},
+			desc: "dcpm empty dev",
 		},
 	}
 
-	serverIdx := 0
+	srvIdx := 0
 
 	for _, tt := range tests {
-		commands = []string{}
-
-		config := newMockScmConfig(
+		config := newMockStorageConfig(
 			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
-			tt.mount, tt.class, tt.devs, tt.size)
+			tt.mount, tt.class, tt.devs, tt.size,
+			bdNVMe, []string{})
+		ss := newMockScmStorage([]DeviceDiscovery{}, false, config)
+		ss.formatted = tt.formatted
 
-		ss := newMockScmStorage([]DeviceDiscovery{}, true, config)
+		resp := new(pb.FormatStorageResp)
 
-		if err := ss.Format(serverIdx); err != nil {
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, "")
-				continue
+		if tt.inited {
+			if err := ss.Discover(); err != nil {
+				t.Fatal(err)
 			}
-			t.Fatal(err)
 		}
 
-		for i, s := range commands {
+		ss.Format(srvIdx, resp)
+
+		// only ocm result in response for the moment
+		AssertEqual(
+			t, len(resp.Mrets), 1,
+			"unexpected number of response results, "+tt.desc)
+
+		result := resp.Mrets[0]
+
+		AssertEqual(
+			t, result.State.Status, tt.expResults[0].State.Status,
+			"unexpected response status, "+tt.desc)
+		AssertEqual(
+			t, result.State.Error, tt.expResults[0].State.Error,
+			"unexpected result error message, "+tt.desc)
+		AssertEqual(
+			t, result.Mntpoint, tt.expResults[0].Mntpoint,
+			"unexpected mntpoint, "+tt.desc)
+
+		if result.State.Status == pb.ResponseStatus_CTRL_SUCCESS {
 			AssertEqual(
-				t, s, tt.expSyscalls[i],
+				t, ss.formatted,
+				true, "expect formatted state, "+tt.desc)
+		}
+
+		cmds := ss.config.ext.getHistory()
+		AssertEqual(
+			t, len(cmds), len(tt.expCmds), "number of cmds, "+tt.desc)
+		for i, s := range cmds {
+			AssertEqual(
+				t, s, tt.expCmds[i],
 				fmt.Sprintf("commands don't match (%s)", tt.desc))
 		}
-
-		// in case extra values were expected
-		AssertEqual(
-			t, len(commands), len(tt.expSyscalls),
-			fmt.Sprintf("unexpected number of commands (%s)", tt.desc))
 	}
 }

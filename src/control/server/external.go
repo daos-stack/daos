@@ -34,6 +34,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	msgUnmount = "syscall: calling unmount with %s, MNT_DETACH"
+	msgMount   = "syscall: mount %s, %s, %s, %s, %s"
+	msgMkdir   = "os: mkdirall %s, 0777"
+	msgRemove  = "os: removeall %s"
+	msgCmd     = "cmd: %s"
+)
+
 // External interface provides methods to support various os operations.
 type External interface {
 	getenv(string) string
@@ -44,13 +52,22 @@ type External interface {
 	unmount(string) error
 	mkdir(string) error
 	remove(string) error
+	getHistory() []string
 }
 
-type ext struct{}
+type ext struct {
+	history []string
+}
+
+func (e *ext) getHistory() []string {
+	return e.history
+}
 
 // runCommand executes command in subshell (to allow redirection) and returns
 // error result.
 func (e *ext) runCommand(cmd string) error {
+	e.history = append(e.history, fmt.Sprintf(msgCmd, cmd))
+
 	return common.Run(cmd)
 }
 
@@ -59,10 +76,10 @@ func (e *ext) getenv(key string) string {
 	return os.Getenv(key)
 }
 
-// writeToFile wraps around common.WriteString and writes input
-// string to given file pathk.
-func (e *ext) writeToFile(in string, outPath string) error {
-	return common.WriteString(outPath, in)
+// writeToFile wraps around common.WriteString and writes input string to given
+// file path.
+func (e *ext) writeToFile(contents string, path string) error {
+	return common.WriteString(path, contents)
 }
 
 // createEmpty creates a file (if it doesn't exist) of specified size in bytes
@@ -95,9 +112,10 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 func (e *ext) mount(
 	dev string, mount string, mntType string, flags uintptr, opts string) error {
 
-	log.Debugf(
-		"calling mount with %s, %s, %s, %s, %s",
-		dev, mount, mntType, fmt.Sprint(flags), opts)
+	op := fmt.Sprintf(msgMount, dev, mount, mntType, fmt.Sprint(flags), opts)
+
+	log.Debugf(op)
+	e.history = append(e.history, op)
 
 	if err := syscall.Mount(dev, mount, mntType, flags, opts); err != nil {
 		return os.NewSyscallError("mount", err)
@@ -107,12 +125,13 @@ func (e *ext) mount(
 
 // NOTE: requires elevated privileges, lazy unmount, mntpoint may not be
 //       available immediately after
-func (e *ext) unmount(mntPoint string) error {
-	log.Debugf("calling unmount with %s, MNT_DETACH", mntPoint)
+func (e *ext) unmount(path string) error {
+	log.Debugf(msgUnmount, path)
+	e.history = append(e.history, fmt.Sprintf(msgUnmount, path))
 
 	// ignore NOENT errors, treat as success
 	if err := syscall.Unmount(
-		mntPoint, syscall.MNT_DETACH); err != nil && !os.IsNotExist(err) {
+		path, syscall.MNT_DETACH); err != nil && !os.IsNotExist(err) {
 
 		// when mntpoint exists but is unmounted, get EINVAL
 		e, ok := err.(syscall.Errno)
@@ -126,17 +145,23 @@ func (e *ext) unmount(mntPoint string) error {
 }
 
 // NOTE: may require elevated privileges
-func (e *ext) mkdir(mntPoint string) error {
-	if err := os.MkdirAll(mntPoint, 0777); err != nil {
+func (e *ext) mkdir(path string) error {
+	log.Debugf(msgMkdir, path)
+	e.history = append(e.history, fmt.Sprintf(msgMkdir, path))
+
+	if err := os.MkdirAll(path, 0777); err != nil {
 		return errors.WithMessage(err, "mkdir")
 	}
 	return nil
 }
 
 // NOTE: may require elevated privileges
-func (e *ext) remove(mntPoint string) error {
+func (e *ext) remove(path string) error {
+	log.Debugf(msgRemove, path)
+	e.history = append(e.history, fmt.Sprintf(msgRemove, path))
+
 	// ignore NOENT errors, treat as success
-	if err := os.RemoveAll(mntPoint); err != nil && !os.IsNotExist(err) {
+	if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
 		return errors.WithMessage(err, "remove")
 	}
 	return nil

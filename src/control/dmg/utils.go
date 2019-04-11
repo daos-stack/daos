@@ -98,7 +98,7 @@ func unpackFormat(i interface{}) string {
 				continue
 			}
 
-			decoded[addr] = res.Mms
+			decoded[addr] = res.Modules
 		}
 	case client.ResultMap:
 		for addr, res := range v {

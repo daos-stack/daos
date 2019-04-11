@@ -64,12 +64,14 @@ func (c *controllerFactory) create(address string) (Control, error) {
 type Connect interface {
 	// ConnectClients attempts to connect a list of addresses
 	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states of controllers and removes inactive
+	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
+	ScanStorage() (ClientNvmeMap, ClientScmMap)
+	FormatStorage() (ClientNvmeMap, ClientScmMap)
+	//UpdateStorage() (ClientNvmeMap, ClientScmMap)
+	//BurninStorage() (ClientNvmeMap, ClientScmMap)
 	ListFeatures() ClientFeatureMap
-	ListStorage() (ClientNvmeMap, ClientScmMap)
-	FormatStorage() ResultMap
 	KillRank(uuid string, rank uint32) ResultMap
 }
 

@@ -45,16 +45,10 @@ const (
 	scmDCPM ScmClass = "dcpm"
 	scmRAM  ScmClass = "ram"
 
-	bdNVMe   BdClass = "nvme"
-	bdMalloc BdClass = "malloc"
-	bdKdev   BdClass = "kdev"
-	bdFile   BdClass = "file"
-
 	// TODO: implement Provider discriminated union
 	// TODO: implement LogMask discriminated union
 )
 
-// rank represents a rank of an I/O server or a nil rank.
 type rank uint32
 
 func (r rank) String() string {
@@ -135,16 +129,16 @@ func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// BdClass enum specifing block device type for storage
-type BdClass string
+// BdevClass enum specifing block device type for storage
+type BdevClass string
 
-// UnmarshalYAML implements yaml.Unmarshaler on BdClass type
-func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
+// UnmarshalYAML implements yaml.Unmarshaler on BdevClass type
+func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var class string
 	if err := unmarshal(&class); err != nil {
 		return err
 	}
-	bdevClass := BdClass(class)
+	bdevClass := BdevClass(class)
 	switch bdevClass {
 	case bdNVMe, bdMalloc, bdKdev, bdFile:
 		*b = bdevClass
@@ -160,23 +154,23 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // server defines configuration options for DAOS IO Server instances
 type server struct {
-	Rank            *rank    `yaml:"rank"`
-	Targets         []string `yaml:"targets"` // cpus to run xstreams
-	NrXsHelpers     int      `yaml:"nr_xs_helpers"`
-	FirstCore       int      `yaml:"first_core"`
-	FabricIface     string   `yaml:"fabric_iface"`
-	FabricIfacePort int      `yaml:"fabric_iface_port"`
-	LogMask         string   `yaml:"log_mask"`
-	LogFile         string   `yaml:"log_file"`
-	EnvVars         []string `yaml:"env_vars"`
-	ScmMount        string   `yaml:"scm_mount"`
-	ScmClass        ScmClass `yaml:"scm_class"`
-	ScmList         []string `yaml:"scm_list"`
-	ScmSize         int      `yaml:"scm_size"`
-	BdevClass       BdClass  `yaml:"bdev_class"`
-	BdevList        []string `yaml:"bdev_list"`
-	BdevNumber      int      `yaml:"bdev_number"`
-	BdevSize        int      `yaml:"bdev_size"`
+	Rank            *rank     `yaml:"rank"`
+	Targets         []string  `yaml:"targets"` // cpus to run xstreams
+	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
+	FirstCore       int       `yaml:"first_core"`
+	FabricIface     string    `yaml:"fabric_iface"`
+	FabricIfacePort int       `yaml:"fabric_iface_port"`
+	LogMask         string    `yaml:"log_mask"`
+	LogFile         string    `yaml:"log_file"`
+	EnvVars         []string  `yaml:"env_vars"`
+	ScmMount        string    `yaml:"scm_mount"`
+	ScmClass        ScmClass  `yaml:"scm_class"`
+	ScmList         []string  `yaml:"scm_list"`
+	ScmSize         int       `yaml:"scm_size"`
+	BdevClass       BdevClass `yaml:"bdev_class"`
+	BdevList        []string  `yaml:"bdev_list"`
+	BdevNumber      int       `yaml:"bdev_number"`
+	BdevSize        int       `yaml:"bdev_size"`
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
 	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]

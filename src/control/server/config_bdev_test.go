@@ -35,7 +35,7 @@ import (
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := []struct {
-		bdevClass  BdClass
+		bdevClass  BdevClass
 		bdevList   []string
 		bdevSize   int  // relevant for MALLOC/FILE
 		bdevNumber int  // relevant for MALLOC
@@ -43,6 +43,7 @@ func TestParseBdev(t *testing.T) {
 		extraEnv   string
 		expFiles   [][]string
 		errMsg     string
+		desc       string
 	}{
 		{
 			expFiles: [][]string{
@@ -58,6 +59,7 @@ func TestParseBdev(t *testing.T) {
 					``,
 				},
 			},
+			desc: "defaults from example config",
 		},
 		{
 			bdevClass: bdNVMe,
@@ -76,6 +78,7 @@ func TestParseBdev(t *testing.T) {
 					``,
 				},
 			},
+			desc: "multiple controllers",
 		},
 		{
 			bdevClass: bdFile,
@@ -92,6 +95,7 @@ func TestParseBdev(t *testing.T) {
 				},
 			},
 			extraEnv: "VOS_BDEV_CLASS=AIO",
+			desc:     "AIO file",
 		},
 		{
 			bdevClass: bdFile,
@@ -107,6 +111,7 @@ func TestParseBdev(t *testing.T) {
 			},
 			extraEnv:   "VOS_BDEV_CLASS=AIO",
 			fileExists: true,
+			desc:       "AIO file already exists",
 		},
 		{
 			bdevClass: bdKdev,
@@ -120,6 +125,7 @@ func TestParseBdev(t *testing.T) {
 				},
 			},
 			extraEnv: "VOS_BDEV_CLASS=AIO",
+			desc:     "AIO kdev",
 		},
 		{
 			bdevClass:  bdMalloc,
@@ -134,6 +140,7 @@ func TestParseBdev(t *testing.T) {
 				},
 			},
 			extraEnv: "VOS_BDEV_CLASS=MALLOC",
+			desc:     "MALLOC",
 		},
 	}
 
@@ -163,7 +170,7 @@ func TestParseBdev(t *testing.T) {
 
 		err := config.parseNvme(srvIdx)
 		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, "")
+			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
 		}
 		if err != nil {
@@ -171,25 +178,33 @@ func TestParseBdev(t *testing.T) {
 		}
 		AssertEqual(
 			t, len(files), len(tt.expFiles),
-			fmt.Sprintf("files returned, got %#v want %#v", files, tt.expFiles))
+			fmt.Sprintf(
+				"%s: files returned, got %#v want %#v",
+				tt.desc, files, tt.expFiles))
 		// iterate through entries representing files created
 		for i, file := range files {
 			actLines := strings.Split(file, "\n")
 			AssertEqual(
 				t, len(actLines), len(tt.expFiles[i]),
-				fmt.Sprintf("lines returned, got %#v want %#v", files, tt.expFiles))
+				fmt.Sprintf(
+					"%s: lines returned, got %#v want %#v",
+					tt.desc, files, tt.expFiles))
 			// iterate over file contents, trim spaces before comparing
 			for j, line := range actLines {
 				line = strings.TrimSpace(line)
 				AssertEqual(
 					t, line, tt.expFiles[i][j],
-					fmt.Sprintf("line %d, got %s want %s", i, line, tt.expFiles[i][j]))
+					fmt.Sprintf(
+						"%s: line %d, got %s want %s",
+						tt.desc, i, line, tt.expFiles[i][j]))
 			}
 		}
 		// verify VOS_BDEV_CLASS env gets set as expected
 		if tt.extraEnv != "" {
 			if !Include(srv.EnvVars, tt.extraEnv) {
-				t.Fatal("env variable missing: " + tt.extraEnv)
+				t.Fatal(
+					tt.desc + ": env variable missing: " +
+						tt.extraEnv)
 			}
 		}
 	}

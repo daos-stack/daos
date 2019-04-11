@@ -149,6 +149,32 @@ NVMe:
   namespace:
   - id: 1
     capacity: 375
+
+SCM:
+- physicalid: 28
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 0
+  capacity: 539661172736
+- physicalid: 40
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 0
+  capacity: 539661172736
+- physicalid: 50
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 1
+  capacity: 539661172736
+- physicalid: 62
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 1
+  capacity: 539661172736
 ```
 
 </p>
@@ -185,7 +211,7 @@ Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
 
 Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
 
-The DAOS control plane wil provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
+The DAOS control plane will provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
 
 #### SCM module discovery
 

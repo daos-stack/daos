@@ -24,23 +24,11 @@
 package client
 
 import (
-	"fmt"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
-
-var errConnect = fmt.Errorf("no client connection was found, please connect")
-
-// ScmModules is an alias for protobuf ScmModule message slice representing
-// a number of SCM modules installed on a storage node.
-type ScmModules []*pb.ScmModule
-
-// NvmeControllers is an alias for protobuf NvmeController message slice
-// representing a number of NVMe SSD controllers installed on a storage node.
-type NvmeControllers []*pb.NvmeController
 
 // Control interface accesses gRPC client functionality.
 type Control interface {
@@ -48,10 +36,11 @@ type Control interface {
 	disconnect() error
 	connected() (connectivity.State, bool)
 	getAddress() string
+	scanStorage() (*pb.ScanStorageResp, error)
+	formatStorage() (pb.MgmtControl_FormatStorageClient, error)
+	//updateStorage(*pb.UpdateStorageParams) (*pb.UpdateStorageResp, error)
+	//burninStorage(*pb.BurninStorageParams) (*pb.BurninStorageResp, error)
 	listAllFeatures() (FeatureMap, error)
-	listScmModules() (ScmModules, error)
-	listNvmeCtrlrs() (NvmeControllers, error)
-	formatStorage() error
 	killRank(uuid string, rank uint32) error
 }
 

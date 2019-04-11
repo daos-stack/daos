@@ -27,6 +27,7 @@ import (
 	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
 
@@ -37,6 +38,7 @@ type mockControl struct {
 	features   []*pb.Feature
 	ctrlrs     NvmeControllers
 	modules    ScmModules
+	scanRet    error
 	formatRet  error
 	killRet    error
 	connectRet error
@@ -62,14 +64,34 @@ func (m *mockControl) listAllFeatures() (FeatureMap, error) {
 	}
 	return fm, nil
 }
-func (m *mockControl) listNvmeCtrlrs() (NvmeControllers, error) {
-	return m.ctrlrs, nil
+func (m *mockControl) scanStorage() (*pb.ScanStorageResp, error) {
+	// return successful query results, state member messages
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.ScanStorageResp{
+		Ctrlrs:  m.ctrlrs,
+		Modules: m.modules,
+	}, m.scanRet
 }
-func (m *mockControl) listScmModules() (ScmModules, error) {
-	return m.modules, nil
+
+type mgmtControlFormatStorageClient struct {
+	grpc.ClientStream
 }
-func (m *mockControl) formatStorage() error {
-	return m.formatRet
+
+func (x mgmtControlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
+	return &pb.FormatStorageResp{
+		Crets: NvmeControllerResults{
+			&pb.NvmeControllerResult{},
+		},
+		Mrets: ScmMountResults{
+			&pb.ScmMountResult{},
+		},
+	}, nil
+}
+
+func (m *mockControl) formatStorage() (
+	pb.MgmtControl_FormatStorageClient, error) {
+
+	return mgmtControlFormatStorageClient{}, m.formatRet
 }
 func (m *mockControl) killRank(uuid string, rank uint32) error {
 	return m.killRet
@@ -77,12 +99,12 @@ func (m *mockControl) killRank(uuid string, rank uint32) error {
 
 func newMockControl(
 	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules,
+	ctrlrs NvmeControllers, modules ScmModules, scanRet error,
 	formatRet error, killRet error, connectRet error) Control {
 
 	return &mockControl{
 		address, state, features, ctrlrs, modules,
-		formatRet, killRet, connectRet,
+		scanRet, formatRet, killRet, connectRet,
 	}
 }
 
@@ -104,7 +126,7 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
 func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
 	cMap := make(ClientNvmeMap)
 	for _, addr := range addrs {
-		cMap[addr] = NvmeResult{ctrlrs, nil}
+		cMap[addr] = NvmeResult{Ctrlrs: ctrlrs}
 	}
 	return cMap
 }
@@ -113,7 +135,7 @@ func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
 func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
 	cMap := make(ClientScmMap)
 	for _, addr := range addrs {
-		cMap[addr] = ScmResult{mms, nil}
+		cMap[addr] = ScmResult{Modules: mms}
 	}
 	return cMap
 }
