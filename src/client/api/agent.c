@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <daos/agent.h>
 
-char* dc_agent_sockpath;
+char *dc_agent_sockpath;
 
 int
 dc_agent_init()
@@ -43,7 +43,7 @@ dc_agent_init()
 
 		ret = asprintf(&path, "%s/%s", envpath,
 				DAOS_AGENT_DRPC_SOCK_NAME);
-		if ( ret < 0) {
+		if (ret < 0) {
 			path = NULL;
 		}
 	}

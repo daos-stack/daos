@@ -48,8 +48,8 @@ extern char *dc_agent_sockpath;
 /**
  * Default Unix Domain Socket path for the DAOS agent dRPC connection
  */
-#define DEFAULT_DAOS_AGENT_DRPC_SOCK 	DAOS_AGENT_DRPC_DIR \
-					DAOS_AGENT_DRPC_SOCK_NAME
+#define DEFAULT_DAOS_AGENT_DRPC_SOCK	(DAOS_AGENT_DRPC_DIR \
+					DAOS_AGENT_DRPC_SOCK_NAME)
 
 /**
  * dRPC definitions for DAOS agent.

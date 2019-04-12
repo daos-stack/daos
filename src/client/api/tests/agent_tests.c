@@ -88,6 +88,7 @@ static void
 test_dc_agent_init_with_env(void **state)
 {
 	char *sockaddr = "/nice/good/agent.sock";
+
 	getenv_return = "/nice/good";
 
 	dc_agent_init();
