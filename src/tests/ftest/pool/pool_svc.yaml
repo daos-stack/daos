@@ -5,8 +5,8 @@ hosts:
             - boro-B
             - boro-C
             - boro-D
-server:
-    server_group: daos_server
+server_config:
+    name: daos_server
 createtests:
     createmode:
         mode_RW:

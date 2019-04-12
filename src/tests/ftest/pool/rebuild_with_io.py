@@ -77,7 +77,7 @@ class RebuildWithIO(Test):
 
         # the rebuild tests need to redo this stuff each time so not in setup
         # as it usually would be
-        server_group = self.params.get("server_group", '/server/',
+        server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
