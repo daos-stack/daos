@@ -80,7 +80,7 @@ class Dfuse(Test):
                                             self.workdir))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
-        # start servers
+        # start server
         self.agent_sessions = AgentUtils.run_agent(self.basepath,
                                                    self.hostlist_servers,
                                                    self.hostlist_clients)
@@ -108,7 +108,10 @@ class Dfuse(Test):
         ServerUtils.stopServer(hosts=self.hostlist_servers)
 
     def test_dfuse(self):
-        """Try and run something over fuse"""
+        """Try and run something over fuse
+
+        :avocado: tags=vm
+        """
         self.fail("Well, here we are")
 
     def test_dfuse_optimist(self):
