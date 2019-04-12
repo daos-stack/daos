@@ -1,8 +1,13 @@
-hosts:
-    test_servers:
-        - boro-A
-    test_clients:
-        - boro-B
+run:
+    hosts:
+        test_servers:
+            - boro-A
+        test_clients:
+            - boro-B
 timeout: 240
 server:
     server_group: daos_server
+poolparams:
+   mode: 511
+   setname: daos_server
+   size: 1073741824
