@@ -64,7 +64,7 @@ class DaosCoreTest(Test):
         self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         self.daos_test = self.basepath + '/install/bin/daos_test'
-        self.orterun = 'orterun'
+        self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         #To generate the seperate client log file
         self.orterun_env = '-x D_LOG_FILE={}'.format(CLIENT_LOG)

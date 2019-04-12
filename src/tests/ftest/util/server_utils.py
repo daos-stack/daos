@@ -40,8 +40,8 @@ from avocado.utils import genio
 
 SESSIONS = {}
 
-DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yml"
-AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yml"
+DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
+AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
