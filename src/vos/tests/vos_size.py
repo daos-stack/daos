@@ -27,7 +27,6 @@ Usage: vos_size.py input.yaml [alternate vos_size.yaml]
 
 See vos_size_input.yaml sample input
 '''
-import sys
 import yaml
 import random
 
@@ -67,8 +66,9 @@ class Stats(object):
             "array": 0,
             "single_value": 0,
             "user_value": 0,
-            "user_key": 0,
+            "user_meta": 0,
             "total_meta": 0,
+            "nvme_total": 0,
             "total": 0
         }
 
@@ -83,14 +83,16 @@ class Stats(object):
         self.stats["total"] += count
         self.stats["total_meta"] += count
 
-    def add_user_value(self, count):
+    def add_user_value(self, tree):
         """add a user data"""
+        count = tree["value_size"]
         self.stats["user_value"] += count
+        self.stats["nvme_total"] += tree["nvme_size"]
         self.stats["total"] += count
 
-    def add_user_key(self, count):
+    def add_user_meta(self, count):
         """add a user key"""
-        self.stats["user_key"] += count
+        self.stats["user_meta"] += count
         self.stats["total"] += count
 
     def merge(self, child):
@@ -109,6 +111,7 @@ class Stats(object):
     def pretty_print(self):
         """Pretty print statistics"""
         print "Metadata totals:"
+        self.stats["scm_total"] = self.stats["total"] - self.stats["nvme_total"]
         self.print_stat("pool")
         self.print_stat("container")
         self.print_stat("object")
@@ -117,15 +120,17 @@ class Stats(object):
         self.print_stat("single_value")
         self.print_stat("array")
         self.print_stat("total_meta")
-        self.print_stat("user_key")
+        self.print_stat("user_meta")
         self.print_stat("user_value")
-        print "Total bytes with user data: %dK" % (self.stats["total"] / 1024)
+        self.print_stat("scm_total")
+        print "Total bytes with user data: %s" % (convert(self.stats["total"]))
 
 # pylint: disable=too-many-instance-attributes
 class MetaOverhead(object):
     """Class for calculating overheads"""
-    def __init__(self, num_pools, meta_yaml):
+    def __init__(self, args, num_pools, meta_yaml):
         """class for keeping track of overheads"""
+        self.args = args
         self.csum_size = 0
         self.meta = meta_yaml
         self.num_pools = num_pools
@@ -142,7 +147,7 @@ class MetaOverhead(object):
             raise RuntimeError("No objects in container spec %s" % cont_spec)
 
         for pool in self.pools:
-            pool["count"] += 1
+            pool["count"] += int(cont_spec.get("count", 1))
             cont = {"dup": int(cont_spec.get("count", 1)), "key": "object",
                     "count": 0, "csum_size": int(cont_spec.get("csum_size", 0)),
                     "csum_gran": int(cont_spec.get("csum_gran", 16384)),
@@ -185,21 +190,21 @@ class MetaOverhead(object):
                     obj = {"dup": int(obj_spec.get("count", 1)), "key": "dkey",
                            "count": 0, "trees": [], "oid": oid}
                     cont["trees"].append(obj)
-                    cont["count"] += 1
+                    cont["count"] += int(obj_spec.get("count", 1))
                 dup = full_count
                 if partial_count > idx:
                     dup += 1
                 obj = cont["trees"][-1]
                 dkey = {"dup": dup, "key": "akey", "count": 0, "trees": [],
                         "type": dkey_spec.get("type", "hashed"),
-                        "size": int(dkey_spec.get("size", 0))}
+                        "size": int(dkey_spec.get("size", 0)),
+                        "overhead": dkey_spec.get("overhead", "user")}
                 obj["trees"].append(dkey)
-                obj["count"] += 1
+                obj["count"] += dup
                 for akey_spec in dkey_spec.get("akeys"):
-                    MetaOverhead.init_akey(cont, dkey, akey_spec)
+                    self.init_akey(cont, dkey, akey_spec)
 
-    @staticmethod
-    def init_akey(cont, dkey, akey_spec):
+    def init_akey(self, cont, dkey, akey_spec):
         """Handle akey specification"""
         check_key_type(akey_spec)
         if "values" not in akey_spec:
@@ -210,18 +215,21 @@ class MetaOverhead(object):
                 "key": akey_spec.get("value_type"), "count": 0,
                 "type": akey_spec.get("type", "hashed"),
                 "size": int(akey_spec.get("size", 0)),
-                "value_size": 0}
+                "overhead": akey_spec.get("overhead", "user"),
+                "value_size": 0, "meta_size": 0, "nvme_size": 0}
         dkey["trees"].append(akey)
-        dkey["count"] += 1
+        dkey["count"] += int(akey_spec.get("count", 1))
         for value_spec in akey_spec.get("values"):
-            MetaOverhead.init_value(cont, akey, value_spec)
+            self.init_value(cont, akey, value_spec)
 
-    @staticmethod
-    def init_value(cont, akey, value_spec):
+    def init_value(self, cont, akey, value_spec):
         """Handle value specification"""
         if "size" not in value_spec:
             raise RuntimeError("No size in value spec %s" % value_spec)
         size = value_spec.get("size")
+        nvme = True
+        if self.meta.get("scm_cutoff") > size:
+            nvme = False
         csum_size = cont["csum_size"]
         if csum_size != 0:
             if akey["key"] == "single_value" or size < cont["csum_gran"]:
@@ -231,41 +239,53 @@ class MetaOverhead(object):
                 if value_spec.get("aligned", "Yes") == "No":
                     size += (csum_size * 2)
         akey["count"] += value_spec.get("count", 1) # Number of values
-        akey["value_size"] += size * value_spec.get("count", 1) # total size
+        if value_spec.get("overhead", "user") == "user":
+            akey["value_size"] += size * value_spec.get("count", 1) # total size
+        else:
+            akey["meta_size"] += size * value_spec.get("count", 1) # total size
+        if nvme:
+            akey["nvme_size"] += size * value_spec.get("count", 1) # total size
 
     def load_container(self, cont_spec):
         """calculate metadata for update(s)"""
         self.init_container(cont_spec)
 
-    def calc_subtrees(self, parent, mult):
+    def calc_subtrees(self, stats, parent):
         """Calculate for subtrees"""
-        stats = Stats()
         for tree in parent["trees"]:
             if parent["key"] == "container":
                 self.csum_size = tree["csum_size"]
             self.calc_tree(stats, tree)
-        stats.mult(mult)
-        return stats
 
     def calc_tree(self, stats, tree):
         """calculate the totals"""
+        tree_stats = Stats()
         key = tree["key"]
         num_values = tree["count"]
         record_size = self.meta["trees"][key]["record_msize"]
         node_size = self.meta["trees"][key]["node_size"]
         order = self.meta["trees"][key]["order"]
-        rec_overhead = num_values * record_size
-        tree_nodes = (num_values * 2 + order -1) / order
-        overhead = tree_nodes * node_size + rec_overhead
+        if num_values == 1 and key in self.args.trees:
+            overhead = self.meta["trees"][key]["single_size"]
+        else:
+            rec_overhead = num_values * record_size
+            tree_nodes = (num_values * 2 + order -1) / order
+            overhead = tree_nodes * node_size + rec_overhead
         if key == "akey" or key == "single_value" or key == "array":
             #key refers to child tree
-            stats.add_user_key(num_values * tree["size"])
+            if tree["overhead"] == "user":
+                tree_stats.add_user_meta(num_values * tree["size"])
+            else:
+                tree_stats.add_meta(key, num_values * tree["size"])
             overhead += self.csum_size * num_values
-        stats.add_meta(key, overhead)
+        tree_stats.add_meta(key, overhead)
         if key == "array" or key == "single_value":
-            stats.add_user_value(tree["value_size"])
+            tree_stats.add_user_value(tree)
+            tree_stats.add_meta(key, tree["meta_size"])
+            stats.merge(tree_stats)
             return
-        tree_stats = self.calc_subtrees(tree, tree["dup"])
+        self.calc_subtrees(tree_stats, tree)
+        tree_stats.mult(tree["dup"])
         stats.merge(tree_stats)
 
     def print_report(self):
@@ -282,25 +302,30 @@ class MetaOverhead(object):
 
 def run_vos_size():
     """Run the tool"""
+    import argparse
 
-    if len(sys.argv) < 2:
-        print "Usage: %s <configuration> [<meta config>]" % sys.argv[0]
-        sys.exit(-1)
+    parser = argparse.ArgumentParser(description="Estimate VOS Overhead")
+    parser.add_argument('config', metavar='CONFIG', type=str, nargs=1,
+                        help='Input configuration file')
+    parser.add_argument('--meta', metavar='META', help='Input metadata file',
+                        default='vos_size.yaml')
+    parser.add_argument('trees', metavar='TREETYPE',
+                        nargs='*', default='no',
+                        choices=['akey', 'dkey', 'single_value', 'array', 'no'],
+                        help='Tree type for first entry in root')
 
-    config_name = open(sys.argv[1], "r")
-    config_yaml = yaml.load(config_name)
+    args = parser.parse_args()
 
-    meta_name = "vos_size.yaml"
-    if len(sys.argv) == 3:
-        meta_name = sys.argv[2]
-    meta_yaml = yaml.load(open(meta_name, "r"))
+    config_yaml = yaml.safe_load(open(args.config[0], "r"))
+
+    meta_yaml = yaml.safe_load(open(args.meta, "r"))
 
     num_pools = config_yaml.get("num_pools", 1)
 
-    overheads = MetaOverhead(num_pools, meta_yaml)
+    overheads = MetaOverhead(args, num_pools, meta_yaml)
 
     if "containers" not in config_yaml:
-        print "No \"containers\" key in %s.  Nothing to do" % config_name
+        print "No \"containers\" key in %s.  Nothing to do" % args.config[0]
         return
 
     for container in config_yaml.get("containers"):

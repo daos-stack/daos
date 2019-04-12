@@ -33,6 +33,7 @@
 #include <daos_srv/daos_server.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include "srv_layout.h"
 
 static int
 init(void)
@@ -51,10 +52,16 @@ init(void)
 	if (rc)
 		D_GOTO(err_hdl_hash, rc);
 
+	rc = ds_pool_prop_default_init();
+	if (rc)
+		D_GOTO(err_pool_iv, rc);
+
 	ds_pool_rsvc_class_register();
 
 	return 0;
 
+err_pool_iv:
+	ds_pool_iv_fini();
 err_hdl_hash:
 	ds_pool_hdl_hash_fini();
 err_pool_cache:
@@ -70,6 +77,7 @@ fini(void)
 	ds_pool_iv_fini();
 	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
+	ds_pool_prop_default_fini();
 	return 0;
 }
 

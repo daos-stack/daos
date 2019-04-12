@@ -103,6 +103,8 @@ func (s *scmStorage) Discover() error {
 	if s.initialized {
 		mms, err := s.ipmCtl.Discover()
 		if err != nil {
+			// TODO: check and handle permissions and no module errs
+			//       to give caller useful message.
 			return err
 		}
 		pbMms, err := loadModules(mms)
@@ -180,6 +182,12 @@ func (s *scmStorage) makeMount(
 func (s *scmStorage) Format(idx int) error {
 	var devType, devPath, mntOpts string
 
+	if s.formatted {
+		return errors.New(
+			"scm storage has already been formatted and reformat " +
+				"not implemented")
+	}
+
 	srv := s.config.Servers[idx]
 	mntPoint := srv.ScmMount
 
@@ -194,7 +202,8 @@ func (s *scmStorage) Format(idx int) error {
 	case scmDCPM:
 		if len(srv.ScmList) != 1 {
 			return errors.New(
-				"expecting one scm dcpm pmem device per-server in config")
+				"expecting one scm dcpm pmem device per-server " +
+					"in config")
 		}
 		devPath = srv.ScmList[0]
 		if devPath == "" {
