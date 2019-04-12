@@ -337,6 +337,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	daos_size_t		sgls_size;
 	uint64_t		dkey_hash;
 	bool			do_bulk = false;
+	bool			cb_registered = false;
 	int			rc;
 
 	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
@@ -451,6 +452,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 				       sizeof(rw_args));
 	if (rc != 0)
 		D_GOTO(out_args, rc);
+	cb_registered = true;
 
 	if (daos_io_bypass & IOBP_CLI_RPC) {
 		rc = daos_rpc_complete(req, task);
@@ -472,7 +474,8 @@ out_req:
 out_pool:
 	dc_pool_put(pool);
 out_obj:
-	obj_shard_decref(shard);
+	if (!cb_registered)
+		obj_shard_decref(shard);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -743,6 +746,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	struct obj_key_enum_in	*oei;
 	struct obj_enum_args	enum_args;
 	daos_size_t		sgl_size = 0;
+	bool			cb_registered = false;
 	int			rc;
 
 	D_ASSERT(obj_shard != NULL);
@@ -839,6 +843,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 				       sizeof(enum_args));
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
+	cb_registered = true;
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
@@ -857,7 +862,8 @@ out_req:
 out_pool:
 	dc_pool_put(pool);
 out_put:
-	obj_shard_decref(obj_shard);
+	if (!cb_registered)
+		obj_shard_decref(obj_shard);
 	tse_task_complete(task, rc);
 	return rc;
 }
