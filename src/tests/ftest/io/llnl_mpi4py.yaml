@@ -1,8 +1,8 @@
 hosts:
     test_servers:
-        - boro-64
+        - boro-A
     test_clients:
-        - boro-61
+        - boro-B
 timeout: 240
 server_config:
     name: daos_server
@@ -16,6 +16,8 @@ pool:
         size: 10000000000
     createsvc:
         svcn: 1
+client_processes:
+    np: 8
 # below mentioned path should be replaced by path of
 # LLNL and Mpi4py test suite directory in CI nodes when available.
 test_repo:
