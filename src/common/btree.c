@@ -3631,6 +3631,7 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 {
 	btr_ops_t	*ops;
 	size_t		 hkey_size;
+	size_t		 btr_size;
 
 	if (ovhd == NULL) {
 		D_ERROR("Invalid ovhd argument\n");
@@ -3651,12 +3652,14 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 	}
 
 	hkey_size = btr_hkey_size_const(ops, ofeat);
+	btr_size = sizeof(struct btr_record) + hkey_size;
 
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
+	ovhd->to_single_size = ovhd->to_record_msize + btr_size;
 
 	ovhd->to_order = tree_order;
 	ovhd->to_node_size = alloc_overhead + sizeof(struct btr_node) +
-		(sizeof(struct btr_record) + hkey_size) * tree_order;
+		btr_size * tree_order;
 
 	return 0;
 }
