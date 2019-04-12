@@ -33,6 +33,35 @@
 #include <inttypes.h>
 #include <daos/pool_map.h>
 
+static inline void
+set_bitmap(uint8_t *bitmap, uint64_t bit)
+{
+        uint64_t offset = bit / 8;
+        uint8_t position = bit % 8;
+        bitmap[offset] |= (0x80 >> position);
+}
+
+static inline void
+clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end)
+{
+        uint8_t mask = (0xFF >> (start % 8));
+
+        mask = ~mask;
+        if (end >> 3 == start >> 3) {
+            mask |= (0xFF >> ((end%8)+1));
+            bitmap[(start >> 3)] &= mask;
+            return;
+        }
+
+        bitmap[(start >> 3)] &= mask;
+
+        mask = (0xFF >> ((end % 8) + 1));
+        bitmap[(end >> 3)] &= mask;
+
+        if (end >> 3 > (start >> 3) + 1)
+            memset(&(bitmap[(start>>3)+1]), 0, (end>>3) - ((start>>3)+1));
+}
+
 /**
  * Jump Consistent Hash Algorithm that provides a bucket location
  * for the given key. This algorithm hashes a minimal (1/n) number
@@ -585,6 +614,7 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 	int j;
 	int k;
 
+
 	memset(dom_used, 0, sizeof(*dom_used) * dom_map_size);
 	memset(dom_cnt, 0, sizeof(*dom_cnt) *  cnt_map_size);
 	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) * 2);
@@ -749,6 +779,7 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
 	struct pool_domain      *root;
+	struct pool_domain      *next;
 	int rc;
 
 	mplmap = pl_map2mplmap(map);
@@ -774,6 +805,9 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Get root node of pool map */
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
+	pool_map_find_domain(pmap, PO_COMP_TP_RACK, PO_COMP_ID_ALL, &next);
+	D_PRINT("%p\n", root);
+	D_PRINT("%i\n", (int)(((uint64_t)next- (uint64_t)root)/sizeof(struct pool_domain)));
 	get_target_layout(root, layout, mplmap->co_map_root, group_size,
 			  group_cnt, oid, 10, mplmap->dom_used_length,
 			  mplmap->cnt_used_length, NULL);
