@@ -1,5 +1,5 @@
-server:
-   server_group: test_server
+server_config:
+   name: test_server
 hosts:
   test_machines:
     - boro-A

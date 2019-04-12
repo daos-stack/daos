@@ -20,8 +20,8 @@ hosts:
     - boro-D
     - boro-E
     - boro-F
-server:
-   server_group: daos_server
+server_config:
+   name: daos_server
 poolparams:
    createmode:
      mode: 511

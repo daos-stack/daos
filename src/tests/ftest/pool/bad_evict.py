@@ -62,7 +62,7 @@ class BadEvictTest(Test):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
 
-        server_group = self.params.get("server_group", '/server/',
+        server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
         self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)

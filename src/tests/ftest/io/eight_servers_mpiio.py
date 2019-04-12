@@ -65,7 +65,7 @@ class EightServers(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
         print("<<{}>>".format(self.basepath))
-        self.server_group = self.params.get("name", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server_config/', 'daos_server')
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
