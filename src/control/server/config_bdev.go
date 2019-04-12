@@ -87,51 +87,51 @@ func createConf(ext External, server *server, templ string) error {
 	return nil
 }
 
-func (c *configuration) parseNvme() error {
-	for i := range c.Servers {
-		s := &c.Servers[i]
-		switch s.BdevClass {
-		case bdNVMe:
-			if len(s.BdevList) == 0 {
-				continue
-			}
-			// standard daos_nvme.conf, don't need to set VOS_BDEV_CLASS
-			if err := createConf(c.ext, s, nvmeTempl); err != nil {
-				return err
-			}
-		case bdMalloc:
-			if s.BdevNumber == 0 {
-				continue
-			}
-			if err := createConf(c.ext, s, mallocTempl); err != nil {
-				return err
-			}
-			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=MALLOC")
-		case bdKdev:
-			if len(s.BdevList) == 0 {
-				continue
-			}
-			if err := createConf(c.ext, s, kdevTempl); err != nil {
-				return err
-			}
-			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")
-		case bdFile:
-			if len(s.BdevList) == 0 {
-				continue
-			}
-			// requested size aligned with block size
-			size := (int64(s.BdevSize*gbyte) / int64(blkSize)) * int64(blkSize)
-			for _, path := range s.BdevList {
-				err := c.ext.createEmpty(path, size)
-				if err != nil {
-					return err
-				}
-			}
-			if err := createConf(c.ext, s, fileTempl); err != nil {
-				return err
-			}
-			s.EnvVars = append(s.EnvVars, "VOS_BDEV_CLASS=AIO")
+func (c *configuration) parseNvme(i int) error {
+	srv := &c.Servers[i]
+
+	switch srv.BdevClass {
+	case bdNVMe:
+		if len(srv.BdevList) == 0 {
+			break
 		}
+		// standard daos_nvme.conf, don't need to set VOS_BDEV_CLASS
+		if err := createConf(c.ext, srv, nvmeTempl); err != nil {
+			return err
+		}
+	case bdMalloc:
+		if srv.BdevNumber == 0 {
+			break
+		}
+		if err := createConf(c.ext, srv, mallocTempl); err != nil {
+			return err
+		}
+		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS=MALLOC")
+	case bdKdev:
+		if len(srv.BdevList) == 0 {
+			break
+		}
+		if err := createConf(c.ext, srv, kdevTempl); err != nil {
+			return err
+		}
+		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS=AIO")
+	case bdFile:
+		if len(srv.BdevList) == 0 {
+			break
+		}
+		// requested size aligned with block size
+		size := (int64(srv.BdevSize*gbyte) / int64(blkSize)) * int64(blkSize)
+		for _, path := range srv.BdevList {
+			err := c.ext.createEmpty(path, size)
+			if err != nil {
+				return err
+			}
+		}
+		if err := createConf(c.ext, srv, fileTempl); err != nil {
+			return err
+		}
+		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS=AIO")
 	}
+
 	return nil
 }

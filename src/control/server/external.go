@@ -114,6 +114,12 @@ func (e *ext) unmount(mntPoint string) error {
 	if err := syscall.Unmount(
 		mntPoint, syscall.MNT_DETACH); err != nil && !os.IsNotExist(err) {
 
+		// when mntpoint exists but is unmounted, get EINVAL
+		e, ok := err.(syscall.Errno)
+		if ok && e == syscall.EINVAL {
+			return nil
+		}
+
 		return os.NewSyscallError("umount", err)
 	}
 	return nil

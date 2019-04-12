@@ -50,7 +50,6 @@ func MockNamespacePB() *pb.NvmeNamespace {
 // multiple packages (message contains repeated namespace field).
 func MockControllerPB(fwRev string) *pb.NvmeController {
 	return &pb.NvmeController{
-		Id:        int32(12345),
 		Model:     "ABC",
 		Serial:    "123ABC",
 		Pciaddr:   "1:2:3.0",

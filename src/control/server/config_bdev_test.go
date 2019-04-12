@@ -40,17 +40,24 @@ func TestParseBdev(t *testing.T) {
 		bdevSize   int  // relevant for MALLOC/FILE
 		bdevNumber int  // relevant for MALLOC
 		fileExists bool // mock return value for file exists check
-		expEnvs    []string
+		extraEnv   string
 		expFiles   [][]string
 		errMsg     string
 	}{
 		{
-			bdevClass: "",
-			bdevList:  []string{"0000:81:00.1"},
-		},
-		{},
-		{
-			bdevClass: bdNVMe,
+			expFiles: [][]string{
+				{
+					`/mnt/daos/daos_nvme.conf:[Nvme]`,
+					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme0`,
+					`RetryCount 4`,
+					`TimeoutUsec 0`,
+					`ActionOnTimeout None`,
+					`AdminPollRate 100000`,
+					`HotplugEnable No`,
+					`HotplugPollRate 0`,
+					``,
+				},
+			},
 		},
 		{
 			bdevClass: bdNVMe,
@@ -84,7 +91,7 @@ func TestParseBdev(t *testing.T) {
 					"",
 				},
 			},
-			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
+			extraEnv: "VOS_BDEV_CLASS=AIO",
 		},
 		{
 			bdevClass: bdFile,
@@ -98,7 +105,7 @@ func TestParseBdev(t *testing.T) {
 					"",
 				},
 			},
-			expEnvs:    []string{"VOS_BDEV_CLASS=AIO"},
+			extraEnv:   "VOS_BDEV_CLASS=AIO",
 			fileExists: true,
 		},
 		{
@@ -112,7 +119,7 @@ func TestParseBdev(t *testing.T) {
 					"",
 				},
 			},
-			expEnvs: []string{"VOS_BDEV_CLASS=AIO"},
+			extraEnv: "VOS_BDEV_CLASS=AIO",
 		},
 		{
 			bdevClass:  bdMalloc,
@@ -126,7 +133,7 @@ func TestParseBdev(t *testing.T) {
 					"",
 				},
 			},
-			expEnvs: []string{"VOS_BDEV_CLASS=MALLOC"},
+			extraEnv: "VOS_BDEV_CLASS=MALLOC",
 		},
 	}
 
@@ -134,16 +141,27 @@ func TestParseBdev(t *testing.T) {
 		// files is a mock store of written file contents
 		files = []string{}
 
-		// create default config and add server populated with test values
-		server := newDefaultServer()
-		server.ScmMount = "/mnt/daos"
-		server.BdevClass = tt.bdevClass
-		server.BdevList = tt.bdevList
-		server.BdevSize = tt.bdevSize
-		server.BdevNumber = tt.bdevNumber
-		config := newMockConfig(nil, "", tt.fileExists, nil, nil, nil, nil)
-		config.Servers = append(config.Servers, server)
-		err := config.parseNvme()
+		ext := newMockExt(nil, "", tt.fileExists, nil, nil, nil, nil)
+		config := mockConfigFromFile(t, ext, socketsExample)
+
+		srvIdx := 0 // we know that socketsExample only specifies one srv
+		srv := &config.Servers[srvIdx]
+
+		// populate bdev server config parameters
+		if tt.bdevClass != "" {
+			srv.BdevClass = tt.bdevClass
+		}
+		if len(tt.bdevList) != 0 {
+			srv.BdevList = tt.bdevList
+		}
+		if tt.bdevSize != 0 {
+			srv.BdevSize = tt.bdevSize
+		}
+		if tt.bdevNumber != 0 {
+			srv.BdevNumber = tt.bdevNumber
+		}
+
+		err := config.parseNvme(srvIdx)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, "")
 			continue
@@ -169,6 +187,10 @@ func TestParseBdev(t *testing.T) {
 			}
 		}
 		// verify VOS_BDEV_CLASS env gets set as expected
-		AssertEqual(t, config.Servers[0].EnvVars, tt.expEnvs, string(tt.bdevClass))
+		if tt.extraEnv != "" {
+			if !Include(srv.EnvVars, tt.extraEnv) {
+				t.Fatal("env variable missing: " + tt.extraEnv)
+			}
+		}
 	}
 }
