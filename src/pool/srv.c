@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,16 +115,6 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 
 static struct crt_corpc_ops ds_pool_tgt_update_map_co_ops = {
 	.co_aggregate	= ds_pool_tgt_update_map_aggregator,
-	.co_pre_forward	= NULL,
-};
-
-static struct crt_corpc_ops ds_pool_rdb_start_co_ops = {
-	.co_aggregate	= ds_pool_rdb_start_aggregator,
-	.co_pre_forward	= NULL,
-};
-
-static struct crt_corpc_ops ds_pool_rdb_stop_co_ops = {
-	.co_aggregate	= ds_pool_rdb_stop_aggregator,
 	.co_pre_forward	= NULL,
 };
 
