@@ -104,12 +104,16 @@ func (c *controlService) doFormat(i int) error {
 	cond.L.Lock()
 	defer cond.L.Unlock()
 
+	msg := "nvme format"
+	log.Debugf("performing %s, may take several minutes!\n", msg)
 	if err := c.nvme.Format(i); err != nil {
-		return errAnnotate(err, "nvme format")
+		return errAnnotate(err, msg)
 	}
 
+	msg = "scm format"
+	log.Debugf("performing %s, should be quick!\n", msg)
 	if err := c.scm.Format(i); err != nil {
-		return errAnnotate(err, "scm format")
+		return errAnnotate(err, msg)
 	}
 
 	// storage subsystem format successful, signal to alert main.

@@ -72,6 +72,11 @@ int dss_sys_map_load(const char *path, crt_group_id_t grpid, d_rank_t self_rank,
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
 	(dss_tgt_nr * DSS_XS_NR_PER_TGT + dss_sys_xs_nr)
+/** Number of cart contexts for each VOS target */
+#define DSS_CTX_NR_PER_TGT	(dss_tgt_offload_xs_nr == 0 ? 1 : 2)
+/** Total number of cart contexts created */
+#define DSS_CTX_NR_TOTAL					\
+	(dss_tgt_nr * DSS_CTX_NR_PER_TGT + dss_sys_xs_nr)
 /** main XS id of (vos) tgt_id */
 #define DSS_MAIN_XS_ID(tgt_id)					\
 	(((tgt_id) * DSS_XS_NR_PER_TGT) + dss_sys_xs_nr)

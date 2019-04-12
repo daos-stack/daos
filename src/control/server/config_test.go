@@ -47,8 +47,9 @@ const (
 	tmpOut           = "testdata/.tmp_out.yml"
 )
 
+// init gets called once per package, don't call in other test files
 func init() {
-	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "server_tests: ", os.Stderr)
 
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()
@@ -82,16 +83,6 @@ func uncommentServerConfig() {
 	if err := cmd.Wait(); err != nil {
 		fail(err)
 	}
-}
-
-func newMockConfig(
-	cmdRet error, getenvRet string, existsRet bool, mountRet error,
-	unmountRet error, mkdirRet error, removeRet error) configuration {
-
-	return newDefaultConfiguration(
-		newMockExt(
-			cmdRet, getenvRet, existsRet, mountRet, unmountRet,
-			mkdirRet, removeRet))
 }
 
 // defaultMoc2kConfig returns configuration populated from blank config file

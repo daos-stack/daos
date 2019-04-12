@@ -26,7 +26,7 @@ import sys
 sys.path.append('./util')
 sys.path.append('../util')
 
-from GeneralUtils  import get_file_path
+from general_utils import get_file_path
 from avocado       import Test
 from avocado.utils import process
 

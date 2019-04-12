@@ -32,6 +32,7 @@
 #ifndef DAOS_SRV_RSVC_H
 #define DAOS_SRV_RSVC_H
 
+#include <abt.h>
 #include <daos/rsvc.h>
 #include <daos_srv/rdb.h>
 
@@ -51,6 +52,15 @@ struct ds_rsvc_class {
 	 * string will later be passed to D_FREE.
 	 */
 	int (*sc_name)(daos_iov_t *id, char **name);
+
+	/** Retrieve the stored UUID of the service database. */
+	int (*sc_load_uuid)(daos_iov_t *id, uuid_t db_uuid);
+
+	/** Store the UUID of the service database. */
+	int (*sc_store_uuid)(daos_iov_t *id, uuid_t db_uuid);
+
+	/** Delete the stored UUID of the service database. */
+	int (*sc_delete_uuid)(daos_iov_t *id);
 
 	/**
 	 * Locate the DB of the service identified by \a id. The returned DB
@@ -127,6 +137,11 @@ int ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy);
 int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
 			struct rsvc_hint *hint);
+int ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
+		       const uuid_t dbid, const d_rank_list_t *ranks,
+		       bool create, bool bootstrap, size_t size);
+int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
+		      const d_rank_list_t *ranks, bool destroy);
 int ds_rsvc_lookup(enum ds_rsvc_class_id class, daos_iov_t *id,
 		   struct ds_rsvc **svc);
 int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, daos_iov_t *id,

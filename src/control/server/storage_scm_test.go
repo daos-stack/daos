@@ -25,17 +25,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 )
-
-func init() {
-	log.NewDefaultLogger(log.Error, "storage_scm_test: ", os.Stderr)
-}
 
 // MockModule returns a mock SCM module of type exported from go-ipmctl.
 func MockModule() DeviceDiscovery {
