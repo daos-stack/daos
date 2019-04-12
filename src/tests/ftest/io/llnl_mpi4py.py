@@ -62,19 +62,20 @@ class LlnlMpi4py(Test):
             build_paths = json.load(var_file)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.server_group = self.params.get("name", '/server_config/', 'daos_server')
+        self.server_group = self.params.get("name", '/server_config/',
+                                            'daos_server')
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
-        self.hostfile_servers = write_host_file.write_host_file(self.hostlist_servers,
-                                                            self.workdir)
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
         print("Host file servers is: {}".format(self.hostfile_servers))
 
         self.hostlist_clients = self.params.get("test_clients", '/run/hosts/')
-        self.hostfile_clients = write_host_file.write_host_file(self.hostlist_clients,
-                                                            self.workdir, None)
+        self.hostfile_clients = write_host_file.write_host_file(
+            self.hostlist_clients, self.workdir, None)
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         self.agent_sessions = AgentUtils.run_agent(self.basepath,
@@ -82,7 +83,7 @@ class LlnlMpi4py(Test):
                                                    self.hostlist_clients)
         # start servers
         server_utils.run_server(self.hostfile_servers, self.server_group,
-                              self.basepath)
+                                self.basepath)
         try:
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/pool/createmode/*/')
@@ -96,9 +97,10 @@ class LlnlMpi4py(Test):
             # daos storage
             self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None, None, self.createsvc)
+                             createsize, createsetid, None, None,
+                             self.createsvc)
         except (DaosApiError) as excep:
-            self.fail("<{0} Test Failed at pool create> \n{1}".format(excep))
+            self.fail("<Test Failed at pool create> \n{1}".format(excep))
 
     def tearDown(self):
         try:
@@ -134,7 +136,8 @@ class LlnlMpi4py(Test):
 
             # running tests
             self.mpio.run_llnl_mpi4py(self.basepath, self.hostfile_clients,
-                                      pool_uuid, test_repo, test_name, client_processes)
+                                      pool_uuid, test_repo, test_name,
+                                      client_processes)
 
             # Parsing output to look for failures
             # stderr directed to stdout
