@@ -26,15 +26,30 @@
 
 #include <daos/drpc.h>
 
-/**
- * Default Unix Domain Socket path for the DAOS agent dRPC connection
- */
-#define DEFAULT_DAOS_AGENT_DRPC_SOCK "/var/run/daos_agent/agent.sock"
+int dc_agent_init(void);
+void dc_agent_fini(void);
 
+extern char *dc_agent_sockpath;
+
+/**
+ * Default runtime directory for daos_agent
+ */
+#define DAOS_AGENT_DRPC_DIR "/var/run/daos_agent/"
 /**
  * Environment variable for specifying an alternate dRPC socket path
  */
 #define DAOS_AGENT_DRPC_DIR_ENV "DAOS_AGENT_DRPC_DIR"
+
+/**
+ * Socket name used to craft path from environment variable
+ */
+#define DAOS_AGENT_DRPC_SOCK_NAME "agent.sock"
+
+/**
+ * Default Unix Domain Socket path for the DAOS agent dRPC connection
+ */
+#define DEFAULT_DAOS_AGENT_DRPC_SOCK 	DAOS_AGENT_DRPC_DIR \
+					DAOS_AGENT_DRPC_SOCK_NAME
 
 /**
  * dRPC definitions for DAOS agent.

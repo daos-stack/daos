@@ -34,7 +34,6 @@
 
 /* Prototypes for static helper functions */
 static int request_credentials_via_drpc(Drpc__Response **response);
-static char *get_agent_socket_path(void);
 static int process_credential_response(Drpc__Response *response,
 		daos_iov_t *creds);
 static int sanity_check_credential_response(Drpc__Response *response);
@@ -66,18 +65,15 @@ request_credentials_via_drpc(Drpc__Response **response)
 	Drpc__Call	*request;
 	struct drpc	*agent_socket;
 	int		rc;
-	char		*sock_path;
 
-	sock_path = get_agent_socket_path();
-	if (sock_path == NULL) {
+	if (dc_agent_sockpath == NULL) {
 		D_ERROR("Unable to craft DRPC socket path\n");
 		return -DER_BADPATH;
 	}
 
-	agent_socket = drpc_connect(sock_path);
+	agent_socket = drpc_connect(dc_agent_sockpath);
 	if (agent_socket == NULL) {
 		D_ERROR("Can't connect to agent socket\n");
-		free(sock_path);
 		return -DER_BADPATH;
 	}
 
@@ -87,7 +83,6 @@ request_credentials_via_drpc(Drpc__Response **response)
 	if (request == NULL) {
 		D_ERROR("Couldn't allocate dRPC call\n");
 		drpc_close(agent_socket);
-		free(sock_path);
 		return -DER_NOMEM;
 	}
 
@@ -95,31 +90,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 
 	drpc_close(agent_socket);
 	drpc_call_free(request);
-	free(sock_path);
 	return rc;
-}
-
-static char *
-get_agent_socket_path(void)
-{
-	char *path = NULL;
-	/*
-	 * UDS path may be set in an environment variable.
-	 */
-	char *envpath = getenv(DAOS_AGENT_DRPC_DIR_ENV);
-
-	if (envpath == NULL) {
-		path = DEFAULT_DAOS_AGENT_DRPC_SOCK;
-	}
-
-	/*
-	 * Craft our socket path from the directory.
-	 */
-	if (asprintf(&path, "%s/agent.sock", envpath) < 0) {
-		path = NULL;
-	}
-
-	return path;
 }
 
 static int
