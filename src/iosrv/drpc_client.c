@@ -30,6 +30,8 @@
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
 #include <daos_srv/daos_server.h>
+#include "srv.pb-c.h"
+#include "srv_internal.h"
 
 /** dRPC client context */
 struct drpc *dss_drpc_ctx;
@@ -38,21 +40,52 @@ struct drpc *dss_drpc_ctx;
 static int
 notify_ready(void)
 {
-	Drpc__Call     *req;
-	Drpc__Response *resp;
-	int		rc;
+	Srv__NotifyReadyReq	req = SRV__NOTIFY_READY_REQ__INIT;
+	uint8_t		       *reqb;
+	size_t			reqb_size;
+	Drpc__Call	       *dreq;
+	Drpc__Response	       *dresp;
+	int			rc;
 
-	req = drpc_call_create(dss_drpc_ctx,
-			       DRPC_MODULE_SRV,
-			       DRPC_METHOD_SRV_NOTIFY_READY);
-	if (req == NULL) {
-		return -DER_NOMEM;
+	rc = crt_self_uri_get(0 /* tag */, &req.uri);
+	if (rc != 0)
+		goto out;
+	req.nctxs = DSS_CTX_NR_TOTAL;
+
+	reqb_size = srv__notify_ready_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL) {
+		rc = -DER_NOMEM;
+		goto out_uri;
+	}
+	srv__notify_ready_req__pack(&req, reqb);
+
+	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+				DRPC_METHOD_SRV_NOTIFY_READY);
+	if (dreq == NULL) {
+		rc = -DER_NOMEM;
+		D_FREE(reqb);
+		goto out_uri;
+	}
+	dreq->body.len = reqb_size;
+	dreq->body.data = reqb;
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0)
+		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
 	}
 
-	rc = drpc_call(dss_drpc_ctx, R_SYNC, req, &resp);
-
-	drpc_call_free(req);
-	drpc_response_free(resp);
+	drpc_response_free(dresp);
+out_dreq:
+	/* This also frees reqb via dreq->body.data. */
+	drpc_call_free(dreq);
+out_uri:
+	D_FREE(req.uri);
+out:
 	return rc;
 }
 

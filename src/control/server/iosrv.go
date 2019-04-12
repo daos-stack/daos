@@ -38,6 +38,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 )
@@ -198,7 +199,7 @@ type iosrv struct {
 	index   int
 	cmd     *exec.Cmd
 	sigchld chan os.Signal
-	ready   chan struct{}
+	ready   chan *srvpb.NotifyReadyReq
 	conn    *drpc.ClientConnection
 }
 
@@ -213,7 +214,7 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 		config:  config,
 		index:   i,
 		sigchld: make(chan os.Signal, 1),
-		ready:   make(chan struct{}),
+		ready:   make(chan *srvpb.NotifyReadyReq),
 		conn:    getDrpcClientConnection(config.SocketDir),
 	}
 
@@ -236,11 +237,13 @@ func (srv *iosrv) start() (err error) {
 
 	// Wait for the notifyReady request or the SIGCHLD from the I/O server.
 	// If the I/O server is ready, make a dRPC connection to it.
+	var ready *srvpb.NotifyReadyReq
 	select {
-	case <-srv.ready:
+	case ready = <-srv.ready:
 	case <-srv.sigchld:
 		return errors.New("received SIGCHLD")
 	}
+	log.Debugf("iosrv ready: %+v", *ready)
 	if err = srv.conn.Connect(); err != nil {
 		return
 	}

@@ -56,12 +56,14 @@
 
 #define TREE_FMT(name, type, feats)		\
 "  " #name ":\n"				\
-"    node_size: %d\n"			\
+"    node_size: %d\n"				\
 "    record_msize: %d\n"			\
+"    single_size: %d\n"				\
 "    order: %d\n"
 
-#define TREE_PRINT(name, type, feats)		\
-	name.to_node_size, name.to_record_msize, name.to_order,
+#define TREE_PRINT(name, type, feats)			\
+	name.to_node_size, name.to_record_msize,	\
+	name.to_single_size, name.to_order,
 
 char *
 alloc_fname(const char *requested)
@@ -166,8 +168,9 @@ main(int argc, char **argv)
 		goto exit_1;
 
 	fprintf(fp, "---\n# VOS tree overheads\ntrees:\n"
-		FOREACH_TYPE(TREE_FMT) "root: %d\n",
-		FOREACH_TYPE(TREE_PRINT) vos_pool_get_msize());
+		FOREACH_TYPE(TREE_FMT) "root: %d\nscm_cutoff: %d\n",
+		FOREACH_TYPE(TREE_PRINT) vos_pool_get_msize(),
+		vos_pool_get_scm_cutoff());
 
 	fclose(fp);
 exit_1:

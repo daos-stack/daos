@@ -262,7 +262,6 @@ server_init()
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
-	int		ctx_nr;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -287,11 +286,8 @@ server_init()
 	/* initialize the network layer */
 	if (sys_map_path != NULL)
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
-	ctx_nr = dss_sys_xs_nr + dss_tgt_nr;
-	if (dss_tgt_offload_xs_nr >= 1)
-		ctx_nr += dss_tgt_nr;
 	rc = crt_init_opt(server_group_id, flags,
-			  daos_crt_init_opt_get(true, ctx_nr));
+			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	if (sys_map_path != NULL) {
@@ -304,7 +300,7 @@ server_init()
 			D_ERROR("failed to set self rank %u: %d\n", self_rank,
 				rc);
 		rc = dss_sys_map_load(sys_map_path, server_group_id, self_rank,
-				      ctx_nr);
+				      DSS_CTX_NR_TOTAL);
 		if (rc) {
 			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
 			D_GOTO(exit_crt_init, rc);
