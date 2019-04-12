@@ -172,29 +172,45 @@ pipeline {
                         }
                     }
                     steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh '''rm -rf artifacts/
-                              mkdir -p artifacts/
-                              if make srpm; then
-                                  if make mockbuild; then
-                                      (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
-                                      createrepo artifacts/
-                                  else
-                                      rc=\${PIPESTATUS[0]}
-                                      (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
-                                      cp -af _topdir/SRPMS artifacts/
-                                      exit \$rc
-                                  fi
-                              else
-                                  exit \${PIPESTATUS[0]}
-                              fi'''
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/
+                                      mkdir -p artifacts/
+                                      if make srpm; then
+                                          if make mockbuild; then
+                                              (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
+                                              createrepo artifacts/
+                                          else
+                                              rc=\${PIPESTATUS[0]}
+                                              (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
+                                              cp -af _topdir/SRPMS artifacts/
+                                              exit \$rc
+                                          fi
+                                      else
+                                          exit \${PIPESTATUS[0]}
+                                      fi'''
                     }
                     post {
                         always {
                             archiveArtifacts artifacts: 'artifacts/**'
                         }
+                        success {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
                     }
-
                 }
                 stage('Build on CentOS 7') {
                     agent {

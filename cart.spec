@@ -1,6 +1,8 @@
+%define carthome %{_exec_prefix}/lib/%{name}
+
 Name:          cart
 Version:       0.0.1
-Release:       1%{?dist}
+Release:       2%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -34,13 +36,33 @@ Requires: openssl
 Requires: libyaml
 
 %description
-
 Collective and RPC Transport (CaRT)
 
 CaRT is an open-source RPC transport layer for Big Data and Exascale
 HPC. It supports both traditional P2P RPC delivering and collective RPC
 which invokes the RPC at a group of target servers with a scalable
 tree-based message propagating.
+
+%package devel
+Summary: CaRT devel
+
+# since the so is unversioned, it only exists in the main package
+# at this time
+Requires: %{name} = %{version}-%{release}
+
+Requires: libuuid-devel
+Requires: boost-devel
+
+%description devel
+CaRT devel
+
+%package tests
+Summary: CaRT tests
+
+Requires: %{name} = %{version}-%{release}
+
+%description tests
+CaRT tests
 
 %prep
 %setup -q
@@ -67,22 +89,32 @@ PREFIX="%{?_prefix}"
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
 mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
-mkdir -p %{?buildroot}/%{_prefix}/lib/cart
-cp -al multi-node-test.sh utils %{?buildroot}%{_prefix}/lib/cart/
+mkdir -p %{?buildroot}/%{carthome}
+cp -al multi-node-test.sh utils %{?buildroot}%{carthome}/
 mv %{?buildroot}%{_prefix}/{TESTING,lib/cart/}
-ln %{?buildroot}%{_prefix}/lib/cart/{TESTING/.build_vars,.build_vars-Linux}.sh
+ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 
 %files
 %defattr(-, root, root, -)
 %{_bindir}/*
 %{_libdir}/*
-%{_prefix}/lib/cart
-%{_includedir}/*
+%{carthome}/utils
 %{_prefix}%{_sysconfdir}/*
 %doc
 
+%files devel
+%{_includedir}/*
 
+%files tests
+%{carthome}/TESTING
+%{carthome}/multi-node-test.sh
+%{carthome}/.build_vars-Linux.sh
 
 %changelog
-* Wed Apr  3 2019 Brian J. Murrell <brian.murrell@intel.com>
+* Fri Apr 05 2019 Brian J. Murrell <brian.murrell@intel.com>
+- split out devel and tests subpackages
+- have devel depend on the main package since we only have the
+  unversioned library at the moement which is in the main package
+
+* Wed Apr 03 2019 Brian J. Murrell <brian.murrell@intel.com>
 - initial package
