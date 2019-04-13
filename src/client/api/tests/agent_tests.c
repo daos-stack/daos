@@ -22,7 +22,7 @@
  */
 
 /**
- * Unit tests for the security API for the client lib
+ * Unit tests for the agent API for the client lib
  */
 
 #include <stdarg.h>
@@ -87,13 +87,13 @@ test_dc_agent_init_no_env(void **state)
 static void
 test_dc_agent_init_with_env(void **state)
 {
-	char *sockaddr = "/nice/good/agent.sock";
+	char *expected_sockaddr = "/nice/good/agent.sock";
 
 	getenv_return = "/nice/good";
 
 	dc_agent_init();
 	/* Tried to connect to the path we got back from getenv */
-	assert_string_equal(dc_agent_sockpath, sockaddr);
+	assert_string_equal(dc_agent_sockpath, expected_sockaddr);
 
 	/* Make sure we asked for the right env variable */
 	assert_non_null(getenv_name);

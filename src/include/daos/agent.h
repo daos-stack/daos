@@ -26,15 +26,26 @@
 
 #include <daos/drpc.h>
 
+/**
+ *  Called during libray initialization to craft socket path for agent.
+ */
 int dc_agent_init(void);
+
+/**
+ *  Called during library finalization to free allocated agent resources
+ */
 void dc_agent_fini(void);
 
+/**
+ * Path to be used to communicate with the DAOS Agent set at library init.
+ */
 extern char *dc_agent_sockpath;
 
 /**
  * Default runtime directory for daos_agent
  */
 #define DAOS_AGENT_DRPC_DIR "/var/run/daos_agent/"
+
 /**
  * Environment variable for specifying an alternate dRPC socket path
  */

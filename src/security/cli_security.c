@@ -67,8 +67,8 @@ request_credentials_via_drpc(Drpc__Response **response)
 	int		rc;
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("Unable to craft DRPC socket path\n");
-		return -DER_BADPATH;
+		D_ERROR("DAOS Socket Path is Unitialized\n");
+		return -DER_UNINIT;
 	}
 
 	agent_socket = drpc_connect(dc_agent_sockpath);

@@ -36,11 +36,7 @@ dc_agent_init()
 	if (envpath == NULL) {
 		path = strndup(DEFAULT_DAOS_AGENT_DRPC_SOCK,
 				sizeof(DEFAULT_DAOS_AGENT_DRPC_SOCK));
-		if (path == NULL) {
-			path = NULL;
-		}
 	} else {
-
 		ret = asprintf(&path, "%s/%s", envpath,
 				DAOS_AGENT_DRPC_SOCK_NAME);
 		if (ret < 0) {
@@ -49,6 +45,7 @@ dc_agent_init()
 	}
 
 	if (path == NULL) {
+		D_ERROR("Unable to allocate dc_agent_sockpath.");
 		return DER_NOMEM;
 	}
 
@@ -59,6 +56,5 @@ dc_agent_init()
 void
 dc_agent_fini()
 {
-	free(dc_agent_sockpath);
-	dc_agent_sockpath = NULL;
+	D_FREE(dc_agent_sockpath);
 }
