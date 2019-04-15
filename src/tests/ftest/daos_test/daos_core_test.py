@@ -91,9 +91,9 @@ class DaosCoreTest(Test):
                 for host in self.hostlist:
                     subprocess.check_call(['ssh', host,
                                            '[ -f \"{0}\" ] && '
-                                           '    mv \"{0}\" '
-                                           '    \"{1}\"'.format(logfile,
-                                                                new_logfile)])
+                                           ' mv \"{0}\" '
+                                           ' \"{1}\"'.format("/tmp/server.log",
+                                                             new_logfile)])
             except KeyError:
                 pass
 
