@@ -29,19 +29,15 @@ char *dc_agent_sockpath;
 int
 dc_agent_init()
 {
-	int	ret;
 	char	*path = NULL;
 	char	*envpath = getenv(DAOS_AGENT_DRPC_DIR_ENV);
 
 	if (envpath == NULL) {
-		path = strndup(DEFAULT_DAOS_AGENT_DRPC_SOCK,
+		D_STRNDUP(path, DEFAULT_DAOS_AGENT_DRPC_SOCK,
 				sizeof(DEFAULT_DAOS_AGENT_DRPC_SOCK));
 	} else {
-		ret = asprintf(&path, "%s/%s", envpath,
+		D_ASPRINTF(path, "%s/%s", envpath,
 				DAOS_AGENT_DRPC_SOCK_NAME);
-		if (ret < 0) {
-			path = NULL;
-		}
 	}
 
 	if (path == NULL) {
