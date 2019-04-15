@@ -22,21 +22,17 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
+
 import os
-import sys
 import json
 import traceback
 import uuid
 import threading
 import Queue
 import avocado
+from apricot import Test, skipForTicket
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 import ior_utils
@@ -96,10 +92,11 @@ def ior_runner_thread(result_queue, tname, operation, **kwargs):
                           str(exe)))
             return
 
-class ObjectMetadata(avocado.Test):
+class ObjectMetadata(Test):
     """
     Test Class Description:
         Test the general Metadata operations and boundary conditions.
+    :avocado: recursive
     """
 
     def setUp(self):
@@ -124,10 +121,11 @@ class ObjectMetadata(avocado.Test):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
-        self.hostfile_clients = (
-            write_host_file.write_host_file(hostlist_clients, self.workdir))
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist,
-                                                   self.hostlist_clients)
+        self.hostfile_clients = write_host_file.write_host_file(
+            self.hostlist_clients, self.workdir)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist,
+                                                    self.hostlist_clients)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
         self.pool = DaosPool(self.context)
@@ -147,11 +145,11 @@ class ObjectMetadata(avocado.Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist_clients,
+                                       self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
-    @avocado.skip("Skipping until DAOS-1936/DAOS-1946 is fixed.")
+    @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
         """
         Test ID: DAOS-1512
@@ -174,7 +172,7 @@ class ObjectMetadata(avocado.Test):
 
         self.fail("Test was expected to fail but it passed.\n")
 
-    @avocado.skip("Skipping until DAOS-1965 is fixed.")
+    @skipForTicket("DAOS-1965")
     @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):
         """
@@ -270,11 +268,11 @@ class ObjectMetadata(avocado.Test):
 
         #Server Restart
         if self.agent_sessions:
-            AgentUtils.stop_agent(self.hostlist_clients, self.agent_sessions)
+            agent_utils.stop_agent(self.hostlist_clients, self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist)
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist_clients,
-                                                   self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_clients,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
         #Read IOR with verification with same number of threads

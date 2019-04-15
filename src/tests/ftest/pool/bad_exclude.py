@@ -25,17 +25,12 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
 import json
 import ctypes
-from avocado import Test
+from apricot import Test
 
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./util')
-sys.path.append('./../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosApiError
@@ -46,7 +41,7 @@ class BadExcludeTest(Test):
     Tests target exclude calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
 
-    :avocado: tags=pool,badparam,badexclude
+    :avocado: recursive
     """
 
     def setUp(self):
@@ -66,12 +61,13 @@ class BadExcludeTest(Test):
                                        '/server/',
                                        'daos_server')
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
         if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+            agent_utils.stop_agent(self.hostlist, self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist)
 
     def test_exclude(self):

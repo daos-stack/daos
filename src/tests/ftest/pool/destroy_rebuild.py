@@ -26,16 +26,10 @@ from __future__ import print_function
 import os
 import time
 import traceback
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('./../../utils/py')
-sys.path.append('../../../utils/py')
-
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosServer, DaosApiError
@@ -46,7 +40,7 @@ class DestroyRebuild(Test):
     Test Class Description:
     This test verifies destruction of a pool that is rebuilding.
 
-    :avocado: tags=pool,pooldestroy,rebuild,desreb
+    :avocado: recursive
     """
 
     build_paths = []
@@ -72,7 +66,8 @@ class DestroyRebuild(Test):
         # fire up the DAOS servers
         self.server_group = self.params.get("server_group", '/run/server/',
                                             'daos_server')
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group,
                                 build_paths['PREFIX'] + '/../')
 
@@ -98,7 +93,7 @@ class DestroyRebuild(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
 

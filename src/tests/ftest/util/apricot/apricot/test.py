@@ -33,7 +33,7 @@ from avocado import Test as avocadoTest
 from avocado import skip
 
 import fault_config_utils
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog
@@ -149,15 +149,15 @@ class TestWithServers(TestWithoutServers):
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
 
         try:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
         finally:
             server_utils.stop_server(hosts=self.hostlist)
 

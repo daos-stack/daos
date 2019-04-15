@@ -25,15 +25,12 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
 import json
 
-from avocado import Test
 from avocado.utils import process
+from apricot import Test
 
-sys.path.append('./util')
-
-import AgentUtils
+import agent_utils
 import server_utils
 import check_for_pool
 import write_host_file
@@ -42,7 +39,7 @@ class MultipleCreatesTest(Test):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
 
-    :avocado: tags=pool,poolcreate,multicreate
+    :avocado: recursive
     """
 
     # super wasteful since its doing this for every variation
@@ -61,7 +58,7 @@ class MultipleCreatesTest(Test):
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(basepath, self.hostlist)
         server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.daosctl = basepath + '/install/bin/daosctl'
@@ -72,7 +69,7 @@ class MultipleCreatesTest(Test):
             os.remove(self.hostfile)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def test_create_one(self):

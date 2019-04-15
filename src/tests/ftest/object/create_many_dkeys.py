@@ -25,21 +25,12 @@ from __future__ import print_function
 
 import os
 import sys
-import json
 import ctypes
 import avocado
-from avocado       import Test
+from apricot import Test, skipForTicket
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
-import AgentUtils
-import server_utils
-import write_host_file
-
-from daos_api import DaosContext, DaosPool, DaosContainer, IORequest
+from daos_api import DaosPool, DaosContainer, IORequest
 from daos_api import DaosApiError
 
 class CreateManyDkeys(Test):
@@ -48,24 +39,10 @@ class CreateManyDkeys(Test):
         Tests that create large numbers of keys in objects/containers and then
         destroy the containers and verify the space has been reclaimed.
 
+    :avocado: recursive
     """
     def setUp(self):
-        self.agent_sessions = None
-        with open('../../../.build_vars.json') as json_f:
-            build_paths = json.load(json_f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        server_group = self.params.get("server_group",
-                                       '/server/',
-                                       'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.container = None
-        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-
-        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, basepath)
-
+        super(CreateManyDkeys, self).setUp()
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
                          os.geteuid(),
@@ -77,14 +54,10 @@ class CreateManyDkeys(Test):
 
     def tearDown(self):
         try:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
             if self.pool:
                 self.pool.destroy(1)
         finally:
-            if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+            super(CreateManyDkeys, self).tearDown()
 
     def write_a_bunch_of_values(self, how_many):
         """
@@ -152,7 +125,7 @@ class CreateManyDkeys(Test):
         print("destroy complete")
 
     @avocado.fail_on(DaosApiError)
-    @avocado.skip("Skipping until DAOS-1721 is fixed.")
+    @skipForTicket("DAOS-1721")
     def test_many_dkeys(self):
         """
         Test ID: DAOS-1701

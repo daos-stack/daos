@@ -24,16 +24,11 @@
 from __future__ import print_function
 
 import os
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog, DaosApiError
@@ -43,7 +38,7 @@ class Permission(Test):
     Tests DAOS pool permissions while connect, whether
     modifying file with specific permissions work as expected.
 
-    :avocado: tags=pool,permission
+    :avocado: recursive
     """
     def setUp(self):
         self.agent_sessions = None
@@ -70,7 +65,8 @@ class Permission(Test):
         self.container = None
 
         # starting server
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -80,7 +76,7 @@ class Permission(Test):
         finally:
             # stop servers
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def test_connectpermission(self):

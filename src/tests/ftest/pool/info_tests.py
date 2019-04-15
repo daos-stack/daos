@@ -22,16 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('./../../utils/py')
-sys.path.append('../../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosLog
@@ -40,6 +35,7 @@ from conversion import c_uuid_to_str
 class InfoTests(Test):
     """
     Tests DAOS pool query.
+    :avocado: recursive
     """
     def setUp(self):
         self.agent_sessions = None
@@ -58,7 +54,8 @@ class InfoTests(Test):
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -69,7 +66,7 @@ class InfoTests(Test):
             os.remove(self.hostfile)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def test_simple_query(self):

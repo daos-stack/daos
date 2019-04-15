@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 import sys
 import json
-from avocado       import Test
+from avocado import Test
 
 sys.path.append('./util')
 sys.path.append('../util')

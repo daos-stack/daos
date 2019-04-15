@@ -25,17 +25,12 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
 import json
 import ctypes
-from avocado import Test
+from apricot import Test
 
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./util')
-sys.path.append('./../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosApiError
@@ -46,6 +41,8 @@ class BadEvictTest(Test):
     Test Class Description:
     Tests pool evict calls passing NULL and otherwise inappropriate
     parameters.
+
+    :avocado: recursive
     """
 
     def setUp(self):
@@ -65,12 +62,13 @@ class BadEvictTest(Test):
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
         if self.agent_sessions:
-            AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+            agent_utils.stop_agent(self.hostlist, self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist)
 
     def test_evict(self):

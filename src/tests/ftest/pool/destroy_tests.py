@@ -26,18 +26,13 @@ from __future__ import print_function
 import os
 import time
 import traceback
-import sys
 import json
 import threading
-from avocado import Test
 from avocado.utils import process
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('./../../utils/py')
-sys.path.append('../../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import check_for_pool
 import write_host_file
@@ -60,6 +55,7 @@ def cb_func(event):
 class DestroyTests(Test):
     """
     Tests DAOS pool removal
+    :avocado: recursive
     """
     # super wasteful since its doing this for every variation
     def setUp(self):
@@ -83,9 +79,6 @@ class DestroyTests(Test):
         self.hostlist1 = None
         self.hostlist2 = None
 
-    def tearDown(self):
-        pass
-
     def test_simple_delete(self):
         """
         Test destroying a pool created on a single server, nobody is using
@@ -96,7 +89,8 @@ class DestroyTests(Test):
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
         hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         setid = self.params.get("setname",
@@ -143,7 +137,7 @@ class DestroyTests(Test):
                 os.remove(hostfile)
             finally:
                 if self.agent_sessions:
-                    AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                    agent_utils.stop_agent(self.hostlist, self.agent_sessions)
                 server_utils.stop_server(hosts=self.hostlist)
 
     def test_delete_doesnt_exist(self):
@@ -155,7 +149,8 @@ class DestroyTests(Test):
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
         hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         setid = self.params.get("setname",
@@ -186,7 +181,7 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -201,7 +196,8 @@ class DestroyTests(Test):
         self.hostlist = self.params.get("test_machines1", '/run/hosts/')
         hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
         server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         # need both a good and bad set
@@ -253,7 +249,7 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -269,7 +265,9 @@ class DestroyTests(Test):
         self.hostlist = self.params.get("test_machines2", '/run/hosts/')
         hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist)
+
         server_utils.run_server(hostfile, self.server_group, self.basepath)
 
         setid = self.params.get("setname",
@@ -322,7 +320,7 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -347,10 +345,10 @@ class DestroyTests(Test):
         daosctl = self.basepath + '/install/bin/daosctl'
 
         # start 2 different sets of servers,
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist1)
-        self.agent_sessions2 = AgentUtils.run_agent(self.basepath,
-                                                    self.hostlist2)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist1)
+        self.agent_sessions2 = agent_utils.run_agent(self.basepath,
+                                                     self.hostlist2)
         server_utils.run_server(hostfile1, self.server_group, self.basepath)
         server_utils.run_server(hostfile2, setid2, self.basepath)
 
@@ -402,9 +400,9 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist1, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist1, self.agent_sessions)
             if self.agent_sessions2:
-                AgentUtils.stop_agent(self.hostlist2, self.agent_sessions2)
+                agent_utils.stop_agent(self.hostlist2, self.agent_sessions2)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile1)
             os.remove(hostfile2)
@@ -423,8 +421,8 @@ class DestroyTests(Test):
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                       self.hostlist)
+            self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                        self.hostlist)
             server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
@@ -462,7 +460,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -479,8 +477,8 @@ class DestroyTests(Test):
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                       self.hostlist)
+            self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                        self.hostlist)
             server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
@@ -525,7 +523,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -540,8 +538,8 @@ class DestroyTests(Test):
             self.hostlist = self.params.get("test_machines6", '/run/hosts/')
             hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                       self.hostlist)
+            self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                        self.hostlist)
             server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
@@ -574,7 +572,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -590,8 +588,8 @@ class DestroyTests(Test):
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                       self.hostlist)
+            self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                        self.hostlist)
             server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
@@ -639,7 +637,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
 
@@ -658,8 +656,8 @@ class DestroyTests(Test):
             self.hostlist = self.params.get("test_machines1", '/run/hosts/')
             hostfile = write_host_file.write_host_file(self.hostlist, self.tmp)
 
-            self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                       self.hostlist)
+            self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                        self.hostlist)
             server_utils.run_server(hostfile, self.server_group, self.basepath)
 
             # parameters used in pool create
@@ -712,6 +710,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
             os.remove(hostfile)
