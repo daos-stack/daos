@@ -61,9 +61,6 @@ class Dfuse(Test):
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        # setup the DAOS python API
-        context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         hostfile_servers = (
             write_host_file.write_host_file(self.hostlist_servers,
@@ -88,6 +85,9 @@ class Dfuse(Test):
 
         :avocado: tags=vm,regression
         """
+
+        # setup the DAOS python API
+        context = DaosContext(build_paths['PREFIX'] + '/lib/')
 
         createmode = self.params.get("mode", '/run/poolparams/')
         createuid = os.geteuid()
