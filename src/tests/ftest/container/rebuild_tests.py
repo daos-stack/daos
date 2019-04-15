@@ -25,7 +25,6 @@ from __future__ import print_function
 import json
 import os
 import string
-import time
 import random
 import sys
 
@@ -142,7 +141,7 @@ class RebuildContainerCreate(Test):
                                               string.digits) for _ in range(5)))
                     data = (''.join(random.choice(string.ascii_uppercase +
                                                   string.digits) for _ in
-                            range(self.size)))
+                                    range(self.size)))
                     obj, txn = container.write_an_obj(data, len(data), dkey,
                                                       akey, obj, self.rank,
                                                       obj_cls=16)
@@ -174,4 +173,3 @@ class RebuildContainerCreate(Test):
                     break
         except DaosApiError as excep:
             self.fail("Encountered DaosApiError: {0}".format(excep))
-
