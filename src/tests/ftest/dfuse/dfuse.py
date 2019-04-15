@@ -78,6 +78,17 @@ class Dfuse(Test):
                                                    self.hostlist_clients)
         server_utils.run_server(hostfile_servers, server_group, basepath)
 
+    def tearDown(self):
+        if self.agent_sessions:
+            AgentUtils.stop_agent(self.hostlist_clients, self.agent_sessions)
+        server_utils.stop_server(hosts=self.hostlist_servers)
+
+    def test_dfuse(self):
+        """Try and run something over fuse
+
+        :avocado: tags=vm,regression
+        """
+
         createmode = self.params.get("mode", '/run/poolparams/')
         createuid = os.geteuid()
         creategid = os.getegid()
@@ -93,16 +104,6 @@ class Dfuse(Test):
         container = DaosContainer(context)
         container.create(pool.handle)
 
-    def tearDown(self):
-        if self.agent_sessions:
-            AgentUtils.stop_agent(self.hostlist_clients, self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist_servers)
-
-    def test_dfuse(self):
-        """Try and run something over fuse
-
-        :avocado: tags=vm,regression
-        """
         self.fail("Well, here we are")
 
     def test_dfuse_optimist(self):
