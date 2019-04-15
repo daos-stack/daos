@@ -342,7 +342,8 @@ pipeline {
                     }
                 }
                 stage('Build on Ubuntu 18.04') {
-                    when { branch 'master' }
+                    when { beforeAgent true
+                           branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.ubuntu:18.04'
@@ -462,8 +463,137 @@ pipeline {
                         }
                     }
                 }
+                stage('Build on SLES 12.3') {
+                    when { beforeAgent true
+                           environment name: 'SLES12_3_DOCKER', value: 'true' }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.sles.12.3'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-sles12.3 " + '$BUILDARGS'
+                        }
+                    }
+                    steps {
+                        sconsBuild clean: "_build.external${arch}"
+                    }
+                    post {
+                        always {
+                            node('lightweight') {
+                                /* Stack dumping for sles12sp3/leap42.3:
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-sles12.3",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external-Linux\\/.*'),
+                                                       excludeFile('_build\\.external-Linux\\/.*')]
+                                */
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
+                               stepResult name: env.STAGE_NAME,
+                                          context: 'build/' + env.STAGE_NAME,
+                                          result: ${currentBuild.currentResult}
+                            */
+                        }
+                        success {
+                        /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unstable {
+                            sh "mv config${arch}.log config.log-sles12sp3-gcc"
+                            archiveArtifacts artifacts: 'config.log-sles12sp3-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                            */
+                        }
+                        failure {
+                            sh "mv config${arch}.log config.log-sles12sp3-gcc"
+                            archiveArtifacts artifacts: 'config.log-sles12sp3-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                            */
+                        }
+                    }
+                }
+                stage('Build on LEAP 42.3') {
+                    when { beforeAgent true
+                           environment name: 'LEAP42_3_DOCKER', value: 'true' }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.leap.42.3'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap42.3 " + '$BUILDARGS'
+                        }
+                    }
+                    steps {
+                        sconsBuild clean: "_build.external${arch}"
+                    }
+                    post {
+                        always {
+                            node('lightweight') {
+                                /* Stack dumping for sles12sp3/leap42.3:
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: false,
+                                             id: "analysis-leap42.3",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external-Linux\\/.*'),
+                                                       excludeFile('_build\\.external-Linux\\/.*')]
+                                */
+                            }
+                            /* when JENKINS-39203 is resolved, can probably use stepResult
+                               here and remove the remaining post conditions
+                               stepResult name: env.STAGE_NAME,
+                                          context: 'build/' + env.STAGE_NAME,
+                                          result: ${currentBuild.currentResult}
+                            */
+                        }
+                        success {
+                        /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                            */
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unstable {
+                            sh "mv config${arch}.log config.log-leap42sp3-gcc"
+                            archiveArtifacts artifacts: 'config.log-leap42sp3-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                            */
+                        }
+                        failure {
+                            sh "mv config${arch}.log config.log-leap42sp3-gcc"
+                            archiveArtifacts artifacts: 'config.log-leap42sp3-gcc'
+                            /* temporarily moved into stepResult due to JENKINS-39203
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'build/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                            */
+                        }
+                    }
+                }
                 stage('Build on Leap 15') {
-                    when { branch 'master' }
+                    when { beforeAgent true
+                           branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap:15'
@@ -524,7 +654,8 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15 with Clang') {
-                    when { branch 'master' }
+                    when { beforeAgent true
+                           branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap:15'
