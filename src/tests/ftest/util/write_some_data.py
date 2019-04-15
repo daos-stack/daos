@@ -26,8 +26,6 @@ from __future__ import print_function
 import sys
 import numpy as np
 
-sys.path.append('../../../utils/py')
-sys.path.append('../../utils/py')
 from daos_io import DaosFile
 
 class DaosIOFailed(Exception):
