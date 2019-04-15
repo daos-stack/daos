@@ -42,8 +42,8 @@ def filelist(directory):
     test_pattern = "*.py"
 
     for path, _dirs, files in os.walk(directory):
-        if not (path == directory or path == os.path.join(directory,
-                                                          'util')):
+        if not (path == directory or path.startswith(os.path.join(directory,
+                                                                  'util'))):
             for test_file in files:
                 if fnmatch.fnmatch(test_file, test_pattern):
                     local_test_files.append(os.path.join(path, test_file))
