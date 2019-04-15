@@ -27,6 +27,7 @@ s1: &sv_example
 # count     No                  Number of identical akeys       1
 # type      No                  Either hashed or integer        hashed
 # size      if type == hashed   Size in bytes of key            N/A
+# overhead  No                  Assign overhead to meta or user user
 # val_type  Yes                 Array or single value           N/A
 # values    Yes                 List of values                  N/A
 a1: &akey1
@@ -46,6 +47,7 @@ a2: &akey2
 # count     No                  Number of identical dkeys       1
 # type      No                  Either hashed or integer        hashed
 # size      if type == hashed   Size in bytes of key            N/A
+# overhead  No                  Assign overhead to meta or user user
 # akeys     Yes                 List of akeys                   N/A
 d1: &dkey_example
   count: 200

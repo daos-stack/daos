@@ -152,13 +152,6 @@ func (n *nvmeStorage) Teardown() (err error) {
 	return
 }
 
-// Format attempts to format (forcefully) NVMe devices on a given server
-// as specified in config file.
-func (n *nvmeStorage) Format(idx int) error {
-	// TODO: add implementation
-	return nil
-}
-
 // Discover method implementation for nvmeStorage.
 //
 // Initialise SPDK environment before probing controllers then retrieve
@@ -189,55 +182,98 @@ func (n *nvmeStorage) Discover() error {
 	return nil
 }
 
+// Format attempts to format (forcefully) NVMe devices on a given server
+// as specified in config file.
+func (n *nvmeStorage) Format(idx int) error {
+	if !n.initialized {
+		return errors.New("nvme storage not initialized")
+	}
+	if n.formatted {
+		return errors.New(
+			"nvme storage has already been formatted and reformat " +
+				"not implemented")
+	}
+
+	srv := n.config.Servers[idx]
+
+	switch srv.BdevClass {
+	case bdNVMe:
+		for _, pciAddr := range srv.BdevList {
+			if pciAddr == "" {
+				return errors.New("bdev nvme device list entry empty")
+			}
+
+			cs, ns, err := n.nvme.Format(pciAddr)
+			if err != nil {
+				return errors.Wrap(err, "nvme format")
+			}
+			n.controllers = loadControllers(cs, ns)
+		}
+	default:
+		return errors.Errorf(
+			"format unsupported on BdevClass %v", srv.BdevClass)
+	}
+
+	n.formatted = true
+	return nil
+}
+
 // Update method implementation for nvmeStorage
 func (n *nvmeStorage) Update(pciAddr string, path string, slot int32) error {
-	if n.initialized {
-		cs, ns, err := n.nvme.Update(pciAddr, path, slot)
-		if err != nil {
-			return err
-		}
-		n.controllers = loadControllers(cs, ns)
-		return nil
+	if !n.initialized {
+		return errors.New("nvme storage not initialized")
 	}
-	return errors.New("nvme storage not initialized")
+
+	cs, ns, err := n.nvme.Update(pciAddr, path, slot)
+	if err != nil {
+		return err
+	}
+
+	n.controllers = loadControllers(cs, ns)
+	return nil
 }
 
 // BurnIn method implementation for nvmeStorage
 // Doesn't call through go-spdk, returns cmds to be issued over shell
 func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
-	if n.initialized {
-		pluginDir := ""
-		pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
-		if err != nil {
-			return
-		}
-		fioPath, err = common.GetAbsInstallPath(fioExecPath)
-		if err != nil {
-			return
-		}
-		// run fio with spdk plugin specified in LD_PRELOAD env
-		env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
-		// limitation of fio_plugin for spdk is that traddr needs
-		// to not contain colon chars, convert to full-stops
-		// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
-		// shm_id specified within fio configs to enable spdk multiprocess
-		// mode required to perform burn-in from Go process.
-		// eta options provided to trigger periodic client responses.
-		cmds = []string{
-			fmt.Sprintf(
-				"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
-				strings.Replace(pciAddr, ":", ".", -1), nsID),
-			"--ioengine=spdk",
-			"--eta=always",
-			"--eta-newline=10",
-			configPath,
-		}
-		log.Debugf(
-			"BurnIn command string: %s %s %v", env, fioPath, cmds)
+
+	if !n.initialized {
+		err = errors.New("nvme storage not initialized")
 		return
 	}
-	err = errors.New("nvme storage not initialized")
+
+	pluginDir := ""
+	pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
+	if err != nil {
+		return
+	}
+
+	fioPath, err = common.GetAbsInstallPath(fioExecPath)
+	if err != nil {
+		return
+	}
+
+	// run fio with spdk plugin specified in LD_PRELOAD env
+	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
+	// limitation of fio_plugin for spdk is that traddr needs
+	// to not contain colon chars, convert to full-stops
+	// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
+	// shm_id specified within fio configs to enable spdk multiprocess
+	// mode required to perform burn-in from Go process.
+	// eta options provided to trigger periodic client responses.
+	cmds = []string{
+		fmt.Sprintf(
+			"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
+			strings.Replace(pciAddr, ":", ".", -1), nsID),
+		"--ioengine=spdk",
+		"--eta=always",
+		"--eta-newline=10",
+		configPath,
+	}
+	log.Debugf(
+		"BurnIn command string: %s %s %v", env, fioPath, cmds)
+
 	return
 }
 
@@ -249,7 +285,6 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 		pbCtrlrs = append(
 			pbCtrlrs,
 			&pb.NvmeController{
-				Id:      c.ID,
 				Model:   c.Model,
 				Serial:  c.Serial,
 				Pciaddr: c.PCIAddr,

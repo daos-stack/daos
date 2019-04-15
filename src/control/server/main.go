@@ -130,12 +130,6 @@ func serverMain() error {
 		return err
 	}
 
-	// Process configurations parameters for Nvme.
-	if err = config.parseNvme(); err != nil {
-		log.Errorf("NVMe config could not be processed: %s", err)
-		return err
-	}
-
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
 	iosrv, err := newIosrv(&config, 0)

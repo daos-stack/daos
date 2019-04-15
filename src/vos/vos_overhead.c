@@ -12,6 +12,12 @@ vos_pool_get_msize(void)
 }
 
 int
+vos_pool_get_scm_cutoff(void)
+{
+	return VOS_BLK_SZ;
+}
+
+int
 vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
 		      uint64_t ofeat, struct daos_tree_overhead *ovhd)
 {

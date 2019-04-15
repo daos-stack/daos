@@ -222,7 +222,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	if srv.NrXsHelpers > 2 {
 		log.Errorf(
 			"invalid NrXsHelpers %d exceed [0, 2], "+
-				"use default value of 2", srv.NrXsHelpers)
+				"using default value of 2", srv.NrXsHelpers)
 		srv.NrXsHelpers = 2
 	} else if srv.NrXsHelpers != 2 {
 		srv.CliOpts = append(
@@ -355,38 +355,34 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	for i := range c.Servers {
 		srv := &c.Servers[i]
 
-		mntpt := srv.ScmMount
-		if err = c.checkMount(mntpt); err != nil {
-			return fmt.Errorf(
-				"srv%d scm mount path (%s) not mounted: %s",
-				i, mntpt, err)
-		}
-
 		if err = c.populateCliOpts(i); err != nil {
 			return err
 		}
 
-		if !skipEnv {
-			// add to existing config file EnvVars
-			srv.EnvVars = append(
-				srv.EnvVars,
-				providerEnvKey+"="+c.Provider,
-				"OFI_INTERFACE="+srv.FabricIface,
-				"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort),
-				"D_LOG_MASK="+srv.LogMask,
-				"D_LOG_FILE="+srv.LogFile)
+		if skipEnv {
+			// user environment variable detected for provider,
+			// assume all necessary environment already exists
+			// and clear srv config EnvVars
+			examplesPath, _ := common.GetAbsInstallPath(
+				"utils/config/examples/")
+			log.Errorf(
+				"using os env vars, specify params in config "+
+					"instead: %s", examplesPath)
+
+			srv.EnvVars = []string{}
 			continue
 		}
 
-		// user environment variable detected for provider, assume all
-		// necessary environment already exists and clear srv config EnvVars
-		examplesPath, _ := common.GetAbsInstallPath("utils/config/examples/")
-		log.Errorf(
-			"using os env vars, specify params in config instead: %s",
-			examplesPath)
-
-		srv.EnvVars = []string{}
+		// add to existing config file EnvVars
+		srv.EnvVars = append(
+			srv.EnvVars,
+			providerEnvKey+"="+c.Provider,
+			"OFI_INTERFACE="+srv.FabricIface,
+			"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort),
+			"D_LOG_MASK="+srv.LogMask,
+			"D_LOG_FILE="+srv.LogFile)
 	}
+
 	return nil
 }
 
