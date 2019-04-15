@@ -1,9 +1,8 @@
-run:
-    hosts:
-        test_servers:
-            - boro-A
-        test_clients:
-            - boro-B
+hosts:
+    test_servers:
+        - boro-A
+    test_clients:
+        - boro-B
 timeout: 240
 server:
     server_group: daos_server

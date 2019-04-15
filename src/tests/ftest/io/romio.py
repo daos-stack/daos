@@ -100,7 +100,7 @@ class Romio(Test):
         Test ID: DAOS-1994
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
-        :avocado: tags=mpio,romio
+        :avocado: tags=mpio,romio,vm,regression
         """
         # setting romio parameters
         romio_test_repo = self.params.get("romio_repo", '/run/romio/')

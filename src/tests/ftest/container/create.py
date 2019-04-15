@@ -77,7 +77,7 @@ class CreateContainerTest(Test):
 
         Test Description: valid and invalid container creation and close.
 
-        :avocado: tags=regression,cont,contcreate
+        :avocado: tags=vm,regression,cont,contcreate
         """
 
         pool = None
