@@ -135,8 +135,8 @@ flags_are_valid(unsigned int flags)
 {
 	unsigned int mode = flags & (DAOS_PC_RO | DAOS_PC_RW | DAOS_PC_EX);
 
-	return (mode = DAOS_PC_RO) || (mode = DAOS_PC_RW) ||
-	       (mode = DAOS_PC_EX);
+	return (mode == DAOS_PC_RO) || (mode == DAOS_PC_RW) ||
+	       (mode == DAOS_PC_EX);
 }
 
 /* default number of components in pool map */
