@@ -34,11 +34,46 @@
 #include <daos/pool_map.h>
 
 static inline void
-set_bitmap(uint8_t *bitmap, uint64_t bit)
+set_bit(uint8_t *bitmap, uint64_t bit)
 {
         uint64_t offset = bit / 8;
         uint8_t position = bit % 8;
         bitmap[offset] |= (0x80 >> position);
+}
+
+static inline uint8_t
+get_bit(uint8_t *bitmap, uint64_t bit)
+{
+	uint64_t offset = bit / 8;
+        uint8_t position = bit % 8;
+        return ((bitmap[offset] & (0x80 >> position)) != 0);
+}
+
+static inline uint8_t
+is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
+{
+    uint8_t mask = 0xFF >> (start % 8);
+
+    if (end >> 3 == start >> 3) {
+        mask &= (0xFF << (8-((end%8)+1)));
+        return (bitmap[(start >> 3)] & mask) == mask;
+    }
+
+    if ((bitmap[(start >> 3)] & mask) != mask)
+        return 0;
+
+    mask = (0xFF << (8-((end%8)+1)));
+    if((bitmap[(end >> 3)] & mask) != mask)
+        return 0;
+
+    if ((end >> 3) > ((start >> 3) + 1)) {
+        int i;
+        for(i = (start >> 3) + 1; i < (end >> 3); ++i)
+            if(bitmap[i] != 0xFF)
+                return 0;
+    }
+
+    return 1;
 }
 
 static inline void
@@ -75,6 +110,7 @@ uint64_t get_dom_cnt(struct pool_domain *dom) {
 
 	return count;
 }
+
 /**
  * Jump Consistent Hash Algorithm that provides a bucket location
  * for the given key. This algorithm hashes a minimal (1/n) number
@@ -144,6 +180,7 @@ crc(uint64_t data, uint32_t init_val)
                                              init_val) << 32);
 }
 
+
 struct remap_node {
 	uint32_t rank;
 	uint32_t shard_idx;
@@ -196,11 +233,6 @@ pl_map2mplmap(struct pl_map *map)
  * \param[in]   dom_used        This is a contiguous array that contains
  *                              information on whether or not an internal node
  *                              (non-target) in a domain has been used.
- * \param[in]   dom_count       An array that contains the number of targets
- *                              previously used that will be cleared when all
- *                              the domains have been used. Important for the
- *                              case that we must place more shards than
- *                              domains in a particular fault domain.
  * \param[in]   used_targets    A list of the targets that have been used. We
  *                              iterate through this when selecting the next
  *                              target in a placement to determine if that
@@ -215,8 +247,8 @@ pl_map2mplmap(struct pl_map *map)
  */
 static void
 get_target(struct pool_domain *curr_dom, struct pool_target **target,
-	   uint64_t obj_key, uint8_t *dom_used,
-	   uint16_t *dom_count, uint32_t *used_targets, int shard_num)
+	   uint64_t obj_key, uint8_t *dom_used, uint32_t *used_targets,
+	   int shard_num)
 {
 	uint8_t         found_target = 0;
 	uint8_t         top = 0;
@@ -231,7 +263,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 		uint32_t        num_doms;
 		uint64_t        key;
 		uint64_t 	curr_pos;
-		uint8_t         *coll_dom_start;
+		uint64_t        start_bit;
 
 		/* Retrieve number of nodes in this domain */
 		if(curr_dom->do_children == NULL)
@@ -279,7 +311,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 			/* Mark target as used */
 			used_targets[i] = dom_id + 1;
-			dom_count[curr_pos]++;
 
 			/* Found target (which may be available or not) */
 			found_target = 1;
@@ -289,18 +320,18 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			child_pos = child_pos / sizeof(struct pool_domain);
 
 			/* Get the start position of bookkeeping array for domain */
-			coll_dom_start = &dom_used[child_pos];
+			start_bit = child_pos;
 
 			/*
 			 * If all of the nodes have been used for shards but we
 			 * still have shards to place mark all nodes as unused
 			 * so duplicates can be chosen
 			 */
-			if (dom_count[curr_pos] == num_doms &&
-			    curr_dom->do_children != NULL) {
-				dom_count[curr_pos] = 0;
-				for (i = 0; i < num_doms; ++i)
-					coll_dom_start[i] = 0;
+			if (is_range_set(dom_used, start_bit, start_bit +
+				num_doms - 1) && curr_dom->do_children != NULL) {
+				clear_bitmap_range(dom_used, curr_pos, curr_pos);
+				clear_bitmap_range(dom_used, start_bit,
+						start_bit + (num_doms - 1));
 			}
 
 			/*
@@ -312,11 +343,11 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				selected_dom = jump_consistent_hash(key,
 								    num_doms);
 				key = crc(key, fail_num);
-			} while (coll_dom_start[selected_dom] == 1);
+			} while (get_bit(dom_used, selected_dom + start_bit)
+					== 1);
 
 			/* Mark this domain as used */
-			coll_dom_start[selected_dom] = 1;
-			dom_count[curr_pos]++;
+			set_bit(dom_used, selected_dom + start_bit);
 
 			/* Add domain info to the stack */
 			top++;
@@ -337,10 +368,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
  *                              The root node of the pool map.
  * \param[in]   target_id       This is the ID of the original layout location
  *                              that was determined to be unavailable.
- * \param[in]   top_level_id    This is the top level below the root that the
- *                              shard was originally placed on. This is used in
- *                              order to attempt selecting the rebuild target
- *                              from any other domain first.
  * \param[in]   key             A unique key generated using the object ID.
  *                              This is the same key used during initial
  *                              placement.
@@ -348,12 +375,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
  * \param[in]   dom_used        This is a contiguous array that contains
  *                              information on whether or not an internal node
  *                              (non-target) in a domain has been used.
- * \param[in]   dom_count       An array that contains the number of targets
- *                              previously used that will be cleared when all
- *                              the domains have been used. Important for the
- *                              case that we must place more shards than
- *                              domains in a particular fault domain.
- *                              location is valid.
  * \param[in]   shard_num       the current shard number. This is used when
  *                              selecting a target to determine if repeated
  *                              targets are allowed in the case that there
@@ -362,8 +383,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 static void
 get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
-		   uint64_t key, uint8_t *dom_used, uint16_t *dom_count,
-		   int shard_num)
+		   uint64_t key, uint8_t *dom_used, int shard_num)
 {
 	uint8_t                 *coll_dom_start;
 	uint8_t                 *used_tgts = NULL;
@@ -395,7 +415,6 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
 
 		/* mark this domain as used */
 		coll_dom_start[selected_dom] = 1;
-		dom_count[selected_dom]++;
 
 		/* To find rebuild target we examine all targets */
 		num_doms = target_selection->do_target_nr;
@@ -480,7 +499,6 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 
 	struct pool_target *target;
 	uint8_t dom_used[dom_map_size];
-	uint16_t dom_cnt[dom_map_size];
 	uint32_t target_id;
 	uint8_t rebuild_shard_num[group_size * group_cnt];
 	uint32_t used_targets[layout->ol_nr * 2];
@@ -490,7 +508,6 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 	int k;
 
 	memset(dom_used, 0, sizeof(*dom_used) * dom_map_size);
-	memset(dom_cnt, 0, sizeof(*dom_cnt) *  dom_map_size);
 	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) * 2);
 
 	for (i = 0, k = 0; i < group_cnt; i++) {
@@ -498,7 +515,7 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 			uint32_t tgt_id;
 
 			get_target(root, &target, crc(oid.lo, k),
-				   dom_used, dom_cnt, used_targets, k);
+				   dom_used, used_targets, k);
 
 			tgt_id = target->ta_comp.co_id;
 
@@ -519,13 +536,11 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 		}
 	}
 
-	memset(dom_cnt, 0, sizeof(*dom_cnt) *  dom_map_size);
-
 	for (i = 0; i < rebuild_num; ++i) {
 		k = rebuild_shard_num[i];
 
 		get_rebuild_target(root, &target_id, crc(oid.lo, k), dom_used,
-				dom_cnt, k);
+				k);
 
 		layout->ol_shards[k].po_target = target_id;
 		layout->ol_shards[k].po_shard = k;
@@ -578,7 +593,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	}
 
 
-	mplmap->dom_used_length = get_dom_cnt(*root) + 1;
+	mplmap->dom_used_length = (get_dom_cnt(*root)/ 8) + 1;
 	*mapp = &mplmap->mmp_map;
 
 	D_FREE(root);
