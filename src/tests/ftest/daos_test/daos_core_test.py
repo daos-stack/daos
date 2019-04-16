@@ -40,7 +40,7 @@ import server_utils
 import write_host_file
 # pylint: enable=wrong-import-position,import-error
 
-CLIENT_LOG = "/tmp/client.log"
+CLIENT_LOG = "/client_daos.log"
 
 class DaosCoreTest(Test):
     """
@@ -66,11 +66,15 @@ class DaosCoreTest(Test):
         self.daos_test = self.basepath + '/install/bin/daos_test'
         self.orterun = self.basepath + '/install/bin/orterun'
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        #To generate the seperate client log file
-        self.orterun_env = '-x D_LOG_FILE={}'.format(CLIENT_LOG)
 
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
+        logfile_env = os.environ['D_LOG_FILE']
+        self.log_dir, self.server_log = os.path.split(logfile_env)
+        self.client_log = os.path.join(self.log_dir + CLIENT_LOG)
+        #To generate the seperate client log file
+        self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
+
         self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
@@ -83,10 +87,8 @@ class DaosCoreTest(Test):
         # subtest
         if self.subtest_name:
             try:
-                logfile = os.environ['D_LOG_FILE']
-                dirname, filename = os.path.split(logfile)
-                new_logfile = os.path.join(dirname, self.subtest_name + "_" + \
-                                                    filename)
+                new_logfile = os.path.join(self.log_dir, self.subtest_name + "_" + \
+                                           self.server_log)
                 # rename on each of the servers
                 for host in self.hostlist:
                     subprocess.check_call(['ssh', host,
