@@ -35,40 +35,39 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# 'recipe' for Docker to build an image of centOS-based
+# 'recipe' for Docker to build an image of Leap-based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM centos:7
+FROM opensuse/leap:15.0
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
-# Build arguments can be set via --build-arg
+# Build arguments can be set via -build-arg
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
-# for good measure, clean the metadata
-RUN yum clean metadata
+# Update distribution
+# It's better to put the zypper update in the same "cache layer" as the
+# zypper install command so that the database is updated if/when the
+# installed packages list below is updated
+RUN zypper --non-interactive update; \
+    zypper --non-interactive install                                  \
+           boost-devel clang cmake cunit-devel curl doxygen flex      \
+           gcc gcc-c++ git go graphviz gzip                           \
+           libaio-devel libcmocka-devel libevent-devel libiscsi-devel \
+           libltdl7 libnuma-devel libopenssl-devel libtool            \
+           libuuid-devel libyaml-devel                                \
+           make man meson nasm ninja pandoc patch python2-pip         \
+           readline-devel sg3_utils which yasm
 
-# Install basic tools
-RUN yum -y install epel-release
-RUN yum -y install                                                 \
-           git gcc gcc-c++ make cmake golang libtool boost-devel   \
-           libuuid-devel openssl-devel libevent-devel              \
-           libtool-ltdl-devel libcmocka-devel readline-devel       \
-           doxygen pandoc flex patch nasm yasm ninja-build meson   \
-           CUnit-devel libaio-devel clang-analyzer sg3_utils       \
-           libiscsi-devel numactl-devel graphviz                   \
-           libyaml-devel                                           \
-           scons pylint file ShellCheck python-pep8 lcov  python   \
-           python2-pygithub yum-plugin-copr
+RUN pip install --upgrade pip; \
+    pip install -U setuptools; \
+    pip install -U wheel;      \
+    pip install scons==3.0.1
 
-RUN yum -y copr enable jhli/ipmctl
-RUN yum -y copr enable jhli/safeclib
-RUN yum -y install libipmctl-devel
-
-RUN yum -y install python34 python34-pylint python34-PyYAML.x86_64 \
-           PyYAML python2-paramiko python34-paramiko valgrind rsync
+# CaRT Specific
+RUN zypper --non-interactive install mscgen rsync valgrind
 
 # Add CaRT user
 ENV USER cart

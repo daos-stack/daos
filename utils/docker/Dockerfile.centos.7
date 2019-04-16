@@ -35,45 +35,37 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# 'recipe' for Docker to build an image of Ubuntu-based
+# 'recipe' for Docker to build an image of centOS-based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM ubuntu:18.04
+FROM centos:7
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
-# Build arguments can be set via -build-arg
-# set NOBUILD to disable git clone & build
-ARG NOBUILD
+# Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
-# Update distribution
-# It's better to put the apt-get update in the same "cache layer" as the
-# apt-get install command so that the apt database is updated if/when the
-# installed packages list below is updated
+# for good measure, clean the metadata
+RUN yum clean metadata
 
 # Install basic tools
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y git   \
-                       gcc golang-go make cmake libtool-bin scons autoconf    \
-                       libboost-dev uuid-dev libssl-dev libevent-dev          \
-                       libltdl-dev librdmacm-dev libcmocka0 libcmocka-dev     \
-                       libreadline6-dev curl doxygen pandoc flex patch nasm   \
-                       yasm graphviz doxygen libibverbs-dev librdmacm-dev     \
-                       libcunit1-dev libnuma-dev libaio-dev sg3-utils         \
-                       libiscsi-dev python-dev mscgen ninja-build meson       \
-                       pylint bash locales clang libyaml-dev
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y go-dep \
-                       python3 python-yaml python3-yaml
-# Don't need libsafec-dev and libipmctl-dev
+RUN yum -y install epel-release; \
+    yum -y install                                                        \
+           boost-devel clang-analyzer cmake CUnit-devel doxygen file flex \
+           gcc gcc-c++ git golang graphviz lcov                           \
+           libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
+           libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
+           make meson nasm ninja-build numactl-devel openssl-devel        \
+           pandoc patch                                                   \
+           pylint python python-pep8 python-requests python2-pygithub     \
+           readline-devel scons sg3_utils ShellCheck yasm
 
-RUN ln -s /usr/bin/cc /bin/cc
-
-# hack the default shell to bash instead of dash
-RUN rm /bin/sh && ln -s bash /bin/sh
-
-RUN locale-gen en_US.UTF-8
+# CaRT specific
+RUN yum -y install \
+           python2-paramiko python36 python36-pylint python36-PyYAML \
+           python36-paramiko PyYAML rsync valgrind
 
 # Add CaRT user
 ENV USER cart
@@ -84,6 +76,9 @@ RUN echo "$USER:$PASSWD" | chpasswd
 # Switch to new user
 USER $USER
 WORKDIR /home/$USER
+
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
 
 # Fetch CaRT code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/cart.git; fi

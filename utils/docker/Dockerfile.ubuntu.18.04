@@ -35,41 +35,46 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# 'recipe' for Docker to build an image of Leap-based
+# 'recipe' for Docker to build an image of Ubuntu-based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM opensuse/leap:15.0
+FROM ubuntu:18.04
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
 # Build arguments can be set via -build-arg
-# set NOBUILD to disable git clone & build
-ARG NOBUILD
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
 # Update distribution
-# It's better to put the zypper update in the same "cache layer" as the
-# zypper install command so that the database is updated if/when the
+# It's better to put the apt-get update in the same "cache layer" as the
+# apt-get install command so that the apt database is updated if/when the
 # installed packages list below is updated
-RUN zypper -n update
-RUN zypper install -y                                        \
-           git gcc gcc-c++ make cmake go libtool boost-devel \
-           libuuid-devel libopenssl-devel libevent-devel     \
-           libltdl7 libcmocka-devel readline-devel           \
-           doxygen pandoc flex patch nasm yasm ninja meson   \
-           cunit-devel libaio-devel clang sg3_utils          \
-           libiscsi-devel libnuma-devel graphviz             \
-           libyaml-devel                                     \
-           mscgen python2-pip curl which man
 
-RUN pip install --upgrade pip
-RUN pip install -U setuptools
-RUN pip install -U wheel
-Run pip install scons==3.0.1
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            autoconf bash clang cmake curl doxygen flex                 \
+            gcc git golang-go graphviz                                  \
+            libaio-dev libboost-dev libcmocka0 libcmocka-dev            \
+            libcunit1-dev libevent-dev libibverbs-dev libiscsi-dev      \
+            libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
+            libssl-dev libtool-bin libyaml-dev                          \
+            locales make meson nasm ninja-build pandoc patch            \
+            pylint python-dev scons sg3-utils uuid-dev yasm
 
-RUN zypper install -y rsync valgrind
+# CaRT Specific
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            go-dep mscgen python-yaml python3 python3-yaml
+
+# Don't need libsafec-dev and libipmctl-dev
+
+RUN ln -s /usr/bin/cc /bin/cc
+
+# hack the default shell to bash instead of dash
+RUN rm /bin/sh && ln -s bash /bin/sh
+
+RUN locale-gen en_US.UTF-8
 
 # Add CaRT user
 ENV USER cart
@@ -80,6 +85,9 @@ RUN echo "$USER:$PASSWD" | chpasswd
 # Switch to new user
 USER $USER
 WORKDIR /home/$USER
+
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
 
 # Fetch CaRT code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/cart.git; fi

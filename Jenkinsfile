@@ -109,7 +109,7 @@ pipeline {
                 stage('checkpatch') {
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos:7'
+                            filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
@@ -164,7 +164,7 @@ pipeline {
                 stage('Build RPM on CentOS 7') {
                     agent {
                         dockerfile {
-                            filename 'Dockerfile-mockbuild.centos:7'
+                            filename 'Dockerfile-mockbuild.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs  '--build-arg UID=$(id -u)'
@@ -215,7 +215,7 @@ pipeline {
                 stage('Build on CentOS 7') {
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos:7'
+                            filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
@@ -284,7 +284,7 @@ pipeline {
                 stage('Build on CentOS 7 with Clang') {
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos:7'
+                            filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
@@ -346,7 +346,7 @@ pipeline {
                            branch 'master' }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu:18.04'
+                            filename 'Dockerfile.ubuntu.18.04'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
@@ -406,7 +406,7 @@ pipeline {
                 stage('Build on Ubuntu 18.04 with Clang') {
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu:18.04'
+                            filename 'Dockerfile.ubuntu.18.04'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
@@ -596,7 +596,7 @@ pipeline {
                            branch 'master' }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap:15'
+                            filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
@@ -658,7 +658,7 @@ pipeline {
                            branch 'master' }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap:15'
+                            filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
@@ -718,7 +718,7 @@ pipeline {
                 stage('Build on Leap 15 with Intel-C') {
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap:15'
+                            filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
