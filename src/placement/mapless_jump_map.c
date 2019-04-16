@@ -342,7 +342,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 				selected_dom = jump_consistent_hash(key,
 								    num_doms);
-				key = crc(key, fail_num);
+				key = crc(key, fail_num++);
 			} while (get_bit(dom_used, selected_dom + start_bit)
 					== 1);
 
@@ -481,7 +481,7 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
  *                              non-leaf node in the pool map. When this equals
  *                              the total number of child nodes we reset the
  *                              status showing the nodes have been used.
- * \param[out]  remap_list      The list of nodes that needs to be rebuilt
+ * \param[out]  rebuild_list      The list of nodes that needs to be rebuilt
  *                              during the rebuild process. This is only
  *                              returned when this function is called from the
  *                              rebuild function and will otherwise be NULL.
@@ -491,9 +491,9 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
  *                              from functions other than find rebuild.
  */
 static int
-get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
+get_object_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 		uint16_t group_cnt, uint16_t group_size, daos_obj_id_t oid,
-		uint32_t dom_map_size, struct remap_node *remap_list)
+		uint32_t dom_map_size, struct remap_node *rebuild_list)
 {
 
 
@@ -501,14 +501,20 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 	uint8_t dom_used[dom_map_size];
 	uint32_t target_id;
 	uint8_t rebuild_shard_num[group_size * group_cnt];
-	uint32_t used_targets[layout->ol_nr * 2];
+	uint32_t used_targets[layout->ol_nr + 1];
 	uint8_t rebuild_num = 0;
 	int i;
 	int j;
 	int k;
 
 	memset(dom_used, 0, sizeof(*dom_used) * dom_map_size);
-	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) * 2);
+	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) + 1);
+
+
+	if(group_cnt*group_size > root->do_target_nr) {
+		D_ERROR("Not enough targets for layout.\n");
+		return -DER_INVAL;
+	}
 
 	for (i = 0, k = 0; i < group_cnt; i++) {
 		for (j = 0; j < group_size; j++, k++) {
@@ -524,10 +530,9 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 
 				uint32_t tgt_rank = target->ta_comp.co_rank;
 
-				if (remap_list != NULL) {
-					remap_list[rebuild_num].rank = tgt_rank;
-					remap_list[rebuild_num].shard_idx = k;
-
+				if (rebuild_list != NULL) {
+					rebuild_list[rebuild_num].rank = tgt_rank;
+					rebuild_list[rebuild_num].shard_idx = k;
 				}
 				rebuild_num++;
 			}
@@ -589,6 +594,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		D_ERROR("Could not find root node in pool map.");
 		D_FREE(root);
 		D_FREE_PTR(mplmap);
+		pool_map_decref(poolmap);
 		return -DER_NONEXIST;
 	}
 
@@ -613,6 +619,7 @@ mapless_jump_map_destroy(struct pl_map *map)
 	struct pl_mapless_map   *mplmap;
 
 	mplmap = pl_map2mplmap(map);
+	pool_map_decref(map->pl_poolmap);
 
 	D_FREE_PTR(mplmap);
 }
@@ -666,10 +673,11 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(group_size * group_cnt, &layout);
-	if (rc) {
+	if (rc != 0) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
+
 	pmap = map->pl_poolmap;
 
 	/* Set the pool map version */
@@ -677,8 +685,13 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Get root node of pool map */
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
-	get_target_layout(root, layout, group_size, group_cnt, oid,
+	rc = get_object_layout(root, layout, group_size, group_cnt, oid,
 			mplmap->dom_used_length,  NULL);
+
+	if(rc != 0) {
+		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
+		return rc;
+	}
 
 	*layout_pp = layout;
 	return DER_SUCCESS;
@@ -712,7 +725,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 {
 	struct pl_mapless_map   *mplmap;
 	struct pl_obj_layout    *layout;
-	struct remap_node       remap_list[array_size];
+	struct remap_node       rebuild_list[array_size];
 	struct pool_map         *pmap;
 	uint16_t                group_size;
 	uint16_t                group_cnt;
@@ -755,9 +768,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	/* Get root node of pool map */
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
-	failed_tgt_num = get_target_layout(root, layout,
-					   group_size, group_cnt, oid,
-					   mplmap->dom_used_length,  remap_list);
+	failed_tgt_num = get_object_layout(root, layout, group_size, group_cnt,
+			oid, mplmap->dom_used_length,  rebuild_list);
 
 	for (i = 0; i < failed_tgt_num; ++i) {
 		struct pool_target	*target;
@@ -768,7 +780,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			goto add;
 
 		leader = pl_select_leader(md->omd_id,
-				remap_list[i].shard_idx, layout->ol_nr,
+				rebuild_list[i].shard_idx, layout->ol_nr,
 				true, pl_obj_get_shard, layout);
 
 		if (leader < 0) {
@@ -776,7 +788,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 				"is leader or not for obj "DF_OID
 				", ver:%d, shard:%d, rc = %d\n",
 				DP_OID(md->omd_id), rebuild_ver,
-				remap_list[i].shard_idx, leader);
+				rebuild_list[i].shard_idx, leader);
 			goto add;
 		}
 
@@ -801,13 +813,13 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 				DP_OID(md->omd_id),
 				target->ta_comp.co_fseq,
 				target->ta_comp.co_status,
-				rebuild_ver, remap_list[i].shard_idx);
+				rebuild_ver, rebuild_list[i].shard_idx);
 			continue;
 		}
 
 add:
-		tgt_rank[i] = remap_list[i].rank;
-		shard_id[i] = remap_list[i].shard_idx;
+		tgt_rank[i] = rebuild_list[i].rank;
+		shard_id[i] = rebuild_list[i].shard_idx;
 	}
 	return failed_tgt_num;
 }
