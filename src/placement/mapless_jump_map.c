@@ -62,6 +62,19 @@ clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end)
             memset(&(bitmap[(start>>3)+1]), 0, (end>>3) - ((start>>3)+1));
 }
 
+uint64_t get_dom_cnt(struct pool_domain *dom) {
+	uint64_t count = 0;
+
+	if(dom->do_children != NULL) {
+		int i;
+		count += dom->do_child_nr;
+
+		for(i = 0; i < dom->do_child_nr; ++i)
+			count += get_dom_cnt(&dom->do_children[i]);
+	}
+
+	return count;
+}
 /**
  * Jump Consistent Hash Algorithm that provides a bucket location
  * for the given key. This algorithm hashes a minimal (1/n) number
@@ -131,26 +144,6 @@ crc(uint64_t data, uint32_t init_val)
                                              init_val) << 32);
 }
 
-
-/**
- * This struct contains information used in determining
- * where the information is that denotes whether or not this
- * node has already been used.
- *
- * This structure must be updated every time there is a
- * change to the pool map.
- */
-struct coll_map {
-	/** number of nodes for this level (targets or domains) */
-	unsigned int    do_node_cnt;
-	/** child nodes for collision map */
-	struct coll_map *do_children;
-	/** number unused children domains */
-	uint32_t        cnt_used_offset;
-	/** the offset for the location in the "used" array */
-	uint32_t        coll_offset;
-};
-
 struct remap_node {
 	uint32_t rank;
 	uint32_t shard_idx;
@@ -167,10 +160,6 @@ struct pl_mapless_map {
 	struct pl_map   mmp_map;
 	/** the total length of the array used for bookkeeping */
 	uint32_t        dom_used_length;
-
-	uint32_t        cnt_used_length;
-	/** the collision map used during placement to avoid collisions */
-	struct coll_map *co_map_root;
 };
 
 /**
@@ -193,80 +182,6 @@ pl_map2mplmap(struct pl_map *map)
 }
 
 /**
- * This function recursively creates a collision map that is used to
- * keep track of which nodes in a given domain have been used. The collision
- * map mirrors the pool maps structure,
- *
- * \param[in]   *domain         A pointer to the root node of the pool map
- *                              domains.
- * \param[out]  *co_map         A pointer to the collision map that will
- *                              be created.
- * \param[in]   *offset_start   The index in the array of utilized targets
- *                              where the information related to this node is
- *                              located (Generally starts at n = number
- *                              of targets)
- *
- * \return      void
- */
-static void
-create_collision_tree(struct pool_domain *dom, struct coll_map *co_map,
-		      uint32_t *used_currnt, uint32_t *cnt_currnt)
-{
-	/* There should always be targets in the pool map */
-	D_ASSERT(dom->do_targets != NULL);
-
-	/* these are the offsets into their respective book-keeping arrays */
-	co_map->coll_offset = *used_currnt;
-	co_map->cnt_used_offset = *cnt_currnt;
-
-	/* Every domain has a count for how many node have been used */
-	(*cnt_currnt)++;
-
-	/* If this is non-target level domain */
-	if (dom->do_children != NULL) {
-		uint32_t i;
-
-		D_ALLOC_ARRAY(co_map->do_children, dom->do_child_nr);
-
-		/* Keep track of number of children in a single place */
-		co_map->do_node_cnt = dom->do_child_nr;
-		*used_currnt += dom->do_child_nr;
-
-		/* Recursively build the collision map */
-		for (i = 0; i < dom->do_child_nr; i++)
-			create_collision_tree(&dom->do_children[i],
-					      &co_map->do_children[i],
-					      used_currnt, cnt_currnt);
-	} else {
-		/* We don't used a byte map for individual targets */
-		co_map->coll_offset = 0;
-		co_map->do_node_cnt = dom->do_target_nr;
-	}
-}
-/**
- * This function recursively frees all the children in the collision tree.
- *
- * \param[in]   co_map         The collision tree to be freed.
- *
- * \return      void
- */
-static void
-free_collision_tree(struct coll_map *co_map)
-{
-	/* If this is non-target level domain */
-	if (co_map->do_children != NULL) {
-		uint32_t i;
-
-		/* Recursively free the collision map */
-		for (i = 0; i < co_map->do_node_cnt; i++)
-			free_collision_tree(&co_map->do_children[i]);
-
-		D_FREE(co_map->do_children);
-	}
-}
-
-
-/**
  * This function recursively chooses a single target to be used in the
  * object shard layout. This function is called for every shard that needs a
  * placement location.
@@ -276,19 +191,11 @@ free_collision_tree(struct coll_map *co_map)
  *                              initially the root node of the pool map.
  * \param[out]  target          This variable is used when returning the
  *                              selected target for this shard.
- * \param[in]   co_map          The collision map used for book keeping
- *                              purposes when selecting targets. Contains
- *                              additional information about the pool map.
  * \param[in]   obj_key         a unique key generated using the object ID.
  *                              This is used in jump consistent hash.
  * \param[in]   dom_used        This is a contiguous array that contains
  *                              information on whether or not an internal node
  *                              (non-target) in a domain has been used.
- * \param[in]   next_dom        The "stack" used when iterating down the pool
- *                              map. This is required because there is a
- *                              chance we may need to iterate back up the pool
- *                              map.
- * \param[in]   next_co_map     A stack similar to the next dom variable.
  * \param[in]   dom_count       An array that contains the number of targets
  *                              previously used that will be cleared when all
  *                              the domains have been used. Important for the
@@ -308,65 +215,39 @@ free_collision_tree(struct coll_map *co_map)
  */
 static void
 get_target(struct pool_domain *curr_dom, struct pool_target **target,
-	   struct coll_map *co_map, uint64_t obj_key, uint8_t *dom_used,
-	   struct pool_domain **next_dom, struct coll_map **next_co_map,
-	   uint32_t *dom_count, uint32_t *used_targets, int shard_num)
+	   uint64_t obj_key, uint8_t *dom_used,
+	   uint16_t *dom_count, uint32_t *used_targets, int shard_num)
 {
 	uint8_t         found_target = 0;
 	uint8_t         top = 0;
 	uint32_t        fail_num = 0;
 	uint32_t        selected_dom;
-	uint64_t        total_tgts;
+	uint64_t 	root_pos;
 
-	/* Used to determine if there are fewer targets than shards */
-	total_tgts = curr_dom->do_target_nr;
-
-	/* top of the "call" stack */
-	next_dom[top] = curr_dom;
-	next_co_map[top] = co_map;
+	root_pos = (uint64_t)curr_dom;
 
 	do {
 		uint32_t        i;
 		uint32_t        num_doms;
 		uint64_t        key;
+		uint64_t 	curr_pos;
 		uint8_t         *coll_dom_start;
 
-		curr_dom = next_dom[top];
-		co_map = next_co_map[top];
-
 		/* Retrieve number of nodes in this domain */
-		num_doms = co_map->do_node_cnt;
-		/* Get the start position of bookkeeping array for domain */
-		coll_dom_start = &dom_used[co_map->coll_offset];
-
-		/*
-		 * If all of the nodes have been used for shards but we
-		 * still have shards to place mark all nodes as unused
-		 * so duplicates can be chosen
-		 */
-		if (dom_count[co_map->cnt_used_offset] == num_doms &&
-		    curr_dom->do_children != NULL) {
-
-			dom_count[co_map->cnt_used_offset] = 0;
-			for (i = 0; i < num_doms; ++i)
-				coll_dom_start[i] = 0;
-		}
+		if(curr_dom->do_children == NULL)
+			num_doms = curr_dom->do_target_nr;
+		else
+			num_doms = curr_dom->do_child_nr;
 
 		key = obj_key;
 		/* If choosing target in lowest fault domain level */
+
+		curr_pos = (uint64_t)curr_dom - root_pos;
+		curr_pos = curr_pos / sizeof(struct pool_domain);
+
 		if (curr_dom->do_children == NULL) {
 			uint32_t dom_id;
-			/*
-			 * Number of repeats allowed when sharding is wider
-			 * than stripe count
-			 *
-			 * 0 if placing fewer shards than available targets
-			 */
-			uint16_t num_repeats = (shard_num / total_tgts);
-
 			do {
-				uint16_t repeats = 0;
-
 				/*
 				 * Must crc key because jump consistent hash
 				 * requires an even distribution or it will
@@ -392,24 +273,42 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				 */
 				for (i = 0; used_targets[i] != 0; ++i) {
 					if (used_targets[i] == dom_id + 1)
-						repeats++;
-					if (repeats > num_repeats)
 						break;
 				}
 			} while (used_targets[i]);
 
 			/* Mark target as used */
 			used_targets[i] = dom_id + 1;
-			dom_count[co_map->cnt_used_offset]++;
+			dom_count[curr_pos]++;
 
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
+
+			uint64_t child_pos = (uint64_t)(curr_dom->do_children) - root_pos;
+			child_pos = child_pos / sizeof(struct pool_domain);
+
+			/* Get the start position of bookkeeping array for domain */
+			coll_dom_start = &dom_used[child_pos];
+
+			/*
+			 * If all of the nodes have been used for shards but we
+			 * still have shards to place mark all nodes as unused
+			 * so duplicates can be chosen
+			 */
+			if (dom_count[curr_pos] == num_doms &&
+			    curr_dom->do_children != NULL) {
+				dom_count[curr_pos] = 0;
+				for (i = 0; i < num_doms; ++i)
+					coll_dom_start[i] = 0;
+			}
+
 			/*
 			 * Keep choosing new domains until one that has
 			 * not been used is found
 			 */
 			do {
+
 				selected_dom = jump_consistent_hash(key,
 								    num_doms);
 				key = crc(key, fail_num);
@@ -417,12 +316,11 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 			/* Mark this domain as used */
 			coll_dom_start[selected_dom] = 1;
-			dom_count[co_map->cnt_used_offset]++;
+			dom_count[curr_pos]++;
 
 			/* Add domain info to the stack */
 			top++;
-			next_dom[top] = &(curr_dom->do_children[selected_dom]);
-			next_co_map[top] = &(co_map->do_children[selected_dom]);
+			curr_dom = &(curr_dom->do_children[selected_dom]);
 			obj_key = crc(obj_key, top);
 		}
 	} while (!found_target);
@@ -439,9 +337,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
  *                              The root node of the pool map.
  * \param[in]   target_id       This is the ID of the original layout location
  *                              that was determined to be unavailable.
- * \param[in]   co_map          The collision map used for book keeping
- *                              purposes when selecting targets. contains
- *                              additional information about the pool map.
  * \param[in]   top_level_id    This is the top level below the root that the
  *                              shard was originally placed on. This is used in
  *                              order to attempt selecting the rebuild target
@@ -467,11 +362,9 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 static void
 get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
-		   struct coll_map *co_map, uint32_t *top_level_id,
-		   uint64_t key, uint8_t *dom_used, uint32_t *dom_count,
+		   uint64_t key, uint8_t *dom_used, uint16_t *dom_count,
 		   int shard_num)
 {
-	int                     i;
 	uint8_t                 *coll_dom_start;
 	uint8_t                 *used_tgts = NULL;
 	uint32_t                selected_dom;
@@ -480,27 +373,15 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
 	struct pool_target      *target;
 	struct pool_domain      *target_selection;
 
+
 	/* Get the top level start location for bookkeeping */
-	coll_dom_start = &dom_used[co_map->coll_offset];
+	coll_dom_start = &dom_used[0];
 	while (1) {
 
 		uint8_t skip = 0;
-		uint32_t curr_id;
 		uint32_t num_doms;
 
 		num_doms = root->do_child_nr;
-
-		/*
-		 * If all domains have been tried and failed, clear the
-		 * collision bookkeeping then choose domain  of original
-		 * failure.
-		 */
-		if (dom_count[co_map->cnt_used_offset] + 1 >= num_doms) {
-			dom_count[co_map->cnt_used_offset] = 0;
-			top_level_id = NULL;
-			for (i = 0; i < num_doms; ++i)
-				coll_dom_start[i] = 0;
-		}
 
 		/*
 		 * Choose domains using jump consistent hash until we find a
@@ -510,12 +391,11 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
 			key = crc(key, fail_num++);
 			selected_dom = jump_consistent_hash(key, num_doms);
 			target_selection = &(root->do_children[selected_dom]);
-			curr_id = target_selection->do_comp.co_id;
-		} while (top_level_id != NULL && curr_id  == *top_level_id);
+		} while (coll_dom_start[selected_dom] != 1);
 
 		/* mark this domain as used */
 		coll_dom_start[selected_dom] = 1;
-		dom_count[co_map->cnt_used_offset]++;
+		dom_count[selected_dom]++;
 
 		/* To find rebuild target we examine all targets */
 		num_doms = target_selection->do_target_nr;
@@ -574,8 +454,6 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
  *                              This will be multiplied with group_cnt to get
  *                              the total number of targets required for
  *                              placement.
- * \param[in]   tree_depth      The size the stack will need to be when calling
- *                              the iterative get_target function.
  * \param[in]   dom_map_size    The number of non-leaf nodes in the pool map.
  *                              This value will be used to initialize the array
  *                              that holds the statuses of whether the node has
@@ -595,18 +473,15 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
  */
 static int
 get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
-		  struct coll_map *co_map, uint16_t group_cnt,
-		  uint16_t group_size, daos_obj_id_t oid, uint8_t tree_depth,
-		  uint32_t dom_map_size, uint32_t cnt_map_size,
-		  struct remap_node *remap_list)
+		uint16_t group_cnt, uint16_t group_size, daos_obj_id_t oid,
+		uint32_t dom_map_size, struct remap_node *remap_list)
 {
+
+
 	struct pool_target *target;
-	struct pool_domain *next_dom[tree_depth];
-	struct coll_map *next_co_map[tree_depth];
 	uint8_t dom_used[dom_map_size];
-	uint32_t dom_cnt[cnt_map_size];
+	uint16_t dom_cnt[dom_map_size];
 	uint32_t target_id;
-	uint32_t rebuild_doms[group_size * group_cnt];
 	uint8_t rebuild_shard_num[group_size * group_cnt];
 	uint32_t used_targets[layout->ol_nr * 2];
 	uint8_t rebuild_num = 0;
@@ -614,25 +489,20 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 	int j;
 	int k;
 
-
 	memset(dom_used, 0, sizeof(*dom_used) * dom_map_size);
-	memset(dom_cnt, 0, sizeof(*dom_cnt) *  cnt_map_size);
+	memset(dom_cnt, 0, sizeof(*dom_cnt) *  dom_map_size);
 	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) * 2);
 
 	for (i = 0, k = 0; i < group_cnt; i++) {
 		for (j = 0; j < group_size; j++, k++) {
 			uint32_t tgt_id;
-			uint32_t ndom_id;
 
-			get_target(root, &target, co_map, crc(oid.lo, k),
-				   dom_used, next_dom, next_co_map,
-				   dom_cnt, used_targets, k);
+			get_target(root, &target, crc(oid.lo, k),
+				   dom_used, dom_cnt, used_targets, k);
 
 			tgt_id = target->ta_comp.co_id;
-			ndom_id = next_dom[1]->do_comp.co_id;
 
 			if (pool_target_unavail(target)) {
-				rebuild_doms[rebuild_num] = ndom_id;
 				rebuild_shard_num[rebuild_num] = k;
 
 				uint32_t tgt_rank = target->ta_comp.co_rank;
@@ -649,13 +519,13 @@ get_target_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 		}
 	}
 
-	memset(dom_cnt, 0, sizeof(*dom_cnt) *  cnt_map_size);
+	memset(dom_cnt, 0, sizeof(*dom_cnt) *  dom_map_size);
 
 	for (i = 0; i < rebuild_num; ++i) {
 		k = rebuild_shard_num[i];
 
-		get_rebuild_target(root, &target_id, co_map, &(rebuild_doms[i]),
-				   crc(oid.lo, k), dom_used, dom_cnt, k);
+		get_rebuild_target(root, &target_id, crc(oid.lo, k), dom_used,
+				dom_cnt, k);
 
 		layout->ol_shards[k].po_target = target_id;
 		layout->ol_shards[k].po_shard = k;
@@ -689,10 +559,6 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	if (mplmap == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(mplmap->co_map_root, sizeof(mplmap->co_map_root));
-	if (mplmap->co_map_root == NULL)
-		return -DER_NOMEM;
-
 	D_ALLOC(root, sizeof(*root));
 	if (root == NULL)
 		return -DER_NOMEM;
@@ -701,23 +567,18 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	mplmap->mmp_map.pl_poolmap = poolmap;
 
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL,
-				  root);
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_ROOT,
+			PO_COMP_ID_ALL, root);
+
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
 		D_FREE(root);
-		D_FREE(mplmap->co_map_root);
 		D_FREE_PTR(mplmap);
 		return -DER_NONEXIST;
 	}
 
-	mplmap->dom_used_length = 0;
-	mplmap->cnt_used_length = 0;
 
-	create_collision_tree(*root, mplmap->co_map_root,
-			      &(mplmap->dom_used_length),
-			      &(mplmap->cnt_used_length));
-
+	mplmap->dom_used_length = get_dom_cnt(*root) + 1;
 	*mapp = &mplmap->mmp_map;
 
 	D_FREE(root);
@@ -737,9 +598,6 @@ mapless_jump_map_destroy(struct pl_map *map)
 	struct pl_mapless_map   *mplmap;
 
 	mplmap = pl_map2mplmap(map);
-
-	free_collision_tree(mplmap->co_map_root);
-	D_FREE(mplmap->co_map_root);
 
 	D_FREE_PTR(mplmap);
 }
@@ -779,7 +637,6 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
 	struct pool_domain      *root;
-	struct pool_domain      *next;
 	int rc;
 
 	mplmap = pl_map2mplmap(map);
@@ -805,12 +662,8 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Get root node of pool map */
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
-	pool_map_find_domain(pmap, PO_COMP_TP_RACK, PO_COMP_ID_ALL, &next);
-	D_PRINT("%p\n", root);
-	D_PRINT("%i\n", (int)(((uint64_t)next- (uint64_t)root)/sizeof(struct pool_domain)));
-	get_target_layout(root, layout, mplmap->co_map_root, group_size,
-			  group_cnt, oid, 10, mplmap->dom_used_length,
-			  mplmap->cnt_used_length, NULL);
+	get_target_layout(root, layout, group_size, group_cnt, oid,
+			mplmap->dom_used_length,  NULL);
 
 	*layout_pp = layout;
 	return DER_SUCCESS;
@@ -887,10 +740,9 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	/* Get root node of pool map */
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
-	failed_tgt_num = get_target_layout(root, layout, mplmap->co_map_root,
-					   group_size, group_cnt, oid, 10,
-					   mplmap->dom_used_length,
-					   mplmap->cnt_used_length, remap_list);
+	failed_tgt_num = get_target_layout(root, layout,
+					   group_size, group_cnt, oid,
+					   mplmap->dom_used_length,  remap_list);
 
 	for (i = 0; i < failed_tgt_num; ++i) {
 		struct pool_target	*target;
