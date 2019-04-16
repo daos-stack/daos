@@ -15,8 +15,8 @@ then
 else
     mkdir "$DAOS_DIR/test_results"
 fi
-CMOCKA_MESSAGE_OUTPUT="xml"
-CMOCKA_XML_FILE="$DAOS_DIR/test_results/%g.xml"
+export CMOCKA_MESSAGE_OUTPUT="xml"
+export CMOCKA_XML_FILE="$DAOS_DIR/test_results/%g.xml"
 echo "$CMOCKA_MESSAGE_OUTPUT"
 echo "$CMOCKA_XML_FILE"
 
