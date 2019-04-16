@@ -45,6 +45,18 @@
 #include <daos/tests_lib.h>
 #include <utest_common.h>
 
+/*
+ * The following structure used to
+ * pass bool value , command line information
+ * to various functions
+ */
+struct test_input_value {
+	bool             input;
+	char             *optval;
+};
+
+struct test_input_value tst_fn_val;
+
 /**
  * An example for integer key evtree .
  */
@@ -65,15 +77,20 @@ static daos_handle_t		ts_toh;
 #define EVT_SEP_EXT		'-'
 #define EVT_SEP_EPC		'@'
 
-static int
-ts_open_create(bool create, char *args)
+static void
+ts_open_create(void **state)
 {
+	bool    create;
+	char    *args;
 	bool	inplace = false;
 	int	rc;
 
+	create = tst_fn_val.input;
+	args = tst_fn_val.optval;
+
 	if (!daos_handle_is_inval(ts_toh)) {
 		D_PRINT("Tree has been opened\n");
-		return -1;
+		fail();
 	}
 
 	if (create && args != NULL) {
@@ -81,27 +98,27 @@ ts_open_create(bool create, char *args)
 			inplace = true;
 			if (args[1] != EVT_SEP) {
 				D_PRINT("wrong parameter format %s\n", args);
-				return -1;
+				fail();
 			}
 			args += 2;
 		}
 
 		if (args[0] != 'o' || args[1] != EVT_SEP_VAL) {
 			D_PRINT("incorrect format for tree order: %s\n", args);
-			return -1;
+			fail();
 		}
 
 		ts_order = atoi(&args[2]);
 		if (ts_order < EVT_ORDER_MIN || ts_order > EVT_ORDER_MAX) {
 			D_PRINT("Invalid tree order %d\n", ts_order);
-			return -1;
+			fail();
 		}
 
 	} else if (!create) {
 		inplace = (ts_root->tr_feats != 0);
 		if (TMMID_IS_NULL(ts_root_mmid) && !inplace) {
 			D_PRINT("Please create tree first\n");
-			return -1;
+			fail();
 		}
 	}
 
@@ -127,19 +144,21 @@ ts_open_create(bool create, char *args)
 
 	if (rc != 0) {
 		D_PRINT("Tree %s failed: %d\n", create ? "create" : "open", rc);
-		return -1;
+		fail();
 	}
-	return 0;
 }
 
-static int
-ts_close_destroy(bool destroy)
+static void
+ts_close_destroy(void **state)
 {
+	bool destroy;
 	int rc;
+
+	destroy = tst_fn_val.input;
 
 	if (daos_handle_is_inval(ts_toh)) {
 		D_PRINT("Invalid tree open handle\n");
-		return -1;
+		fail();
 	}
 
 	if (destroy) {
@@ -154,9 +173,8 @@ ts_close_destroy(bool destroy)
 	if (rc != 0) {
 		D_PRINT("Tree %s failed: %d\n",
 			destroy ? "destroy" : "close", rc);
-		return -1;
+		fail();
 	}
-	return rc;
 }
 
 static int
@@ -277,8 +295,8 @@ bio_strdup(struct utest_context *utx, bio_addr_t *addr, const char *str)
 	return bio_alloc_init(utx, addr, str, len);
 }
 
-static int
-ts_add_rect(char *args)
+static void
+ts_add_rect(void **state)
 {
 	char			*val;
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
@@ -286,14 +304,20 @@ ts_add_rect(char *args)
 	int			 rc;
 	bool			 should_pass;
 	static int		 total_added;
+	char			*args;
 
-	if (args == NULL)
-		return -1;
+	args = tst_fn_val.optval;
+
+	if (args == NULL) {
+		D_PRINT("No parameters %s", args);
+		fail();
+	}
 
 	rc = ts_parse_rect(args, &entry.ei_rect, NULL, &val, &should_pass);
-	if (rc != 0)
-		return -1;
-
+	if (rc != 0) {
+		D_PRINT("Parsing tree failure %d", rc);
+		fail();
+	}
 	D_PRINT("Insert "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
 		DP_RECT(&entry.ei_rect), val ? val : "<NULL>",
 		should_pass ? "true" : "false", total_added);
@@ -302,7 +326,7 @@ ts_add_rect(char *args)
 	rc = bio_strdup(ts_utx, &bio_addr, val);
 	if (rc != 0) {
 		D_FATAL("Insufficient memory for test\n");
-		return rc;
+		fail();
 	}
 	entry.ei_addr = bio_addr;
 	entry.ei_ver = 0;
@@ -317,16 +341,15 @@ ts_add_rect(char *args)
 	} else {
 		if (rc == 0) {
 			D_FATAL("Add rect should have failed\n");
-			return -1;
+			fail();
 		}
 		rc = 0;
 	}
 
-	return rc;
 }
 
-static int
-ts_delete_rect(char *args)
+static void
+ts_delete_rect(void **state)
 {
 	char			*val;
 	struct evt_entry	 ent;
@@ -334,13 +357,15 @@ ts_delete_rect(char *args)
 	int			 rc;
 	bool			 should_pass;
 	static int		 total_deleted;
+	char			*args;
 
+	args = tst_fn_val.optval;
 	if (args == NULL)
-		return -1;
+		fail();
 
 	rc = ts_parse_rect(args, &rect, NULL, &val, &should_pass);
 	if (rc != 0)
-		return -1;
+		fail();
 
 	D_PRINT("Delete "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
 		DP_RECT(&rect), val ? val : "<NULL>",
@@ -369,16 +394,15 @@ ts_delete_rect(char *args)
 	} else {
 		if (rc == 0) {
 			D_FATAL("Delete rect should have failed\n");
-			return -1;
+			fail();
 		}
 		rc = 0;
 	}
 
-	return rc;
 }
 
-static int
-ts_find_rect(char *args)
+static void
+ts_find_rect(void **state)
 {
 	struct evt_entry	*ent;
 	char			*val;
@@ -387,13 +411,15 @@ ts_find_rect(char *args)
 	struct evt_entry_array	 ent_array;
 	int			 rc;
 	bool			 should_pass;
+	char			*args;
 
+	args = tst_fn_val.optval;
 	if (args == NULL)
-		return -1;
+		fail();
 
 	rc = ts_parse_rect(args, &rect, NULL, &val, &should_pass);
 	if (rc != 0)
-		return -1;
+		fail();
 
 	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
@@ -416,11 +442,10 @@ ts_find_rect(char *args)
 	}
 
 	evt_ent_array_fini(&ent_array);
-	return rc;
 }
 
-static int
-ts_list_rect(char *args)
+static void
+ts_list_rect(void **state)
 {
 	char			*val;
 	daos_anchor_t		 anchor;
@@ -429,10 +454,12 @@ ts_list_rect(char *args)
 	daos_epoch_t		 high = DAOS_EPOCH_MAX;
 	daos_handle_t		 ih;
 	int			 i;
+	char			*args;
 	int			 rc;
 	int			 options = 0;
 	bool			 probe = true;
 
+	args = tst_fn_val.optval;
 	if (args == NULL) {
 		filter.fr_ex.ex_lo = 0;
 		filter.fr_ex.ex_hi = ~(0ULL);
@@ -443,7 +470,7 @@ ts_list_rect(char *args)
 
 	rc = ts_parse_rect(args, &rect, &high, &val, NULL);
 	if (rc != 0)
-		return -1;
+		fail();
 	filter.fr_ex = rect.rc_ex;
 	filter.fr_epr.epr_lo = rect.rc_epc;
 	filter.fr_epr.epr_hi = high;
@@ -485,14 +512,14 @@ ts_list_rect(char *args)
 		break;
 	default:
 		D_PRINT("Unknown iterator type: %c\n", val[0]);
-		return -1;
+		fail();
 	}
 
 start:
 	rc = evt_iter_prepare(ts_toh, options, &filter, &ih);
 	if (rc != 0) {
 		D_PRINT("Failed to prepare iterator: %d\n", rc);
-		return -1;
+		fail();
 	}
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
@@ -513,7 +540,7 @@ start:
 			if (inob != 1) {
 				D_PRINT("Unexpected value for inob: %d\n",
 					inob);
-				return -1;
+				fail();
 			}
 			D_PRINT("%d) "DF_ENT", val_addr="DF_U64" val=%.*s\n",
 				i, DP_ENT(&ent),
@@ -553,13 +580,12 @@ skip_probe:
 	}
  out:
 	evt_iter_finish(ih);
-	return 0;
 }
 
 #define TS_VAL_CYCLE	4
 
-static int
-ts_many_add(char *args)
+static void
+ts_many_add(void **state)
 {
 	char			*buf;
 	char			*tmp;
@@ -572,59 +598,60 @@ ts_many_add(char *args)
 	int			 nr;
 	int			 i;
 	int			 rc;
-
+	char			*args;
 	/* argument format: "s:NUM,e:NUM,n:NUM"
 	 * s: start offset
 	 * e: extent size
 	 * n: number of extents
 	 */
+	args = tst_fn_val.optval;
 	if (args[0] == 's') {
 		if (args[1] != EVT_SEP_VAL) {
 			D_PRINT("Invalid parameter %s\n", args);
-			return -1;
+			fail();
 		}
 		offset = strtol(&args[2], &tmp, 0);
 		if (*tmp != EVT_SEP) {
 			D_PRINT("Invalid parameter %s\n", args);
-			return -1;
+			fail();
 		}
 		args = tmp + 1;
 	}
 
 	if (args[0] != 'e' || args[1] != EVT_SEP_VAL) {
 		D_PRINT("Invalid parameter %s\n", args);
-		return -1;
+		fail();
 	}
 
 	size = strtol(&args[2], &tmp, 0);
 	if (size <= 0) {
 		D_PRINT("Invalid extent size %d\n", size);
-		return -1;
+		fail();
 	}
 	if (*tmp != EVT_SEP) {
 		D_PRINT("Invalid parameter %s\n", args);
-		return -1;
+		fail();
 	}
 	args = tmp + 1;
 
 	if (args[0] != 'n' || args[1] != EVT_SEP_VAL) {
 		D_PRINT("Invalid parameter %s\n", args);
-		return -1;
+		fail();
 	}
 	nr = strtol(&args[2], &tmp, 0);
 	if (nr <= 0) {
 		D_PRINT("Invalid extent number %d\n", nr);
-		return -1;
+		fail();
 	}
 
 	D_ALLOC(buf, size);
 	if (!buf)
-		return -1;
+		fail();
 
 	seq = dts_rand_iarr_alloc(nr, 0);
 	if (!seq) {
 		D_FREE(buf);
-		return -1;
+		fail();
 	}
 
 	rect = &entry.ei_rect;
@@ -639,7 +666,7 @@ ts_many_add(char *args)
 		rc = bio_strdup(ts_utx, &bio_addr, buf);
 		if (rc != 0) {
 			D_FATAL("Insufficient memory for test\n");
-			return rc;
+			fail();
 		}
 		entry.ei_addr = bio_addr;
 		entry.ei_ver = 0;
@@ -648,23 +675,23 @@ ts_many_add(char *args)
 		rc = evt_insert(ts_toh, &entry);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed %d\n", i, rc);
-			break;
+			fail();
 		}
 	}
 
 	D_FREE(buf);
 	D_FREE(seq);
-	return rc;
 }
 
-static int
-ts_tree_debug(char *args)
+static void
+ts_tree_debug(void **state)
 {
 	int	level;
+	char   *args;
 
+	args = tst_fn_val.optval;
 	level = atoi(args);
 	evt_debug(ts_toh, level);
-	return 0;
 }
 
 #define POOL_NAME "/mnt/daos/evtree-utest"
@@ -1038,16 +1065,17 @@ test_evt_ent_alloc_bug(void **state)
 
 	assert_in_range(count, last, last * 3);
 }
+
 static int
 run_internal_tests(void)
 {
 	static const struct CMUnitTest evt_builtin[] = {
-		{ "EVT001: evt_iter_delete", test_evt_iter_delete,
+		{ "EVT009: evt_iter_delete", test_evt_iter_delete,
 			setup_builtin, teardown_builtin},
-		{ "EVT002: evt_iter_delete_internal",
+		{ "EVT010: evt_iter_delete_internal",
 			test_evt_iter_delete_internal,
 			setup_builtin, teardown_builtin},
-		{ "EVT003: evt_ent_alloc_bug",
+		{ "EVT011: evt_ent_alloc_bug",
 			test_evt_ent_alloc_bug,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
@@ -1057,6 +1085,101 @@ run_internal_tests(void)
 					   global_setup, global_teardown);
 }
 
+static int
+run_create_tests(void)
+{
+	static const struct CMUnitTest evt_create[] = {
+		{ "EVT001: evt_create", ts_open_create, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree create tests", evt_create,
+					   NULL, NULL);
+}
+
+static int
+run_destroy_tests(void)
+{
+	static const struct CMUnitTest evt_destroy[] = {
+		{ "EVT002: evt_destroy", ts_close_destroy, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree destroy tests", evt_destroy,
+						NULL, NULL);
+}
+
+static int
+run_add_tests(void)
+{
+	static const struct CMUnitTest evt_add_rect[] = {
+		{ "EVT003: evt_add_rect", ts_add_rect, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree add tests", evt_add_rect,
+						NULL, NULL);
+}
+
+static int
+run_many_add_tests(void)
+{
+	static const struct CMUnitTest evt_many_add[] = {
+		{ "EVT004: evt_many_add", ts_many_add, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree many add tests",
+						evt_many_add, NULL, NULL);
+}
+
+static int
+run_find_rect_tests(void)
+{
+	static const struct CMUnitTest evt_find_rect[] = {
+		{ "EVT005: evt_find_rect", ts_find_rect, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree find rect tests",
+						evt_find_rect, NULL, NULL);
+}
+
+static int
+run_list_rect_tests(void)
+{
+	static const struct CMUnitTest evt_list_rect[] = {
+		{ "EVT006: evt_list_rect", ts_list_rect, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree list rect tests",
+						evt_list_rect, NULL, NULL);
+}
+
+static int
+run_delete_rect_tests(void)
+{
+	static const struct CMUnitTest evt_delete_rect[] = {
+		{ "EVT007: evt_delete_rect", ts_delete_rect, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree delete rect tests",
+						evt_delete_rect, NULL, NULL);
+}
+
+static int
+run_tree_debug_tests(void)
+{
+	static const struct CMUnitTest evt_tree_debug[] = {
+		{ "EVT008: evt_tree_debug", ts_tree_debug, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree tree debug tests",
+					evt_tree_debug, NULL, NULL);
+}
 
 static struct option ts_ops[] = {
 	{ "create",	required_argument,	NULL,	'C'	},
@@ -1078,36 +1201,42 @@ ts_cmd_run(char opc, char *args)
 {
 	int	rc;
 
+	tst_fn_val.optval = args;
+	tst_fn_val.input = true;
+
 	switch (opc) {
 	case 'C':
-		rc = ts_open_create(true, args);
+		rc = run_create_tests();
 		break;
 	case 'D':
-		rc = ts_close_destroy(true);
+		rc = run_destroy_tests();
 		break;
 	case 'o':
-		rc = ts_open_create(false, NULL);
+		tst_fn_val.input = false;
+		tst_fn_val.optval = NULL;
+		rc = run_create_tests();
 		break;
 	case 'c':
-		rc = ts_close_destroy(false);
+		tst_fn_val.input = false;
+		rc = run_destroy_tests();
 		break;
 	case 'a':
-		rc = ts_add_rect(args);
+		rc = run_add_tests();
 		break;
 	case 'm':
-		rc = ts_many_add(args);
+		rc = run_many_add_tests();
 		break;
 	case 'f':
-		rc = ts_find_rect(args);
+		rc = run_find_rect_tests();
 		break;
 	case 'l':
-		rc = ts_list_rect(args);
+		rc = run_list_rect_tests();
 		break;
 	case 'd':
-		rc = ts_delete_rect(args);
+		rc = run_delete_rect_tests();
 		break;
 	case 'b':
-		rc = ts_tree_debug(args);
+		rc = run_tree_debug_tests();
 		break;
 	case 't':
 		rc = run_internal_tests();
