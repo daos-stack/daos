@@ -63,16 +63,25 @@ type spdkSetup struct {
 	nrHugePages int
 }
 
+// NvmeStorage interface specifies basic functionality for subsystem
+type NvmeStorage interface {
+	Setup() error
+	Teardown() error
+	Format(int) error
+	Discover() error
+}
+
 // nvmeStorage gives access to underlying SPDK interfaces
 // for accessing Nvme devices (API) as well as storing device
 // details.
 type nvmeStorage struct {
-	env         spdk.ENV  // SPDK ENV interface
-	nvme        spdk.NVME // SPDK NVMe interface
-	spdk        SpdkSetup // SPDK shell configuration interface
-	shmID       int       // SPDK init opts param to enable multi-process mode
+	env         spdk.ENV       // SPDK ENV interface
+	nvme        spdk.NVME      // SPDK NVMe interface
+	spdk        SpdkSetup      // SPDK shell configuration interface
+	config      *configuration // server configuration structure
 	controllers []*pb.NvmeController
 	initialized bool
+	formatted   bool
 }
 
 // prep executes setup script to allocate hugepages and bind PCI devices
@@ -161,7 +170,7 @@ func (n *nvmeStorage) Discover() error {
 		return nil
 	}
 	// specify shmID to be set as opt in SPDK env init
-	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
+	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
 		return errors.WithMessage(err, "SPDK env init, has setup been run?")
 	}
 	cs, ns, err := n.nvme.Discover()
@@ -173,55 +182,98 @@ func (n *nvmeStorage) Discover() error {
 	return nil
 }
 
+// Format attempts to format (forcefully) NVMe devices on a given server
+// as specified in config file.
+func (n *nvmeStorage) Format(idx int) error {
+	if !n.initialized {
+		return errors.New("nvme storage not initialized")
+	}
+	if n.formatted {
+		return errors.New(
+			"nvme storage has already been formatted and reformat " +
+				"not implemented")
+	}
+
+	srv := n.config.Servers[idx]
+
+	switch srv.BdevClass {
+	case bdNVMe:
+		for _, pciAddr := range srv.BdevList {
+			if pciAddr == "" {
+				return errors.New("bdev nvme device list entry empty")
+			}
+
+			cs, ns, err := n.nvme.Format(pciAddr)
+			if err != nil {
+				return errors.Wrap(err, "nvme format")
+			}
+			n.controllers = loadControllers(cs, ns)
+		}
+	default:
+		return errors.Errorf(
+			"format unsupported on BdevClass %v", srv.BdevClass)
+	}
+
+	n.formatted = true
+	return nil
+}
+
 // Update method implementation for nvmeStorage
 func (n *nvmeStorage) Update(pciAddr string, path string, slot int32) error {
-	if n.initialized {
-		cs, ns, err := n.nvme.Update(pciAddr, path, slot)
-		if err != nil {
-			return err
-		}
-		n.controllers = loadControllers(cs, ns)
-		return nil
+	if !n.initialized {
+		return errors.New("nvme storage not initialized")
 	}
-	return errors.New("nvme storage not initialized")
+
+	cs, ns, err := n.nvme.Update(pciAddr, path, slot)
+	if err != nil {
+		return err
+	}
+
+	n.controllers = loadControllers(cs, ns)
+	return nil
 }
 
 // BurnIn method implementation for nvmeStorage
 // Doesn't call through go-spdk, returns cmds to be issued over shell
 func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	fioPath string, cmds []string, env string, err error) {
-	if n.initialized {
-		pluginDir := ""
-		pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
-		if err != nil {
-			return
-		}
-		fioPath, err = common.GetAbsInstallPath(fioExecPath)
-		if err != nil {
-			return
-		}
-		// run fio with spdk plugin specified in LD_PRELOAD env
-		env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
-		// limitation of fio_plugin for spdk is that traddr needs
-		// to not contain colon chars, convert to full-stops
-		// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
-		// shm_id specified within fio configs to enable spdk multiprocess
-		// mode required to perform burn-in from Go process.
-		// eta options provided to trigger periodic client responses.
-		cmds = []string{
-			fmt.Sprintf(
-				"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
-				strings.Replace(pciAddr, ":", ".", -1), nsID),
-			"--ioengine=spdk",
-			"--eta=always",
-			"--eta-newline=10",
-			configPath,
-		}
-		log.Debugf(
-			"BurnIn command string: %s %s %v", env, fioPath, cmds)
+
+	if !n.initialized {
+		err = errors.New("nvme storage not initialized")
 		return
 	}
-	err = errors.New("nvme storage not initialized")
+
+	pluginDir := ""
+	pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
+	if err != nil {
+		return
+	}
+
+	fioPath, err = common.GetAbsInstallPath(fioExecPath)
+	if err != nil {
+		return
+	}
+
+	// run fio with spdk plugin specified in LD_PRELOAD env
+	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
+	// limitation of fio_plugin for spdk is that traddr needs
+	// to not contain colon chars, convert to full-stops
+	// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
+	// shm_id specified within fio configs to enable spdk multiprocess
+	// mode required to perform burn-in from Go process.
+	// eta options provided to trigger periodic client responses.
+	cmds = []string{
+		fmt.Sprintf(
+			"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
+			strings.Replace(pciAddr, ":", ".", -1), nsID),
+		"--ioengine=spdk",
+		"--eta=always",
+		"--eta-newline=10",
+		configPath,
+	}
+	log.Debugf(
+		"BurnIn command string: %s %s %v", env, fioPath, cmds)
+
 	return
 }
 
@@ -233,7 +285,6 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 		pbCtrlrs = append(
 			pbCtrlrs,
 			&pb.NvmeController{
-				Id:      c.ID,
 				Model:   c.Model,
 				Serial:  c.Serial,
 				Pciaddr: c.PCIAddr,
@@ -264,16 +315,16 @@ func loadNamespaces(
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(shmID int, nrHugePages int) (*nvmeStorage, error) {
+func newNvmeStorage(config *configuration) (*nvmeStorage, error) {
 
 	scriptPath, err := common.GetAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}
 	return &nvmeStorage{
-		env:   &spdk.Env{},
-		nvme:  &spdk.Nvme{},
-		spdk:  &spdkSetup{scriptPath, nrHugePages},
-		shmID: shmID, // required to enable SPDK multi-process mode
+		env:    &spdk.Env{},
+		nvme:   &spdk.Nvme{},
+		spdk:   &spdkSetup{scriptPath, config.NrHugepages},
+		config: config,
 	}, nil
 }

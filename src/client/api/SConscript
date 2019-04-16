@@ -11,9 +11,9 @@ def scons():
     dc_tgts = denv.SharedObject(Glob('*.c'))
 
     Import('dc_pool_tgts', 'dc_co_tgts', 'dc_obj_tgts', 'dc_placement_tgts')
-    Import('dc_mgmt_tgts', 'addons_tgts')
+    Import('dc_mgmt_tgts', 'addons_tgts', 'dc_security_tgts')
     dc_tgts += dc_pool_tgts + dc_co_tgts + dc_placement_tgts + dc_obj_tgts
-    dc_tgts += dc_mgmt_tgts + addons_tgts
+    dc_tgts += dc_mgmt_tgts + addons_tgts + dc_security_tgts
     libdaos = daos_build.library(env, 'libdaos', dc_tgts,
                                  SHLIBVERSION=DAOS_VERSION,
                                  LIBS=['daos_common'])

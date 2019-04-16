@@ -52,21 +52,24 @@ type controllerFactory struct{}
 
 // create instantiates and connects a client to server at given address.
 func (c *controllerFactory) create(address string) (Control, error) {
-	return newControl(address)
+	controller := &control{}
+
+	err := controller.connect(address)
+
+	return controller, err
 }
 
 // Connect is an interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// ConnectClients attempts to connect a list of addresses, returns
-	// list of connected clients (controllers) and map of any errors.
-	ConnectClients(Addresses) (Addresses, ResultMap)
+	// ConnectClients attempts to connect a list of addresses
+	ConnectClients(Addresses) ResultMap
 	// GetActiveConns verifies states of controllers and removes inactive
-	// from stored. Adds failure to failure map and returns active.
-	GetActiveConns(ResultMap) (Addresses, ResultMap)
+	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
 	ListFeatures() ClientFeatureMap
 	ListStorage() (ClientNvmeMap, ClientScmMap)
+	FormatStorage() ResultMap
 	KillRank(uuid string, rank uint32) ResultMap
 }
 
@@ -81,8 +84,8 @@ type connList struct {
 //
 // Returns errors if server addresses doesn't resolve but will add
 // controllers for any server addresses that are connectable.
-func (c *connList) ConnectClients(addresses Addresses) (Addresses, ResultMap) {
-	errors := make(ResultMap)
+func (c *connList) ConnectClients(addresses Addresses) ResultMap {
+	results := make(ResultMap)
 	ch := make(chan ClientResult)
 
 	for _, address := range addresses {
@@ -94,9 +97,9 @@ func (c *connList) ConnectClients(addresses Addresses) (Addresses, ResultMap) {
 
 	for range addresses {
 		res := <-ch
+		results[res.Address] = res
 
 		if res.Err != nil {
-			errors[res.Address] = res
 			continue
 		}
 
@@ -106,23 +109,20 @@ func (c *connList) ConnectClients(addresses Addresses) (Addresses, ResultMap) {
 				"type assertion failed, wanted %+v got %+v",
 				control{}, res.Value)
 
-			errors[res.Address] = res
+			results[res.Address] = res
 			continue
 		}
 
 		c.controllers = append(c.controllers, controller)
 	}
 
-	return c.GetActiveConns(errors)
+	return c.GetActiveConns(results)
 }
 
 // GetActiveConns verifies active connections and (re)builds connection list.
 //
 // TODO: resolve hostname and compare destination IPs for duplicates.
-func (c *connList) GetActiveConns(errors ResultMap) (Addresses, ResultMap) {
-	if errors == nil {
-		errors = make(ResultMap)
-	}
+func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 	addresses := []string{}
 
 	controllers := c.controllers[:0]
@@ -132,28 +132,28 @@ func (c *connList) GetActiveConns(errors ResultMap) (Addresses, ResultMap) {
 			continue // ignore duplicate
 		}
 
+		var err error
+
 		state, ok := mc.connected()
 		if ok {
 			addresses = append(addresses, address)
 			controllers = append(controllers, mc)
-			continue
+		} else {
+			err = fmt.Errorf(
+				"socket connection is not active (%s)", state)
 		}
 
-		errors[address] = ClientResult{
-			address, state,
-			fmt.Errorf(
-				"socket connection is not active (%s)", state),
-		}
+		results[address] = ClientResult{address, state, err}
 	}
 
 	// purge inactive connections by replacing with active list
 	c.controllers = controllers
-	return Addresses(addresses), errors
+	return results
 }
 
 // ClearConns clears all stored connections.
 func (c *connList) ClearConns() ResultMap {
-	errors := make(ResultMap)
+	results := make(ResultMap)
 	ch := make(chan ClientResult)
 
 	for _, controller := range c.controllers {
@@ -165,14 +165,11 @@ func (c *connList) ClearConns() ResultMap {
 
 	for range c.controllers {
 		res := <-ch
-
-		if res.Err != nil {
-			errors[res.Address] = res
-		}
+		results[res.Address] = res
 	}
 	c.controllers = nil
 
-	return errors
+	return results
 }
 
 // makeRequests performs supplied method over each controller in connList and
@@ -193,4 +190,13 @@ func (c *connList) makeRequests(
 	}
 
 	return cMap
+}
+
+// NewConnect is a factory for Connect interface to operate over
+// multiple clients.
+func NewConnect() Connect {
+	return &connList{
+		factory:     &controllerFactory{},
+		controllers: []Control{},
+	}
 }

@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 
 #define	DAOS_ACL_VERSION		1
@@ -153,7 +154,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
  *		allocated
  */
 struct daos_acl *
-daos_acl_copy(struct daos_acl *acl);
+daos_acl_dup(struct daos_acl *acl);
 
 /**
  * Free a DAOS Access Control List.
@@ -162,6 +163,18 @@ daos_acl_copy(struct daos_acl *acl);
  */
 void
 daos_acl_free(struct daos_acl *acl);
+
+/**
+ * Get the total size of the DAOS Access Control List in bytes.
+ * This includes the size of the header as well as the ACE list.
+ *
+ * \param[in]	acl	ACL to get the size of
+ *
+ * \return	Size of ACL in bytes
+ *		-DER_INVAL		Invalid input
+ */
+ssize_t
+daos_acl_get_size(struct daos_acl *acl);
 
 /**
  * Get the next Access Control Entry in the Access Control List, for iterating
@@ -247,6 +260,19 @@ void
 daos_acl_dump(struct daos_acl *acl);
 
 /**
+ * Parse and sanity check the entire Access Control List for valid values and
+ * internal consistency.
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_validate(struct daos_acl *acl);
+
+/**
  * Allocate a new Access Control Entry with an appropriately aligned principal
  * name, if applicable.
  *
@@ -277,8 +303,8 @@ daos_ace_free(struct daos_ace *ace);
  *
  * \param[in]	ace	ACE to get the size of
  *
- * \return	Success		Size of ACE in bytes
- *		-DER_INVAL	Invalid input
+ * \return	Size of ACE in bytes
+ *		-DER_INVAL		Invalid input
  */
 ssize_t
 daos_ace_get_size(struct daos_ace *ace);
@@ -291,6 +317,17 @@ daos_ace_get_size(struct daos_ace *ace);
  */
 void
 daos_ace_dump(struct daos_ace *ace, uint tabs);
+
+/**
+ * Sanity check the Access Control Entry structure for valid values and internal
+ * consistency.
+ *
+ * \param	ace	Access Control Entry to be checked
+ *
+ * \return	True if the ACE is valid, false otherwise
+ */
+bool
+daos_ace_is_valid(struct daos_ace *ace);
 
 #if defined(__cplusplus)
 }

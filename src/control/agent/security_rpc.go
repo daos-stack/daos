@@ -24,11 +24,10 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // Module id for the Agent security module
@@ -45,12 +44,12 @@ type SecurityModule struct {
 //HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
 	if method != methodRequestCredentials {
-		return nil, fmt.Errorf("Attempt to call unregistered function")
+		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
 	info, err := security.DomainInfoFromUnixConn(client.Conn)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to get credentials for client socket")
+		return nil, errors.Errorf("Unable to get credentials for client socket")
 	}
 
 	response, err := security.AuthSysRequestFromCreds(info)

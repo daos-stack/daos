@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,15 +105,7 @@
 	X(POOL_TGT_QUERY,						\
 		0, &CQF_pool_tgt_query,					\
 		ds_pool_tgt_query_handler,				\
-		&ds_pool_tgt_query_co_ops),				\
-	X(POOL_RDB_START,						\
-		0, &CQF_pool_rdb_start,					\
-		ds_pool_rdb_start_handler,				\
-		&ds_pool_rdb_start_co_ops),				\
-	X(POOL_RDB_STOP,						\
-		0, &CQF_pool_rdb_stop,					\
-		ds_pool_rdb_stop_handler,				\
-		&ds_pool_rdb_stop_co_ops)
+		&ds_pool_tgt_query_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -160,8 +152,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
 #define DAOS_ISEQ_POOL_CONNECT	/* input fields */		 \
 	((struct pool_op_in)	(pci_op)		CRT_VAR) \
-	((uint32_t)		(pci_uid)		CRT_VAR) \
-	((uint32_t)		(pci_gid)		CRT_VAR) \
+	((daos_iov_t)		(pci_cred)		CRT_VAR) \
 	((uint64_t)		(pci_capas)		CRT_VAR) \
 	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR)
 
@@ -187,14 +178,19 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
 
 /** pool query request bits */
-#define DAOS_PO_QUERY_PROP_LABEL	(1ULL << 0)
-#define DAOS_PO_QUERY_PROP_SPACE_RB	(1ULL << 1)
-#define DAOS_PO_QUERY_PROP_SELF_HEAL	(1ULL << 2)
-#define DAOS_PO_QUERY_PROP_RECLAIM	(1ULL << 3)
+#define DAOS_PO_QUERY_SPACE		(1ULL << 0)
+#define DAOS_PO_QUERY_REBUILD_STATUS	(1ULL << 1)
+
+#define DAOS_PO_QUERY_PROP_LABEL	(1ULL << 16)
+#define DAOS_PO_QUERY_PROP_SPACE_RB	(1ULL << 17)
+#define DAOS_PO_QUERY_PROP_SELF_HEAL	(1ULL << 18)
+#define DAOS_PO_QUERY_PROP_RECLAIM	(1ULL << 19)
+#define DAOS_PO_QUERY_PROP_ACL		(1ULL << 20)
 
 #define DAOS_PO_QUERY_PROP_ALL						\
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |	\
-	 DAOS_PO_QUERY_PROP_SELF_HEAL | DAOS_PO_QUERY_PROP_RECLAIM)
+	 DAOS_PO_QUERY_PROP_SELF_HEAL | DAOS_PO_QUERY_PROP_RECLAIM |	\
+	 DAOS_PO_QUERY_PROP_ACL)
 
 #define DAOS_ISEQ_POOL_QUERY	/* input fields */		 \
 	((struct pool_op_in)	(pqi_op)		CRT_VAR) \
@@ -348,31 +344,6 @@ CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 
 CRT_RPC_DECLARE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
-
-#define DAOS_ISEQ_POOL_RDB_START /* input fields */		 \
-	((uuid_t)		(dai_dbid)		CRT_VAR) \
-	((uuid_t)		(dai_pool)		CRT_VAR) \
-	((uint32_t)		(dai_flags)		CRT_VAR) \
-	((uint32_t)		(dai_padding)		CRT_VAR) \
-	((uint64_t)		(dai_size)		CRT_VAR) \
-	((d_rank_list_t)	(dai_ranks)		CRT_PTR)
-
-#define DAOS_OSEQ_POOL_RDB_START /* output fields */		 \
-	((int32_t)		(dao_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(pool_rdb_start, DAOS_ISEQ_POOL_RDB_START,
-		DAOS_OSEQ_POOL_RDB_START)
-
-#define DAOS_ISEQ_POOL_RDB_STOP /* input fields */		 \
-	((uuid_t)		(doi_pool)		CRT_VAR) \
-	((uint32_t)		(doi_flags)		CRT_VAR) \
-	((uint32_t)		(doi_padding)		CRT_VAR) \
-	((d_rank_list_t)	(doi_ranks)		CRT_PTR)
-
-#define DAOS_OSEQ_POOL_RDB_STOP /* output fields */		 \
-	((int32_t)		(doo_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(pool_rdb_stop, DAOS_ISEQ_POOL_RDB_STOP, DAOS_OSEQ_POOL_RDB_STOP)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

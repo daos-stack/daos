@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos_security.h>
 
 /**
  * Initialise a scatter/gather list, create an array to store @nr iovecs.
@@ -396,7 +397,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 {
 	d_rank_t	       *buf;
 	int			cap = 8;
-	d_rank_list_t	       *ranks;
+	d_rank_list_t	       *ranks = NULL;
 	char		       *s, *s_saved;
 	char		       *p;
 	int			n = 0;
@@ -428,11 +429,12 @@ daos_rank_list_parse(const char *str, const char *sep)
 		s = NULL;
 	}
 
-	ranks = daos_rank_list_alloc(n);
-	if (ranks == NULL)
-		D_GOTO(out_s, ranks = NULL);
-	memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
-
+	if (n > 0) {
+		ranks = daos_rank_list_alloc(n);
+		if (ranks == NULL)
+			D_GOTO(out_s, ranks = NULL);
+		memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
+	}
 out_s:
 	D_FREE(s_saved);
 out_buf:
@@ -665,6 +667,11 @@ daos_prop_free(daos_prop_t *prop)
 			if (entry->dpe_str)
 				D_FREE(entry->dpe_str);
 			break;
+		case DAOS_PROP_PO_ACL:
+		case DAOS_PROP_CO_ACL:
+			if (entry->dpe_val_ptr)
+				D_FREE(entry->dpe_val_ptr);
+			break;
 		default:
 			break;
 		};
@@ -685,6 +692,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 {
 	uint32_t	type;
 	uint64_t	val;
+	struct daos_acl	*acl_ptr;
 	int		i;
 
 	if (prop == NULL) {
@@ -734,6 +742,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			break;
 		case DAOS_PROP_PO_ACL:
+			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
+			if (daos_acl_validate(acl_ptr) != 0)
+				return false;
+			break;
+		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
 			val = prop->dpp_entries[i].dpe_val;
@@ -801,7 +815,6 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
-		case DAOS_PROP_CO_ACL:
 		case DAOS_PROP_CO_COMPRESS:
 		case DAOS_PROP_CO_ENCRYPT:
 			break;
@@ -823,6 +836,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
+	struct daos_acl		*acl_ptr;
 
 	if (!daos_prop_valid(prop, pool, true))
 		return NULL;
@@ -845,6 +859,18 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 				daos_prop_free(prop_dup);
 				return NULL;
 			}
+			break;
+		case DAOS_PROP_PO_ACL:
+			acl_ptr = entry->dpe_val_ptr;
+			entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
+			if (entry_dup->dpe_val_ptr == NULL) {
+				D_ERROR("failed to dup ACL\n");
+				daos_prop_free(prop_dup);
+				return NULL;
+			}
+			break;
+		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
 			break;
 		default:
 			entry_dup->dpe_val = entry->dpe_val;
@@ -887,6 +913,8 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	struct daos_prop_entry	*entry_req, *entry_reply;
 	struct daos_prop_entry	*entries_alloc = NULL;
 	d_string_t		 label_alloc = NULL;
+	void			*acl_alloc = NULL;
+	struct daos_acl		*acl;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
@@ -924,6 +952,14 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			label_alloc = entry_req->dpe_str;
+		} else if (type == DAOS_PROP_PO_ACL) {
+			acl = entry_reply->dpe_val_ptr;
+			entry_req->dpe_val_ptr = daos_acl_dup(acl);
+			if (entry_req->dpe_val_ptr == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			acl_alloc = entry_req->dpe_val_ptr;
+		} else if (type == DAOS_PROP_CO_ACL) {
+			/* TODO: Implement container ACL */
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -940,6 +976,10 @@ out:
 			entry_req = daos_prop_entry_get(prop_req,
 							DAOS_PROP_PO_LABEL);
 			entry_req->dpe_str = NULL;
+		}
+		if (acl_alloc) {
+			D_FREE(acl_alloc);
+			entry_req->dpe_val_ptr = NULL;
 		}
 	}
 	return rc;

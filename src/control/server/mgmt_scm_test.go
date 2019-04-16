@@ -26,12 +26,10 @@ package main
 import (
 	"testing"
 
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
 	"google.golang.org/grpc"
-
-	. "github.com/daos-stack/daos/src/control/common"
-
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 type mockListScmModulesServer struct {
@@ -44,19 +42,16 @@ func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
 	return nil
 }
 
-func mockScmCS(ss *scmStorage) *controlService {
-	return &controlService{scm: ss}
-}
-
 func TestListScmModules(t *testing.T) {
-	s := mockScmCS(
-		newMockScmStorage([]DeviceDiscovery{MockModule()}, true))
+	cs := defaultMockControlService(t)
+	cs.scm = newMockScmStorage([]DeviceDiscovery{MockModule()}, true, cs.config)
+
 	m := MockModulePB()
-
 	mock := &mockListScmModulesServer{}
-	s.ListScmModules(nil, mock)
 
-	AssertEqual(t, len(s.scm.modules), 1, "unexpected number of modules")
+	cs.ListScmModules(nil, mock)
+
+	AssertEqual(t, len(cs.scm.modules), 1, "unexpected number of modules")
 	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")
 	AssertEqual(t, mock.Results, []*pb.ScmModule{m}, "unexpected list of modules sent")
 }

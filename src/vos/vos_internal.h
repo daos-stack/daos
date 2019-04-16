@@ -162,6 +162,7 @@ struct vos_imem_strts {
 struct vos_imem_strts		*vsa_imems_inst;
 struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
+struct daos_tx_handle		*vsa_dth;
 bool vsa_nvme_init;
 
 static inline struct bio_xs_context *
@@ -217,9 +218,22 @@ extern struct vos_iter_ops vos_dtx_iter_ops;
 /** VOS thread local storage structure */
 struct vos_tls {
 	/* in-memory structures TLS instance */
-	struct vos_imem_strts		vtl_imems_inst;
+	struct vos_imem_strts		 vtl_imems_inst;
 	/* PMDK transaction stage callback data */
-	struct umem_tx_stage_data	vtl_txd;
+	struct umem_tx_stage_data	 vtl_txd;
+	/** XXX: The DTX handle.
+	 *
+	 *	 Transferring DTX handle via TLS can avoid much changing
+	 *	 of existing functions' interfaces, and avoid the corner
+	 *	 cases that someone may miss to set the DTX handle when
+	 *	 operate related tree.
+	 *
+	 *	 But honestly, it is some hack to pass the DTX handle via
+	 *	 the TLS. It requires that there is no CPU yield during the
+	 *	 processing. Otherwise, the vtl_dth may be changed by other
+	 *	 ULTs. The user needs to guarantee that by itself.
+	 */
+	struct daos_tx_handle		*vtl_dth;
 };
 
 static inline struct vos_tls *
@@ -260,6 +274,30 @@ vos_txd_get(void)
 	return &vsa_txd_inst;
 #else
 	return &(vos_tls_get()->vtl_txd);
+#endif
+}
+
+static inline struct daos_tx_handle *
+vos_dth_get(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_dth;
+#else
+	return vos_tls_get()->vtl_dth;
+#endif
+}
+
+static inline void
+vos_dth_set(struct daos_tx_handle *dth)
+{
+#ifdef VOS_STANDALONE
+	D_ASSERT(dth == NULL || vsa_dth == NULL);
+
+	vsa_dth = dth;
+#else
+	D_ASSERT(dth == NULL || vos_tls_get()->vtl_dth == NULL);
+
+	vos_tls_get()->vtl_dth = dth;
 #endif
 }
 
@@ -442,6 +480,75 @@ int
 vos_dtx_table_register(void);
 
 /**
+ * Check whether the record (to be accessible) is available to outside or not.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param coh		[IN]	The container open handle.
+ * \param entry		[IN]	Address of the DTX to be checked.
+ * \param record	[IN]	Address of the record modified via the DTX.
+ * \param intent	[IN]	The request intent.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ *
+ * \return	positive value	If available to outside.
+ *		zero		If unavailable to outside.
+ *		-DER_INPROGRESS If the target record is in some
+ *				uncommitted DTX, the caller
+ *				needs to retry some time later.
+ *				Or the caller is not sure about whether
+ *				related DTX is committable or not, need
+ *				to check with leader replica.
+ *		negative value	For error cases.
+ */
+int
+vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
+			   umem_id_t entry, umem_id_t record, uint32_t intent,
+			   uint32_t type);
+
+/**
+ * Register the record (to be modified) to the DTX entry.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param record	[IN]	Address of the record (in SCM) to be modified.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_register_record(struct umem_instance *umm, umem_id_t record,
+			uint32_t type, uint32_t flags);
+
+/**
+ * Degister the record from the DTX entry.
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param entry		[IN]	The DTX entry address.
+ * \param record	[IN]	Address of the record to be degistered.
+ * \param type		[IN]	The record type, vos_dtx_record_types.
+ */
+void
+vos_dtx_degister_record(struct umem_instance *umm,
+			umem_id_t entry, umem_id_t record, uint32_t type);
+
+/**
+ * Mark the DTX as prepared locally.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_prepared(struct daos_tx_handle *dth);
+
+void
+vos_dtx_commit_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+			int count);
+
+int
+vos_dtx_abort_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+		       int count, bool force);
+
+/**
  * Register dbtree class for DTX CoS, it is called within vos_init().
  *
  * \return		0 on success and negative on failure.
@@ -564,21 +671,20 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static inline uint64_t
-vos_krec_size(enum vos_tree_class tclass, struct vos_rec_bundle *rbund)
+vos_krec_size(struct vos_rec_bundle *rbund)
 {
 	daos_iov_t	*key;
-	uint64_t	 size;
-	bool		 has_evt = (tclass == VOS_BTR_AKEY);
+	daos_size_t	 psize;
 
 	key = rbund->rb_iov;
-	size = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
-	return size + offsetof(struct vos_krec_df, kr_evt[has_evt]);
+	psize = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
+	return sizeof(struct vos_krec_df) + psize;
 }
 
 static inline void *
 vos_krec2payload(struct vos_krec_df *krec)
 {
-	return (void *)&krec->kr_evt[!!(krec->kr_bmap & KREC_BF_EVT)];
+	return (void *)&krec[1];
 }
 
 static inline char *

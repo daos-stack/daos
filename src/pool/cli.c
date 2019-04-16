@@ -32,6 +32,7 @@
 #include <daos/event.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
+#include <daos/security.h>
 #include <daos_types.h>
 #include "cli_internal.h"
 #include "rpc.h"
@@ -286,20 +287,17 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		D_GOTO(out_unlock, rc);
 
 	/* Scan all targets for info->pi_ndisabled and/or tgts. */
-	if (info != NULL || tgts != NULL) {
+	if (info != NULL) {
 		struct pool_target     *ts;
 		int			i;
 
-		if (info != NULL)
-			memset(info, 0, sizeof(*info));
-
 		rc = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &ts);
 		D_ASSERTF(rc > 0, "%d\n", rc);
+		info->pi_ndisabled = 0;
 		for (i = 0; i < rc; i++) {
 			int status = ts[i].ta_comp.co_status;
 
-			if (info != NULL &&
-			    (status == PO_COMP_ST_DOWN ||
+			if ((status == PO_COMP_ST_DOWN ||
 			     status == PO_COMP_ST_DOWNOUT))
 				info->pi_ndisabled++;
 			/* TODO: Take care of tgts. */
@@ -324,8 +322,10 @@ out_unlock:
 		info->pi_gid		= gid;
 		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
-		info->pi_space		= *ps;
-		info->pi_rebuild_st	= *rs;
+		if (info->pi_bits & DPI_SPACE)
+			info->pi_space		= *ps;
+		if (info->pi_bits & DPI_REBUILD_STATUS)
+			info->pi_rebuild_st	= *rs;
 	}
 
 	return rc;
@@ -576,22 +576,27 @@ dc_pool_connect(tse_task_t *task)
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_pool, rc);
 	}
-
 	/** for con_argss */
 	crt_req_addref(rpc);
 
 	/** fill in request buffer */
 	pci = crt_req_get(rpc);
+
+	/** request credentials */
+	rc = dc_sec_request_creds(&pci->pci_cred);
+	if (rc != 0) {
+		D_ERROR("failed to obtain security credential: %d\n", rc);
+		D_GOTO(out_req, rc);
+	}
+
 	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
-	pci->pci_uid = geteuid();
-	pci->pci_gid = getegid();
 	pci->pci_capas = args->flags;
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));
 	if (rc != 0)
-		D_GOTO(out_req, rc);
+		D_GOTO(out_cred, rc);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
 	con_args.pca_info = args->info;
@@ -613,6 +618,8 @@ dc_pool_connect(tse_task_t *task)
 
 out_bulk:
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
+out_cred:
+	daos_iov_free(&pci->pci_cred);
 out_req:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc); /* free req */
@@ -1285,16 +1292,25 @@ out:
 }
 
 static uint64_t
-pool_query_bits(daos_prop_t *prop)
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
 	uint64_t		 bits = 0;
 	int			 i;
 
+	if (po_info != NULL) {
+		if (po_info->pi_bits & DPI_SPACE)
+			bits |= DAOS_PO_QUERY_SPACE;
+		if (po_info->pi_bits & DPI_REBUILD_STATUS)
+			bits |= DAOS_PO_QUERY_REBUILD_STATUS;
+	}
+
 	if (prop == NULL)
-		return 0;
-	if (prop->dpp_entries == NULL)
-		return DAOS_PO_QUERY_PROP_ALL;
+		goto out;
+	if (prop->dpp_entries == NULL) {
+		bits |= DAOS_PO_QUERY_PROP_ALL;
+		goto out;
+	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
@@ -1311,11 +1327,16 @@ pool_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_PO_RECLAIM:
 			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
 			break;
+		case DAOS_PROP_PO_ACL:
+			bits |= DAOS_PO_QUERY_PROP_ACL;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
 		}
 	}
+
+out:
 	return bits;
 }
 
@@ -1374,7 +1395,7 @@ dc_pool_query(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->pqi_op.pi_hdl, pool->dp_pool_hdl);
-	in->pqi_query_bits = pool_query_bits(args->prop);
+	in->pqi_query_bits = pool_query_bits(args->info, args->prop);
 
 	/** +1 for args */
 	crt_req_addref(rpc);

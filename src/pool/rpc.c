@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,9 +168,6 @@ CRT_RPC_DEFINE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
-CRT_RPC_DEFINE(pool_rdb_start, DAOS_ISEQ_POOL_RDB_START,
-		DAOS_OSEQ_POOL_RDB_START)
-CRT_RPC_DEFINE(pool_rdb_stop, DAOS_ISEQ_POOL_RDB_STOP, DAOS_OSEQ_POOL_RDB_STOP)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition

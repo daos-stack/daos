@@ -85,7 +85,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]"
+                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]"
                     }
                     post {
                         always {
@@ -146,13 +146,13 @@ pipeline {
                                                  build/src/common/tests/btree,
                                                  build/src/common/tests/sched,
                                                  build/src/common/tests/drpc_tests,
+                                                 build/src/common/tests/acl_api_tests,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,
                                                  build/src/iosrv/tests/drpc_handler_tests,
                                                  build/src/iosrv/tests/drpc_listener_tests,
                                                  build/src/security/tests/cli_security_tests,
-                                                 build/src/security/tests/acl_api_tests,
                                                  build/src/vos/vea/tests/vea_ut,
                                                  scons_local/build_info/**,
                                                  src/common/tests/btree.sh,
@@ -691,7 +691,7 @@ pipeline {
                         always {
                             sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/ Functional/
                                   mkdir Functional/
-                                  ls *daos.log* >/dev/null && mv *daos.log* Functional/
+                                  ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* Functional/
                                   mv src/tests/ftest/avocado/job-results/* \
                                      $(ls src/tests/ftest/*.stacktrace || true) Functional/'''
                             junit 'Functional/*/results.xml'

@@ -325,6 +325,7 @@ pool_destroy_safe(test_arg_t *arg)
 		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
 
 		memset(&pinfo, 0, sizeof(pinfo));
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
 		rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
@@ -530,6 +531,7 @@ rebuild_pool_wait(test_arg_t *arg)
 	int			   rc;
 	bool			   done = false;
 
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
 	if (rst->rs_done || rc != 0) {

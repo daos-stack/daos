@@ -24,13 +24,13 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	pb "github.com/daos-stack/daos/src/control/security/proto"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // mockDrpcClient is a mock of the DomainSocketClient interface
@@ -186,7 +186,7 @@ func TestSetPermissions_Success(t *testing.T) {
 func TestSetPermissions_SendMsgFailed(t *testing.T) {
 	client := newMockDrpcClient()
 	expectedError := "mock dRPC call failed"
-	client.SendMsgOutputError = fmt.Errorf(expectedError)
+	client.SendMsgOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
 	result, err := service.SetPermissions(nil,
@@ -241,7 +241,7 @@ func TestSetPermissions_SendMsgResponseNil(t *testing.T) {
 func TestSetPermissions_ConnectFailed(t *testing.T) {
 	client := newMockDrpcClient()
 	expectedError := "mock dRPC connect failed"
-	client.ConnectOutputError = fmt.Errorf(expectedError)
+	client.ConnectOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
 	result, err := service.SetPermissions(nil,
@@ -254,7 +254,7 @@ func TestSetPermissions_ConnectFailed(t *testing.T) {
 func TestSetPermissions_CloseFailed(t *testing.T) {
 	client := newMockDrpcClient()
 	expectedError := "mock dRPC close failed"
-	client.CloseOutputError = fmt.Errorf(expectedError)
+	client.CloseOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(&pb.AclResponse{}))
@@ -310,7 +310,7 @@ func TestGetPermissions_Success(t *testing.T) {
 func TestGetPermissions_SendMsgFailed(t *testing.T) {
 	client := newMockDrpcClient()
 	expectedError := "mock dRPC call failed"
-	client.SendMsgOutputError = fmt.Errorf(expectedError)
+	client.SendMsgOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
 	result, err := service.GetPermissions(nil, newValidAclEntry())
@@ -322,7 +322,7 @@ func TestGetPermissions_SendMsgFailed(t *testing.T) {
 func TestGetPermissions_ConnectFailed(t *testing.T) {
 	client := newMockDrpcClient()
 	expectedError := "mock dRPC connect failed"
-	client.ConnectOutputError = fmt.Errorf(expectedError)
+	client.ConnectOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
 	result, err := service.GetPermissions(nil, newValidAclEntry())
@@ -334,7 +334,7 @@ func TestGetPermissions_ConnectFailed(t *testing.T) {
 func TestGetPermissions_CloseFailed(t *testing.T) {
 	client := newMockDrpcClient()
 	expectedError := "mock dRPC close failed"
-	client.CloseOutputError = fmt.Errorf(expectedError)
+	client.CloseOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(&pb.AclResponse{}))

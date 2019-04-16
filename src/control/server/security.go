@@ -28,11 +28,11 @@ package main
 import "C"
 import (
 	"context"
-	"fmt"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	pb "github.com/daos-stack/daos/src/control/security/proto"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 const moduleID int32 = C.DRPC_MODULE_SECURITY_AGENT
@@ -54,18 +54,18 @@ type SecurityService struct {
 // checks for some basic formatting errors
 func (s *SecurityService) processDrpcResponse(drpcResp *drpc.Response) (*pb.AclResponse, error) {
 	if drpcResp == nil {
-		return nil, fmt.Errorf("dRPC returned no response")
+		return nil, errors.Errorf("dRPC returned no response")
 	}
 
 	if drpcResp.Status != drpc.Status_SUCCESS {
-		return nil, fmt.Errorf("bad dRPC response status: %v",
+		return nil, errors.Errorf("bad dRPC response status: %v",
 			drpcResp.Status.String())
 	}
 
 	resp := &pb.AclResponse{}
 	err := proto.Unmarshal(drpcResp.Body, resp)
 	if err != nil {
-		return nil, fmt.Errorf("invalid dRPC response body: %v", err)
+		return nil, errors.Errorf("invalid dRPC response body: %v", err)
 	}
 
 	return resp, nil
@@ -113,7 +113,7 @@ func (s *SecurityService) callDrpcMethodWithMessage(method int32, body proto.Mes
 // it if it doesn't already exist.
 func (s *SecurityService) SetPermissions(ctx context.Context, perms *pb.AclEntryPermissions) (*pb.AclResponse, error) {
 	if perms == nil {
-		return nil, fmt.Errorf("requested permissions were nil")
+		return nil, errors.Errorf("requested permissions were nil")
 	}
 
 	return s.callDrpcMethodWithMessage(methodSetAcl, perms)
@@ -122,7 +122,7 @@ func (s *SecurityService) SetPermissions(ctx context.Context, perms *pb.AclEntry
 // GetPermissions fetches the current permissions for a given Access Control Entry.
 func (s *SecurityService) GetPermissions(ctx context.Context, entry *pb.AclEntry) (*pb.AclResponse, error) {
 	if entry == nil {
-		return nil, fmt.Errorf("requested entry was nil")
+		return nil, errors.Errorf("requested entry was nil")
 	}
 
 	return s.callDrpcMethodWithMessage(methodGetAcl, entry)
@@ -132,7 +132,7 @@ func (s *SecurityService) GetPermissions(ctx context.Context, entry *pb.AclEntry
 // principal on that object will be inferred from the remaining entries.
 func (s *SecurityService) DestroyAclEntry(ctx context.Context, entry *pb.AclEntry) (*pb.AclResponse, error) {
 	if entry == nil {
-		return nil, fmt.Errorf("requested entry was nil")
+		return nil, errors.Errorf("requested entry was nil")
 	}
 
 	return s.callDrpcMethodWithMessage(methodDestroyAcl, entry)

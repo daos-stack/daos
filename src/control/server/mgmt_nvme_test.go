@@ -31,36 +31,31 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-func mockNvmeCS(t *testing.T, ns *nvmeStorage) *controlService {
-	cs := controlService{nvme: ns}
+func TestUpdateNvmeCtrlr(t *testing.T) {
+	cs := defaultMockControlService(t)
+
 	if err := cs.nvme.Setup(); err != nil {
 		t.Fatal(err)
 	}
-	return &cs
 
-}
-
-func TestUpdateNvmeCtrlr(t *testing.T) {
-	s := mockNvmeCS(t, defaultMockNvmeStorage())
-
-	if err := s.nvme.Discover(); err != nil {
+	if err := cs.nvme.Discover(); err != nil {
 		t.Fatal(err)
 	}
 
 	cExpect := MockControllerPB("1.0.1")
-	c := s.nvme.controllers[0]
+	c := cs.nvme.controllers[0]
 
 	// after fetching controller details, simulate updated firmware
 	// version being reported
 	params := &pb.UpdateNvmeParams{
 		Pciaddr: c.Pciaddr, Path: "/foo/bar", Slot: 0}
 
-	newC, err := s.UpdateNvmeCtrlr(nil, params)
+	newC, err := cs.UpdateNvmeCtrlr(nil, params)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	AssertEqual(t, s.nvme.controllers[0], cExpect, "unexpected Controller populated")
+	AssertEqual(t, cs.nvme.controllers[0], cExpect, "unexpected Controller populated")
 	AssertEqual(t, newC, cExpect, "unexpected Controller returned")
 }
 
