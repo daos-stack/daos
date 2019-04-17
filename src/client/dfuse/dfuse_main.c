@@ -67,17 +67,16 @@ bool
 dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		   struct fuse_lowlevel_ops *flo,
 		   struct fuse_args *args,
-		   struct dfuse_projection_info *fsi_handle,
-		   struct fuse_session **sessionp)
+		   struct dfuse_projection_info *fs_handle)
 {
 	int rc;
 
-	dfuse_info->fsi_handle = fsi_handle;
+	dfuse_info->fsi_handle = fs_handle;
 
 	dfuse_info->fsi_session = fuse_session_new(args,
 						   flo,
 						   sizeof(*flo),
-						   fsi_handle);
+						   fs_handle);
 	if (!dfuse_info->fsi_session)
 		goto cleanup;
 
@@ -86,7 +85,8 @@ dfuse_register_fuse(struct dfuse_info *dfuse_info,
 	if (rc != 0) {
 		goto cleanup;
 	}
-	*sessionp = dfuse_info->fsi_session;
+	fs_handle->session = dfuse_info->fsi_session;
+	fs_handle->fsh_dfs = dfuse_info->fsi_dfs;
 
 	fuse_opt_free_args(args);
 

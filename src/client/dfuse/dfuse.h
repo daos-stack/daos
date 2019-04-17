@@ -61,8 +61,7 @@ bool
 dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		   struct fuse_lowlevel_ops *flo,
 		   struct fuse_args *args,
-		   struct dfuse_projection_info *fsi_handle,
-		   struct fuse_session **sessionp);
+		   struct dfuse_projection_info *fsi_handle);
 
 int
 dfuse_post_start(struct dfuse_info *dfuse_info);
@@ -76,6 +75,7 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
 	struct fuse_session		*session;
+	dfs_t				*fsh_dfs;
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
@@ -245,7 +245,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 		__rc = fuse_reply_write(req, bytes);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
-					"fuse_reply_attr returned %d:%s", \
+					"fuse_reply_write returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 

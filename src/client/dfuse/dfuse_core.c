@@ -491,8 +491,7 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 	if (!dfuse_register_fuse(dfuse_info,
 				 fuse_ops,
 				 &args,
-				 fs_handle,
-				 &fs_handle->session)) {
+				 fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err, 0);
 	}

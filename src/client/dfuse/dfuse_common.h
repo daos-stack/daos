@@ -24,6 +24,10 @@
 #ifndef __DFUSE_COMMON_H__
 #define __DFUSE_COMMON_H__
 
+#ifndef D_LOGFAC
+#define D_LOGFAC DD_FAC(dfuse)
+#endif
+
 #include "dfuse_log.h"
 
 #include <sys/stat.h>

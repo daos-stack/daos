@@ -49,12 +49,47 @@ static const struct dfuse_request_api getattr_api = {
 	.on_result	= dfuse_getattr_result_fn,
 };
 
+
+static int
+dfuse_getattr(struct dfuse_request *request, fuse_ino_t ino)
+{
+	struct stat	stat = {};
+	mode_t		mode;
+	dfs_obj_t	*obj;
+	int		rc;
+
+	if (ino != 1) {
+		D_GOTO(err, rc = -DER_EXIST);
+	}
+
+	rc = dfs_lookup(request->fsh->fsh_dfs, "/", O_RDONLY, &obj, &mode);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(err, 0);
+	}
+
+	rc = dfs_ostat(request->fsh->fsh_dfs, obj, &stat);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(err, 0);
+	}
+
+	rc = dfs_release(obj);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(err, 0);
+	}
+
+	DFUSE_REPLY_ATTR(request, &stat);
+	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
+
+err:
+	return rc;
+}
+
 void
 dfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_file_handle	*handle = NULL;
-	struct TYPE_NAME		*desc = NULL;
+	struct common_req		*desc = NULL;
 	int rc;
 
 	if (fi)
@@ -69,13 +104,17 @@ dfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		desc->request.ir_ht = RHS_FILE;
 		desc->request.ir_file = handle;
+		rc = dfuse_fs_send(&desc->request);
+		if (rc != 0)
+			D_GOTO(err, rc);
 	} else {
-		desc->request.ir_ht = RHS_INODE_NUM;
-		desc->request.ir_inode_num = ino;
+		desc->request.req = req;
+		rc = dfuse_getattr(&desc->request, ino);
+		if (rc != -DER_SUCCESS) {
+			D_GOTO(err, 0);
+		}
 	}
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, rc);
+
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
