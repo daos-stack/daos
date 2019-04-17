@@ -162,12 +162,17 @@ class RebuildContainerCreate(Test):
             # get the pool/rebuild status again
             pool.pool_query()
             if pool.pool_info.pi_rebuild_st.rs_done == 1:
-                self.error("rebuild finished too early")
-            else:
-                # make and open a container while rebuild is active
-                rebuild_cont = DaosContainer(self.context)
-                rebuild_cont.create(pool.handle)
-                rebuild_cont.open()
+                self.error("rebuild finished before container creation")
+
+            # make and open a container while rebuild is active
+            rebuild_cont = DaosContainer(self.context)
+            rebuild_cont.create(pool.handle)
+            rebuild_cont.open()
+
+            # check again to guard against rebuild having finished between steps
+            pool.pool_query()
+            if pool.pool_info.pi_rebuild_st.rs_done == 1:
+                self.error("rebuild finished during container creation")
 
         except DaosApiError as excep:
             self.fail("Encountered DaosApiError: {0}".format(excep))
