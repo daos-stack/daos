@@ -46,8 +46,8 @@ name: daos
 #  # Discarded if no CA certificate is passed.
 #  #
 #  # default: ./.daos/daos.{crt,key}
-cert: ./.daos/daos.crt
-key: ./.daos/daos.key
+# cert: ./.daos/daos.crt
+# key: ./.daos/daos.key
 
 #
 ## Use specific OFI interface and port
