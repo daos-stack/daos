@@ -50,7 +50,7 @@ class IorSingleServer(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("server_config", '/name/',
                                             'daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
@@ -69,7 +69,7 @@ class IorSingleServer(Test):
                                                 '/run/hosts/test_machines/*')
         self.hostfile_clients = (
             write_host_file.write_host_file(self.hostlist_clients,
-                                            self.workdir, None)
+                                            self.workdir, None))
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
         self.agent_sessions = AgentUtils.run_agent(self.basepath,

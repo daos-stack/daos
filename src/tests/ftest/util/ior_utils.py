@@ -118,15 +118,13 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
         transfer_size  --size of transfer in bytes
         pool_uuid      --Daos Pool UUID
         svc_list       --Daos Pool SVCL
-        record_size    --Daos Record Size
-        stripe_size    --Daos Stripe Size
-        stripe_count   --Daos Stripe Count
-        async_io       --Concurrent Async IOs
         object_class   --object class
         basepath       --Daos basepath
-        slots          --slots on each node
+        client_processes          --number of client processes
+        cont_uuid       -- Container UUID
         seg_count      --segment count
-        filename       --Container file name
+        chunk_size      --chunk size
+        cont_destroy    --Container destroy
         display_output --print IOR output on console.
     """
     with open(os.path.join(basepath, ".build_vars.json")) as afile:
@@ -135,13 +133,13 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
     attach_info_path = basepath + "/install/tmp"
     try:
 
-        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node -x DAOS_SINGLETON_CLI=1 "\
-                  " -x CRT_ATTACH_INFO_PATH={} /home/standan/mpiio/install/ior-hpc_daos_new/bin/ior {} -s {} -i {} -a DAOS" \
-                  " -b {} -t {} --daos.pool {} --daos.svcl {} " \
-                  "--daos.cont {} --daos.destroy "\
-                  "--daos.chunk_size {} --daos.oclass {} "\
-                  .format(client_processes, client_file, attach_info_path, ior_flags,
-                          seg_count, iteration, block_size,
+        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node " \
+                  " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={} " \
+                  " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {} " \
+                  " --daos.svcl {} --daos.cont {} --daos.destroy " \
+                  "--daos.chunk_size {} --daos.oclass {} " \
+                  .format(client_processes, client_file, attach_info_path,
+                          ior_flags, seg_count, iteration, block_size,
                           transfer_size, pool_uuid, svc_list, cont_uuid,
                           chunk_size, object_class)
         if display_output:

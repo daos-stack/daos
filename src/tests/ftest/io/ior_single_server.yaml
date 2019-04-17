@@ -1,19 +1,22 @@
 hosts:
    test_machines:
         test_servers:
-            - boro-64
+            - boro-A
         test_clients:
-                - boro-60
-                - boro-61
-                - boro-62
-#                - boro-64
-#                - boro-F
-#                - boro-G
-#                - boro-H
-#                - boro-I
-timeout: 540
-server:
-    server_group: daos_server
+                - boro-B
+                - boro-C
+                - boro-D
+                - boro-E
+                - boro-F
+                - boro-G
+                - boro-H
+                - boro-I
+
+# some run can take long to run, but needs to be verified
+# by running consecutively for accurate time.
+timeout: 1800
+server_config:
+    name: daos_server
 createtests:
     createmode:
         mode_RW:
@@ -21,19 +24,19 @@ createtests:
     createset:
         setname: daos_server
     createsize:
-        size: 20000000000
+        size: 60000000000
     createsvc:
         svcn: 1
 ior:
     client_processes: !mux
-#        np_1:
-#            np: 1
+        np_1:
+            np: 1
         np_64:
-            np: 6
-#        np_128:
-#            np: 128
+            np: 64
+        np_128:
+            np: 128
     iteration:
-        iter: 1
+        iter: 5
     iorflags:
         F: "-v -W -w -r -R"
     transfersize_blocksize: !mux
@@ -43,16 +46,17 @@ ior:
         4K:
             t: '4K'
             b: '64M'
-#        32K:
-#            t: '32K'
-#            b: '64M'
-#        128K:
-#            t: '128K'
-#        512K:   
-#            t: '512K'
-#            b: '64M'
-#        1M:
-#            t: '1M'
-#            b: '64M'
+        32K:
+            t: '32K'
+            b: '64M'
+        128K:
+            t: '128K'
+            b: '64M'
+        512K:   
+            t: '512K'
+            b: '64M'
+        1M:
+            t: '1M'
+            b: '64M'
     objectclass:
             o: "LARGE"
