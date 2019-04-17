@@ -60,25 +60,25 @@ class RebuildContainerCreate(Test):
         self.createuid = os.geteuid()
         self.creategid = os.getegid()
         self.createmode = self.params.get("mode",
-                                          '/run/testparams/createmode/')
+                                          '/run/poolparams/createmode/')
         self.createsetid = self.params.get("setname",
-                                           '/run/testparams/createset/')
+                                           '/run/poolparams/createset/')
         self.createsize = self.params.get("size",
-                                          '/run/testparams/createsize/')
+                                          '/run/poolparams/createsize/')
 
         # how many objects and records are we creating
         self.objcount = self.params.get("objcount",
-                                        '/run/testparams/numobjects/')
+                                        '/run/objparams/numobjects/')
         self.reccount = self.params.get("reccount",
-                                        '/run/testparams/numrecords/')
+                                        '/run/objparams/numrecords/')
         if self.objcount == 0:
             self.reccount = 0
 
         # which rank to write to and kill
-        self.rank = self.params.get("rank", '/run/testparams/ranks/*')
+        self.rank = 1
 
         # how much data to write with each key
-        self.size = self.params.get("size", '/run/testparams/datasize/')
+        self.size = self.params.get("size", '/run/objparams/datasize/')
 
         #Start the server + agent
         self.server_group = self.params.get("server_group", '/server/',
@@ -92,27 +92,26 @@ class RebuildContainerCreate(Test):
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
-        if self.agent_sessions:
-            AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist)
+        try:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+        finally:
+            server_utils.stop_server(hosts=self.hostlist)
 
     def test_rebuild_cont_create(self):
         """
         Test Description: Test creating a container while rebuild is ongoing.
 
-        :avocado: tags=cont,rebuild,rebuildsimple
+        :avocado: tags=cont,rebuild,rebuildsimple,rebuildcontainercreate
         """
         try:
 
-            # make ourselves a pool
+            # make ourselves a pool, connect to it
             pool = DaosPool(self.context)
             pool.create(self.createmode, self.createuid, self.creategid,
                         self.createsize, self.createsetid)
-
-            # want an open connection during rebuild
             pool.connect(1 << 1)
 
-            # get pool status we want to test later
             pool.pool_query()
             if pool.pool_info.pi_ndisabled != 0:
                 self.fail("Number of disabled targets reporting incorrectly.")
@@ -160,16 +159,15 @@ class RebuildContainerCreate(Test):
             # temporarily, the exclude of a failed target must be done manually
             pool.exclude([self.rank])
 
-            while True:
-                # get the pool/rebuild status again
-                pool.pool_query()
-                if pool.pool_info.pi_rebuild_st.rs_done == 1:
-                    self.fail("rebuild finished too early")
-                else:
-                    # make and open a container while rebuild is active
-                    rebuild_cont = DaosContainer(self.context)
-                    rebuild_cont.create(pool.handle)
-                    rebuild_cont.open()
-                    break
+            # get the pool/rebuild status again
+            pool.pool_query()
+            if pool.pool_info.pi_rebuild_st.rs_done == 1:
+                self.error("rebuild finished too early")
+            else:
+                # make and open a container while rebuild is active
+                rebuild_cont = DaosContainer(self.context)
+                rebuild_cont.create(pool.handle)
+                rebuild_cont.open()
+
         except DaosApiError as excep:
             self.fail("Encountered DaosApiError: {0}".format(excep))

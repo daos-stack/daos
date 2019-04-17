@@ -9,18 +9,12 @@ hosts:
 timeout: 700
 server:
  server_group: daos_server
-testparams:
- ranks: !mux
-  rank1:
-   rank: 5
-  rank4:
-   rank: 4
-  rank3:
-   rank: 3
+poolparams:
  createmode:
   mode: 511
  createsize:
   size: 1073741824
+objparams:
  numobjects:
    objcount: 10
  numrecords:
