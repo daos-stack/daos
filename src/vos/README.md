@@ -472,13 +472,47 @@ A special aggregation ULT processes aggregation, yielding frequently to avoid bl
 
 <a id="79"></a>
 
-## VOS Checksum Management (TO BE UPDATED)
+## VOS Checksum Management
 
-One of the guarantees that VOS provides is end-to-end data integrity.  Data corruption in VOS can happen while reading or writing data due to a variety of reasons, including leaks or failures in persistent memory, or during data transmission through the wire. VOS supports data integrity check with checksums.
+VOS is responsible for storing checksums during an object update and retrieve checksums on an object fetch. 
+Checksums will be stored with other VOS metadata in storage class memory.  For Single Value types a single checksum is stored. 
+For Array Value types, multiple checksums can be stored based on the chunk size.
 
-The VOS API for updates and writes will require checksums as arguments from its upper layer(s). VOS requires checksum for both keys and values in case of KV objects.  VOS stores the checksum along with the data.
+The **Chunk Size** is defined as the maximum number of bytes of data that a checksum is derived from. 
+While extents are defined in terms of records, the chunk size is defined in terms of bytes. 
+When calculating the number of checksums needed for an extent, the number of records and the record size is needed. 
+Checksums should typically be derived from Chunk Size bytes, however, 
+if the extent is smaller than Chunk Size or an extent is not "Chunk Aligned" than a checksum might be derived from bytes smaller than Chunk Size.
 
-A Lookup operation on a KV will verify the checksum by computing the checksum for the key and value. If reads in byte-arrays span multiple extent ranges, VOS would have to recompute the checksum at the server for each individual extent range for verifying their integrity and return the computed checksum of the entire requested extent range to the client.  In case a read requests a partial byte array extent of an existing extent range, VOS would compute the checksum of the existing extent to verify correctness and then return the requested extent range to the client with its computed checksum.  When byte array extents are aggregated, VOS individually re-computes checksum of all extent ranges to be merged to verify correctness, and finally computes and saves the checksum for the merged extent range.
+The **Chunk Alignment** will have an absolute offset, not an I/O offset. So even if an extent is exactly, or less than, Chunk Size bytes long, it may have more than one Chunk if it crosses the alignment barrier.
+
+### Configuration
+Checksums will be configured for a container when a container is created. Checksum specific properties can be included in the daos_cont_create API.
+This configuration has not been fully implemented yet, but properties might include checksum type, chunk size, and server side verification. 
+
+### Storage
+Checksums will be stored in a record(vos_irec_df) or extent(evt_desc) structure for Single Value types and Array Value types respectfully. 
+Because the checksum can be of variable size, depending on the type of checksum configured, the checksum itself will be appended to the end of the structure.  
+The size needed for checksums is included while allocating memory for the persistent structures on SCM (vos_reserve_single/vos_reserve_recx).
+
+The following diagram illustrates the overall VOS layout and where checksums will be stored. Note that the checksum type isn't actually stored in vos_cont_df yet.
+
+![../../doc/graph/Fig_021.png](../../doc/graph/Fig_021.png "How checksum fits into the VOS Layout")
+
+
+###Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
+
+On an update, the checksum(s) are part of the I/O Descriptor.  
+Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert) the checksum(s) are copied to the end of the persistent structure.
+
+On a fetch, the update flow is essentially reversed.
+
+For reference, key junction points in the flows are:
+
+ - SV Update: 	vos_update_end 	-> akey_update_single 	-> svt_rec_store
+ - Sv Fetch: 	vos_fetch_begin -> akey_fetch_single 	-> svt_rec_load
+ - EV Update: 	vos_update_end 	-> akey_update_recx 	-> evt_insert
+ - EV Fetch: 	vos_fetch_begin -> akey_fetch_recx 	-> evt_fill_entry
 
 <a id="80"></a>
 
