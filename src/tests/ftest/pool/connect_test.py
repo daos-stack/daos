@@ -67,8 +67,8 @@ class ConnectTest(TestWithServers):
             # TODO make these params in the yaml
             daosctl = self.basepath + '/install/bin/daosctl'
 
-            host1 = self.hostlist[0]
-            host2 = self.hostlist[1]
+            host1 = self.hostlist_servers[0]
+            host2 = self.hostlist_servers[1]
 
             create_cmd = (
                 "{0} create-pool "

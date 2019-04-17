@@ -45,7 +45,6 @@ class RebuildNoCap(TestWithServers):
         self.server_group = ""
         self.context = None
         self.pool = None
-        self.hostfile = ""
 
     def setUp(self):
         super(RebuildNoCap, self).setUp()
@@ -69,7 +68,7 @@ class RebuildNoCap(TestWithServers):
                  "/../src/tests/ftest/util/write_some_data.py"
         cmd = "export DAOS_POOL={0}; export DAOS_SVCL=1; mpirun"\
               " --np 1 --host {1} {2} {3} testfile".format(
-                  uuid, self.hostlist[0], exepath, how_many_bytes)
+                  uuid, self.hostlist_servers[0], exepath, how_many_bytes)
         subprocess.call(cmd, shell=True)
 
     def tearDown(self):
@@ -105,7 +104,7 @@ class RebuildNoCap(TestWithServers):
             # exclude should trigger rebuild, check
             self.pool.connect(1 << 1)
             status = self.pool.pool_query()
-            if not status.pi_ntargets == len(self.hostlist):
+            if not status.pi_ntargets == len(self.hostlist_servers):
                 self.fail("target count wrong.\n")
             if not status.pi_ndisabled == 1:
                 self.fail("disabled target count wrong.\n")

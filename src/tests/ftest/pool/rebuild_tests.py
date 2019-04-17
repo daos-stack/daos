@@ -72,7 +72,7 @@ class RebuildTests(TestWithoutServers):
     def tearDown(self):
         try:
             # really make sure everything is gone
-            check_for_pool.cleanup_pools(self.hostlist)
+            check_for_pool.cleanup_pools(self.hostlist_servers)
         finally:
             super(RebuildTests, self).tearDown()
 
@@ -346,6 +346,6 @@ class RebuildTests(TestWithoutServers):
             self.fail("Expecting to pass but test has failed.\n")
 
         finally:
-            server_utils.stop_server(hosts=self.hostlist)
-            check_for_pool.cleanup_pools(self.hostlist)
-            server_utils.kill_server(self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist_servers)
+            check_for_pool.cleanup_pools(self.hostlist_servers)
+            server_utils.kill_server(self.hostlist_servers)

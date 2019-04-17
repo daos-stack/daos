@@ -79,7 +79,7 @@ class GlobalHandle(TestWithServers):
             super(GlobalHandle, self).tearDown()
         finally:
             # really make sure everything is gone
-            check_for_pool.cleanup_pools(self.hostlist)
+            check_for_pool.cleanup_pools(self.hostlist_servers)
 
     def test_global_handle(self):
         """

@@ -43,15 +43,16 @@ class PoolSvc(TestWithServers):
         super(PoolSvc, self).setUp()
         self.pool = None
 
-        self.hostfile = None
-        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-        print("Host file is: {}".format(self.hostfile))
+        self.hostfile_servers = None
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
+        print("Host file is: {}".format(self.hostfile_servers))
 
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist)
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+                                                    self.hostlist_servers)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
     def tearDown(self):
         try:

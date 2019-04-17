@@ -67,7 +67,7 @@ def ior_runner_thread(result_queue, tname, operation, **kwargs):
             cont_uuid = lines[no_file].rstrip()
 
         try:
-            ior_utils.run_ior(ior_args['client_hostfile'],
+            ior_utils.run_ior(ior_args['client_hostfile_servers'],
                               ior_flag,
                               ior_args['iteration'],
                               ior_args['stripe_size'],
@@ -102,9 +102,9 @@ class ObjectMetadata(Test):
     def setUp(self):
         self.agent_sessions = None
         self.pool = None
-        self.hostlist = None
+        self.hostlist_servers = None
         self.hostfile_clients = None
-        self.hostfile = None
+        self.hostfile_servers = None
         self.out_queue = None
         self.pool_connect = True
 
@@ -117,16 +117,17 @@ class ObjectMetadata(Test):
                                             'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
-        self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
+        self.hostlist_servers = self.params.get("servers", '/run/hosts/*')
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
         self.hostfile_clients = write_host_file.write_host_file(
             self.hostlist_clients, self.workdir)
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist,
+                                                    self.hostlist_servers,
                                                     self.hostlist_clients)
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -147,7 +148,7 @@ class ObjectMetadata(Test):
             if self.agent_sessions:
                 agent_utils.stop_agent(self.hostlist_clients,
                                        self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
@@ -235,7 +236,7 @@ class ObjectMetadata(Test):
             svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
         svc_list = svc_list[:-1]
 
-        ior_args['client_hostfile'] = self.hostfile_clients
+        ior_args['client_hostfile_servers'] = self.hostfile_clients
         ior_args['pool_uuid'] = self.pool.get_uuid_str()
         ior_args['svc_list'] = svc_list
         ior_args['basepath'] = self.basepath
@@ -269,11 +270,12 @@ class ObjectMetadata(Test):
         #Server Restart
         if self.agent_sessions:
             agent_utils.stop_agent(self.hostlist_clients, self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist)
+        server_utils.stop_server(hosts=self.hostlist_servers)
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_clients,
-                                                    self.hostlist)
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+                                                    self.hostlist_servers)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
         #Read IOR with verification with same number of threads
         threads = []

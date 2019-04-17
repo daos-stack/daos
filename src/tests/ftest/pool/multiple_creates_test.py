@@ -51,26 +51,28 @@ class MultipleCreatesTest(Test):
             build_paths = json.load(build_file)
         basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
 
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        self.agent_sessions = agent_utils.run_agent(basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, basepath)
+        self.agent_sessions = agent_utils.run_agent(basepath,
+                                                    self.hostlist_servers)
+        server_utils.run_server(self.hostfile_servers, server_group, basepath)
 
         self.daosctl = basepath + '/install/bin/daosctl'
 
 
     def tearDown(self):
         try:
-            os.remove(self.hostfile)
+            os.remove(self.hostfile_servers)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_create_one(self):
         """
@@ -113,7 +115,7 @@ class MultipleCreatesTest(Test):
             uuid_str = """{0}""".format(process.system_output(cmd))
             print("uuid is {0}\n".format(uuid_str))
 
-            host = self.hostlist[0]
+            host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str,
@@ -183,7 +185,7 @@ class MultipleCreatesTest(Test):
             uuid_str_1 = """{0}""".format(process.system_output(cmd))
             uuid_str_2 = """{0}""".format(process.system_output(cmd))
 
-            host = self.hostlist[0]
+            host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
@@ -269,7 +271,7 @@ class MultipleCreatesTest(Test):
             uuid_str_2 = """{0}""".format(process.system_output(cmd))
             uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
-            host = self.hostlist[0]
+            host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
