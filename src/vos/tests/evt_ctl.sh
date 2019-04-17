@@ -17,7 +17,6 @@ else
 fi
 export CMOCKA_MESSAGE_OUTPUT="xml"
 export CMOCKA_XML_FILE="$DAOS_DIR/test_results/%g.xml"
-echo "$CMOCKA_MESSAGE_OUTPUT"
 echo "$CMOCKA_XML_FILE"
 
 cmd="$VCMD $EVT_CTL $* -C o:4"

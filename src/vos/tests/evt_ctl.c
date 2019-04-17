@@ -309,13 +309,13 @@ ts_add_rect(void **state)
 	arg = tst_fn_val.optval;
 
 	if (arg == NULL) {
-		D_PRINT("No parameters %s", arg);
+		D_PRINT("No parameters %s\n", arg);
 		fail();
 	}
 
 	rc = ts_parse_rect(arg, &entry.ei_rect, NULL, &val, &should_pass);
 	if (rc != 0) {
-		D_PRINT("Parsing tree failure %d", rc);
+		D_PRINT("Parsing tree failure %d\n", rc);
 		fail();
 	}
 	D_PRINT("Insert "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
@@ -1066,24 +1066,6 @@ test_evt_ent_alloc_bug(void **state)
 	assert_in_range(count, last, last * 3);
 }
 
-static int
-run_internal_tests(void)
-{
-	static const struct CMUnitTest evt_builtin[] = {
-		{ "EVT009: evt_iter_delete", test_evt_iter_delete,
-			setup_builtin, teardown_builtin},
-		{ "EVT010: evt_iter_delete_internal",
-			test_evt_iter_delete_internal,
-			setup_builtin, teardown_builtin},
-		{ "EVT011: evt_ent_alloc_bug",
-			test_evt_ent_alloc_bug,
-			setup_builtin, teardown_builtin},
-		{ NULL, NULL, NULL, NULL }
-	};
-
-	return cmocka_run_group_tests_name("evtree built-in tests", evt_builtin,
-					   global_setup, global_teardown);
-}
 
 static int
 run_create_test(void)
@@ -1179,6 +1161,25 @@ run_tree_debug_test(void)
 
 	return cmocka_run_group_tests_name("evtree tree debug test",
 					evt_tree_debug, NULL, NULL);
+}
+
+static int
+run_internal_tests(void)
+{
+	static const struct CMUnitTest evt_builtin[] = {
+		{ "EVT009: evt_iter_delete", test_evt_iter_delete,
+			setup_builtin, teardown_builtin},
+		{ "EVT010: evt_iter_delete_internal",
+			test_evt_iter_delete_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT011: evt_ent_alloc_bug",
+			test_evt_ent_alloc_bug,
+			setup_builtin, teardown_builtin},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("evtree built-in tests", evt_builtin,
+					   global_setup, global_teardown);
 }
 
 static struct option ts_ops[] = {
