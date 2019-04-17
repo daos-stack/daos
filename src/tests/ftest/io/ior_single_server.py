@@ -114,7 +114,8 @@ class IorSingleServer(Test):
         client_processes = self.params.get("np", '/run/ior/client_processes/*/')
         iteration = self.params.get("iter", '/run/ior/iteration/')
         ior_flags = self.params.get("F", '/run/ior/iorflags/')
-        transfer_size = self.params.get("t", '/run/ior/transfersize_blocksize/*/')
+        transfer_size = self.params.get("t",
+                                        '/run/ior/transfersize_blocksize/*/')
         block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
         object_class = self.params.get("o", '/run/ior/objectclass/')
 
@@ -134,8 +135,9 @@ class IorSingleServer(Test):
             svc_list = svc_list[:-1]
 
             ior_utils.run_ior_daos(self.hostfile_clients, ior_flags, iteration,
-                                  block_size, transfer_size, pool_uuid, svc_list,
-                                  object_class, self.basepath, client_processes)
+                                   block_size, transfer_size, pool_uuid,
+                                   svc_list, object_class, self.basepath,
+                                   client_processes)
 
         except (DaosApiError, ior_utils.IorFailed) as excep:
             self.fail("<Single Server Test FAILED>\n {}".format(excep))
