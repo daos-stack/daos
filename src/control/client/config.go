@@ -58,42 +58,30 @@ func (e *ext) getenv(key string) string {
 
 // Configuration contains all known configuration variables available to the client
 type Configuration struct {
-	SystemName      string   `yaml:"name"`
-	SocketDir       string   `yaml:"socket_dir"`
-	HostFile        string   `yaml:"host_file"`
-	AccessPoints    []string `yaml:"access_points"`
-	Port            int      `yaml:"port"`
-	CaCert          string   `yaml:"ca_cert"`
-	Cert            string   `yaml:"cert"`
-	Key             string   `yaml:"key"`
-	Provider        string   `yaml:"provider"`
-	FabricIface     string   `yaml:"fabric_iface"`
-	FabricIfacePort int      `yaml:"fabric_iface_port"`
-	LogFile         string   `yaml:"log_file"`
-	LogFileFormat   string   `yaml:"log_file_format"`
-	Path            string
-	ext             External
+	SystemName    string `yaml:"name"`
+	RuntimeDir    string `yaml:"runtime_dir"`
+	HostFile      string `yaml:"host_file"`
+	Cert          string `yaml:"cert"`
+	Key           string `yaml:"key"`
+	LogFile       string `yaml:"log_file"`
+	LogFileFormat string `yaml:"log_file_format"`
+	Path          string
+	ext           External
 }
 
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) Configuration {
 	return Configuration{
-		SystemName:      "daos",
-		SocketDir:       "/var/run/daos_agent",
-		HostFile:        "",
-		AccessPoints:    []string{"localhost"},
-		Port:            0,
-		CaCert:          "",
-		Cert:            "",
-		Key:             "",
-		Provider:        "",
-		FabricIface:     "",
-		FabricIfacePort: 0,
-		LogFile:         "/tmp/daos_agent.log",
-		LogFileFormat:   "",
-		Path:            "etc/daos.yml",
-		ext:             ext,
+		SystemName:    "daos",
+		RuntimeDir:    "/var/run/daos_agent",
+		HostFile:      "",
+		Cert:          "",
+		Key:           "",
+		LogFile:       "/tmp/daos_agent.log",
+		LogFileFormat: "",
+		Path:          "etc/daos.yml",
+		ext:           ext,
 	}
 }
 
@@ -141,11 +129,11 @@ func (c *Configuration) LoadConfig() error {
 
 // ApplyCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
-func (c *Configuration) ApplyCmdLineOverrides(SocketDir string, LogFile string) error {
+func (c *Configuration) ApplyCmdLineOverrides(RuntimeDir string, LogFile string) error {
 
-	if SocketDir != "" {
-		log.Debugf("Overriding socket path from config file with %s", SocketDir)
-		c.SocketDir = SocketDir
+	if RuntimeDir != "" {
+		log.Debugf("Overriding socket path from config file with %s", RuntimeDir)
+		c.RuntimeDir = RuntimeDir
 	}
 
 	if LogFile != "" {
@@ -157,21 +145,15 @@ func (c *Configuration) ApplyCmdLineOverrides(SocketDir string, LogFile string) 
 }
 
 // ProcessEnvOverrides examines environment variables and applies the environment
-// variable value if the corresponding configuration value is still undefined.
-// This method prioritizes the configuration file and commandline over any environment variables
-// as is done in the server configuration methods.
+// variable value over an existing value if defined.
 func (c *Configuration) ProcessEnvOverrides() int {
 	var envVarsFound = 0
 
-	// If we don't have a valid SocketDir at this point, examine
-	// the environment variable to see if one is defined.
-	if c.SocketDir == "" {
-		daosAgentDrpcSock := c.ext.getenv(daosAgentDrpcSockEnv)
-		if daosAgentDrpcSock != "" {
-			log.Debugf("DAOS_AGENT_DRPC_DIR found: %s", daosAgentDrpcSock)
-			c.SocketDir = daosAgentDrpcSock
-			envVarsFound++
-		}
+	daosAgentDrpcSock := c.ext.getenv(daosAgentDrpcSockEnv)
+	if daosAgentDrpcSock != "" {
+		log.Debugf("DAOS_AGENT_DRPC_DIR found: %s", daosAgentDrpcSock)
+		c.RuntimeDir = daosAgentDrpcSock
+		envVarsFound++
 	}
 	return envVarsFound
 }

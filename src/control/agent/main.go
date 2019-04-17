@@ -24,26 +24,25 @@
 package main
 
 import (
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
 )
-
 const (
 	agentSockName = "agent.sock"
 )
 
 type cliOptions struct {
 	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
-	SocketDir  string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 }
 
 var (
@@ -76,33 +75,33 @@ func agentMain() error {
 		return err
 	}
 
-	// Override the default SocketDir and LogFile with any commandline values given
-	err = config.ApplyCmdLineOverrides(opts.SocketDir, opts.LogFile)
+	// Apply environment variable overrides if found
+	res := config.ProcessEnvOverrides()
+	log.Debugf("Found %d environment variable overrides", res)
+
+	// Override configuration with any commandline values given
+	err = config.ApplyCmdLineOverrides(opts.RuntimeDir, opts.LogFile) 
 	if err != nil {
 		log.Errorf("Failed to apply command line overrides %s", err)
 		return err
 	}
 
-	// If key configuration data remains undefined at this point,
-	// use environment variable overrides to complete the configuration
-	res := config.ProcessEnvOverrides()
-	log.Debugf("Found %d environment variable overrides", res)
-
-	if config.SocketDir == "" {
-		log.Errorf("The path to the agent communications socket is undefined.  "+
-			"Use the config file: %s or command line option 'socket-dir' to specify a value.", config.Path)
+	if config.RuntimeDir == "" {
+		log.Errorf("The path to the agent communications socket is undefined.  " +
+			"Use the config file: %s or command line option 'runtime_dir' to specify a value.", config.Path)
 		return errors.New("the path to the agent communications socket is undefined")
 	}
 
-	sockPath := filepath.Join(config.SocketDir, agentSockName)
+	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
 
-	log.Debugf("Using logfile: %s", config.LogFile)
 	f, err := common.AppendFile(config.LogFile)
 	if err != nil {
 		log.Errorf("Failure creating log file: %s", err)
 		return err
 	}
+	log.Debugf("Using logfile: %s", config.LogFile)
+
 	defer f.Close()
 	log.SetOutput(f)
 
