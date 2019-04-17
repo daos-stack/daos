@@ -37,42 +37,31 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-struct fs_info {
-	char			*fsi_mnt;
-	struct fuse		*fsi_fuse;
-	struct fuse_session	*fsi_session;
-	pthread_t		fsi_thread;
-	pthread_mutex_t		fsi_lock;
-	struct dfuse_projection_info *fsi_handle;
-	bool			fsi_running;
-	bool			fsi_mt;
+/* Command line configuration data */
+struct dfuse_data {
+	char	*pool;
+	char	*cont;
+	char	*svcl;
+	char	*group;
+	char	*mountpoint;
+	bool	threaded;
 };
 
 struct dfuse_info {
-	struct dfuse_state	*dfuse_state;
-	struct fs_info		ci_fsinfo;
+	struct fuse_session		*fsi_session;
+	struct dfuse_projection_info	*fsi_handle;
+	struct dfuse_data		fsi_dfd;
 };
 
 bool
 dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		   struct fuse_lowlevel_ops *flo,
 		   struct fuse_args *args,
-		   const char *mnt,
-		   bool threaded,
-		   void *private_data,
+		   struct dfuse_projection_info *fsi_handle,
 		   struct fuse_session **sessionp);
 
-struct dfuse_state *
-dfuse_plugin_init();
-
-void
-dfuse_reg(struct dfuse_state *dfuse_state, struct dfuse_info *dfuse_info);
-
-void
-dfuse_post_start(struct dfuse_state *dfuse_state);
-
-void
-dfuse_finish(struct dfuse_state *dfuse_state);
+int
+dfuse_post_start(struct dfuse_info *dfuse_info);
 
 void
 dfuse_flush_fuse(struct dfuse_projection_info *fs_handle);
@@ -80,26 +69,8 @@ dfuse_flush_fuse(struct dfuse_projection_info *fs_handle);
 int
 dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
 
-/**
- * Global state for DFUSE client.
- *
- */
-struct dfuse_state {
-	struct dfuse_info		*dfuse_info;
-	/** CNSS Prefix.  Parent directory of projections */
-	char				*dfuse_prefix;
-	/** ctrl_fs inoss directory handle */
-	struct ctrl_dir			*ionss_dir;
-	/** ctrl_fs projections directory handle */
-	struct ctrl_dir			*projections_dir;
-	/** Group information */
-	struct dfuse_service_group	grp;
-};
-
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
-	struct dfuse_state		*dfuse_state;
-	d_list_t			link;
 	struct fuse_session		*session;
 	/** Feature Flags */
 	uint64_t			flags;

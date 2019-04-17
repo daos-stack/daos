@@ -76,6 +76,7 @@ dfuse_fs_send(struct dfuse_request *request)
 			request->ir_ht = RHS_INODE;
 		}
 	}
+	return EIO;
 	return 0;
 err:
 	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", rc);
@@ -342,16 +343,9 @@ wb_reset(void *arg)
 	return true;
 }
 
-void
-dfuse_reg(struct dfuse_state *dfuse_state, struct dfuse_info *dfuse_info)
+int
+dfuse_post_start(struct dfuse_info *dfuse_info)
 {
-	dfuse_state->dfuse_info = dfuse_info;
-}
-
-static bool
-initialize_projection(struct dfuse_state *dfuse_state)
-{
-	struct dfuse_service_group	*group = &dfuse_state->grp;
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
 	int				ret;
@@ -393,13 +387,9 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (!fs_handle)
 		return false;
 
-	DFUSE_TRA_UP(fs_handle, dfuse_state, "dfuse_projection");
-
 	ret = dfuse_da_init(&fs_handle->da, fs_handle);
 	if (ret != -DER_SUCCESS)
 		D_GOTO(err, 0);
-
-	fs_handle->dfuse_state = dfuse_state;
 
 	ret = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
 					  D_HASH_FT_EPHEMERAL,
@@ -410,8 +400,6 @@ initialize_projection(struct dfuse_state *dfuse_state)
 		D_GOTO(err, 0);
 
 	fs_handle->proj.progress_thread = 1;
-
-	fs_handle->proj.grp = group;
 
 	args.argc = 4;
 
@@ -500,31 +488,23 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
-	if (!dfuse_register_fuse(fs_handle->dfuse_state->dfuse_info,
-				fuse_ops,
-				&args,
-				NULL,
-				(fs_handle->flags & DFUSE_CNSS_MT) != 0,
-				fs_handle,
-				&fs_handle->session)) {
+	if (!dfuse_register_fuse(dfuse_info,
+				 fuse_ops,
+				 &args,
+				 fs_handle,
+				 &fs_handle->session)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err, 0);
 	}
 
 	D_FREE(fuse_ops);
 
-	return true;
+	return -DER_SUCCESS;
 err:
 	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
 	D_FREE(fs_handle);
-	return false;
-}
-
-void
-dfuse_post_start(struct dfuse_state *dfuse_state)
-{
-	initialize_projection(dfuse_state);
+	return -DER_INVAL;
 }
 
 static int
@@ -654,24 +634,5 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 
 	dfuse_da_destroy(&fs_handle->da);
 
-	d_list_del_init(&fs_handle->link);
-
 	return rcp;
-}
-
-void
-dfuse_finish(struct dfuse_state *dfuse_state)
-{
-	DFUSE_TRA_DOWN(dfuse_state);
-	D_FREE(dfuse_state);
-}
-
-struct dfuse_state *
-dfuse_plugin_init()
-{
-	struct dfuse_state *dfuse_state;
-
-	D_ALLOC_PTR(dfuse_state);
-
-	return dfuse_state;
 }

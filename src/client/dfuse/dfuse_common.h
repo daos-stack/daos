@@ -31,7 +31,6 @@
 
 #include "dfuse_gah.h"
 
-#define DFUSE_CNSS_MT		0x080UL
 #define DFUSE_FUSE_READ_BUF	0x100UL
 #define DFUSE_FUSE_WRITE_BUF	0x200UL
 
