@@ -193,7 +193,7 @@ export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!
-export D_LOG_FILE=/tmp/Functional_$TEST_TAG/daos.log
+export D_LOG_FILE=/tmp/Functional_$TEST_TAG/server_daos.log
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
