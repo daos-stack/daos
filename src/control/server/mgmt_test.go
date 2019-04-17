@@ -25,26 +25,17 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
-func init() {
-	log.NewDefaultLogger(log.Debug, "mgmt_test: ", os.Stdout)
-}
-
-func newMockControlService() *controlService {
-	config := defaultMockConfig()
-	return mockControlService(&config)
+func defaultMockControlService(t *testing.T) *controlService {
+	c := defaultMockConfig(t)
+	return mockControlService(&c)
 }
 
 func mockControlService(config *configuration) *controlService {
-	server := newDefaultServer()
-	config.Servers = append(config.Servers, server)
-
 	cs := controlService{
 		nvme:   defaultMockNvmeStorage(config),
 		scm:    defaultMockScmStorage(config),
@@ -54,7 +45,7 @@ func mockControlService(config *configuration) *controlService {
 	return &cs
 }
 
-func TestFormatStorage(t *testing.T) {
+func TestFormatScmStorage(t *testing.T) {
 	tests := []struct {
 		mountRet   error
 		unmountRet error
@@ -107,10 +98,12 @@ func TestFormatStorage(t *testing.T) {
 			}
 		}()
 
+		AssertEqual(t, cs.nvme.formatted, false, tt.desc)
 		AssertEqual(t, cs.scm.formatted, false, tt.desc)
 
 		c.Wait()
 
+		AssertEqual(t, cs.nvme.formatted, true, tt.desc)
 		AssertEqual(t, cs.scm.formatted, true, tt.desc)
 	}
 }

@@ -38,7 +38,6 @@ import (
 )
 
 const (
-	sConfig = "../../../utils/config/daos_server.yml"
 	// sConfigUncomment created on init
 	sConfigUncomment = "testdata/.daos_server_uncomment.yml"
 	socketsExample   = "../../../utils/config/examples/daos_server_sockets.yml"
@@ -48,8 +47,9 @@ const (
 	tmpOut           = "testdata/.tmp_out.yml"
 )
 
+// init gets called once per package, don't call in other test files
 func init() {
-	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "server_tests: ", os.Stderr)
 
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()
@@ -64,7 +64,7 @@ func uncommentServerConfig() {
 	}
 
 	cmd := exec.Command(
-		"bash", "-c", fmt.Sprintf("sed s/^#//g %s > %s", sConfig, sConfigUncomment))
+		"bash", "-c", fmt.Sprintf("sed s/^#//g %s > %s", defaultConfig, sConfigUncomment))
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -85,34 +85,23 @@ func uncommentServerConfig() {
 	}
 }
 
-// newMockConfig returns default configuration with mocked external interface
-func newMockConfig(
-	cmdRet error, getenvRet string, existsRet bool, mountRet error,
-	unmountRet error, mkdirRet error, removeRet error) configuration {
-
-	return newDefaultConfiguration(
-		&mockExt{
-			cmdRet, getenvRet, existsRet, mountRet, unmountRet,
-			mkdirRet, removeRet})
+// defaultMoc2kConfig returns configuration populated from blank config file
+// with mocked external interface.
+func defaultMockConfig(t *testing.T) configuration {
+	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
 }
 
-// defaultMockConfig returns MockConfig with default mock return values
-func defaultMockConfig() configuration {
-	return newMockConfig(nil, "", false, nil, nil, nil, nil)
-}
-func cmdFailsConfig() configuration {
-	return newMockConfig(errors.New("exit status 1"), "", false, nil, nil, nil, nil)
-}
-func envExistsConfig() configuration {
-	return newMockConfig(nil, "somevalue", false, nil, nil, nil, nil)
-}
+// supply mock external interface, populates config from given file path
+func mockConfigFromFile(t *testing.T, e External, path string) configuration {
+	c := newDefaultConfiguration(e)
 
-func populateMockConfig(t *testing.T, c configuration, path string) configuration {
 	c.Path = path
+
 	err := c.loadConfig()
 	if err != nil {
 		t.Fatalf("Configuration could not be read (%s)", err)
 	}
+
 	return c
 }
 
@@ -133,23 +122,22 @@ func TestParseConfigSucceed(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		// verify decoding of config from written file
-		config := defaultMockConfig()
-		config.Path = tmpIn
-		err = config.loadConfig()
-		if err != nil {
-			t.Fatal(err)
-		}
+		config := mockConfigFromFile(t, defaultMockExt(), tmpIn)
+
 		// encode decoded config to temporary output file
 		err = config.saveConfig(tmpOut)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		// use SplitFile (just for convenience) to read output file contents
 		outputs, err := SplitFile(tmpOut)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		// compare encoded output (first element of output from SplitFile)
 		// with expected outputYaml
 		for x, line := range outputYamls[i] {
@@ -179,9 +167,10 @@ func TestParseConfigFail(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		config := defaultMockConfig()
+		config := defaultMockConfig(t)
 		config.Path = tmpIn
 		err = config.loadConfig()
+
 		// output error messages will always be first entry in a slice.
 		ExpectError(t, err, outputErrorMsgs[i][0], "")
 	}
@@ -191,37 +180,37 @@ func TestParseConfigFail(t *testing.T) {
 // after being decoded.
 func TestProvidedConfigs(t *testing.T) {
 	tests := []struct {
-		inConfig configuration
-		inPath   string
-		desc     string
-		errMsg   string
+		inExt  External
+		inPath string
+		desc   string
+		errMsg string
 	}{
 		{
-			defaultMockConfig(),
+			defaultMockExt(),
 			sConfigUncomment,
 			"uncommented default config",
 			"",
 		},
 		{
-			defaultMockConfig(),
+			defaultMockExt(),
 			socketsExample,
 			"socket example config",
 			"",
 		},
 		{
-			defaultMockConfig(),
+			defaultMockExt(),
 			psm2Example,
 			"psm2 example config",
 			"",
 		},
 		{
-			defaultMockConfig(),
+			defaultMockExt(),
 			defaultConfig,
 			"default empty config",
-			"required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
+			"no servers specified in config file and missing os envvar CRT_PHY_ADDR_STR",
 		},
 		{
-			envExistsConfig(),
+			envExistsMockExt(),
 			defaultConfig,
 			"default empty config with os env present",
 			"",
@@ -229,17 +218,22 @@ func TestProvidedConfigs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// Compare YAML parsing
+
 		// compute file path containing expected output to compare with
 		// some input files may be auto generated and prefixed with "."
 		// the relevant expect files will not be so strip here
 		filename := strings.TrimPrefix(filepath.Base(tt.inPath), ".")
 		expectedFile := fmt.Sprintf("testdata/expect_%s", filename)
-		config := populateMockConfig(t, tt.inConfig, tt.inPath)
+
+		config := mockConfigFromFile(t, tt.inExt, tt.inPath)
+
 		// encode decoded config to temporary output file to verify parser
 		err := config.saveConfig(tmpOut)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		// use SplitFile (just for convenience) to read what has been output
 		outYamls, err := SplitFile(tmpOut)
 		if err != nil {
@@ -249,6 +243,7 @@ func TestProvidedConfigs(t *testing.T) {
 					"reading processed output file %s",
 					tmpOut))
 		}
+
 		// read and compare output file contents with expected file contents
 		// (outFile), (extract first element of output from SplitFile for each)
 		outExpectYamls, err := SplitFile(expectedFile)
@@ -260,7 +255,6 @@ func TestProvidedConfigs(t *testing.T) {
 					expectedFile))
 		}
 
-		// verify the generated yaml is of expected size
 		outExpectYaml := outExpectYamls[0]
 		outYaml := outYamls[0]
 
@@ -273,9 +267,12 @@ func TestProvidedConfigs(t *testing.T) {
 					i, tt.inPath, expectedFile, outYaml[i], line))
 		}
 
+		// verify the generated yaml is of expected size
 		if len(outExpectYaml) != len(outYaml) {
 			t.Fatalf("number of lines unexpected in %s", expectedFile)
 		}
+
+		// Compare IO parameters
 
 		// retrieve expected and actual io parameters
 		expectedFile = fmt.Sprintf(
@@ -289,7 +286,10 @@ func TestProvidedConfigs(t *testing.T) {
 					"reading expected output file %s",
 					expectedFile))
 		}
-		err = config.getIOParams(&cliOptions{})
+
+		opts := new(cliOptions)
+
+		err = config.getIOParams(opts)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -372,11 +372,14 @@ func TestSetNumCores(t *testing.T) {
 			ExpectError(t, err, tt.errMsg, tt.num)
 			continue
 		}
+
 		AssertEqual(t, cpus, tt.cpus, "failed to convert number to range")
+
 		num, err := getNumCores(cpus)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		AssertEqual(t, num, tt.num, "failed to convert to expected number")
 	}
 }
@@ -392,7 +395,7 @@ func TestCmdlineOverride(t *testing.T) {
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
 	newC := func(t *testing.T) configuration {
-		return populateMockConfig(t, defaultMockConfig(), sConfigUncomment)
+		return mockConfigFromFile(t, defaultMockExt(), sConfigUncomment)
 	}
 
 	tests := []struct {
@@ -406,10 +409,11 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig: newC(t),
 			outCliOpts: [][]string{
 				{
-					"-t", "21",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
@@ -417,7 +421,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -429,10 +434,11 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-t", "21",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/foo/bar",
 					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
@@ -440,7 +446,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "daos",
 					"-s", "/foo/bar",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -452,10 +459,11 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-t", "21",
+					"-t", "20",
 					"-g", "testing123",
 					"-s", "/mnt/daos/1",
 					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
@@ -463,7 +471,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "testing123",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -479,6 +488,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
@@ -486,22 +496,49 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "2",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
-			desc: "Cores",
+			desc: "Cores override Targets set in config file",
+		},
+		{
+			inCliOpts: cliOptions{Targets: 3},
+			inConfig:  newC(t),
+			outCliOpts: [][]string{
+				{
+					"-t", "3",
+					"-g", "daos",
+					"-s", "/mnt/daos/1",
+					"-x", "0",
+					"-f", "1",
+					"-r", "0",
+					"-d", "./.daos/daos_server",
+				},
+				{
+					"-t", "3",
+					"-g", "daos",
+					"-s", "/mnt/daos/2",
+					"-x", "1",
+					"-f", "21",
+					"-r", "1",
+					"-d", "./.daos/daos_server",
+				},
+			},
+			desc: "Override Targets set in config file",
 		},
 		{
 			inCliOpts: cliOptions{Rank: &r},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-t", "21",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-x", "0",
+					"-f", "1",
 					"-r", "9",
 					"-d", "./.daos/daos_server",
 				},
@@ -509,7 +546,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -520,16 +558,17 @@ func TestCmdlineOverride(t *testing.T) {
 			// currently not provided as config or cli option, set
 			// directly in configuration
 			inConfig: func() configuration {
-				c := defaultMockConfig()
+				c := mockConfigFromFile(t, defaultMockExt(), sConfigUncomment)
 				c.NvmeShmID = 1
-				return populateMockConfig(t, c, sConfigUncomment)
+				return c
 			}(),
 			outCliOpts: [][]string{
 				{
-					"-t", "21",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
@@ -538,7 +577,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
@@ -551,12 +591,13 @@ func TestCmdlineOverride(t *testing.T) {
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
-					"-t", "21",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
 					"-x", "0",
+					"-f", "1",
 					"-y", "/another/different/file",
 					"-r", "0",
 					"-d", "/tmp/Jeremy",
@@ -567,7 +608,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-y", "/another/different/file",
 					"-r", "1",
 					"-d", "/tmp/Jeremy",
@@ -584,6 +626,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
@@ -591,7 +634,8 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "5",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-x", "1",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -599,42 +643,42 @@ func TestCmdlineOverride(t *testing.T) {
 			desc: "Targets cli overrides Cores cli",
 		},
 		{
-			inCliOpts: cliOptions{Cores: 2},
-			inConfig: func() configuration {
-				c := defaultMockConfig()
-				c.Targets = 3
-				return populateMockConfig(t, c, sConfigUncomment)
-			}(),
+			inCliOpts: cliOptions{
+				NrXsHelpers: func() *uint16 {
+					var i uint16 = 3
+					return &i
+				}(),
+			},
+			inConfig: newC(t),
 			outCliOpts: [][]string{
 				{
-					"-t", "3",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
-					"-x", "0",
+					"-f", "1",
 					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
-					"-t", "3",
+					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-x", "0",
+					"-f", "21",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
-			desc: "Targets config overrides Cores cli",
+			desc: "exceed max NrXsHelpers results in default and no option",
 		},
 		{
 			// no provider set but os env set mock getenv returns not empty string
-			inConfig: envExistsConfig(),
+			inConfig: mockConfigFromFile(t, envExistsMockExt(), socketsExample),
 			outCliOpts: [][]string{
 				{
-					"-t", "0",
+					"-t", "8",
 					"-g", "daos_server",
 					"-s", "/mnt/daos",
-					"-x", "0",
-					"-d", "/var/run/daos_server",
+					"-d", "/tmp/daos_sockets",
 				},
 			},
 			desc: "use defaults, no Provider set but provider env exists",
@@ -644,7 +688,7 @@ func TestCmdlineOverride(t *testing.T) {
 			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			inConfig: envExistsConfig(),
+			inConfig: mockConfigFromFile(t, envExistsMockExt(), socketsExample),
 			outCliOpts: [][]string{
 				{
 					"-t", "2",
@@ -652,7 +696,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/foo/bar",
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
-					"-x", "0",
 					"-y", "/another/different/file",
 					"-d", "/tmp/Jeremy",
 				},
@@ -664,22 +707,26 @@ func TestCmdlineOverride(t *testing.T) {
 			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			inConfig: defaultMockConfig(),
+			inConfig: mockConfigFromFile(t, defaultMockExt(), defaultConfig),
 			desc:     "override defaults, no Provider set and no provider env exists",
-			errMsg:   "required parameters missing from config and os environment (CRT_PHY_ADDR_STR)",
+			errMsg:   "no servers specified in config file and missing os envvar CRT_PHY_ADDR_STR",
 		},
 	}
 
 	for _, tt := range tests {
 		config := tt.inConfig
-		err := config.getIOParams(&tt.inCliOpts)
+		opts := &tt.inCliOpts
+
+		err := config.getIOParams(opts)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
 		}
+
 		if err != nil {
 			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
 		}
+
 		if len(config.Servers) != len(tt.outCliOpts) {
 			t.Fatalf(
 				"incorrect number of io server params returned (%s)", tt.desc)
@@ -697,31 +744,35 @@ func TestCmdlineOverride(t *testing.T) {
 
 func TestPopulateEnv(t *testing.T) {
 	tests := []struct {
-		inConfig  configuration
-		ioIdx     int
-		inEnvs    []string
-		outEnvs   []string
-		getParams bool
-		desc      string
+		inConfig configuration
+		ioIdx    int
+		inEnvs   []string
+		outEnvs  []string
+		errMsg   string
+		desc     string
 	}{
 		{
-			defaultMockConfig(),
+			mockConfigFromFile(t, defaultMockExt(), defaultConfig),
 			0,
 			[]string{},
 			[]string{},
-			false,
+			fmt.Sprintf(
+				"no servers specified in config file and missing os "+
+					"envvar %s", providerEnvKey),
 			"empty config (no envs) and getenv returns empty",
 		},
 		{
-			defaultMockConfig(),
+			mockConfigFromFile(t, defaultMockExt(), defaultConfig),
 			0,
 			[]string{"FOO=bar"},
 			[]string{"FOO=bar"},
-			false,
+			fmt.Sprintf(
+				"no servers specified in config file and missing os "+
+					"envvar %s", providerEnvKey),
 			"empty config (no envs) and getenv returns empty",
 		},
 		{
-			populateMockConfig(t, defaultMockConfig(), socketsExample),
+			mockConfigFromFile(t, defaultMockExt(), socketsExample),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
@@ -739,11 +790,11 @@ func TestPopulateEnv(t *testing.T) {
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
 			},
-			true,
+			"",
 			"sockets populated config (with envs) and getenv returns empty",
 		},
 		{
-			populateMockConfig(t, envExistsConfig(), socketsExample),
+			mockConfigFromFile(t, envExistsMockExt(), socketsExample),
 			0,
 			// existing os vars already set, config values should be ignored and
 			// result in no change
@@ -773,11 +824,11 @@ func TestPopulateEnv(t *testing.T) {
 				"D_LOG_MASK=somevalue",
 				"D_LOG_FILE=somevalue",
 			},
-			true,
+			"",
 			"sockets populated config (with envs) and getenv returns with 'somevalue'",
 		},
 		{
-			populateMockConfig(t, defaultMockConfig(), psm2Example),
+			mockConfigFromFile(t, defaultMockExt(), psm2Example),
 			0,
 			[]string{"FOO=bar"},
 			[]string{
@@ -794,11 +845,11 @@ func TestPopulateEnv(t *testing.T) {
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
 			},
-			true,
+			"",
 			"psm2 populated config (with envs) and getenv returns empty",
 		},
 		{
-			populateMockConfig(t, envExistsConfig(), psm2Example),
+			mockConfigFromFile(t, envExistsMockExt(), psm2Example),
 			0,
 			// existing os vars already set, config values should be ignored and
 			// result in no change, as provider is set in os, no changes made
@@ -829,7 +880,7 @@ func TestPopulateEnv(t *testing.T) {
 				"D_LOG_MASK=somevalue",
 				"D_LOG_FILE=somevalue",
 			},
-			true,
+			"",
 			"psm2 populated config (with envs) and getenv returns with 'somevalue'",
 		},
 	}
@@ -837,17 +888,26 @@ func TestPopulateEnv(t *testing.T) {
 	for _, tt := range tests {
 		config := tt.inConfig
 		inEnvs := tt.inEnvs
-		if len(config.Servers) == 0 {
-			server := newDefaultServer()
-			config.Servers = append(config.Servers, server)
-		}
-		// optionally add to server EnvVars from config (with empty cliOptions)
-		if tt.getParams == true {
-			err := config.getIOParams(&cliOptions{})
-			if err != nil {
-				t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
+
+		_, err := config.validateConfig()
+		if err != nil {
+			if tt.errMsg != "" {
+				AssertEqual(
+					t, err.Error(), tt.errMsg,
+					"unexpected error")
+				continue
 			}
+			t.Fatalf("validate config: %s", err)
 		}
+
+		// optionally add to server EnvVars from config (with empty cliOptions)
+		opts := &cliOptions{}
+
+		err = config.getIOParams(opts)
+		if err != nil {
+			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
+		}
+
 		// pass in env and verify output envs is as expected
 		config.populateEnv(tt.ioIdx, &inEnvs)
 		AssertEqual(t, inEnvs, tt.outEnvs, tt.desc)

@@ -226,10 +226,16 @@ struct dss_module {
 	struct dss_drpc_handler	 *sm_drpc_handlers;
 };
 
+/**
+ * DSS_TGT_SELF can be passed to dss_ult_xs to indicate scheduling ULT on
+ * caller's self XS.
+ */
+#define DSS_TGT_SELF	(-1)
+
 /** ULT types to determine on which XS to schedule the ULT */
 enum dss_ult_type {
-	/** To schedule ULT on caller's self XS */
-	DSS_ULT_SELF = 100,
+	/** for dtx_resync */
+	DSS_ULT_DTX_RESYNC = 100,
 	/** forward/dispatch IO request for TX coordinator */
 	DSS_ULT_IOFW,
 	/** EC/checksum/compress computing offload */
@@ -238,12 +244,16 @@ enum dss_ult_type {
 	DSS_ULT_COMPRESS,
 	/** pool service ULT */
 	DSS_ULT_POOL_SRV,
+	/** RDB ULT */
+	DSS_ULT_RDB,
 	/** rebuild ULT such as scanner/puller, status checker etc. */
 	DSS_ULT_REBUILD,
 	/** aggregation ULT */
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
 	DSS_ULT_DRPC,
+	/** miscellaneous ULT */
+	DSS_ULT_MISC,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -254,8 +264,6 @@ void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
-int dss_rebuild_ult_create(void (*func)(void *), void *arg, int ult_type,
-			   int tgt_id, size_t stack_size, ABT_thread *ult);
 int dss_ult_create_all(void (*func)(void *), void *arg);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
@@ -404,14 +412,18 @@ struct dss_acc_task {
  */
 int dss_acc_offload(struct dss_acc_task *at_args);
 
-/** Different type of ES pools, there are 3 pools for now
+/**
+ * Different type of ES pools, there are 4 pools for now
  *
- *  DSS_POOL_PRIV     Private pool: I/O requests will be added to this pool.
- *  DSS_POOL_SHARE    Shared pool: Other requests and ULT created during
- *                    processing rpc.
- *  DSS_POOL_REBUILD  rebuild pool: pools specially for rebuild tasks.
+ *  DSS_POOL_URGENT	The highest priority pool. ULTs in this pool will be
+ *			scheduled firstly.
+ *  DSS_POOL_PRIV	Private pool: I/O requests will be added to this pool.
+ *  DSS_POOL_SHARE	Shared pool: Other requests and ULT created during
+ *			processing rpc.
+ *  DSS_POOL_REBUILD	rebuild pool: pools specially for rebuild tasks.
  */
 enum {
+	DSS_POOL_URGENT,
 	DSS_POOL_PRIV,
 	DSS_POOL_SHARE,
 	DSS_POOL_REBUILD,

@@ -650,6 +650,7 @@ ts_rebuild_wait()
 
 	while (1) {
 		memset(&pinfo, 0, sizeof(pinfo));
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
 		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
 		if (rst->rs_done || rc != 0) {
 			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
@@ -740,6 +741,8 @@ ts_class_name(void)
 		return "ECHO R4S (network only, 4-replica)";
 	case DAOS_OC_TINY_RW:
 		return "DAOS TINY (full stack, non-replica)";
+	case DAOS_OC_LARGE_RW:
+		return "DAOS LARGE (full stack, non-replica)";
 	case DAOS_OC_R2S_RW:
 		return "DAOS R2S (full stack, 2 replica)";
 	case DAOS_OC_R3S_RW:
@@ -794,7 +797,7 @@ The options are as follows:\n\
 	and 64. The utility runs in synchronous mode if credits is set to 0.\n\
 	This option is ignored for mode 'vos'.\n\
 \n\
--c TINY|R2S|R3S|R4S\n\
+-c TINY|LARGE|R2S|R3S|R4S\n\
 	Object class for DAOS full stack test.\n\
 \n\
 -o number\n\
@@ -1013,7 +1016,7 @@ main(int argc, char **argv)
 					ts_class = DAOS_OC_RAW;
 			} else { /* no RAW for other modes */
 				if (ts_class == DAOS_OC_RAW)
-					ts_class = DAOS_OC_TINY_RW;
+					ts_class = DAOS_OC_LARGE_RW;
 			}
 			break;
 		case 'C':
@@ -1028,6 +1031,8 @@ main(int argc, char **argv)
 				ts_class = DAOS_OC_R2S_RW;
 			} else if (!strcasecmp(optarg, "TINY")) {
 				ts_class = DAOS_OC_TINY_RW;
+			} else if (!strcasecmp(optarg, "LARGE")) {
+				ts_class = DAOS_OC_LARGE_RW;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();

@@ -43,12 +43,12 @@ class DaosFile(object):
     @classmethod
     def open(cls, filename, mode):
         """ Open a DAOS file """
-        df = DaosFile()
-        fn = "daos:" + filename
+        daos_file = DaosFile()
+        fname = "daos:" + filename
         # this uses an environment variable DAOS_POOL to determine
         # where this actually gets written
-        df.mpifile = MPI.File.Open(df.comm, fn, mode)
-        return df
+        daos_file.mpifile = MPI.File.Open(daos_file.comm, fname, mode)
+        return daos_file
 
     def write(self, np_array):
         """ write data from a numpy array into the file """
@@ -71,7 +71,7 @@ class DaosFile(object):
         self.mpifile.Close()
 
 if __name__ == "__main__":
-    """ this is a unit test driver for this code """
+    # this is a unit test driver for this code
 
     # create some data to write, integers 0,1,2,...
     # rolling over at 256 and starting over
@@ -87,10 +87,10 @@ if __name__ == "__main__":
     # reopen and read data back
     fh = DaosFile.open("testfile", DaosFile.MODE_RDWR_CREATE)
     rdata = np.zeros(1, dtype=np.uint8)
-    fh.read_at(89000000,rdata)
+    fh.read_at(89000000, rdata)
 
     # double check a couple values
     if not rdata == (89000000 % 256):
-        print "expecting {0} but value is {1}".format((89000000 % 256), rdata)
+        print("expecting {0} but value is {1}".format((89000000 % 256), rdata))
 
     fh.close()

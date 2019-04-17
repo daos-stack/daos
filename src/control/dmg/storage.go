@@ -71,13 +71,14 @@ type FormatStorCmd struct{}
 func formatStor() {
 	fmt.Println(
 		"This is a destructive operation and storage devices " +
-			"specified in the server config file will be erased. " +
+			"specified in the server config file will be erased.\n" +
+			"Please be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
 	if getConsent() {
 		fmt.Printf(
 			unpackFormat(conns.FormatStorage()),
-			"Format Storage command result")
+			"storage format result")
 	}
 }
 

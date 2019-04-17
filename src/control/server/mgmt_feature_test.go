@@ -32,7 +32,7 @@ import (
 )
 
 func TestGetFeature(t *testing.T) {
-	cs := newMockControlService()
+	cs := defaultMockControlService(t)
 
 	mockFeature := MockFeaturePB()
 	fMap := make(FeatureMap)

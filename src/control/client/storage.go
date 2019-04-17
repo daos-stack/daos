@@ -154,7 +154,8 @@ func (c *connList) ListStorage() (ClientNvmeMap, ClientScmMap) {
 }
 
 func (c *control) formatStorage() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Maximum time limit for format is 2hrs
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
 	_, err := c.client.FormatStorage(ctx, &pb.FormatStorageParams{})
