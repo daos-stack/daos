@@ -114,7 +114,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= 2,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 3,
 			},
@@ -138,7 +138,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= 2,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 4,
 			},
@@ -150,7 +150,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= 1,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= DAOS_OBJ_REPL_MAX,
 			},
