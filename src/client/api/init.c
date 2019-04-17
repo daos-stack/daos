@@ -25,6 +25,7 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
+#include <daos/agent.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
@@ -165,9 +166,15 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+	/** set up agent */
+	rc = dc_agent_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
+out_obj:
 	dc_obj_fini();
 out_co:
 	dc_cont_fini();
@@ -208,6 +215,7 @@ daos_fini(void)
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
+	dc_agent_fini();
 
 	daos_hhash_fini();
 	daos_debug_fini();

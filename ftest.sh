@@ -193,8 +193,6 @@ export CRT_ATTACH_INFO_PATH=$DAOS_BASE/install/tmp
 export DAOS_SINGLETON_CLI=1
 export CRT_CTX_SHARE_ADDR=1
 export CRT_PHY_ADDR_STR=ofi+sockets
-export ABT_ENV_MAX_NUM_XSTREAMS=100
-export ABT_MAX_NUM_XSTREAMS=100
 export OFI_INTERFACE=eth0
 export OFI_PORT=23350
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
@@ -227,8 +225,8 @@ fi
 
 pushd src/tests/ftest
 
-# make sure no lingering corefiles exist
-rm -f core.*
+# make sure no lingering corefiles or junit files exist
+rm -f core.* *_results.xml
 
 # now run it!
 if ! ./launch.py -s \"$TEST_TAG\"; then
