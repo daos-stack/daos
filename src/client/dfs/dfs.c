@@ -575,8 +575,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	}
 	case S_IFLNK:
 		size = strlen(entry.value);
-		free(entry.value);
-		entry.value = NULL;
+		D_FREE(entry.value);
 		nlinks = 1;
 		break;
 	default:
@@ -717,8 +716,7 @@ open_file:
 	if (!S_ISREG(entry.mode)) {
 		if (entry.value) {
 			D_ASSERT(S_ISLNK(entry.mode));
-			free(entry.value);
-			entry.value = NULL;
+			D_FREE(entry.value);
 		}
 		return -DER_INVAL;
 	}
@@ -1184,7 +1182,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		return rc;
 	}
 
-	strcpy(new_dir.name, name);
+	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), 0,
 			&new_dir);
 	if (rc)
@@ -1386,7 +1384,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->oid, dfs->root.oid);
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
-	strcpy(obj->name, dfs->root.name);
+	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc);
@@ -1419,14 +1417,12 @@ dfs_lookup_loop:
 			D_GOTO(err_obj, rc);
 		}
 
-		if (!exists) {
-			D_ERROR("Dir/file %s does not exist\n", token);
+		if (!exists)
 			D_GOTO(err_obj, rc = -DER_NONEXIST);
-		}
 
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
-		strcpy(obj->name, token);
+		strncpy(obj->name, token, DFS_MAX_PATH);
 		obj->mode = entry.mode;
 
 		/** if entry is a file, open the array object and return */
@@ -1481,8 +1477,7 @@ dfs_lookup_loop:
 
 				parent.oh = sym->oh;
 				D_FREE(sym);
-				free(entry.value);
-				entry.value = NULL;
+				D_FREE(entry.value);
 				obj->value = NULL;
 				/*
 				 * need to go to to the beginning of loop but we
@@ -1511,12 +1506,11 @@ dfs_lookup_loop:
 	if (mode)
 		*mode = obj->mode;
 out:
-	free(rem);
+	D_FREE(rem);
 	*_obj = obj;
 	return rc;
 err_obj:
 	D_FREE(obj);
-	obj = NULL;
 	goto out;
 }
 
@@ -1652,12 +1646,10 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (rc)
 		D_GOTO(err_obj, rc);
 
-	if (!exists) {
-		D_ERROR("Entry %s does not exist\n", name);
+	if (!exists)
 		D_GOTO(err_obj, rc = -DER_NONEXIST);
-	}
 
-	strcpy(obj->name, name);
+	strncpy(obj->name, name, DFS_MAX_PATH);
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
@@ -1696,7 +1688,6 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 
 err_obj:
 	D_FREE(obj);
-	obj = NULL;
 	return rc;
 }
 
@@ -1738,7 +1729,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (obj == NULL)
 		return -DER_NOMEM;
 
-	strcpy(obj->name, name);
+	strncpy(obj->name, name, DFS_MAX_PATH);
 	obj->mode = mode;
 	oid_cp(&obj->parent_oid, parent->oid);
 
@@ -1791,7 +1782,7 @@ dfs_release(dfs_obj_t *obj)
 	else if (S_ISREG(obj->mode))
 		rc = daos_array_close(obj->oh, NULL);
 	else if (S_ISLNK(obj->mode))
-		free(obj->value);
+		D_FREE(obj->value);
 	else
 		D_ASSERT(0);
 
@@ -2329,10 +2320,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
 	}
-	if (exists == false) {
-		D_ERROR("Entry %s does not exist\n", name);
+	if (exists == false)
 		D_GOTO(out, rc);
-	}
 
 	rc = fetch_entry(new_parent->oh, th, new_name, true, &exists,
 			 &new_entry);
@@ -2423,13 +2412,11 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 out:
 	if (entry.value) {
 		D_ASSERT(S_ISLNK(entry.mode));
-		free(entry.value);
-		entry.value = NULL;
+		D_FREE(entry.value);
 	}
 	if (new_entry.value) {
 		D_ASSERT(S_ISLNK(new_entry.mode));
-		free(new_entry.value);
-		new_entry.value = NULL;
+		D_FREE(new_entry.value);
 	}
 	return rc;
 }
@@ -2485,10 +2472,8 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		D_ERROR("Failed to fetch entry %s (%d)\n", name1, rc);
 		D_GOTO(out, rc);
 	}
-	if (exists == false) {
-		D_ERROR("Entry %s does not exist\n", name1);
+	if (exists == false)
 		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	rc = fetch_entry(parent2->oh, th, name2, true, &exists, &entry2);
 	if (rc) {
@@ -2496,10 +2481,8 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		D_GOTO(out, rc);
 	}
 
-	if (exists == false) {
-		D_ERROR("Exchange: New Entry %s does not exist\n", name2);
+	if (exists == false)
 		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	/** remove the first entry from parent1 (just the dkey) */
 	daos_iov_set(&dkey, (void *)name1, strlen(name1));
@@ -2536,13 +2519,11 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 out:
 	if (entry1.value) {
 		D_ASSERT(S_ISLNK(entry1.mode));
-		free(entry1.value);
-		entry1.value = NULL;
+		D_FREE(entry1.value);
 	}
 	if (entry2.value) {
 		D_ASSERT(S_ISLNK(entry2.mode));
-		free(entry2.value);
-		entry2.value = NULL;
+		D_FREE(entry2.value);
 	}
 	return rc;
 }
@@ -2661,7 +2642,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 out:
 	if (xname)
-		free(xname);
+		D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -2738,7 +2719,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 
 out:
 	if (xname)
-		free(xname);
+		D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
@@ -2797,7 +2778,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 
 out:
 	if (xname)
-		free(xname);
+		D_FREE(xname);
 	daos_obj_close(oh, NULL);
 	return rc;
 }
