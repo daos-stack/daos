@@ -55,8 +55,8 @@ class CartSelfTest(TestWithoutServers):
         super(CartSelfTest, self).setUp()
         self.agent_sessions = None
 
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
 
         context = DaosContext(self.prefix + '/lib/')
@@ -87,7 +87,7 @@ class CartSelfTest(TestWithoutServers):
                                             'daos_server')
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath,
                                 uri_path=self.uri_file, env_dict=self.env_dict)
 
@@ -97,8 +97,9 @@ class CartSelfTest(TestWithoutServers):
             os.remove(self.uri_file)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
             super(CartSelfTest, self).tearDown()
 
     def test_self_test(self):

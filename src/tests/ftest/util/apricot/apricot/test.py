@@ -152,7 +152,7 @@ class TestWithServers(TestWithoutServers):
             self.workdir)
 
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                   self.hostlist_servers)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -161,7 +161,7 @@ class TestWithServers(TestWithoutServers):
         try:
             if self.agent_sessions:
                 agent_utils.stop_agent(self.hostlist_servers,
-                                      self.agent_sessions)
+                                       self.agent_sessions)
         finally:
             server_utils.stop_server(hosts=self.hostlist_servers)
 
