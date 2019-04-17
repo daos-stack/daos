@@ -70,7 +70,7 @@ dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		   struct dfuse_projection_info *fsi_handle,
 		   struct fuse_session **sessionp)
 {
-	int		rc;
+	int rc;
 
 	dfuse_info->fsi_handle = fsi_handle;
 
@@ -91,13 +91,12 @@ dfuse_register_fuse(struct dfuse_info *dfuse_info,
 	fuse_opt_free_args(args);
 
 	rc = ll_loop_fn(dfuse_info);
+	fuse_session_unmount(dfuse_info->fsi_session);
 	if (rc) {
 		goto cleanup;
 	}
 
 	return true;
-
-	fuse_session_unmount(dfuse_info->fsi_session);
 cleanup:
 	return false;
 }
