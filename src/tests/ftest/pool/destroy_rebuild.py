@@ -59,15 +59,15 @@ class DestroyRebuild(Test):
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         # generate a hostfile
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
 
         # fire up the DAOS servers
         self.server_group = self.params.get("server_group", '/run/server/',
                                             'daos_server')
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile, self.server_group,
                                 build_paths['PREFIX'] + '/../')
 
@@ -93,8 +93,9 @@ class DestroyRebuild(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
 
     def test_destroy_while_rebuilding(self):
@@ -116,7 +117,7 @@ class DestroyRebuild(Test):
             # BUG if you don't connect the rebuild doesn't start correctly
             self.pool.connect(1 << 1)
             status = self.pool.pool_query()
-            if not status.pi_ntargets == len(self.hostlist):
+            if not status.pi_ntargets == len(self.hostlist_servers):
                 self.fail("target count wrong.\n")
             if not status.pi_ndisabled == 0:
                 self.fail("disabled target count wrong.\n")

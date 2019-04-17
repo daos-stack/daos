@@ -51,11 +51,12 @@ class InfoTests(Test):
 
         self.pool = DaosPool(context)
         self.d_log = DaosLog(context)
-        self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
+        self.hostlist_servers = self.params.get("test_machines1",
+                                                '/run/hosts/')
+        self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -66,8 +67,9 @@ class InfoTests(Test):
             os.remove(self.hostfile)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_simple_query(self):
         """
@@ -111,7 +113,7 @@ class InfoTests(Test):
         #               .format(size, pool_info.pi_space))
 
         # number of targets
-        if pool_info.pi_ntargets != len(self.hostlist):
+        if pool_info.pi_ntargets != len(self.hostlist_servers):
             self.d_log.error("found number of targets in pool did not match "
                              "expected number, 1. num targets: "
                              "{0}".format(pool_info.pi_ntargets))

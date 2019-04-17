@@ -51,8 +51,8 @@ class BadQueryTest(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
 
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
 
         server_group = self.params.get("server_group",
@@ -60,13 +60,13 @@ class BadQueryTest(Test):
                                        'daos_server')
 
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile, server_group, self.basepath)
 
     def tearDown(self):
         if self.agent_sessions:
-            agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist)
+            agent_utils.stop_agent(self.hostlist_servers, self.agent_sessions)
+        server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_query(self):
         """

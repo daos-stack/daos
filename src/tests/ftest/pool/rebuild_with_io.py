@@ -64,12 +64,13 @@ class RebuildWithIO(TestWithoutServers):
         server_group = self.params.get("server_group", '/server/',
                                        'daos_server')
 
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        hostfile = write_host_file.write_host_file(self.hostlist, self.workdir)
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        hostfile = write_host_file.write_host_file(self.hostlist_servers,
+                                                   self.workdir)
 
         try:
             self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                        self.hostlist)
+                                                        self.hostlist_servers)
             server_utils.run_server(hostfile, server_group, self.basepath)
 
             # use the uid/gid of the user running the test, these should
@@ -150,11 +151,12 @@ class RebuildWithIO(TestWithoutServers):
         finally:
             # wait for the I/O process to finish
             try:
-                server_utils.stop_server(hosts=self.hostlist)
+                server_utils.stop_server(hosts=self.hostlist_servers)
                 os.remove(hostfile)
                 # really make sure everything is gone
-                check_for_pool.cleanup_pools(self.hostlist)
+                check_for_pool.cleanup_pools(self.hostlist_servers)
             finally:
                 if self.agent_sessions:
-                    agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-                server_utils.kill_server(self.hostlist)
+                    agent_utils.stop_agent(self.hostlist_servers,
+                                           self.agent_sessions)
+                server_utils.kill_server(self.hostlist_servers)

@@ -51,7 +51,7 @@ class DaosCoreTest(TestWithServers):
                 new_logfile = os.path.join(dirname, self.subtest_name + "_" + \
                                                     filename)
                 # rename on each of the servers
-                for host in self.hostlist:
+                for host in self.hostlist_servers:
                     subprocess.check_call(['ssh', host,
                                            '[ -f \"{0}\" ] && '
                                            '    mv \"{0}\" '

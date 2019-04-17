@@ -57,8 +57,8 @@ class Permission(Test):
 
         # getting hostfile
         self.hostfile = None
-        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
+        self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
         print ("Host file is: {}".format(self.hostfile))
 
@@ -66,7 +66,7 @@ class Permission(Test):
 
         # starting server
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
     def tearDown(self):
@@ -76,8 +76,9 @@ class Permission(Test):
         finally:
             # stop servers
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_connectpermission(self):
         """

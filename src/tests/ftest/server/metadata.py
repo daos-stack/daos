@@ -102,7 +102,7 @@ class ObjectMetadata(Test):
     def setUp(self):
         self.agent_sessions = None
         self.pool = None
-        self.hostlist = None
+        self.hostlist_servers = None
         self.hostfile_clients = None
         self.hostfile = None
         self.out_queue = None
@@ -117,14 +117,14 @@ class ObjectMetadata(Test):
                                             'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
-        self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
+        self.hostlist_servers = self.params.get("servers", '/run/hosts/*')
+        self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
         self.hostfile_clients = write_host_file.write_host_file(
             self.hostlist_clients, self.workdir)
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist,
+                                                    self.hostlist_servers,
                                                     self.hostlist_clients)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
@@ -147,7 +147,7 @@ class ObjectMetadata(Test):
             if self.agent_sessions:
                 agent_utils.stop_agent(self.hostlist_clients,
                                        self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
@@ -269,10 +269,10 @@ class ObjectMetadata(Test):
         #Server Restart
         if self.agent_sessions:
             agent_utils.stop_agent(self.hostlist_clients, self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist)
+        server_utils.stop_server(hosts=self.hostlist_servers)
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_clients,
-                                                    self.hostlist)
+                                                    self.hostlist_servers)
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
         #Read IOR with verification with same number of threads
