@@ -105,10 +105,17 @@ cleanup:
 int
 main(int argc, char **argv)
 {
-	struct dfuse_info	*dfuse_info;
+	struct dfuse_info	*dfuse_info = NULL;
 	struct dfuse_data	*dfuse_fs;
+	d_rank_list_t		*svcl;
+	uuid_t			pool_uuid;
+	uuid_t			co_uuid;
+	daos_pool_info_t	pool_info;
+	daos_cont_info_t	co_info;
+	daos_handle_t		poh;
+	daos_handle_t		coh;
 	char			c;
-	int			ret;
+	int			ret = -DER_SUCCESS;
 	int			rc;
 
 	struct option long_options[] = {
@@ -130,7 +137,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
-		D_GOTO(shutdown_log, ret = -DER_NOMEM);
+		D_GOTO(out, ret = -DER_NOMEM);
 
 	dfuse_fs = &dfuse_info->fsi_dfd;
 	dfuse_fs->threaded = true;
@@ -187,41 +194,77 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
+	if (uuid_parse(dfuse_fs->pool, pool_uuid) < 0) {
+		DFUSE_LOG_ERROR("Invalid pool uuid");
+		D_GOTO(out, ret = -DER_INVAL);
+	}
+
+	if (uuid_parse(dfuse_fs->cont, co_uuid) < 0) {
+		DFUSE_LOG_ERROR("Invalid container uuid");
+		D_GOTO(out, ret = -DER_INVAL);
+	}
+
+	svcl = daos_rank_list_parse(dfuse_fs->svcl, ":");
+	if (svcl == NULL) {
+		DFUSE_LOG_ERROR("Invalid pool service rank list");
+		D_GOTO(out, ret = -DER_INVAL);
+	}
+
 	rc = daos_init();
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(shutdown_log, ret = rc);
+		D_GOTO(out, ret = rc);
+	}
+
+	/** Connect to DAOS pool */
+	rc = daos_pool_connect(pool_uuid, dfuse_fs->group, svcl, DAOS_PC_RW,
+			       &poh, &pool_info, NULL);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+		D_GOTO(out, 0);
+	}
+
+	/** Try to open the DAOS container first (the mountpoint) */
+	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	/* If NOEXIST we create it */
+	if (rc == -DER_NONEXIST) {
+		rc = daos_cont_create(poh, co_uuid, NULL, NULL);
+		if (rc == 0) {
+			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW,
+					    &coh, &co_info, NULL);
+		}
+	}
+	if (rc) {
+		DFUSE_LOG_ERROR("Failed container open (%d)", rc);
+		D_GOTO(out_pool, 0);
+	}
+
+	rc = dfs_mount(poh, coh, O_RDWR, &dfuse_info->fsi_dfs);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+		D_GOTO(out_cont, 0);
 	}
 
 	rc = dfuse_post_start(dfuse_info);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(shutdown_log, ret = rc);
+		D_GOTO(out_cont, ret = rc);
 	}
 
 	dfuse_flush_fuse(dfuse_info->fsi_handle);
 
-	ret = 0;
+	ret = dfuse_deregister_fuse(dfuse_info->fsi_handle);
 
-	rc = dfuse_deregister_fuse(dfuse_info->fsi_handle);
-	if (rc)
-		ret = 1;
 	fuse_session_destroy(dfuse_info->fsi_session);
 
-
-	DFUSE_TRA_INFO(dfuse_info, "Exiting with status %d", ret);
-
-	DFUSE_TRA_DOWN(dfuse_info);
-
-	D_FREE(dfuse_info);
-
-	return ret;
-
-shutdown_log:
+out_cont:
+	daos_cont_close(coh, NULL);
+out_pool:
+	daos_pool_disconnect(poh, NULL);
+out:
 
 	DFUSE_TRA_DOWN(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	D_FREE(dfuse_info);
 
-out:
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.

@@ -30,6 +30,9 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
+#include <daos/common.h>
+#include "daos_fs.h"
+
 #include "dfuse_gah.h"
 #include "dfuse_fs.h"
 #include "dfuse_da.h"
@@ -51,6 +54,7 @@ struct dfuse_info {
 	struct fuse_session		*fsi_session;
 	struct dfuse_projection_info	*fsi_handle;
 	struct dfuse_data		fsi_dfd;
+	dfs_t				*fsi_dfs;
 };
 
 bool
