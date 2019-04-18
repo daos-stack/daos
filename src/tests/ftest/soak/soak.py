@@ -164,7 +164,7 @@ class Soak(Test):
                                                 '/run/hosts/test_machines/*')
         filename = write_host_file.write_host_file(self.hostlist_servers,
                                                    self.workdir)
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         print("Servers {} group {} basepath {}".format(self.hostlist_servers,
                                                        self.server_group,
