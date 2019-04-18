@@ -80,7 +80,7 @@ func agentMain() error {
 	log.Debugf("Found %d environment variable overrides", res)
 
 	// Override configuration with any commandline values given
-	err = config.ApplyCmdLineOverrides(opts.RuntimeDir, opts.LogFile) 
+	err = config.ApplyCmdLineOverrides(opts.RuntimeDir, opts.LogFile)
 	if err != nil {
 		log.Errorf("Failed to apply command line overrides %s", err)
 		return err
