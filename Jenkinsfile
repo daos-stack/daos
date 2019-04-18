@@ -47,7 +47,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *' : '')
+        cron(env.BRANCH_NAME == 'weekly-test' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -61,7 +61,7 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
-        timestamps ()
+        timeout(time: 24, unit: 'HOURS')
     }
 
     stages {
@@ -69,56 +69,6 @@ pipeline {
             when { changeRequest() }
             steps {
                 cancelPreviousBuilds()
-            }
-        }
-        stage('Pre-build') {
-            parallel {
-                stage('checkpatch') {
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        checkPatch user: GITHUB_USER_USR,
-                                   password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]"
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        /* temporarily moved into stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                    }
-                }
             }
         }
         stage('Build') {
@@ -137,6 +87,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   scm: [url: 'https://github.com/daos-stack/daos.git',
+                                         branch: "master"],
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
@@ -216,511 +168,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 with Clang') {
-                    when { beforeAgent true
-                           branch 'master' }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-centos7-clang'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-centos7-clang",
-                                             tools: [ clang(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-centos7-clang'
-                            archiveArtifacts artifacts: 'config.log-centos7-clang'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-centos7-clang'
-                            archiveArtifacts artifacts: 'config.log-centos7-clang'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on Ubuntu 18.04') {
-                    when { beforeAgent true
-                           branch 'master' }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.ubuntu.18.04'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-ubuntu18.04-gcc'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-ubuntu18",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-ubuntu18.04-gcc'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-ubuntu18.04-gcc'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on Ubuntu 18.04 with Clang') {
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.ubuntu.18.04'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-ubuntu18.04-clag'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-ubuntu18-clang",
-                                             tools: [ clang(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-ubuntu18.04-clang'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-ubuntu18.04-clang'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on SLES 12.3') {
-                    when { beforeAgent true
-                           environment name: 'SLES12_3_DOCKER', value: 'true' }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.sles.12.3'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-sles12.3 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-sles12.3-gcc'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                /* Stack dumping for sles12sp3/leap42.3:
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-sles12.3",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                                */
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-sles12.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-sles12.3-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-sles12.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-sles12.3-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on Leap 42.3') {
-                    when { beforeAgent true
-                           environment name: 'LEAP42_3_DOCKER', value: 'true' }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.42.3'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap42.3 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-leap42.3-gcc'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                /* Stack dumping for sles12sp3/leap42.3:
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap42.3",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                                */
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-leap42.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap42.3-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-leap42.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap42.3-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on Leap 15') {
-                    when { beforeAgent true
-                           branch 'master' }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-leap15-gcc'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-leap15-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-leap15-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Clang') {
-                    when { beforeAgent true
-                           branch 'master' }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-leap15-clang'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15-clang",
-                                             tools: [ clang(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-leap15-clang'
-                            archiveArtifacts artifacts: 'config.log-leap15-clang'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-leap15-clang'
-                            archiveArtifacts artifacts: 'config.log-leap15-clang'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Intel-C') {
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
-                            args '-v /opt/intel:/opt/intel'
-                        }
-                    }
-                    steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   failure_artifacts: 'config.log-leap15-icc'
-                    }
-                    post {
-                        always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15-intelc",
-                                             tools: [ intel(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unstable {
-                            sh 'mv config.log config.log-leap15-intelc'
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
-                        }
-                        failure {
-                            sh 'mv config.log config.log-leap15-intelc'
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc'
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                            */
-                        }
-                    }
-                }
             }
         }
         stage('Unit Test') {
@@ -733,6 +180,9 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: "master",
+                                    withSubmodules: true
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            # JENKINS-52781 tar function is breaking symlinks
@@ -822,11 +272,14 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: "master",
+                                    withSubmodules: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=regression,vm
+                                               test_tag=all
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
