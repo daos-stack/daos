@@ -1013,6 +1013,21 @@ class PreReqComponent(object):
             env = self.__env.Clone()
             self.require(env, comp)
 
+    def modify_prefix(self, comp_def, env):
+        """Overwrite the prefix in cases where we may be using the default"""
+        prebuilt1 = os.path.join(env.subst("$PREBUILT_PREFIX"),
+                                 comp_def.name)
+        opt_name = "%s_PREBUILT" % comp_def.name.upper()
+        prebuilt2 = self.__env.get(opt_name)
+
+        if comp_def.src_path and \
+           not os.path.exists(comp_def.src_path) and \
+           not os.path.exists(prebuilt1) and \
+           not os.path.exists(prebuilt2):
+            self.save_component_prefix('%s_PREFIX' %
+                                       comp_def.name.upper(),
+                                       "/usr")
+
     def require(self,
                 env,
                 *comps,
@@ -1059,11 +1074,7 @@ class PreReqComponent(object):
                     self.__required[comp] = False
                     changes = True
                 else:
-                    if comp_def.src_path and \
-                       not os.path.exists(comp_def.src_path):
-                        self.save_component_prefix('%s_PREFIX' %
-                                                   comp_def.name.upper(),
-                                                   "/usr")
+                    self.modify_prefix(comp_def, env)
             except Exception as error:
                 # Save the exception in case the component is requested again
                 self.__errors[comp] = error
