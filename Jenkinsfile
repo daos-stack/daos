@@ -154,6 +154,7 @@ pipeline {
                                                  build/src/iosrv/tests/drpc_listener_tests,
                                                  build/src/security/tests/cli_security_tests,
                                                  build/src/vos/vea/tests/vea_ut,
+                                                 build/src/common/tests/umem_test,
                                                  scons_local/build_info/**,
                                                  src/common/tests/btree.sh,
                                                  src/control/run_go_tests.sh,

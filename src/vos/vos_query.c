@@ -138,8 +138,8 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 	recx->rx_idx = 0;
 	recx->rx_nr = 0;
 
-	rc = evt_open_inplace(query->qt_recx_root, query->qt_uma,
-			      query->qt_coh, query->qt_vea_info, &toh);
+	rc = evt_open(query->qt_recx_root, query->qt_uma, query->qt_coh,
+		      query->qt_vea_info, &toh);
 	if (rc != 0)
 		return rc;
 

@@ -40,14 +40,6 @@ enum {
 	EVT_UMEM_DESC	= (EVT_UMEM_TYPE + 2),
 };
 
-struct evt_node;
-struct evt_root;
-struct evt_desc;
-
-TMMID_DECLARE(struct evt_root, EVT_UMEM_ROOT);
-TMMID_DECLARE(struct evt_node, EVT_UMEM_NODE);
-TMMID_DECLARE(struct evt_desc, EVT_UMEM_DESC);
-
 /** Valid tree order */
 enum {
 	EVT_ORDER_MIN			= 4,
@@ -384,21 +376,6 @@ struct evt_policy_ops {
 };
 
 /**
- * Create a new tree and open it.
- *
- * \param feats		[IN]	Feature bits, see \a evt_feats
- * \param order		[IN]	Tree order
- * \param uma		[IN]	Memory class attributes
- * \param root_mmidp	[OUT]	The returned tree root mmid
- * \param toh		[OUT]	The returned tree open handle
- *
- * \return		0	Success
- *			-ve	error code
- */
-int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       TMMID(struct evt_root) *root_mmidp, daos_handle_t *toh);
-
-/**
  * Create a new tree in the specified address of root \a root, and open it.
  *
  * \param feats		[IN]	Feature bits, see \a evt_feats
@@ -411,21 +388,8 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  * \return		0	Success
  *			-ve	error code
  */
-int evt_create_inplace(uint64_t feats, unsigned int order,
-		       struct umem_attr *uma, struct evt_root *root,
-		       daos_handle_t coh, daos_handle_t *toh);
-/**
- * Open a tree by its memory ID \a root_mmid
- *
- * \param root_mmid	[IN]	Memory ID of the tree root
- * \param uma		[IN]	Memory class attributes
- * \param toh		[OUT]	The returned tree open handle
- *
- * \return		0	Success
- *			-ve	error code
- */
-int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
-	     daos_handle_t *toh);
+int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
+	       struct evt_root *root, daos_handle_t coh, daos_handle_t *toh);
 /**
  * Open a tree by its root address \a root
  *
@@ -438,8 +402,8 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  * \return		0	Success
  *			-ve	error code
  */
-int evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		     daos_handle_t coh, void *info, daos_handle_t *toh);
+int evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
+	     void *info, daos_handle_t *toh);
 
 /**
  * Close a opened tree

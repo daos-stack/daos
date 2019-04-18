@@ -60,7 +60,7 @@ struct evt_iterator {
 
 struct evt_trace {
 	/** the current node offset */
-	uint64_t			tr_node;
+	umem_off_t			tr_node;
 	/** child position of the searching trace */
 	unsigned int			tr_at;
 	/** Indicates whether node has been added to tx */
@@ -70,8 +70,8 @@ struct evt_trace {
 struct evt_context {
 	/** mapped address of the tree root */
 	struct evt_root			*tc_root;
-	/** memory ID of the tree root */
-	TMMID(struct evt_root)		 tc_root_mmid;
+	/** memory offset of the tree root */
+	umem_off_t			 tc_root_off;
 	/** magic number to identify invalid tree open handle */
 	unsigned int			 tc_magic;
 	/** refcount on the context */
@@ -105,35 +105,17 @@ struct evt_context {
 	daos_handle_t			 tc_coh;
 };
 
-#define EVT_NODE_NULL			TMMID_NULL(struct evt_node)
-#define EVT_ROOT_NULL			TMMID_NULL(struct evt_root)
+#define EVT_NODE_NULL			UMOFF_NULL
+#define EVT_ROOT_NULL			UMOFF_NULL
 
 #define evt_umm(tcx)			(&(tcx)->tc_umm)
-#define evt_tmmid2ptr(tcx, tmmid)	umem_id2ptr_typed(evt_umm(tcx), tmmid)
 #define evt_has_tx(tcx)			umem_has_tx(evt_umm(tcx))
 
-#define evt_off2mmid(tcx, offset)			\
-(							\
-{							\
-	umem_id_t	__ummid;			\
-							\
-	__ummid.pool_uuid_lo = (tcx)->tc_pmempool_uuid;	\
-	__ummid.off = (offset);				\
-	__ummid;					\
-}							\
-)
-
-#define evt_off2tmmid(tcx, offset, type)		\
-	umem_id_u2t(evt_off2mmid(tcx, offset), type)
+#define evt_off2mmid(tcx, offset)	\
+	umem_off2id(evt_umm(tcx), offset)
 
 #define evt_off2ptr(tcx, offset)			\
-	umem_id2ptr(evt_umm(tcx), evt_off2mmid(tcx, offset))
-
-#define evt_off2nodemmid(tcx, offset)			\
-	evt_off2tmmid(tcx, offset, struct evt_node)
-
-#define evt_off2descmmid(tcx, offset)			\
-	evt_off2tmmid(tcx, offset, struct evt_desc)
+	umem_off2ptr(evt_umm(tcx), offset)
 
 #define EVT_NODE_MAGIC 0xfefef00d
 #define EVT_DESC_MAGIC 0xbeefdead
@@ -143,7 +125,7 @@ struct evt_context {
  * \param[IN]	offset	The offset in the umem pool
  */
 static inline struct evt_node *
-evt_off2node(struct evt_context *tcx, uint64_t offset)
+evt_off2node(struct evt_context *tcx, umem_off_t offset)
 {
 	struct evt_node *node;
 
@@ -158,7 +140,7 @@ evt_off2node(struct evt_context *tcx, uint64_t offset)
  * \param[IN]	offset	The offset in the umem pool
  */
 static inline struct evt_desc *
-evt_off2desc(struct evt_context *tcx, uint64_t offset)
+evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 {
 	struct evt_desc *desc;
 
@@ -406,7 +388,7 @@ struct evt_rect *evt_node_rect_at(struct evt_context *tcx,
  * Returns the rectangle at the index
  */
 static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
-						  uint64_t nd_off,
+						  umem_off_t nd_off,
 						  unsigned int at)
 {
 	struct evt_node	*node;
