@@ -114,18 +114,19 @@ static int
 oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	     daos_iov_t *val_iov, struct btr_record *rec)
 {
-	struct vos_obj_df	 *obj;
-	struct oi_key		 *key;
-	struct oi_hkey		 *hkey;
-	TMMID(struct vos_obj_df)  obj_mmid;
-	int			  rc;
+	struct vos_obj_df	*obj;
+	struct oi_key		*key;
+	struct oi_hkey		*hkey;
+	umem_off_t		 obj_off;
+	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj_df);
-	if (TMMID_IS_NULL(obj_mmid))
+	obj_off = umem_zalloc_off(&tins->ti_umm, sizeof(struct vos_obj_df));
+	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOMEM;
 
-	rc = vos_dtx_register_record(&tins->ti_umm, umem_id_t2u(obj_mmid),
+	rc = vos_dtx_register_record(&tins->ti_umm,
+				     umem_off2id(&tins->ti_umm, obj_off),
 				     DTX_RT_OBJ, 0);
 	if (rc != 0)
 		/* It is unnecessary to free the PMEM that will be dropped
@@ -133,7 +134,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		 */
 		return rc;
 
-	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+	obj = umem_off2ptr(&tins->ti_umm, obj_off);
 
 	D_ASSERT(key_iov->iov_len == sizeof(struct oi_key));
 	key = key_iov->iov_buf;
@@ -150,25 +151,24 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	}
 
 	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
-	rec->rec_mmid = umem_id_t2u(obj_mmid);
+	rec->rec_off = obj_off;
 
-	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "UMMID_PF"\n",
-		DP_UOID(obj->vo_id), UMMID_P(rec->rec_mmid));
+	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
+		DP_UOID(obj->vo_id), rec->rec_off);
 	return 0;
 }
 
 static int
 oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct umem_instance	 *umm = &tins->ti_umm;
-	struct vos_obj_df	 *obj;
-	TMMID(struct vos_obj_df)  obj_mmid;
-	int			  rc = 0;
+	struct umem_instance	*umm = &tins->ti_umm;
+	struct vos_obj_df	*obj;
+	int			 rc = 0;
 
-	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj_df);
-	obj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
-	vos_dtx_degister_record(umm, obj->vo_dtx, rec->rec_mmid, DTX_RT_OBJ);
+	vos_dtx_degister_record(umm, obj->vo_dtx,
+				umem_off2id(umm, rec->rec_off), DTX_RT_OBJ);
 	if (obj->vo_dtx_shares > 0) {
 		D_ERROR("There are some unknown DTXs (%d) share the obj rec\n",
 			obj->vo_dtx_shares);
@@ -188,7 +188,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		else
 			dbtree_destroy(toh);
 	}
-	umem_free_typed(umm, obj_mmid);
+	umem_free_off(umm, rec->rec_off);
 	return rc;
 }
 
@@ -198,9 +198,9 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_obj_df	*obj;
 
-	obj = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	D_DEBUG(DB_TRACE, "fetch "DF_UOID" rec "UMMID_PF"\n",
-		DP_UOID(obj->vo_id), UMMID_P(rec->rec_mmid));
+	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	D_DEBUG(DB_TRACE, "fetch "DF_UOID" rec "DF_X64"\n",
+		DP_UOID(obj->vo_id), rec->rec_off);
 
 	D_ASSERT(val_iov != NULL);
 	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
@@ -221,9 +221,11 @@ oi_check_availability(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_obj_df	*obj;
 
-	obj = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  obj->vo_dtx, rec->rec_mmid,
+					  obj->vo_dtx,
+					  umem_off2id(&tins->ti_umm,
+						      rec->rec_off),
 					  intent, DTX_RT_OBJ);
 }
 

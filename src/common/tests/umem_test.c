@@ -201,24 +201,41 @@ test_alloc(void **state)
 	int			 rc;
 
 	rc = utest_tx_begin(arg->ta_utx);
-	assert_int_equal(rc, 0);
+	if (rc != 0)
+		goto done;
 
 	umoff = umem_zalloc_off(umm, 4);
-	assert_false(UMOFF_IS_NULL(umoff));
+	if (UMOFF_IS_NULL(umoff)) {
+		print_message("umoff unexpectedly NULL\n");
+		rc = 1;
+		goto end;
+	}
 
 	mmid = umem_off2id(umm, umoff);
-	assert_false(UMMID_IS_NULL(mmid));
+	if (UMMID_IS_NULL(mmid)) {
+		print_message("mmid unexpectedly NULL\n");
+		rc = 1;
+		goto end;
+	}
 
 	value1 = umem_off2ptr(umm, umoff);
 	value2 = umem_id2ptr(umm, mmid);
-	assert_ptr_equal(value1, value2);
+	if (value1 != value2) {
+		print_message("different values returned for umoff and mmid\n");
+		rc = 1;
+		goto end;
+	}
 
-	assert_int_equal(*value1, 0);
+	if (*value1 != 0) {
+		print_message("Bad value for allocated umoff\n");
+		rc = 1;
+		goto end;
+	}
 
 	rc = umem_free(umm, mmid);
-	assert_int_equal(rc, 0);
-
+end:
 	rc = utest_tx_end(arg->ta_utx, rc);
+done:
 	assert_int_equal(rc, 0);
 }
 

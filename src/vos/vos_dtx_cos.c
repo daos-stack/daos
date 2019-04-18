@@ -147,7 +147,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		dcr->dcr_update_count = 1;
 	}
 
-	rec->rec_mmid = umem_ptr2id(&tins->ti_umm, dcr);
+	rec->rec_off = umem_ptr2off(&tins->ti_umm, dcr);
 	return 0;
 }
 
@@ -160,7 +160,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	dcr = (struct dtx_cos_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_update_list,
 				   dcrc_link) {
 		d_list_del(&dcrc->dcrc_link);
@@ -188,7 +188,7 @@ dtx_cos_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(val_iov != NULL);
 
-	dcr = (struct dtx_cos_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	daos_iov_set(val_iov, dcr, sizeof(struct dtx_cos_rec));
 
 	return 0;
@@ -204,7 +204,7 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	dcr = (struct dtx_cos_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rbund = (struct dtx_cos_rec_bundle *)val->iov_buf;
 
 	D_ALLOC_PTR(dcrc);

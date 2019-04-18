@@ -661,13 +661,13 @@ vos_size_round(uint64_t size)
 static inline struct vos_krec_df *
 vos_rec2krec(struct btr_instance *tins, struct btr_record *rec)
 {
-	return (struct vos_krec_df *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return (struct vos_krec_df *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 }
 
 static inline struct vos_irec_df *
 vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 {
-	return (struct vos_irec_df *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return (struct vos_irec_df *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 }
 
 static inline uint64_t

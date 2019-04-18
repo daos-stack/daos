@@ -335,6 +335,21 @@ umem_off2ptr(const struct umem_instance *umm, umem_off_t umoff)
 	return (void *)(umm->umm_base + umoff);
 }
 
+/** Convert pointer to an offset.
+ *
+ *  \param	umm[IN]		The umem pool instance
+ *  \param	ptr[in]		The direct pointer to convert
+ *
+ *  Returns the umem offset
+ */
+static inline umem_off_t
+umem_ptr2off(const struct umem_instance *umm, void *ptr)
+{
+	if (ptr == NULL)
+		return UMOFF_NULL;
+
+	return (uint64_t)ptr - umm->umm_base;
+}
 /**
  * Get pmemobj pool uuid
  *
@@ -466,6 +481,9 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 #define umem_tx_add_mmid_typed(umm, tmmid)				\
 	umem_tx_add_typed(umm, tmmid, sizeof(*(tmmid)._type))
 
+#define umem_tx_add_off(umm, off, size)					\
+	umem_tx_add(umm, umem_off2id(umm, off), size)
+
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
@@ -515,6 +533,10 @@ umem_id_equal(struct umem_instance *umm, umem_id_t ummid_1, umem_id_t ummid_2)
 }
 #define umem_id_equal_typed(umm, tmmid_1, tmmid_2)			\
 	umem_id_equal(umm, (tmmid_1).oid, (tmmid_2).oid)
+
+#define umem_id_equal_off(umm, off_1, off_2)				\
+	umem_id_equal(umm, umem_off2id(umm, off_1), umem_off2id(umm, off_2))
+
 
 #define umem_id_u2t(ummid, type)					\
 ({									\

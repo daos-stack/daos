@@ -343,7 +343,7 @@ dtx_cf_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	d_list_add_tail(&drr->drr_link, dcrb->dcrb_head);
 	++(*dcrb->dcrb_length);
 
-	rec->rec_mmid = umem_ptr2id(&tins->ti_umm, drr);
+	rec->rec_off = umem_ptr2off(&tins->ti_umm, drr);
 	return 0;
 }
 
@@ -354,7 +354,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	drr = (struct dtx_req_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_list_del(&drr->drr_link);
 	D_FREE(drr->drr_dti);
 	D_FREE_PTR(drr);
@@ -377,7 +377,7 @@ dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
 
-	drr = (struct dtx_req_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	dcrb = (struct dtx_cf_rec_bundle *)val->iov_buf;
 	drr->drr_dti[drr->drr_count++] = *dcrb->dcrb_dti;
 
