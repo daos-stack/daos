@@ -910,17 +910,13 @@ struct obj_auxi_args {
 };
 
 static int
-obj_retry_cb(tse_task_t *task, struct dc_object *obj, bool io_retry,
+obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
 	int		  result = task->dt_result;
 	int		  rc;
-
-	/** if succeed or no retry, leave */
-	if (!obj_retry_error(result) && !io_retry)
-		return result;
 
 	if (result == -DER_INPROGRESS)
 		obj_auxi->retry_with_leader = 1;
@@ -930,11 +926,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj, bool io_retry,
 		rc = obj_pool_query_task(sched, obj, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
-	} else {
-		D_ASSERT(io_retry);
 	}
 
-	if (io_retry) {
+	if (obj_auxi->io_retry) {
 		/* Let's reset task result before retry */
 		rc = dc_task_resched(task);
 		if (rc != 0) {
@@ -953,11 +947,11 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj, bool io_retry,
 	}
 
 	D_DEBUG(DB_IO, "Retrying task=%p for err=%d, io_retry=%d\n",
-		 task, result, io_retry);
+		 task, result, obj_auxi->io_retry);
 
 	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
-		dc_task_schedule(pool_task, io_retry);
+		dc_task_schedule(pool_task, obj_auxi->io_retry);
 
 	return 0;
 err:
@@ -966,7 +960,7 @@ err:
 
 	task->dt_result = result; /* restore the orignal error */
 	D_ERROR("Failed to retry task=%p(err=%d), io_retry=%d, rc %d.\n",
-		task, result, io_retry, rc);
+		task, result, obj_auxi->io_retry, rc);
 	return rc;
 }
 
@@ -1074,10 +1068,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 	struct obj_auxi_args	*obj_auxi;
 	d_list_t		*head = NULL;
 	bool			 pm_stale = false;
-	bool			 io_retry = false;
 
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
 	obj_auxi->retry_with_leader = 0;
+	obj_auxi->io_retry = 0;
 	switch (obj_auxi->opc) {
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		arg = data;
@@ -1117,7 +1111,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 		head = &obj_auxi->shard_task_head;
 		D_ASSERT(!d_list_empty(head));
 		obj_auxi->result = 0;
-		obj_auxi->io_retry = 0;
 		tse_task_list_traverse(head, shard_result_process, obj_auxi);
 		/* for stale pm version, retry the obj IO at there will check
 		 * if need to retry shard IO.
@@ -1136,15 +1129,15 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	if (obj_auxi->map_ver_reply > obj_auxi->map_ver_req)
 		pm_stale = true;
-	if (obj_retry_error(task->dt_result) || obj_auxi->io_retry)
-		io_retry = true;
+	if (obj_retry_error(task->dt_result))
+		obj_auxi->io_retry = 1;
 
-	if (pm_stale || io_retry)
-		obj_retry_cb(task, obj, io_retry, obj_auxi);
+	if (pm_stale || obj_auxi->io_retry)
+		obj_retry_cb(task, obj, obj_auxi);
 	else if (task->dt_result == 0)
 		task->dt_result = obj_auxi->result;
 
-	if (!io_retry) {
+	if (!obj_auxi->io_retry) {
 		D_FREE(obj_auxi->fw_shard_tgts);
 		obj_auxi->fw_cnt = 0;
 		if (head != NULL) {
