@@ -29,8 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/log"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
-	"os"
-	"strings"
 )
 
 type cliOptions struct {
