@@ -500,7 +500,7 @@ The following diagram illustrates the overall VOS layout and where checksums wil
 ![../../doc/graph/Fig_021.png](../../doc/graph/Fig_021.png "How checksum fits into the VOS Layout")
 
 
-###Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
+### Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
 
 On an update, the checksum(s) are part of the I/O Descriptor.
 Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert) the checksum(s) are copied to the end of the persistent structure.
