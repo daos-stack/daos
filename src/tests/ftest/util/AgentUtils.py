@@ -127,31 +127,32 @@ def run_agent(basepath, server_list, client_list=None):
         sessions[client] = p
 
     # double check agent launched successfully
-    file_desc = sessions[client].stderr.fileno()
-    flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
-    fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-    timeout = 5
-    start_time = time.time()
-    result = 0
-    pattern = "Starting daos_agent"
-    expected_data = ""
-    while True:
-        output = ""
-        try:
-            output = sessions[client].stderr.read()
-        except IOError as excpn:
-            if excpn.errno != errno.EAGAIN:
-                raise excpn
-            continue
-        match = re.findall(pattern, output)
-        expected_data += output
-        result += len(match)
-        if not output or time.time() - start_time > timeout:
-            print("<AGENT>: {}".format(expected_data))
-            raise AgentFailed("DAOS Agent didn't start!")
-        break
-    print("<AGENT> agent started and took %s seconds to start" % \
-            (time.time() - start_time))
+    for client in client_list:
+        file_desc = sessions[client].stderr.fileno()
+        flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
+        fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        timeout = 5
+        start_time = time.time()
+        result = 0
+        pattern = "Starting daos_agent"
+        expected_data = ""
+        while True:
+            output = ""
+            try:
+                output = sessions[client].stderr.read()
+            except IOError as excpn:
+                if excpn.errno != errno.EAGAIN:
+                    raise excpn
+                continue
+            match = re.findall(pattern, output)
+            expected_data += output
+            result += len(match)
+            if not output or time.time() - start_time > timeout:
+                print("<AGENT>: {}".format(expected_data))
+                raise AgentFailed("DAOS Agent didn't start!")
+            break
+        print("<AGENT> agent started on node {0} and took {1} seconds to "
+              "start".format(client, (time.time() - start_time)))
 
     return sessions
 # pylint: enable=too-many-locals
