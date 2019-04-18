@@ -118,7 +118,7 @@ The sudoers file can be accessed with command `visudo` and permissions can be gr
 linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 ```
 
-See `daos_server prep-nvme --help` for usage.
+See `daos_server storage prep-nvme --help` for usage.
 
 ### storage list
 

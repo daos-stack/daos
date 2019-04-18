@@ -102,8 +102,8 @@ func (s *ListStorCmd) Execute(args []string) (errs error) {
 // PrepNvmeCmd is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
 type PrepNvmeCmd struct {
-	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Specify PCI devices to be unbound from Kernel driver and used with SPDK (default is all PCI devices)"`
-	NrHugepages int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
+	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Specify PCI devices to be unbound from Kernel driver and used with SPDK (default is all PCI devices). Must be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted."`
+	NrHugepages int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
 	TargetUser  string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	Reset       bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
 }
@@ -136,14 +136,8 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "SPDK setup reset")
 	}
 	if !p.Reset {
-		if p.PCIWhiteList == "" {
-			if err := server.nvme.spdk.prepAll(p.NrHugepages, tUsr); err != nil {
-				return errors.WithMessage(err, "SPDK setup")
-			}
-		} else {
-			if err := server.nvme.spdk.prep(p.NrHugepages, tUsr, p.PCIWhiteList); err != nil {
-				return errors.WithMessage(err, "SPDK setup")
-			}
+		if err := server.nvme.spdk.prep(p.NrHugepages, tUsr, p.PCIWhiteList); err != nil {
+			return errors.WithMessage(err, "SPDK setup")
 		}
 	}
 
