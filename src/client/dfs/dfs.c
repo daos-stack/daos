@@ -600,6 +600,8 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return -DER_INVAL;
+	if (strlen(name) > DFS_MAX_PATH - 1)
+		return -DER_INVAL;
 	return 0;
 }
 
