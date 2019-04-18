@@ -88,6 +88,59 @@ void
 dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*ie;
+	struct dfuse_inode_entry	*inode = NULL;
+	mode_t				mode;
+	d_list_t			*rlink;
+	int rc;
+
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
+
+	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
+		D_GOTO(err, rc = EEXIST);
+	}
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	DFUSE_TRA_INFO(ie, "parent");
+
+	D_ALLOC_PTR(inode);
+	if (!inode) {
+		D_GOTO(out_defref, rc = ENOMEM);
+	}
+
+	rc = dfs_lookup(fs_handle->fsh_dfs,
+			name, O_RDONLY, &inode->obj, &mode);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %p %d",
+			       fs_handle->fsh_dfs, rc);
+		if (rc == -DER_NONEXIST) {
+			D_GOTO(out_defref, rc = ENOENT);
+		} else {
+			D_GOTO(out_defref, rc = EIO);
+		}
+	}
+
+	strncpy(inode->name, name, NAME_MAX);
+
+	DFUSE_TRA_ERROR(fs_handle, "unexpected success");
+	D_GOTO(out_defref, rc = EIO);
+	return;
+
+out_defref:
+	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	D_FREE(inode);
+}
+
+void
+dfuse_cb_lookup_old(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct TYPE_NAME		*desc = NULL;
 	int rc;
 

@@ -86,7 +86,6 @@ dfuse_register_fuse(struct dfuse_info *dfuse_info,
 		goto cleanup;
 	}
 	fs_handle->session = dfuse_info->fsi_session;
-	fs_handle->fsh_dfs = dfuse_info->fsi_dfs;
 
 	fuse_opt_free_args(args);
 

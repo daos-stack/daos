@@ -454,6 +454,8 @@ struct dfuse_inode_entry {
 	 */
 	struct stat	stat;
 
+	dfs_obj_t	*obj;
+
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
 	 * however may be incorrect at any point after that.  It may not

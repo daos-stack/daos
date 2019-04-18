@@ -488,6 +488,51 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
+	fs_handle->fsh_dfs = dfuse_info->fsi_dfs;
+	/* Create initial inode */
+	{
+		struct dfuse_inode_entry *inode;
+		mode_t          mode;
+		int rc;
+
+		D_ALLOC_PTR(inode);
+		if (!inode) {
+			D_GOTO(err, 0);
+		}
+
+		rc = dfs_lookup(fs_handle->fsh_dfs,
+				"/", O_RDONLY, &inode->obj, &mode);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %p %d",
+					fs_handle->fsh_dfs, rc);
+			D_GOTO(err, 0);
+		}
+
+		atomic_fetch_add(&inode->ie_ref, 1);
+
+		rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
+					rc);
+			D_GOTO(err, 0);
+		}
+
+		inode->stat.st_ino = 1;
+
+		/* stat */
+		rc = d_hash_rec_insert(&fs_handle->inode_ht,
+				       &inode->stat.st_ino,
+				       sizeof(inode->stat.st_ino),
+				       &inode->ie_htl,
+				       false);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
+					rc);
+			D_GOTO(err, 0);
+
+		}
+	}
+
 	if (!dfuse_register_fuse(dfuse_info,
 				 fuse_ops,
 				 &args,
@@ -500,6 +545,7 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 
 	return -DER_SUCCESS;
 err:
+	DFUSE_TRA_ERROR(fs_handle, "Failed");
 	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
 	D_FREE(fs_handle);

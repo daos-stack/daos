@@ -68,24 +68,9 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 	d_hash_rec_ndecref(&fs_handle->inode_ht, 2, rlink);
 }
 
-static bool
-ie_close_cb(struct dfuse_request *request)
-{
-	struct TYPE_NAME	*desc = CONTAINER(request);
-
-	DFUSE_TRA_DOWN(request);
-	dfuse_da_release(desc->request.fsh->close_da, desc);
-	return false;
-}
-
-static const struct dfuse_request_api api = {
-	.on_result	= ie_close_cb,
-};
-
 void ie_close(struct dfuse_projection_info *fs_handle,
 	      struct dfuse_inode_entry *ie)
 {
-	struct TYPE_NAME	*desc = NULL;
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
@@ -96,21 +81,8 @@ void ie_close(struct dfuse_projection_info *fs_handle,
 
 	drop_ino_ref(fs_handle, ie->parent);
 
-	DFUSE_REQ_INIT(desc, fs_handle, api, in, rc);
-	if (rc)
-		D_GOTO(err, 0);
-
-	DFUSE_TRA_UP(&desc->request, ie, "close_req");
-
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, 0);
-
-	DFUSE_TRA_DOWN(ie);
-	return;
-
-err:
-	DFUSE_TRA_DOWN(ie);
-	if (desc)
-		dfuse_da_release(fs_handle->close_da, desc);
+	rc = dfs_release(ie->obj);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(ie, "dfs_release failed: %d", rc);
+	}
 }

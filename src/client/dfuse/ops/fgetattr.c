@@ -49,35 +49,32 @@ static const struct dfuse_request_api getattr_api = {
 	.on_result	= dfuse_getattr_result_fn,
 };
 
-
 static int
 dfuse_getattr(struct dfuse_request *request, fuse_ino_t ino)
 {
-	struct stat	stat = {};
-	mode_t		mode;
-	dfs_obj_t	*obj;
-	int		rc;
+	struct dfuse_inode_entry	*ie;
+	d_list_t			*rlink;
+	struct stat			stat = {};
+	int				rc;
 
-	if (ino != 1) {
+	rlink = d_hash_rec_find(&request->fsh->inode_ht, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(request, "Failed to find inode %lu",
+				ino);
 		D_GOTO(err, rc = -DER_EXIST);
 	}
 
-	rc = dfs_lookup(request->fsh->fsh_dfs, "/", O_RDONLY, &obj, &mode);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
-	}
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	rc = dfs_ostat(request->fsh->fsh_dfs, obj, &stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
-	}
-
-	rc = dfs_release(obj);
+	rc = dfs_ostat(request->fsh->fsh_dfs, ie->obj, &stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
 	}
 
 	DFUSE_REPLY_ATTR(request, &stat);
+
+	d_hash_rec_decref(&request->fsh->inode_ht, rlink);
+
 	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
 
 err:
