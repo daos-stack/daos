@@ -56,18 +56,13 @@ extern bool	srv_io_dispatch;
 /** client object shard */
 struct dc_obj_shard {
 	/* Metadata for this shard */
-	struct daos_obj_shard_md do_md;
+	uint64_t		do_attr;
 	/** refcount */
 	unsigned int		do_ref;
-	/** number of partitions on the remote target */
-	int			do_part_nr;
-
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	/** list to the container */
-	d_list_t		do_co_list;
 	uint32_t		do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
@@ -79,6 +74,13 @@ struct dc_obj_shard {
 #define do_target_id	do_pl_shard.po_target
 #define do_fseq		do_pl_shard.po_fseq
 #define do_rebuilding	do_pl_shard.po_rebuilding
+
+/** client object layout */
+struct dc_obj_layout {
+	/** The reference for the shards that are opened (in-using). */
+	unsigned int		do_open_count;
+	struct dc_obj_shard	do_shards[0];
+};
 
 /** Client stack object */
 struct dc_object {
@@ -103,7 +105,7 @@ struct dc_object {
 	unsigned int		cob_version;
 	unsigned int		cob_shards_nr;
 	/** shard object ptrs */
-	struct dc_obj_shard	*cob_shards;
+	struct dc_obj_layout	*cob_shards;
 };
 
 static inline void
