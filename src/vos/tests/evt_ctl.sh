@@ -9,6 +9,15 @@ DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 #shellcheck disable=SC1090
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
+if [ -d "$DAOS_DIR/test_results" ]
+then
+    rm "$DAOS_DIR"/test_results/evt*.xml
+else
+    mkdir "$DAOS_DIR/test_results"
+fi
+export CMOCKA_MESSAGE_OUTPUT="xml"
+export CMOCKA_XML_FILE="$DAOS_DIR/test_results/%g.xml"
+echo "$CMOCKA_XML_FILE"
 
 cmd="$VCMD $EVT_CTL $* -C o:4"
 
