@@ -46,22 +46,6 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
 
-def set_nvme_mode(default_value_set, bdev, enabled=False):
-    """
-    Enable/Disable NVMe Mode.
-    NVMe is enabled by default in yaml file.So disable it for CI runs.
-    Args:
-     - default_value_set: Default dictionary value.
-     - bdev : Block device name.
-     - enabled: Set True/False for enabling NVMe, disabled by default.
-    """
-    if 'bdev_class' in default_value_set['servers'][0]:
-        if (default_value_set['servers'][0]['bdev_class'] == bdev and
-                not enabled):
-            del default_value_set['servers'][0]['bdev_class']
-    if enabled:
-        default_value_set['servers'][0]['bdev_class'] = bdev
-
 def create_server_yaml(basepath):
     """
     This function is to create DAOS server configuration YAML file
@@ -107,8 +91,11 @@ def create_server_yaml(basepath):
             elif key in default_value_set:
                 default_value_set[key] = new_value_set['server_config'][key]
 
-    #Disable NVMe from baseline data/daos_server_baseline.yml
-    set_nvme_mode(default_value_set, "nvme")
+            if key in default_value_set.keys():
+                default_value_set[key] = new_value_set['server_config'][key]
+            else:
+                default_value_set['servers'][0][key] = new_value_set\
+                ['server_config'][key]
 
     #Write default_value_set dictionary in to AVOCADO_FILE
     #This will be used to start with daos_server -o option.
