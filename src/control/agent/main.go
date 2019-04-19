@@ -24,17 +24,18 @@
 package main
 
 import (
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 )
+
 const (
 	agentSockName = "agent.sock"
 )
@@ -42,7 +43,7 @@ const (
 type cliOptions struct {
 	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
 	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 }
 
 var (
@@ -87,7 +88,7 @@ func agentMain() error {
 	}
 
 	if config.RuntimeDir == "" {
-		log.Errorf("The path to the agent communications socket is undefined.  " +
+		log.Errorf("The path to the agent communications socket is undefined.  "+
 			"Use the config file: %s or command line option 'runtime_dir' to specify a value.", config.Path)
 		return errors.New("the path to the agent communications socket is undefined")
 	}

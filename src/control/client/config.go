@@ -36,6 +36,10 @@ import (
 
 const (
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
+	defaultRuntimeDir    = "/var/run/daos_agent"
+	defaultLogFile       = "/tmp/daos_agent.log"
+	defaultConfigPath    = "etc/daos.yml"
+	defaultSystemName    = "daos"
 )
 
 // External interface provides methods to support various os operations.
@@ -73,14 +77,14 @@ type Configuration struct {
 // populated with defaults.
 func newDefaultConfiguration(ext External) Configuration {
 	return Configuration{
-		SystemName:    "daos",
-		RuntimeDir:    "/var/run/daos_agent",
+		SystemName:    defaultSystemName,
+		RuntimeDir:    defaultRuntimeDir,
 		HostFile:      "",
 		Cert:          "",
 		Key:           "",
-		LogFile:       "/tmp/daos_agent.log",
+		LogFile:       defaultLogFile,
 		LogFileFormat: "",
-		Path:          "etc/daos.yml",
+		Path:          defaultConfigPath,
 		ext:           ext,
 	}
 }

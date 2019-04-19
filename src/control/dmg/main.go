@@ -24,13 +24,13 @@
 package main
 
 import (
-	"os"
-	"strings"
 	"fmt"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
+	"os"
+	"strings"
 )
 
 type cliOptions struct {
