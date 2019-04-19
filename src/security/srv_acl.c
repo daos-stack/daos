@@ -183,19 +183,28 @@ get_auth_sys_payload(AuthToken *token, AuthSys **payload)
 }
 
 static bool
+ace_allowed(struct daos_ace *ace, enum daos_acl_perm perm)
+{
+	if (ace->dae_allow_perms & perm)
+		return true;
+
+	return false;
+}
+
+static bool
 ace_has_access(struct daos_ace *ace, uint64_t capas)
 {
 	D_DEBUG(DB_MGMT, "Allow Perms: 0x%lx\n", ace->dae_allow_perms);
 
 	if ((capas & DAOS_PC_RO) &&
-	    (ace->dae_allow_perms & DAOS_ACL_PERM_READ)) {
+	    ace_allowed(ace, DAOS_ACL_PERM_READ)) {
 		D_DEBUG(DB_MGMT, "Allowing read-only access\n");
 		return true;
 	}
 
 	if ((capas & (DAOS_PC_RW | DAOS_PC_EX)) &&
-	    (ace->dae_allow_perms & DAOS_ACL_PERM_READ) &&
-	    (ace->dae_allow_perms & DAOS_ACL_PERM_WRITE)) {
+	    ace_allowed(ace, DAOS_ACL_PERM_READ) &&
+	    ace_allowed(ace, DAOS_ACL_PERM_WRITE)) {
 		D_DEBUG(DB_MGMT, "Allowing RW access\n");
 		return true;
 	}
