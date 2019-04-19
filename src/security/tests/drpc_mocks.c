@@ -106,7 +106,7 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 }
 
 static void
-init_drpc_call_resp()
+init_drpc_call_resp(void)
 {
 	/* By default, return non-null response */
 	drpc_call_resp_return_ptr = &drpc_call_resp_return_content;
@@ -151,20 +151,20 @@ mock_drpc_close_setup(void)
 }
 
 void
-free_drpc_connect_return()
+free_drpc_connect_return(void)
 {
 	D_FREE(drpc_connect_return);
 }
 
 void
-free_drpc_call_msg_body()
+free_drpc_call_msg_body(void)
 {
 	D_FREE(drpc_call_msg_content.body.data);
 	drpc_call_msg_content.body.len = 0;
 }
 
 void
-free_drpc_call_resp_body()
+free_drpc_call_resp_body(void)
 {
 	D_FREE(drpc_call_resp_return_content.body.data);
 	drpc_call_resp_return_content.body.len = 0;

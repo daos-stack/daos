@@ -41,7 +41,7 @@ void mock_drpc_connect_setup(void);
 void mock_drpc_connect_teardown(void);
 
 /* Convenience method to free mocks */
-void free_drpc_connect_return();
+void free_drpc_connect_return(void);
 
 /**
  * drpc_call mock values
@@ -67,8 +67,8 @@ void pack_cred_in_drpc_call_resp_body(SecurityCredential *cred);
 void pack_token_in_drpc_call_resp_body(AuthToken *token);
 
 /* Convenience methods to free mocks */
-void free_drpc_call_msg_body();
-void free_drpc_call_resp_body();
+void free_drpc_call_msg_body(void);
+void free_drpc_call_resp_body(void);
 
 /**
  * drpc_close mock values
