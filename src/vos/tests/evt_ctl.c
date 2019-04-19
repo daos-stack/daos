@@ -1170,7 +1170,7 @@ run_internal_tests(void)
 		{ "EVT011: evt_ent_alloc_bug",
 			test_evt_ent_alloc_bug,
 			setup_builtin, teardown_builtin},
-		{ "EVT011: evt_root_deactivate_bug",
+		{ "EVT012: evt_root_deactivate_bug",
 			test_evt_root_deactivate_bug,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
