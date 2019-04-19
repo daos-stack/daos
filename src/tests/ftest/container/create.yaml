@@ -4,8 +4,8 @@ hosts:
    test_machines:
      - boro-A
 timeout: 100
-server:
-   server_group: daos_server
+server_config:
+   name: daos_server
 poolparams:
    mode: 511
    setname: daos_server

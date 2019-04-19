@@ -5,8 +5,8 @@ hosts:
             - boro-B
             - boro-C
 timeout: 80
-server:
-    server_group: daos_server
+server_config:
+    name: daos_server
 createtests:
     createmode:
         mode_RO:
