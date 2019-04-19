@@ -38,6 +38,8 @@ sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
 import ior_utils
+import AgentUtils
+import spdk
 
 from general_utils import DaosTestError
 from daos_api import DaosContext, DaosPool, DaosApiError, DaosLog
@@ -67,6 +69,20 @@ class NvmeIo(avocado.Test):
         self.hostlist = self.params.get("servers", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
+        self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
+        #This is for NVMe Setup
+        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
+
+        try:
+            if self.nvme_parameter == "nvme":
+                spdk.nvme_setup(self.hostlist)
+        except:
+            raise
+
+        self.agent_sessions = AgentUtils.run_agent(self.basepath,
+                                                   self.hostlist,
+                                                   self.hostlist_clients)
+
         #Start Server
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
@@ -76,7 +92,13 @@ class NvmeIo(avocado.Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
+            if self.agent_sessions:
+                AgentUtils.stop_agent(self.hostlist_clients,
+                                      self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
+            #For NVMe Cleanup
+            if self.nvme_parameter == "nvme":
+                spdk.nvme_cleanup(self.hostlist)
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """

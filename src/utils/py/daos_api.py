@@ -366,6 +366,8 @@ class DaosPool(object):
 
         self.pool_info = PoolInfo()
         func = self.context.get_function('query-pool')
+        #Query space and Rebuild info
+        self.pool_info.pi_bits = ctypes.c_ulong(-1)
 
         if cb_func is None:
             ret = func(self.handle, None, ctypes.byref(self.pool_info),
