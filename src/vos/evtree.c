@@ -970,7 +970,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 	rc = evt_desc_free(tcx, desc,
 			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
 	if (rc == 0)
-		rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, ne->ne_child));
+		rc = umem_free_off(evt_umm(tcx), ne->ne_child);
 
 	return rc;
 }
@@ -1091,7 +1091,7 @@ evt_node_tx_add(struct evt_context *tcx, struct evt_node *nd)
 static int
 evt_node_free(struct evt_context *tcx, umem_off_t nd_off)
 {
-	return umem_free(evt_umm(tcx), evt_off2mmid(tcx, nd_off));
+	return umem_free_off(evt_umm(tcx), nd_off);
 }
 
 /**
@@ -1387,7 +1387,7 @@ evt_root_deactivate(struct evt_context *tcx)
 		return rc;
 
 	root->tr_depth = 0;
-	rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, root->tr_node));
+	rc = umem_free_off(evt_umm(tcx), root->tr_node);
 	if (rc != 0)
 		return rc;
 
@@ -2623,8 +2623,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 				desc = evt_off2desc(tcx, ne->ne_child);
 				rc = evt_desc_free(tcx, desc, width);
 			} else {
-				rc = umem_free(evt_umm(tcx),
-					       evt_off2mmid(tcx, ne->ne_child));
+				rc = umem_free_off(evt_umm(tcx), ne->ne_child);
 			}
 			if (rc != 0)
 				return rc;
@@ -2638,7 +2637,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 			}
 
 			old_cur = nm_cur;
-			rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, nm_cur));
+			rc = umem_free_off(evt_umm(tcx), nm_cur);
 			if (rc != 0)
 				return rc;
 			level--;
