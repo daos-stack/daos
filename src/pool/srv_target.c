@@ -867,14 +867,24 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
+			rc = pl_map_update(pool->sp_uuid, map,
+					   pool->sp_map != NULL ? false : true);
+			if (rc != 0) {
+				ABT_rwlock_unlock(pool->sp_lock);
+				D_ERROR(DF_UUID":failed to update pl_map: %d\n",
+					DP_UUID(pool->sp_uuid), rc);
+				D_GOTO(out, rc);
+			}
+
 			pool->sp_map = map;
 			map = tmp;
 		}
 
 		D_DEBUG(DF_DSMS, DF_UUID
-			": changed cached map version: %u -> %u\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map_version,
-			map_version);
+			": changed cached map version: %u -> %u pool %p"
+			" map %p map_ver %u\n", DP_UUID(pool->sp_uuid),
+			pool->sp_map_version, map_version, pool, pool->sp_map,
+			pool_map_get_version(pool->sp_map));
 
 		pool->sp_map_version = map_version;
 		rc = dss_task_collective(update_child_map, pool, 0);

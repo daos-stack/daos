@@ -576,7 +576,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		 * that creates ULT in DSS_XS_SELF. So ABT_POOL_ACCESS_PRIV
 		 * is fine.
 		 */
-		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD) ?
+		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD ||
+			  i == DSS_POOL_URGENT) ?
 			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
 
 		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
