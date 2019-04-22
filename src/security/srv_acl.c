@@ -233,20 +233,20 @@ check_access_for_principal(struct daos_acl *acl,
 	return -DER_NO_PERM;
 }
 
-static int
-check_owner_group_access_for_gid(struct daos_acl *acl,
-				 struct pool_prop_ugm *ugm,
-				 uint64_t capas,
-				 uint32_t gid)
+static bool
+authsys_has_owner_group(struct pool_prop_ugm *ugm, AuthSys *authsys)
 {
-	int rc = -DER_NO_PERM;
+	size_t i;
 
-	if (gid == ugm->pp_gid) {
-		rc = check_access_for_principal(acl, DAOS_ACL_OWNER_GROUP,
-						capas);
+	if (authsys->has_gid && authsys->gid == ugm->pp_gid)
+		return true;
+
+	for (i = 0; i < authsys->n_gids; i++) {
+		if (authsys->gids[i] == ugm->pp_gid)
+			return true;
 	}
 
-	return rc;
+	return false;
 }
 
 static int
@@ -254,7 +254,6 @@ check_authsys_permissions(struct daos_acl *acl, struct pool_prop_ugm *ugm,
 			  AuthSys *authsys, uint64_t capas)
 {
 	int rc = -DER_NO_PERM;
-	int i;
 
 	/* If this is the owner, and there's an owner entry... */
 	if (authsys->has_uid && authsys->uid == ugm->pp_uid) {
@@ -265,19 +264,9 @@ check_authsys_permissions(struct daos_acl *acl, struct pool_prop_ugm *ugm,
 	}
 
 	/* Check all the user's groups for owner group... */
-	if (authsys->has_gid) {
-		rc = check_owner_group_access_for_gid(acl, ugm, capas,
-						      authsys->gid);
-		if (rc == 0)
-			return 0;
-	}
-
-	for (i = 0; i < authsys->n_gids; i++) {
-		rc = check_owner_group_access_for_gid(acl, ugm, capas,
-						      authsys->gids[i]);
-		if (rc == 0)
-			return 0;
-	}
+	if (authsys_has_owner_group(ugm, authsys))
+		rc = check_access_for_principal(acl, DAOS_ACL_OWNER_GROUP,
+						capas);
 
 	return rc;
 }
