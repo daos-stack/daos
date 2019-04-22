@@ -769,11 +769,14 @@ class PreReqComponent(object):
     def _setup_compiler(self):
         """Setup the compiler to use"""
         compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
+                        'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
+                                  'CXX' : '/opt/BullseyeCoverage/bin/g++',
+                                  'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
                         'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
                         'icc' : {'CC' : 'icc', 'CXX' : 'icpc'},
                        }
         self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
-                                   'gcc', ['gcc', 'clang', 'icc'],
+                                   'gcc', ['gcc', 'covc', 'clang', 'icc'],
                                    ignorecase=1))
 
         if GetOption('clean'):
@@ -798,6 +801,15 @@ class PreReqComponent(object):
                 raise MissingSystemLibs(prog)
             args = {name : prog}
             self.__env.Replace(**args)
+
+        if compiler == 'covc':
+            covfile = self.__top_dir + "/test.cov"
+            if os.path.isfile(covfile):
+                os.remove(covfile)
+            commands = ['$COV01 -1', '$COV01 -s']
+            if not RUNNER.run_commands(commands):
+                raise BuildFailure("cov01")
+
         config.Finish()
         if self.__check_only:
             # Restore the dry run state
