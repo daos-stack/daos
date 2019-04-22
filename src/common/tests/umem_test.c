@@ -202,22 +202,12 @@ test_alloc(void **state)
 
 	rc = utest_tx_begin(arg->ta_utx);
 	assert_int_equal(rc, 0);
-	if (rc != 0)
-		return;
 
 	umoff = umem_zalloc_off(umm, 4);
 	assert_false(UMOFF_IS_NULL(umoff));
-	if (UMOFF_IS_NULL(umoff)) {
-		rc = -DER_NOMEM;
-		goto end;
-	}
 
 	mmid = umem_off2id(umm, umoff);
 	assert_false(UMMID_IS_NULL(mmid));
-	if (UMMID_IS_NULL(mmid)) {
-		rc = -DER_NOMEM;
-		goto end;
-	}
 
 	value1 = umem_off2ptr(umm, umoff);
 	value2 = umem_id2ptr(umm, mmid);
@@ -227,7 +217,7 @@ test_alloc(void **state)
 
 	rc = umem_free(umm, mmid);
 	assert_int_equal(rc, 0);
-end:
+
 	rc = utest_tx_end(arg->ta_utx, rc);
 	assert_int_equal(rc, 0);
 }

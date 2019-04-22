@@ -47,10 +47,21 @@
 
 /** The offset of an object from the base address of the pool */
 typedef uint64_t		umem_off_t;
+/** Number of flag bits to reserve for encoding extra information in
+ *  a NULL umem_off_t entry.
+ */
 #define UMOFF_NUM_FLAGS		(8)
+/** The absolute value of a flag mask may not exceed this value */
 #define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAGS)
+/** A mask to retrieve the invalid flags */
 #define UMOFF_FLAG_MASK		(UMOFF_MAX_FLAG - 1)
+/** Use to set a value to NULL.  Note we don't use 0 because,
+ *  in theory, 0 can be a valid offset whereas it is less likely
+ *  that values above UMOFF_NULL are valid virtual memory
+ *  addresses (for vmem case).
+ */
 #define UMOFF_NULL		(~0ULL & ~UMOFF_FLAG_MASK)
+/** Check for a NULL value including possible invalid flag bits */
 #define UMOFF_IS_NULL(umoff)	(umoff >= UMOFF_NULL)
 
 /** Up to UMOFF_NUM_FLAGS bits are available to the user to mark an
@@ -285,10 +296,8 @@ umem_off2id(const struct umem_instance *umm, umem_off_t umoff)
 {
 	umem_id_t	ummid;
 
-	if (UMOFF_IS_NULL(umoff)) {
-		ummid = UMMID_NULL;
-		return ummid;
-	}
+	if (UMOFF_IS_NULL(umoff))
+		return UMMID_NULL;
 
 	ummid.pool_uuid_lo = umm->umm_pool_uuid_lo;
 	ummid.off = umoff;
