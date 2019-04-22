@@ -1535,6 +1535,7 @@ out_tx:
 			D_GOTO(out_svc, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
+		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
 	}
 
 out_mutex:
