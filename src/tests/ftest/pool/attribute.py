@@ -38,6 +38,7 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
+import AgentUtils 
 
 from general_utils import DaosTestError
 from daos_api import DaosContext, DaosPool, DaosApiError
@@ -101,7 +102,7 @@ class PoolAttributeTest(Test):
                 self.hostlist = self.params.get("test_machines", '/run/hosts/*')
                 self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                                 self.workdir)
-
+		self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
                 server_utils.run_server(self.hostfile, server_group, basepath)
 
                 createmode = self.params.get("mode",
@@ -130,6 +131,8 @@ class PoolAttributeTest(Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
+	    if self.agent_sessions:
+		AgentUtils.stop_agent(self.hostlist, self.agent_sessions) 
             server_utils.stop_server(hosts=self.hostlist)
 
     def create_data_set(self):
@@ -154,21 +157,27 @@ class PoolAttributeTest(Test):
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
+        '''
         if value[0] is None:
             self.cancel("skipping these tests until DAOS-2170 is fixed")
+        '''
         expected_for_param.append(value[1])
-
-        attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
 
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        attr_dict = {name[0]:value[0]}
+        if name[0] is not None:
+            if "largenumberofattr" in name[0]:
+                self.create_data_set()
+                attr_dict = self.large_data_set
+                #ramdonly generated data result is unpredictable
+                #let the callback function provide the result
+                expected_result = 'TBD'
+
         try:
             self.pool.set_attr(data=attr_dict)
             size, buf = self.pool.list_attr()
@@ -214,21 +223,27 @@ class PoolAttributeTest(Test):
         else:
             expected_for_param.append(name[1])
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
+	'''
         if value[0] is None:
             self.cancel("skipping this test until DAOS-2170 is fixed")
+	'''
         expected_for_param.append(value[1])
-
-        attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
 
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        attr_dict = {name[0]:value[0]}
+        if name[0] is not None:
+            if "largenumberofattr" in name[0]:
+                self.create_data_set()
+                attr_dict = self.large_data_set
+                #ramdonly generated data result is unpredictable
+                #let the callback function provide the result
+                expected_result = 'TBD'
+
         try:
             GLOB_SIGNAL = threading.Event()
             self.pool.set_attr(attr_dict, None, cb_func)
