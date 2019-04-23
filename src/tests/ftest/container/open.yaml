@@ -4,8 +4,8 @@ hosts: !mux
     test_machines1:
       test_machines:
         - boro-A
-server:
-  server_group: daos_server
+server_config:
+  name: daos_server
 createtests:
   createmode:
     mode: 511
