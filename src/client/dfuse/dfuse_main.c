@@ -117,14 +117,14 @@ main(int argc, char **argv)
 	int			rc;
 
 	struct option long_options[] = {
-		{"pool",	required_argument, 0, 'p'},
-		{"container",	required_argument, 0, 'c'},
-		{"svcl",	required_argument, 0, 's'},
-		{"group",	required_argument, 0, 'g'},
-		{"mountpoint",	required_argument, 0, 'm'},
-		{"singlethread",no_argument,	   0, 'S'},
-		{"help",	no_argument,	   0, 'h'},
-		{"prefix",	required_argument, 0, 'p'},
+		{"pool",		required_argument, 0, 'p'},
+		{"container",		required_argument, 0, 'c'},
+		{"svcl",		required_argument, 0, 's'},
+		{"group",		required_argument, 0, 'g'},
+		{"mountpoint",		required_argument, 0, 'm'},
+		{"singlethread",	no_argument,	   0, 'S'},
+		{"help",		no_argument,	   0, 'h'},
+		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
 	};
 
