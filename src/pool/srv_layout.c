@@ -43,6 +43,8 @@ RDB_STRING_KEY(ds_pool_prop_, acl);
 RDB_STRING_KEY(ds_pool_prop_, space_rb);
 RDB_STRING_KEY(ds_pool_prop_, self_heal);
 RDB_STRING_KEY(ds_pool_prop_, reclaim);
+RDB_STRING_KEY(ds_pool_prop_, owner);
+RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
 
 /** pool handle KVS */
@@ -70,6 +72,12 @@ struct daos_prop_entry pool_prop_entries_default[POOL_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_ACL,
 		.dpe_val_ptr	= NULL, /* generated dynamically */
+	}, {
+		.dpe_type	= DAOS_PROP_PO_OWNER,
+		.dpe_str	= "nobody@",
+	}, {
+		.dpe_type	= DAOS_PROP_PO_OWNER_GROUP,
+		.dpe_str	= "nobody@",
 	}
 };
 

@@ -491,7 +491,7 @@ pool_properties(void **state)
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, 5);
+	assert_int_equal(prop_query->dpp_nr, 7);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -521,6 +521,20 @@ pool_properties(void **state)
 	if (entry == NULL || entry->dpe_val_ptr == NULL ||
 	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
 		print_message("ACL prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, "nobody@", DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, "nobody@", DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 

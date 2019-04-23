@@ -664,6 +664,8 @@ daos_prop_free(daos_prop_t *prop)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
+		case DAOS_PROP_PO_OWNER:
+		case DAOS_PROP_PO_OWNER_GROUP:
 			if (entry->dpe_str)
 				D_FREE(entry->dpe_str);
 			break;
@@ -679,6 +681,46 @@ daos_prop_free(daos_prop_t *prop)
 
 	D_FREE(prop->dpp_entries);
 	D_FREE_PTR(prop);
+}
+
+static bool
+daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
+{
+	size_t len;
+
+	if (str == NULL) {
+		D_ERROR("invalid NULL %s\n", prop_name);
+		return false;
+	}
+	len = strlen(str);
+	if (len == 0 || len > max_len) {
+		D_ERROR("invalid %s len=%lu, max=%lu\n",
+			prop_name, len, max_len);
+		return false;
+	}
+	return true;
+}
+
+static bool
+daos_prop_owner_valid(d_string_t owner)
+{
+	/* Max length passed in doesn't include the null terminator */
+	return daos_prop_str_valid(owner, "owner",
+				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+}
+
+static bool
+daos_prop_owner_group_valid(d_string_t owner)
+{
+	/* Max length passed in doesn't include the null terminator */
+	return daos_prop_str_valid(owner, "owner-group",
+				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+}
+
+static bool
+daos_prop_label_valid(d_string_t label)
+{
+	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
 }
 
 /**
@@ -766,6 +808,16 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				D_ERROR("invalid reclaim "DF_U64".\n", val);
 				return false;
 			}
+			break;
+		case DAOS_PROP_PO_OWNER:
+			if (!daos_prop_owner_valid(
+				prop->dpp_entries[i].dpe_str))
+				return false;
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			if (!daos_prop_owner_group_valid(
+				prop->dpp_entries[i].dpe_str))
+				return false;
 			break;
 		/* container properties */
 		case DAOS_PROP_CO_LABEL:
@@ -872,6 +924,17 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 		case DAOS_PROP_CO_ACL:
 			/* TODO: Implement container ACL */
 			break;
+		case DAOS_PROP_PO_OWNER:
+		case DAOS_PROP_PO_OWNER_GROUP:
+			entry_dup->dpe_str =
+					strndup(entry->dpe_str,
+						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (entry_dup->dpe_str == NULL) {
+				D_ERROR("failed to dup ownership info.\n");
+				daos_prop_free(prop_dup);
+				return NULL;
+			}
+			break;
 		default:
 			entry_dup->dpe_val = entry->dpe_val;
 			break;
@@ -914,6 +977,8 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	struct daos_prop_entry	*entries_alloc = NULL;
 	d_string_t		 label_alloc = NULL;
 	void			*acl_alloc = NULL;
+	d_string_t		 owner_alloc = NULL;
+	d_string_t		 group_alloc = NULL;
 	struct daos_acl		*acl;
 	uint32_t		 type;
 	int			 i;
@@ -960,6 +1025,20 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			acl_alloc = entry_req->dpe_val_ptr;
 		} else if (type == DAOS_PROP_CO_ACL) {
 			/* TODO: Implement container ACL */
+		} else if (type == DAOS_PROP_PO_OWNER) {
+			entry_req->dpe_str =
+					strndup(entry_reply->dpe_str,
+						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (entry_req->dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			owner_alloc = entry_req->dpe_str;
+		} else if (type == DAOS_PROP_PO_OWNER_GROUP) {
+			entry_req->dpe_str =
+					strndup(entry_reply->dpe_str,
+						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (entry_req->dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			group_alloc = entry_req->dpe_str;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -979,7 +1058,21 @@ out:
 		}
 		if (acl_alloc) {
 			D_FREE(acl_alloc);
+			entry_req = daos_prop_entry_get(prop_req,
+							DAOS_PROP_PO_ACL);
 			entry_req->dpe_val_ptr = NULL;
+		}
+		if (owner_alloc) {
+			D_FREE(owner_alloc);
+			entry_req = daos_prop_entry_get(prop_req,
+							DAOS_PROP_PO_OWNER);
+			entry_req->dpe_str = NULL;
+		}
+		if (group_alloc) {
+			D_FREE(group_alloc);
+			entry_req = daos_prop_entry_get(prop_req,
+						DAOS_PROP_PO_OWNER_GROUP);
+			entry_req->dpe_str = NULL;
 		}
 	}
 	return rc;

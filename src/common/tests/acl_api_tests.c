@@ -2146,7 +2146,7 @@ main(void)
 		cmocka_unit_test(test_acl_is_valid_duplicate_user),
 		cmocka_unit_test(test_acl_is_valid_duplicate_group),
 		cmocka_unit_test(test_acl_is_valid_bad_ordering),
-		cmocka_unit_test(test_acl_random_buffer)
+		cmocka_unit_test(test_acl_random_buffer),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
