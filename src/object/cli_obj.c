@@ -201,7 +201,7 @@ obj_hdl2ptr(daos_handle_t oh)
 static void
 obj_hdl_link(struct dc_object *obj)
 {
-	daos_hhash_link_insert(&obj->cob_hlink, D_HTYPE_OBJ);
+	daos_hhash_link_insert(&obj->cob_hlink, DAOS_HTYPE_OBJ);
 }
 
 static void

@@ -1041,6 +1041,22 @@ typedef struct {
 	struct daos_prop_entry	*dpp_entries;
 } daos_prop_t;
 
+/**
+ * DAOS Hash Table Handle Types
+ * The handle type, uses the least significant 4-bits in the 64-bits hhash key.
+ * The bit 0 is only used for D_HYTPE_PTR (pointer type), all other types MUST
+ * set bit 0 to 1.
+ */
+enum {
+	DAOS_HTYPE_EQ		= 1, /**< event queue */
+	DAOS_HTYPE_POOL		= 3, /**< pool */
+	DAOS_HTYPE_CO		= 5, /**< container */
+	DAOS_HTYPE_OBJ		= 7, /**< object */
+	DAOS_HTYPE_ARRAY	= 9, /**< array */
+	DAOS_HTYPE_TX		= 11, /**< transaction */
+	/* Must enlarge D_HTYPE_BITS to add more types */
+};
+
 #if defined(__cplusplus)
 }
 #endif

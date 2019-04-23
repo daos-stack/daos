@@ -121,7 +121,7 @@ dc_hdl2pool(daos_handle_t poh)
 static void
 dc_pool_hdl_link(struct dc_pool *pool)
 {
-	daos_hhash_link_insert(&pool->dp_hlink, D_HTYPE_POOL);
+	daos_hhash_link_insert(&pool->dp_hlink, DAOS_HTYPE_POOL);
 }
 
 static void

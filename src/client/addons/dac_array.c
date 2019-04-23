@@ -136,7 +136,7 @@ array_hdl2ptr(daos_handle_t oh)
 static void
 array_hdl_link(struct dac_array *array)
 {
-	daos_hhash_link_insert(&array->hlink, D_HTYPE_ARRAY);
+	daos_hhash_link_insert(&array->hlink, DAOS_HTYPE_ARRAY);
 }
 
 static void
