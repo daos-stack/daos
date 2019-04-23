@@ -24,41 +24,67 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME mkdir_da
-#define TYPE_NAME entry_req
-#include "dfuse_ops.h"
-
-static const struct dfuse_request_api api = {
-	.on_result	= dfuse_entry_cb,
-};
-
 void
 dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct entry_req		*desc = NULL;
+	struct dfuse_inode_entry	*inode = NULL;
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink = NULL;
 	int rc;
 
 	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
-	if (rc)
-		D_GOTO(err, rc);
 
-	strncpy(desc->ie->name, name, NAME_MAX);
-	desc->ie->parent = parent;
-	desc->da = fs_handle->mkdir_da;
+	if (parent != 1) {
+		D_GOTO(err, rc = ENOTSUP);
+	}
 
-	desc->request.ir_inode_num = parent;
+	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
+		D_GOTO(err, rc = ENOENT);
+	}
 
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	D_ALLOC_PTR(inode);
+	if (!inode) {
+		D_GOTO(err, rc = ENOMEM);
+	}
+
+	/* mkdir with the correct parent */
+	rc = dfs_mkdir(fs_handle->fsh_dfs, parent_inode->obj, name, mode);
+	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
+	}
+
+	strncpy(inode->name, name, NAME_MAX);
+	inode->parent = parent;
+	atomic_fetch_add(&inode->ie_ref, 1);
+
+	/* This wants to use parent->obj but it isn't ready yet */
+	rc = dfs_lookup(fs_handle->fsh_dfs, name, O_RDONLY, &inode->obj, &mode);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(err, 0);
+	}
+
+	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(release, 0);
+	}
+
+	/* Return the new inode data, and keep the parent ref */
+	dfuse_register_inode(fs_handle, inode, req);
+
 	return;
+release:
+	dfs_release(inode->obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (desc) {
-		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_da_release(fs_handle->mkdir_da, desc);
+	if (rlink) {
+		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
+
 	}
+	D_FREE(inode);
 }

@@ -2756,6 +2756,12 @@ out:
 	return rc;
 }
 
+daos_obj_id_t
+dfs_obj2id(dfs_obj_t *obj)
+{
+	return obj->oid;
+}
+
 #define DFS_ROOT_UUID "ffffffff-ffff-ffff-ffff-ffffffffffff"
 
 int

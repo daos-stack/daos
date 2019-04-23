@@ -69,7 +69,8 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
-	DFUSE_TRA_DEBUG(ie, "closing, ref %u, parent %lu", ref, ie->parent);
+	DFUSE_TRA_DEBUG(ie, "closing, ref %u, name '%s', parent %lu",
+			ref, ie->name, ie->parent);
 
 	D_ASSERT(ref == 0);
 	atomic_fetch_add(&ie->ie_ref, 1);

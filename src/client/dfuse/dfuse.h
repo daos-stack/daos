@@ -272,16 +272,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define DFUSE_REPLY_ENTRY(dfuse_req, entry)				\
+#define DFUSE_REPLY_ENTRY(req, entry)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning entry");	\
-		__rc = fuse_reply_entry((dfuse_req)->req, &entry);	\
+		DFUSE_TRA_DEBUG(req, "Returning entry");		\
+		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_entry returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
 #define DFUSE_FUSE_REPLY_STATFS(dfuse_req, stat)			\
@@ -675,7 +674,9 @@ dfuse_cb_symlink(fuse_req_t, const char *, fuse_ino_t, const char *);
 void
 dfuse_cb_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
 
-bool
-dfuse_entry_cb(struct dfuse_request *);
+void
+dfuse_register_inode(struct dfuse_projection_info *fs_handle,
+		     struct dfuse_inode_entry *inode,
+		     fuse_req_t req);
 
 #endif /* __DFUSE_H__ */
