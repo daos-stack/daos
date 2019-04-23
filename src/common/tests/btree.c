@@ -778,13 +778,12 @@ ik_btr_perf(void **state)
 	double		 then;
 	double		 now;
 	unsigned int	key_nr;
-	char		outbuf[64];
 
 	key_nr = atoi(tst_fn_val.optval);
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		sprintf(outbuf, "Invalid key number: %d\n", key_nr);
-		fail_msg("%s", outbuf);
+		D_PRINT("Invalid key number: %d\n", key_nr);
+		fail();
 	}
 
 	D_PRINT("Btree performance test, order=%u, keys=%u\n",

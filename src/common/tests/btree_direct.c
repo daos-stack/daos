@@ -908,15 +908,14 @@ sk_btr_batch_oper(void **state)
 	int		 i;
 	int		rc;
 	unsigned int	key_nr;
-	char		outbuf[64];
 	bool		 verbose;
 
 	key_nr = atoi(tst_fn_val.optval);
 	verbose = key_nr < 20;
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		sprintf(outbuf, "Invalid key number: %d\n", key_nr);
-		fail_msg("%s", outbuf);
+		D_PRINT("Invalid key number: %d\n", key_nr);
+		fail();
 	}
 
 	D_ALLOC_ARRAY(kv, key_nr);
