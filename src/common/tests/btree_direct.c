@@ -34,11 +34,28 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <setjmp.h>
+#include <cmocka.h>
 
 #include <daos/btree.h>
 #include <daos/dtx.h>
 #include <daos/tests_lib.h>
 #include "utest_common.h"
+
+enum sk_btr_opc {
+	BTR_OPC_UPDATE,
+	BTR_OPC_LOOKUP,
+	BTR_OPC_DELETE,
+	BTR_OPC_DELETE_RETAIN,
+};
+
+struct test_input_value {
+	bool					input;
+	enum	 sk_btr_opc		opc;
+	char					*optval;
+};
+
+struct test_input_value tst_fn_val;
 
 /**
  * An example for string key
@@ -291,43 +308,49 @@ static btr_ops_t sk_ops = {
 #define SK_SEP		','
 #define SK_SEP_VAL	':'
 
-static int
-sk_btr_open_create(bool create, char *args)
+static void
+sk_btr_open_create(void **state)
 {
 	bool		inplace = false;
 	uint64_t	feats = BTR_FEAT_DIRECT_KEY;
 	int		rc;
+	bool	create;
+	char	*arg;
+	char	outbuf[64];
+
+	create = tst_fn_val.input;
+	arg = tst_fn_val.optval;
 
 	if (!daos_handle_is_inval(sk_toh)) {
-		D_ERROR("Tree has been opened\n");
-		return -1;
+		fail_msg("Tree has been opened\n");
 	}
 
-	if (create && args != NULL) {
-		if (args[0] == 'i') { /* inplace create/open */
+	if (create && arg != NULL) {
+		if (arg[0] == 'i') { /* inplace create/open */
 			inplace = true;
-			if (args[1] != SK_SEP) {
-				D_ERROR("wrong parameter format %s\n", args);
-				return -1;
+			if (arg[1] != SK_SEP) {
+				sprintf(outbuf,
+					"wrong parameter format %s\n",	arg);
+				fail_msg("%s", outbuf);
 			}
-			args += 2;
+			arg += 2;
 		}
 
-		if (args[0] != 'o' || args[1] != SK_SEP_VAL) {
-			D_ERROR("incorrect format for tree order: %s\n", args);
-			return -1;
+		if (arg[0] != 'o' || arg[1] != SK_SEP_VAL) {
+			sprintf(outbuf,
+				"incorrect format for tree order: %s\n", arg);
+			fail_msg("%s", outbuf);
 		}
 
-		sk_order = atoi(&args[2]);
+		sk_order = atoi(&arg[2]);
 		if (sk_order < BTR_ORDER_MIN || sk_order > BTR_ORDER_MAX) {
-			D_ERROR("Invalid tree order %d\n", sk_order);
-			return -1;
+			sprintf(outbuf, "Invalid tree order %d\n", sk_order);
+			fail_msg("%s", outbuf);
 		}
 	} else if (!create) {
 		inplace = (sk_root->tr_class != 0);
 		if (TMMID_IS_NULL(sk_root_mmid) && !inplace) {
-			D_ERROR("Please create tree first\n");
-			return -1;
+			fail_msg("Please create tree first\n");
 		}
 	}
 
@@ -350,21 +373,23 @@ sk_btr_open_create(bool create, char *args)
 			rc = dbtree_open(sk_root_mmid, sk_uma, &sk_toh);
 	}
 	if (rc != 0) {
-		D_ERROR("Tree %s failed: %d\n", create ? "create" : "open",
-			 rc);
-		return -1;
+		sprintf(outbuf, "Tree %s failed: %d\n",
+				create ? "create" : "open", rc);
+		fail_msg("%s", outbuf);
 	}
-	return 0;
 }
 
-static int
-sk_btr_close_destroy(bool destroy)
+static void
+sk_btr_close_destroy(void **state)
 {
 	int rc;
+	bool	destroy;
+	char	outbuf[64];
+
+	destroy = tst_fn_val.input;
 
 	if (daos_handle_is_inval(sk_toh)) {
-		D_ERROR("Invalid tree open handle\n");
-		return -1;
+		fail_msg("Invalid tree open handle\n");
 	}
 
 	if (destroy) {
@@ -377,11 +402,10 @@ sk_btr_close_destroy(bool destroy)
 
 	sk_toh = DAOS_HDL_INVAL;
 	if (rc != 0) {
-		D_ERROR("Tree %s failed: %d\n",
+		sprintf(outbuf, "Tree %s failed: %d\n",
 			destroy ? "destroy" : "close", rc);
-		return -1;
+		fail_msg("%s", outbuf);
 	}
-	return rc;
 }
 
 static int
@@ -408,12 +432,6 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 	return 0;
 }
 
-enum sk_btr_opc {
-	BTR_OPC_UPDATE,
-	BTR_OPC_LOOKUP,
-	BTR_OPC_DELETE,
-	BTR_OPC_DELETE_RETAIN,
-};
 
 static char *
 btr_opc2str(enum sk_btr_opc opc)
@@ -432,16 +450,23 @@ btr_opc2str(enum sk_btr_opc opc)
 	}
 }
 
-static int
-sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
+static void
+sk_btr_kv_operate(void **state)
 {
 	int		count = 0;
 	umem_id_t	rec_mmid;
 	int		rc;
+	enum	sk_btr_opc	opc;
+	char				*str;
+	bool				verbose;
+	char				outbuf[64];
+
+	opc = tst_fn_val.opc;
+	str = tst_fn_val.optval;
+	verbose = tst_fn_val.input;
 
 	if (daos_handle_is_inval(sk_toh)) {
-		D_ERROR("Can't find opened tree\n");
-		return -1;
+		fail_msg("Can't find opened tree\n");
 	}
 
 	while (str != NULL && !isspace(*str) && *str != '\0') {
@@ -453,9 +478,10 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 		if (opc == BTR_OPC_UPDATE) {
 			val = strchr(str, SK_SEP_VAL);
 			if (val == NULL) {
-				D_ERROR("Invalid parameters %s (errno %d)\n",
+				sprintf(outbuf,
+				"Invalid parameters %s (errno %d)\n",
 					str, errno);
-				return -1;
+				fail_msg("%s", outbuf);
 			}
 			*val = 0;
 			str = ++val;
@@ -470,21 +496,22 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 		daos_iov_set(&key_iov, key, strlen(key) + 1);
 		switch (opc) {
 		default:
-			return -1;
+			fail_msg("Invalid opcode\n");
 		case BTR_OPC_UPDATE:
 			daos_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(sk_toh, &key_iov, &val_iov);
 			if (rc != 0) {
-				D_ERROR("Failed to update %s:%s\n", key, val);
-				return -1;
+				sprintf(outbuf,
+				"Failed to update %s:%s\n", key, val);
+				fail_msg("%s", outbuf);
 			}
 			break;
 
 		case BTR_OPC_DELETE:
 			rc = dbtree_delete(sk_toh, &key_iov, NULL);
 			if (rc != 0) {
-				D_ERROR("Failed to delete %s\n", key);
-				return -1;
+				sprintf(outbuf, "Failed to delete %s\n", key);
+				fail_msg("%s", outbuf);
 			}
 			if (verbose)
 				D_PRINT("Deleted key %s\n", key);
@@ -496,15 +523,14 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 		case BTR_OPC_DELETE_RETAIN:
 			rc = dbtree_delete(sk_toh, &key_iov, &rec_mmid);
 			if (rc != 0) {
-				D_ERROR("Failed to delete %s\n", key);
-				return -1;
+				sprintf(outbuf, "Failed to delete %s\n", key);
+				fail_msg("%s", outbuf);
 			}
 
 			/** Verify and delete rec_mmid here */
 			rc = btr_rec_verify_delete(&rec_mmid, &key_iov);
 			if (rc != 0) {
-				D_ERROR("Failed to verify and delete rec\n");
-				return -1;
+				fail_msg("Failed to verify and delete rec\n");
 			}
 
 			if (verbose)
@@ -519,8 +545,8 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 			daos_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(sk_toh, &key_iov, &val_iov);
 			if (rc != 0) {
-				D_ERROR("Failed to lookup %s\n", key);
-				return -1;
+				sprintf(outbuf, "Failed to lookup %s\n", key);
+				fail_msg("%s", outbuf);
 			}
 
 			if (verbose) {
@@ -533,20 +559,20 @@ sk_btr_kv_operate(enum sk_btr_opc opc, char *str, bool verbose)
 	}
 	if (verbose)
 		D_PRINT("%s %d record(s)\n", btr_opc2str(opc), count);
-	return 0;
 }
 
-static int
-sk_btr_query(void)
+static void
+sk_btr_query(void **state)
 {
 	struct btr_attr		attr;
 	struct btr_stat		stat;
 	int			rc;
+	char		outbuf[64];
 
 	rc = dbtree_query(sk_toh, &attr, &stat);
 	if (rc != 0) {
-		D_ERROR("Failed to query btree: %d\n", rc);
-		return -1;
+		sprintf(outbuf, "Failed to query btree: %d\n", rc);
+		fail_msg("%s", outbuf);
 	}
 
 	D_PRINT("tree   [order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
@@ -558,11 +584,10 @@ sk_btr_query(void)
 		stat.bs_key_sum, stat.bs_key_max,
 		stat.bs_val_sum, stat.bs_val_max);
 
-	return 0;
 }
 
-static int
-sk_btr_iterate(char *args)
+static void
+sk_btr_iterate(void **state)
 {
 	daos_handle_t	ih;
 	int		i;
@@ -572,37 +597,39 @@ sk_btr_iterate(char *args)
 	int		opc;
 	char		*start;
 	char		*err;
+	char		*arg;
 	daos_anchor_t	anchor = {0};
 	daos_key_t	anchor_key = {0};
 
+	arg = tst_fn_val.optval;
+
 	if (daos_handle_is_inval(sk_toh)) {
-		D_ERROR("Can't find opened tree\n");
-		return -1;
+		fail_msg("Can't find opened tree\n");
 	}
 
 	rc = dbtree_iter_prepare(sk_toh, BTR_ITER_EMBEDDED, &ih);
 	if (rc != 0) {
-		err = "initialize";
+		err = "Failed to initialize\n";
 		goto failed;
 	}
 
-	if (args[0] == 'b') {
+	if (arg[0] == 'b') {
 		opc = BTR_PROBE_LAST;
-		args++;
-	} else if (args[0] == 'f') {
+		arg++;
+	} else if (arg[0] == 'f') {
 		opc = BTR_PROBE_FIRST;
-		args++;
+		arg++;
 	} else {
 		opc = BTR_PROBE_FIRST;
 	}
 
-	if (args[0] == 'd' && args[1] == ':' && strlen(args) >= 3)
-		del = atoi(&args[2]);
+	if (arg[0] == 'd' && arg[1] == ':' && strlen(arg) >= 3)
+		del = atoi(&arg[2]);
 	else
 		del = 0;
 
-	if (args[0] == 's' && args[1] == ':' && strlen(args) >= 3) {
-		start = &args[2];
+	if (arg[0] == 's' && arg[1] == ':' && strlen(arg) >= 3) {
+		start = &arg[2];
 		opc |= BTR_PROBE_SPEC;
 	} else {
 		start = "";
@@ -624,7 +651,7 @@ sk_btr_iterate(char *args)
 				break;
 
 			if (rc != 0) {
-				err = "probe";
+				err = "Failed probe\n";
 				goto failed;
 			}
 
@@ -641,7 +668,7 @@ sk_btr_iterate(char *args)
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, &anchor);
 
 		if (rc != 0) {
-			err = "fetch";
+			err = "Failed: fetch\n";
 			goto failed;
 		}
 
@@ -650,7 +677,7 @@ sk_btr_iterate(char *args)
 		if (d != 0) { /* delete */
 			rc = dbtree_iter_delete(ih, NULL);
 			if (rc != 0) {
-				err = "delete";
+				err = "Failed: delete\n";
 				goto failed;
 			}
 
@@ -666,7 +693,7 @@ sk_btr_iterate(char *args)
 				break;
 
 			if (rc != 0) {
-				err = "move";
+				err = "Failed: move\n";
 				goto failed;
 			}
 		}
@@ -675,11 +702,12 @@ sk_btr_iterate(char *args)
 	D_PRINT("%s iterator: total %d, deleted %d\n",
 		opc == BTR_PROBE_FIRST ? "forward" : "backward", i, d);
 	dbtree_iter_finish(ih);
-	return 0;
- failed:
-	D_PRINT("Iterator %s failed: %d\n", err, rc);
+	goto pass;
+failed:
 	dbtree_iter_finish(ih);
-	return -1;
+	fail_msg("%s", err);
+pass:
+	D_PRINT("Test Passed\n");
 }
 
 struct kv_node {
@@ -870,24 +898,30 @@ sk_btr_check_order(struct kv_node *kv, unsigned int key_nr)
  * 3) delete nr=DEL_BATCH keys
  * 4) repeat 2) and 3) util all keys are deleted
  */
-static int
-sk_btr_batch_oper(unsigned int key_nr)
+static void
+sk_btr_batch_oper(void **state)
 {
 	struct kv_node	*kv;
 	char		*key;
 	char		*value;
 	char		 buf[1024];
 	int		 i;
-	int		 rc;
-	bool		 verbose = key_nr < 20;
+	int		rc;
+	unsigned int	key_nr;
+	char		outbuf[64];
+	bool		 verbose;
+
+	key_nr = atoi(tst_fn_val.optval);
+	verbose = key_nr < 20;
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		D_PRINT("Invalid key number: %d\n", key_nr);
-		return -1;
+		sprintf(outbuf, "Invalid key number: %d\n", key_nr);
+		fail_msg("%s", outbuf);
 	}
 
 	D_ALLOC_ARRAY(kv, key_nr);
-	D_ASSERT(kv != NULL);
+	if (kv == NULL)
+		fail_msg("Array allocation failed");
 
 	D_PRINT("Batch add %d records.\n", key_nr);
 	sk_btr_gen_keys(kv, key_nr);
@@ -895,19 +929,17 @@ sk_btr_batch_oper(unsigned int key_nr)
 		key = kv[i].key.iov_buf;
 		value = kv[i].val.iov_buf;
 		sprintf(buf, "%s:%s", key, value);
-
-		rc = sk_btr_kv_operate(BTR_OPC_UPDATE, buf, verbose);
-		if (rc != 0) {
-			D_PRINT("Batch update failed: %d\n", rc);
-			return -1;
-		}
+		tst_fn_val.opc = BTR_OPC_UPDATE;
+		tst_fn_val.optval = buf;
+		tst_fn_val.input = verbose;
+		sk_btr_kv_operate(NULL);
 	}
 
-	sk_btr_query();
+	sk_btr_query(NULL);
 
 	rc = sk_btr_check_order(kv, key_nr);
 	if (rc != 0)
-		return -1;
+		fail_msg("Failed: check order\n");
 
 	/* lookup all rest records, delete 10000 of them, and repeat until
 	 * deleting all records.
@@ -920,12 +952,10 @@ sk_btr_batch_oper(unsigned int key_nr)
 		for (j = i; j < key_nr; j++) {
 			key = kv[j].key.iov_buf;
 			sprintf(buf, "%s", key);
-
-			rc = sk_btr_kv_operate(BTR_OPC_LOOKUP, buf, verbose);
-			if (rc != 0) {
-				D_PRINT("Batch lookup failed: %d\n", rc);
-				return -1;
-			}
+			tst_fn_val.opc = BTR_OPC_LOOKUP;
+			tst_fn_val.optval = buf;
+			tst_fn_val.input = verbose;
+			sk_btr_kv_operate(NULL);
 		}
 
 		D_PRINT("Batch delete %d records.\n",
@@ -934,40 +964,41 @@ sk_btr_batch_oper(unsigned int key_nr)
 		for (j = 0; i < key_nr && j < DEL_BATCH; i++, j++) {
 			key = kv[i].key.iov_buf;
 			sprintf(buf, "%s", key);
-
-			rc = sk_btr_kv_operate(BTR_OPC_DELETE, buf, verbose);
-			if (rc != 0) {
-				D_PRINT("Batch delete failed: %d\n", rc);
-				return -1;
-			}
+			tst_fn_val.opc = BTR_OPC_DELETE;
+			tst_fn_val.optval = buf;
+			tst_fn_val.input = verbose;
+			sk_btr_kv_operate(NULL);
 		}
 	}
-	sk_btr_query();
-	return 0;
+	sk_btr_query(NULL);
 }
 
-static int
-sk_btr_perf(unsigned int key_nr)
+static void
+sk_btr_perf(void **state)
 {
 	struct kv_node	*kv;
 	char		*key;
 	char		*value;
 	char		 buf[1024];
 	int		 i;
-	int		 rc = 0;
 	double		 then;
 	double		 now;
+	unsigned int	key_nr;
+	char		outbuf[64];
+
+	key_nr = atoi(tst_fn_val.optval);
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		D_PRINT("Invalid key number: %d\n", key_nr);
-		return -1;
+		sprintf(outbuf, "Invalid key number: %d\n", key_nr);
+		fail_msg("%s", outbuf);
 	}
 
 	D_PRINT("Btree performance test, order=%u, keys=%u\n",
 		sk_order, key_nr);
 
 	D_ALLOC_ARRAY(kv, key_nr);
-	D_ASSERT(kv != NULL);
+	if (kv == NULL)
+		fail_msg("Array allocation failed\n");
 
 	/* step-1: Insert performance */
 	sk_btr_gen_keys(kv, key_nr);
@@ -977,12 +1008,10 @@ sk_btr_perf(unsigned int key_nr)
 		key = kv[i].key.iov_buf;
 		value = kv[i].val.iov_buf;
 		sprintf(buf, "%s:%s", key, value);
-
-		rc = sk_btr_kv_operate(BTR_OPC_UPDATE, buf, false);
-		if (rc != 0) {
-			D_PRINT("update failed: %d\n", rc);
-			D_GOTO(out, rc = -1);
-		}
+		tst_fn_val.opc = BTR_OPC_UPDATE;
+		tst_fn_val.optval = buf;
+		tst_fn_val.input = false;
+		sk_btr_kv_operate(NULL);
 	}
 	now = dts_time_now();
 	D_PRINT("insert = %10.2f/sec\n", key_nr / (now - then));
@@ -994,12 +1023,10 @@ sk_btr_perf(unsigned int key_nr)
 	for (i = 0; i < key_nr; i++) {
 		key = kv[i].key.iov_buf;
 		sprintf(buf, "%s", key);
-
-		rc = sk_btr_kv_operate(BTR_OPC_LOOKUP, buf, false);
-		if (rc != 0) {
-			D_PRINT("lookup failed: %d\n", rc);
-			D_GOTO(out, rc = -1);
-		}
+		tst_fn_val.opc = BTR_OPC_LOOKUP;
+		tst_fn_val.optval = buf;
+		tst_fn_val.input = false;
+		sk_btr_kv_operate(NULL);
 	}
 	now = dts_time_now();
 	D_PRINT("lookup = %10.2f/sec\n", key_nr / (now - then));
@@ -1011,19 +1038,104 @@ sk_btr_perf(unsigned int key_nr)
 	for (i = 0; i < key_nr; i++) {
 		key = kv[i].key.iov_buf;
 		sprintf(buf, "%s", key);
-
-		rc = sk_btr_kv_operate(BTR_OPC_DELETE, buf, false);
-		if (rc != 0) {
-			D_PRINT("delete failed: %d\n", rc);
-			D_GOTO(out, rc = -1);
-		}
+		tst_fn_val.opc = BTR_OPC_DELETE;
+		tst_fn_val.optval = buf;
+		tst_fn_val.input = false;
+		sk_btr_kv_operate(NULL);
 	}
 	now = dts_time_now();
 	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
-
-out:
 	D_FREE(kv);
-	return rc;
+}
+
+static int
+run_btree_direct_open_create_test(void)
+{
+	static const struct CMUnitTest btree_direct_open_create_test[] = {
+		{ "EVT001: btree_direct_open_create test", sk_btr_open_create,
+			NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct open create test",
+				btree_direct_open_create_test, NULL, NULL);
+}
+
+static int
+run_btree_direct_close_destroy_test(void)
+{
+	static const struct CMUnitTest btree_direct_close_destroy_test[] = {
+		{ "EVT002: btree_direct_close_destroy test",
+		sk_btr_close_destroy, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct close destroy test",
+			btree_direct_close_destroy_test, NULL, NULL);
+}
+
+static int
+run_btree_direct_query_test(void)
+{
+	static const struct CMUnitTest btree_direct_query_test[] = {
+		{ "EVT003: btree_direct_query test", sk_btr_query,
+			NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct query test",
+				btree_direct_query_test, NULL, NULL);
+}
+
+static int
+run_btree_direct_iter_test(void)
+{
+	static const struct CMUnitTest btree_direct_iterate_test[] = {
+		{ "EVT004: btree_direct_iterate test", sk_btr_iterate,
+			NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct iterate test",
+				btree_direct_iterate_test, NULL, NULL);
+}
+
+static int
+run_btree_direct_batch_oper_test(void)
+{
+	static const struct CMUnitTest btree_direct_batch_oper_test[] = {
+		{ "EVT005: btree_direct_batch_oper test", sk_btr_batch_oper,
+			NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct batch oper test",
+				btree_direct_batch_oper_test, NULL, NULL);
+}
+
+static int
+run_btree_direct_perf_test(void)
+{
+	static const struct CMUnitTest btree_direct_perf_test[] = {
+		{ "EVT006: btree_direct_perf test", sk_btr_perf, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct perf test",
+				btree_direct_perf_test, NULL, NULL);
+}
+
+static int
+run_btree_direct_kv_operate_test(void)
+{
+	static const struct CMUnitTest btree_direct_kv_operate_test[] = {
+		{ "EVT007: btree_direct_kv_operate test",
+			sk_btr_kv_operate, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree direct kv operate test",
+				btree_direct_kv_operate_test, NULL, NULL);
 }
 
 static struct option btr_ops[] = {
@@ -1091,43 +1203,51 @@ main(int argc, char **argv)
 	D_PRINT("--------------------------------------\n");
 	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
 				  NULL)) != -1) {
+		tst_fn_val.optval = optarg;
+		tst_fn_val.input = true;
 		switch (opt) {
 		case 'C':
-			rc = sk_btr_open_create(true, optarg);
+			rc = run_btree_direct_open_create_test();
 			break;
 		case 'D':
-			rc = sk_btr_close_destroy(true);
+			rc = run_btree_direct_close_destroy_test();
 			break;
 		case 'o':
-			rc = sk_btr_open_create(false, NULL);
+			tst_fn_val.input = false;
+			tst_fn_val.optval = NULL;
+			rc = run_btree_direct_open_create_test();
 			break;
 		case 'c':
-			rc = sk_btr_close_destroy(false);
+			tst_fn_val.input = false;
+			rc = run_btree_direct_close_destroy_test();
 			break;
 		case 'q':
-			rc = sk_btr_query();
+			rc = run_btree_direct_query_test();
 			break;
 		case 'u':
-			rc = sk_btr_kv_operate(BTR_OPC_UPDATE, optarg, true);
+			tst_fn_val.opc = BTR_OPC_UPDATE;
+			rc = run_btree_direct_kv_operate_test();
 			break;
 		case 'f':
-			rc = sk_btr_kv_operate(BTR_OPC_LOOKUP, optarg, true);
+			tst_fn_val.opc = BTR_OPC_LOOKUP;
+			rc = run_btree_direct_kv_operate_test();
 			break;
 		case 'd':
-			rc = sk_btr_kv_operate(BTR_OPC_DELETE, optarg, true);
+			tst_fn_val.opc = BTR_OPC_DELETE;
+			rc = run_btree_direct_kv_operate_test();
 			break;
 		case 'r':
-			rc = sk_btr_kv_operate(BTR_OPC_DELETE_RETAIN, optarg,
-					       true);
+			tst_fn_val.opc = BTR_OPC_DELETE_RETAIN;
+			rc = run_btree_direct_kv_operate_test();
 			break;
 		case 'i':
-			rc = sk_btr_iterate(optarg);
+			rc = run_btree_direct_iter_test();
 			break;
 		case 'b':
-			rc = sk_btr_batch_oper(atoi(optarg));
+			rc = run_btree_direct_batch_oper_test();
 			break;
 		case 'p':
-			rc = sk_btr_perf(atoi(optarg));
+			rc = run_btree_direct_perf_test();
 			break;
 		default:
 			D_PRINT("Unsupported command %c\n", opt);
