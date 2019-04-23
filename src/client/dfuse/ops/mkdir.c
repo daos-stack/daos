@@ -30,14 +30,10 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*inode = NULL;
 	struct dfuse_inode_entry	*parent_inode;
-	d_list_t			*rlink = NULL;
+	d_list_t			*rlink;
 	int rc;
 
 	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-
-	if (parent != 1) {
-		D_GOTO(err, rc = ENOTSUP);
-	}
 
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
 	if (!rlink) {
@@ -53,6 +49,8 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 		D_GOTO(err, rc = ENOMEM);
 	}
 
+	DFUSE_TRA_INFO(parent_inode, "parent");
+
 	/* mkdir with the correct parent */
 	rc = dfs_mkdir(fs_handle->fsh_dfs, parent_inode->obj, name, mode);
 	if (rc != -DER_SUCCESS) {
@@ -63,8 +61,8 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	inode->parent = parent;
 	atomic_fetch_add(&inode->ie_ref, 1);
 
-	/* This wants to use parent->obj but it isn't ready yet */
-	rc = dfs_lookup(fs_handle->fsh_dfs, name, O_RDONLY, &inode->obj, &mode);
+	rc = dfs_lookup_rel(fs_handle->fsh_dfs, parent_inode->obj, name,
+			    O_RDONLY, &inode->obj, &mode);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
 	}

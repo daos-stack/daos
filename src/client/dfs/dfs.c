@@ -1686,6 +1686,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 
 	if (mode)
 		*mode = obj->mode;
+	*_obj = obj;
 	return rc;
 
 err_obj:

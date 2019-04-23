@@ -65,17 +65,13 @@ void
 dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie;
 	struct dfuse_inode_entry	*inode = NULL;
+	struct dfuse_inode_entry	*parent_inode;
 	mode_t				mode;
 	d_list_t			*rlink;
 	int rc;
 
 	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-
-	if (parent != 1) {
-		D_GOTO(err, rc = ENOTSUP);
-	}
 
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
 	if (!rlink) {
@@ -84,9 +80,9 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		D_GOTO(err, rc = ENOENT);
 	}
 
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_INFO(ie, "parent");
+	DFUSE_TRA_INFO(parent_inode, "parent");
 
 	D_ALLOC_PTR(inode);
 	if (!inode) {
@@ -94,8 +90,8 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	}
 	inode->parent = parent;
 
-	/* TODO: Use the parent here to search */
-	rc = dfs_lookup(fs_handle->fsh_dfs, name, O_RDONLY, &inode->obj, &mode);
+	rc = dfs_lookup_rel(fs_handle->fsh_dfs, parent_inode->obj, name,
+			    O_RDONLY, &inode->obj, &mode);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %p %d",
 			       fs_handle->fsh_dfs, rc);
