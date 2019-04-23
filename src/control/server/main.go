@@ -124,10 +124,19 @@ func serverMain() error {
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Format the unformatted servers and related hardware.
-	if err = formatIosrvs(&config, false); err != nil {
-		log.Errorf("Failed to format servers: %s", err)
-		return err
+	if !config.Reformat {
+		// Format the unformatted servers and related hardware.
+		if err = formatIosrvs(&config, false); err != nil {
+			log.Errorf("Failed to format servers: %s", err)
+			return err
+		}
+	} else {
+		// Reformat servers (re-run daos_server with existing superblock
+		// and environment.
+		if err = formatIosrvs(&config, true); err != nil {
+			log.Errorf("Failed to format servers: %s", err)
+			return err
+		}
 	}
 
 	// Only start single io_server for now.

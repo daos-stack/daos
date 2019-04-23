@@ -226,6 +226,7 @@ type configuration struct {
 	FaultCb        string          `yaml:"fault_cb"`
 	FabricIfaces   []string        `yaml:"fabric_ifaces"`
 	FormatOverride bool            `yaml:"format_override"`
+	Reformat       bool            `yaml:"reformat"`
 	ScmMountPath   string          `yaml:"scm_mount_path"`
 	BdevInclude    []string        `yaml:"bdev_include"`
 	BdevExclude    []string        `yaml:"bdev_exclude"`
@@ -277,6 +278,7 @@ func newDefaultConfiguration(ext External) configuration {
 		Cert:           "./.daos/daos_server.crt",
 		Key:            "./.daos/daos_server.key",
 		FormatOverride: true,
+		Reformat:	true,
 		ScmMountPath:   "/mnt/daos",
 		Hyperthreads:   false,
 		NrHugepages:    1024,

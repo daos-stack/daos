@@ -93,10 +93,10 @@ func formatIosrv(
 	if _, err := os.Stat(iosrvSuperPath(srv.ScmMount)); err == nil {
 		log.Debugf("server %d has already been formatted\n", i)
 
-		if reformat {
-			return errors.New(op + ": reformat not implemented yet")
+		if !reformat {
+			log.Debugf("Reformatting server %d\n", i)
+			return nil
 		}
-		return nil
 	} else if !os.IsNotExist(err) {
 		return errors.Wrap(err, op)
 	}
