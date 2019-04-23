@@ -96,6 +96,13 @@ func formatIosrv(
 		if reformat {
 			return errors.New(op + ": reformat not implemented yet")
 		}
+
+		// process config parameters for nvme and persist nvme.conf in scm
+		// but don't create files as they should already exist
+		if err := config.parseNvme(i, false); err != nil {
+			return errors.Wrap(err, "nvme config could not be processed")
+		}
+
 		return nil
 	} else if !os.IsNotExist(err) {
 		return errors.Wrap(err, op)
@@ -122,7 +129,7 @@ func formatIosrv(
 	}
 
 	// process config parameters for nvme and persist nvme.conf in scm
-	if err := config.parseNvme(i); err != nil {
+	if err := config.parseNvme(i, true); err != nil {
 		return errors.Wrap(err, "nvme config could not be processed")
 	}
 

@@ -161,7 +161,9 @@ func TestParseBdev(t *testing.T) {
 			srv.BdevNumber = tt.bdevNumber
 		}
 
-		err := config.parseNvme(srvIdx)
+		// TODO: add test to verify parseNvme works with create == false and adds
+		// expected env + cli opts
+		err := config.parseNvme(srvIdx, true)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, "")
 			continue
