@@ -77,6 +77,8 @@ static Drpc__Response *drpc_call_resp_return_ptr;
 static Drpc__Response drpc_call_resp_return_content;
 /* unpacked content of response body */
 static SecurityCredential *drpc_call_resp_return_security_credential;
+char *dc_agent_sockpath;
+
 int
 drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		Drpc__Response **resp)
@@ -205,6 +207,7 @@ setup_security_mocks(void **state)
 	/* Initialize mock values to something sane */
 	getenv_return = NULL;
 	getenv_name = NULL;
+	dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 
 	D_ALLOC_PTR(drpc_connect_return);
 	memset(drpc_connect_sockaddr, 0, sizeof(drpc_connect_sockaddr));
@@ -282,26 +285,6 @@ test_request_credentials_connects_to_default_socket(void **state)
 
 	assert_string_equal(drpc_connect_sockaddr,
 			DEFAULT_DAOS_AGENT_DRPC_SOCK);
-
-	daos_iov_free(&creds);
-}
-
-static void
-test_request_credentials_connects_to_env_socket(void **state)
-{
-	daos_iov_t creds;
-
-	memset(&creds, 0, sizeof(daos_iov_t));
-	getenv_return = "/nice/good/wonderful.sock";
-
-	dc_sec_request_creds(&creds);
-
-	/* Tried to connect to the path we got back from getenv */
-	assert_string_equal(drpc_connect_sockaddr, getenv_return);
-
-	/* Make sure we asked for the right env variable */
-	assert_non_null(getenv_name);
-	assert_string_equal(getenv_name, DAOS_AGENT_DRPC_SOCK_ENV);
 
 	daos_iov_free(&creds);
 }
@@ -482,8 +465,6 @@ main(void)
 			test_request_credentials_fails_if_drpc_connect_fails),
 		SECURITY_UTEST(
 			test_request_credentials_connects_to_default_socket),
-		SECURITY_UTEST(
-			test_request_credentials_connects_to_env_socket),
 		SECURITY_UTEST(
 			test_request_credentials_fails_if_drpc_call_fails),
 		SECURITY_UTEST(

@@ -304,8 +304,8 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out_lock;
 
 	svc->ms_step_down = false;
-	rc = dss_ult_create(map_distributord, svc, DSS_ULT_SELF, 0, 0,
-			    &svc->ms_distributord);
+	rc = dss_ult_create(map_distributord, svc, DSS_ULT_MISC, DSS_TGT_SELF,
+			    0, &svc->ms_distributord);
 	if (rc != 0)
 		goto out_lock;
 

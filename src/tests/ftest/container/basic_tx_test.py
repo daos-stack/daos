@@ -58,7 +58,7 @@ class BasicTxTest(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 
         # setup fault injection, this MUST be before API setup
@@ -78,7 +78,7 @@ class BasicTxTest(Test):
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 
         # start the DAOS servers

@@ -93,8 +93,8 @@ class PoolAttributeTest(Test):
             with open('../../../.build_vars.json') as build_file:
                 build_paths = json.load(build_file)
                 basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-                server_group = self.params.get("server_group",
-                                               '/server/',
+                server_group = self.params.get("name",
+                                               '/server_config/',
                                                'daos_server')
                 context = DaosContext(build_paths['PREFIX'] + '/lib/')
 

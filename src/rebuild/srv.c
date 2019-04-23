@@ -1253,8 +1253,9 @@ rebuild_ults(void *arg)
 			if (pool_is_rebuilding(task->dst_pool_uuid))
 				continue;
 
-			rc = dss_rebuild_ult_create(rebuild_task_ult, task,
-						    DSS_ULT_SELF, 0, 0, NULL);
+			rc = dss_ult_create(rebuild_task_ult, task,
+					    DSS_ULT_REBUILD, DSS_TGT_SELF,
+					    0, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				d_list_move(&task->dst_list,
@@ -1407,8 +1408,8 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 			D_GOTO(free, rc = dss_abterr2der(rc));
 
 		rebuild_gst.rg_rebuild_running = 1;
-		rc = dss_rebuild_ult_create(rebuild_ults, NULL,
-					    DSS_ULT_SELF, 0, 0, NULL);
+		rc = dss_ult_create(rebuild_ults, NULL, DSS_ULT_REBUILD,
+				    DSS_TGT_SELF, 0, NULL);
 		if (rc) {
 			ABT_cond_free(&rebuild_gst.rg_stop_cond);
 			rebuild_gst.rg_rebuild_running = 0;

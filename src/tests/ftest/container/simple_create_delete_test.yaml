@@ -12,8 +12,8 @@ hosts: !mux
         - boro-D
         - boro-E
         - boro-F
-server:
-   server_group: daos_server
+server_config:
+   name: daos_server
 conttests:
    createmode:
      mode: 511

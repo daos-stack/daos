@@ -6,12 +6,10 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.0
+FROM opensuse/leap:42.3
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
 # Build arguments can be set via -build-arg
-# set NOBUILD to disable git clone & build
-ARG NOBUILD
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
@@ -19,23 +17,27 @@ ARG UID=1000
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
-RUN zypper -n update
-RUN zypper install -y                                        \
-           git gcc gcc-c++ make cmake go libtool boost-devel \
-           libuuid-devel libopenssl-devel libevent-devel     \
-           libltdl7 libcmocka-devel readline-devel           \
-           doxygen pandoc flex patch nasm yasm ninja meson   \
-           cunit-devel libaio-devel clang sg3_utils          \
-           libiscsi-devel libnuma-devel graphviz             \
-           libyaml-devel                                     \
-           python2-pip curl which man
+RUN zypper --non-interactive update
+RUN zypper --non-interactive install                                   \
+           boost-devel ca-certificates-mozilla cmake cunit-devel curl  \
+           doxygen flex gcc gcc-c++ git go graphviz                    \
+           libaio-devel libevent-devel libiscsi-devel libltdl7 libtool \
+           libnuma-devel libopenssl-devel libuuid-devel libyaml-devel  \
+           make man nasm ninja pandoc patch                            \
+           python python-xml python3                                   \
+           readline-devel rsync yasm valgrind
 
-RUN pip install --upgrade pip
+RUN curl -ksS "https://bootstrap.pypa.io/get-pip.py" -o "/tmp/git-pip.py"; \
+    python /tmp/git-pip.py pip; \
+    python3 /tmp/git-pip.py pip; \
+    cp /usr/bin/pip2 /usr/bin/pip; \
+    rm /tmp/git-pip.py
 RUN pip install -U setuptools
 RUN pip install -U wheel
-Run pip install scons==3.0.1
+RUN pip install scons==3.0.1; pip3 install -U "meson<0.45.0"
 
-RUN zypper install -y gzip
+# No clang meson python2-pip sg3_utils
+RUN zypper install -y gzip which libcmocka-devel
 
 RUN curl -fsSL -o /tmp/jhli.key https://download.opensuse.org/repositories/home:/jhli/SLE_15/repodata/repomd.xml.key
 RUN rpm --import /tmp/jhli.key
@@ -47,7 +49,6 @@ RUN zypper --non-interactive install -y ipmctl-devel
 ENV USER daos
 ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
 
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
@@ -56,6 +57,9 @@ RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/sha
 # Switch to new user
 USER $USER
 WORKDIR /home/$USER
+
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
 
 # Fetch DAOS code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi

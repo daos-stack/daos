@@ -80,7 +80,7 @@
  * Two helper functions:
  * 1) daos_rpc_tag() to query the target tag (context ID) of specific RPC
  *    request,
- * 2) dss_tgt2xs() to query the XS id of the xstream for specific ULT task.
+ * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
 /** Number of offload XS per target [0, 2] */
@@ -96,8 +96,10 @@ dss_ctx_nr_get(void)
 	return DSS_CTX_NR_TOTAL;
 }
 
-#define REBUILD_DEFAULT_SCHEDULE_RATIO 30
+#define FIRST_DEFAULT_SCHEDULE_RATIO	80
+#define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
+unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
 
 #define DSS_XS_NAME_LEN		(64)
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
@@ -167,63 +169,65 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 }
 
 static ABT_unit
+unit_pop(ABT_pool *pools, int pool_idx, ABT_pool *pool)
+{
+	ABT_unit unit;
+
+	ABT_pool_pop(pools[pool_idx], &unit);
+	if (unit != ABT_UNIT_NULL) {
+		*pool = pools[pool_idx];
+		return unit;
+	}
+
+	return ABT_UNIT_NULL;
+}
+
+static ABT_unit
 normal_unit_pop(ABT_pool *pools, ABT_pool *pool)
 {
 	ABT_unit unit;
 
 	/* Let's pop I/O request ULT first */
-	ABT_pool_pop(pools[DSS_POOL_PRIV], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_PRIV];
+	unit = unit_pop(pools, DSS_POOL_PRIV, pool);
+	if (unit != ABT_UNIT_NULL)
 		return unit;
-	}
 
-	/* Other request and ollective ULT or created ULT */
-	ABT_pool_pop(pools[DSS_POOL_SHARE], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_SHARE];
+	/* Other request and collective ULT or created ULT */
+	unit = unit_pop(pools, DSS_POOL_SHARE, pool);
+	if (unit != ABT_UNIT_NULL)
 		return unit;
-	}
-
-	return ABT_UNIT_NULL;
-}
-
-static ABT_unit
-rebuild_unit_pop(ABT_pool *pools, ABT_pool *pool)
-{
-	ABT_unit unit;
-
-	ABT_pool_pop(pools[DSS_POOL_REBUILD], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_REBUILD];
-		return unit;
-	}
 
 	return ABT_UNIT_NULL;
 }
 
 /**
- * Choose ULT from the pool. Note: the rebuild ULT will be
- * be choosen by dss_rebuild_res_percentage.
- *
- * XXX we may change the sequence later once we have more cases.
+ * Choose ULT from the pool.
+ * Firstly with dss_first_res_percentage to schedule the task in
+ * DSS_POOL_URGENT, then with dss_rebuild_res_percentage (of left) to
+ * schedule rebuild task.
  */
 static ABT_unit
 dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
 {
-	size_t	 rebuild_cnt;
-	int	 rc;
+	size_t		cnt;
+	int		rc;
 
-	rc = ABT_pool_get_total_size(pools[DSS_POOL_REBUILD],
-				     &rebuild_cnt);
+	/* pop highest priority pool first */
+	rc = ABT_pool_get_total_size(pools[DSS_POOL_URGENT], &cnt);
+	if (rc != ABT_SUCCESS)
+		return ABT_UNIT_NULL;
+	if (cnt != 0 && rand() % 100 <= dss_first_res_percentage)
+		return unit_pop(pools, DSS_POOL_URGENT, pool);
+
+	/* then pop other pools */
+	rc = ABT_pool_get_total_size(pools[DSS_POOL_REBUILD], &cnt);
 	if (rc != ABT_SUCCESS)
 		return ABT_UNIT_NULL;
 
-	if (rebuild_cnt == 0 ||
-	    rand() % 100 >= dss_rebuild_res_percentage)
+	if (cnt == 0 || rand() % 100 >= dss_rebuild_res_percentage)
 		return normal_unit_pop(pools, pool);
 	else
-		return rebuild_unit_pop(pools, pool);
+		return unit_pop(pools, DSS_POOL_REBUILD, pool);
 
 	return ABT_UNIT_NULL;
 }
@@ -298,7 +302,7 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	};
 
 	/* Create a scheduler config */
-	ret = ABT_sched_config_create(&config, cv_event_freq, 10,
+	ret = ABT_sched_config_create(&config, cv_event_freq, 512,
 				      ABT_sched_config_var_end);
 	if (ret != ABT_SUCCESS)
 		return dss_abterr2der(ret);
@@ -610,6 +614,10 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	for (i = 0; i < DSS_POOL_CNT; i++) {
 		ABT_pool_access access;
 
+		/* for DSS_POOL_URGENT, now the only usage is for dtx_resync,
+		 * that creates ULT in DSS_XS_SELF. So ABT_POOL_ACCESS_PRIV
+		 * is fine.
+		 */
 		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD) ?
 			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
 
@@ -961,22 +969,16 @@ free:
 	return dss_abterr2der(rc);
 }
 
-/* Create the pool in the normal share pool */
+/**
+ * Create the ult, will internally select the pool and XS based on ult_type
+ * and tgt_idx.
+ */
 int
 dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
 	       size_t stack_size, ABT_thread *ult)
 {
-	return dss_ult_pool_create(func, arg, dss_tgt2xs(ult_type, tgt_idx),
-				   stack_size, ult, DSS_POOL_SHARE);
-}
-
-/* Create the pool in the rebuild pool */
-int
-dss_rebuild_ult_create(void (*func)(void *), void *arg, int ult_type,
-		       int tgt_id, size_t stack_size, ABT_thread *ult)
-{
-	return dss_ult_pool_create(func, arg, dss_tgt2xs(ult_type, tgt_id),
-				   stack_size, ult, DSS_POOL_REBUILD);
+	return dss_ult_pool_create(func, arg, dss_ult_xs(ult_type, tgt_idx),
+				   stack_size, ult, dss_ult_pool(ult_type));
 }
 
 /**
@@ -1055,13 +1057,13 @@ dss_ult_create_execute_cb(void *data)
  * Note: This is
  * normally used when it needs to create an ULT on other xstream.
  *
- * \param[in]	func	function to execute
- * \param[in]	arg	argument for \a func
- * \param[in]	user_cb	user call back (mandatory for async mode)
- * \param[in]	arg	argument for \a user callback
- * \param[in]	ult_type type of ULT
- * \param[in]	tgt_id	target index
- * \param[out]		error code.
+ * \param[in]	func		function to execute
+ * \param[in]	arg		argument for \a func
+ * \param[in]	user_cb		user call back (mandatory for async mode)
+ * \param[in]	arg		argument for \a user callback
+ * \param[in]	ult_type	type of ULT
+ * \param[in]	tgt_id		target index
+ * \param[out]			error code.
  *
  */
 int

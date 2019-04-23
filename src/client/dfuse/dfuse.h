@@ -685,8 +685,9 @@ dfuse_cb_write_buf(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 		   struct fuse_file_info *);
 
 void
-dfuse_cb_ioctl(fuse_req_t, fuse_ino_t, int, void *, struct fuse_file_info *,
-	       unsigned int, const void *, size_t, size_t);
+dfuse_cb_ioctl(fuse_req_t, fuse_ino_t, unsigned int, void *,
+	       struct fuse_file_info *, unsigned int, const void *, size_t,
+	       size_t);
 
 void
 dfuse_cb_setattr(fuse_req_t, fuse_ino_t, struct stat *, int,
