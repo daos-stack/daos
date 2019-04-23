@@ -9,9 +9,9 @@ then
 else
     mkdir "$DAOS_DIR/test_results"
 fi
-export CMOCKA_MESSAGE_OUTPUT=xml
+export CMOCKA_MESSAGE_OUTPUT="xml"
 export CMOCKA_XML_FILE="$DAOS_DIR/test_results/%g.xml"
-echo $CMOCKA_XML_FILE
+echo "$CMOCKA_XML_FILE"
 
 VCMD=()
 if [ "$USE_VALGRIND" = "yes" ]; then
