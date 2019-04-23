@@ -24,11 +24,6 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define POOL_NAME close_da
-#define TYPE_NAME common_req
-#define REQ_NAME request
-#include "dfuse_ops.h"
-
 int
 find_inode(struct dfuse_request *request)
 {
@@ -68,8 +63,8 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 	d_hash_rec_ndecref(&fs_handle->inode_ht, 2, rlink);
 }
 
-void ie_close(struct dfuse_projection_info *fs_handle,
-	      struct dfuse_inode_entry *ie)
+void
+ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);

@@ -83,7 +83,6 @@ struct dfuse_projection_info {
 	struct dfuse_da_type		*dh_da;
 	struct dfuse_da_type		*fgh_da;
 	struct dfuse_da_type		*fsh_da;
-	struct dfuse_da_type		*close_da;
 	struct dfuse_da_type		*lookup_da;
 	struct dfuse_da_type		*mkdir_da;
 	struct dfuse_da_type		*symlink_da;

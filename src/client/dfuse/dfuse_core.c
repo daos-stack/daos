@@ -229,7 +229,6 @@ fh_release(void *arg)
 	}
 COMMON_INIT(getattr);
 COMMON_INIT(setattr);
-COMMON_INIT(close);
 
 /* Reset and prepare for use a common descriptor */
 static bool
@@ -445,12 +444,6 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 	common_t.init = setattr_common_init;
 	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common_t);
 	if (!fs_handle->fsh_da)
-		D_GOTO(err, 0);
-
-	common_t.init = close_common_init;
-	fs_handle->close_da = dfuse_da_register(&fs_handle->da,
-						    &common_t);
-	if (!fs_handle->close_da)
 		D_GOTO(err, 0);
 
 	entry_t.init = lookup_entry_init;
