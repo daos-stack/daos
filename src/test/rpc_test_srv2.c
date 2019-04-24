@@ -179,6 +179,59 @@ srv_rpc_finalize(void)
 	dbg("<---%s---", __func__);
 }
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_test_srv2[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_rpc_io,
+		.prf_hdlr	= srv_common_cb,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= &CQF_crt_test_shutdown,
+		.prf_hdlr	= srv_common_cb,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_multitier_test_io,
+		.prf_hdlr	= srv_common_cb,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_multitier_test_no_io,
+		.prf_hdlr	= srv_common_cb,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_test_srv2 = {
+	.cpf_name = "my-proto-test-srv2",
+	.cpf_ver = TEST_RPC_COMMON_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_srv2),
+	.cpf_prf = &my_proto_rpc_fmt_test_srv2[0],
+	.cpf_base = TEST_RPC_COMMON_BASE,
+};
+
+
 int
 srv_rpc_init(void)
 {
@@ -195,23 +248,8 @@ srv_rpc_init(void)
 	rc  = crt_group_config_save(NULL, false);
 	D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);
 
-	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_TEST_IO, 0, crt_rpc_io,
-				  srv_common_cb);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register failed %d\n", rc);
-
-
-	rc = crt_rpc_srv_register(CRT_RPC_TEST_SHUTDOWN,
-				  CRT_RPC_FEAT_NO_REPLY, NULL,
-				  srv_common_cb);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register failed %d\n", rc);
-
-	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_MULTITIER_TEST_IO, 0,
-				  crt_multitier_test_io, srv_common_cb);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register failed %d\n", rc);
-
-	rc = CRT_RPC_SRV_REGISTER(CRT_RPC_MULTITIER_TEST_NO_IO, 0,
-				  crt_multitier_test_no_io, srv_common_cb);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register failed %d\n", rc);
+	rc = crt_proto_register(&my_proto_fmt_test_srv2);
+	D_ASSERTF(rc == 0, "crt_proto_register failed %d\n", rc);
 
 	rc = crt_group_rank(NULL, &rpc_srv.my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank failed %d\n", rc);

@@ -126,7 +126,7 @@ crt_client_cb(const struct crt_cb_info *cb_info)
 	default:
 		dbg("default\n");
 		break;
-     }
+	}
 
 	 /* set completion flag */
 	dbg("setting the completion flag\n");
@@ -153,7 +153,7 @@ static void
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed %d", rc);
 			break;
-		 }
+		}
 	}
 
 	dbg("<---%s---", __func__);
@@ -471,6 +471,59 @@ single_rpc_test(void)
 
 }
 
+
+static struct crt_proto_rpc_format my_proto_rpc_fmt_cli[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_rpc_io,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_test_no_io,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_test_err,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_test_timeout,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= &CQF_crt_test_shutdown,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_crt_multitier_test_io,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_cli = {
+	.cpf_name = "my-proto-cli",
+	.cpf_ver = TEST_RPC_COMMON_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_cli),
+	.cpf_prf = &my_proto_rpc_fmt_cli[0],
+	.cpf_base = TEST_RPC_COMMON_BASE,
+};
+
 void
 cli_rpc_init(void)
 {
@@ -490,28 +543,11 @@ cli_rpc_init(void)
 
 	D_ASSERT(rc == 0 || !rpc_cli.progress_thid);
 
-	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_IO, 0, crt_rpc_io);
-	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
-
-	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_ERR, 0, crt_test_err);
-	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
-
-	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_NO_IO, 0, crt_test_no_io);
-	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
-
-	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_TIMEOUT, 0, crt_test_timeout);
-	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
-
-	rc = CRT_RPC_REGISTER(CRT_RPC_TEST_SHUTDOWN,
-			      CRT_RPC_FEAT_NO_REPLY, crt_test_shutdown);
-	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
+	rc = crt_proto_register(&my_proto_fmt_cli);
+	D_ASSERTF(rc == 0, "crt_proto_register failed %d\n", rc);
 
 	rc = sem_init(&rpc_cli.cli_sem, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.%d\n", rc);
-
-	rc = CRT_RPC_REGISTER(CRT_RPC_MULTITIER_TEST_IO, 0,
-			      crt_multitier_test_io);
-	D_ASSERTF(rc == 0, "crt_rpc_register failed %d\n", rc);
 
 	rc = crt_group_config_path_set(rpc_cli.config_path);
 	D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);

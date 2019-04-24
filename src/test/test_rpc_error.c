@@ -50,9 +50,15 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 
-#define RPC_ERR_OPC_NOREPLY		(0xA1)
-#define RPC_ERR_OPC_NORPC		(0xA2)
-#define RPC_ERR_OPC_SHUTDOWN		(0x100)
+#define TEST_RPC_ERROR_BASE             0x010000000
+#define TEST_RPC_ERROR_VER              0
+
+#define RPC_ERR_OPC_NOREPLY	CRT_PROTO_OPC(TEST_RPC_ERROR_BASE, \
+					TEST_RPC_ERROR_VER, 0)
+#define RPC_ERR_OPC_NORPC	CRT_PROTO_OPC(TEST_RPC_ERROR_BASE, \
+					TEST_RPC_ERROR_VER, 1)
+#define RPC_ERR_OPC_SHUTDOWN	CRT_PROTO_OPC(TEST_RPC_ERROR_BASE, \
+					TEST_RPC_ERROR_VER, 2)
 
 struct rpc_err_t {
 	crt_group_t		*re_local_group;
@@ -185,6 +191,34 @@ rpc_err_shutdown_hdlr(crt_rpc_t *rpc_req)
 	fprintf(stderr, "rpc err server set shutdown flag.\n");
 }
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_rpc_error[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_rpc_err_noreply,
+		.prf_hdlr	= rpc_err_noreply_hdlr,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= rpc_err_shutdown_hdlr,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_rpc_error = {
+	.cpf_name = "my-proto-rpc_error",
+	.cpf_ver = TEST_RPC_ERROR_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_rpc_error),
+	.cpf_prf = &my_proto_rpc_fmt_rpc_error[0],
+	.cpf_base = TEST_RPC_ERROR_BASE,
+};
+
+
 void
 rpc_err_init(void)
 {
@@ -208,18 +242,9 @@ rpc_err_init(void)
 	rc = crt_context_create(&rpc_err.re_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
-	rc = CRT_RPC_SRV_REGISTER(RPC_ERR_OPC_NOREPLY, 0, rpc_err_noreply,
-				  rpc_err_noreply_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
+	rc = crt_proto_register(&my_proto_fmt_rpc_error);
 
-	rc = crt_rpc_srv_register(RPC_ERR_OPC_SHUTDOWN, 0, NULL,
-				  rpc_err_shutdown_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
-
-	if (!rpc_err.re_is_service) {
-		rc = crt_rpc_register(RPC_ERR_OPC_NORPC, 0, NULL);
-		D_ASSERTF(rc == 0, "crt_rpc_register() failed, rc: %d\n", rc);
-	}
+	D_ASSERTF(rc == 0, "crt_proto_register() failed, rc: %d\n", rc);
 
 	rc = sem_init(&rpc_err.re_all_done, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore\n");

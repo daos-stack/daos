@@ -72,6 +72,9 @@ static pid_t mypid;
 		fprintf(stderr, x); \
 	} while (0)
 
+#define TEST_PMIX_BASE 0x010000000
+#define TEST_PMIX_VER  0
+
 #define RPC_REGISTER(name) \
 	CRT_RPC_SRV_REGISTER(name, 0, name, DQF_FUNC_##name)
 
@@ -80,15 +83,16 @@ static pid_t mypid;
 
 #define RPC_DECLARE(name, function)					\
 	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
-	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
-	static void *DQF_FUNC_##name = (void *)function
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
 
 enum {
-	RPC_TEST_PING = 0xB1,
-	RPC_TEST_INDIRECT_PING = 0xB2,
-	CORPC_TEST_PING = 0xC1,
-	RPC_SET_GRP_INFO = 0xC2,
-	RPC_SHUTDOWN = 0xE0,
+	RPC_TEST_PING = CRT_PROTO_OPC(TEST_PMIX_BASE, TEST_PMIX_VER, 0),
+	RPC_TEST_INDIRECT_PING = CRT_PROTO_OPC(TEST_PMIX_BASE,
+						TEST_PMIX_VER, 1),
+	CORPC_TEST_PING = CRT_PROTO_OPC(TEST_PMIX_BASE,
+						TEST_PMIX_VER, 2),
+	RPC_SET_GRP_INFO = CRT_PROTO_OPC(TEST_PMIX_BASE, TEST_PMIX_VER, 3),
+	RPC_SHUTDOWN = CRT_PROTO_OPC(TEST_PMIX_BASE, TEST_PMIX_VER, 4),
 } rpc_id_t;
 
 #define CRT_ISEQ_RPC_TEST_PING	/* input fields */		 \
@@ -727,6 +731,44 @@ sem_timed_wait(sem_t *sem, int sec, int line_number)
 		  line_number, rc);
 }
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_no_pmix[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_RPC_TEST_PING,
+		.prf_hdlr	= (void *)test_ping_hdlr,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_RPC_TEST_INDIRECT_PING,
+		.prf_hdlr	= (void *)test_ping_indirect_hdlr,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_CORPC_TEST_PING,
+		.prf_hdlr	= (void *)corpc_test_ping_hdlr,
+		.prf_co_ops	= &corpc_test_ping_ops,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_RPC_SET_GRP_INFO,
+		.prf_hdlr	= (void *)set_grp_info_hdlr,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_RPC_SHUTDOWN,
+		.prf_hdlr	= (void *)shutdown_hdlr,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_no_pmix = {
+	.cpf_name = "my-proto-no_pmix",
+	.cpf_ver = TEST_PMIX_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_no_pmix),
+	.cpf_prf = &my_proto_rpc_fmt_no_pmix[0],
+	.cpf_base = TEST_PMIX_BASE,
+};
+
+
 int main(int argc, char **argv)
 {
 	d_rank_t	my_rank;
@@ -797,33 +839,9 @@ int main(int argc, char **argv)
 	rc = pthread_create(&progress_thread, 0, progress_function, &crt_ctx);
 	assert(rc == 0);
 
-	rc = RPC_REGISTER(RPC_TEST_PING);
+	rc = crt_proto_register(&my_proto_fmt_no_pmix);
 	if (rc != 0) {
-		D_ERROR("RPC_REGISTER() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	rc = RPC_REGISTER(RPC_SHUTDOWN);
-	if (rc != 0) {
-		D_ERROR("RPC_REGISTER() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	rc = RPC_REGISTER(RPC_TEST_INDIRECT_PING);
-	if (rc != 0) {
-		D_ERROR("RPC_REGISTER() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	rc = RPC_REGISTER(RPC_SET_GRP_INFO);
-	if (rc != 0) {
-		D_ERROR("RPC_REGISTER() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	rc = CORPC_REGISTER(CORPC_TEST_PING, &corpc_test_ping_ops);
-	if (rc != 0) {
-		D_ERROR("crt_corpc_register() failed; rc=%d\n", rc);
+		D_ERROR("PROTO_REGISTER() failed; rc=%d\n", rc);
 		assert(0);
 	}
 

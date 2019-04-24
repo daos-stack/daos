@@ -65,6 +65,7 @@ static crt_endpoint_t	g_server_ep;
 static char		g_hostname[100];
 static bool		g_do_shutdown;
 
+
 #define DBG_PRINT(x...)					\
 	do {						\
 		fprintf(stderr, "[%s::CLIENT]\t", g_hostname);	\
@@ -524,20 +525,10 @@ int main(int argc, char **argv)
 		sleep(1);
 	}
 	assert(rc == 0);
-
 	rc = pthread_create(&progress_thread, 0, progress_function, &g_crt_ctx);
 	assert(rc == 0);
 
-	rc = RPC_REGISTER(RPC_TEST_FETCH_IV);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_TEST_UPDATE_IV);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_TEST_INVALIDATE_IV);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_SHUTDOWN);
+	rc = crt_proto_register(&my_proto_fmt_iv);
 	assert(rc == 0);
 
 	g_server_ep.ep_grp = srv_grp;

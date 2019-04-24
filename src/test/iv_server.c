@@ -84,6 +84,7 @@ static void wait_for_namespace(void)
 	} while (0)
 
 
+
 /* Verbose mode:
  * 0 - disabled
  * 1 - Entry/Exists
@@ -1151,6 +1152,7 @@ show_usage(char *app_name)
 	printf("Verbose numbers are 0,1,2\n\n");
 }
 
+
 int main(int argc, char **argv)
 {
 	char	*arg_verbose = NULL;
@@ -1186,19 +1188,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("Server starting\n");
 
-	rc = RPC_REGISTER(RPC_TEST_FETCH_IV);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_TEST_UPDATE_IV);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_TEST_INVALIDATE_IV);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_SET_IVNS);
-	assert(rc == 0);
-
-	rc = RPC_REGISTER(RPC_SHUTDOWN);
+	rc = crt_proto_register(&my_proto_fmt_iv);
 	assert(rc == 0);
 
 	rc = crt_group_rank(NULL, &g_my_rank);

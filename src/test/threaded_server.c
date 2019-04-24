@@ -1,5 +1,5 @@
 /* Copyright (C) 2017-2019 Intel Corporation
- * All rights reserved.
+3 * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted for any purpose (including commercial purposes)
@@ -115,6 +115,23 @@ static void rpc_handler(crt_rpc_t *rpc)
 	}
 }
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_threaded_server[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_threaded_rpc,
+		.prf_hdlr	= rpc_handler,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_threaded_server = {
+	.cpf_name = "my-proto-threaded_server",
+	.cpf_ver = TEST_THREADED_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_threaded_server),
+	.cpf_prf = &my_proto_rpc_fmt_threaded_server[0],
+	.cpf_base = TEST_THREADED_BASE,
+};
+
 int main(int argc, char **argv)
 {
 	pthread_t		thread[NUM_THREADS];
@@ -131,7 +148,11 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	CRT_RPC_SRV_REGISTER(RPC_ID, 0, threaded_rpc, rpc_handler);
+	rc = crt_proto_register(&my_proto_fmt_threaded_server);
+	if (rc != 0) {
+		printf("Could not register rpc protocol , rc = %d", rc);
+		return -1;
+	}
 
 	crt_context_create(&crt_ctx);
 	for (rc = 0; rc < NUM_THREADS; rc++)

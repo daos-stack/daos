@@ -88,6 +88,10 @@ static const char *msg_strings[MSG_COUNT] = {
 #define MSG_IN_VALUE 0xbeef
 #define MSG_OUT_VALUE 0xbead
 
-#define RPC_ID 0x73ff
+#define TEST_THREADED_BASE 0x010000000
+#define TEST_THREADED_VER 0
+
+#define RPC_ID CRT_PROTO_OPC(TEST_THREADED_BASE,	\
+				TEST_THREADED_VER, 0)
 
 #endif /* __THREADED_RPC_H__ */

@@ -51,10 +51,18 @@
 #include <gurt/atomic.h>
 #include <cart/api.h>
 
-#define TEST_OPC_SHUTDOWN			(0xA1)
-#define TEST_OPC_CORPC_VER_MISMATCH		(0x200)
-#define TEST_OPC_RANK_EVICT			(0x201)
-#define TEST_OPC_SUBGRP_PING			(0x202)
+#define TEST_CORPC_BASE1 0x010000000
+#define TEST_CORPC_BASE2 0x020000000
+#define TEST_CORPC_VER 0
+
+#define TEST_OPC_SHUTDOWN CRT_PROTO_OPC(TEST_CORPC_BASE2,		\
+						TEST_CORPC_VER, 0)
+#define TEST_OPC_CORPC_VER_MISMATCH CRT_PROTO_OPC(TEST_CORPC_BASE1,	\
+						TEST_CORPC_VER, 0)
+#define TEST_OPC_RANK_EVICT CRT_PROTO_OPC(TEST_CORPC_BASE2,		\
+						TEST_CORPC_VER, 1)
+#define TEST_OPC_SUBGRP_PING CRT_PROTO_OPC(TEST_CORPC_BASE2,		\
+						TEST_CORPC_VER, 2)
 
 struct test_t {
 	crt_group_t		*t_local_group;
@@ -76,6 +84,7 @@ struct test_t {
 };
 
 struct test_t test;
+
 
 #define CRT_ISEQ_CORPC_VER_MISMATCH /* input fields */		 \
 	((uint32_t)		(magic)			CRT_VAR)
@@ -565,6 +574,51 @@ out:
 	D_ASSERT(rc == 0);
 }
 
+struct crt_proto_rpc_format my_proto_rpc_fmt_corpc[] = {
+	{
+		.prf_flags      = 0,
+		.prf_req_fmt    = &CQF_corpc_ver_mismatch,
+		.prf_hdlr       = corpc_ver_mismatch_hdlr,
+		.prf_co_ops     = &corpc_ver_mismatch_ops,
+	}
+};
+
+struct crt_proto_format my_proto_fmt_corpc = {
+	.cpf_name = "my-proto-corpc",
+	.cpf_ver = TEST_CORPC_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_corpc),
+	.cpf_prf = &my_proto_rpc_fmt_corpc[0],
+	.cpf_base = TEST_CORPC_BASE1,
+};
+
+static struct crt_proto_rpc_format my_proto_rpc_fmt_srv[] = {
+	{
+		.prf_flags      = 0,
+		.prf_req_fmt    = NULL,
+		.prf_hdlr       = test_shutdown_hdlr,
+		.prf_co_ops     = NULL,
+	}, {
+		.prf_flags      = 0,
+		.prf_req_fmt    = &CQF_rank_evict,
+		.prf_hdlr       = test_rank_evict_hdlr,
+		.prf_co_ops     = NULL,
+	}, {
+		.prf_flags      = 0,
+		.prf_req_fmt    = &CQF_subgrp_ping,
+		.prf_hdlr       = subgrp_ping_hdlr,
+		.prf_co_ops     = NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_srv = {
+	.cpf_name = "my-proto-srv",
+	.cpf_ver = TEST_CORPC_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_srv),
+	.cpf_prf = &my_proto_rpc_fmt_srv[0],
+	.cpf_base = TEST_CORPC_BASE2,
+};
+
+
 void
 test_init(void)
 {
@@ -597,22 +651,11 @@ test_init(void)
 	rc = crt_context_create(&test.t_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
-	rc = CRT_RPC_CORPC_REGISTER(TEST_OPC_CORPC_VER_MISMATCH,
-				    corpc_ver_mismatch,
-				    corpc_ver_mismatch_hdlr,
-				    &corpc_ver_mismatch_ops);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
-	rc = crt_rpc_srv_register(TEST_OPC_SHUTDOWN,
-				  CRT_RPC_FEAT_NO_REPLY, NULL,
-				  test_shutdown_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
+	rc = crt_proto_register(&my_proto_fmt_corpc);
+	D_ASSERTF(rc == 0, "crt_proto_register() for corpc failed, rc: %d\n",
+		rc);
 
-	rc = CRT_RPC_SRV_REGISTER(TEST_OPC_RANK_EVICT, 0, rank_evict,
-				  test_rank_evict_hdlr);
-	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
-
-	rc = CRT_RPC_SRV_REGISTER(TEST_OPC_SUBGRP_PING, 0, subgrp_ping,
-				  subgrp_ping_hdlr);
+	rc = crt_proto_register(&my_proto_fmt_srv);
 	D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed, rc: %d\n", rc);
 
 	rc = sem_init(&test.t_all_done, 0, 0);

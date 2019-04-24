@@ -53,6 +53,10 @@
 
 #define TEST_CTX_MAX_NUM	 (72)
 
+#define TEST_GROUP_BASE          0x010000000
+#define TEST_GROUP_VER           0
+
+
 struct test_t {
 	crt_group_t	*t_local_group;
 	crt_group_t	*t_remote_group;
@@ -270,6 +274,55 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 	printf("tier1 test_srver set shutdown flag.\n");
 }
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_ping_check,
+		.prf_hdlr	= test_checkin_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= test_shutdown_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_crt_test_ping_delay,
+		.prf_hdlr	= test_ping_delay_handler,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_test_group1 = {
+	.cpf_name = "my-proto-test-group1",
+	.cpf_ver = TEST_GROUP_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_group1),
+	.cpf_prf = &my_proto_rpc_fmt_test_group1[0],
+	.cpf_base = TEST_GROUP_BASE,
+};
+
+static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_ping_check,
+		.prf_hdlr	= test_checkin_handler,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= test_shutdown_handler,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_test_group2 = {
+	.cpf_name = "my-proto-test-group2",
+	.cpf_ver = TEST_GROUP_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_group2),
+	.cpf_prf = &my_proto_rpc_fmt_test_group2[0],
+	.cpf_base = TEST_GROUP_BASE,
+};
+
 void
 test_init(void)
 {
@@ -311,28 +364,13 @@ test_init(void)
 
 	/* register RPCs */
 	if (test_g.t_is_service) {
-		rc = CRT_RPC_SRV_REGISTER(TEST_OPC_CHECKIN, 0, test_ping_check,
-				      test_checkin_handler);
-		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
-		rc = crt_rpc_srv_register(TEST_OPC_SHUTDOWN,
-					  CRT_RPC_FEAT_NO_REPLY, NULL,
-					  test_shutdown_handler);
-		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
-
-		rc = CRT_RPC_SRV_REGISTER(TEST_OPC_PING_DELAY,
-					  CRT_RPC_FEAT_NO_TIMEOUT,
-					  crt_test_ping_delay,
-					  test_ping_delay_handler);
-		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
+		rc = crt_proto_register(&my_proto_fmt_test_group1);
+		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
+			rc);
 	} else {
-		rc = CRT_RPC_REGISTER(TEST_OPC_CHECKIN, 0, test_ping_check);
-		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
-		rc = crt_rpc_register(TEST_OPC_SHUTDOWN, CRT_RPC_FEAT_NO_REPLY,
-				      NULL);
-		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
+		rc = crt_proto_register(&my_proto_fmt_test_group2);
+		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
+			rc);
 	}
 
 	for (i = 0; i < test_g.t_ctx_num; i++) {
@@ -456,7 +494,8 @@ test_fini()
 			server_ep.ep_grp = test_g.t_remote_group;
 			server_ep.ep_rank = ii;
 			rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-					    TEST_OPC_SHUTDOWN, &rpc_req);
+				CRT_PROTO_OPC(TEST_GROUP_BASE,
+				TEST_GROUP_VER, 1), &rpc_req);
 			D_ASSERTF(rc == 0 && rpc_req != NULL,
 				  "crt_req_create() failed. "
 				  "rc: %d, rpc_req: %p\n", rc, rpc_req);

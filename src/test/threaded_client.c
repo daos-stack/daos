@@ -51,6 +51,7 @@ static crt_context_t crt_ctx;
 #define STOPPING 2
 #define SHUTDOWN 3
 
+
 static int check_status(void *arg)
 {
 	int	*status = (int *)arg;
@@ -188,6 +189,23 @@ static void *send_rpcs(void *arg)
 		}							\
 	} while (0)
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_threaded_client[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_threaded_rpc,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_threaded_client = {
+	.cpf_name = "my-proto-threaded_client",
+	.cpf_ver = TEST_THREADED_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_threaded_client),
+	.cpf_prf = &my_proto_rpc_fmt_threaded_client[0],
+	.cpf_base = TEST_THREADED_BASE,
+};
+
 int main(int argc, char **argv)
 {
 	pthread_t		 thread[NUM_THREADS];
@@ -207,8 +225,11 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	CRT_RPC_REGISTER(RPC_ID, 0, threaded_rpc);
-
+	saved_rc = crt_proto_register(&my_proto_fmt_threaded_client);
+	if (saved_rc != 0) {
+		printf("Could not register rpc protocol , rc = %d", saved_rc);
+		return -1;
+	}
 	pthread_create(&progress_thread, NULL, progress, &status);
 	while (status != STARTED)
 		sched_yield();

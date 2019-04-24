@@ -97,6 +97,9 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 
 #define TEST_BASIC_CORPC 0xC1
 
+#define TEST_CORPC_PREFWD_BASE 0x010000000
+#define TEST_CORPC_PREFWD_VER  0
+
 #define CRT_ISEQ_BASIC_CORPC	/* input fields */		 \
 	((uint32_t)		(unused)		CRT_VAR)
 
@@ -111,6 +114,24 @@ corpc_response_hdlr(const struct crt_cb_info *info)
 {
 	g_do_shutdown = 1;
 }
+
+static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_basic_corpc,
+		.prf_hdlr	= test_basic_corpc_hdlr,
+		.prf_co_ops	= &corpc_set_ivns_ops,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_basic_corpc = {
+	.cpf_name = "my-proto-basic_corpc",
+	.cpf_ver = TEST_CORPC_PREFWD_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_basic_corpc),
+	.cpf_prf = &my_proto_rpc_fmt_basic_corpc[0],
+	.cpf_base = TEST_CORPC_PREFWD_BASE,
+};
+
 
 int main(void)
 {
@@ -134,9 +155,7 @@ int main(void)
 	rc = crt_group_config_save(NULL, true);
 	assert(rc == 0);
 
-	rc = CRT_RPC_CORPC_REGISTER(TEST_BASIC_CORPC, basic_corpc,
-				    test_basic_corpc_hdlr,
-				    &corpc_set_ivns_ops);
+	rc = crt_proto_register(&my_proto_fmt_basic_corpc);
 	assert(rc == 0);
 
 	rc = crt_context_create(&g_main_ctx);
@@ -147,8 +166,9 @@ int main(void)
 	if (my_rank == 0) {
 		D_DEBUG(DB_TEST, "Rank 0 sending CORPC call\n");
 		rc = crt_corpc_req_create(g_main_ctx, NULL, &excluded_membs,
-				TEST_BASIC_CORPC, NULL, 0, 0,
-				crt_tree_topo(CRT_TREE_KNOMIAL, 4), &rpc);
+			CRT_PROTO_OPC(TEST_CORPC_PREFWD_BASE,
+				TEST_CORPC_PREFWD_VER, 0), NULL, 0, 0,
+			crt_tree_topo(CRT_TREE_KNOMIAL, 4), &rpc);
 		assert(rc == 0);
 
 		rc = crt_req_send(rpc, corpc_response_hdlr, NULL);

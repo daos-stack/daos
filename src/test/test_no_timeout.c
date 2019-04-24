@@ -51,6 +51,8 @@
 
 #define TEST_CTX_MAX_NUM	72
 #define NUM_ATTACH_RETRIES	10
+#define TEST_NO_TIMEOUT_BASE    0x010000000
+#define TEST_NO_TIMEOUT_VER     0
 
 struct test_t {
 	crt_group_t	*t_local_group;
@@ -182,6 +184,33 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 	printf("tier1 test_srver set shutdown flag.\n");
 }
 
+static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_crt_test_ping_delay,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}
+};
+
+static struct crt_proto_format my_proto_fmt_test_no_timeout = {
+	.cpf_name = "my-proto-test-no_timeout",
+	.cpf_ver = TEST_NO_TIMEOUT_VER,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_no_timeout),
+	.cpf_prf = &my_proto_rpc_fmt_test_no_timeout[0],
+	.cpf_base = TEST_NO_TIMEOUT_BASE,
+};
+
 void
 test_init(void)
 {
@@ -214,13 +243,8 @@ test_init(void)
 	if (test_g.t_is_service) {
 		D_ERROR("Can't run as service.\n");
 	} else {
-		rc = CRT_RPC_REGISTER(TEST_OPC_PING_DELAY,
-				      CRT_RPC_FEAT_NO_TIMEOUT,
-				      crt_test_ping_delay);
-		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
-		rc = crt_rpc_register(TEST_OPC_SHUTDOWN, CRT_RPC_FEAT_NO_REPLY,
-				      NULL);
-		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
+		rc = crt_proto_register(&my_proto_fmt_test_no_timeout);
+		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
 	}
 
 	for (i = 0; i < test_g.t_ctx_num; i++) {
