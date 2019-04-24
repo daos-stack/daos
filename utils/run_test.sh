@@ -96,6 +96,7 @@ if [ -d "/mnt/daos" ]; then
     export OFI_INTERFACE=lo
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
+    run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
