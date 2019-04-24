@@ -716,12 +716,12 @@ add_server(crt_group_t *group, struct server_entry *server)
 		if (rc != 0)
 			return rc;
 		rc = crt_group_node_add(group, server->se_rank, i, info);
-		D_FREE(info.uri);
-		if (rc != 0) {
+		if (rc != 0)
 			D_ERROR("failed to add rank=%u tag=%d uri=%s: %d\n",
 				server->se_rank, i, info.uri, rc);
+		D_FREE(info.uri);
+		if (rc != 0)
 			return rc;
-		}
 	}
 
 	return 0;
@@ -770,18 +770,6 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 		D_ERROR("failed to get existing ranks: %d\n", rc);
 		return rc;
 	}
-#if 1
-	D_ASSERT(d_rank_list_find(ranks, self_rank, NULL /* idx */));
-	D_DEBUG(DB_MGMT, "pre ranks:\n");
-	for (i = 0; i < ranks->rl_nr; i++) {
-		char *uri;
-
-		rc = crt_rank_uri_get(group, ranks->rl_ranks[i], 0, &uri);
-		D_ASSERTF(rc == 0, "%d\n", rc);
-		D_DEBUG(DB_MGMT, "%u %s\n", ranks->rl_ranks[i], uri);
-		D_FREE(uri);
-	}
-#endif
 
 	for (i = 0; i < in->tm_servers.ca_count; i++) {
 		bool existing = d_rank_list_find(ranks, servers[i].se_rank,
@@ -804,24 +792,6 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 			  in->tm_map_version, rc);
 	}
 	sys_map_version = in->tm_map_version;
-
-#if 1
-	d_rank_list_free(ranks);
-	rc = crt_group_ranks_get(group, &ranks);
-	if (rc != 0) {
-		D_ERROR("failed to get existing ranks: %d\n", rc);
-		return rc;
-	}
-	D_DEBUG(DB_MGMT, "post ranks:\n");
-	for (i = 0; i < ranks->rl_nr; i++) {
-		char *uri;
-
-		rc = crt_rank_uri_get(group, ranks->rl_ranks[i], 0, &uri);
-		D_ASSERTF(rc == 0, "%d\n", rc);
-		D_DEBUG(DB_MGMT, "%u %s\n", ranks->rl_ranks[i], uri);
-		D_FREE(uri);
-	}
-#endif
 
 	d_rank_list_free(ranks);
 	return 0;
