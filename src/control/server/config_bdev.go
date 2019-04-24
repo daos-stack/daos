@@ -66,7 +66,8 @@ const (
 	msgBdevNone = "in config, no nvme.conf generated for server"
 )
 
-type Bdev struct {
+// bdev describes parameters and behaviours for a particular bdev class.
+type bdev struct {
 	templ   string
 	vosEnv  string
 	isEmpty func(*server) string            // check no elements
@@ -131,11 +132,12 @@ func prepBdevFile(i int, c *configuration) error {
 	return nil
 }
 
-var bdevMap = map[BdClass]Bdev{
-	bdNVMe:   Bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep},
-	bdMalloc: Bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep},
-	bdKdev:   Bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilPrep},
-	bdFile:   Bdev{fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile},
+// bdevMap provides lookup of params and behaviour for each bdev class.
+var bdevMap = map[BdClass]bdev{
+	bdNVMe:   {nvmeTempl, "", isEmptyList, isValidList, nilPrep},
+	bdMalloc: {mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep},
+	bdKdev:   {kdevTempl, "AIO", isEmptyList, isValidList, nilPrep},
+	bdFile:   {fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile},
 }
 
 // rank represents a rank of an I/O server or a nil rank.
