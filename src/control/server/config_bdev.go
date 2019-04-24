@@ -135,7 +135,7 @@ var bdevMap = map[BdClass]Bdev{
 	bdNVMe:   Bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep},
 	bdMalloc: Bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep},
 	bdKdev:   Bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilPrep},
-	bdFile:   Bdev{fileTempl, "AIO", isEmptyNumber, isValidSize, prepBdevFile},
+	bdFile:   Bdev{fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile},
 }
 
 // rank represents a rank of an I/O server or a nil rank.
