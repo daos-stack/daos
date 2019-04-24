@@ -79,11 +79,12 @@ dfs_umount(dfs_t *dfs);
  * Convert from a dfs_obj_t to a daos_obj_id_t.
  *
  * \param[in]	obj	Object to convert
+ * \param[out]	oid	Daos object ID.
  *
- * \return		The DAOS object ID.
+ * \return		0 on Success. Negative on Failure.
  */
-daos_obj_id_t
-dfs_obj2id(dfs_obj_t *obj);
+int
+dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
 
 /**
  * Lookup a path in the DFS and return the associated open object and mode.

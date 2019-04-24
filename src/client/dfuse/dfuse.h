@@ -51,26 +51,29 @@ struct dfuse_data {
 };
 
 struct dfuse_info {
-	struct fuse_session		*fsi_session;
-	struct dfuse_projection_info	*fsi_handle;
-	struct dfuse_data		fsi_dfd;
-	dfs_t				*fsi_dfs;
+	struct fuse_session		*dfi_session;
+	struct dfuse_projection_info	*dfi_handle;
+	struct dfuse_data		dfi_dfd;
+	dfs_t				*dfi_dfs;
 };
 
+/* dfuse_main.c */
+
+/* Launch fuse, and do not return until complete */
 bool
-dfuse_register_fuse(struct dfuse_info *dfuse_info,
-		   struct fuse_lowlevel_ops *flo,
-		   struct fuse_args *args,
-		   struct dfuse_projection_info *fsi_handle);
+dfuse_launch_fuse(struct dfuse_info *dfuse_info,
+		  struct fuse_lowlevel_ops *flo,
+		  struct fuse_args *args,
+		  struct dfuse_projection_info *dfi_handle);
 
+/* dfuse_core.c */
+/* Start a dfuse projection */
 int
-dfuse_post_start(struct dfuse_info *dfuse_info);
+dfuse_start(struct dfuse_info *dfuse_info);
 
-void
-dfuse_flush_fuse(struct dfuse_projection_info *fs_handle);
-
+/* Drain and free resources used by a projection */
 int
-dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle);
+dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
@@ -674,9 +677,13 @@ dfuse_cb_symlink(fuse_req_t, const char *, fuse_ino_t, const char *);
 void
 dfuse_cb_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
 
+/* Return inode information to fuse
+ *
+ * Adds inode to the hash table and calls fuse_reply_entry()
+ */
 void
-dfuse_register_inode(struct dfuse_projection_info *fs_handle,
-		     struct dfuse_inode_entry *inode,
-		     fuse_req_t req);
+dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
+		  struct dfuse_inode_entry *inode,
+		  fuse_req_t req);
 
 #endif /* __DFUSE_H__ */

@@ -2863,10 +2863,13 @@ out:
 	return rc;
 }
 
-daos_obj_id_t
-dfs_obj2id(dfs_obj_t *obj)
+int
+dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 {
-	return obj->oid;
+	if (oid == NULL)
+		return -DER_INVAL;
+	oid_cp(oid, obj->oid);
+	return -DER_SUCCESS;
 }
 
 #define DFS_ROOT_UUID "ffffffff-ffff-ffff-ffff-ffffffffffff"

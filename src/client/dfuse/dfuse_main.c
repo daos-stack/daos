@@ -42,13 +42,13 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 	int			ret;
 
 	/*Blocking*/
-	if (dfuse_info->fsi_dfd.threaded) {
+	if (dfuse_info->dfi_dfd.threaded) {
 		struct fuse_loop_config config = {.max_idle_threads = 10};
 
-		ret = fuse_session_loop_mt(dfuse_info->fsi_session,
+		ret = fuse_session_loop_mt(dfuse_info->dfi_session,
 					   &config);
 	} else {
-		ret = fuse_session_loop(dfuse_info->fsi_session);
+		ret = fuse_session_loop(dfuse_info->dfi_session);
 	}
 	if (ret != 0)
 		DFUSE_LOG_ERROR("Fuse loop exited with return code: %d", ret);
@@ -64,33 +64,33 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
  * Returns 0 on success, or non-zero on error.
  */
 bool
-dfuse_register_fuse(struct dfuse_info *dfuse_info,
-		   struct fuse_lowlevel_ops *flo,
-		   struct fuse_args *args,
-		   struct dfuse_projection_info *fs_handle)
+dfuse_launch_fuse(struct dfuse_info *dfuse_info,
+		  struct fuse_lowlevel_ops *flo,
+		  struct fuse_args *args,
+		  struct dfuse_projection_info *fs_handle)
 {
 	int rc;
 
-	dfuse_info->fsi_handle = fs_handle;
+	dfuse_info->dfi_handle = fs_handle;
 
-	dfuse_info->fsi_session = fuse_session_new(args,
+	dfuse_info->dfi_session = fuse_session_new(args,
 						   flo,
 						   sizeof(*flo),
 						   fs_handle);
-	if (!dfuse_info->fsi_session)
+	if (!dfuse_info->dfi_session)
 		goto cleanup;
 
-	rc = fuse_session_mount(dfuse_info->fsi_session,
-				dfuse_info->fsi_dfd.mountpoint);
+	rc = fuse_session_mount(dfuse_info->dfi_session,
+				dfuse_info->dfi_dfd.mountpoint);
 	if (rc != 0) {
 		goto cleanup;
 	}
-	fs_handle->session = dfuse_info->fsi_session;
+	fs_handle->session = dfuse_info->dfi_session;
 
 	fuse_opt_free_args(args);
 
 	rc = ll_loop_fn(dfuse_info);
-	fuse_session_unmount(dfuse_info->fsi_session);
+	fuse_session_unmount(dfuse_info->dfi_session);
 	if (rc) {
 		goto cleanup;
 	}
@@ -137,7 +137,7 @@ main(int argc, char **argv)
 	if (!dfuse_info)
 		D_GOTO(out, ret = -DER_NOMEM);
 
-	dfuse_fs = &dfuse_info->fsi_dfd;
+	dfuse_fs = &dfuse_info->dfi_dfd;
 	dfuse_fs->threaded = true;
 
 	while (1) {
@@ -236,22 +236,20 @@ main(int argc, char **argv)
 		D_GOTO(out_pool, 0);
 	}
 
-	rc = dfs_mount(poh, coh, O_RDWR, &dfuse_info->fsi_dfs);
+	rc = dfs_mount(poh, coh, O_RDWR, &dfuse_info->dfi_dfs);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
 		D_GOTO(out_cont, 0);
 	}
 
-	rc = dfuse_post_start(dfuse_info);
+	rc = dfuse_start(dfuse_info);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(out_cont, ret = rc);
 	}
 
-	dfuse_flush_fuse(dfuse_info->fsi_handle);
+	ret = dfuse_destroy_fuse(dfuse_info->dfi_handle);
 
-	ret = dfuse_deregister_fuse(dfuse_info->fsi_handle);
-
-	fuse_session_destroy(dfuse_info->fsi_session);
+	fuse_session_destroy(dfuse_info->dfi_session);
 
 out_cont:
 	daos_cont_close(coh, NULL);

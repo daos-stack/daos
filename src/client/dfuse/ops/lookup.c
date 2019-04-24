@@ -25,13 +25,20 @@
 #include "dfuse.h"
 
 void
-dfuse_register_inode(struct dfuse_projection_info *fs_handle,
-		     struct dfuse_inode_entry *inode,
-		     fuse_req_t req)
+dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
+		  struct dfuse_inode_entry *inode,
+		  fuse_req_t req)
 {
 	struct fuse_entry_param		entry = {0};
 	d_list_t			*rlink;
-	daos_obj_id_t oid = dfs_obj2id(inode->obj);
+	daos_obj_id_t			oid;
+	int				rc;
+
+	rc = dfs_obj2id(inode->obj, &oid);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, EIO);
+		return;
+	}
 
 	inode->stat.st_ino = (ino_t)oid.hi;
 
@@ -110,7 +117,7 @@ dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		D_GOTO(out_decref, 0);
 	}
 
-	dfuse_register_inode(fs_handle, inode, req);
+	dfuse_reply_entry(fs_handle, inode, req);
 	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 	return;
 

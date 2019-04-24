@@ -343,12 +343,14 @@ wb_reset(void *arg)
 }
 
 int
-dfuse_post_start(struct dfuse_info *dfuse_info)
+dfuse_start(struct dfuse_info *dfuse_info)
 {
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
-	int				ret;
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
+	struct dfuse_inode_entry	*inode;
+	mode_t				mode;
+	int				rc;
 
 	struct dfuse_da_reg pt = {.init = dh_init,
 				  .reset = dh_reset,
@@ -361,12 +363,12 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 				  POOL_TYPE_INIT(dfuse_file_handle,
 						 fh_free_list)};
 
-	struct dfuse_da_reg common_t = {.reset = common_reset,
-					POOL_TYPE_INIT(common_req, list)};
+	struct dfuse_da_reg common = {.reset = common_reset,
+				      POOL_TYPE_INIT(common_req, list)};
 
-	struct dfuse_da_reg entry_t = {.reset = entry_reset,
-				       .release = entry_release,
-				       POOL_TYPE_INIT(entry_req, list)};
+	struct dfuse_da_reg entry = {.reset = entry_reset,
+				     .release = entry_release,
+				     POOL_TYPE_INIT(entry_req, list)};
 
 	struct dfuse_da_reg rb_page = {.init = rb_page_init,
 				       .reset = rb_reset,
@@ -386,16 +388,16 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 	if (!fs_handle)
 		return false;
 
-	ret = dfuse_da_init(&fs_handle->da, fs_handle);
-	if (ret != -DER_SUCCESS)
+	rc = dfuse_da_init(&fs_handle->da, fs_handle);
+	if (rc != -DER_SUCCESS)
 		D_GOTO(err, 0);
 
-	ret = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
 					  D_HASH_FT_EPHEMERAL,
 					  3,
 					  fs_handle, &hops,
 					  &fs_handle->inode_ht);
-	if (ret != 0)
+	if (rc != 0)
 		D_GOTO(err, 0);
 
 	fs_handle->proj.progress_thread = 1;
@@ -436,30 +438,30 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 	if (!fs_handle->dh_da)
 		D_GOTO(err, 0);
 
-	common_t.init = getattr_common_init;
-	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common_t);
+	common.init = getattr_common_init;
+	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common);
 	if (!fs_handle->fgh_da)
 		D_GOTO(err, 0);
 
-	common_t.init = setattr_common_init;
-	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common_t);
+	common.init = setattr_common_init;
+	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common);
 	if (!fs_handle->fsh_da)
 		D_GOTO(err, 0);
 
-	entry_t.init = lookup_entry_init;
+	entry.init = lookup_entry_init;
 	fs_handle->lookup_da = dfuse_da_register(&fs_handle->da,
-						     &entry_t);
+						     &entry);
 	if (!fs_handle->lookup_da)
 		D_GOTO(err, 0);
 
-	entry_t.init = mkdir_entry_init;
-	fs_handle->mkdir_da = dfuse_da_register(&fs_handle->da, &entry_t);
+	entry.init = mkdir_entry_init;
+	fs_handle->mkdir_da = dfuse_da_register(&fs_handle->da, &entry);
 	if (!fs_handle->mkdir_da)
 		D_GOTO(err, 0);
 
-	entry_t.init = symlink_entry_init;
+	entry.init = symlink_entry_init;
 	fs_handle->symlink_da = dfuse_da_register(&fs_handle->da,
-						      &entry_t);
+						      &entry);
 	if (!fs_handle->symlink_da)
 		D_GOTO(err, 0);
 
@@ -481,55 +483,45 @@ dfuse_post_start(struct dfuse_info *dfuse_info)
 	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
-	fs_handle->fsh_dfs = dfuse_info->fsi_dfs;
-	/* Create initial inode */
-	{
-		struct dfuse_inode_entry *inode;
-		mode_t          mode;
-		int rc;
+	fs_handle->fsh_dfs = dfuse_info->dfi_dfs;
 
-		D_ALLOC_PTR(inode);
-		if (!inode) {
-			D_GOTO(err, 0);
-		}
-
-		rc = dfs_lookup(fs_handle->fsh_dfs,
-				"/", O_RDONLY, &inode->obj, &mode);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %p %d",
-					fs_handle->fsh_dfs, rc);
-			D_GOTO(err, 0);
-		}
-
-		atomic_fetch_add(&inode->ie_ref, 1);
-
-		rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
-					rc);
-			D_GOTO(err, 0);
-		}
-
-		inode->stat.st_ino = 1;
-
-		/* stat */
-		rc = d_hash_rec_insert(&fs_handle->inode_ht,
-				       &inode->stat.st_ino,
-				       sizeof(inode->stat.st_ino),
-				       &inode->ie_htl,
-				       false);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
-					rc);
-			D_GOTO(err, 0);
-
-		}
+	/* Create the root inode and insert into table */
+	D_ALLOC_PTR(inode);
+	if (!inode) {
+		D_GOTO(err, 0);
 	}
 
-	if (!dfuse_register_fuse(dfuse_info,
-				 fuse_ops,
-				 &args,
-				 fs_handle)) {
+	rc = dfs_lookup(fs_handle->fsh_dfs,
+			"/", O_RDONLY, &inode->obj, &mode);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %p %d",
+				fs_handle->fsh_dfs, rc);
+		D_GOTO(err, 0);
+	}
+
+	atomic_fetch_add(&inode->ie_ref, 1);
+
+	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
+				rc);
+		D_GOTO(err, 0);
+	}
+
+	inode->stat.st_ino = 1;
+
+	rc = d_hash_rec_insert(&fs_handle->inode_ht,
+			       &inode->stat.st_ino,
+			       sizeof(inode->stat.st_ino),
+			       &inode->ie_htl,
+			       false);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
+				rc);
+		D_GOTO(err, 0);
+	}
+
+	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err, 0);
 	}
@@ -584,11 +576,15 @@ ino_flush(d_list_t *rlink, void *arg)
 	return -DER_SUCCESS;
 }
 
-/* Called once per projection, before the FUSE filesystem has been torn down */
-void
-dfuse_flush_fuse(struct dfuse_projection_info *fs_handle)
+/* Called once per projection, after the FUSE filesystem has been torn down */
+int
+dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 {
-	int rc;
+	d_list_t	*rlink;
+	uint64_t	refs = 0;
+	int		handles = 0;
+	int		rc;
+	int		rcp = 0;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
@@ -596,17 +592,6 @@ dfuse_flush_fuse(struct dfuse_projection_info *fs_handle)
 				   fs_handle);
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
-}
-
-/* Called once per projection, after the FUSE filesystem has been torn down */
-int
-dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
-{
-	d_list_t	*rlink;
-	uint64_t	refs = 0;
-	int		handles = 0;
-	int		rc;
-	int		rcp = 0;
 
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
