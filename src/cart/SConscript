@@ -97,17 +97,21 @@ def scons():
     prereqs.require(denv, 'mercury', 'pmix')
     denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
-    pp_env = Environment(TOOLS=['default', 'extra'])
-    pp_env.AppendUnique(CPPPATH=['src/include', 'src/cart'])
-    prereqs.require(pp_env, 'mercury', 'pmix', headers_only=True)
-
-    # pylint: disable=no-member
-    pp_files = pp_env.Preprocess(SRC)
-    pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
-    # pylint: enable=no-member
-
     cart_targets = denv.SharedObject(SRC)
-    denv.Requires(cart_targets, pp_files)
+
+    compiler = env.get('COMPILER').lower()
+    if compiler != 'covc':
+        pp_env = Environment(TOOLS=['default', 'extra'])
+        pp_env.AppendUnique(CPPPATH=['src/include', 'src/cart'])
+        prereqs.require(pp_env, 'mercury', 'pmix', headers_only=True)
+
+        # pylint: disable=no-member
+        pp_files = pp_env.Preprocess(SRC)
+        pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
+        # pylint: enable=no-member
+
+        denv.Requires(cart_targets, pp_files)
+
     cart_lib = denv.SharedLibrary('libcart', [cart_targets, swim_targets])
     denv.Requires(cart_lib, [swim_targets, gurt_lib])
     denv.Install('$PREFIX/lib/', cart_lib)
