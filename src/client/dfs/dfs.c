@@ -1731,7 +1731,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t **_new_obj)
 		break;
 	default:
 		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc);
 	}
 
 	strncpy(new_obj->name, obj->name, DFS_MAX_PATH);
