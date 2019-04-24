@@ -102,7 +102,7 @@ func (s *ListStorCmd) Execute(args []string) (errs error) {
 // PrepNvmeCmd is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
 type PrepNvmeCmd struct {
-	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Specify PCI devices to be unbound from Kernel driver and used with SPDK (default is all PCI devices). Must be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted."`
+	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
 	TargetUser  string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	Reset       bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
