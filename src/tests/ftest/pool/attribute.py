@@ -102,7 +102,8 @@ class PoolAttributeTest(Test):
                 self.hostlist = self.params.get("test_machines", '/run/hosts/*')
                 self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                                 self.workdir)
-                self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
+                self.agent_sessions = AgentUtils.run_agent(basepath,
+                                                           self.hostlist)
                 server_utils.run_server(self.hostfile, server_group, basepath)
 
                 createmode = self.params.get("mode",
