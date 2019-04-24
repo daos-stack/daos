@@ -33,6 +33,44 @@
 #include <inttypes.h>
 #include <daos/pool_map.h>
 
+struct remap_node {
+	uint32_t rank;
+	uint32_t shard_idx;
+	uint32_t fseq;
+};
+
+/** compare hashed IDs of two targets */
+static int
+map_rebuild_cmp(void *array, int a, int b)
+{
+	struct remap_node *sort = (struct remap_node *)array;
+
+	if (sort[a].fseq > sort[b].fseq)
+		return 1;
+	if (sort[a].fseq  < sort[b].fseq)
+		return -1;
+	return 0;
+}
+
+static void
+map_rebuild_swap(void *array, int a, int b)
+{
+	struct remap_node *sort;
+	struct remap_node  tmp;
+
+	sort = ((struct remap_node *)array);
+
+	tmp = sort[a];
+	sort[a] = sort[b];
+	sort[b] = tmp;
+}
+
+/** sort target by fseq*/
+static daos_sort_ops_t map_rebuild_sops = {
+	.so_cmp		= map_rebuild_cmp,
+	.so_swap	= map_rebuild_swap,
+};
+
 static inline void
 set_bit(uint8_t *bitmap, uint64_t bit)
 {
@@ -181,10 +219,6 @@ crc(uint64_t data, uint32_t init_val)
 }
 
 
-struct remap_node {
-	uint32_t rank;
-	uint32_t shard_idx;
-};
 
 /**
  * This is the Mapless placement map structure used to place objects.
@@ -383,7 +417,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 static void
 get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
-		   uint64_t key, uint8_t *dom_used, int shard_num)
+		   uint64_t key, uint8_t *dom_used, struct remap_node *r_node)
 {
 	uint8_t                 *coll_dom_start;
 	uint8_t                 *used_tgts = NULL;
@@ -500,7 +534,7 @@ get_object_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 	struct pool_target *target;
 	uint8_t dom_used[dom_map_size];
 	uint32_t target_id;
-	uint8_t rebuild_shard_num[group_size * group_cnt];
+	struct remap_node rebuild_shard_num[group_size * group_cnt];
 	uint32_t used_targets[layout->ol_nr + 1];
 	uint8_t rebuild_num = 0;
 	int i;
@@ -526,26 +560,35 @@ get_object_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 			tgt_id = target->ta_comp.co_id;
 
 			if (pool_target_unavail(target)) {
-				rebuild_shard_num[rebuild_num] = k;
 
 				uint32_t tgt_rank = target->ta_comp.co_rank;
+				uint32_t fseq = target->ta_comp.co_fseq;
+
+				rebuild_shard_num[rebuild_num].shard_idx = k;
+				rebuild_shard_num[rebuild_num].rank = tgt_rank;
+				rebuild_shard_num[rebuild_num].fseq = fseq;
 
 				if (rebuild_list != NULL) {
 					rebuild_list[rebuild_num].rank = tgt_rank;
 					rebuild_list[rebuild_num].shard_idx = k;
+					rebuild_list[rebuild_num].fseq = fseq;
 				}
 				rebuild_num++;
+
 			}
 			layout->ol_shards[k].po_target = tgt_id;
 			layout->ol_shards[k].po_shard = k;
 		}
 	}
 
+	if(rebuild_num > 1)
+		daos_array_sort(rebuild_shard_num, rebuild_num, true,
+				&map_rebuild_sops);
+
 	for (i = 0; i < rebuild_num; ++i) {
-		k = rebuild_shard_num[i];
 
 		get_rebuild_target(root, &target_id, crc(oid.lo, k), dom_used,
-				k);
+				&rebuild_shard_num[i]);
 
 		layout->ol_shards[k].po_target = target_id;
 		layout->ol_shards[k].po_shard = k;
