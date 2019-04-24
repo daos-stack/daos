@@ -51,21 +51,15 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	DFUSE_TRA_INFO(parent_inode, "parent");
 
-	/* mkdir with the correct parent */
-	rc = dfs_mkdir(fs_handle->fsh_dfs, parent_inode->obj, name, mode);
+	rc = dfs_open(fs_handle->fsh_dfs, parent_inode->obj, name, mode,
+		      O_CREAT, 0, 0, NULL, &inode->obj);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
+		D_GOTO(release, 0);
 	}
 
 	strncpy(inode->name, name, NAME_MAX);
 	inode->parent = parent;
 	atomic_fetch_add(&inode->ie_ref, 1);
-
-	rc = dfs_lookup_rel(fs_handle->fsh_dfs, parent_inode->obj, name,
-			    O_RDONLY, &inode->obj, &mode);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
-	}
 
 	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
