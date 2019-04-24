@@ -1107,9 +1107,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		break;
 
 	case VOS_ITER_RECX:
-		rc = evt_open_inplace(info->ii_evt, info->ii_uma,
-				      vos_cont2hdl(info->ii_obj->obj_cont),
-				      info->ii_vea_info, &toh);
+		rc = evt_open(info->ii_evt, info->ii_uma,
+			      vos_cont2hdl(info->ii_obj->obj_cont),
+			      info->ii_vea_info, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
