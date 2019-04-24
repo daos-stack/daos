@@ -175,11 +175,10 @@ func (c *configuration) createConf(srv *server, templ string, path string) (
 	return
 }
 
-// parseNvme reads server config file, calls createConf when "create" == true
-// and performs necessary file creation and sets environment variable for SPDK
-// emulation if needed. Direct io_server to use generated NVMe conf by setting
-//"-n" cli opt.
-func (c *configuration) parseNvme(i int, create bool) (err error) {
+// parseNvme reads server config file, calls createConf and performs necessary
+// file creation and sets environment variable for SPDK emulation if needed.
+// Direct io_server to use generated NVMe conf by setting "-n" cli opt.
+func (c *configuration) parseNvme(i int) (err error) {
 	srv := &c.Servers[i]
 	confPath := filepath.Join(srv.ScmMount, confOut)
 	bdev := bdevMap[srv.BdevClass]
@@ -189,14 +188,12 @@ func (c *configuration) parseNvme(i int, create bool) (err error) {
 		return
 	}
 
-	if create {
-		if err = bdev.prep(i, c); err != nil {
-			return
-		}
+	if err = bdev.prep(i, c); err != nil {
+		return
+	}
 
-		if err = c.createConf(srv, bdev.templ, confPath); err != nil {
-			return
-		}
+	if err = c.createConf(srv, bdev.templ, confPath); err != nil {
+		return
 	}
 
 	if bdev.vosEnv != "" {

@@ -42,7 +42,6 @@ func TestParseBdev(t *testing.T) {
 		fileExists bool // mock return value for file exists check
 		extraEnv   string
 		expFiles   [][]string
-		dontCreate bool // default is to create conf and AIO files
 		errMsg     string
 		desc       string
 	}{
@@ -171,7 +170,7 @@ func TestParseBdev(t *testing.T) {
 
 		// TODO: add test to verify parseNvme works with create == false and adds
 		// expected env + cli opts
-		err := config.parseNvme(srvIdx, !tt.dontCreate)
+		err := config.parseNvme(srvIdx)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
