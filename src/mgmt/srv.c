@@ -156,32 +156,6 @@ static struct dss_drpc_handler mgmt_drpc_handlers[] = {
 };
 
 /**
- * Set parameter on a single target.
- */
-void
-ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
-{
-	struct mgmt_tgt_params_set_in	*in;
-	struct mgmt_tgt_params_set_out	*out;
-	int rc;
-
-	in = crt_req_get(rpc);
-	D_ASSERT(in != NULL);
-
-	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
-	if (rc == 0 && in->tps_key_id == DSS_KEY_FAIL_LOC)
-		rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
-					in->tps_value_extra);
-	if (rc)
-		D_ERROR("Set parameter failed key_id %d: rc %d\n",
-			 in->tps_key_id, rc);
-
-	out = crt_reply_get(rpc);
-	out->srv_rc = rc;
-	crt_reply_send(rpc);
-}
-
-/**
  * Set parameter on all of server targets, for testing or other
  * purpose.
  */
@@ -240,6 +214,57 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 out:
 	out = crt_reply_get(rpc);
 	out->srv_rc = rc;
+	crt_reply_send(rpc);
+}
+
+/**
+ * Set parameter on all of server targets, for testing or other
+ * purpose.
+ */
+void
+ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_profile_in	*in;
+	crt_opcode_t		opc;
+	int			topo;
+	crt_rpc_t		*tc_req;
+	struct mgmt_profile_in	*tc_in;
+	struct mgmt_profile_out	*out;
+	int			rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_PROFILE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
+				  opc, NULL, NULL, 0, topo, &tc_req);
+	if (rc)
+		D_GOTO(out, rc);
+
+	tc_in = crt_req_get(tc_req);
+	D_ASSERT(tc_in != NULL);
+
+	tc_in->p_module = in->p_module;
+	tc_in->p_path = in->p_path;
+	tc_in->p_op = in->p_op;
+	rc = dss_rpc_send(tc_req);
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D_GOTO(out, rc);
+	}
+
+	out = crt_reply_get(tc_req);
+	rc = out->p_rc;
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D_GOTO(out, rc);
+	}
+out:
+	out = crt_reply_get(rpc);
+	D_DEBUG(DB_MGMT, "profile hdlr: rc %d\n", rc);
+	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
 
