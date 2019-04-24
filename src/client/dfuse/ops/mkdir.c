@@ -67,7 +67,7 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	}
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, inode, req);
+	dfuse_reply_entry(fs_handle, inode, NULL, req);
 
 	return;
 release:

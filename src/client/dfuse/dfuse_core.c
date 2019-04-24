@@ -180,7 +180,6 @@ fh_init(void *arg, void *handle)
 	struct dfuse_file_handle *fh = arg;
 
 	DFUSE_REQUEST_INIT(&fh->open_req, handle);
-	DFUSE_REQUEST_INIT(&fh->creat_req, handle);
 	DFUSE_REQUEST_INIT(&fh->release_req, handle);
 	fh->ie = NULL;
 }
@@ -193,10 +192,6 @@ fh_reset(void *arg)
 	DFUSE_REQUEST_RESET(&fh->open_req);
 
 	fh->open_req.ir_ht = RHS_INODE_NUM;
-
-	DFUSE_REQUEST_RESET(&fh->creat_req);
-
-	fh->creat_req.ir_ht = RHS_INODE_NUM;
 
 	DFUSE_REQUEST_RESET(&fh->release_req);
 

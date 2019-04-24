@@ -263,16 +263,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define DFUSE_REPLY_CREATE(dfuse_req, entry, fi)			\
+#define DFUSE_REPLY_CREATE(req, entry, fi)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning create");	\
-		__rc = fuse_reply_create((dfuse_req)->req, &entry, &fi); \
+		DFUSE_TRA_DEBUG(req, "Returning create");		\
+		__rc = fuse_reply_create(req, &entry, fi);		\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_create returned %d:%s",\
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
 #define DFUSE_REPLY_ENTRY(req, entry)					\
@@ -518,12 +517,10 @@ struct dfuse_file_handle {
 
 	/** Open request, with precreated RPC */
 	struct dfuse_request		open_req;
-	/** Create request, with precreated RPC */
-	struct dfuse_request		creat_req;
 	/* Release request, with precreated RPC */
 	struct dfuse_request		release_req;
 
-	d_list_t fh_free_list;
+	d_list_t			fh_free_list;
 
 	/** The inode number of the file */
 	ino_t				inode_num;
@@ -531,7 +528,7 @@ struct dfuse_file_handle {
 	 * allocated and then used on a successful create() call.  Once
 	 * the file handle is in use then this field will be NULL.
 	 */
-	struct dfuse_inode_entry		*ie;
+	struct dfuse_inode_entry	*ie;
 };
 
 /** Read buffer descriptor */
@@ -684,6 +681,7 @@ dfuse_cb_fsync(fuse_req_t, fuse_ino_t, int, struct fuse_file_info *);
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
+		  struct dfuse_file_handle *handle,
 		  fuse_req_t req);
 
 #endif /* __DFUSE_H__ */
