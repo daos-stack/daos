@@ -120,6 +120,19 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 const char *value, dfs_obj_t **obj);
 
 /*
+ * Duplicate the DFS object without any RPCs (locally) by using the existing
+ * open handles. This is used mostly for low-level fuse to avoid re-opening. The
+ * duplicated object must be released with dfs_release().
+ *
+ * \param[in]	obj	Object to dup.
+ * \param[out]	new_obj	DFS object that is duplicated/opened.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t **new_obj);
+
+/*
  * Close/release open object.
  *
  * \param[in]	obj	Object to release.

@@ -1689,6 +1689,65 @@ out:
 }
 
 int
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t **_new_obj)
+{
+	dfs_obj_t	*new_obj;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -DER_INVAL;
+	if (obj == NULL || _new_obj == NULL)
+		return -DER_INVAL;
+
+	D_ALLOC_PTR(new_obj);
+	if (new_obj == NULL)
+		return -DER_NOMEM;
+
+	switch (obj->mode & S_IFMT) {
+	case S_IFDIR:
+		rc = daos_obj_open(dfs->coh, obj->oid, DAOS_OO_RW,
+				   &new_obj->oh, NULL);
+		if (rc)
+			D_GOTO(err, rc);
+		break;
+	case S_IFREG:
+	{
+		char		buf[1024];
+		daos_iov_t	ghdl;
+
+		daos_iov_set(&ghdl, buf, 1024);
+
+		rc = daos_array_local2global(obj->oh, &ghdl);
+		if (rc)
+			D_GOTO(err, rc);
+
+		rc = daos_array_global2local(dfs->coh, ghdl, &new_obj->oh);
+		if (rc)
+			D_GOTO(err, rc);
+		break;
+	}
+	case S_IFLNK:
+		new_obj->value = strdup(obj->value);
+		break;
+	default:
+		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
+		return -DER_INVAL;
+	}
+
+	strncpy(new_obj->name, obj->name, DFS_MAX_PATH);
+	new_obj->mode = obj->mode;
+	oid_cp(&new_obj->parent_oid, obj->parent_oid);
+	oid_cp(&new_obj->oid, obj->oid);
+
+	*_new_obj = new_obj;
+	return 0;
+
+err:
+	D_FREE(new_obj);
+	return rc;
+}
+
+int
 dfs_release(dfs_obj_t *obj)
 {
 	int rc = 0;
