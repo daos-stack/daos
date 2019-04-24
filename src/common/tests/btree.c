@@ -579,6 +579,8 @@ ik_btr_iterate(void **state)
 	char		*arg;
 
 	arg = tst_fn_val.optval;
+	i = strlen(arg);
+	arg[i+1] = '\0';
 
 	if (daos_handle_is_inval(ik_toh)) {
 		fail_msg("Can't find opened tree\n");
@@ -713,15 +715,14 @@ ik_btr_batch_oper(void **state)
 	char		 buf[64];
 	int		 i;
 	unsigned int	key_nr;
-	char		outbuf[64];
 	bool		 verbose;
 
 	key_nr = atoi(tst_fn_val.optval);
 	verbose = key_nr < 20;
 
 	if (key_nr == 0 || key_nr > (1U << 28)) {
-		sprintf(outbuf, "Invalid key number: %d\n", key_nr);
-		fail_msg("%s", outbuf);
+		D_PRINT("Invalid key number: %d\n", key_nr);
+		fail();
 	}
 
 	D_ALLOC_ARRAY(arr, key_nr);
