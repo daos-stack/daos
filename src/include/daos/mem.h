@@ -55,14 +55,14 @@ typedef uint64_t		umem_off_t;
 #define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAGS)
 /** A mask to retrieve the invalid flags */
 #define UMOFF_FLAG_MASK		(UMOFF_MAX_FLAG - 1)
-/** Use to set a value to NULL.  Note we don't use 0 because,
- *  in theory, 0 can be a valid offset whereas it is less likely
- *  that values above UMOFF_NULL are valid virtual memory
- *  addresses (for vmem case).
+/** In theory and offset can be NULL but in practice, pmemobj_root
+ *  is not at offset 0 as pmdk reserves some space for its internal
+ *  use.   So, use 0 for NULL.   Invalid bits are also considered
+ *  NULL.
  */
-#define UMOFF_NULL		(~0ULL & ~UMOFF_FLAG_MASK)
+#define UMOFF_NULL		(0ULL)
 /** Check for a NULL value including possible invalid flag bits */
-#define UMOFF_IS_NULL(umoff)	(umoff >= UMOFF_NULL)
+#define UMOFF_IS_NULL(umoff)	(umoff <= UMOFF_FLAG_MASK)
 
 /** Up to UMOFF_NUM_FLAGS bits are available to the user to mark an
  *  invalid offset with extra information.  If these fields are
@@ -77,7 +77,7 @@ umem_off_set_invalid(umem_off_t *offset, uint64_t flags)
 {
 	D_ASSERTF(flags < UMOFF_MAX_FLAG,
 		  "Attempt to set invalid flag bits on umem_off_t\n");
-	*offset = UMOFF_NULL | flags;
+	*offset = flags;
 }
 
 /** Retrieves any invalid flags that are set.  If the offset hasn't

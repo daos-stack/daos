@@ -166,11 +166,10 @@ static void
 test_invalid_flags(void **state)
 {
 	struct test_arg		*arg = *state;
-	umem_off_t		 umoff = 0;
+	umem_off_t		 umoff = UMOFF_NULL;
 	int			 i;
 
-	/* 0 is not considered NULL for an offset */
-	assert_false(UMOFF_IS_NULL(umoff));
+	assert_true(UMOFF_IS_NULL(umoff));
 
 	assert_int_equal(umem_off_get_invalid_flags(umoff), 0);
 
