@@ -44,6 +44,7 @@ var (
 		"per-server in config"
 	msgScmDevEmpty          = "scm dcpm device list must contain path"
 	msgScmClassNotSupported = "operation unsupported on scm class"
+	msgIpmctlDiscoverFail   = "ipmctl module discovery"
 )
 
 // ScmStorage interface specifies basic functionality for subsystem
@@ -61,14 +62,14 @@ type ScmStorage interface {
 // IpaCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
-	ipmCtl      ipmctl.IpmCtl  // ipmctl NVM API interface
+	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *configuration // server configuration structure
 	modules     []*pb.ScmModule
 	initialized bool
 	formatted   bool
 }
 
-// todo: implement remaining methods for scmStorage
+// TODO: implement remaining methods for scmStorage
 // func (s *scmStorage) Update(params interface{}) interface{} {return nil}
 // func (s *scmStorage) BurnIn(params interface{}) (fioPath string, cmds []string, env string, err error) {
 // return
@@ -105,21 +106,36 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms []*pb.ScmModule) {
 }
 
 // Discover method implementation for scmStorage
-func (s *scmStorage) Discover() error {
+func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
+	addStateDiscover := func(
+		status pb.ResponseStatus, errMsg string,
+		infoMsg string) *pb.ResponseState {
+
+		return addState(
+			status, errMsg, infoMsg, common.UtilLogDepth+1,
+			"scm storage discover")
+	}
+
 	if s.initialized {
-		return nil
+		resp.Scmstate = addStateDiscover(
+			pb.ResponseStatus_CTRL_SUCCESS, "", "already initialized")
+		resp.Modules = s.modules
+		return
 	}
 
-	mms, err := s.ipmCtl.Discover()
+	mms, err := s.ipmctl.Discover()
 	if err != nil {
-		// TODO: check and handle permissions and no module errs
-		//       to give caller useful message.
-		return err
+		resp.Scmstate = addStateDiscover(
+			pb.ResponseStatus_CTRL_ERR_NVME,
+			msgIpmctlDiscoverFail+": "+err.Error(), "")
+		return
 	}
-
 	s.modules = loadModules(mms)
+
+	resp.Scmstate = addStateDiscover(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	resp.Modules = s.modules
+
 	s.initialized = true
-	return nil
 }
 
 // clearMount unmounts then removes mount point.
@@ -213,7 +229,7 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 
 	// wraps around addMret to provide format specific function
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
-		// log context should be stack layer registering result
+		// log depth should be stack layer registering result
 		addMret(
 			resp, "format", mntPoint, status, errMsg,
 			common.UtilLogDepth+1)
@@ -295,10 +311,10 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 
 // newScmStorage creates a new instance of ScmStorage struct.
 //
-// NvmMgmt is the implementation of IpmCtl interface in go-ipmctl
+// NvmMgmt is the implementation of ipmctl interface in go-ipmctl
 func newScmStorage(config *configuration) *scmStorage {
 	return &scmStorage{
-		ipmCtl: &ipmctl.NvmMgmt{},
+		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"os"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/pkg/errors"
 )
 
@@ -51,46 +52,51 @@ type cliOptions struct {
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	List     ListStorCmd `command:"list" alias:"l" description:"List SCM and NVMe storage attached to local server"`
+	Scan     ScanStorCmd `command:"scan" alias:"l" description:"Scan SCM and NVMe storage attached to local server"`
 	PrepNvme PrepNvmeCmd `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
 }
 
-// ListStorCmd is the struct representing the command to list storage.
+// ScanStorCmd is the struct representing the command to scan storage.
 // Retrieves and prints details of locally attached SCM and NVMe storage.
-type ListStorCmd struct{}
+type ScanStorCmd struct{}
 
-// Execute is run when ListStorCmd activates
+// Execute is run when ScanStorCmd activates
 //
 // Perform task then exit immediately. No config parsing performed.
-func (s *ListStorCmd) Execute(args []string) (errs error) {
+func (s *ScanStorCmd) Execute(args []string) (errs error) {
+	var isErrored bool
 	config := newConfiguration()
+	resp := new(pb.ScanStorageResp)
 
-	server, err := newControlService(
+	srv, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
-	server.Setup()
+	srv.Setup()
 
 	// continue on failure for a single subsystem
 	fmt.Println("Listing attached storage...")
-	if err := server.nvme.Discover(); err != nil {
-		errs = errors.WithMessage(err, "nvme discover")
-		fmt.Fprintln(os.Stderr, errs)
+	srv.nvme.Discover(resp)
+	srv.scm.Discover(resp)
+
+	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		fmt.Fprintln(os.Stderr, "nvme scan: "+resp.Nvmestate.Error)
+		isErrored = true
 	} else {
-		common.PrintStructs("NVMe", server.nvme.controllers)
+		common.PrintStructs("NVMe", srv.nvme.controllers)
 	}
-	if err := server.scm.Discover(); err != nil {
-		errs = errors.WithMessage(err, "scm discover")
-		fmt.Fprintln(os.Stderr, errs)
+	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		fmt.Fprintln(os.Stderr, "scm scan: "+resp.Scmstate.Error)
+		isErrored = true
 	} else {
-		common.PrintStructs("SCM", server.scm.modules)
+		common.PrintStructs("SCM", srv.scm.modules)
 	}
 
-	server.Teardown()
+	srv.Teardown()
 
-	if errs != nil {
+	if isErrored {
 		os.Exit(1)
 	}
 	// exit immediately to avoid continuation of main

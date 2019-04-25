@@ -53,6 +53,8 @@ var (
 	msgBdevNotFound          = "controller at pci addr not found"
 	msgBdevNotInited         = "nvme storage not initialized"
 	msgBdevClassNotSupported = "operation unsupported on bdev class"
+	msgSpdkInitFail          = "SPDK env init, has setup been run?"
+	msgSpdkDiscoverFail      = "SPDK controller discovery"
 )
 
 // newNvmeStorageErrLogger is a factory creating context aware local log util
@@ -148,6 +150,7 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 			return c
 		}
 	}
+
 	return nil
 }
 
@@ -157,9 +160,13 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 // NOTE: doesn't attempt SPDK prep which requires elevated privileges,
 //       that instead can be performed explicitly with subcommand.
 func (n *nvmeStorage) Setup() (err error) {
-	if err = n.Discover(); err != nil {
-		return
+	resp := new(pb.ScanStorageResp)
+	n.Discover(resp)
+
+	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		err = errors.New("nvme scan: " + resp.Nvmestate.Error)
 	}
+
 	return
 }
 
@@ -172,6 +179,7 @@ func (n *nvmeStorage) Teardown() (err error) {
 	// TODO: Decide whether to rebind PCI devices back to their original
 	// drivers and release hugepages here.
 	// err = n.setup.reset()
+
 	n.initialized = false
 	return
 }
@@ -189,21 +197,44 @@ func (n *nvmeStorage) Teardown() (err error) {
 // TODO: This is currently a one-time only discovery for the lifetime of this
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
-func (n *nvmeStorage) Discover() error {
-	if n.initialized {
-		return nil
+func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
+	addStateDiscover := func(
+		status pb.ResponseStatus, errMsg string,
+		infoMsg string) *pb.ResponseState {
+
+		return addState(
+			status, errMsg, infoMsg, common.UtilLogDepth+1,
+			"nvme storage discover")
 	}
+
+	if n.initialized {
+		resp.Nvmestate = addStateDiscover(
+			pb.ResponseStatus_CTRL_SUCCESS, "", "already initialized")
+		resp.Ctrlrs = n.controllers
+		return
+	}
+
 	// specify shmID to be set as opt in SPDK env init
 	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
-		return errors.WithMessage(err, "SPDK env init, has setup been run?")
+		resp.Nvmestate = addStateDiscover(
+			pb.ResponseStatus_CTRL_ERR_NVME,
+			msgSpdkInitFail+": "+err.Error(), "")
+		return
 	}
+
 	cs, ns, err := n.nvme.Discover()
 	if err != nil {
-		return errors.WithMessage(err, "SPDK discovery")
+		resp.Nvmestate = addStateDiscover(
+			pb.ResponseStatus_CTRL_ERR_NVME,
+			msgSpdkDiscoverFail+": "+err.Error(), "")
+		return
 	}
 	n.controllers = loadControllers(cs, ns)
+
+	resp.Nvmestate = addStateDiscover(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	resp.Ctrlrs = n.controllers
+
 	n.initialized = true
-	return nil
 }
 
 // addCret populates and adds to response NVMe ctrlr results list in addition
@@ -216,15 +247,10 @@ func addCret(
 		resp.Crets,
 		&pb.NvmeControllerResult{
 			Pciaddr: pciaddr,
-			State: &pb.ResponseState{
-				Status: status,
-				Error:  errMsg,
-			},
+			State: addState(
+				status, errMsg, "", logDepth+1,
+				"nvme storage "+op),
 		})
-
-	if errMsg != "" {
-		log.Errordf(logDepth, "nvme storage "+op+": "+errMsg)
-	}
 }
 
 // Format attempts to format (forcefully) NVMe devices on a given server
@@ -240,8 +266,7 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 
 	// wraps around addCret to provide format specific function
 	addCretFormat := func(status pb.ResponseStatus, errMsg string) {
-
-		// log context should be stack layer registering result
+		// log depth should be stack layer registering result
 		addCret(
 			resp, "format", pciAddr, status, errMsg,
 			common.UtilLogDepth+1)

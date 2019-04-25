@@ -30,6 +30,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
+	"github.com/pkg/errors"
 )
 
 // MockModule returns a mock SCM module of type exported from go-ipmctl.
@@ -46,20 +47,22 @@ func MockModule() DeviceDiscovery {
 	return dd
 }
 
-type mockIpmCtl struct {
-	modules []DeviceDiscovery
+type mockIpmctl struct {
+	discoverModulesRet error
+	modules            []DeviceDiscovery
 }
 
-func (m *mockIpmCtl) Discover() ([]DeviceDiscovery, error) {
-	return m.modules, nil
+func (m *mockIpmctl) Discover() ([]DeviceDiscovery, error) {
+	return m.modules, m.discoverModulesRet
 }
 
 // mockScmStorage factory
 func newMockScmStorage(
-	mms []DeviceDiscovery, inited bool, c *configuration) *scmStorage {
+	discoverModulesRet error, mms []DeviceDiscovery, inited bool,
+	c *configuration) *scmStorage {
 
 	return &scmStorage{
-		ipmCtl:      &mockIpmCtl{modules: mms},
+		ipmctl:      &mockIpmctl{discoverModulesRet, mms},
 		initialized: inited,
 		config:      c,
 	}
@@ -68,7 +71,8 @@ func newMockScmStorage(
 func defaultMockScmStorage(config *configuration) *scmStorage {
 	m := MockModule()
 
-	return newMockScmStorage([]DeviceDiscovery{m}, false, config)
+	return newMockScmStorage(
+		nil, []DeviceDiscovery{m}, false, config)
 }
 
 func TestDiscoverScm(t *testing.T) {
@@ -77,33 +81,48 @@ func TestDiscoverScm(t *testing.T) {
 	config := defaultMockConfig(t)
 
 	tests := []struct {
-		inited     bool
-		errMsg     string
-		expModules []*pb.ScmModule
+		inited            bool
+		ipmctlDiscoverRet error
+		errMsg            string
+		expModules        []*pb.ScmModule
 	}{
 		{
 			true,
+			nil,
 			"",
 			[]*pb.ScmModule(nil),
 		},
 		{
 			false,
+			nil,
 			"",
 			[]*pb.ScmModule{mPB},
 		},
-		// TODO: test errors return from ipmctl subsystem
+		{
+			false,
+			errors.New("ipmctl example failure"),
+			msgIpmctlDiscoverFail + ": ipmctl example failure",
+			[]*pb.ScmModule{mPB},
+		},
 	}
 
 	for _, tt := range tests {
-		ss := newMockScmStorage([]DeviceDiscovery{m}, tt.inited, &config)
+		ss := newMockScmStorage(
+			tt.ipmctlDiscoverRet, []DeviceDiscovery{m}, tt.inited,
+			&config)
 
-		if err := ss.Discover(); err != nil {
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, "")
-				continue
-			}
-			t.Fatal(err)
+		resp := new(pb.ScanStorageResp)
+		ss.Discover(resp)
+		if tt.errMsg != "" {
+			AssertEqual(t, resp.Scmstate.Error, tt.errMsg, "")
+			AssertTrue(
+				t,
+				resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS,
+				"")
+			continue
 		}
+		AssertEqual(t, resp.Scmstate.Error, "", "")
+		AssertEqual(t, resp.Scmstate.Status, pb.ResponseStatus_CTRL_SUCCESS, "")
 
 		AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
 	}
@@ -111,9 +130,10 @@ func TestDiscoverScm(t *testing.T) {
 
 func TestFormatScm(t *testing.T) {
 	tests := []struct {
-		inited     bool
-		formatted  bool
-		mountRet   error
+		inited    bool
+		formatted bool
+		mountRet  error
+		// log context should be stack layer registering result
 		unmountRet error
 		mkdirRet   error
 		removeRet  error
@@ -282,15 +302,14 @@ func TestFormatScm(t *testing.T) {
 			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
 			tt.mount, tt.class, tt.devs, tt.size,
 			bdNVMe, []string{})
-		ss := newMockScmStorage([]DeviceDiscovery{}, false, config)
+		ss := newMockScmStorage(
+			nil, []DeviceDiscovery{}, false, config)
 		ss.formatted = tt.formatted
-
 		resp := new(pb.FormatStorageResp)
 
 		if tt.inited {
-			if err := ss.Discover(); err != nil {
-				t.Fatal(err)
-			}
+			// not concerned with response
+			ss.Discover(new(pb.ScanStorageResp))
 		}
 
 		ss.Format(srvIdx, resp)
