@@ -82,7 +82,6 @@ struct dfuse_projection_info {
 	uint64_t			flags;
 	int				fs_id;
 	struct dfuse_da			da;
-	struct dfuse_da_type		*dh_da;
 	struct dfuse_da_type		*fgh_da;
 	struct dfuse_da_type		*fsh_da;
 	struct dfuse_da_type		*lookup_da;
@@ -109,6 +108,8 @@ struct dfuse_inode_ops {
 	bool (*mkdir)(fuse_req_t req,
 		      struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
+	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			size_t size, off_t offset);
 	void (*unlink)(fuse_req_t req,
 		       struct dfuse_inode_entry *parent,
 		       const char *name);
@@ -363,7 +364,6 @@ enum dfuse_request_htype {
 	RHS_ROOT,
 	RHS_INODE,
 	RHS_FILE,
-	RHS_DIR,
 	RHS_INODE_NUM,
 };
 
@@ -405,7 +405,6 @@ struct dfuse_request {
 		 */
 		struct dfuse_inode_entry	*ir_inode;
 		struct dfuse_file_handle	*ir_file;
-		struct dfuse_dir_handle	*ir_dir;
 		fuse_ino_t		ir_inode_num;
 	};
 	/** List of requests.
@@ -505,26 +504,6 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint	ie_ref;
-};
-
-/**
- * Directory handle.
- *
- * Describes a open directory, may be used for readdir() calls.
- */
-struct dfuse_dir_handle {
-	/** Request for opening the directory */
-	struct dfuse_request		open_req;
-	/** Request for closing the directory */
-	struct dfuse_request		close_req;
-	int				reply_count;
-	void				*replies_base;
-	/** Set to True if the current batch of replies is the final one */
-	int				last_replies;
-	/** The inode number of the directory */
-	ino_t				inode_num;
-
-	d_list_t dh_free_list;
 };
 
 /**
@@ -663,17 +642,11 @@ dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
 void
-dfuse_cb_opendir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t);
 
 void
 dfuse_cb_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,
 		const char *, unsigned int);
-
-void
-dfuse_cb_releasedir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
-
-void
-dfuse_int_releasedir(struct dfuse_dir_handle *);
 
 void
 dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,

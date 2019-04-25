@@ -223,6 +223,42 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
+/*
+ * Implement readdir without a opendir/closedir pair.  This works perfectly
+ * well, but adding (open|close)dir would allow us to cache the inode_entry
+ * between calls which would help performance, and may be necessary later on
+ * to support directories which require multiple calls to readdir() to return
+ * all entries.
+ */
+static void
+df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
+	      struct fuse_file_info *fi)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int rc;
+
+	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				ino);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!inode->ie_dfs->dffs_ops->readdir) {
+		D_GOTO(err, rc = ENOTSUP);
+	}
+	inode->ie_dfs->dffs_ops->readdir(req, inode, size, offset);
+
+	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
 static void
 dfuse_fuse_destroy(void *userdata)
 {
@@ -237,6 +273,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.mkdir		= dfuse_cb_mkdir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
+	.readdir	= dfuse_cb_readdir,
 };
 
 /* Return the ops that should be passed to fuse */
@@ -250,11 +287,12 @@ struct fuse_lowlevel_ops
 		return NULL;
 
 	/* Ops that support per-inode indirection */
-	fuse_ops->getattr = df_ll_getattr;
-	fuse_ops->lookup = df_ll_lookup;
-	fuse_ops->mkdir = df_ll_mkdir;
-	fuse_ops->unlink = df_ll_unlink;
-	fuse_ops->rmdir = df_ll_unlink;
+	fuse_ops->getattr	= df_ll_getattr;
+	fuse_ops->lookup	= df_ll_lookup;
+	fuse_ops->mkdir		= df_ll_mkdir;
+	fuse_ops->unlink	= df_ll_unlink;
+	fuse_ops->rmdir		= df_ll_unlink;
+	fuse_ops->readdir	= df_ll_readdir;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;
@@ -268,8 +306,6 @@ struct fuse_lowlevel_ops
 	fuse_ops->open = dfuse_cb_open;
 	fuse_ops->read = dfuse_cb_read;
 	fuse_ops->release = dfuse_cb_release;
-	fuse_ops->opendir = dfuse_cb_opendir;
-	fuse_ops->releasedir = dfuse_cb_releasedir;
 	fuse_ops->ioctl = dfuse_cb_ioctl;
 	fuse_ops->symlink = dfuse_cb_symlink;
 

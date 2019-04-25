@@ -60,6 +60,10 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *inode)
 		D_GOTO(err, 0);
 	}
 
+	/* Copy the inode number from the inode struct, to avoid having to
+	 * recompute it each time.
+	 */
+	stat.st_ino = inode->stat.st_ino;
 	DFUSE_REPLY_ATTR(req, &stat);
 
 	return;

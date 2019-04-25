@@ -137,36 +137,6 @@ d_hash_table_ops_t hops = {.hop_key_cmp = ih_key_cmp,
 			   .hop_rec_free = ih_free,
 };
 
-static void
-dh_init(void *arg, void *handle)
-{
-	struct dfuse_dir_handle *dh = arg;
-
-	DFUSE_REQUEST_INIT(&dh->open_req, handle);
-	DFUSE_REQUEST_INIT(&dh->close_req, handle);
-}
-
-static bool
-dh_reset(void *arg)
-{
-	struct dfuse_dir_handle	*dh = arg;
-
-	dh->reply_count = 0;
-
-	/* If there has been an error on the local handle, or readdir() is not
-	 * exhausted then ensure that all resources are freed correctly
-	 */
-
-	DFUSE_REQUEST_RESET(&dh->open_req);
-	DFUSE_REQUEST_RESET(&dh->close_req);
-
-	dh->open_req.ir_ht = RHS_INODE_NUM;
-	dh->close_req.ir_ht = RHS_DIR;
-	dh->close_req.ir_dir = dh;
-
-	return true;
-}
-
 /* Create a getattr descriptor for use with descriptor allocators.
  *
  * Two das of descriptors are used here, one for getattr and a second
@@ -347,11 +317,6 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	mode_t				mode;
 	int				rc;
 
-	struct dfuse_da_reg pt = {.init = dh_init,
-				  .reset = dh_reset,
-				  POOL_TYPE_INIT(dfuse_dir_handle,
-						 dh_free_list)};
-
 	struct dfuse_da_reg fh = {.init = fh_init,
 				  .reset = fh_reset,
 				  .release = fh_release,
@@ -422,15 +387,6 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 
 	fuse_ops = dfuse_get_fuse_ops(fs_handle->flags);
 	if (!fuse_ops)
-		D_GOTO(err, 0);
-
-	/* Register the directory handle type
-	 *
-	 * This is done late on in the registration as the dh_int() and
-	 * dh_reset() functions require access to fs_handle.
-	 */
-	fs_handle->dh_da = dfuse_da_register(&fs_handle->da, &pt);
-	if (!fs_handle->dh_da)
 		D_GOTO(err, 0);
 
 	common.init = getattr_common_init;
