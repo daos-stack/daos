@@ -50,9 +50,9 @@ typedef uint64_t		umem_off_t;
 /** Number of flag bits to reserve for encoding extra information in
  *  a NULL umem_off_t entry.
  */
-#define UMOFF_NUM_FLAGS		(8)
-/** The absolute value of a flag mask may not exceed this value */
-#define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAGS)
+#define UMOFF_NUM_BITS		(3)
+/** The absolute value of a flag mask must be <= this value */
+#define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_BITS)
 /** A mask to retrieve the invalid flags */
 #define UMOFF_FLAG_MASK		(UMOFF_MAX_FLAG - 1)
 /** In theory and offset can be NULL but in practice, pmemobj_root
@@ -64,7 +64,7 @@ typedef uint64_t		umem_off_t;
 /** Check for a NULL value including possible invalid flag bits */
 #define UMOFF_IS_NULL(umoff)	(umoff <= UMOFF_FLAG_MASK)
 
-/** Up to UMOFF_NUM_FLAGS bits are available to the user to mark an
+/** Up to UMOFF_NUM_BITS bits are available to the user to mark an
  *  invalid offset with extra information.  If these fields are
  *  set, the pointer resulting from such an offset will be
  *  considered NULL.
@@ -315,6 +315,8 @@ umem_id2off(const struct umem_instance *umm, umem_id_t ummid)
 {
 	if (UMMID_IS_NULL(ummid))
 		return UMOFF_NULL;
+
+	D_ASSERT(!UMOFF_IS_NULL(ummid.off));
 
 	return ummid.off;
 }

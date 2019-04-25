@@ -173,9 +173,9 @@ test_invalid_flags(void **state)
 
 	assert_int_equal(umem_off_get_invalid_flags(umoff), 0);
 
-	for (i = 0; i < UMOFF_NUM_FLAGS; i++) {
-		umem_off_set_invalid(&umoff, 1 << i);
-		assert_int_equal(umem_off_get_invalid_flags(umoff), 1 << i);
+	for (i = 0; i < UMOFF_MAX_FLAG; i++) {
+		umem_off_set_invalid(&umoff, i);
+		assert_int_equal(umem_off_get_invalid_flags(umoff), i);
 	}
 
 	umoff = UMOFF_NULL;
