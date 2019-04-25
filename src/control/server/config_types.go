@@ -45,16 +45,10 @@ const (
 	scmDCPM ScmClass = "dcpm"
 	scmRAM  ScmClass = "ram"
 
-	bdNVMe   BdClass = "nvme"
-	bdMalloc BdClass = "malloc"
-	bdKdev   BdClass = "kdev"
-	bdFile   BdClass = "file"
-
 	// TODO: implement Provider discriminated union
 	// TODO: implement LogMask discriminated union
 )
 
-// rank represents a rank of an I/O server or a nil rank.
 type rank uint32
 
 func (r rank) String() string {
