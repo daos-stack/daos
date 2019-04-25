@@ -534,18 +534,10 @@ daos_hhash_link_lookup(uint64_t key)
 void
 daos_hhash_link_insert(struct d_hlink *hlink, int type)
 {
-	int	n = 0;
-	int	count = 0;
-
 	D_ASSERT(daos_ht.dht_hhash != NULL);
 
 	/* check if custom type fits in allocated bits */
-	n = type;
-	while (n) {
-		count++;
-		n >>= 1;
-	}
-	D_ASSERTF(count <= D_HTYPE_BITS,
+	D_ASSERTF(type < (1 << D_HTYPE_BITS),
 		  "Custom handle int (%d) does not fit D_HTYPE_BITS (%d)\n",
 		  type, D_HTYPE_BITS);
 
