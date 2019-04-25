@@ -68,7 +68,6 @@ static struct umem_attr		*ts_uma;
 
 static int			ts_order = ORDER_DEF;
 
-static TMMID(struct evt_root)	ts_root_mmid;
 static struct evt_root		*ts_root;
 static daos_handle_t		ts_toh;
 
@@ -82,7 +81,6 @@ ts_open_create(void **state)
 {
 	bool    create;
 	char    *arg;
-	bool	inplace = false;
 	int	rc;
 
 	create = tst_fn_val.input;
@@ -94,15 +92,6 @@ ts_open_create(void **state)
 	}
 
 	if (create && arg != NULL) {
-		if (arg[0] == 'i') { /* inplace create/open */
-			inplace = true;
-			if (arg[1] != EVT_SEP) {
-				D_PRINT("wrong parameter format %s\n", arg);
-				fail();
-			}
-			arg += 2;
-		}
-
 		if (arg[0] != 'o' || arg[1] != EVT_SEP_VAL) {
 			D_PRINT("incorrect format for tree order: %s\n", arg);
 			fail();
@@ -114,32 +103,15 @@ ts_open_create(void **state)
 			fail();
 		}
 
-	} else if (!create) {
-		inplace = (ts_root->tr_feats != 0);
-		if (TMMID_IS_NULL(ts_root_mmid) && !inplace) {
-			D_PRINT("Please create tree first\n");
-			fail();
-		}
 	}
 
 	if (create) {
-		D_PRINT("Create evtree with order %d%s\n",
-			ts_order, inplace ? " inplace" : "");
-		if (inplace) {
-			rc = evt_create_inplace(EVT_FEAT_DEFAULT, ts_order,
-						ts_uma, ts_root,
-						DAOS_HDL_INVAL, &ts_toh);
-		} else {
-			rc = evt_create(EVT_FEAT_DEFAULT, ts_order, ts_uma,
-					&ts_root_mmid, &ts_toh);
-		}
+		D_PRINT("Create evtree with order %d\n", ts_order);
+		rc = evt_create(EVT_FEAT_DEFAULT, ts_order, ts_uma, ts_root,
+				DAOS_HDL_INVAL, &ts_toh);
 	} else {
-		D_PRINT("Open evtree %s\n", inplace ? " inplace" : "");
-		if (inplace)
-			rc = evt_open_inplace(ts_root, ts_uma, DAOS_HDL_INVAL,
-					      NULL, &ts_toh);
-		else
-			rc = evt_open(ts_root_mmid, ts_uma, &ts_toh);
+		D_PRINT("Open evtree\n");
+		rc = evt_open(ts_root, ts_uma, DAOS_HDL_INVAL, NULL, &ts_toh);
 	}
 
 	if (rc != 0) {
@@ -785,7 +757,6 @@ global_teardown(void **state)
 static void
 test_evt_iter_delete(void **state)
 {
-	TMMID(struct evt_root)	 root_mmid;
 	struct test_arg		*arg = *state;
 	int			*value;
 	umem_id_t		 mmid;
@@ -800,9 +771,8 @@ test_evt_iter_delete(void **state)
 	struct evt_filter	 filter;
 	uint32_t		 inob;
 
-	root_mmid = TMMID_NULL(struct evt_root);
-
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, &root_mmid, &toh);
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
 	/* Insert a bunch of entries */
@@ -921,7 +891,6 @@ test_evt_iter_delete(void **state)
 static void
 test_evt_iter_delete_internal(void **state)
 {
-	TMMID(struct evt_root)	 root_mmid;
 	struct test_arg		*arg = *state;
 	daos_handle_t		 toh;
 	daos_handle_t		 ih;
@@ -930,9 +899,8 @@ test_evt_iter_delete_internal(void **state)
 	int			 epoch;
 	int			 offset;
 
-	root_mmid = TMMID_NULL(struct evt_root);
-
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, &root_mmid, &toh);
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
 	/* Insert a bunch of entries */
@@ -991,7 +959,6 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 static void
 test_evt_ent_alloc_bug(void **state)
 {
-	TMMID(struct evt_root)	 root_mmid;
 	struct test_arg		*arg = *state;
 	daos_handle_t		 toh;
 	daos_handle_t		 ih;
@@ -1003,9 +970,8 @@ test_evt_ent_alloc_bug(void **state)
 	int			 last = 0;
 	int			 idx1, nr1, idx2, nr2, idx3, nr3;
 
-	root_mmid = TMMID_NULL(struct evt_root);
-
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, &root_mmid, &toh);
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
 	idx1 = 0;
@@ -1066,7 +1032,36 @@ test_evt_ent_alloc_bug(void **state)
 	assert_in_range(count, last, last * 3);
 }
 
+static void
+test_evt_root_deactivate_bug(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	struct evt_entry_in	 entry_in = {0};
+	int			 rc;
 
+	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+			DAOS_HDL_INVAL, &toh);
+	assert_int_equal(rc, 0);
+
+	entry_in.ei_ver = 0;
+	entry_in.ei_inob = 0;
+	/* We will insert nothing but holes as we are just checking sorted
+	 * iteration.
+	 */
+	bio_alloc_init(arg->ta_utx, &entry_in.ei_addr, NULL, 0);
+
+	insert_and_check(toh, &entry_in, 0, 1);
+
+	rc = evt_delete(toh, &entry_in.ei_rect, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Insert it again now */
+	insert_and_check(toh, &entry_in, 0, 1);
+
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+}
 static int
 run_create_test(void)
 {
@@ -1175,6 +1170,9 @@ run_internal_tests(void)
 		{ "EVT011: evt_ent_alloc_bug",
 			test_evt_ent_alloc_bug,
 			setup_builtin, teardown_builtin},
+		{ "EVT012: evt_root_deactivate_bug",
+			test_evt_root_deactivate_bug,
+			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
 
@@ -1263,8 +1261,6 @@ main(int argc, char **argv)
 	srand(tv.tv_usec);
 
 	ts_toh = DAOS_HDL_INVAL;
-
-	ts_root_mmid = TMMID_NULL(struct evt_root);
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)

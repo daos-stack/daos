@@ -96,8 +96,6 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		goto free_ctx;
 	}
 
-	umem_class_init(&ctx->uc_uma, &ctx->uc_umm);
-
 	ctx->uc_root = pmemobj_root(ctx->uc_uma.uma_pool,
 				 sizeof(*root) + root_size);
 	if (OID_IS_NULL(ctx->uc_root)) {
@@ -105,6 +103,9 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		rc = -DER_MISC;
 		goto destroy;
 	}
+
+
+	umem_class_init(&ctx->uc_uma, &ctx->uc_umm);
 
 	root = umem_id2ptr(&ctx->uc_umm, ctx->uc_root);
 
@@ -259,6 +260,28 @@ end:
 }
 
 int
+utest_alloc_off(struct utest_context *utx, umem_off_t *off, size_t size,
+		utest_init_cb cb, const void *cb_arg)
+{
+	int	rc;
+
+	rc = utest_tx_begin(utx);
+	if (rc != 0)
+		return rc;
+
+	*off = umem_alloc_off(&utx->uc_umm, size);
+	if (UMOFF_IS_NULL(*off)) {
+		rc = -DER_NOMEM;
+		goto end;
+	}
+
+	if (cb)
+		cb(umem_off2ptr(&utx->uc_umm, *off), size, cb_arg);
+end:
+	return utest_tx_end(utx, rc);
+}
+
+int
 utest_free(struct utest_context *utx, umem_id_t mmid)
 {
 	int	rc;
@@ -268,6 +291,20 @@ utest_free(struct utest_context *utx, umem_id_t mmid)
 		return rc;
 
 	rc = umem_free(&utx->uc_umm, mmid);
+
+	return utest_tx_end(utx, rc);
+}
+
+int
+utest_free_off(struct utest_context *utx, umem_off_t umoff)
+{
+	int	rc;
+
+	rc = utest_tx_begin(utx);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_free_off(&utx->uc_umm, umoff);
 
 	return utest_tx_end(utx, rc);
 }

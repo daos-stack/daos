@@ -657,3 +657,81 @@ out:
 	td_out->td_rc = rc;
 	crt_reply_send(td_req);
 }
+
+/**
+ * Set parameter on a single target.
+ */
+void
+ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_tgt_params_set_in	*in;
+	struct mgmt_tgt_params_set_out	*out;
+	int rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
+	if (rc == 0 && in->tps_key_id == DSS_KEY_FAIL_LOC)
+		rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+					in->tps_value_extra);
+	if (rc)
+		D_ERROR("Set parameter failed key_id %d: rc %d\n",
+			 in->tps_key_id, rc);
+
+	out = crt_reply_get(rpc);
+	out->srv_rc = rc;
+	crt_reply_send(rpc);
+}
+
+static int
+tgt_profile_task(void *arg)
+{
+	struct mgmt_profile_in *in = arg;
+	int mod_id = 0;
+	int rc = 0;
+
+	for (mod_id = 0; mod_id < 64; mod_id++) {
+		uint64_t mask = 1 << mod_id;
+		struct dss_module *module;
+
+		if (!(in->p_module & mask))
+			continue;
+
+		module = dss_module_get(mod_id);
+		if (module == NULL || module->sm_mod_ops == NULL) {
+			D_ERROR("no module sm_mod_ops %d\n", mod_id);
+			continue;
+		}
+
+		if (in->p_op == MGMT_PROFILE_START)
+			rc = module->sm_mod_ops->dms_profile_start(in->p_path);
+		else
+			rc = module->sm_mod_ops->dms_profile_stop();
+		if (rc)
+			break;
+	}
+
+	D_DEBUG(DB_MGMT, "profile task: rc %d\n", rc);
+	return rc;
+}
+
+/**
+ * start/stop profile on a single target.
+ */
+void
+ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_profile_in	*in;
+	struct mgmt_profile_out	*out;
+	int rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	rc = dss_task_collective(tgt_profile_task, in, 0);
+
+	out = crt_reply_get(rpc);
+	out->p_rc = rc;
+	crt_reply_send(rpc);
+}

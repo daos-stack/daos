@@ -182,6 +182,13 @@ daos_eq_free(struct d_hlink *hlink)
 	D_FREE(eq);
 }
 
+crt_context_t
+daos_get_crt_ctx()
+{
+	D_ASSERT(eq_ref > 0);
+	return daos_eq_ctx;
+}
+
 struct d_hlink_ops	eq_h_ops = {
 	.hop_free	= daos_eq_free,
 };

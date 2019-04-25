@@ -308,26 +308,6 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
-
-static dss_abt_pool_choose_cb_t abt_pool_choose_cbs[DAOS_MAX_MODULE];
-
-/**
- * Register abt choose pool callback for each module, so the module
- * can choose the pools by itself.
- *
- * \param mod_id [IN]	module ID.
- * \param cb [IN]	callback.
- *
- * \return		0 if succes, otherwise negative errno.
- */
-void
-dss_abt_pool_choose_cb_register(unsigned int mod_id,
-				dss_abt_pool_choose_cb_t cb)
-{
-	D_ASSERT(abt_pool_choose_cbs[mod_id] == NULL);
-	abt_pool_choose_cbs[mod_id] = cb;
-}
-
 /**
  * Process the rpc received, let's create a ABT thread for each request.
  */
@@ -336,12 +316,17 @@ dss_process_rpc(crt_context_t *ctx, crt_rpc_t *rpc,
 		void (*real_rpc_hdlr)(void *), void *arg)
 {
 	unsigned int	mod_id = opc_get_mod_id(rpc->cr_opc);
+	struct dss_module *module = dss_module_get(mod_id);
 	ABT_pool	*pools = arg;
 	ABT_pool	pool;
 	int		rc;
 
-	if (abt_pool_choose_cbs[mod_id] != NULL)
-		pool = abt_pool_choose_cbs[mod_id](rpc, pools);
+	/* For RPC originally from CART might still come here, and its mod_id
+	 * is 0xfe, and module would be NULL.
+	 */
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_abt_pool_choose_cb)
+		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
 	else
 		pool = pools[DSS_POOL_SHARE];
 
