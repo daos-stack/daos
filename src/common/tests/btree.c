@@ -578,7 +578,7 @@ ik_btr_iterate(void **state)
 	char		*err;
 	char		*arg;
 
-	arg = tst_fn_val.optval);
+	arg = tst_fn_val.optval;
 
 	if (daos_handle_is_inval(ik_toh)) {
 		fail_msg("Can't find opened tree\n");
