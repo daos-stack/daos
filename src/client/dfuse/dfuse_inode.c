@@ -48,16 +48,10 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
 	d_list_t *rlink;
 
-	if (ino == 1)
-		return;
-
-	if (ino == 0)
-		return;
-
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
 
 	if (!rlink) {
-		DFUSE_TRA_WARNING(fs_handle, "Could not find entry %lu", ino);
+		DFUSE_TRA_ERROR(fs_handle, "Could not find entry %lu", ino);
 		return;
 	}
 	d_hash_rec_ndecref(&fs_handle->inode_ht, 2, rlink);
@@ -69,16 +63,18 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
-	DFUSE_TRA_DEBUG(ie, "closing, ref %u, name '%s', parent %lu",
-			ref, ie->name, ie->parent);
+	DFUSE_TRA_DEBUG(ie, "closing, inode %lu ref %u, name '%s', parent %lu",
+			ie->stat.st_ino, ref, ie->name, ie->parent);
 
 	D_ASSERT(ref == 0);
-	atomic_fetch_add(&ie->ie_ref, 1);
 
-	drop_ino_ref(fs_handle, ie->parent);
+	if (ie->parent != 0) {
+		drop_ino_ref(fs_handle, ie->parent);
+	}
 
 	rc = dfs_release(ie->obj);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(ie, "dfs_release failed: %d", rc);
 	}
+	D_FREE(ie);
 }

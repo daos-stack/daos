@@ -37,7 +37,7 @@ dfuse_getattr_result_fn(struct dfuse_request *request)
 	DFUSE_REQUEST_RESOLVE(request, out);
 
 	if (request->rc == 0)
-		DFUSE_REPLY_ATTR(request, &out->stat);
+		DFUSE_REPLY_ATTR(request->req, &out->stat);
 	else
 		DFUSE_REPLY_ERR(request, request->rc);
 
@@ -49,40 +49,26 @@ static const struct dfuse_request_api getattr_api = {
 	.on_result	= dfuse_getattr_result_fn,
 };
 
-static int
-dfuse_getattr(struct dfuse_request *request, fuse_ino_t ino)
+void
+dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *inode)
 {
-	struct dfuse_inode_entry	*ie;
-	d_list_t			*rlink;
-	struct stat			stat = {};
-	int				rc;
+	struct stat	stat = {};
+	int		rc;
 
-	rlink = d_hash_rec_find(&request->fsh->inode_ht, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(request, "Failed to find inode %lu",
-				ino);
-		D_GOTO(err, rc = -DER_EXIST);
-	}
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	rc = dfs_ostat(request->fsh->fsh_dfs, ie->obj, &stat);
+	rc = dfs_ostat(inode->ie_dfs->dffs_dfs, inode->obj, &stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
 	}
 
-	DFUSE_REPLY_ATTR(request, &stat);
+	DFUSE_REPLY_ATTR(req, &stat);
 
-	d_hash_rec_decref(&request->fsh->inode_ht, rlink);
-
-	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
-
+	return;
 err:
-	return rc;
+	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }
 
 void
-dfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+Xdfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_file_handle	*handle = NULL;
@@ -105,10 +91,8 @@ dfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		if (rc != 0)
 			D_GOTO(err, rc);
 	} else {
-		desc->request.req = req;
-		rc = dfuse_getattr(&desc->request, ino);
 		if (rc != -DER_SUCCESS) {
-			D_GOTO(err, 0);
+			D_GOTO(err, rc = ENOTSUP);
 		}
 	}
 

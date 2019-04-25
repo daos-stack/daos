@@ -36,11 +36,20 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	struct fuse_file_info		fi = {0};
 	int				rc;
 
+	if (!inode->parent) {
+		DFUSE_TRA_ERROR(inode, "no parent");
+		D_GOTO(err, rc = EIO);
+	}
+
+	if (!inode->ie_dfs) {
+		DFUSE_TRA_ERROR(inode, "ie_dfs");
+		D_GOTO(err, rc = EIO);
+	}
+
 	rc = dfs_obj2id(inode->obj, &oid);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_REPLY_ERR_RAW(fs_handle, req, EIO);
-		dfs_release(inode->obj);
-		return;
+		DFUSE_TRA_ERROR(inode, "no oid");
+		D_GOTO(err, rc = EIO);
 	}
 
 	inode->stat.st_ino = (ino_t)oid.hi;
@@ -64,11 +73,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
 		 * keep a reference on the parent.
-		 * Note that this function will be called with a reference on
-		 * the parent anyway, so keep that one, but drop one in the call
-		 * to ie_close().
 		 */
 		atomic_fetch_sub(&inode->ie_ref, 1);
+		inode->parent = 0;
 
 		ie_close(fs_handle, inode);
 	}
@@ -78,63 +85,55 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	} else {
 		DFUSE_REPLY_ENTRY(req, entry);
 	}
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfs_release(inode->obj);
 }
 
 void
-dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
+dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*inode = NULL;
-	struct dfuse_inode_entry	*parent_inode;
 	mode_t				mode;
-	d_list_t			*rlink;
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->parent, name);
 
-	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				parent);
-		D_GOTO(err, rc = ENOENT);
-	}
-
-	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	DFUSE_TRA_INFO(parent_inode, "parent");
+	DFUSE_TRA_INFO(parent, "parent");
 
 	D_ALLOC_PTR(inode);
 	if (!inode) {
-		D_GOTO(out_decref, rc = ENOMEM);
+		D_GOTO(err, rc = ENOMEM);
 	}
-	inode->parent = parent;
+	inode->parent = parent->parent;
+	inode->ie_dfs = parent->ie_dfs;
 
-	rc = dfs_lookup_rel(fs_handle->fsh_dfs, parent_inode->obj, name,
+	rc = dfs_lookup_rel(parent->ie_dfs->dffs_dfs, parent->obj, name,
 			    O_RDONLY, &inode->obj, &mode);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %p %d",
-			       fs_handle->fsh_dfs, rc);
+		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %d",
+			       rc);
 		if (rc == -DER_NONEXIST) {
-			D_GOTO(out_decref, rc = ENOENT);
+			D_GOTO(err, rc = ENOENT);
 		} else {
-			D_GOTO(out_decref, rc = EIO);
+			D_GOTO(err, rc = EIO);
 		}
 	}
 
 	strncpy(inode->name, name, NAME_MAX);
 	atomic_fetch_add(&inode->ie_ref, 1);
 
-	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(out_decref, 0);
+		D_GOTO(err, 0);
 	}
 
 	dfuse_reply_entry(fs_handle, inode, NULL, req);
-	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 	return;
 
-out_decref:
-	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(inode);

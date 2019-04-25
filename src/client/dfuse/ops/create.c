@@ -90,8 +90,8 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	DFUSE_TRA_INFO(handle, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
-	rc = dfs_open(fs_handle->fsh_dfs, parent_inode->obj, name, mode,
-		      O_CREAT, 0, 0, NULL, &inode->obj);
+	rc = dfs_open(parent_inode->ie_dfs->dffs_dfs, parent_inode->obj, name,
+		      mode, O_CREAT, 0, 0, NULL, &inode->obj);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(release, 0);
 	}
@@ -103,7 +103,8 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	inode->parent = parent;
 	atomic_fetch_add(&inode->ie_ref, 1);
 
-	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+	rc = dfs_ostat(parent_inode->ie_dfs->dffs_dfs,
+		       inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(release, 0);
 	}

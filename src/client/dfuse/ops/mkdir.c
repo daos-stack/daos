@@ -24,44 +24,35 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-void
-dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
+bool
+dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+	       const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*inode = NULL;
-	struct dfuse_inode_entry	*parent_inode;
-	d_list_t			*rlink;
-	int rc;
+	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-
-	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				parent);
-		D_GOTO(err, rc = ENOENT);
-	}
-
-	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->parent, name);
 
 	D_ALLOC_PTR(inode);
 	if (!inode) {
 		D_GOTO(err, rc = ENOMEM);
 	}
 
-	DFUSE_TRA_INFO(parent_inode, "parent");
+	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
 
-	rc = dfs_open(fs_handle->fsh_dfs, parent_inode->obj, name, mode,
-		      O_CREAT, 0, 0, NULL, &inode->obj);
+	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->obj, name,
+		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &inode->obj);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+		D_GOTO(err, 0);
 	}
 
 	strncpy(inode->name, name, NAME_MAX);
-	inode->parent = parent;
+	inode->parent = parent->parent;
+	inode->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&inode->ie_ref, 1);
 
-	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(release, 0);
 	}
@@ -69,14 +60,12 @@ dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, inode, NULL, req);
 
-	return;
+	return true;
 release:
 	dfs_release(inode->obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (rlink) {
-		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
-
-	}
 	D_FREE(inode);
+
+	return false;
 }

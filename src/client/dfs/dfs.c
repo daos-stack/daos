@@ -1740,7 +1740,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	case S_IFREG:
 		rc = open_file(dfs, th, parent, flags, cid, chunk_size, obj);
 		if (rc) {
-			D_ERROR("Failed to open file (%d)", rc);
+			D_ERROR("Failed to open file (%d)\n", rc);
 			D_FREE(obj);
 			D_GOTO(out, rc);
 		}
@@ -1748,7 +1748,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, obj);
 		if (rc) {
-			D_ERROR("Failed to open directory (%d)", rc);
+			D_ERROR("Failed to open directory (%d)\n", rc);
 			D_FREE(obj);
 			D_GOTO(out, rc);
 		}
@@ -1756,14 +1756,15 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	case S_IFLNK:
 		rc = open_symlink(dfs, th, parent, flags, value, obj);
 		if (rc) {
-			D_ERROR("Failed to open symlink (%d)", rc);
+			D_ERROR("Failed to open symlink (%d)\n", rc);
 			D_FREE(obj);
 			D_GOTO(out, rc);
 		}
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(out, rc);
+		D_FREE(obj);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	*_obj = obj;

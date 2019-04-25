@@ -129,7 +129,6 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->parent);
 	ie_close(fs_handle, ie);
-	D_FREE(ie);
 }
 
 d_hash_table_ops_t hops = {.hop_key_cmp = ih_key_cmp,
@@ -338,12 +337,13 @@ wb_reset(void *arg)
 }
 
 int
-dfuse_start(struct dfuse_info *dfuse_info)
+dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 {
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
-	struct dfuse_inode_entry	*inode;
+	struct dfuse_inode_entry	*inode = NULL;
+	struct dfuse_dfs		*dfs = NULL;
 	mode_t				mode;
 	int				rc;
 
@@ -478,30 +478,39 @@ dfuse_start(struct dfuse_info *dfuse_info)
 	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
-	fs_handle->fsh_dfs = dfuse_info->dfi_dfs;
-
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(inode);
 	if (!inode) {
 		D_GOTO(err, 0);
 	}
 
-	rc = dfs_lookup(fs_handle->fsh_dfs,
+	D_ALLOC_PTR(dfs);
+	if (!dfs) {
+		D_GOTO(err, 0);
+	}
+
+	dfs->dffs_dfs = ddfs;
+
+	rc = dfs_lookup(dfs->dffs_dfs,
 			"/", O_RDONLY, &inode->obj, &mode);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %p %d",
-				fs_handle->fsh_dfs, rc);
+		DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %d",
+				rc);
 		D_GOTO(err, 0);
 	}
 
 	atomic_fetch_add(&inode->ie_ref, 1);
 
-	rc = dfs_ostat(fs_handle->fsh_dfs, inode->obj, &inode->stat);
+	rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
 				rc);
 		D_GOTO(err, 0);
 	}
+
+	dfs->dffs_ops = &dfuse_dfs_ops;
+	inode->ie_dfs = dfs;
+	inode->parent = 1;
 
 	inode->stat.st_ino = 1;
 
@@ -528,6 +537,8 @@ err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed");
 	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
+	D_FREE(inode);
+	D_FREE(dfs);
 	D_FREE(fs_handle);
 	return -DER_INVAL;
 }

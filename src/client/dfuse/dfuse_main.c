@@ -112,6 +112,7 @@ main(int argc, char **argv)
 	daos_cont_info_t	co_info;
 	daos_handle_t		poh;
 	daos_handle_t		coh;
+	dfs_t			*dfs;
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -236,13 +237,13 @@ main(int argc, char **argv)
 		D_GOTO(out_pool, 0);
 	}
 
-	rc = dfs_mount(poh, coh, O_RDWR, &dfuse_info->dfi_dfs);
+	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
 		D_GOTO(out_cont, 0);
 	}
 
-	rc = dfuse_start(dfuse_info);
+	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(out_cont, ret = rc);
 	}

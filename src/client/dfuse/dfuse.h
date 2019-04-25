@@ -54,7 +54,6 @@ struct dfuse_info {
 	struct fuse_session		*dfi_session;
 	struct dfuse_projection_info	*dfi_handle;
 	struct dfuse_data		dfi_dfd;
-	dfs_t				*dfi_dfs;
 };
 
 /* dfuse_main.c */
@@ -69,7 +68,7 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 /* dfuse_core.c */
 /* Start a dfuse projection */
 int
-dfuse_start(struct dfuse_info *dfuse_info);
+dfuse_start(struct dfuse_info *dfuse_info, dfs_t *dfs);
 
 /* Drain and free resources used by a projection */
 int
@@ -78,7 +77,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
 	struct fuse_session		*session;
-	dfs_t				*fsh_dfs;
+	struct dfuse_dfs		*dfpi_ddfs;
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
@@ -97,6 +96,29 @@ struct dfuse_projection_info {
 	uint32_t			max_iov_read;
 	/** Hash table of open inodes */
 	struct d_hash_table		inode_ht;
+};
+
+struct dfuse_inode_entry;
+
+struct dfuse_inode_ops {
+	void (*getattr)(fuse_req_t req,
+			struct dfuse_inode_entry *inode);
+	void (*lookup)(fuse_req_t req,
+		       struct dfuse_inode_entry *parent,
+		       const char *name);
+	bool (*mkdir)(fuse_req_t req,
+		      struct dfuse_inode_entry *parent,
+		      const char *name, mode_t mode);
+	void (*unlink)(fuse_req_t req,
+		       struct dfuse_inode_entry *parent,
+		       const char *name);
+};
+
+extern struct dfuse_inode_ops dfuse_dfs_ops;
+
+struct dfuse_dfs {
+	struct dfuse_inode_ops	*dffs_ops;
+	dfs_t			*dffs_dfs;
 };
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
@@ -216,16 +238,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(dfuse_req, attr)				\
+#define DFUSE_REPLY_ATTR(req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning attr");		\
-		__rc = fuse_reply_attr((dfuse_req)->req, attr, 0);	\
+		DFUSE_TRA_DEBUG(req, "Returning attr");			\
+		__rc = fuse_reply_attr(req, attr, 0);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
 #define DFUSE_REPLY_READLINK(dfuse_req, path)				\
@@ -463,6 +484,7 @@ struct dfuse_inode_entry {
 	 * not updated on local rename requests.
 	 */
 	char		name[256];
+
 	/** The parent inode of this entry.
 	 *
 	 * As with name this will be correct when created however may
@@ -470,6 +492,8 @@ struct dfuse_inode_entry {
 	 * a reference on the parent so the inode may not be valid.
 	 */
 	fuse_ino_t	parent;
+
+	struct dfuse_dfs *ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table
@@ -577,7 +601,7 @@ struct entry_req {
 	char				*dest;
 };
 
-/* inode.c */
+/* dfuse_inode.c */
 
 int
 find_inode(struct dfuse_request *);
@@ -585,17 +609,18 @@ find_inode(struct dfuse_request *);
 void
 ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 
-int
-dfuse_fs_send(struct dfuse_request *request);
+/* dfuse_core.c */
 
 int
-dfuse_simple_resend(struct dfuse_request *request);
+dfuse_fs_send(struct dfuse_request *request);
 
 bool
 dfuse_gen_cb(struct dfuse_request *);
 
+/* ops/...c */
+
 void
-dfuse_cb_lookup(fuse_req_t, fuse_ino_t, const char *);
+dfuse_cb_lookup(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
 dfuse_cb_forget(fuse_req_t, fuse_ino_t, uint64_t);
@@ -604,7 +629,7 @@ void
 dfuse_cb_forget_multi(fuse_req_t, size_t, struct fuse_forget_data *);
 
 void
-dfuse_cb_getattr(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+dfuse_cb_getattr(fuse_req_t, struct dfuse_inode_entry *);
 
 void
 dfuse_cb_statfs(fuse_req_t, fuse_ino_t);
@@ -612,8 +637,9 @@ dfuse_cb_statfs(fuse_req_t, fuse_ino_t);
 void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
-void
-dfuse_cb_mkdir(fuse_req_t, fuse_ino_t, const char *, mode_t);
+bool
+dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
+	       const char *, mode_t);
 
 void
 dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
@@ -633,10 +659,8 @@ void
 dfuse_int_release(struct dfuse_file_handle *);
 
 void
-dfuse_cb_unlink(fuse_req_t, fuse_ino_t, const char *);
-
-void
-dfuse_cb_rmdir(fuse_req_t, fuse_ino_t, const char *);
+dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
+		const char *);
 
 void
 dfuse_cb_opendir(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
