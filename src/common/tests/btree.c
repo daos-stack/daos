@@ -576,10 +576,9 @@ ik_btr_iterate(void **state)
 	int		rc;
 	int		opc;
 	char		*err;
-	char		arg[64];
+	char		*arg;
 
-	memset(arg, '\0', sizeof(arg));
-	strcpy(arg, tst_fn_val.optval);
+	arg = tst_fn_val.optval);
 
 	if (daos_handle_is_inval(ik_toh)) {
 		fail_msg("Can't find opened tree\n");
@@ -596,7 +595,7 @@ ik_btr_iterate(void **state)
 	else
 		opc = BTR_PROBE_FIRST;
 
-	if (strlen(arg) >= 3 && arg[1] == ':')
+	if (arg[1] == ':')
 		del = atoi(&arg[2]);
 	else
 		del = 0;

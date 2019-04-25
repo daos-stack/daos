@@ -597,12 +597,11 @@ sk_btr_iterate(void **state)
 	int		opc;
 	char		*start;
 	char		*err;
-	char		arg[64];
+	char		*arg;
 	daos_anchor_t	anchor = {0};
 	daos_key_t	anchor_key = {0};
 
-	memset(arg, '\0', sizeof(arg));
-	strcpy(arg, tst_fn_val.optval);
+	arg = tst_fn_val.optval;
 
 	if (daos_handle_is_inval(sk_toh)) {
 		fail_msg("Can't find opened tree\n");
@@ -622,12 +621,12 @@ sk_btr_iterate(void **state)
 		opc = BTR_PROBE_FIRST;
 	}
 
-	if (arg[0] == 'd' && arg[1] == ':' && strlen(arg) >= 3)
+	if (arg[0] == 'd' && arg[1] == ':')
 		del = atoi(&arg[2]);
 	else
 		del = 0;
 
-	if (arg[0] == 's' && arg[1] == ':' && strlen(arg) >= 3) {
+	if (arg[0] == 's' && arg[1] == ':') {
 		start = &arg[2];
 		opc |= BTR_PROBE_SPEC;
 	} else {
