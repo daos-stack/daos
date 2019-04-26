@@ -79,6 +79,13 @@ func (c *controlService) Teardown() {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
+
+	// unlock condition variables used to wait on storage formatting
+	for idx := range c.config.Servers {
+		cv := c.config.Servers[idx].FormatCond
+		cv.L.Unlock()
+	}
+
 }
 
 func errAnnotate(err error, msg string) (e error) {

@@ -145,7 +145,7 @@ func formatStorageRequest(mc Control, ch chan ClientResult) {
 			return // recv err
 		}
 
-		// wait for nvme formatting to finish
+		// wait for nvme formatting of all devices to finish
 		for _, result := range resp.Crets {
 			state := result.GetState()
 			if state.GetStatus() == pb.ResponseStatus_CTRL_WAITING {
@@ -156,7 +156,7 @@ func formatStorageRequest(mc Control, ch chan ClientResult) {
 			}
 		}
 
-		// wait for scm formatting to finish
+		// wait for scm formatting of all devices to finish
 		for _, result := range resp.Mrets {
 			state := result.GetState()
 			if state.GetStatus() == pb.ResponseStatus_CTRL_WAITING {
@@ -207,6 +207,7 @@ func (c *connList) FormatStorage() (ClientNvmeMap, ClientScmMap) {
 	return cCtrlrs, cModules
 }
 
+// TODO: implement update and burnin in a similar way to format
 //	updateStorage(pb.UpdateStorageParams) (*pb.UpdateStorageResp, error)
 //	burninStorage(pb.BurninStorageParams) (*pb.BurninStorageResp, error)
 

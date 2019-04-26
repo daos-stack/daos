@@ -76,9 +76,9 @@ func formatStor() {
 			"Are you sure you want to continue? (yes/no)")
 
 	if getConsent() {
-		nvme, scm := conns.FormatStorage()
-		fmt.Printf(unpackFormat(nvme), "NVMe storage format result")
-		fmt.Printf(unpackFormat(scm), "SCM storage format result")
+		cCtrlrs, cModules := conns.FormatStorage()
+		fmt.Printf(unpackFormat(cCtrlrs), "NVMe storage format result")
+		fmt.Printf(unpackFormat(cModules), "SCM storage format result")
 	}
 }
 
@@ -96,7 +96,7 @@ func (s *FormatStorCmd) Execute(args []string) error {
 	return nil
 }
 
-// todo: implement burn-in and firmware update subcommands
+// TODO: implement burn-in and firmware update subcommands
 
 //func getUpdateParams(c *ishell.Context) (*pb.UpdateNvmeParams, error) {
 //	// disable the '>>>' for cleaner same line input.

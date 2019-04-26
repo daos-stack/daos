@@ -74,10 +74,7 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
-	srv.Setup()
-
-	// continue on failure for a single subsystem
-	fmt.Println("Listing attached storage...")
+	fmt.Println("Scanning locally-attached storage...")
 	srv.nvme.Discover(resp)
 	srv.scm.Discover(resp)
 
@@ -93,8 +90,6 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 	} else {
 		common.PrintStructs("SCM", srv.scm.modules)
 	}
-
-	srv.Teardown()
 
 	if isErrored {
 		os.Exit(1)
