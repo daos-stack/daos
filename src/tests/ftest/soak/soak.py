@@ -32,9 +32,9 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import ServerUtils
-import WriteHostFile
-import IorUtils
+import server_utils
+import write_host_file
+import ior_utils
 import slurm_utils
 import dmg_utils
 from daos_api import DaosContext, DaosPool, DaosApiError
@@ -121,11 +121,11 @@ class Soak(Test):
 
         hostfile = os.path.join(self.tmpdir, "ior_hosts_" + job_name)
 
-        cmd = IorUtils.get_ior_cmd(ior_flags, iteration, block_size,
-                                   transfer_size, pool_uuid, svc_list,
-                                   record_size, stripe_size, stripe_count,
-                                   async_io, object_class, self.basepath,
-                                   hostfile, job_processes)
+        cmd = ior_utils.get_ior_cmd(ior_flags, iteration, block_size,
+                                    transfer_size, pool_uuid, svc_list,
+                                    record_size, stripe_size, stripe_count,
+                                    async_io, object_class, self.basepath,
+                                    hostfile, job_processes)
 
         output = os.path.join(self.tmpdir, job_name + "_results.out")
         script = slurm_utils.write_slurm_script(self.tmpdir, job_name,
@@ -162,20 +162,20 @@ class Soak(Test):
         # start the servers
         self.hostlist_servers = self.params.get("daos_servers",
                                                 '/run/hosts/test_machines/*')
-        filename = WriteHostFile.WriteHostFile(self.hostlist_servers,
-                                               self.workdir)
-        self.server_group = self.params.get("server_group", '/server/',
+        filename = write_host_file.write_host_file(self.hostlist_servers,
+                                                   self.workdir)
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         print("Servers {} group {} basepath {}".format(self.hostlist_servers,
                                                        self.server_group,
                                                        self.basepath))
-        ServerUtils.runServer(filename, self.server_group, self.basepath)
+        server_utils.run_server(filename, self.server_group, self.basepath)
 
         # setup the storage
         self.create_pool()
 
     def tearDown(self):
-        ServerUtils.stopServer(hosts=self.hostlist_servers)
+        server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_soak_1(self):
         """
@@ -206,7 +206,7 @@ class Soak(Test):
                     self.fail("Soak job: {} didn't complete as expected: {}".
                               format(job, result))
 
-        except (DaosApiError, IorUtils.IorFailed) as error:
+        except (DaosApiError, ior_utils.IorFailed) as error:
             self.fail("<Soak Test 1 Failed>\n {}".format(error))
         finally:
             try:
@@ -250,7 +250,7 @@ class Soak(Test):
                     self.fail("Soak job: {} didn't complete as expected: {}".
                               format(job, result))
 
-        except (DaosApiError, IorUtils.IorFailed) as error:
+        except (DaosApiError, ior_utils.IorFailed) as error:
             self.fail("Soak Test 2 Failed/n {}".format(error))
         finally:
             try:
@@ -296,7 +296,7 @@ class Soak(Test):
                     self.fail("Soak job: {} didn't complete as expected: {}".
                               format(job, result))
 
-        except (DaosApiError, IorUtils.IorFailed) as error:
+        except (DaosApiError, ior_utils.IorFailed) as error:
             self.fail("Soak Test 3 Failed\n {}".format(error))
         finally:
             try:

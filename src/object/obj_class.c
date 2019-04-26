@@ -236,6 +236,34 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "ec_k2p2_len32k",
+		.oc_id		= DAOS_OC_EC_K2P2_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.u.ec			= {
+				.e_k		= 2,
+				.e_p		= 2,
+				.e_len		= 1 << 15,
+			},
+		},
+	},
+	{
+		.oc_name	= "ec_k8p2_len1m",
+		.oc_id		= DAOS_OC_EC_K8P2_L1M,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.u.ec			= {
+				.e_k		= 8,
+				.e_p		= 2,
+				.e_len		= 1 << 20,
+			},
+		},
+	},
+	{
 		.oc_name	= NULL,
 		.oc_id		= DAOS_OC_UNKNOWN,
 	},
@@ -293,7 +321,7 @@ daos_oclass_grp_size(struct daos_oclass_attr *oc_attr)
 		return oc_attr->u.repl.r_num;
 
 	case DAOS_RES_EC:
-		return oc_attr->u.ec.e_grp_size;
+		return oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
 	}
 }
 
@@ -327,4 +355,130 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 {
 	/* NB: @md is unsupported for now */
 	return oc_attr->ca_grp_nr;
+}
+
+/** a structure to map EC object class to EC codec structure */
+struct daos_oc_ec_codec {
+	/** object class id */
+	daos_oclass_id_t	 ec_oc_id;
+	/** pointer to EC codec */
+	struct obj_ec_codec	 ec_codec;
+};
+
+static struct daos_oc_ec_codec	*oc_ec_codecs;
+static int			 oc_ec_codec_nr;
+
+void
+obj_ec_codec_fini(void)
+{
+	struct obj_ec_codec	*ec_codec;
+	struct daos_obj_class	*oc;
+	int			 ocnr = 0;
+	int			 i;
+
+	if (oc_ec_codecs == NULL)
+		return;
+
+	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+			ocnr++;
+	}
+	D_ASSERTF(oc_ec_codec_nr == ocnr,
+		  "oc_ec_codec_nr %d mismatch with ocnr %d.\n",
+		  oc_ec_codec_nr, ocnr);
+
+	for (i = 0; i < ocnr; i++) {
+		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		if (ec_codec->ec_en_matrix != NULL)
+			D_FREE(ec_codec->ec_en_matrix);
+		if (ec_codec->ec_gftbls != NULL)
+			D_FREE(ec_codec->ec_gftbls);
+	}
+
+	D_FREE(oc_ec_codecs);
+	oc_ec_codecs = NULL;
+	oc_ec_codec_nr = 0;
+}
+
+int
+obj_ec_codec_init()
+{
+	struct obj_ec_codec	*ec_codec;
+	struct daos_obj_class	*oc;
+	unsigned char		*encode_matrix = NULL;
+	int			 ocnr;
+	int			 i;
+	int			 k, p, m;
+	int			 rc;
+
+	if (oc_ec_codecs != NULL)
+		return 0;
+
+	ocnr = 0;
+	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+			ocnr++;
+	}
+	if (ocnr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(oc_ec_codecs, ocnr);
+	if (oc_ec_codecs == NULL)
+		D_GOTO(failed, rc = -DER_NOMEM);
+	oc_ec_codec_nr = ocnr;
+
+	i = 0;
+	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+		if (oc->oc_attr.ca_resil != DAOS_RES_EC)
+			continue;
+
+		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
+		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		k = oc->oc_attr.u.ec.e_k;
+		p = oc->oc_attr.u.ec.e_p;
+		m = k + p;
+		/* 32B needed for data generated for each input coefficient */
+		D_ALLOC(ec_codec->ec_gftbls, k * p * 32);
+		if (ec_codec->ec_gftbls == NULL)
+			D_GOTO(failed, rc = -DER_NOMEM);
+		D_ALLOC(encode_matrix, m * k);
+		if (encode_matrix == NULL)
+			D_GOTO(failed, rc = -DER_NOMEM);
+		ec_codec->ec_en_matrix = encode_matrix;
+		/* A Cauchy matrix is always invertible, the recovery rule is
+		 * simpler than gf_gen_rs_matrix (vandermonde matrix).
+		 */
+		gf_gen_cauchy1_matrix(encode_matrix, m, k);
+		/* Initialize gf tables from encode matrix */
+		ec_init_tables(k, p, &encode_matrix[k * k],
+			       ec_codec->ec_gftbls);
+	}
+
+	D_ASSERT(i == ocnr);
+	return 0;
+
+failed:
+	obj_ec_codec_fini();
+	return rc;
+}
+
+struct obj_ec_codec *
+obj_ec_codec_get(daos_oclass_id_t oc_id)
+{
+	struct daos_oc_ec_codec *oc_ec_codec;
+	int			 i;
+
+	if (oc_ec_codecs == NULL)
+		return NULL;
+
+	D_ASSERT(oc_ec_codec_nr >= 1);
+	for (i = 0; i < oc_ec_codec_nr; i++) {
+		oc_ec_codec = &oc_ec_codecs[i];
+		D_ASSERT(oc_ec_codec->ec_codec.ec_en_matrix != NULL);
+		D_ASSERT(oc_ec_codec->ec_codec.ec_gftbls != NULL);
+		if (oc_ec_codec->ec_oc_id == oc_id)
+			return &oc_ec_codec->ec_codec;
+	}
+
+	return NULL;
 }

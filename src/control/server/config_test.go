@@ -47,8 +47,9 @@ const (
 	tmpOut           = "testdata/.tmp_out.yml"
 )
 
+// init gets called once per package, don't call in other test files
 func init() {
-	log.NewDefaultLogger(log.Error, "config_test: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "server_tests: ", os.Stderr)
 
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()
@@ -82,16 +83,6 @@ func uncommentServerConfig() {
 	if err := cmd.Wait(); err != nil {
 		fail(err)
 	}
-}
-
-func newMockConfig(
-	cmdRet error, getenvRet string, existsRet bool, mountRet error,
-	unmountRet error, mkdirRet error, removeRet error) configuration {
-
-	return newDefaultConfiguration(
-		newMockExt(
-			cmdRet, getenvRet, existsRet, mountRet, unmountRet,
-			mkdirRet, removeRet))
 }
 
 // defaultMoc2kConfig returns configuration populated from blank config file
@@ -786,8 +777,6 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
-				"ABT_ENV_MAX_NUM_XSTREAMS=100",
-				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
 				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
@@ -809,7 +798,6 @@ func TestPopulateEnv(t *testing.T) {
 			// result in no change
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
@@ -822,7 +810,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
@@ -842,8 +829,6 @@ func TestPopulateEnv(t *testing.T) {
 			[]string{"FOO=bar"},
 			[]string{
 				"FOO=bar",
-				"ABT_ENV_MAX_NUM_XSTREAMS=100",
-				"ABT_MAX_NUM_XSTREAMS=100",
 				"DAOS_MD_CAP=1024",
 				"CRT_CTX_SHARE_ADDR=0",
 				"CRT_TIMEOUT=30",
@@ -864,7 +849,6 @@ func TestPopulateEnv(t *testing.T) {
 			// result in no change, as provider is set in os, no changes made
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
@@ -877,7 +861,6 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			[]string{
 				"FOO=bar",
-				"ABT_MAX_NUM_XSTREAMS=somevalue",
 				"DAOS_MD_CAP=somevalue",
 				"CRT_TIMEOUT=somevalue",
 				// "CRT_CREDIT_EP_CTX=0", // whilst this is a new env, it is ignored

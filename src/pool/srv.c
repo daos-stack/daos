@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <daos_srv/daos_server.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include "srv_layout.h"
 
 static int
 init(void)
@@ -51,10 +52,16 @@ init(void)
 	if (rc)
 		D_GOTO(err_hdl_hash, rc);
 
+	rc = ds_pool_prop_default_init();
+	if (rc)
+		D_GOTO(err_pool_iv, rc);
+
 	ds_pool_rsvc_class_register();
 
 	return 0;
 
+err_pool_iv:
+	ds_pool_iv_fini();
 err_hdl_hash:
 	ds_pool_hdl_hash_fini();
 err_pool_cache:
@@ -70,6 +77,7 @@ fini(void)
 	ds_pool_iv_fini();
 	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
+	ds_pool_prop_default_fini();
 	return 0;
 }
 
@@ -107,16 +115,6 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 
 static struct crt_corpc_ops ds_pool_tgt_update_map_co_ops = {
 	.co_aggregate	= ds_pool_tgt_update_map_aggregator,
-	.co_pre_forward	= NULL,
-};
-
-static struct crt_corpc_ops ds_pool_rdb_start_co_ops = {
-	.co_aggregate	= ds_pool_rdb_start_aggregator,
-	.co_pre_forward	= NULL,
-};
-
-static struct crt_corpc_ops ds_pool_rdb_stop_co_ops = {
-	.co_aggregate	= ds_pool_rdb_stop_aggregator,
 	.co_pre_forward	= NULL,
 };
 

@@ -12,9 +12,11 @@ def scons():
     Export('utest_utils')
 
     daos_build.test(denv, 'btree', ['btree.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
+                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
+    daos_build.test(denv, 'umem_test', ['umem_test.c', utest_utils],
+                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(denv, 'btree_direct', ['btree_direct.c', utest_utils],
-                    LIBS=['daos_common', 'gurt', 'cart', 'pmemobj'])
+                    LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(denv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(denv, 'checksum', 'checksum.c',
@@ -35,6 +37,9 @@ def scons():
     daos_build.test(unit_env, 'drpc_tests',
                     ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
                      common_test_utils],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    daos_build.test(unit_env, 'acl_api_tests',
+                    source=['acl_api_tests.c', '../acl_api.c'],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
 
 if __name__ == "SCons.Script":

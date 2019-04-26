@@ -36,6 +36,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <daos_api.h> /* for daos_prop_alloc/_free() */
+#include <daos_security.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
@@ -246,53 +247,6 @@ pool_svc_rdb_uuid_path(const uuid_t pool_uuid)
 	return pool_svc_rdb_path_common(pool_uuid, "-uuid");
 }
 
-static int
-pool_svc_rdb_uuid_store(const uuid_t pool_uuid, const uuid_t uuid)
-{
-	char   *path;
-	int	rc;
-
-	path = pool_svc_rdb_uuid_path(pool_uuid);
-	if (path == NULL)
-		return -DER_NOMEM;
-	rc = uuid_store(path, uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-pool_svc_rdb_uuid_load(const uuid_t pool_uuid, uuid_t uuid)
-{
-	char   *path;
-	int	rc;
-
-	path = pool_svc_rdb_uuid_path(pool_uuid);
-	if (path == NULL)
-		return -DER_NOMEM;
-	rc = uuid_load(path, uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-pool_svc_rdb_uuid_remove(const uuid_t pool_uuid)
-{
-	char   *path;
-	int	rc;
-
-	path = pool_svc_rdb_uuid_path(pool_uuid);
-	if (path == NULL)
-		return -DER_NOMEM;
-	rc = remove(path);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to remove %s: %d\n",
-			DP_UUID(pool_uuid), path, errno);
-		rc = daos_errno2der(errno);
-	}
-	D_FREE(path);
-	return rc;
-}
-
 /*
  * Called by mgmt module on every storage node belonging to this pool.
  * "path" is the directory under which the VOS and metadata files shall be.
@@ -325,6 +279,27 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
+static void
+pool_prop_copy_ptr(struct daos_prop_entry *entry_def,
+		struct daos_prop_entry *entry, size_t len)
+{
+	D_ALLOC(entry_def->dpe_val_ptr, len);
+	if (entry_def->dpe_val_ptr != NULL) {
+		memcpy(entry_def->dpe_val_ptr, entry->dpe_val_ptr, len);
+	}
+}
+
+static uint32_t
+pool_prop_acl_get_length(struct daos_prop_entry *entry)
+{
+	if (entry->dpe_val_ptr == NULL) {
+		D_WARN("ACL pool property was NULL\n");
+		return 0;
+	}
+
+	return daos_acl_get_size((struct daos_acl *)entry->dpe_val_ptr);
+}
+
 /* copy \a prop to \a prop_def (duplicated default prop) */
 static int
 pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
@@ -355,6 +330,12 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
+			if (entry->dpe_val_ptr != NULL) {
+				pool_prop_copy_ptr(entry_def, entry,
+					pool_prop_acl_get_length(entry));
+				if (entry_def->dpe_val_ptr == NULL)
+					return -DER_NOMEM;
+			}
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -388,6 +369,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_PO_ACL:
+			if (entry->dpe_val_ptr != NULL) {
+				daos_iov_set(&value, entry->dpe_val_ptr,
+					     pool_prop_acl_get_length(entry));
+				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
+						   &value);
+				if (rc)
+					return rc;
+			}
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
 			daos_iov_set(&value, &entry->dpe_val,
@@ -664,6 +653,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 {
 	d_rank_list_t	       *ranks;
 	uuid_t			rdb_uuid;
+	daos_iov_t		psid;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -681,9 +671,10 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		D_GOTO(out, rc);
 
 	uuid_generate(rdb_uuid);
-	rc = ds_pool_rdb_dist_start(rdb_uuid, pool_uuid, ranks,
-				    true /* create */, true /* bootstrap */,
-				    get_md_cap());
+	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, rdb_uuid, ranks,
+				true /* create */, true /* bootstrap */,
+				get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -743,7 +734,8 @@ out_client:
 	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
-		ds_pool_rdb_dist_stop(pool_uuid, ranks, true /* destroy */);
+		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
+				  true /* destroy */);
 out_ranks:
 	daos_rank_list_free(ranks);
 out:
@@ -754,12 +746,14 @@ int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
 	char		id[DAOS_UUID_STR_SIZE];
+	daos_iov_t	psid;
 	crt_group_t    *group;
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
-	rc = ds_pool_rdb_dist_stop(pool_uuid, NULL /* ranks */,
-				   true /* destroy */);
+	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
+			       true /* destroy */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -820,6 +814,59 @@ pool_svc_name_cb(daos_iov_t *id, char **name)
 	s[8] = '\0'; /* strlen(DF_UUID) */
 	*name = s;
 	return 0;
+}
+
+static int
+pool_svc_load_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+{
+	char   *path;
+	int	rc;
+
+	if (id->iov_len != sizeof(uuid_t))
+		return -DER_INVAL;
+	path = pool_svc_rdb_uuid_path(id->iov_buf);
+	if (path == NULL)
+		return -DER_NOMEM;
+	rc = uuid_load(path, db_uuid);
+	D_FREE(path);
+	return rc;
+}
+
+static int
+pool_svc_store_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+{
+	char   *path;
+	int	rc;
+
+	if (id->iov_len != sizeof(uuid_t))
+		return -DER_INVAL;
+	path = pool_svc_rdb_uuid_path(id->iov_buf);
+	if (path == NULL)
+		return -DER_NOMEM;
+	rc = uuid_store(path, db_uuid);
+	D_FREE(path);
+	return rc;
+}
+
+static int
+pool_svc_delete_uuid_cb(daos_iov_t *id)
+{
+	char   *path;
+	int	rc;
+
+	if (id->iov_len != sizeof(uuid_t))
+		return -DER_INVAL;
+	path = pool_svc_rdb_uuid_path(id->iov_buf);
+	if (path == NULL)
+		return -DER_NOMEM;
+	rc = remove(path);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to remove %s: %d\n",
+			DP_UUID(id->iov_buf), path, errno);
+		rc = daos_errno2der(errno);
+	}
+	D_FREE(path);
+	return rc;
 }
 
 static int
@@ -1057,6 +1104,9 @@ pool_svc_drain_cb(struct ds_rsvc *rsvc)
 
 static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_name	= pool_svc_name_cb,
+	.sc_load_uuid	= pool_svc_load_uuid_cb,
+	.sc_store_uuid	= pool_svc_store_uuid_cb,
+	.sc_delete_uuid	= pool_svc_delete_uuid_cb,
 	.sc_locate	= pool_svc_locate_cb,
 	.sc_alloc	= pool_svc_alloc_cb,
 	.sc_free	= pool_svc_free_cb,
@@ -1136,66 +1186,6 @@ ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svcp,
 	return 0;
 }
 
-/* If create is false, db_uuid, size, and replicas are ignored. */
-int
-ds_pool_svc_start(uuid_t uuid, bool create, uuid_t db_uuid, size_t size,
-		  d_rank_list_t *replicas)
-{
-	uuid_t		db_uuid_buf;
-	daos_iov_t	id;
-	int		rc;
-
-	if (!create) {
-		rc = pool_svc_rdb_uuid_load(uuid, db_uuid_buf);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to load DB UUID: %d\n",
-				DP_UUID(uuid), rc);
-			return rc;
-		}
-		db_uuid = db_uuid_buf;
-	}
-
-	daos_iov_set(&id, uuid, sizeof(uuid_t));
-	rc = ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, db_uuid, create, size,
-			   replicas, NULL /* arg */);
-	if (rc != 0 && rc != -DER_ALREADY && !(create && rc == -DER_EXIST)) {
-		D_ERROR(DF_UUID": failed to start pool service: %d\n",
-			DP_UUID(uuid), rc);
-		return rc;
-	}
-
-	if (create) {
-		rc = pool_svc_rdb_uuid_store(uuid, db_uuid);
-		if (rc != 0) {
-			ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id,
-				     create /* destroy */);
-			return rc;
-		}
-	}
-
-	return 0;
-}
-
-int
-ds_pool_svc_stop(uuid_t uuid, bool destroy)
-{
-	daos_iov_t	id;
-	int		rc;
-
-	daos_iov_set(&id, uuid, sizeof(uuid_t));
-	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id, destroy);
-	if (rc != 0) {
-		if (rc == -DER_ALREADY)
-			rc = 0;
-		return rc;
-	}
-
-	if (destroy)
-		rc = pool_svc_rdb_uuid_remove(uuid);
-
-	return rc;
-}
-
 /*
  * Try to start a pool's pool service if its RDB exists. Continue the iteration
  * upon errors as other pools may still be able to work.
@@ -1204,12 +1194,13 @@ static int
 start_one(uuid_t uuid, void *arg)
 {
 	char	       *path;
+	daos_iov_t	id;
 	struct stat	st;
 	int		rc;
 
 	/*
 	 * Check if an RDB file exists, to avoid unnecessary error messages
-	 * from the ds_pool_svc_start() call.
+	 * from the ds_rsvc_start() call.
 	 */
 	path = pool_svc_rdb_path(uuid);
 	if (path == NULL) {
@@ -1225,15 +1216,10 @@ start_one(uuid_t uuid, void *arg)
 		return 0;
 	}
 
-	rc = ds_pool_svc_start(uuid, false /* create */, NULL /* db_uuid */,
-			       0 /* size */, NULL /* replicas */);
-	if (rc != 0) {
-		D_ERROR("failed to start pool service "DF_UUID": %d\n",
-			DP_UUID(uuid), rc);
-		return 0;
-	}
-
-	D_DEBUG(DB_MD, "started pool service "DF_UUID"\n", DP_UUID(uuid));
+	daos_iov_set(&id, uuid, sizeof(uuid_t));
+	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, NULL /* db_uuid */,
+		      false /* create */, 0 /* size */, NULL /* replicas */,
+		      NULL /* arg */);
 	return 0;
 }
 
@@ -1348,6 +1334,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_RECLAIM)
 		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_ACL)
+		nr++;
 	if (nr == 0)
 		return 0;
 
@@ -1405,6 +1393,22 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
 		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_ACL) {
+		daos_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_acl,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
+		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+			return -DER_NOMEM;
+		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
+		       value.iov_buf_len);
+		idx++;
 	}
 	return 0;
 }
@@ -1531,6 +1535,7 @@ out_tx:
 			D_GOTO(out_svc, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
+		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
 	}
 
 out_mutex:
@@ -1729,6 +1734,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
+	daos_prop_t		       *prop;
+	struct daos_prop_entry	       *acl_entry;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -1789,12 +1796,26 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
-	rc = ds_sec_check_pool_access(&ugm, &in->pci_cred, in->pci_capas);
+	/* Fetch ACL for access check */
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot get ACL for pool, rc=%d\n",
+			DP_UUID(in->pci_op.pi_uuid), rc);
+		D_GOTO(out_map_version, rc);
+	}
+	D_ASSERT(prop != NULL);
+
+	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	D_ASSERT(acl_entry != NULL);
+	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
+
+	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &ugm,
+			&in->pci_cred, in->pci_capas);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
 			in->pci_capas, rc);
-		D_GOTO(out_map_version, rc = -DER_NO_PERM);
+		D_GOTO(out_pool_prop, rc = -DER_NO_PERM);
 	}
 
 	out->pco_uid = ugm.pp_uid;
@@ -1812,22 +1833,22 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	rc = transfer_map_buf(&tx, svc, rpc, in->pci_map_bulk,
 			      &out->pco_map_buf_size, &map_buf_bulk);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_pool_prop, rc);
 
 	if (skip_update)
-		D_GOTO(out_map_version, rc = 0);
+		D_GOTO(out_pool_prop, rc = 0);
 
 	daos_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_pool_prop, rc);
 
 	/* Take care of exclusive handles. */
 	if (nhandles != 0) {
 		if (in->pci_capas & DAOS_PC_EX) {
 			D_DEBUG(DF_DSMS, DF_UUID": others already connected\n",
 				DP_UUID(in->pci_op.pi_uuid));
-			D_GOTO(out_map_version, rc = -DER_BUSY);
+			D_GOTO(out_pool_prop, rc = -DER_BUSY);
 		} else {
 			/*
 			 * If there is a non-exclusive handle, then all handles
@@ -1838,9 +1859,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 					  RDB_PROBE_FIRST, NULL /* key_in */,
 					  NULL /* key_out */, &value);
 			if (rc != 0)
-				D_GOTO(out_map_version, rc);
+				D_GOTO(out_pool_prop, rc);
 			if (hdl.ph_capas & DAOS_PC_EX)
-				D_GOTO(out_map_version, rc = -DER_BUSY);
+				D_GOTO(out_pool_prop, rc = -DER_BUSY);
 		}
 	}
 
@@ -1850,7 +1871,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_pool_prop, rc);
 	}
 
 	hdl.ph_capas = in->pci_capas;
@@ -1859,15 +1880,18 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	daos_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_pool_prop, rc);
 
 	daos_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	daos_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_pool_prop, rc);
 
 	rc = rdb_tx_commit(&tx);
+
+out_pool_prop:
+	daos_prop_free(prop);
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 out_lock:
@@ -2851,8 +2875,9 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	struct pool_svc			*svc;
 	struct rdb			*db;
 	d_rank_list_t			*ranks;
-	uuid_t				 dbid;
-	uuid_t				 psid;
+	uuid_t				 db_uuid;
+	uuid_t				 pool_uuid;
+	daos_iov_t			 psid;
 	int				 rc;
 
 	D_DEBUG(DB_MD, DF_UUID": Replica Rank: %u\n", DP_UUID(in->pmi_uuid),
@@ -2872,16 +2897,16 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	/* TODO: Use rdb_get() to track references? */
 	db = svc->ps_rsvc.s_db;
-	rdb_get_uuid(db, dbid);
-	uuid_copy(psid, svc->ps_uuid);
+	rdb_get_uuid(db, db_uuid);
+	uuid_copy(pool_uuid, svc->ps_uuid);
 	pool_svc_put_leader(svc);
+	daos_iov_set(&psid, pool_uuid, sizeof(uuid_t));
 
 	switch (opc) {
 	case POOL_REPLICAS_ADD:
-		rc = ds_pool_rdb_dist_start(dbid, psid, in->pmi_targets,
-					    true /* create */,
-					    false /* bootstrap */,
-					    get_md_cap());
+		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, db_uuid,
+					in->pmi_targets, true /* create */,
+					false /* bootstrap */, get_md_cap());
 		if (rc != 0)
 			break;
 		rc = rdb_add_replicas(db, ranks);
@@ -2892,7 +2917,8 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 		if (rc != 0)
 			break;
 		/* ignore return code */
-		ds_pool_rdb_dist_stop(psid, in->pmi_targets, true /*destroy*/);
+		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, in->pmi_targets,
+				  true /*destroy*/);
 		break;
 
 	default:

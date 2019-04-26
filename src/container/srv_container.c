@@ -266,6 +266,7 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
 			break;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
@@ -361,6 +362,7 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
 			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);

@@ -62,7 +62,7 @@ open_retry:
 		D_GOTO(unlock, rc = -DER_STALE);
 	}
 
-	obj_shard = &obj->cob_shards[shard];
+	obj_shard = &obj->cob_shards->do_shards[shard];
 
 	/* Skip the invalid shards and targets */
 	if (obj_shard->do_shard == -1 ||
@@ -75,7 +75,7 @@ open_retry:
 	D_ASSERT(obj_shard->do_shard == shard);
 
 	D_DEBUG(DB_IO, "Open object shard %d\n", shard);
-	obj_shard = &obj->cob_shards[shard];
+
 	if (obj_shard->do_obj == NULL) {
 		daos_unit_oid_t	 oid;
 
@@ -114,17 +114,25 @@ unlock:
 static void
 obj_layout_free(struct dc_object *obj)
 {
-	int i;
+	struct dc_obj_layout	*layout = NULL;
+	int			 i;
 
 	if (obj->cob_shards == NULL)
 		return;
 
 	for (i = 0; i < obj->cob_shards_nr; i++) {
-		if (obj->cob_shards[i].do_obj)
-			obj_shard_close(&obj->cob_shards[i]);
+		if (obj->cob_shards->do_shards[i].do_obj != NULL)
+			obj_shard_close(&obj->cob_shards->do_shards[i]);
 	}
-	D_FREE(obj->cob_shards);
+
+	D_SPIN_LOCK(&obj->cob_spin);
+	if (obj->cob_shards->do_open_count == 0)
+		layout = obj->cob_shards;
 	obj->cob_shards = NULL;
+	D_SPIN_UNLOCK(&obj->cob_spin);
+
+	if (layout != NULL)
+		D_FREE(layout);
 }
 
 static void
@@ -249,7 +257,8 @@ obj_layout_create(struct dc_object *obj)
 	obj->cob_version = layout->ol_ver;
 
 	D_ASSERT(obj->cob_shards == NULL);
-	D_ALLOC_ARRAY(obj->cob_shards, layout->ol_nr);
+	D_ALLOC(obj->cob_shards, sizeof(struct dc_obj_layout) +
+		sizeof(struct dc_obj_shard) * layout->ol_nr);
 	if (obj->cob_shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -257,7 +266,7 @@ obj_layout_create(struct dc_object *obj)
 	for (i = 0; i < layout->ol_nr; i++) {
 		struct dc_obj_shard *obj_shard;
 
-		obj_shard = &obj->cob_shards[i];
+		obj_shard = &obj->cob_shards->do_shards[i];
 		obj_shard->do_shard = i;
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
 		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
@@ -367,7 +376,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 			return -DER_INVAL;
 		}
 
-		if (obj->cob_shards[idx].do_shard != -1) {
+		if (obj->cob_shards->do_shards[idx].do_shard != -1) {
 			D_DEBUG(DB_TRACE, "special shard %d\n", idx);
 			D_RWLOCK_UNLOCK(&obj->cob_lock);
 			return idx;
@@ -380,10 +389,10 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	     i++, idx = idx_first + (idx + 1 - idx_first) % grp_size) {
 		/* let's skip the rebuild shard for non-update op */
 		if (op != DAOS_OBJ_RPC_UPDATE &&
-		    obj->cob_shards[idx].do_rebuilding)
+		    obj->cob_shards->do_shards[idx].do_rebuilding)
 			continue;
 
-		if (obj->cob_shards[idx].do_target_id != -1)
+		if (obj->cob_shards->do_shards[idx].do_target_id != -1)
 			break;
 	}
 
@@ -400,7 +409,7 @@ obj_get_shard(void *data, int idx)
 {
 	struct dc_object	*obj = data;
 
-	return &obj->cob_shards[idx].do_pl_shard;
+	return &obj->cob_shards->do_shards[idx].do_pl_shard;
 }
 
 static int
@@ -459,7 +468,7 @@ static uint32_t
 obj_shard2tgtid(struct dc_object *obj, uint32_t shard)
 {
 	D_ASSERT(shard < obj->cob_shards_nr);
-	return obj->cob_shards[shard].do_target_id;
+	return obj->cob_shards->do_shards[shard].do_target_id;
 }
 
 static int
@@ -833,16 +842,17 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 		shard = layout->ol_shards[i];
 		shard->os_replica_nr = grp_size;
 		for (j = 0; j < grp_size; j++) {
+			struct dc_obj_shard *obj_shard;
 			struct pool_target *tgt;
 
-			if (obj->cob_shards[k].do_target_id == -1) {
+			obj_shard = &obj->cob_shards->do_shards[k];
+			if (obj_shard->do_target_id == -1) {
 				k++;
 				continue;
 			}
 
 			rc = dc_cont_tgt_idx2ptr(obj->cob_coh,
-					obj->cob_shards[k].do_target_id,
-					&tgt);
+						 obj_shard->do_target_id, &tgt);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -867,7 +877,8 @@ dc_obj_query(tse_task_t *task)
 int
 dc_obj_layout_refresh(daos_handle_t oh)
 {
-	struct dc_object *obj;
+	struct dc_object	*obj;
+	int			 rc;
 
 	obj = obj_hdl2ptr(oh);
 	if (obj == NULL) {
@@ -875,11 +886,11 @@ dc_obj_layout_refresh(daos_handle_t oh)
 		return -DER_NO_HDL;
 	}
 
-	obj_layout_refresh(obj);
+	rc = obj_layout_refresh(obj);
 
 	obj_decref(obj);
 
-	return 0;
+	return rc;
 }
 
 /* Auxiliary args for object I/O */

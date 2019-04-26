@@ -8,6 +8,9 @@ def scons():
     daos_build.test(denv, 'eq_tests', Glob('eq_tests.c'),
                     LIBS=['daos', 'daos_common', 'gurt', 'cart',
                           'pthread', 'cmocka'])
+    daos_build.test(denv, 'agent_tests', Glob('agent_tests.c'),
+                    LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                          'pthread', 'cmocka'])
 
 if __name__ == "SCons.Script":
     scons()

@@ -158,9 +158,9 @@ struct vos_dtx_record_df {
 	/** The DTX record flags, see enum vos_dtx_record_flags. */
 	uint32_t			tr_flags;
 	/** The record in the related tree in SCM. */
-	umem_id_t			tr_record;
+	umem_off_t			tr_record;
 	/** The next vos_dtx_record_df for the same DTX. */
-	umem_id_t			tr_next;
+	umem_off_t			tr_next;
 };
 
 enum vos_dtx_entry_flags {
@@ -194,11 +194,11 @@ struct vos_dtx_entry_df {
 	/** The second timestamp when handles the transaction. */
 	uint64_t			te_sec;
 	/** The list of vos_dtx_record_df in SCM. */
-	umem_id_t			te_records;
+	umem_off_t			te_records;
 	/** The next committed DTX in global list. */
-	umem_id_t			te_next;
+	umem_off_t			te_next;
 	/** The prev committed DTX in global list. */
-	umem_id_t			te_prev;
+	umem_off_t			te_prev;
 };
 
 /**
@@ -210,9 +210,9 @@ struct vos_dtx_table_df {
 	/** The time in second when last aggregate the DTXs. */
 	uint64_t			tt_time_last_shrink;
 	/** The list head of committed DTXs. */
-	umem_id_t			tt_entry_head;
+	umem_off_t			tt_entry_head;
 	/** The list tail of committed DTXs. */
-	umem_id_t			tt_entry_tail;
+	umem_off_t			tt_entry_tail;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root			tt_committed_btr;
 	/** The root of the B+ tree for active (prepared) DTXs. */
@@ -275,7 +275,7 @@ struct vos_krec_df {
 	/* Earliest known modification timestamp */
 	daos_epoch_t			kr_earliest;
 	/** The DTX entry in SCM. */
-	umem_id_t			kr_dtx;
+	umem_off_t			kr_dtx;
 	/** The count of uncommitted DTXs that share the key. */
 	uint32_t			kr_dtx_shares;
 	/** For 64-bits alignment. */
@@ -310,7 +310,7 @@ struct vos_irec_df {
 	/** pool map version */
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */
-	umem_id_t			ir_dtx;
+	umem_off_t			ir_dtx;
 	/** length of value */
 	uint64_t			ir_size;
 	/** external payload address */
@@ -334,7 +334,7 @@ struct vos_obj_df {
 	/** Incarnation of the object, it's increased each time it's punched. */
 	uint64_t			vo_incarnation;
 	/** The DTX entry in SCM. */
-	umem_id_t			vo_dtx;
+	umem_off_t			vo_dtx;
 	/** The count of uncommitted DTXs that share the object. */
 	uint32_t			vo_dtx_shares;
 	/** For 64-bits alignment. */

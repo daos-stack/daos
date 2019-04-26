@@ -1075,6 +1075,29 @@ cont_iter_cb(uuid_t cont_uuid, vos_iter_entry_t *ent, void *data)
 	return arg->callback(cont_uuid, ent, arg->arg);
 }
 
+struct dtx_resync_args {
+	daos_handle_t	ph;
+	uuid_t		po_uuid;
+	uuid_t		co_uuid;
+	uint32_t	ver;
+};
+
+static int
+dtx_resync_ult(void *data)
+{
+	struct dtx_resync_args	*args = data;
+	int			 rc;
+
+	rc = dtx_resync(args->ph, args->po_uuid, args->co_uuid, args->ver,
+			true);
+	if (rc != 0)
+		D_ERROR("Fail to resync some DTX(s) for the pool/cont "
+			DF_UUID"/"DF_UUID" that will affect subsequent "
+			"object rebuild: rc = %d.\n",
+			DP_UUID(args->po_uuid), DP_UUID(args->co_uuid), rc);
+	return rc;
+}
+
 static int
 pool_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
 {
@@ -1082,15 +1105,19 @@ pool_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
 
 	switch (arg->intent) {
 	case DAOS_INTENT_REBUILD: {
-		int	rc;
+		struct dtx_resync_args	args;
+		int			rc;
 
 		/* For rebuild case, we need to resync DTXs' status firstly. */
-		rc = dtx_resync(ph, arg->po_uuid, co_uuid, arg->version, true);
+		args.ph = ph;
+		args.ver = arg->version;
+		uuid_copy(args.po_uuid, arg->po_uuid);
+		uuid_copy(args.co_uuid, co_uuid);
+		rc = dss_ult_create_execute(dtx_resync_ult, &args, NULL, NULL,
+					    DSS_ULT_DTX_RESYNC, DSS_TGT_SELF,
+					    0);
 		if (rc != 0) {
-			D_ERROR("Fail to resync some DTX(s) for the pool/cont "
-				DF_UUID"/"DF_UUID" that will affect subsequent "
-				"object rebuild: rc = %d.\n",
-				DP_UUID(arg->po_uuid), DP_UUID(co_uuid), rc);
+			D_ERROR("dtx_resync_ult failed, rc %d.\n", rc);
 			return rc;
 		}
 

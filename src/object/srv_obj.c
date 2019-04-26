@@ -41,12 +41,6 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-static inline struct obj_tls *
-obj_tls_get()
-{
-	return dss_module_key_get(dss_tls_get(), &obj_module_key);
-}
-
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -54,6 +48,7 @@ static void
 ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		   daos_handle_t ioh, int status, uint32_t map_version)
 {
+	struct obj_tls		*tls = obj_tls_get();
 	struct obj_rw_in	*orwi;
 	struct obj_rw_out	*orwo;
 	int			rc;
@@ -61,6 +56,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	orwi = crt_req_get(rpc);
 	orwo = crt_reply_get(rpc);
 
+	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_END);
 	if (!daos_handle_is_inval(ioh)) {
 		bool update = (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE);
 
@@ -88,6 +84,8 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		}
 	}
 
+	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_END);
+	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_REPLY);
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
@@ -108,6 +106,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			orwo->orw_nrs.ca_count = 0;
 		}
 	}
+	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_REPLY);
 }
 
 struct ds_bulk_async_args {
@@ -720,6 +719,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont			*cont = NULL;
+	struct obj_tls			*tls = obj_tls_get();
 	daos_handle_t			 ioh = DAOS_HDL_INVAL;
 	uint32_t			 map_ver = 0;
 	int				 tag;
@@ -734,6 +734,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	dispatch = update && orw->orw_shard_tgts.ca_arrays != NULL;
 	tag = dss_get_module_info()->dmi_tgt_id;
 
+	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_PREP);
+	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE);
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64".\n", rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
@@ -784,6 +786,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_PREP);
+	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_LOCAL);
 	/* local RPC handler */
 	rc = ds_obj_rw_local_hdlr(rpc, tag, cont_hdl, cont, &ioh, update);
 	if (rc != 0)
@@ -797,8 +801,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (rc == 0)
 		rc = dispatch_rc;
 
+	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_LOCAL);
 out:
 	ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, map_ver);
+	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE);
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
 			ds_cont_put(cont); /* -1 for rebuild container */

@@ -60,6 +60,8 @@ struct daos_tree_overhead {
 	int			to_node_size;
 	/** Dynamic metadata size of an allocated record. */
 	int			to_record_msize;
+	/** Size of first insertion.  Full node allocated on second key */
+	int			to_single_size;
 	/** Tree order */
 	int			to_order;
 };
@@ -119,6 +121,15 @@ static inline bool
 daos_rank_list_valid(const d_rank_list_t *rl)
 {
 	return rl && rl->rl_ranks && rl->rl_nr;
+}
+
+static inline uint64_t
+daos_get_ntime(void)
+{
+	struct timespec	tv;
+
+	d_gettime(&tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
 }
 
 /** Function table for combsort and binary search */
