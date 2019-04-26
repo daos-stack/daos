@@ -10,8 +10,6 @@ servers:
   log_mask: ERR
   log_file: /tmp/server.log
   env_vars:
-  - ABT_ENV_MAX_NUM_XSTREAMS=100
-  - ABT_MAX_NUM_XSTREAMS=100
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30

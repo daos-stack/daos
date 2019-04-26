@@ -80,7 +80,7 @@ class RebuildTests(Test):
         # how much data to write with each key
         self.size = self.params.get("size", '/run/testparams/datasize/*')
         #Start the server
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")
         self.hostlist = self.params.get("test_machines", '/run/hosts/')
