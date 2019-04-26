@@ -50,7 +50,7 @@ typedef uint64_t		umem_off_t;
 /** Number of flag bits to reserve for encoding extra information in
  *  a NULL umem_off_t entry.
  */
-#define UMOFF_NUM_BITS		(3)
+#define UMOFF_NUM_BITS		(8)
 /** The absolute value of a flag mask must be <= this value */
 #define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_BITS)
 /** A mask to retrieve the invalid flags */
