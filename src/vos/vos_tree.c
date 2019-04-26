@@ -412,8 +412,8 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (krec->kr_evt.tr_order == 0)
 			goto exit; /* No subtree */
 
-		rc = evt_open_inplace(&krec->kr_evt, &uma, tins->ti_coh,
-				      tins->ti_blks_info, &toh);
+		rc = evt_open(&krec->kr_evt, &uma, tins->ti_coh,
+			      tins->ti_blks_info, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open evtree: %d\n", rc);
 		else
@@ -837,8 +837,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 	if (krec->kr_bmap & expected_flag) {
 		if (flags & SUBTR_EVT) {
-			rc = evt_open_inplace(&krec->kr_evt, uma, coh, info,
-					      sub_toh);
+			rc = evt_open(&krec->kr_evt, uma, coh, info, sub_toh);
 		} else {
 			rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh,
 						    info, sub_toh);
@@ -852,8 +851,8 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	D_ASSERT(flags & SUBTR_CREATE);
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER,
-					uma, &krec->kr_evt, coh, sub_toh);
+		rc = evt_create(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, uma,
+				&krec->kr_evt, coh, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);
 			goto out;

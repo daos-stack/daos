@@ -40,7 +40,7 @@
 #include <string.h>
 #include <linux/limits.h>
 #include "../security.pb-c.h"
-
+#include "drpc_mocks.h"
 
 /*
  * Mocks
@@ -54,117 +54,12 @@ char *getenv(const char *name)
 	return getenv_return;
 }
 
-static struct drpc *drpc_connect_return; /* value to be returned */
-static char drpc_connect_sockaddr[PATH_MAX + 1]; /* saved copy of input */
-struct drpc *
-drpc_connect(char *sockaddr)
-{
-	strncpy(drpc_connect_sockaddr, sockaddr, PATH_MAX);
-	return drpc_connect_return;
-}
-
-static int drpc_call_return; /* value to be returned */
-static struct drpc *drpc_call_ctx; /* saved input */
-static int drpc_call_flags; /* saved input */
-static Drpc__Call drpc_call_msg_content; /* saved copy of input */
-/* saved input ptr address (for checking non-NULL) */
-static Drpc__Call *drpc_call_msg_ptr;
-/* saved input ptr address (for checking non-NULL) */
-static Drpc__Response **drpc_call_resp_ptr;
-/* ptr to content to allocate in response (can be NULL) */
-static Drpc__Response *drpc_call_resp_return_ptr;
-/* actual content to allocate in response */
-static Drpc__Response drpc_call_resp_return_content;
 /* unpacked content of response body */
 static SecurityCredential *drpc_call_resp_return_security_credential;
 char *dc_agent_sockpath;
 
-int
-drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
-		Drpc__Response **resp)
-{
-	/* Save off the params passed in */
-	drpc_call_ctx = ctx;
-	drpc_call_flags = flags;
-	drpc_call_msg_ptr = msg;
-	if (msg != NULL) {
-		memcpy(&drpc_call_msg_content, msg, sizeof(Drpc__Call));
-
-		/* Need a copy of the body data, it's separately allocated */
-		D_ALLOC(drpc_call_msg_content.body.data, msg->body.len);
-		memcpy(drpc_call_msg_content.body.data, msg->body.data,
-				msg->body.len);
-	}
-	drpc_call_resp_ptr = resp;
-
-	if (resp == NULL) {
-		return drpc_call_return;
-	}
-
-	/* Fill out the mocked response */
-	if (drpc_call_resp_return_ptr == NULL) {
-		*resp = NULL;
-	} else {
-		size_t data_len =
-				drpc_call_resp_return_content.body.len;
-
-		/**
-		 * Need to allocate a new copy to return - the
-		 * production code will free the returned memory.
-		 */
-		D_ALLOC_PTR(*resp);
-		memcpy(*resp, &drpc_call_resp_return_content,
-				sizeof(Drpc__Response));
-
-		D_ALLOC((*resp)->body.data, data_len);
-		memcpy((*resp)->body.data,
-				drpc_call_resp_return_content.body.data,
-				data_len);
-	}
-
-	return drpc_call_return;
-}
-
-static int drpc_close_return; /* value to be returned */
-static struct drpc *drpc_close_ctx; /* saved copy of input ctx */
-int
-drpc_close(struct drpc *ctx)
-{
-	drpc_close_ctx = ctx;
-	return drpc_close_return;
-}
-
-/* Clean up dynamically-allocated variables from our mocks */
 static void
-free_drpc_connect_return()
-{
-	D_FREE(drpc_connect_return);
-}
-
-static void
-free_drpc_call_msg_body()
-{
-	D_FREE(drpc_call_msg_content.body.data);
-	drpc_call_msg_content.body.len = 0;
-}
-
-static void
-free_drpc_call_resp_body()
-{
-	D_FREE(drpc_call_resp_return_content.body.data);
-	drpc_call_resp_return_content.body.len = 0;
-}
-
-static void
-free_drpc_call_resp_security_credential()
-{
-	security_credential__free_unpacked(
-			drpc_call_resp_return_security_credential, NULL);
-}
-
-/* Setup helper functions - for mocks */
-static void
-init_default_drpc_resp_security_credential()
+init_default_drpc_resp_security_credential(void)
 {
 	D_ALLOC_PTR(drpc_call_resp_return_security_credential);
 	security_credential__init(drpc_call_resp_return_security_credential);
@@ -174,27 +69,18 @@ init_default_drpc_resp_security_credential()
 }
 
 static void
-pack_drpc_call_resp_body(SecurityCredential *cred)
+init_drpc_resp_with_sec_cred(void)
 {
-	size_t len = security_credential__get_packed_size(cred);
-
-	drpc_call_resp_return_content.body.len = len;
-	D_ALLOC(drpc_call_resp_return_content.body.data, len);
-	security_credential__pack(cred,
-			drpc_call_resp_return_content.body.data);
+	init_default_drpc_resp_security_credential();
+	pack_cred_in_drpc_call_resp_body(
+			drpc_call_resp_return_security_credential);
 }
 
-static void
-init_drpc_call_resp()
+void
+free_drpc_call_resp_security_credential()
 {
-	/* By default, return non-null response */
-	drpc_call_resp_return_ptr = &drpc_call_resp_return_content;
-
-	drpc__response__init(&drpc_call_resp_return_content);
-	drpc_call_resp_return_content.status = DRPC__STATUS__SUCCESS;
-
-	init_default_drpc_resp_security_credential();
-	pack_drpc_call_resp_body(drpc_call_resp_return_security_credential);
+	security_credential__free_unpacked(
+			drpc_call_resp_return_security_credential, NULL);
 }
 
 /*
@@ -209,19 +95,11 @@ setup_security_mocks(void **state)
 	getenv_name = NULL;
 	dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 
-	D_ALLOC_PTR(drpc_connect_return);
-	memset(drpc_connect_sockaddr, 0, sizeof(drpc_connect_sockaddr));
+	mock_drpc_connect_setup();
+	mock_drpc_call_setup();
+	mock_drpc_close_setup();
 
-	drpc_call_return = DER_SUCCESS;
-	drpc_call_ctx = NULL;
-	drpc_call_flags = 0;
-	drpc_call_msg_ptr = NULL;
-	memset(&drpc_call_msg_content, 0, sizeof(drpc_call_msg_content));
-	drpc_call_resp_ptr = NULL;
-	init_drpc_call_resp();
-
-	drpc_close_return = 0;
-	drpc_close_ctx = NULL;
+	init_drpc_resp_with_sec_cred();
 
 	return 0;
 }
@@ -231,9 +109,8 @@ teardown_security_mocks(void **state)
 {
 	/* Cleanup dynamically allocated mocks */
 
-	free_drpc_connect_return();
-	free_drpc_call_msg_body();
-	free_drpc_call_resp_body();
+	mock_drpc_connect_teardown();
+	mock_drpc_call_teardown();
 	free_drpc_call_resp_security_credential();
 
 	return 0;
@@ -413,7 +290,8 @@ test_request_credentials_fails_if_reply_token_missing(void **state)
 	auth_token__free_unpacked(
 			drpc_call_resp_return_security_credential->token, NULL);
 	drpc_call_resp_return_security_credential->token = NULL;
-	pack_drpc_call_resp_body(drpc_call_resp_return_security_credential);
+	pack_cred_in_drpc_call_resp_body(
+			drpc_call_resp_return_security_credential);
 
 	assert_int_equal(dc_sec_request_creds(&creds), -DER_MISC);
 

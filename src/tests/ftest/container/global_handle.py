@@ -116,7 +116,7 @@ class GlobalHandle(Test):
         # setup the DAOS python API
         self.context = DaosContext(self.build_paths['PREFIX'] + '/lib/')
 
-        server_group = self.params.get("server_group", '/server/',
+        server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
         basepath = os.path.normpath(self.build_paths['PREFIX'] + "/../")

@@ -183,30 +183,38 @@ yum -y install \$install_pkgs'" 2>&1 | dshbak -c; then
     exit 1
 fi
 
+args="${1:-quick}"
+shift || true
+args+=" $*"
+
 # shellcheck disable=SC2029
 if ! ssh -i ci_key jenkins@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
-export CRT_ATTACH_INFO_PATH=$DAOS_BASE/install/tmp
-export DAOS_SINGLETON_CLI=1
-export CRT_CTX_SHARE_ADDR=1
 export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
-export OFI_PORT=23350
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!
-export DD_LOG=/tmp/Functional_$TEST_TAG/daos.log
-export DD_SUBSYS=\"\"
-export DD_MASK=all
-export D_LOG_FILE=/tmp/Functional_$TEST_TAG/daos.log
-export D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR
+export D_LOG_FILE=/tmp/Functional_$TEST_TAG/server_daos.log
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
 logs_dir = $DAOS_BASE/src/tests/ftest/avocado/job-results
+
+[sysinfo.collectibles]
+# File with list of commands that will be executed and have their output
+# collected
+commands = \$HOME/.config/avocado/sysinfo/commands
+EOF
+
+mkdir -p ~/.config/avocado/sysinfo/
+cat <<EOF > ~/.config/avocado/sysinfo/commands
+ps axf
+dmesg
+df -h
 EOF
 
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908
@@ -229,6 +237,7 @@ pushd src/tests/ftest
 rm -f core.* *_results.xml
 
 # now run it!
+export PYTHONPATH=./util:../../utils/py/:./util/apricot
 if ! ./launch.py -s \"$TEST_TAG\"; then
     rc=\${PIPESTATUS[0]}
 else
