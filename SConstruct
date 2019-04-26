@@ -72,6 +72,9 @@ def scons():
     if not os.path.exists(commits_file):
         commits_file = None
 
+    if not GetOption("abc"):
+        print "bad option to induce build failure"
+
     prereqs = PreReqComponent(env, opts, commits_file)
     preload_prereqs(prereqs)
     opts.Save(opts_file, env)
