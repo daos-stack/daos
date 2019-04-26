@@ -514,7 +514,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 	unsigned char			*ldata[dc];
 	int				 i, lcnt = 0;
 	int				 rc = 0;
-	
+
 	for (i = 0; i < dc; i++)
 		if (sgl->sg_iovs[*j].iov_len - *k >= clen) {
 			unsigned char *from =
@@ -547,7 +547,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 			}
 			data[i] = ldata[lcnt++];
 		}
-	    
+
 	ec_encode_data(clen, dc, p, codec->ec_gftbls, data,
 		       &parity->p_bufs[p_idx]);
 out:
