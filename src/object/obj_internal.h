@@ -44,7 +44,7 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
-#define HIGH_BIT 1UL << 63
+#define HIGH_BIT (1UL << 63)
 
 /**
  * Bypass client I/O RPC, it means the client stack will complete the

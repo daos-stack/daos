@@ -503,22 +503,22 @@ int
 obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 		       size_t *k, struct obj_ec_parity *parity, int p_idx)
 {
-	struct obj_ec_codec 		*codec =
-					 obj_ec_codec_get(daos_obj_id2class(oid));
+	struct obj_ec_codec		*codec =
+				 obj_ec_codec_get(daos_obj_id2class(oid));
  	struct daos_oclass_attr 	*oca =
 					 daos_oclass_attr_find(oid);
 	unsigned int    		 clen = oca->u.ec.e_len;
-	unsigned int    		 dc = oca->u.ec.e_k;
+	unsigned int			 dc = oca->u.ec.e_k;
 	unsigned int			 p = oca->u.ec.e_p;
-	unsigned char 			*data[dc];
-	unsigned char 			*ldata[dc];
+	unsigned char			*data[dc];
+	unsigned char			*ldata[dc];
 	int				 i, lcnt = 0;
 	int				 rc = 0;
 	
-	for (i = 0; i < dc; i++) 
+	for (i = 0; i < dc; i++)
 		if (sgl->sg_iovs[*j].iov_len - *k >= clen) {
-			unsigned char* from =
-				(unsigned char*)sgl->sg_iovs[*j].iov_buf;
+			unsigned char *from =
+				(unsigned char *)sgl->sg_iovs[*j].iov_buf;
 			data[i] = &from[*k];
 			*k += clen;
 			if (*k == sgl->sg_iovs[*j].iov_len) {
@@ -536,6 +536,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 					sgl->sg_iovs[*j].iov_len-*k :
 					clen - cp_cnt;
 				unsigned char* from = sgl->sg_iovs[*j].iov_buf;
+
 				memcpy(&ldata[lcnt][cp_cnt], &from[*k], cp_amt);
 				if (sgl->sg_iovs[*j].iov_len-*k < clen - cp_cnt) {
 					 *k = 0;
@@ -547,7 +548,8 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 			data[i] = ldata[lcnt++];
 		}
 	    
-	ec_encode_data(clen, dc, p, codec->ec_gftbls, data, &parity->p_bufs[p_idx]);
+	ec_encode_data(clen, dc, p, codec->ec_gftbls, data,
+		       &parity->p_bufs[p_idx]);
 out:
 	for (i = 0; i < lcnt; i++)
 		D_FREE(ldata[i]);
