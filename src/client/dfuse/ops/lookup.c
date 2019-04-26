@@ -27,13 +27,12 @@
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
-		  struct dfuse_file_handle *handle,
+		  bool create,
 		  fuse_req_t req)
 {
 	struct fuse_entry_param		entry = {0};
 	d_list_t			*rlink;
 	daos_obj_id_t			oid;
-	struct fuse_file_info		fi = {0};
 	int				rc;
 
 	if (!inode->parent) {
@@ -53,11 +52,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	}
 
 	inode->stat.st_ino = (ino_t)oid.hi;
-
-	if (handle) {
-		handle->inode_num = inode->stat.st_ino;
-		fi.fh = (uint64_t)handle;
-	}
 
 	entry.attr = inode->stat;
 	entry.generation = 1;
@@ -80,7 +74,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		ie_close(fs_handle, inode);
 	}
 
-	if (handle) {
+	if (create) {
+		struct fuse_file_info fi = {0};
 		DFUSE_REPLY_CREATE(req, entry, &fi);
 	} else {
 		DFUSE_REPLY_ENTRY(req, entry);
@@ -131,7 +126,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, 0);
 	}
 
-	dfuse_reply_entry(fs_handle, inode, NULL, req);
+	dfuse_reply_entry(fs_handle, inode, false, req);
 	return;
 
 err:

@@ -35,9 +35,6 @@
 
 #include "dfuse_gah.h"
 
-#define DFUSE_FUSE_READ_BUF	0x100UL
-#define DFUSE_FUSE_WRITE_BUF	0x200UL
-
 struct dfuse_string_out {
 	d_string_t path;
 	int rc;
@@ -51,22 +48,8 @@ struct dfuse_entry_out {
 	int err;
 };
 
-struct dfuse_create_out {
-	struct ios_gah gah;
-	struct ios_gah igah;
-	struct stat stat;
-	int rc;
-	int err;
-};
-
 struct dfuse_attr_out {
 	struct stat stat;
-	int rc;
-	int err;
-};
-
-struct dfuse_opendir_out {
-	struct ios_gah gah;
 	int rc;
 	int err;
 };
@@ -87,21 +70,5 @@ struct dfuse_status_out {
 	int rc;
 	int err;
 };
-
-#define DFUSE_RPC_READX_OUT			\
-	((d_iov_t)(data) CRT_VAR)		\
-	((uint64_t)(bulk_len) CRT_VAR)		\
-	((uint32_t)(iov_len) CRT_VAR)		\
-	((int)(rc) CRT_VAR)			\
-	((int)(err) CRT_VAR)
-
-CRT_GEN_STRUCT(dfuse_readx_out, DFUSE_RPC_READX_OUT);
-
-#define DFUSE_RPC_WRITEX_OUT			\
-	((uint64_t)(len)	CRT_VAR)	\
-	((int)(rc)		CRT_VAR)	\
-	((int)(err)		CRT_VAR)
-
-CRT_GEN_STRUCT(dfuse_writex_out, DFUSE_RPC_WRITEX_OUT);
 
 #endif /* __DFUSE_COMMON_H__ */

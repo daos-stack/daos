@@ -25,25 +25,6 @@
 #include "dfuse.h"
 #include "dfuse_da.h"
 
-bool
-dfuse_gen_cb(struct dfuse_request *request)
-{
-	struct dfuse_status_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc) {
-		DFUSE_REPLY_ERR(request, request->rc);
-		D_GOTO(out, 0);
-	}
-
-	DFUSE_REPLY_ZERO(request);
-
-out:
-
-	D_FREE(request);
-	return false;
-}
-
 /*
  * Wrapper function that is called from FUSE to send RPCs. The idea is to
  * decouple the FUSE implementation from the actual sending of RPCs. The
@@ -137,54 +118,6 @@ d_hash_table_ops_t hops = {.hop_key_cmp = ih_key_cmp,
 			   .hop_rec_free = ih_free,
 };
 
-/* Create a getattr descriptor for use with descriptor allocators.
- *
- * Two das of descriptors are used here, one for getattr and a second
- * for getfattr.  The only difference is the RPC id so the datatypes are
- * the same, as are the init and release functions.
- */
-static void
-fh_init(void *arg, void *handle)
-{
-	struct dfuse_file_handle *fh = arg;
-
-	DFUSE_REQUEST_INIT(&fh->open_req, handle);
-	DFUSE_REQUEST_INIT(&fh->release_req, handle);
-	fh->ie = NULL;
-}
-
-static bool
-fh_reset(void *arg)
-{
-	struct dfuse_file_handle	*fh = arg;
-
-	DFUSE_REQUEST_RESET(&fh->open_req);
-
-	fh->open_req.ir_ht = RHS_INODE_NUM;
-
-	DFUSE_REQUEST_RESET(&fh->release_req);
-
-	fh->release_req.ir_ht = RHS_FILE;
-	fh->release_req.ir_file = fh;
-
-	if (!fh->ie) {
-		D_ALLOC_PTR(fh->ie);
-		if (!fh->ie)
-			return false;
-		atomic_fetch_add(&fh->ie->ie_ref, 1);
-	}
-
-	return true;
-}
-
-static void
-fh_release(void *arg)
-{
-	struct dfuse_file_handle *fh = arg;
-
-	D_FREE(fh->ie);
-}
-
 #define COMMON_INIT(type)						\
 	static void type##_common_init(void *arg, void *handle)		\
 	{								\
@@ -215,8 +148,6 @@ common_reset(void *arg)
 		req->dest = NULL;					\
 		req->ie = NULL;						\
 	}
-ENTRY_INIT(lookup);
-ENTRY_INIT(mkdir);
 ENTRY_INIT(symlink);
 
 static bool
@@ -254,58 +185,6 @@ entry_release(void *arg)
 	D_FREE(req->ie);
 }
 
-static void
-rb_page_init(void *arg, void *handle)
-{
-	struct dfuse_rb *rb = arg;
-
-	DFUSE_REQUEST_INIT(&rb->rb_req, handle);
-	rb->buf_size = 4096;
-	rb->fbuf.count = 1;
-	rb->fbuf.buf[0].fd = -1;
-}
-
-static void
-rb_large_init(void *arg, void *handle)
-{
-	struct dfuse_rb *rb = arg;
-
-	rb_page_init(arg, handle);
-	rb->buf_size = rb->rb_req.fsh->max_read;
-}
-
-static bool
-rb_reset(void *arg)
-{
-	struct dfuse_rb	*rb = arg;
-
-	DFUSE_REQUEST_RESET(&rb->rb_req);
-
-	rb->rb_req.ir_ht = RHS_FILE;
-
-	return true;
-}
-
-static void
-wb_init(void *arg, void *handle)
-{
-	struct dfuse_wb *wb = arg;
-
-	DFUSE_REQUEST_INIT(&wb->wb_req, handle);
-}
-
-static bool
-wb_reset(void *arg)
-{
-	struct dfuse_wb	*wb = arg;
-
-	DFUSE_REQUEST_RESET(&wb->wb_req);
-
-	wb->wb_req.ir_ht = RHS_FILE;
-
-	return true;
-}
-
 int
 dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 {
@@ -317,32 +196,12 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	mode_t				mode;
 	int				rc;
 
-	struct dfuse_da_reg fh = {.init = fh_init,
-				  .reset = fh_reset,
-				  .release = fh_release,
-				  POOL_TYPE_INIT(dfuse_file_handle,
-						 fh_free_list)};
-
 	struct dfuse_da_reg common = {.reset = common_reset,
 				      POOL_TYPE_INIT(common_req, list)};
 
 	struct dfuse_da_reg entry = {.reset = entry_reset,
 				     .release = entry_release,
 				     POOL_TYPE_INIT(entry_req, list)};
-
-	struct dfuse_da_reg rb_page = {.init = rb_page_init,
-				       .reset = rb_reset,
-				       POOL_TYPE_INIT(dfuse_rb,
-						      rb_req.ir_list)};
-
-	struct dfuse_da_reg rb_large = {.init = rb_large_init,
-					.reset = rb_reset,
-					POOL_TYPE_INIT(dfuse_rb,
-						       rb_req.ir_list)};
-
-	struct dfuse_da_reg wb = {.init = wb_init,
-				  .reset = wb_reset,
-				  POOL_TYPE_INIT(dfuse_wb, wb_req.ir_list)};
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
@@ -399,39 +258,10 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	if (!fs_handle->fsh_da)
 		D_GOTO(err, 0);
 
-	entry.init = lookup_entry_init;
-	fs_handle->lookup_da = dfuse_da_register(&fs_handle->da,
-						     &entry);
-	if (!fs_handle->lookup_da)
-		D_GOTO(err, 0);
-
-	entry.init = mkdir_entry_init;
-	fs_handle->mkdir_da = dfuse_da_register(&fs_handle->da, &entry);
-	if (!fs_handle->mkdir_da)
-		D_GOTO(err, 0);
-
 	entry.init = symlink_entry_init;
 	fs_handle->symlink_da = dfuse_da_register(&fs_handle->da,
 						      &entry);
 	if (!fs_handle->symlink_da)
-		D_GOTO(err, 0);
-
-	fs_handle->fh_da = dfuse_da_register(&fs_handle->da, &fh);
-	if (!fs_handle->fh_da)
-		D_GOTO(err, 0);
-
-	fs_handle->rb_da_page = dfuse_da_register(&fs_handle->da,
-						      &rb_page);
-	if (!fs_handle->rb_da_page)
-		D_GOTO(err, 0);
-
-	fs_handle->rb_da_large = dfuse_da_register(&fs_handle->da,
-						       &rb_large);
-	if (!fs_handle->rb_da_large)
-		D_GOTO(err, 0);
-
-	fs_handle->write_da = dfuse_da_register(&fs_handle->da, &wb);
-	if (!fs_handle->write_da)
 		D_GOTO(err, 0);
 
 	/* Create the root inode and insert into table */

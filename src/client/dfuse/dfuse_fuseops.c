@@ -104,6 +104,39 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 }
 
 void
+df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+	     mode_t mode, struct fuse_file_info *fi)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	d_list_t			*rlink;
+	bool				keep_ref;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dffs_ops->create) {
+		D_GOTO(err, rc = ENOTSUP);
+	}
+
+	keep_ref = parent_inode->ie_dfs->dffs_ops->create(req, parent_inode,
+							  name, mode, fi);
+	if (!keep_ref) {
+		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
+	}
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
@@ -201,7 +234,7 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	int rc;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
 	if (!rlink) {
@@ -237,7 +270,7 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
-	int rc;
+	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
 	if (!rlink) {
@@ -274,6 +307,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
 	.readdir	= dfuse_cb_readdir,
+	.create		= dfuse_cb_create,
 };
 
 /* Return the ops that should be passed to fuse */
@@ -293,6 +327,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->unlink	= df_ll_unlink;
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
+	fuse_ops->create	= df_ll_create;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;
@@ -300,25 +335,19 @@ struct fuse_lowlevel_ops
 	fuse_ops->forget_multi = dfuse_cb_forget_multi;
 	fuse_ops->destroy = dfuse_fuse_destroy;
 
-	/* Ops that do not yet support per-inode indirection */
-	fuse_ops->statfs = dfuse_cb_statfs;
-	fuse_ops->readlink = dfuse_cb_readlink;
-	fuse_ops->open = dfuse_cb_open;
+	/* Ops that do not support per-inode indirection
+	 *
+	 * Avoid the extra level of indirection here, as only dfs allows
+	 * creation of files, so it should be the only place to see file
+	 * operations.
+	 *
+	 * TODO: Implement open/release callbacks, to allow setting of fi.fh
+	 * in open, which would avoid a hashtable lookup per read/write.
+	 *
+	 * TODO: read_buf and write_buf support.
+	 */
+	fuse_ops->write = dfuse_cb_write;
 	fuse_ops->read = dfuse_cb_read;
-	fuse_ops->release = dfuse_cb_release;
-	fuse_ops->ioctl = dfuse_cb_ioctl;
-	fuse_ops->symlink = dfuse_cb_symlink;
-
-	fuse_ops->write = dfuse_cb_write;
-
-	fuse_ops->create = dfuse_cb_create;
-	fuse_ops->setattr = dfuse_cb_setattr;
-	fuse_ops->rename = dfuse_cb_rename;
-	fuse_ops->fsync = dfuse_cb_fsync;
-	fuse_ops->write = dfuse_cb_write;
-
-	if (flags & DFUSE_FUSE_WRITE_BUF)
-		fuse_ops->write_buf = dfuse_cb_write_buf;
 
 	return fuse_ops;
 }

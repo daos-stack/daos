@@ -89,7 +89,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		dfs_release(obj);
 
 		ns = fuse_add_direntry(req, buf + b_offset, size - b_offset,
-				       dirents[i].d_name, &stbuf, i+1);
+				       dirents[i].d_name, &stbuf, i + 1);
 		DFUSE_TRA_DEBUG(inode, "ns is %d",
 				ns);
 		if (ns > size - b_offset) {

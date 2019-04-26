@@ -24,20 +24,15 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-void
-dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
-		mode_t mode, struct fuse_file_info *fi)
+bool
+dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
+		const char *name, mode_t mode, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*inode = NULL;
-	struct dfuse_inode_entry	*parent_inode;
-	struct dfuse_file_handle	*handle = NULL;
-	d_list_t			*rlink = NULL;
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-
-	D_GOTO(err, rc = ENOTSUP);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->parent, name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
@@ -64,33 +59,15 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
-	rlink = d_hash_rec_find(&fs_handle->inode_ht, &parent, sizeof(parent));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				parent);
-		D_GOTO(err, rc = ENOENT);
-	}
-
-	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
 	D_ALLOC_PTR(inode);
 	if (!inode) {
 		D_GOTO(err, rc = ENOMEM);
 	}
 
-	D_ALLOC_PTR(handle);
-	if (!handle) {
-		D_GOTO(err, rc = ENOMEM);
-	}
-
-	DFUSE_TRA_INFO(parent_inode, "parent");
-
-	handle->common.projection = &fs_handle->proj;
-
-	DFUSE_TRA_INFO(handle, "file '%s' flags 0%o mode 0%o", name, fi->flags,
+	DFUSE_TRA_INFO(inode, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
-	rc = dfs_open(parent_inode->ie_dfs->dffs_dfs, parent_inode->obj, name,
+	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->obj, name,
 		      mode, O_CREAT, 0, 0, NULL, &inode->obj);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(release, 0);
@@ -100,31 +77,27 @@ dfuse_cb_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	 * as the inode.
 	 */
 	strncpy(inode->name, name, NAME_MAX);
-	inode->parent = parent;
+	inode->parent = parent->parent;
+	inode->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&inode->ie_ref, 1);
 
-	rc = dfs_ostat(parent_inode->ie_dfs->dffs_dfs,
-		       inode->obj, &inode->stat);
+	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(release, 0);
 	}
 
-	LOG_FLAGS(handle, fi->flags);
-	LOG_MODES(handle, mode);
+	LOG_FLAGS(inode, fi->flags);
+	LOG_MODES(inode, mode);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, inode, handle, req);
+	dfuse_reply_entry(fs_handle, inode, true, req);
 
-	return;
+	return true;
 release:
 	dfs_release(inode->obj);
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (rlink) {
-		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
-
-	}
 	D_FREE(inode);
-	D_FREE(handle);
+	return false;
 }
