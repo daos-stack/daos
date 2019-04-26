@@ -10,8 +10,6 @@ FROM ubuntu:18.04
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
 # Build arguments can be set via -build-arg
-# set NOBUILD to disable git clone & build
-ARG NOBUILD
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
@@ -21,20 +19,21 @@ ARG UID=1000
 # installed packages list below is updated
 
 # Install basic tools
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y git   \
-                       gcc golang-go make cmake libtool-bin scons autoconf    \
-                       libboost-dev uuid-dev libssl-dev libevent-dev          \
-                       libltdl-dev librdmacm-dev libcmocka0 libcmocka-dev     \
-                       libreadline6-dev curl doxygen pandoc flex patch nasm   \
-                       yasm graphviz doxygen libibverbs-dev librdmacm-dev     \
-                       libcunit1-dev libnuma-dev libaio-dev sg3-utils         \
-                       libiscsi-dev python-dev ninja-build meson              \
-                       pylint bash locales clang libyaml-dev
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            autoconf bash clang cmake curl doxygen flex                 \
+            gcc git golang-go graphviz                                  \
+            libaio-dev libboost-dev libcmocka0 libcmocka-dev            \
+            libcunit1-dev libevent-dev libibverbs-dev libiscsi-dev      \
+            libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
+            libssl-dev libtool-bin libyaml-dev                          \
+            locales make meson nasm ninja-build pandoc patch            \
+            pylint python-dev scons sg3-utils uuid-dev yasm
+
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
     add-apt-repository ppa:jhli/libsafec;                               \
-    add-apt-repository ppa:jhli/ipmctl
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    add-apt-repository ppa:jhli/ipmctl;                                 \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        libsafec-dev libipmctl-dev
 
 # hack the default shell to bash instead of dash
@@ -57,6 +56,9 @@ RUN chown daos.daos /mnt/daos
 # Switch to new user
 USER $USER
 WORKDIR /home/$USER
+
+# set NOBUILD to disable git clone & build
+ARG NOBUILD
 
 # Fetch DAOS code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi

@@ -18,8 +18,6 @@ servers:
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
   env_vars:                 # influence DAOS IO Server behaviour by setting env variables
-  - ABT_ENV_MAX_NUM_XSTREAMS=100
-  - ABT_MAX_NUM_XSTREAMS=100
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30

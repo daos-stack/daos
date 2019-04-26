@@ -57,7 +57,7 @@ class EvictTest(Test):
 
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
-        server_group = self.params.get("server_group", '/server/',
+        server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
         self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)

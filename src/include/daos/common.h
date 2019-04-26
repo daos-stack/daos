@@ -123,6 +123,15 @@ daos_rank_list_valid(const d_rank_list_t *rl)
 	return rl && rl->rl_ranks && rl->rl_nr;
 }
 
+static inline uint64_t
+daos_get_ntime(void)
+{
+	struct timespec	tv;
+
+	d_gettime(&tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
 /** Function table for combsort and binary search */
 typedef struct {
 	void    (*so_swap)(void *array, int a, int b);

@@ -70,7 +70,7 @@ class DestroyRebuild(Test):
                                                         self.workdir)
 
         # fire up the DAOS servers
-        self.server_group = self.params.get("server_group", '/run/server/',
+        self.server_group = self.params.get("name", '/run/server_config/',
                                             'daos_server')
         self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, self.server_group,

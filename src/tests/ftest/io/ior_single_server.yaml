@@ -14,7 +14,7 @@ hosts:
 
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
-timeout: 1800
+timeout: 2000
 server_config:
     name: daos_server
 createtests:

@@ -681,9 +681,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n",
 			iter_arg->tgt_idx);
 		rpt_get(rpt);
-		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt,
-			DSS_ULT_REBUILD, iter_arg->tgt_idx,
-			PULLER_STACK_SIZE, &puller->rp_ult);
+		rc = dss_ult_create(rebuild_one_ult, rpt, DSS_ULT_REBUILD,
+				    iter_arg->tgt_idx, PULLER_STACK_SIZE,
+				    &puller->rp_ult);
 		if (rc) {
 			rpt_put(rpt);
 			D_GOTO(free, rc);
@@ -906,9 +906,9 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		obj_arg->rpt->rt_toberb_objs++;
 
 	/* Let's iterate the object on different xstream */
-	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, DSS_ULT_REBUILD,
-				    oid.id_pub.lo % dss_tgt_nr,
-				    PULLER_STACK_SIZE, NULL);
+	rc = dss_ult_create(rebuild_obj_ult, obj_arg, DSS_ULT_REBUILD,
+			    oid.id_pub.lo % dss_tgt_nr,
+			    PULLER_STACK_SIZE, NULL);
 	if (rc) {
 		rpt_put(iter_arg->rpt);
 		D_FREE(obj_arg);
@@ -1413,8 +1413,8 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		rpt->rt_lead_puller_running = 1;
 		D_ASSERT(rpt->rt_pullers != NULL);
-		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg,
-					    DSS_ULT_SELF, 0, 0, NULL);
+		rc = dss_ult_create(rebuild_puller_ult, arg, DSS_ULT_REBUILD,
+				    DSS_TGT_SELF, 0, NULL);
 		if (rc) {
 			rpt_put(rpt);
 			D_FREE(arg);

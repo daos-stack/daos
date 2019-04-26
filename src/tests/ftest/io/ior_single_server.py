@@ -50,7 +50,7 @@ class IorSingleServer(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.server_group = self.params.get("server_config", '/name/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
         self.daosctl = self.basepath + '/install/bin/daosctl'
 
@@ -79,7 +79,7 @@ class IorSingleServer(Test):
                                 self.basepath)
 
         #if int(str(self.name).split("-")[0]) == 1:
-        #    IorUtils.build_ior(self.basepath)
+        #    ior_utils.build_ior(self.basepath)
 
     def tearDown(self):
         try:

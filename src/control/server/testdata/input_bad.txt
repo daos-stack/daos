@@ -8,7 +8,6 @@ servers:
   log_mask: ERR
   log_file: /tmp/server.log
   env_vars:
-  - ABT_MAX_NUM_XSTREAMS=100
   - DAOS_MD_CAP=1024
   - CRT_TIMEOUT=30
   - FI_SOCKETS_MAX_CONN_RETRY=1
