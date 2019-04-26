@@ -59,8 +59,7 @@ stab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	umem_free_off(umm, rec->rec_off);
-	return 0;
+	return umem_free_off(umm, rec->rec_off);
 }
 
 static int
