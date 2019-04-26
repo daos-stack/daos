@@ -81,7 +81,7 @@ struct daos_tx_handle {
 	/* The identifier of the DTX that conflict with current one. */
 	struct daos_tx_id	 dth_conflict;
 	/** The address of the DTX entry in SCM. */
-	umem_id_t		 dth_ent;
+	umem_off_t		 dth_ent;
 };
 
 /**
