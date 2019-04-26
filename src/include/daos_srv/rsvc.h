@@ -160,4 +160,30 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 size_t ds_rsvc_get_md_cap(void);
 
+/** Server aliveness event originated from CaRT */
+struct ds_rsvc_event {
+	d_list_t		v_link;	/* in ds_rsvc_eventd.vd_queue */
+	d_rank_t		v_rank;
+	enum crt_event_type	v_type;
+};
+
+/** Server aliveness event callback */
+typedef void (*ds_rsvc_event_cb_t)(struct ds_rsvc_event *, void *);
+
+/** Server aliveness event daemon (opaque) */
+struct ds_rsvc_eventd {
+	ABT_mutex		vd_mutex;
+	ABT_cond		vd_cv;
+	d_list_t		vd_queue;
+	ABT_thread		vd_ult;
+	bool			vd_stop;
+	ds_rsvc_event_cb_t	vd_cb;
+	void		       *vd_arg;
+};
+
+int ds_rsvc_eventd_start(ds_rsvc_event_cb_t cb, void *arg,
+			 struct ds_rsvc_eventd *d);
+void ds_rsvc_eventd_stop(struct ds_rsvc_eventd *d);
+bool ds_rsvc_eventd_started(struct ds_rsvc_eventd *d);
+
 #endif /* DAOS_SRV_RSVC_H */

@@ -37,7 +37,8 @@
 extern d_iov_t ds_mgmt_prop_servers;		/* server KVS */
 extern d_iov_t ds_mgmt_prop_uuids;		/* UUID KVS */
 extern d_iov_t ds_mgmt_prop_map_version;	/* uint32_t */
-extern d_iov_t ds_mgmt_prop_rank_next;	/* uint32_t */
+extern d_iov_t ds_mgmt_prop_rank_next;		/* uint32_t */
+extern d_iov_t ds_mgmt_prop_self_heal;		/* uint8_t */
 
 /*
  * Server KVS (RDB_KVS_INTEGER)

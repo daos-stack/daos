@@ -866,6 +866,9 @@ remove_server(crt_group_t *group, struct server_entry *server)
 /* State of the local system map (i.e., the CaRT PG membership) */
 static uint32_t sys_map_version;
 
+/** Whether to handle CaRT aliveness events */
+bool ds_mgmt_self_heal;
+
 int
 ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 {
@@ -912,6 +915,7 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 		D_ASSERTF(rc == 0, "update system map (version %u): %d\n",
 			  in->tm_map_version, rc);
 	}
+	ds_mgmt_self_heal = in->tm_self_heal;
 	sys_map_version = in->tm_map_version;
 
 	d_rank_list_free(ranks);
