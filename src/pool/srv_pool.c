@@ -1445,10 +1445,9 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			return rc;
-		/* IOV len includes strlen + null terminator */
-		if (value.iov_len > (DAOS_ACL_MAX_PRINCIPAL_LEN + 1)) {
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
 			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
-				(DAOS_ACL_MAX_PRINCIPAL_LEN + 1));
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
 			return -DER_IO;
 		}
 		D_ASSERT(idx < nr);
@@ -1465,11 +1464,10 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			return rc;
-		/* IOV len includes strlen + null terminator */
-		if (value.iov_len > (DAOS_ACL_MAX_PRINCIPAL_LEN + 1)) {
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
 			D_ERROR("bad owner group length %zu (> %d).\n",
 				value.iov_len,
-				(DAOS_ACL_MAX_PRINCIPAL_LEN + 1));
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
 			return -DER_IO;
 		}
 		D_ASSERT(idx < nr);
