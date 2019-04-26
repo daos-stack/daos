@@ -504,8 +504,8 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 		       size_t *k, struct obj_ec_parity *parity, int p_idx)
 {
 	struct obj_ec_codec		*codec =
-				 obj_ec_codec_get(daos_obj_id2class(oid));
- 	struct daos_oclass_attr 	*oca =
+				obj_ec_codec_get(daos_obj_id2class(oid));
+ 	struct daos_oclass_attr		*oca =
 					 daos_oclass_attr_find(oid);
 	unsigned int    		 clen = oca->u.ec.e_len;
 	unsigned int			 dc = oca->u.ec.e_k;
@@ -527,6 +527,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 			}
 		} else {
 			int cp_cnt = 0;
+
 			D_ALLOC_ARRAY(ldata[lcnt], clen);
 			if (ldata[lcnt] == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -535,7 +536,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 					clen - cp_cnt ?
 					sgl->sg_iovs[*j].iov_len-*k :
 					clen - cp_cnt;
-				unsigned char* from = sgl->sg_iovs[*j].iov_buf;
+				unsigned char *from = sgl->sg_iovs[*j].iov_buf;
 
 				memcpy(&ldata[lcnt][cp_cnt], &from[*k], cp_amt);
 				if (sgl->sg_iovs[*j].iov_len-*k < clen-cp_cnt) {
