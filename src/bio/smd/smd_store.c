@@ -438,6 +438,9 @@ smd_nvme_create_md_store(const char *path, const char *fname,
 
 	uma.uma_id = md_mem_class;
 	uma.uma_pool = ph;
+
+	smd_df  = pmempool_pop2df(ph);
+
 	rc = umem_class_init(&uma, &umm);
 	if (rc != 0)
 		D_GOTO(failed, rc);
@@ -446,7 +449,6 @@ smd_nvme_create_md_store(const char *path, const char *fname,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	smd_df  = pmempool_pop2df(ph);
 	rc = pmemobj_tx_add_range_direct(smd_df, sizeof(*smd_df));
 	if (rc != 0)
 		D_GOTO(end, rc);
