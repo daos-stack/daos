@@ -160,11 +160,16 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
+		if (!inode->ie_dfs->dffs_ops->getattr) {
+			D_GOTO(decref, rc = ENOTSUP);
+		}
+
 		inode->ie_dfs->dffs_ops->getattr(req, inode);
 		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 	}
-
 	return;
+decref:
+	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -213,7 +218,7 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	if (!parent_inode->ie_dfs->dffs_ops->mkdir) {
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(decref, rc = ENOTSUP);
 	}
 
 	keep_ref = parent_inode->ie_dfs->dffs_ops->mkdir(req, parent_inode,
@@ -223,6 +228,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 		d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 	}
 	return;
+decref:
+	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -246,12 +253,14 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	if (!parent_inode->ie_dfs->dffs_ops->unlink) {
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(decref, rc = ENOTSUP);
 	}
 	parent_inode->ie_dfs->dffs_ops->unlink(req, parent_inode, name);
 
 	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 	return;
+decref:
+	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -282,12 +291,15 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	if (!inode->ie_dfs->dffs_ops->readdir) {
-		D_GOTO(err, rc = ENOTSUP);
+		D_GOTO(decref, rc = ENOTSUP);
+		return;
 	}
 	inode->ie_dfs->dffs_ops->readdir(req, inode, size, offset);
 
 	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 	return;
+decref:
+	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -308,6 +320,11 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.unlink		= dfuse_cb_unlink,
 	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
+};
+
+struct dfuse_inode_ops dfuse_pool_ops = {
+	.lookup		= dfuse_pool_lookup,
+	.mkdir		= dfuse_pool_mkdir,
 };
 
 /* Return the ops that should be passed to fuse */

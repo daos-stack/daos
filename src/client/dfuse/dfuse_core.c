@@ -207,6 +207,8 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	if (!fs_handle)
 		return false;
 
+	fs_handle->dfuse_info = dfuse_info;
+
 	rc = dfuse_da_init(&fs_handle->da, fs_handle);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err, 0);
@@ -275,29 +277,35 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 		D_GOTO(err, 0);
 	}
 
-	dfs->dffs_dfs = ddfs;
+	if (ddfs) {
+		dfs->dffs_dfs = ddfs;
 
-	rc = dfs_lookup(dfs->dffs_dfs,
-			"/", O_RDONLY, &inode->obj, &mode);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %d",
-				rc);
-		D_GOTO(err, 0);
+		rc = dfs_lookup(dfs->dffs_dfs,
+				"/", O_RDONLY, &inode->obj, &mode);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %d",
+					rc);
+			D_GOTO(err, 0);
+		}
+
+		rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
+					rc);
+			D_GOTO(err, 0);
+		}
+
+		dfs->dffs_ops = &dfuse_dfs_ops;
+
+	} else {
+
+		/* Populate inode->stat */
+		dfs->dffs_ops = &dfuse_pool_ops;
 	}
 
-	atomic_fetch_add(&inode->ie_ref, 1);
-
-	rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
-				rc);
-		D_GOTO(err, 0);
-	}
-
-	dfs->dffs_ops = &dfuse_dfs_ops;
 	inode->ie_dfs = dfs;
 	inode->parent = 1;
-
+	atomic_fetch_add(&inode->ie_ref, 1);
 	inode->stat.st_ino = 1;
 
 	rc = d_hash_rec_insert(&fs_handle->inode_ht,

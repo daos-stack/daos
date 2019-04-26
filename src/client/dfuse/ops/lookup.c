@@ -30,10 +30,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  bool create,
 		  fuse_req_t req)
 {
-	struct fuse_entry_param		entry = {0};
-	d_list_t			*rlink;
-	daos_obj_id_t			oid;
-	int				rc;
+	struct fuse_entry_param	entry = {0};
+	d_list_t		*rlink;
+	daos_obj_id_t		oid;
+	int			rc;
 
 	if (!inode->parent) {
 		DFUSE_TRA_ERROR(inode, "no parent");
@@ -45,13 +45,14 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		D_GOTO(err, rc = EIO);
 	}
 
-	rc = dfs_obj2id(inode->obj, &oid);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(inode, "no oid");
-		D_GOTO(err, rc = EIO);
+	if (inode->stat.st_ino == 0) {
+		rc = dfs_obj2id(inode->obj, &oid);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(inode, "no oid");
+			D_GOTO(err, rc = EIO);
+		}
+		inode->stat.st_ino = (ino_t)oid.hi;
 	}
-
-	inode->stat.st_ino = (ino_t)oid.hi;
 
 	entry.attr = inode->stat;
 	entry.generation = 1;
@@ -76,6 +77,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	if (create) {
 		struct fuse_file_info fi = {0};
+
 		DFUSE_REPLY_CREATE(req, entry, &fi);
 	} else {
 		DFUSE_REPLY_ENTRY(req, entry);
@@ -103,7 +105,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!inode) {
 		D_GOTO(err, rc = ENOMEM);
 	}
-	inode->parent = parent->parent;
+	inode->parent = parent->stat.st_ino;
 	inode->ie_dfs = parent->ie_dfs;
 
 	rc = dfs_lookup_rel(parent->ie_dfs->dffs_dfs, parent->obj, name,

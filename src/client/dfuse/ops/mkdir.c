@@ -48,7 +48,7 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	strncpy(inode->name, name, NAME_MAX);
-	inode->parent = parent->parent;
+	inode->parent = parent->stat.st_ino;
 	inode->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&inode->ie_ref, 1);
 

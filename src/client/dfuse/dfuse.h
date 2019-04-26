@@ -54,6 +54,7 @@ struct dfuse_info {
 	struct fuse_session		*dfi_session;
 	struct dfuse_projection_info	*dfi_handle;
 	struct dfuse_data		dfi_dfd;
+	daos_handle_t			dfi_poh;
 };
 
 /* dfuse_main.c */
@@ -76,8 +77,8 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
+	struct dfuse_info *dfuse_info;
 	struct fuse_session		*session;
-	struct dfuse_dfs		*dfpi_ddfs;
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
@@ -112,10 +113,14 @@ struct dfuse_inode_ops {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
+extern struct dfuse_inode_ops dfuse_pool_ops;
 
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dffs_ops;
 	dfs_t			*dffs_dfs;
+	char			dffs_cont[NAME_MAX];
+	daos_handle_t		dffs_coh;
+	daos_cont_info_t	dffs_co_info;
 };
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
@@ -609,5 +614,14 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  bool create,
 		  fuse_req_t req);
+
+/* dfuse_pool.c */
+void
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		  const char *name);
+
+bool
+dfuse_pool_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+		 const char *name, mode_t mode);
 
 #endif /* __DFUSE_H__ */
