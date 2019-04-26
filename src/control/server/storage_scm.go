@@ -77,7 +77,13 @@ type scmStorage struct {
 
 // Setup placeholder implementation for scmStorage
 func (s *scmStorage) Setup() error {
-	s.initialized = true
+	resp := new(pb.ScanStorageResp)
+	s.Discover(resp)
+
+	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		return errors.New("scm scan: " + resp.Scmstate.Error)
+	}
+
 	return nil
 }
 
@@ -118,7 +124,7 @@ func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
 
 	if s.initialized {
 		resp.Scmstate = addStateDiscover(
-			pb.ResponseStatus_CTRL_SUCCESS, "", "already initialized")
+			pb.ResponseStatus_CTRL_SUCCESS, "", "")
 		resp.Modules = s.modules
 		return
 	}
@@ -126,7 +132,7 @@ func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
 	mms, err := s.ipmctl.Discover()
 	if err != nil {
 		resp.Scmstate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_NVME,
+			pb.ResponseStatus_CTRL_ERR_SCM,
 			msgIpmctlDiscoverFail+": "+err.Error(), "")
 		return
 	}

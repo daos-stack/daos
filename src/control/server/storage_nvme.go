@@ -159,15 +159,15 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 // Perform any setup to be performed before accessing NVMe devices.
 // NOTE: doesn't attempt SPDK prep which requires elevated privileges,
 //       that instead can be performed explicitly with subcommand.
-func (n *nvmeStorage) Setup() (err error) {
+func (n *nvmeStorage) Setup() error {
 	resp := new(pb.ScanStorageResp)
 	n.Discover(resp)
 
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		err = errors.New("nvme scan: " + resp.Nvmestate.Error)
+		return errors.New("nvme scan: " + resp.Nvmestate.Error)
 	}
 
-	return
+	return nil
 }
 
 // Teardown method implementation for nvmeStorage.
@@ -209,7 +209,7 @@ func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
 
 	if n.initialized {
 		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_SUCCESS, "", "already initialized")
+			pb.ResponseStatus_CTRL_SUCCESS, "", "")
 		resp.Ctrlrs = n.controllers
 		return
 	}
@@ -231,7 +231,8 @@ func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
 	}
 	n.controllers = loadControllers(cs, ns)
 
-	resp.Nvmestate = addStateDiscover(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	resp.Nvmestate = addStateDiscover(
+		pb.ResponseStatus_CTRL_SUCCESS, "", "")
 	resp.Ctrlrs = n.controllers
 
 	n.initialized = true
