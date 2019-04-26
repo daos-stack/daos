@@ -127,6 +127,7 @@ struct daos_obj_shard_tgt {
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
 	((uint32_t)		(orw_nr)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
+	((uint32_t)		(orw_start_shard)	CRT_VAR) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY) \

@@ -347,8 +347,9 @@ static int
 obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
-	     struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-	     tse_task_t *task, struct dtx_id *dti, uint32_t flags)
+	     unsigned int start_shard, struct daos_obj_shard_tgt *fw_shard_tgts,
+	     uint32_t fw_cnt, tse_task_t *task, struct dtx_id *dti,
+	     uint32_t flags)
 {
 	struct dc_pool	       *pool;
 	crt_rpc_t	       *req = NULL;
@@ -403,6 +404,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		orw->orw_shard_tgts.ca_arrays = NULL;
 	}
 	orw->orw_map_ver = *map_ver;
+	orw->orw_start_shard = start_shard;
 	orw->orw_oid = shard->do_id;
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
@@ -619,22 +621,23 @@ int
 dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		    daos_sg_list_t *sgls, unsigned int *map_ver,
+		    uint32_t start_shard,
 		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 		    tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_UPDATE, epoch, dkey,
-			    nr, iods, sgls, map_ver, fw_shard_tgts, fw_cnt,
-			    task, dti, flags);
+			    nr, iods, sgls, map_ver, start_shard,
+			    fw_shard_tgts, fw_cnt, task, dti, flags);
 }
 
 int
 dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
-		   daos_key_t *dkey,  unsigned int nr, daos_iod_t *iods,
+		   daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		   daos_sg_list_t *sgls, daos_iom_t *maps,
 		   unsigned int *map_ver, tse_task_t *task)
 {
-	return obj_shard_rw(shard, DAOS_OBJ_RPC_FETCH, epoch, dkey,
-			    nr, iods, sgls, map_ver, NULL, 0, task, NULL, 0);
+	return obj_shard_rw(shard, DAOS_OBJ_RPC_FETCH, epoch, dkey, nr, iods,
+			    sgls, map_ver, 0, NULL, 0, task, NULL, 0);
 }
 
 struct obj_enum_args {
