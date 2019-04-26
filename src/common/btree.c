@@ -712,7 +712,7 @@ static inline bool
 btr_node_is_equal(struct btr_context *tcx, umem_off_t off1,
 		  umem_off_t off2)
 {
-	return umem_id_equal_off(btr_umm(tcx), off1, off2);
+	return off1 == off2;
 }
 
 static bool

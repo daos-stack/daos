@@ -53,8 +53,6 @@ typedef uint64_t		umem_off_t;
 #define UMOFF_NUM_BITS		(8)
 /** The absolute value of a flag mask must be <= this value */
 #define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_BITS)
-/** A mask to retrieve the invalid flags */
-#define UMOFF_FLAG_MASK		(UMOFF_MAX_FLAG - 1)
 /** In theory and offset can be NULL but in practice, pmemobj_root
  *  is not at offset 0 as pmdk reserves some space for its internal
  *  use.   So, use 0 for NULL.   Invalid bits are also considered
@@ -62,7 +60,7 @@ typedef uint64_t		umem_off_t;
  */
 #define UMOFF_NULL		(0ULL)
 /** Check for a NULL value including possible invalid flag bits */
-#define UMOFF_IS_NULL(umoff)	(umoff <= UMOFF_FLAG_MASK)
+#define UMOFF_IS_NULL(umoff)	(umoff < UMOFF_MAX_FLAG)
 
 /** Up to UMOFF_NUM_BITS bits are available to the user to mark an
  *  invalid offset with extra information.  If these fields are
@@ -91,7 +89,7 @@ umem_off_get_invalid_flags(umem_off_t umoff)
 	if (!UMOFF_IS_NULL(umoff))
 		return 0;
 
-	return umoff & UMOFF_FLAG_MASK;
+	return umoff;
 }
 
 /** memory ID without type */
@@ -538,10 +536,6 @@ umem_id_equal(struct umem_instance *umm, umem_id_t ummid_1, umem_id_t ummid_2)
 }
 #define umem_id_equal_typed(umm, tmmid_1, tmmid_2)			\
 	umem_id_equal(umm, (tmmid_1).oid, (tmmid_2).oid)
-
-#define umem_id_equal_off(umm, off_1, off_2)				\
-	umem_id_equal(umm, umem_off2id(umm, off_1), umem_off2id(umm, off_2))
-
 
 #define umem_id_u2t(ummid, type)					\
 ({									\
