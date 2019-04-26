@@ -125,9 +125,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOMEM;
 
-	rc = vos_dtx_register_record(&tins->ti_umm,
-				     umem_off2id(&tins->ti_umm, obj_off),
-				     DTX_RT_OBJ, 0);
+	rc = vos_dtx_register_record(&tins->ti_umm, obj_off, DTX_RT_OBJ, 0);
 	if (rc != 0)
 		/* It is unnecessary to free the PMEM that will be dropped
 		 * automatically when the PMDK transaction is aborted.
@@ -167,8 +165,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
-	vos_dtx_degister_record(umm, obj->vo_dtx,
-				umem_off2id(umm, rec->rec_off), DTX_RT_OBJ);
+	vos_dtx_degister_record(umm, obj->vo_dtx, rec->rec_off, DTX_RT_OBJ);
 	if (obj->vo_dtx_shares > 0) {
 		D_ERROR("There are some unknown DTXs (%d) share the obj rec\n",
 			obj->vo_dtx_shares);
@@ -223,9 +220,7 @@ oi_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  obj->vo_dtx,
-					  umem_off2id(&tins->ti_umm,
-						      rec->rec_off),
+					  obj->vo_dtx, rec->rec_off,
 					  intent, DTX_RT_OBJ);
 }
 
@@ -383,7 +378,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	} else {
 		struct umem_instance	*umm = btr_hdl2umm(cont->vc_btr_hdl);
 
-		rc = vos_dtx_register_record(umm, umem_ptr2id(umm, obj),
+		rc = vos_dtx_register_record(umm, umem_ptr2off(umm, obj),
 					     DTX_RT_OBJ, DTX_RF_EXCHANGE_SRC);
 	}
 

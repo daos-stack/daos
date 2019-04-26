@@ -35,13 +35,21 @@
 static int
 obj_mod_init(void)
 {
+	int rc;
+
 	vos_dtx_register_check_leader(ds_pool_check_leader);
-	return 0;
+
+	rc = obj_ec_codec_init();
+	if (rc != 0)
+		D_ERROR("failed to obj_ec_codec_init: %d\n", rc);
+
+	return rc;
 }
 
 static int
 obj_mod_fini(void)
 {
+	obj_ec_codec_fini();
 	return 0;
 }
 

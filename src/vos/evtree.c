@@ -966,7 +966,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 
 	desc = evt_off2desc(tcx, ne->ne_child);
 	vos_dtx_degister_record(evt_umm(tcx), desc->dc_dtx,
-				umem_ptr2id(evt_umm(tcx), desc), DTX_RT_EVT);
+				ne->ne_child, DTX_RT_EVT);
 	rc = evt_desc_free(tcx, desc,
 			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
 	if (rc == 0)
@@ -1134,11 +1134,11 @@ evt_node_mbr_get(struct evt_context *tcx, struct evt_node *node)
 }
 
 int
-evt_dtx_check_availability(struct evt_context *tcx, umem_id_t entry,
+evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
 			   uint32_t intent)
 {
 	return vos_dtx_check_availability(evt_umm(tcx), tcx->tc_coh, entry,
-					  UMMID_NULL, intent, DTX_RT_EVT);
+					  UMOFF_NULL, intent, DTX_RT_EVT);
 }
 
 /** (Re)compute MBR for a tree node */
@@ -2399,8 +2399,7 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 			return -DER_NOMEM;
 		ne->ne_child = desc_off;
 		desc = evt_off2ptr(tcx, desc_off);
-		rc = vos_dtx_register_record(evt_umm(tcx),
-					     umem_ptr2id(evt_umm(tcx), desc),
+		rc = vos_dtx_register_record(evt_umm(tcx), desc_off,
 					     DTX_RT_EVT, 0);
 		if (rc != 0)
 			/* It is unnecessary to free the PMEM that will be

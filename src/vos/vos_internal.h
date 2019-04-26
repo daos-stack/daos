@@ -484,8 +484,9 @@ vos_dtx_table_register(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	Address of the DTX to be checked.
- * \param record	[IN]	Address of the record modified via the DTX.
+ * \param entry		[IN]	Address (offset) of the DTX to be checked.
+ * \param record	[IN]	Address (offset) of the record modified via
+ *				the DTX.
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -501,34 +502,35 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_id_t entry, umem_id_t record, uint32_t intent,
+			   umem_off_t entry, umem_off_t record, uint32_t intent,
 			   uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
- * \param record	[IN]	Address of the record (in SCM) to be modified.
+ * \param record	[IN]	Address (offset) of the record (in SCM)
+ *				to be modified.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_register_record(struct umem_instance *umm, umem_id_t record,
+vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t flags);
 
 /**
  * Degister the record from the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
- * \param entry		[IN]	The DTX entry address.
- * \param record	[IN]	Address of the record to be degistered.
+ * \param entry		[IN]	The DTX entry address (offset).
+ * \param record	[IN]	Address (offset) of the record to be degistered.
  * \param type		[IN]	The record type, vos_dtx_record_types.
  */
 void
 vos_dtx_degister_record(struct umem_instance *umm,
-			umem_id_t entry, umem_id_t record, uint32_t type);
+			umem_off_t entry, umem_off_t record, uint32_t type);
 
 /**
  * Mark the DTX as prepared locally.
