@@ -538,8 +538,8 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *j,
 				unsigned char* from = sgl->sg_iovs[*j].iov_buf;
 
 				memcpy(&ldata[lcnt][cp_cnt], &from[*k], cp_amt);
-				if (sgl->sg_iovs[*j].iov_len-*k < clen - cp_cnt) {
-					 *k = 0;
+				if (sgl->sg_iovs[*j].iov_len-*k < clen-cp_cnt) {
+					*k = 0;
 					(*j)++;
 				} else
 					*k += cp_amt;
@@ -555,5 +555,3 @@ out:
 		D_FREE(ldata[i]);
 	return rc;
 }
-
-
