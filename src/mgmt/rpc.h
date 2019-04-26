@@ -199,7 +199,8 @@ CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
 
 #define DAOS_ISEQ_MGMT_TGT_MAP_UPDATE /* input fields */	   \
 	((struct server_entry)	(tm_servers)		CRT_ARRAY) \
-	((uint32_t)		(tm_map_version)	CRT_VAR)
+	((uint32_t)		(tm_map_version)	CRT_VAR)   \
+	((uint8_t)		(tm_self_heal)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_TGT_MAP_UPDATE /* output fields */	 \
 	((int32_t)		(tm_rc)			CRT_VAR)

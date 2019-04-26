@@ -43,4 +43,6 @@ ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 int
 ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg);
 
+extern bool ds_mgmt_self_heal;
+
 #endif /* __MGMT_SRV_H__ */

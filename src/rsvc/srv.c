@@ -1088,6 +1088,161 @@ ds_rsvc_get_md_cap(void)
 	return (size_t)n << 20;
 }
 
+static char *
+event_string(enum crt_event_type type)
+{
+	switch (type) {
+	case CRT_EVT_ALIVE:
+		return "alive";
+	case CRT_EVT_DEAD:
+		return "dead";
+	default:
+		return "unknown event";
+	}
+}
+
+static void
+generic_event_cb(d_rank_t rank, enum crt_event_source src,
+		 enum crt_event_type type, void *arg)
+{
+	struct ds_rsvc_eventd  *d = arg;
+	struct ds_rsvc_event   *e;
+
+	if (type == CRT_EVT_ALIVE)
+		return;
+
+	D_ASSERTF(type == CRT_EVT_DEAD, "%d\n", type);
+	D_PRINT("rank %u %s\n", rank, event_string(type));
+
+	D_ALLOC_PTR(e);
+	if (e == NULL) {
+		D_ERROR("failed to queue rank %u event DEAD\n", rank);
+		return;
+	}
+	e->v_rank = rank;
+	e->v_type = type;
+
+	d_list_add_tail(&e->v_link, &d->vd_queue);
+	ABT_cond_broadcast(d->vd_cv);
+}
+
+static void
+discard_events(d_list_t *events)
+{
+	struct ds_rsvc_event   *e;
+	struct ds_rsvc_event   *t;
+
+	d_list_for_each_entry_safe(e, t, events, v_link) {
+		D_DEBUG(DB_MGMT, "discard rank %u event DEAD\n", e->v_rank);
+		d_list_del_init(&e->v_link);
+		D_FREE(e);
+	}
+}
+
+static void
+eventd(void *arg)
+{
+	struct ds_rsvc_eventd *d = arg;
+
+	for (;;) {
+		struct ds_rsvc_event   *e;
+		bool			stop;
+
+		ABT_mutex_lock(d->vd_mutex);
+		for (;;) {
+			stop = d->vd_stop;
+			if (stop) {
+				discard_events(&d->vd_queue);
+				break;
+			}
+			if (!d_list_empty(&d->vd_queue)) {
+				e = d_list_entry(d->vd_queue.next,
+						 struct ds_rsvc_event, v_link);
+				d_list_del_init(&e->v_link);
+				break;
+			}
+			ABT_cond_wait(d->vd_cv, d->vd_mutex);
+		}
+		ABT_mutex_unlock(d->vd_mutex);
+		if (stop)
+			break;
+		d->vd_cb(e, d->vd_arg);
+		ABT_thread_yield();
+	}
+}
+
+int
+ds_rsvc_eventd_start(ds_rsvc_event_cb_t cb, void *arg, struct ds_rsvc_eventd *d)
+{
+	int rc;
+
+	D_INIT_LIST_HEAD(&d->vd_queue);
+	d->vd_stop = false;
+	d->vd_cb = cb;
+	d->vd_arg = arg;
+
+	rc = ABT_mutex_create(&d->vd_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create vd_mutex: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err;
+	}
+
+	rc = ABT_cond_create(&d->vd_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create vd_cv: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err_mutex;
+	}
+
+	rc = crt_register_event_cb(generic_event_cb, d);
+	if (rc != 0)
+		goto err_cv;
+
+	/* Generate events for all IN but DOWN servers. */
+
+	rc = dss_ult_create(eventd, d, DSS_ULT_MISC, DSS_TGT_SELF, 0,
+			    &d->vd_ult);
+	if (rc != 0)
+		goto err_event_cb;
+
+	return 0;
+
+err_event_cb:
+	crt_unregister_event_cb(generic_event_cb, d);
+err_cv:
+	ABT_cond_free(&d->vd_cv);
+err_mutex:
+	ABT_mutex_free(&d->vd_mutex);
+err:
+	memset(d, 0, sizeof(*d));
+	return rc;
+}
+
+bool
+ds_rsvc_eventd_started(struct ds_rsvc_eventd *d)
+{
+	return d->vd_ult != ABT_THREAD_NULL;
+}
+
+void
+ds_rsvc_eventd_stop(struct ds_rsvc_eventd *d)
+{
+	int rc;
+
+	d->vd_stop = true;
+	ABT_cond_broadcast(d->vd_cv);
+	rc = ABT_thread_join(d->vd_ult);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(&d->vd_ult);
+	rc = crt_unregister_event_cb(generic_event_cb, d);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_cond_free(&d->vd_cv);
+	ABT_mutex_free(&d->vd_mutex);
+	D_ASSERT(d_list_empty(&d->vd_queue));
+	memset(d, 0, sizeof(*d));
+}
+
 static int
 rsvc_module_init(void)
 {

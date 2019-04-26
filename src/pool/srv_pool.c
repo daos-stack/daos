@@ -61,6 +61,7 @@ struct pool_svc {
 	rdb_path_t		ps_handles;	/* pool handle KVS */
 	rdb_path_t		ps_user;	/* pool user attributes KVS */
 	struct ds_pool	       *ps_pool;
+	struct ds_rsvc_eventd	ps_eventd;
 };
 
 static struct pool_svc *
@@ -973,6 +974,8 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	D_FREE(svc);
 }
 
+static void handle_event(struct ds_rsvc_event *e, void *arg);
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -1059,10 +1062,20 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
+	if (ds_mgmt_self_heal) {
+		rc = ds_rsvc_eventd_start(handle_event, svc, &svc->ps_eventd);
+		if (rc != 0) {
+			ds_pool_put(svc->ps_pool);
+			svc->ps_pool = NULL;
+			goto out;
+		}
+	}
+
 	ds_cont_svc_step_up(svc->ps_cont_svc);
 
 	rc = ds_rebuild_regenerate_task(pool, replicas);
 	if (rc != 0) {
+		ds_rsvc_eventd_stop(&svc->ps_eventd);
 		ds_cont_svc_step_down(svc->ps_cont_svc);
 		ds_pool_put(svc->ps_pool);
 		svc->ps_pool = NULL;
@@ -1089,6 +1102,8 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	int			rc;
 
 	ds_cont_svc_step_down(svc->ps_cont_svc);
+	if (ds_rsvc_eventd_started(&svc->ps_eventd))
+		ds_rsvc_eventd_stop(&svc->ps_eventd);
 	D_ASSERT(svc->ps_pool != NULL);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
@@ -2578,6 +2593,31 @@ out:
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 	pool_target_addr_list_free(&out_list);
+}
+
+static void
+handle_event(struct ds_rsvc_event *e, void *arg)
+{
+	struct pool_svc		       *svc = arg;
+	struct pool_target_addr		addr;
+	struct pool_target_addr_list	list;
+	struct pool_target_addr_list	out_list = {};
+	uint32_t			map_version;
+	int				rc;
+
+	if (e->v_type != CRT_EVT_DEAD)
+		return;
+
+	addr.pta_rank = e->v_rank;
+	addr.pta_target = -1;
+	list.pta_number = 1;
+	list.pta_addrs = &addr;
+	rc = ds_pool_update(svc->ps_uuid, POOL_EXCLUDE, &list, &out_list,
+			    &map_version, NULL /* hint */);
+	pool_target_addr_list_free(&out_list);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to exclude rank %u: %d\n",
+			DP_UUID(svc->ps_uuid), e->v_rank, rc);
 }
 
 struct evict_iter_arg {

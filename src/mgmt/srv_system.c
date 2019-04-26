@@ -47,18 +47,19 @@ static uuid_t mgmt_svc_db_uuid;
 
 /* Management service */
 struct mgmt_svc {
-	struct ds_rsvc	ms_rsvc;
-	ABT_rwlock	ms_lock;
-	rdb_path_t	ms_root;
-	rdb_path_t	ms_servers;
-	rdb_path_t	ms_uuids;
-	ABT_mutex	ms_mutex;
-	bool		ms_step_down;
-	bool		ms_distribute;
-	ABT_cond	ms_distribute_cv;
-	ABT_thread	ms_distributord;
-	uint32_t	ms_map_version;
-	uint32_t	ms_rank_next;
+	struct ds_rsvc		ms_rsvc;
+	ABT_rwlock		ms_lock;
+	rdb_path_t		ms_root;
+	rdb_path_t		ms_servers;
+	rdb_path_t		ms_uuids;
+	ABT_mutex		ms_mutex;
+	bool			ms_step_down;
+	bool			ms_distribute;
+	ABT_cond		ms_distribute_cv;
+	ABT_thread		ms_distributord;
+	uint32_t		ms_map_version;
+	uint32_t		ms_rank_next;
+	struct ds_rsvc_eventd	ms_eventd;
 };
 
 static struct mgmt_svc *
@@ -217,6 +218,7 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 	d_iov_t		value;
 	uint32_t		map_version = 1;
 	uint32_t		rank_next = 0;
+	uint8_t			self_heal = 1;
 	int			rc;
 
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
@@ -261,6 +263,11 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 	if (rc != 0)
 		goto out_lock;
 
+	daos_iov_set(&value, &self_heal, sizeof(self_heal));
+	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_self_heal, &value);
+	if (rc != 0)
+		goto out_lock;
+
 	rc = rdb_tx_commit(&tx);
 
 out_lock:
@@ -270,6 +277,7 @@ out:
 	return rc;
 }
 
+static void handle_event(struct ds_rsvc_event *e, void *arg);
 static void map_distributord(void *arg);
 static void notify_map_distributord(struct mgmt_svc *svc);
 
@@ -278,7 +286,8 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct rdb_tx		tx;
-	d_iov_t		value;
+	d_iov_t			value;
+	uint8_t			self_heal;
 	int			rc;
 
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
@@ -303,11 +312,30 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out_lock;
 
+	daos_iov_set(&value, &self_heal, sizeof(self_heal));
+	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_self_heal, &value);
+	if (rc != 0)
+		goto out_lock;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out;
+
+	if (self_heal) {
+		rc = ds_rsvc_eventd_start(handle_event, svc, &svc->ms_eventd);
+		if (rc != 0)
+			goto out;
+	}
+
 	svc->ms_step_down = false;
 	rc = dss_ult_create(map_distributord, svc, DSS_ULT_MISC, DSS_TGT_SELF,
 			    0, &svc->ms_distributord);
-	if (rc != 0)
-		goto out_lock;
+	if (rc != 0) {
+		ds_rsvc_eventd_stop(&svc->ms_eventd);
+		goto out;
+	}
 
 	/*
 	 * Just in case the previous leader didn't complete distributing the
@@ -315,9 +343,6 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 */
 	notify_map_distributord(svc);
 
-out_lock:
-	ABT_rwlock_unlock(svc->ms_lock);
-	rdb_tx_end(&tx);
 out:
 	return rc;
 }
@@ -333,6 +358,8 @@ mgmt_svc_step_down_cb(struct ds_rsvc *rsvc)
 	rc = ABT_thread_join(svc->ms_distributord);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	ABT_thread_free(&svc->ms_distributord);
+	if (ds_rsvc_eventd_started(&svc->ms_eventd))
+		ds_rsvc_eventd_stop(&svc->ms_eventd);
 }
 
 static void
@@ -712,7 +739,7 @@ out:
 
 static int
 map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
-		 int nservers, struct server_entry servers[])
+		 bool self_heal, int nservers, struct server_entry servers[])
 {
 	struct mgmt_tgt_map_update_in  *in;
 	struct mgmt_tgt_map_update_out *out;
@@ -737,6 +764,7 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	in->tm_servers.ca_count = nservers;
 	in->tm_servers.ca_arrays = servers;
 	in->tm_map_version = map_version;
+	in->tm_self_heal = self_heal;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -758,6 +786,8 @@ static int
 distribute_map(crt_context_t ctx, struct mgmt_svc *svc)
 {
 	struct rdb_tx		tx;
+	uint8_t			self_heal;
+	daos_iov_t		value;
 	struct enum_server_arg	arg = {};
 	int			rc;
 
@@ -767,18 +797,28 @@ distribute_map(crt_context_t ctx, struct mgmt_svc *svc)
 
 	ABT_rwlock_rdlock(svc->ms_lock);
 
+	daos_iov_set(&value, &self_heal, sizeof(self_heal));
+	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_self_heal, &value);
+	if (rc != 0)
+		goto out_lock;
+
 	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
 			    enum_server_cb, &arg);
 	if (rc != 0)
 		goto out_lock;
 
-	rc = map_update_bcast(ctx, svc, svc->ms_map_version,
-			      arg.esa_servers_len, arg.esa_servers);
-
-	D_FREE(arg.esa_servers);
 out_lock:
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out_arg;
+
+	rc = map_update_bcast(ctx, svc, svc->ms_map_version, self_heal,
+			      arg.esa_servers_len, arg.esa_servers);
+
+out_arg:
+	if (arg.esa_servers != NULL)
+		D_FREE(arg.esa_servers);
 out:
 	return rc;
 }
@@ -820,6 +860,90 @@ notify_map_distributord(struct mgmt_svc *svc)
 {
 	svc->ms_distribute = true;
 	ABT_cond_broadcast(svc->ms_distribute_cv);
+}
+
+static int
+is_ms_replica(struct mgmt_svc *svc, d_rank_t rank, bool *result)
+{
+	d_rank_list_t  *ms_ranks;
+	int		rc;
+
+	rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ms_ranks);
+	if (rc != 0)
+		return rc;
+	*result = d_rank_list_find(ms_ranks, rank, NULL /* idx */);
+	d_rank_list_free(ms_ranks);
+	return 0;
+}
+
+static void
+handle_event(struct ds_rsvc_event *e, void *arg)
+{
+	struct mgmt_svc	       *svc = arg;
+	struct rdb_tx		tx;
+	bool			ms_replica;
+	uint64_t		rank_key = e->v_rank;
+	daos_iov_t		key;
+	daos_iov_t		value;
+	struct server_rec	server;
+	uint32_t		map_version;
+	int			rc;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	ABT_rwlock_wrlock(svc->ms_lock);
+
+	/* Do not exclude MS replicas. */
+	rc = is_ms_replica(svc, e->v_rank, &ms_replica);
+	if (rc != 0)
+		goto out_lock;
+	if (ms_replica) {
+		D_DEBUG(DB_MGMT, "ignore MS replica rank %u\n", e->v_rank);
+		goto out_lock;
+	}
+
+	/* Look up the rank. */
+	daos_iov_set(&key, &rank_key, sizeof(rank_key));
+	daos_iov_set(&value, &server, sizeof(server));
+	rc = rdb_tx_lookup(&tx, &svc->ms_servers, &key, &value);
+	if (rc != 0)
+		goto out_lock;
+	if (!(server.sr_flags & SERVER_IN))
+		goto out_lock;
+
+	/* Mark the server as out. */
+	server.sr_flags &= ~SERVER_IN;
+	daos_iov_set(&key, &rank_key, sizeof(rank_key));
+	daos_iov_set(&value, &server, sizeof(server));
+	rc = rdb_tx_update(&tx, &svc->ms_servers, &key, &value);
+	if (rc != 0)
+		goto out_lock;
+
+	/* Update the map version. */
+	map_version = svc->ms_map_version + 1;
+	daos_iov_set(&value, &map_version, sizeof(map_version));
+	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
+			   &value);
+	if (rc != 0)
+		goto out_lock;
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		goto out_lock;
+
+	D_DEBUG(DB_TRACE, "rank %u excluded in map version %u\n", e->v_rank,
+		map_version);
+	svc->ms_map_version = map_version;
+	notify_map_distributord(svc);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out:
+	D_DEBUG(DB_MGMT, "rank=%u type=%d: %d\n", e->v_rank, e->v_type, rc);
+	return;
 }
 
 int

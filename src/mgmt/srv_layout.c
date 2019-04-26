@@ -34,3 +34,4 @@ RDB_STRING_KEY(ds_mgmt_prop_, servers);
 RDB_STRING_KEY(ds_mgmt_prop_, uuids);
 RDB_STRING_KEY(ds_mgmt_prop_, map_version);
 RDB_STRING_KEY(ds_mgmt_prop_, rank_next);
+RDB_STRING_KEY(ds_mgmt_prop_, self_heal);
