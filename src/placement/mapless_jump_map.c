@@ -33,13 +33,22 @@
 #include <inttypes.h>
 #include <daos/pool_map.h>
 
+/**
+ * This struct is used to to hold information while
+ * finding rebuild targets for shards located on unavailable
+ * targets.
+ */
 struct remap_node {
 	uint32_t rank;
 	uint32_t shard_idx;
 	uint32_t fseq;
 };
 
-/** compare hashed IDs of two targets */
+
+/**
+ * Helper function used for sorting rebuild list by fail sequence
+ * This function compares the fail sequence of the remap_nodes
+ */
 static int
 map_rebuild_cmp(void *array, int a, int b)
 {
@@ -52,6 +61,10 @@ map_rebuild_cmp(void *array, int a, int b)
 	return 0;
 }
 
+/**
+ * Helper function used for sorting rebuild list by fail sequence
+ * This function swaps the two remap_nodes.
+ */
 static void
 map_rebuild_swap(void *array, int a, int b)
 {
@@ -65,12 +78,17 @@ map_rebuild_swap(void *array, int a, int b)
 	sort[b] = tmp;
 }
 
-/** sort target by fseq*/
+/** Function pointers for sorting the rebuild list. */
 static daos_sort_ops_t map_rebuild_sops = {
 	.so_cmp		= map_rebuild_cmp,
 	.so_swap	= map_rebuild_swap,
 };
 
+/**
+ * This function sets a specific bit in the bitmap
+ * It expects the bitmap to be zero indexed from left
+ * to right.
+ */
 static inline void
 set_bit(uint8_t *bitmap, uint64_t bit)
 {
@@ -79,6 +97,7 @@ set_bit(uint8_t *bitmap, uint64_t bit)
         bitmap[offset] |= (0x80 >> position);
 }
 
+/** Returns the bit at a specific position in the bitmap */
 static inline uint8_t
 get_bit(uint8_t *bitmap, uint64_t bit)
 {
@@ -87,6 +106,14 @@ get_bit(uint8_t *bitmap, uint64_t bit)
         return ((bitmap[offset] & (0x80 >> position)) != 0);
 }
 
+/**
+ * Returns true or false depending on whether all bits given in a range
+ * are set or not, the range is inclusive. This is used to in the bookkeeping
+ * to determine if all children in a domain have been used.
+ *
+ * \return	returns 0 if the entire range does not contain set bits and
+ *		returns 1 if all bits are set
+ */
 static inline uint8_t
 is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
 {
@@ -114,6 +141,10 @@ is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
     return 1;
 }
 
+/**
+ * This function clears a continuous range of bits in the bitmap.
+ * The range if from start to end inclusive.
+ */
 static inline void
 clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end)
 {
@@ -135,6 +166,16 @@ clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end)
             memset(&(bitmap[(start>>3)+1]), 0, (end>>3) - ((start>>3)+1));
 }
 
+/**
+ * This function returns the number of non-leaf domains in the pool map
+ * It's used to determine the size of the arrays for storing the bookkeeping
+ * bitmaps
+ *
+ * \param[in]	dom	The pool map used for this placement map.
+ *
+ * \return		The number of non-leaf nodes in the pool, not including
+ *			the root.
+ */
 uint64_t get_dom_cnt(struct pool_domain *dom) {
 	uint64_t count = 0;
 
@@ -363,7 +404,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 */
 			if (is_range_set(dom_used, start_bit, start_bit +
 				num_doms - 1) && curr_dom->do_children != NULL) {
-				clear_bitmap_range(dom_used, curr_pos, curr_pos);
 				clear_bitmap_range(dom_used, start_bit,
 						start_bit + (num_doms - 1));
 			}
@@ -379,7 +419,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				key = crc(key, fail_num++);
 			} while (get_bit(dom_used, selected_dom + start_bit)
 					== 1);
-
 			/* Mark this domain as used */
 			set_bit(dom_used, selected_dom + start_bit);
 
@@ -400,8 +439,8 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
  * \param[in]   root            The top level domain that is being used to
  *                              determine the target location for this shard.
  *                              The root node of the pool map.
- * \param[in]   target_id       This is the ID of the original layout location
- *                              that was determined to be unavailable.
+ * \param[out]  target		Holds the value of the new target
+ *				for the shard being rebuilt.
  * \param[in]   key             A unique key generated using the object ID.
  *                              This is the same key used during initial
  *                              placement.
@@ -413,29 +452,49 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
  *                              selecting a target to determine if repeated
  *                              targets are allowed in the case that there
  *                              are more shards than targets
+ * \param[in]	layout		This is the current layout for the object.
+ *				This is needed for guaranteeing that we don't
+ *				reuse a target already in the layout.
+ *
+ * \return			Returns an Error code if an error occurred,
+ *				otherwise 0.
  */
-
-static void
-get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
-		   uint64_t key, uint8_t *dom_used, struct remap_node *r_node)
+static int
+get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
+		   uint64_t key, uint8_t *dom_used, struct remap_node *r_node,
+		   struct pl_obj_layout *layout)
 {
-	uint8_t                 *coll_dom_start;
 	uint8_t                 *used_tgts = NULL;
 	uint32_t                selected_dom;
 	uint32_t                fail_num = 0;
 	uint32_t                try = 0;
-	struct pool_target      *target;
+	uint16_t		top_level_skips = 0;
 	struct pool_domain      *target_selection;
+	struct pool_domain	*root;
 
+	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
-	/* Get the top level start location for bookkeeping */
-	coll_dom_start = &dom_used[0];
 	while (1) {
 
-		uint8_t skip = 0;
+		uint8_t skiped_targets = 0;
+		uint16_t num_bytes = 0;
 		uint32_t num_doms;
-
 		num_doms = root->do_child_nr;
+
+		uint64_t child_pos = (uint64_t)(root->do_children)
+			- (uint64_t)root;
+		child_pos = child_pos / sizeof(struct pool_domain);
+
+		/*
+		 * If all of the nodes have been used for shards but we
+		 * still have shards to place mark all nodes as unused
+		 * so duplicates can be chosen
+		 */
+		if (is_range_set(dom_used, child_pos, child_pos +
+			num_doms - 1)) {
+			clear_bitmap_range(dom_used, child_pos,
+					child_pos + (num_doms - 1));
+		}
 
 		/*
 		 * Choose domains using jump consistent hash until we find a
@@ -445,15 +504,50 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
 			key = crc(key, fail_num++);
 			selected_dom = jump_consistent_hash(key, num_doms);
 			target_selection = &(root->do_children[selected_dom]);
-		} while (coll_dom_start[selected_dom] != 1);
+		} while (get_bit(dom_used, selected_dom + child_pos) == 1);
 
-		/* mark this domain as used */
-		coll_dom_start[selected_dom] = 1;
+		/* If all choices are exhausted return an error */
+		if (top_level_skips == num_doms)
+			return DER_INVAL;
+		top_level_skips++;
+
+		/* Mark this domain as used */
+		set_bit(dom_used, selected_dom + child_pos);
 
 		/* To find rebuild target we examine all targets */
 		num_doms = target_selection->do_target_nr;
 
-		D_ALLOC_ARRAY(used_tgts, num_doms);
+		num_bytes = (num_doms / 8) + 1;
+
+		D_ALLOC_ARRAY(used_tgts, num_bytes);
+		if (used_tgts == NULL)
+			return -DER_NOMEM;
+
+		/*
+		 * Add the initial layouts targets to the bitmap of checked
+		 * targets.
+		 */
+		int i;
+		uint64_t start_pos;
+		uint64_t end_pos;
+
+		start_pos = (uint64_t)(&target_selection->do_targets[0]);
+		end_pos = start_pos + (num_doms * sizeof(**target));
+
+		for (i = 0; i < layout->ol_nr; ++i) {
+			int id = layout->ol_shards[i].po_target;
+			uint64_t position;
+
+			pool_map_find_target(pmap, id, target);
+			position = (uint64_t) (*target);
+
+
+			if (position >= start_pos && position < end_pos) {
+				set_bit(used_tgts, (position - start_pos)
+						/ sizeof(**target));
+				skiped_targets++;
+			}
+		}
 
 		/*
 		 * Attempt to choose a fallback target from all targets found
@@ -463,29 +557,31 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
 			key = crc(key, try++);
 
 			selected_dom = jump_consistent_hash(key, num_doms);
-			target = &target_selection->do_targets[selected_dom];
+			*target = &target_selection->do_targets[selected_dom];
 
-			*target_id = target->ta_comp.co_id;
 			/*
 			 * keep track of what targets have been tried
 			 * in case all targets in domain have failed
 			 */
-			if (used_tgts[selected_dom] == 0) {
-				skip++;
-				used_tgts[selected_dom] = 1;
-			}
-		} while (pool_target_unavail(target) && skip < num_doms);
+			if (get_bit(used_tgts, selected_dom) == 0)
+				skiped_targets++;
+			if (pool_target_unavail(*target))
+				set_bit(used_tgts, selected_dom);
+
+		} while (get_bit(used_tgts, selected_dom) &&
+			skiped_targets < num_doms);
 
 		D_FREE(used_tgts);
 
 		/* Use the last examined target if it's not unavailable */
-		if (!pool_target_unavail(target))
-			return;
+		if (!pool_target_unavail(*target))
+			return 0;
 	}
 
 	/* Should not reach this point */
 	D_ERROR("Unexpectedly reached end of placement loop without result");
 	D_ASSERT(0);
+	return DER_INVAL;
 }
 
 /**
@@ -525,28 +621,31 @@ get_rebuild_target(struct pool_domain *root, uint32_t *target_id,
  *                              from functions other than find rebuild.
  */
 static int
-get_object_layout(struct pool_domain *root, struct pl_obj_layout *layout,
+get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
 		uint16_t group_cnt, uint16_t group_size, daos_obj_id_t oid,
 		uint32_t dom_map_size, struct remap_node *rebuild_list)
 {
 
 
 	struct pool_target *target;
-	uint8_t dom_used[dom_map_size];
-	uint32_t target_id;
+	uint8_t *dom_used;
 	struct remap_node rebuild_shard_num[group_size * group_cnt];
 	uint32_t used_targets[layout->ol_nr + 1];
 	uint8_t rebuild_num = 0;
-	int i;
-	int j;
-	int k;
+	struct pool_domain *root;
+	int i, j, k, rc;
 
-	memset(dom_used, 0, sizeof(*dom_used) * dom_map_size);
+
+	D_ALLOC_ARRAY(dom_used, dom_map_size);
+	if (dom_used == NULL)
+		return -DER_NOMEM;
+
 	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) + 1);
 
+	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
 	if(group_cnt*group_size > root->do_target_nr) {
-		D_ERROR("Not enough targets for layout.\n");
+		D_ERROR("Too few targets for layout.\n");
 		return -DER_INVAL;
 	}
 
@@ -568,11 +667,6 @@ get_object_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 				rebuild_shard_num[rebuild_num].rank = tgt_rank;
 				rebuild_shard_num[rebuild_num].fseq = fseq;
 
-				if (rebuild_list != NULL) {
-					rebuild_list[rebuild_num].rank = tgt_rank;
-					rebuild_list[rebuild_num].shard_idx = k;
-					rebuild_list[rebuild_num].fseq = fseq;
-				}
 				rebuild_num++;
 
 			}
@@ -587,14 +681,29 @@ get_object_layout(struct pool_domain *root, struct pl_obj_layout *layout,
 
 	for (i = 0; i < rebuild_num; ++i) {
 
-		get_rebuild_target(root, &target_id, crc(oid.lo, k), dom_used,
-				&rebuild_shard_num[i]);
+		target = NULL;
+		k = rebuild_shard_num[i].shard_idx;
+		rc = get_rebuild_target(pmap, &target, crc(oid.lo, k), dom_used,
+				&rebuild_shard_num[i], layout);
+		if (rc != 0) {
+			D_ERROR("Unable to identify rebuild target.\n");
+			goto error;
+		}
 
-		layout->ol_shards[k].po_target = target_id;
-		layout->ol_shards[k].po_shard = k;
+		layout->ol_shards[k].po_target = target->ta_comp.co_id;
+		if (rebuild_list != NULL) {
+			rebuild_list[i].shard_idx = k;
+			rebuild_list[i].rank = target->ta_comp.co_rank;
+			rebuild_list[i].fseq = target->ta_comp.co_fseq;
+		}
+
 	}
 
+	D_FREE(dom_used);
 	return rebuild_num;
+error:
+	D_FREE(dom_used);
+	return rc;
 }
 
 /**
@@ -701,7 +810,6 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	uint16_t                group_cnt;
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
-	struct pool_domain      *root;
 	int rc;
 
 	mplmap = pl_map2mplmap(map);
@@ -727,11 +835,10 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	layout->ol_ver = pl_map_version(map);
 
 	/* Get root node of pool map */
-	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
-	rc = get_object_layout(root, layout, group_size, group_cnt, oid,
+	rc = get_object_layout(pmap, layout, group_size, group_cnt, oid,
 			mplmap->dom_used_length,  NULL);
 
-	if(rc != 0) {
+	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
 		return rc;
 	}
@@ -774,10 +881,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	uint16_t                group_cnt;
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
-	struct pool_domain      *root;
 	int failed_tgt_num;
-	int i;
-	int rc;
+	int i, rc;
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
@@ -808,10 +913,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	/* Set the pool map version */
 	layout->ol_ver = pl_map_version(map);
 
-	/* Get root node of pool map */
-	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
-
-	failed_tgt_num = get_object_layout(root, layout, group_size, group_cnt,
+	failed_tgt_num = get_object_layout(pmap, layout, group_size, group_cnt,
 			oid, mplmap->dom_used_length,  rebuild_list);
 
 	for (i = 0; i < failed_tgt_num; ++i) {
@@ -819,7 +921,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		int			leader;
 
 		target = NULL;
-		if (myrank != -1)
+
+		if (myrank == -1)
 			goto add;
 
 		leader = pl_select_leader(md->omd_id,
