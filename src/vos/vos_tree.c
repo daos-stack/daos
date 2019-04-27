@@ -399,8 +399,8 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	krec = vos_rec2krec(tins, rec);
 	umem_attr_get(&tins->ti_umm, &uma);
 
-	vos_dtx_degister_record(&tins->ti_umm, krec->kr_dtx, rec->rec_off,
-				DTX_RT_KEY);
+	vos_dtx_deregister_record(&tins->ti_umm, krec->kr_dtx, rec->rec_off,
+				  DTX_RT_KEY);
 	if (krec->kr_dtx_shares > 0) {
 		D_ERROR("There are some unknown DTXs (%d) share the key rec\n",
 			krec->kr_dtx_shares);
@@ -676,8 +676,8 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
-	vos_dtx_degister_record(&tins->ti_umm, irec->ir_dtx, rec->rec_off,
-				DTX_RT_SVT);
+	vos_dtx_deregister_record(&tins->ti_umm, irec->ir_dtx, rec->rec_off,
+				  DTX_RT_SVT);
 	if (args != NULL) {
 		*(umem_id_t *)args = umem_off2id(&tins->ti_umm, rec->rec_off);
 		rec->rec_off = UMOFF_NULL; /** taken over by user */
