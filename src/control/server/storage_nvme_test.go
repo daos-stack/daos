@@ -123,8 +123,8 @@ func defaultMockSpdkNvme() NVME {
 // TODO: provide capability to return values from mock
 type mockSpdkSetup struct{}
 
-func (m *mockSpdkSetup) prep(int, string) error { return nil }
-func (m *mockSpdkSetup) reset() error           { return nil }
+func (m *mockSpdkSetup) prep(int, string, string) error { return nil }
+func (m *mockSpdkSetup) reset() error                   { return nil }
 
 // mockNvmeStorage factory
 func newMockNvmeStorage(

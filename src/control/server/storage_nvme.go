@@ -80,27 +80,6 @@ type spdkSetup struct {
 	nrHugePages int
 }
 
-// NvmeStorage interface specifies basic functionality for subsystem
-type NvmeStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-}
-
-// nvmeStorage gives access to underlying SPDK interfaces
-// for accessing Nvme devices (API) as well as storing device
-// details.
-type nvmeStorage struct {
-	env         spdk.ENV       // SPDK ENV interface
-	nvme        spdk.NVME      // SPDK NVMe interface
-	spdk        SpdkSetup      // SPDK shell configuration interface
-	config      *configuration // server configuration structure
-	controllers []*pb.NvmeController
-	initialized bool
-	formatted   bool
-}
-
 // prep executes setup script to allocate hugepages and unbind PCI devices
 // (that don't have active mountpoints) from generic kernel driver to be
 // used with SPDK. Either all PCI devices will be unbound by default if wlist
