@@ -162,9 +162,9 @@ void umem_fini_txd(struct umem_tx_stage_data *txd);
 
 typedef struct {
 	/** convert directly accessible address to ummid */
-	umem_id_t	 (*mo_id)(struct umem_instance *umm, void *addr);
+	umem_id_t	 (*mo_id)(const struct umem_instance *umm, void *addr);
 	/** convert ummid to directly accessible address */
-	void		*(*mo_addr)(struct umem_instance *umm,
+	void		*(*mo_addr)(const struct umem_instance *umm,
 				    umem_id_t ummid);
 	/** check if two ummid are equal */
 	bool		 (*mo_equal)(struct umem_instance *umm,
@@ -283,13 +283,25 @@ struct umem_instance {
 int  umem_class_init(struct umem_attr *uma, struct umem_instance *umm);
 void umem_attr_get(struct umem_instance *umm, struct umem_attr *uma);
 
+static inline void *
+umem_id2ptr(const struct umem_instance *umm, umem_id_t ummid)
+{
+	return umm->umm_ops->mo_addr(umm, ummid);
+}
+
+static inline umem_id_t
+umem_ptr2id(const struct umem_instance *umm, void *ptr)
+{
+	return umm->umm_ops->mo_id(umm, ptr);
+}
+
 /** Convert an offset to an id.   No invalid flags will be maintained
  *  in the conversion.
  *
  *  \param	umm[IN]		The umem pool instance
  *  \param	umoff[in]	The offset to convert
  *
- *  Returns the mmid
+ *  \return	The mmid.
  */
 static inline umem_id_t
 umem_off2id(const struct umem_instance *umm, umem_off_t umoff)
@@ -309,6 +321,8 @@ umem_off2id(const struct umem_instance *umm, umem_off_t umoff)
  *
  *  \param	umm[IN]		The umem pool instance
  *  \param	ummid[in]	The mmid to convert
+ *
+ *  \return	The offset in the PMEM pool.
  */
 static inline umem_off_t
 umem_id2off(const struct umem_instance *umm, umem_id_t ummid)
@@ -324,7 +338,7 @@ umem_id2off(const struct umem_instance *umm, umem_id_t ummid)
  *  \param	umm[IN]		The umem pool instance
  *  \param	umoff[in]	The offset to convert
  *
- *  Returns the address in memory
+ *  \return	The address in memory
  */
 static inline void *
 umem_off2ptr(const struct umem_instance *umm, umem_off_t umoff)
@@ -333,6 +347,22 @@ umem_off2ptr(const struct umem_instance *umm, umem_off_t umoff)
 		return NULL;
 
 	return (void *)(umm->umm_base + umoff);
+}
+
+/** Convert a pointer to offset.
+ *
+ *  \param	umm[IN]		The umem pool instance
+ *  \param	ptr[in]		The pointer to convert
+ *
+ *  \return	The offset in the PMEM pool.
+ */
+static inline umem_off_t
+umem_ptr2off(const struct umem_instance *umm, void *ptr)
+{
+	if (ptr == NULL)
+		return UMOFF_NULL;
+
+	return (umem_off_t)(ptr - umm->umm_base);
 }
 
 /**
@@ -491,18 +521,6 @@ umem_tx_abort(struct umem_instance *umm, int err)
 		return umm->umm_ops->mo_tx_abort(umm, err);
 	else
 		return 0;
-}
-
-static inline void *
-umem_id2ptr(struct umem_instance *umm, umem_id_t ummid)
-{
-	return umm->umm_ops->mo_addr(umm, ummid);
-}
-
-static inline umem_id_t
-umem_ptr2id(struct umem_instance *umm, void *ptr)
-{
-	return umm->umm_ops->mo_id(umm, ptr);
 }
 
 #define umem_id2ptr_typed(umm, tmmid)					\

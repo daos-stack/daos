@@ -46,13 +46,13 @@ struct umem_tx_stage_item {
 /** persistent memory operations (depends on pmdk) */
 
 static umem_id_t
-pmem_id(struct umem_instance *umm, void *addr)
+pmem_id(const struct umem_instance *umm, void *addr)
 {
 	return pmemobj_oid(addr);
 }
 
 static void *
-pmem_addr(struct umem_instance *umm, umem_id_t ummid)
+pmem_addr(const struct umem_instance *umm, umem_id_t ummid)
 {
 	return pmemobj_direct(ummid);
 }
@@ -339,7 +339,7 @@ umem_tx_errno(int err)
 /* volatile memroy operations */
 
 static umem_id_t
-vmem_id(struct umem_instance *umm, void *addr)
+vmem_id(const struct umem_instance *umm, void *addr)
 {
 	umem_id_t	ummid = UMMID_NULL;
 
@@ -348,7 +348,7 @@ vmem_id(struct umem_instance *umm, void *addr)
 }
 
 static void *
-vmem_addr(struct umem_instance *umm, umem_id_t ummid)
+vmem_addr(const struct umem_instance *umm, umem_id_t ummid)
 {
 	return (void *)ummid.off;
 }

@@ -108,6 +108,17 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
+/** EC codec for object EC encoding/decoding */
+struct obj_ec_codec {
+	/** encode matrix, can be used to generate decode matrix */
+	unsigned char		*ec_en_matrix;
+	/**
+	 * GF (galois field) tables, pointer to array of input tables generated
+	 * from coding coefficients. Needed for both encoding and decoding.
+	 */
+	unsigned char		*ec_gftbls;
+};
+
 static inline void
 enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 {
@@ -219,5 +230,10 @@ obj_dkey2hash(daos_key_t *dkey)
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
 }
+
+/* obj_class.c */
+int obj_ec_codec_init(void);
+void obj_ec_codec_fini(void);
+struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
