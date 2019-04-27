@@ -29,6 +29,7 @@ import (
 	"time"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -115,11 +116,8 @@ func (c *connList) ScanStorage() (ClientNvmeMap, ClientScmMap) {
 
 // formatStorage attempts to format nonvolatile storage devices on a remote
 // server by calling over gRPC channel.
-func (c *control) formatStorage() (pb.MgmtControl_FormatStorageClient, error) {
-	// Maximum time limit for format is 2hrs to account for lengthy low
-	// level formatting of multiple devices sequentially.
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
-	defer cancel()
+func (c *control) formatStorage(ctx context.Context) (
+	pb.MgmtControl_FormatStorageClient, error) {
 
 	return c.client.FormatStorage(ctx, &pb.FormatStorageParams{})
 }
@@ -131,8 +129,12 @@ func (c *control) formatStorage() (pb.MgmtControl_FormatStorageClient, error) {
 // over channel for each.
 func formatStorageRequest(mc Control, ch chan ClientResult) {
 	sRes := storageResult{}
+	// Maximum time limit for format is 2hrs to account for lengthy low
+	// level formatting of multiple devices sequentially.
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
+	defer cancel()
 
-	stream, err := mc.formatStorage()
+	stream, err := mc.formatStorage(ctx)
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
@@ -140,38 +142,21 @@ func formatStorageRequest(mc Control, ch chan ClientResult) {
 
 	for {
 		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
+			log.Errorf(
+				"%v.FormatStorage(_) = _, %v\n",
+				mc, err)
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
-		}
-
-		// wait for nvme formatting of all devices to finish
-		for _, result := range resp.Crets {
-			state := result.GetState()
-			if state.GetStatus() == pb.ResponseStatus_CTRL_WAITING {
-				fmt.Printf(
-					"waiting for format of nvme ctrlr at %s",
-					result.Pciaddr)
-				continue
-			}
-		}
-
-		// wait for scm formatting of all devices to finish
-		for _, result := range resp.Mrets {
-			state := result.GetState()
-			if state.GetStatus() == pb.ResponseStatus_CTRL_WAITING {
-				fmt.Printf(
-					"waiting for format of scm mount at %s",
-					result.Mntpoint)
-				continue
-			}
 		}
 
 		sRes.nvme.Responses = resp.Crets
 		sRes.mount.Responses = resp.Mrets
 
 		ch <- ClientResult{mc.getAddress(), sRes, nil}
-		break // all format operations finished
 	}
 }
 

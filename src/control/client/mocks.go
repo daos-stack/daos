@@ -27,6 +27,7 @@ import (
 	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
@@ -88,7 +89,7 @@ func (x mgmtControlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
 	}, nil
 }
 
-func (m *mockControl) formatStorage() (
+func (m *mockControl) formatStorage(ctx context.Context) (
 	pb.MgmtControl_FormatStorageClient, error) {
 
 	return mgmtControlFormatStorageClient{}, m.formatRet

@@ -25,7 +25,7 @@ package client
 
 import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
@@ -37,7 +37,7 @@ type Control interface {
 	connected() (connectivity.State, bool)
 	getAddress() string
 	scanStorage() (*pb.ScanStorageResp, error)
-	formatStorage() (pb.MgmtControl_FormatStorageClient, error)
+	formatStorage(context.Context) (pb.MgmtControl_FormatStorageClient, error)
 	//updateStorage(*pb.UpdateStorageParams) (*pb.UpdateStorageResp, error)
 	//burninStorage(*pb.BurninStorageParams) (*pb.BurninStorageResp, error)
 	listAllFeatures() (FeatureMap, error)
