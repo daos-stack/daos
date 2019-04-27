@@ -44,7 +44,7 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
-/* EC parity is stored in a private namespace that is selected by setting
+/* EC parity is stored in a private address range that is selected by setting
  * the most-significant bit of the offset (an unsigned long). This effectively
  * limits the addressing of user extents to the lower 63 bits of the offset
  * range. The client stack should enforce this limitation.
