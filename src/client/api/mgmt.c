@@ -141,6 +141,9 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_DESTROY);
+	if (uuid == NULL)
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_destroy, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -162,6 +165,9 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
+	if (uuid == NULL)
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -182,6 +188,9 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	if (uuid == NULL)
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_add, NULL, ev, &task);
 	if (rc)
@@ -204,6 +213,9 @@ daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	if (uuid == NULL)
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_exclude_out, NULL, ev, &task);
 	if (rc)
@@ -228,6 +240,8 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
+	if (uuid == NULL)
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_exclude, NULL, ev, &task);
 	if (rc)

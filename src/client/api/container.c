@@ -53,6 +53,9 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
+	if (uuid == NULL)
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -74,6 +77,8 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
+	if (uuid == NULL)
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_cont_open, NULL, ev, &task);
 	if (rc)
@@ -117,6 +122,8 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
+	if (uuid == NULL)
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_cont_destroy, NULL, ev, &task);
 	if (rc)
