@@ -68,7 +68,7 @@ struct sk_rec {
 	uint64_t	sr_key_len;
 	uint32_t	sr_val_size;
 	uint32_t	sr_val_msize;
-	umem_id_t	sr_val_mmid;
+	umem_off_t	sr_val_off;
 	char		sr_key[0];
 };
 
@@ -142,7 +142,7 @@ sk_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	char			*vbuf;
 	umem_off_t		 srec_off;
 
-	srec_off = umem_zalloc_off(&tins->ti_umm,
+	srec_off = umem_zalloc(&tins->ti_umm,
 				   sizeof(*srec) + key_iov->iov_len);
 	D_ASSERT(!UMOFF_IS_NULL(srec_off)); /* lazy bone... */
 
@@ -152,10 +152,10 @@ sk_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	srec->sr_key_len = key_iov->iov_len;
 	srec->sr_val_size = srec->sr_val_msize = val_iov->iov_len;
 
-	srec->sr_val_mmid = umem_alloc(&tins->ti_umm, val_iov->iov_len);
-	D_ASSERT(!UMMID_IS_NULL(srec->sr_val_mmid));
+	srec->sr_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len);
+	D_ASSERT(!UMOFF_IS_NULL(srec->sr_val_off));
 
-	vbuf = umem_id2ptr(&tins->ti_umm, srec->sr_val_mmid);
+	vbuf = umem_off2ptr(&tins->ti_umm, srec->sr_val_off);
 	memcpy(vbuf, (char *)val_iov->iov_buf, val_iov->iov_len);
 
 	rec->rec_off = srec_off;
@@ -171,13 +171,13 @@ sk_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	srec = umem_off2ptr(umm, rec->rec_off);
 
 	if (args != NULL) {
-		umem_id_t *rec_ret = (umem_id_t *) args;
+		umem_off_t *rec_ret = (umem_off_t *) args;
 		 /** Provide the buffer to user */
-		*rec_ret	= umem_off2id(&tins->ti_umm, rec->rec_off);
+		*rec_ret	= rec->rec_off;
 		return 0;
 	}
-	umem_free(umm, srec->sr_val_mmid);
-	umem_free_off(umm, rec->rec_off);
+	umem_free(umm, srec->sr_val_off);
+	umem_free(umm, rec->rec_off);
 
 	return 0;
 }
@@ -198,7 +198,7 @@ sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	val_size = srec->sr_val_size;
 	key_size = srec->sr_key_len;
 
-	val = umem_id2ptr(&tins->ti_umm, srec->sr_val_mmid);
+	val = umem_off2ptr(&tins->ti_umm, srec->sr_val_off);
 	if (key_iov != NULL) {
 		key_iov->iov_len = key_size;
 		key_iov->iov_buf_len = key_size;
@@ -235,7 +235,7 @@ sk_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	skey = &srec->sr_key[0];
-	val = umem_id2ptr(&tins->ti_umm, srec->sr_val_mmid);
+	val = umem_off2ptr(&tins->ti_umm, srec->sr_val_off);
 
 	snprintf(buf, buf_len, "%s:%s", skey, val);
 	buf[buf_len - 1] = 0;
@@ -254,17 +254,17 @@ sk_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	srec = umem_off2ptr(umm, rec->rec_off);
 
 	if (srec->sr_val_msize >= val_iov->iov_len) {
-		umem_tx_add(umm, srec->sr_val_mmid, srec->sr_val_msize);
+		umem_tx_add(umm, srec->sr_val_off, srec->sr_val_msize);
 
 	} else {
-		umem_tx_add_off(umm, rec->rec_off, sizeof(*srec));
-		umem_free(umm, srec->sr_val_mmid);
+		umem_tx_add(umm, rec->rec_off, sizeof(*srec));
+		umem_free(umm, srec->sr_val_off);
 
 		srec->sr_val_msize = val_iov->iov_len;
-		srec->sr_val_mmid = umem_alloc(umm, val_iov->iov_len);
-		D_ASSERT(!UMMID_IS_NULL(srec->sr_val_mmid));
+		srec->sr_val_off = umem_alloc(umm, val_iov->iov_len);
+		D_ASSERT(!UMOFF_IS_NULL(srec->sr_val_off));
 	}
-	val = umem_id2ptr(umm, srec->sr_val_mmid);
+	val = umem_off2ptr(umm, srec->sr_val_off);
 
 	memcpy(val, val_iov->iov_buf, val_iov->iov_len);
 	srec->sr_val_size = val_iov->iov_len;
@@ -400,14 +400,14 @@ sk_btr_close_destroy(void **state)
 }
 
 static int
-btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
+btr_rec_verify_delete(umem_off_t *rec, daos_iov_t *key)
 {
 	struct umem_instance	*umm;
 	struct sk_rec		*srec;
 
 	umm = utest_utx2umm(sk_utx);
 
-	srec	  = umem_id2ptr(umm, *rec);
+	srec	  = umem_off2ptr(umm, *rec);
 
 	if ((srec->sr_key_len != key->iov_len) ||
 	    (memcmp(srec->sr_key, key->iov_buf, key->iov_len) != 0)) {
@@ -415,7 +415,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 		return -1;
 	}
 
-	utest_free(sk_utx, srec->sr_val_mmid);
+	utest_free(sk_utx, srec->sr_val_off);
 	utest_free(sk_utx, *rec);
 
 	return 0;
@@ -443,7 +443,7 @@ static void
 sk_btr_kv_operate(void **state)
 {
 	int		count = 0;
-	umem_id_t	rec_mmid;
+	umem_off_t	rec_off;
 	int		rc;
 	enum	sk_btr_opc	opc;
 	char				*str;
@@ -510,14 +510,14 @@ sk_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
-			rc = dbtree_delete(sk_toh, &key_iov, &rec_mmid);
+			rc = dbtree_delete(sk_toh, &key_iov, &rec_off);
 			if (rc != 0) {
 				sprintf(outbuf, "Failed to delete %s\n", key);
 				fail_msg("%s", outbuf);
 			}
 
-			/** Verify and delete rec_mmid here */
-			rc = btr_rec_verify_delete(&rec_mmid, &key_iov);
+			/** Verify and delete rec_off here */
+			rc = btr_rec_verify_delete(&rec_off, &key_iov);
 			if (rc != 0) {
 				fail_msg("Failed to verify and delete rec\n");
 			}

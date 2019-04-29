@@ -227,7 +227,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	kbund.kb_epoch	= query->qt_epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_mmid	= UMMID_NULL;
+	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_csum = &csum;
 	rbund.rb_tclass = tclass;
 
