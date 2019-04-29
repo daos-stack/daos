@@ -339,11 +339,9 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	root_pos = (uint64_t)curr_dom;
 
 	do {
-		uint32_t	i;
 		uint32_t	num_doms;
 		uint64_t	key;
 		uint64_t	curr_pos;
-		uint64_t	start_bit;
 
 		/* Retrieve number of nodes in this domain */
 		if (curr_dom->do_children == NULL)
@@ -359,6 +357,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 		if (curr_dom->do_children == NULL) {
 			uint32_t dom_id;
+			uint32_t	i;
 
 			do {
 				/*
@@ -397,10 +396,12 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			found_target = 1;
 		} else {
 
-			int range_set;
-			uint64_t child_pos = (uint64_t)(curr_dom->do_children)
-				- root_pos;
+			int		range_set;
+			uint64_t	start_bit;
+			uint64_t	child_pos;
 
+			child_pos = (uint64_t)(curr_dom->do_children)
+				- root_pos;
 			child_pos = child_pos / sizeof(struct pool_domain);
 
 			/* Get the start position of bookkeeping array for
