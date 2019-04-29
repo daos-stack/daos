@@ -92,9 +92,9 @@ static daos_sort_ops_t map_rebuild_sops = {
 static inline void
 set_bit(uint8_t *bitmap, uint64_t bit)
 {
-        uint64_t offset = bit / 8;
-        uint8_t position = bit % 8;
-        bitmap[offset] |= (0x80 >> position);
+	uint64_t offset = bit / 8;
+	uint8_t position = bit % 8;
+	bitmap[offset] |= (0x80 >> position);
 }
 
 /** Returns the bit at a specific position in the bitmap */
@@ -117,28 +117,28 @@ get_bit(uint8_t *bitmap, uint64_t bit)
 static inline uint8_t
 is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
 {
-    uint8_t mask = 0xFF >> (start % 8);
+	uint8_t mask = 0xFF >> (start % 8);
 
-    if (end >> 3 == start >> 3) {
-        mask &= (0xFF << (8-((end%8)+1)));
-        return (bitmap[(start >> 3)] & mask) == mask;
-    }
+	if (end >> 3 == start >> 3) {
+		mask &= (0xFF << (8-((end%8)+1)));
+		return (bitmap[(start >> 3)] & mask) == mask;
+	}
 
-    if ((bitmap[(start >> 3)] & mask) != mask)
+	if ((bitmap[(start >> 3)] & mask) != mask)
         return 0;
 
-    mask = (0xFF << (8-((end%8)+1)));
-    if((bitmap[(end >> 3)] & mask) != mask)
-        return 0;
+	mask = (0xFF << (8-((end%8)+1)));
+	if ((bitmap[(end >> 3)] & mask) != mask)
+		return 0;
 
-    if ((end >> 3) > ((start >> 3) + 1)) {
-        int i;
-        for(i = (start >> 3) + 1; i < (end >> 3); ++i)
-            if(bitmap[i] != 0xFF)
-                return 0;
-    }
+	if ((end >> 3) > ((start >> 3) + 1)) {
+		int i;
+		for (i = (start >> 3) + 1; i < (end >> 3); ++i)
+			if (bitmap[i] != 0xFF)
+				return 0;
+	}
 
-    return 1;
+	return 1;
 }
 
 /**
@@ -148,22 +148,22 @@ is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
 static inline void
 clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end)
 {
-        uint8_t mask = (0xFF >> (start % 8));
+	uint8_t mask = (0xFF >> (start % 8));
 
-        mask = ~mask;
-        if (end >> 3 == start >> 3) {
-            mask |= (0xFF >> ((end%8)+1));
-            bitmap[(start >> 3)] &= mask;
-            return;
-        }
+	mask = ~mask;
+	if (end >> 3 == start >> 3) {
+		mask |= (0xFF >> ((end%8)+1));
+		bitmap[(start >> 3)] &= mask;
+		return;
+	}
 
-        bitmap[(start >> 3)] &= mask;
+	bitmap[(start >> 3)] &= mask;
 
-        mask = (0xFF >> ((end % 8) + 1));
-        bitmap[(end >> 3)] &= mask;
+	mask = (0xFF >> ((end % 8) + 1));
+	bitmap[(end >> 3)] &= mask;
 
-        if (end >> 3 > (start >> 3) + 1)
-            memset(&(bitmap[(start>>3)+1]), 0, (end>>3) - ((start>>3)+1));
+	if (end >> 3 > (start >> 3) + 1)
+		memset(&(bitmap[(start>>3)+1]), 0, (end>>3) - ((start>>3)+1));
 }
 
 /**
@@ -176,14 +176,15 @@ clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end)
  * \return		The number of non-leaf nodes in the pool, not including
  *			the root.
  */
-uint64_t get_dom_cnt(struct pool_domain *dom) {
+uint64_t get_dom_cnt(struct pool_domain *dom)
+{
 	uint64_t count = 0;
 
-	if(dom->do_children != NULL) {
+	if (dom->do_children != NULL) {
 		int i;
 		count += dom->do_child_nr;
 
-		for(i = 0; i < dom->do_child_nr; ++i)
+		for (i = 0; i < dom->do_child_nr; ++i)
 			count += get_dom_cnt(&dom->do_children[i]);
 	}
 
@@ -254,9 +255,9 @@ crc32c_sse42_u32(uint32_t data, uint32_t init_val)
 static inline uint64_t
 crc(uint64_t data, uint32_t init_val)
 {
-        return (uint64_t)crc32c_sse42_u32((data & 0xFFFFFFFF), init_val)
-               | ((uint64_t)crc32c_sse42_u32(((data >> 32) & 0xFFFFFFFF),
-                                             init_val) << 32);
+	return (uint64_t)crc32c_sse42_u32((data & 0xFFFFFFFF), init_val)
+		| ((uint64_t)crc32c_sse42_u32(((data >> 32) & 0xFFFFFFFF),
+					init_val) << 32);
 }
 
 
@@ -341,7 +342,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 		uint64_t        start_bit;
 
 		/* Retrieve number of nodes in this domain */
-		if(curr_dom->do_children == NULL)
+		if (curr_dom->do_children == NULL)
 			num_doms = curr_dom->do_target_nr;
 		else
 			num_doms = curr_dom->do_child_nr;
@@ -391,10 +392,15 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			found_target = 1;
 		} else {
 
-			uint64_t child_pos = (uint64_t)(curr_dom->do_children) - root_pos;
+			int range_set;
+			uint64_t child_pos = (uint64_t)(curr_dom->do_children)
+				- root_pos;
+
 			child_pos = child_pos / sizeof(struct pool_domain);
 
-			/* Get the start position of bookkeeping array for domain */
+			/* Get the start position of bookkeeping array for
+			 * domain
+			 */
 			start_bit = child_pos;
 
 			/*
@@ -402,8 +408,10 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * still have shards to place mark all nodes as unused
 			 * so duplicates can be chosen
 			 */
-			if (is_range_set(dom_used, start_bit, start_bit +
-				num_doms - 1) && curr_dom->do_children != NULL) {
+
+			range_set = is_range_set(dom_used, start_bit, start_bit
+                                + num_doms - 1);
+			if (range_set  && curr_dom->do_children != NULL) {
 				clear_bitmap_range(dom_used, start_bit,
 						start_bit + (num_doms - 1));
 			}
@@ -644,7 +652,7 @@ get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
 
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
-	if(group_cnt*group_size > root->do_target_nr) {
+	if (group_cnt*group_size > root->do_target_nr) {
 		D_ERROR("Too few targets for layout.\n");
 		return -DER_INVAL;
 	}
@@ -675,7 +683,7 @@ get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
 		}
 	}
 
-	if(rebuild_num > 1)
+	if (rebuild_num > 1)
 		daos_array_sort(rebuild_shard_num, rebuild_num, true,
 				&map_rebuild_sops);
 
