@@ -1458,8 +1458,11 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			    DAOS_TX_NONE, &req);
 
 
-	/* TODO Record enumeration still under development, use lookup. */
-	print_message("Lookup non-punched records:\n");
+	/**
+	 * Lookup and enumerate records for both punched and non-punched
+	 * entries.
+	 */
+	print_message("Lookup & enumerate non-punched records:\n");
 	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
 		if (i % 2 == 0)
 			num_rec_exts = PUNCH_SCM_NUM_EXTS;
@@ -1467,15 +1470,39 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			num_rec_exts = PUNCH_NVME_NUM_EXTS;
 		size = PUNCH_IOD_SIZE * num_rec_exts;
 		D_ALLOC(rec_fetch, size);
-		print_message("\tlookup:dkey:%s, akey:'akey'\n", dkeys[i]);
+
+		/* Lookup all non-punched records */
 		lookup_single_with_rxnr(dkeys[i], "akey", /*idx*/0, rec_fetch,
 					PUNCH_IOD_SIZE, size, DAOS_TX_NONE,
 					&req);
 		assert_memory_equal(rec_fetch, data_buf, size);
+		/* Enumerate all non-punched records */
+		memset(&anchor_out, 0, sizeof(anchor_out));
+		enum_num = 2;
+		total_keys = 0;
+		while (!daos_anchor_is_eof(&anchor_out)) {
+			daos_epoch_range_t	eprs[5];
+			daos_recx_t		recxs[5];
+
+			enum_num = 2;
+			enumerate_rec(DAOS_TX_NONE, dkeys[i], "akey", &size,
+				      &enum_num, recxs, eprs, &anchor_out, true,
+				      &req);
+
+			total_keys += enum_num;
+
+			if (enum_num == 0)
+				break;
+			enum_num = 2;
+		}
+		print_message("\tdkey:%s, akey:'akey', #rec:%d\n", dkeys[i],
+			      total_keys);
+
 		D_FREE(rec_fetch);
 	}
-	/* Lookup punched records */
-	print_message("Lookup punched records:\n");
+
+	/* Lookup punched records, verify no data was fetched by lookup */
+	print_message("Lookup & enumerate punched records:\n");
 	num_rec_exts = PUNCH_NVME_NUM_EXTS;
 	size = PUNCH_IOD_SIZE * num_rec_exts;
 	D_ALLOC(rec_verify, size);
@@ -1484,17 +1511,56 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	memcpy(rec_fetch, rec_verify, size);
 	assert_memory_equal(rec_fetch, rec_verify, size);
 
-	print_message("\tlookup dkey:%s, akey:'akey0'\n", dkeys[0]);
+	/* Lookup first punched record */
 	lookup_single_with_rxnr(dkeys[0], "akey0", /*idx*/0, rec_fetch,
 				/*iod_size*/0, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(rec_fetch, rec_verify, size);
-	print_message("\trecord punched\n");
+	/* Enumerate first punched record*/
+	memset(&anchor_out, 0, sizeof(anchor_out));
+	enum_num = 2;
+	total_keys = 0;
+	while (!daos_anchor_is_eof(&anchor_out)) {
+		daos_epoch_range_t	eprs[5];
+		daos_recx_t		recxs[5];
 
-	print_message("\tlookup dkey:%s, akey:'akey1'\n", dkeys[0]);
+		enum_num = 2;
+		enumerate_rec(DAOS_TX_NONE, dkeys[0], "akey0", &size, &enum_num,
+			      recxs, eprs, &anchor_out, true, &req);
+		total_keys += enum_num;
+
+		if (enum_num == 0)
+			break;
+		enum_num = 2;
+	}
+	print_message("\tdkey:%s, akey:'akey0', #rec:%d\n", dkeys[0],
+		      total_keys);
+	assert_int_equal(total_keys, 0);
+
+	/* Lookup second punched record */
 	lookup_single_with_rxnr(dkeys[0], "akey1", /*idx*/0, rec_fetch,
 				/*iod_size*/0, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(rec_fetch, rec_verify, size);
-	print_message("\trecord punched\n");
+	/* Enumerate second punched record */
+	memset(&anchor_out, 0, sizeof(anchor_out));
+	enum_num = 2;
+	total_keys = 0;
+	while (!daos_anchor_is_eof(&anchor_out)) {
+		daos_epoch_range_t	eprs[5];
+		daos_recx_t		recxs[5];
+
+		enum_num = 2;
+		enumerate_rec(DAOS_TX_NONE, dkeys[0], "akey1", &size, &enum_num,
+			      recxs, eprs, &anchor_out, true, &req);
+		total_keys += enum_num;
+
+		if (enum_num == 0)
+			break;
+		enum_num = 2;
+	}
+	print_message("\tdkey:%s, akey:'akey1', #rec:%d\n", dkeys[0],
+		      total_keys);
+	assert_int_equal(total_keys, 0);
+
 	D_FREE(rec_fetch);
 	D_FREE(rec_verify);
 
