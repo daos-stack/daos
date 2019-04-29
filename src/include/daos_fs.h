@@ -92,6 +92,28 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 	   mode_t *mode);
 
 /**
+ * Lookup an entry in the parent object and return the associated open object
+ * and mode of that entry.  If the entry is a symlink, the symlink value is not
+ * resolved and the user can decide what to do to further resolve the value of
+ * the symlink. The object must be released with dfs_release().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ *			This is useful in cases where the creator/opener is
+ *			working in a flat namespace and doesn't need to
+ *			lookup/release the root object.
+ * \param[in]	name	Link name of the object to create/open.
+ * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
+ * \param[out]	obj	Pointer to the object looked up.
+ * \params[out]	mode	Optional mode_t (permissions + type).
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
+	       dfs_obj_t **_obj, mode_t *mode);
+
+/**
  * Create/Open a directory, file, or Symlink.
  * The object must be released with dfs_release().
  *

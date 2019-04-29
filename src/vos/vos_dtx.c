@@ -120,7 +120,8 @@ dtx_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	D_ASSERT(!dtx_is_null(rbund->trb_umoff));
 
 	/* Directly reference the input addreass (in SCM). */
-	rec->rec_mmid = umem_off2id(&tins->ti_umm, rbund->trb_umoff);
+	rec->rec_off = rbund->trb_umoff;
+
 	return 0;
 }
 
@@ -130,14 +131,15 @@ dtx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	umem_off_t	*umoff;
 
 	D_ASSERT(args != NULL);
-	D_ASSERT(!UMMID_IS_NULL(rec->rec_mmid));
+	D_ASSERT(!UMOFF_IS_NULL(rec->rec_off));
 
 	/* Return the record addreass (offset in SCM). The caller will
 	 * release it after using.
 	 */
 	umoff = (umem_off_t *)args;
-	*umoff = umem_id2off(&tins->ti_umm, rec->rec_mmid);
-	rec->rec_mmid = UMMID_NULL;
+	*umoff = rec->rec_off;
+	rec->rec_off = UMOFF_NULL;
+
 	return 0;
 }
 
@@ -149,7 +151,7 @@ dtx_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(val_iov != NULL);
 
-	dtx = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	dtx = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	daos_iov_set(val_iov, dtx, sizeof(*dtx));
 	return 0;
 }
