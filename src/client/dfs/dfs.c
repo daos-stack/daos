@@ -1765,7 +1765,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	*_obj = obj;
 
-	return;
+	return rc;
 out:
 	D_FREE(obj);
 	return rc;
