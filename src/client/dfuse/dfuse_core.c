@@ -58,7 +58,6 @@ dfuse_fs_send(struct dfuse_request *request)
 		}
 	}
 	return EIO;
-	return 0;
 err:
 	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", rc);
 
