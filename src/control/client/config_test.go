@@ -68,7 +68,4 @@ func TestParseEnvVars(t *testing.T) {
 		t, config.RuntimeDir, testRuntimeDir,
 		"setting environment variable failed to override default runtime socket path")
 
-	AssertEqual(
-		t, config.RuntimeDir, "bob",
-		"setting environment variable failed to override default runtime socket path")
 }

@@ -32,14 +32,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultRuntimeDir    = "/var/run/daos_agent"
-	defaultLogFile       = "/tmp/daos_agent.log"
-	defaultConfigPath    = "etc/daos.yml"
-	defaultSystemName    = "daos"
+	defaultRuntimeDir = "/var/run/daos_agent"
+	defaultLogFile =  "/tmp/daos_agent.log"
+	defaultConfigPath = "etc/daos.yml"
+	defaultSystemName = "daos"
+	defaultPort = 10000
 )
 
 // External interface provides methods to support various os operations.
@@ -63,6 +65,9 @@ func (e *ext) getenv(key string) string {
 // Configuration contains all known configuration variables available to the client
 type Configuration struct {
 	SystemName    string `yaml:"name"`
+	AccessPoints  []string `yaml:"access_points"`
+	Port          int `yaml:"port"`
+	HostList      []string `yaml:"hostlist"`
 	RuntimeDir    string `yaml:"runtime_dir"`
 	HostFile      string `yaml:"host_file"`
 	Cert          string `yaml:"cert"`
@@ -78,6 +83,9 @@ type Configuration struct {
 func newDefaultConfiguration(ext External) Configuration {
 	return Configuration{
 		SystemName:    defaultSystemName,
+		AccessPoints:  []string{"localhost"},
+		Port:          defaultPort,
+		HostList:      []string{"localhost:10001"},
 		RuntimeDir:    defaultRuntimeDir,
 		HostFile:      "",
 		Cert:          "",
@@ -131,9 +139,9 @@ func (c *Configuration) LoadConfig() error {
 	return nil
 }
 
-// ApplyCmdLineOverrides will overwrite Configuration values with any non empty
+// ApplyAgentCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
-func (c *Configuration) ApplyCmdLineOverrides(RuntimeDir string, LogFile string) error {
+func (c *Configuration) ApplyAgentCmdLineOverrides(RuntimeDir string, LogFile string) error {
 
 	if RuntimeDir != "" {
 		log.Debugf("Overriding socket path from config file with %s", RuntimeDir)
@@ -143,6 +151,19 @@ func (c *Configuration) ApplyCmdLineOverrides(RuntimeDir string, LogFile string)
 	if LogFile != "" {
 		log.Debugf("Overriding LogFile path from config file with %s", LogFile)
 		c.LogFile = LogFile
+	}
+
+	return nil
+}
+
+// ApplyDMGCmdLineOverrides will overwrite Configuration values with any non empty
+// data provided, usually from the commandline.
+func (c *Configuration) ApplyDMGCmdLineOverrides(Hostlist string) error {
+
+	if (len(Hostlist) > 0) {
+		hosts := strings.Split(Hostlist, ",")
+		log.Debugf("Overriding hostlist from config file with %s", hosts)
+		c.HostList = hosts
 	}
 
 	return nil
