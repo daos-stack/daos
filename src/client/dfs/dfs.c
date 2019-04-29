@@ -35,6 +35,7 @@
 #include "daos_api.h"
 #include "daos_addons.h"
 #include "daos_fs.h"
+#include "daos_security.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"
@@ -954,6 +955,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs_t			*dfs;
 	daos_handle_t		th;
 	daos_pool_info_t	pool_info;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*prop_entry;
 	struct dfs_entry	entry = {0};
 	bool			sb_exists;
 	int			amode, obj_mode;
@@ -977,27 +980,49 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		return rc;
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
+	/* Fetch ownership props with the query */
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate pool prop for query\n");
+		rc = -DER_NOMEM;
 		D_GOTO(err_dfs, rc);
 	}
 
-	dfs->uid = pool_info.pi_uid;
-	dfs->gid = pool_info.pi_gid;
+	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
+		D_GOTO(err_prop, rc);
+	}
+
+	/* Convert the owner information to uid/gid */
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_uid(prop_entry->dpe_str, &dfs->uid);
+	if (rc != 0) {
+		D_ERROR("Unable to convert owner to uid\n");
+		D_GOTO(err_prop, rc);
+	}
+
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_gid(prop_entry->dpe_str, &dfs->gid);
+	if (rc != 0) {
+		D_ERROR("Unable to convert owner-group to gid\n");
+		D_GOTO(err_prop, rc);
+	}
 
 	/** if mount RW, create TX */
 	if (amode == O_RDWR) {
 		rc = daos_tx_open(coh, &th, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() Failed (%d)\n", rc);
-			D_GOTO(err_dfs, rc);
+			D_GOTO(err_prop, rc);
 		}
 	} else if (amode == O_RDONLY) {
 		th = DAOS_TX_NONE;
 	} else {
 		D_ERROR("Invalid dfs_mount access mode\n");
-		D_GOTO(err_dfs, rc = -DER_INVAL);
+		D_GOTO(err_prop, rc = -DER_INVAL);
 	}
 
 	dfs->oid.hi = 0;
@@ -1124,6 +1149,8 @@ err_tx:
 		daos_tx_abort(th, NULL);
 		daos_tx_close(th, NULL);
 	}
+err_prop:
+	daos_prop_free(prop);
 err_dfs:
 	D_FREE(dfs);
 	return rc;

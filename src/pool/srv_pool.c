@@ -437,8 +437,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 }
 
 static int
-init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
-		   uint32_t gid, uint32_t mode,
+init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
 		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
 		   uint32_t ndomains, const int32_t *domains)
@@ -523,20 +522,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 				D_GOTO(out_uuids, rc);
 		}
 	}
-
-	/* Initialize the UID, GID, and mode properties. */
-	d_iov_set(&value, &uid, sizeof(uid));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_uid, &value);
-	if (rc != 0)
-		D_GOTO(out_uuids, rc);
-	d_iov_set(&value, &gid, sizeof(gid));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_gid, &value);
-	if (rc != 0)
-		D_GOTO(out_uuids, rc);
-	d_iov_set(&value, &mode, sizeof(mode));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_mode, &value);
-	if (rc != 0)
-		D_GOTO(out_uuids, rc);
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
@@ -636,9 +621,6 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
  * target UUIDs returned by the ds_pool_create() calls.
  *
  * \param[in]		pool_uuid	pool UUID
- * \param[in]		uid		pool UID
- * \param[in]		gid		pool GID
- * \param[in]		mode		pool mode
  * \param[in]		ntargets	number of targets in the pool
  * \param[in]		target_uuids	array of \a ntargets target UUIDs
  * \param[in]		group		crt group ID (unused now)
@@ -651,8 +633,7 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
  *					list of pool service replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-		   unsigned int mode, int ntargets, uuid_t target_uuids[],
+ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const char *group, const d_rank_list_t *target_addrs,
 		   int ndomains, const int *domains, daos_prop_t *prop,
 		   d_rank_list_t *svc_addrs)
@@ -701,9 +682,6 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pri_op.pi_hdl);
-	in->pri_uid = uid;
-	in->pri_gid = gid;
-	in->pri_mode = mode;
 	in->pri_ntgts = ntargets;
 	in->pri_tgt_uuids.ca_count = ntargets;
 	in->pri_tgt_uuids.ca_arrays = target_uuids;
@@ -1293,34 +1271,6 @@ ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint)
 	hint->sh_flags |= RSVC_HINT_VALID;
 }
 
-/* read uid/gid/mode properties */
-static int
-pool_ugm_read(struct rdb_tx *tx, const struct pool_svc *svc,
-	      struct pool_prop_ugm *ugm)
-{
-	d_iov_t	value;
-	int		rc;
-
-	d_iov_set(&value, &ugm->pp_uid, sizeof(ugm->pp_uid));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_uid, &value);
-	if (rc != 0)
-		return rc;
-
-	d_iov_set(&value, &ugm->pp_gid, sizeof(ugm->pp_gid));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_gid, &value);
-	if (rc != 0)
-		return rc;
-
-	d_iov_set(&value, &ugm->pp_mode, sizeof(ugm->pp_mode));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_mode, &value);
-	if (rc != 0)
-		return rc;
-
-	D_DEBUG(DF_DSMS, "uid=%u gid=%u mode=%u\n", ugm->pp_uid, ugm->pp_gid,
-		ugm->pp_mode);
-	return 0;
-}
-
 static int
 pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	       daos_prop_t **prop_out)
@@ -1585,8 +1535,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_create_root(&tx, &attr);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_uid, in->pri_gid,
-				in->pri_mode, in->pri_ntgts,
+	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_tgt_uuids.ca_count,
 				in->pri_tgt_uuids.ca_arrays, NULL /* group */,
 				in->pri_tgt_ranks, prop_dup,
 				in->pri_ndomains, in->pri_domains.ca_arrays);
@@ -1804,18 +1753,20 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_buf			*map_buf;
 	uint32_t			map_version;
 	struct rdb_tx			tx;
-	d_iov_t			key;
-	d_iov_t			value;
-	struct pool_prop_ugm		ugm;
+	daos_iov_t			key;
+	daos_iov_t			value;
 	struct pool_hdl			hdl;
-	d_iov_t			iv_iov;
+	d_iov_t				iv_iov;
 	unsigned int			iv_ns_id;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
 	daos_prop_t		       *prop;
+	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
 	struct pool_owner		owner;
+	struct daos_prop_entry	       *owner_entry;
+	struct daos_prop_entry	       *owner_grp_entry;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -1872,14 +1823,12 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = pool_ugm_read(&tx, svc, &ugm);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
-	/* Fetch ACL for access check */
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	/* Fetch ACL and ownership info for access check */
+	prop_bits = DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |
+		    DAOS_PO_QUERY_PROP_OWNER_GROUP;
+	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get ACL for pool, rc=%d\n",
+		D_ERROR(DF_UUID": cannot get access data for pool, rc=%d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
 		D_GOTO(out_map_version, rc);
 	}
@@ -1889,34 +1838,25 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	D_ASSERT(acl_entry != NULL);
 	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
 
-	/*
-	 * TODO DAOS-2370: Switch to using pool props for owner/group once
-	 * they are set properly on pool create;
-	 */
-	rc = daos_acl_uid_to_principal(ugm.pp_uid, &owner.user);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
 
-	rc = daos_acl_gid_to_principal(ugm.pp_gid, &owner.group);
-	if (rc != 0) {
-		D_FREE(owner.user);
-		D_GOTO(out_map_version, rc);
-	}
+	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner.user = owner_entry->dpe_str;
+	owner.group = owner_grp_entry->dpe_str;
 
 	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &owner,
 			&in->pci_cred, in->pci_capas);
-	D_FREE(owner.user);
-	D_FREE(owner.group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
 			in->pci_capas, rc);
 		D_GOTO(out_pool_prop, rc = -DER_NO_PERM);
 	}
-
-	out->pco_uid = ugm.pp_uid;
-	out->pco_gid = ugm.pp_gid;
-	out->pco_mode = ugm.pp_mode;
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
@@ -2215,7 +2155,6 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	d_iov_t		key;
 	d_iov_t		value;
 	struct pool_hdl		hdl;
-	struct pool_prop_ugm	ugm;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
@@ -2252,14 +2191,6 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			D_GOTO(out_lock, rc);
 		}
 	}
-
-	/* read uid/gid/mode */
-	rc = pool_ugm_read(&tx, svc, &ugm);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-	out->pqo_uid = ugm.pp_uid;
-	out->pqo_gid = ugm.pp_gid;
-	out->pqo_mode = ugm.pp_mode;
 
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
