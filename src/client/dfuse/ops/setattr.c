@@ -37,7 +37,7 @@ dfuse_setattr_result_fn(struct dfuse_request *request)
 	DFUSE_REQUEST_RESOLVE(request, out);
 
 	if (request->rc == 0)
-		DFUSE_REPLY_ATTR(request, &out->stat);
+		DFUSE_REPLY_ATTR(request->req, &out->stat);
 	else
 		DFUSE_REPLY_ERR(request, request->rc);
 
