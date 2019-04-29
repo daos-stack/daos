@@ -491,7 +491,7 @@ pool_properties(void **state)
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, 7);
+	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {

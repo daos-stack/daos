@@ -919,6 +919,11 @@ enum daos_pool_prop_type {
 	DAOS_PROP_PO_MAX,
 };
 
+/**
+ * Number of pool property types
+ */
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
+
 /** DAOS space reclaim strategy */
 enum {
 	DAOS_RECLAIM_SNAPSHOT,
