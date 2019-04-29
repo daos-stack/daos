@@ -300,12 +300,14 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 
 		/* Populate inode->stat */
 		dfs->dffs_ops = &dfuse_pool_ops;
+		D_INIT_LIST_HEAD(&dfs->dffs_child);
 	}
 
 	inode->ie_dfs = dfs;
 	inode->parent = 1;
 	atomic_fetch_add(&inode->ie_ref, 1);
 	inode->stat.st_ino = 1;
+	dfs->dffs_root = inode->stat.st_ino;
 
 	rc = d_hash_rec_insert(&fs_handle->inode_ht,
 			       &inode->stat.st_ino,

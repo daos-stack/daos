@@ -121,6 +121,8 @@ struct dfuse_dfs {
 	char			dffs_cont[NAME_MAX];
 	daos_handle_t		dffs_coh;
 	daos_cont_info_t	dffs_co_info;
+	fuse_ino_t		dffs_root;
+	d_list_t		dffs_child;
 };
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
@@ -483,7 +485,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char		name[256];
+	char		name[NAME_MAX];
 
 	/** The parent inode of this entry.
 	 *
@@ -505,6 +507,16 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint	ie_ref;
+};
+
+/* List of direct children for root or a container
+ *
+ * This is used when automatically connecting to pools and containers to keep
+ * a list of connections, to avoid calling pool_open() for each lookup() call.
+ */
+struct dfuse_d_child {
+	char		ddc_name[NAME_MAX];
+	d_list_t	ddc_list;
 };
 
 /** Write buffer descriptor */

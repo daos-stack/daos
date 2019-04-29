@@ -40,9 +40,34 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 	mode_t				mode;
 	int rc;
 
+	/* This code is only supposed to support one level of directory descent
+	 * so check that the lookup is relative to the root of the sub-tree,
+	 * and abort if not.
+	 */
+	if (parent->stat.st_ino == parent->ie_dfs->dffs_root) {
+		DFUSE_TRA_ERROR(parent, "Called on non sub-tree root");
+		D_GOTO(err, rc = EIO);
+	}
+
 	if (uuid_parse(name, co_uuid) < 0) {
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		D_GOTO(err, rc = ENOENT);
+	}
+
+	/* If looking up an existing file then check to see if dfuse is already
+	 * connected to the name.
+	 */
+	if (!create) {
+		struct dfuse_d_child *ddc;
+
+		dfs = parent->ie_dfs;
+
+		d_list_for_each_entry(ddc, &dfs->dffs_child, ddc_list) {
+			if ((strncmp(name, ddc->ddc_name, NAME_MAX)) == 0) {
+				DFUSE_TRA_ERROR(parent, "Found entry");
+				D_GOTO(stat, 0);
+			}
+		}
 	}
 
 	D_ALLOC_PTR(dfs);
@@ -88,6 +113,12 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, 0);
 	}
 
+	inode->parent = parent->stat.st_ino;
+	strncpy(inode->name, name, NAME_MAX);
+	dfs->dffs_root = inode->stat.st_ino;
+	dfs->dffs_ops = &dfuse_dfs_ops;
+
+stat:
 	rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(inode, "dfs_ostat() failed: %d",
@@ -96,12 +127,8 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	atomic_fetch_add(&inode->ie_ref, 1);
-	inode->parent = parent->stat.st_ino;
-	strncpy(inode->name, name, NAME_MAX);
 	inode->ie_dfs = dfs;
 	inode->stat.st_ino = 2;
-
-	dfs->dffs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, inode, false, req);
 	return true;
