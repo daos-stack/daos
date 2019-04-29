@@ -37,7 +37,7 @@ dfuse_getattr_result_fn(struct dfuse_request *request)
 	DFUSE_REQUEST_RESOLVE(request, out);
 
 	if (request->rc == 0)
-		DFUSE_REPLY_ATTR(request, &out->stat);
+		DFUSE_REPLY_ATTR(request->req, &out->stat);
 	else
 		DFUSE_REPLY_ERR(request, request->rc);
 
@@ -50,11 +50,33 @@ static const struct dfuse_request_api getattr_api = {
 };
 
 void
-dfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *inode)
+{
+	struct stat	stat = {};
+	int		rc;
+
+	rc = dfs_ostat(inode->ie_dfs->dffs_dfs, inode->obj, &stat);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(err, 0);
+	}
+
+	/* Copy the inode number from the inode struct, to avoid having to
+	 * recompute it each time.
+	 */
+	stat.st_ino = inode->stat.st_ino;
+	DFUSE_REPLY_ATTR(req, &stat);
+
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(inode, req, rc);
+}
+
+void
+Xdfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_file_handle	*handle = NULL;
-	struct TYPE_NAME		*desc = NULL;
+	struct common_req		*desc = NULL;
 	int rc;
 
 	if (fi)
@@ -69,13 +91,15 @@ dfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		desc->request.ir_ht = RHS_FILE;
 		desc->request.ir_file = handle;
+		rc = dfuse_fs_send(&desc->request);
+		if (rc != 0)
+			D_GOTO(err, rc);
 	} else {
-		desc->request.ir_ht = RHS_INODE_NUM;
-		desc->request.ir_inode_num = ino;
+		if (rc != -DER_SUCCESS) {
+			D_GOTO(err, rc = ENOTSUP);
+		}
 	}
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, rc);
+
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
