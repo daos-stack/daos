@@ -50,21 +50,19 @@ typedef uint64_t		umem_off_t;
 /** Number of flag bits to reserve for encoding extra information in
  *  a NULL umem_off_t entry.
  */
-#define UMOFF_NUM_FLAGS		(8)
-/** The absolute value of a flag mask may not exceed this value */
-#define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAGS)
-/** A mask to retrieve the invalid flags */
-#define UMOFF_FLAG_MASK		(UMOFF_MAX_FLAG - 1)
-/** Use to set a value to NULL.  Note we don't use 0 because,
- *  in theory, 0 can be a valid offset whereas it is less likely
- *  that values above UMOFF_NULL are valid virtual memory
- *  addresses (for vmem case).
+#define UMOFF_NUM_BITS		(8)
+/** The absolute value of a flag mask must be <= this value */
+#define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_BITS)
+/** In theory and offset can be NULL but in practice, pmemobj_root
+ *  is not at offset 0 as pmdk reserves some space for its internal
+ *  use.   So, use 0 for NULL.   Invalid bits are also considered
+ *  NULL.
  */
-#define UMOFF_NULL		(~0ULL & ~UMOFF_FLAG_MASK)
+#define UMOFF_NULL		(0ULL)
 /** Check for a NULL value including possible invalid flag bits */
-#define UMOFF_IS_NULL(umoff)	(umoff >= UMOFF_NULL)
+#define UMOFF_IS_NULL(umoff)	(umoff < UMOFF_MAX_FLAG)
 
-/** Up to UMOFF_NUM_FLAGS bits are available to the user to mark an
+/** Up to UMOFF_NUM_BITS bits are available to the user to mark an
  *  invalid offset with extra information.  If these fields are
  *  set, the pointer resulting from such an offset will be
  *  considered NULL.
@@ -77,7 +75,7 @@ umem_off_set_invalid(umem_off_t *offset, uint64_t flags)
 {
 	D_ASSERTF(flags < UMOFF_MAX_FLAG,
 		  "Attempt to set invalid flag bits on umem_off_t\n");
-	*offset = UMOFF_NULL | flags;
+	*offset = flags;
 }
 
 /** Retrieves any invalid flags that are set.  If the offset hasn't
@@ -91,7 +89,7 @@ umem_off_get_invalid_flags(umem_off_t umoff)
 	if (!UMOFF_IS_NULL(umoff))
 		return 0;
 
-	return umoff & UMOFF_FLAG_MASK;
+	return umoff;
 }
 
 /** memory ID without type */
@@ -330,6 +328,8 @@ umem_id2off(const struct umem_instance *umm, umem_id_t ummid)
 	if (UMMID_IS_NULL(ummid))
 		return UMOFF_NULL;
 
+	D_ASSERT(!UMOFF_IS_NULL(ummid.off));
+
 	return ummid.off;
 }
 
@@ -349,12 +349,12 @@ umem_off2ptr(const struct umem_instance *umm, umem_off_t umoff)
 	return (void *)(umm->umm_base + umoff);
 }
 
-/** Convert a pointer to offset.
+/** Convert pointer to an offset.
  *
  *  \param	umm[IN]		The umem pool instance
- *  \param	ptr[in]		The pointer to convert
+ *  \param	ptr[in]		The direct pointer to convert
  *
- *  \return	The offset in the PMEM pool.
+ *  Returns the umem offset
  */
 static inline umem_off_t
 umem_ptr2off(const struct umem_instance *umm, void *ptr)
@@ -362,7 +362,7 @@ umem_ptr2off(const struct umem_instance *umm, void *ptr)
 	if (ptr == NULL)
 		return UMOFF_NULL;
 
-	return (umem_off_t)(ptr - umm->umm_base);
+	return (umem_off_t)ptr - umm->umm_base;
 }
 
 /**
@@ -495,6 +495,9 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 
 #define umem_tx_add_mmid_typed(umm, tmmid)				\
 	umem_tx_add_typed(umm, tmmid, sizeof(*(tmmid)._type))
+
+#define umem_tx_add_off(umm, off, size)					\
+	umem_tx_add(umm, umem_off2id(umm, off), size)
 
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)

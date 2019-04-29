@@ -84,9 +84,9 @@ static int sk_order = SK_ORDER_DEF;
 
 struct utest_context		*sk_utx;
 struct umem_attr		*sk_uma;
-static TMMID(struct btr_root)	sk_root_mmid;
+static umem_off_t		 sk_root_off;
 static struct btr_root		*sk_root;
-static daos_handle_t		sk_toh;
+static daos_handle_t		 sk_toh;
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
@@ -119,7 +119,7 @@ sk_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	uint64_t	 len;
 	int		 rc;
 
-	srec = (struct sk_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
 	/* NB: Since strings are null terminated, this should suffice to
 	 * make shorter string less than larger one
@@ -142,13 +142,13 @@ sk_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 {
 	struct sk_rec		*srec;
 	char			*vbuf;
-	umem_id_t		 srec_mmid;
+	umem_off_t		 srec_off;
 
-	srec_mmid = umem_zalloc(&tins->ti_umm,
-				sizeof(*srec) + key_iov->iov_len);
-	D_ASSERT(!UMMID_IS_NULL(srec_mmid)); /* lazy bone... */
+	srec_off = umem_zalloc_off(&tins->ti_umm,
+				   sizeof(*srec) + key_iov->iov_len);
+	D_ASSERT(!UMOFF_IS_NULL(srec_off)); /* lazy bone... */
 
-	srec = (struct sk_rec *)umem_id2ptr(&tins->ti_umm, srec_mmid);
+	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, srec_off);
 
 	memcpy(&srec->sr_key[0], key_iov->iov_buf, key_iov->iov_len);
 	srec->sr_key_len = key_iov->iov_len;
@@ -160,7 +160,7 @@ sk_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	vbuf = umem_id2ptr(&tins->ti_umm, srec->sr_val_mmid);
 	memcpy(vbuf, (char *)val_iov->iov_buf, val_iov->iov_len);
 
-	rec->rec_mmid = srec_mmid;
+	rec->rec_off = srec_off;
 	return 0;
 }
 
@@ -168,20 +168,18 @@ static int
 sk_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance *umm = &tins->ti_umm;
-	TMMID(struct sk_rec) srec_mmid;
 	struct sk_rec *srec;
 
-	srec_mmid = umem_id_u2t(rec->rec_mmid, struct sk_rec);
-	srec = umem_id2ptr_typed(umm, srec_mmid);
+	srec = umem_off2ptr(umm, rec->rec_off);
 
 	if (args != NULL) {
 		umem_id_t *rec_ret = (umem_id_t *) args;
 		 /** Provide the buffer to user */
-		*rec_ret	= rec->rec_mmid;
+		*rec_ret	= umem_off2id(&tins->ti_umm, rec->rec_off);
 		return 0;
 	}
 	umem_free(umm, srec->sr_val_mmid);
-	umem_free_typed(umm, srec_mmid);
+	umem_free_off(umm, rec->rec_off);
 
 	return 0;
 }
@@ -198,7 +196,7 @@ sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (key_iov == NULL && val_iov == NULL)
 		return -EINVAL;
 
-	srec = (struct sk_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	val_size = srec->sr_val_size;
 	key_size = srec->sr_key_len;
 
@@ -237,7 +235,7 @@ sk_rec_string(struct btr_instance *tins, struct btr_record *rec,
 		return buf;
 	}
 
-	srec = (struct sk_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	skey = &srec->sr_key[0];
 	val = umem_id2ptr(&tins->ti_umm, srec->sr_val_mmid);
 
@@ -254,16 +252,14 @@ sk_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct sk_rec		*srec;
 	char			*val;
-	TMMID(struct sk_rec)	 srec_mmid;
 
-	srec_mmid = umem_id_u2t(rec->rec_mmid, struct sk_rec);
-	srec = umem_id2ptr_typed(umm, srec_mmid);
+	srec = umem_off2ptr(umm, rec->rec_off);
 
 	if (srec->sr_val_msize >= val_iov->iov_len) {
 		umem_tx_add(umm, srec->sr_val_mmid, srec->sr_val_msize);
 
 	} else {
-		umem_tx_add_mmid_typed(umm, srec_mmid);
+		umem_tx_add_off(umm, rec->rec_off, sizeof(*srec));
 		umem_free(umm, srec->sr_val_mmid);
 
 		srec->sr_val_msize = val_iov->iov_len;
@@ -283,10 +279,8 @@ sk_rec_stat(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct sk_rec		*srec;
-	TMMID(struct sk_rec)	 srec_mmid;
 
-	srec_mmid = umem_id_u2t(rec->rec_mmid, struct sk_rec);
-	srec = umem_id2ptr_typed(umm, srec_mmid);
+	srec = umem_off2ptr(umm, rec->rec_off);
 
 	stat->rs_ksize = srec->sr_key_len;
 	stat->rs_vsize = srec->sr_val_size;
@@ -349,9 +343,8 @@ sk_btr_open_create(void **state)
 		}
 	} else if (!create) {
 		inplace = (sk_root->tr_class != 0);
-		if (TMMID_IS_NULL(sk_root_mmid) && !inplace) {
+		if (UMOFF_IS_NULL(sk_root_off) && !inplace)
 			fail_msg("Please create tree first\n");
-		}
 	}
 
 	if (create) {
@@ -363,14 +356,14 @@ sk_btr_open_create(void **state)
 						   &sk_toh);
 		} else {
 			rc = dbtree_create(SK_TREE_CLASS, feats, sk_order,
-					   sk_uma, &sk_root_mmid, &sk_toh);
+					   sk_uma, &sk_root_off, &sk_toh);
 		}
 	} else {
 		D_PRINT("Open btree%s\n", inplace ? " inplace" : "");
 		if (inplace)
 			rc = dbtree_open_inplace(sk_root, sk_uma, &sk_toh);
 		else
-			rc = dbtree_open(sk_root_mmid, sk_uma, &sk_toh);
+			rc = dbtree_open(sk_root_off, sk_uma, &sk_toh);
 	}
 	if (rc != 0) {
 		sprintf(outbuf, "Tree %s failed: %d\n",
@@ -411,14 +404,12 @@ sk_btr_close_destroy(void **state)
 static int
 btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 {
-	TMMID(struct sk_rec)	srec_mmid;
 	struct umem_instance	*umm;
 	struct sk_rec		*srec;
 
 	umm = utest_utx2umm(sk_utx);
 
-	srec_mmid = umem_id_u2t(*rec, struct sk_rec);
-	srec	  = umem_id2ptr_typed(umm, srec_mmid);
+	srec	  = umem_id2ptr(umm, *rec);
 
 	if ((srec->sr_key_len != key->iov_len) ||
 	    (memcmp(srec->sr_key, key->iov_buf, key->iov_len) != 0)) {
@@ -427,7 +418,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 	}
 
 	utest_free(sk_utx, srec->sr_val_mmid);
-	utest_free_typed(sk_utx, srec_mmid);
+	utest_free(sk_utx, *rec);
 
 	return 0;
 }
@@ -1161,7 +1152,7 @@ main(int argc, char **argv)
 	srand(tv.tv_usec);
 
 	sk_toh = DAOS_HDL_INVAL;
-	sk_root_mmid = TMMID_NULL(struct btr_root);
+	sk_root_off = UMOFF_NULL;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
