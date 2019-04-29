@@ -569,6 +569,12 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
+	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cell,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
+				 * cell size 1MB.
+				 */
 };
 
 /** Object class attributes */
@@ -598,14 +604,12 @@ typedef struct daos_oclass_attr {
 
 		/** Erasure coding attributes */
 		struct daos_ec_attr {
-			/** Type of EC */
-			unsigned int	 e_type;
-			/** EC group size */
-			unsigned int	 e_grp_size;
-			/**
-			 * TODO: add members to describe erasure coding
-			 * attributes
-			 */
+			/** number of data cells (k) */
+			unsigned short	 e_k;
+			/** number of parity cells (p) */
+			unsigned short	 e_p;
+			/** length of each block of data (cell) */
+			unsigned int	 e_len;
 		} ec;
 	} u;
 	/** TODO: add more attributes */

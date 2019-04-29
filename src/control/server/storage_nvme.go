@@ -48,12 +48,13 @@ const (
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
+	pciWhiteListEnv    = "_PCI_WHITELIST"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
 type SpdkSetup interface {
-	prep(int, string) error
+	prep(int, string, string) error
 	reset() error
 }
 
@@ -84,16 +85,19 @@ type nvmeStorage struct {
 	formatted   bool
 }
 
-// prep executes setup script to allocate hugepages and bind PCI devices
-// (that don't have active mountpoints) to generic kernel driver.
+// prep executes setup script to allocate hugepages and unbind PCI devices
+// (that don't have active mountpoints) from generic kernel driver to be
+// used with SPDK. Either all PCI devices will be unbound by default if wlist
+// parameter is not set, otherwise PCI devices can be specified by passing in a
+// whitelist of PCI addresses.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetup) prep(nrHugepages int, usr string) error {
+func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 	srv := exec.Command(s.scriptPath)
 	srv.Env = os.Environ()
 	var stderr bytes.Buffer
 	srv.Stderr = &stderr
-	var hPages, tUsr string
+	var hPages, tUsr, whitelist string
 
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
@@ -106,10 +110,16 @@ func (s *spdkSetup) prep(nrHugepages int, usr string) error {
 	srv.Env = append(srv.Env, tUsr)
 	log.Debugf("spdk setup with %s\n", tUsr)
 
+	if wlist != "" {
+		whitelist = pciWhiteListEnv + "=" + wlist
+		srv.Env = append(srv.Env, whitelist)
+		log.Debugf("spdk setup with %s\n", whitelist)
+	}
+
 	return errors.Wrapf(
 		srv.Run(),
-		"spdk setup failed (%s, %s, %s)",
-		hPages, tUsr, stderr.String())
+		"spdk setup failed (%s, %s, %s, %s)",
+		hPages, tUsr, whitelist, stderr.String())
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
