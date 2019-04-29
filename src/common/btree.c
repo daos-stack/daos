@@ -969,7 +969,7 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 		return PROBE_RC_OK;
 	case ALB_UNAVAILABLE:
 	default:
-		/* Invisibile */
+		/* Unavailable */
 		return PROBE_RC_UNAVAILABLE;
 	}
 }
