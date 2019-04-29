@@ -94,6 +94,7 @@ set_bit(uint8_t *bitmap, uint64_t bit)
 {
 	uint64_t offset = bit / 8;
 	uint8_t position = bit % 8;
+
 	bitmap[offset] |= (0x80 >> position);
 }
 
@@ -102,8 +103,8 @@ static inline uint8_t
 get_bit(uint8_t *bitmap, uint64_t bit)
 {
 	uint64_t offset = bit / 8;
-        uint8_t position = bit % 8;
-        return ((bitmap[offset] & (0x80 >> position)) != 0);
+	uint8_t position = bit % 8;
+	return ((bitmap[offset] & (0x80 >> position)) != 0);
 }
 
 /**
@@ -125,7 +126,7 @@ is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
 	}
 
 	if ((bitmap[(start >> 3)] & mask) != mask)
-        return 0;
+		return 0;
 
 	mask = (0xFF << (8-((end%8)+1)));
 	if ((bitmap[(end >> 3)] & mask) != mask)
@@ -133,6 +134,7 @@ is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end)
 
 	if ((end >> 3) > ((start >> 3) + 1)) {
 		int i;
+
 		for (i = (start >> 3) + 1; i < (end >> 3); ++i)
 			if (bitmap[i] != 0xFF)
 				return 0;
@@ -182,6 +184,7 @@ uint64_t get_dom_cnt(struct pool_domain *dom)
 
 	if (dom->do_children != NULL) {
 		int i;
+
 		count += dom->do_child_nr;
 
 		for (i = 0; i < dom->do_child_nr; ++i)
@@ -208,16 +211,16 @@ uint64_t get_dom_cnt(struct pool_domain *dom)
 static inline uint32_t
 jump_consistent_hash(uint64_t key, uint32_t num_buckets)
 {
-        int64_t z = -1;
-        int64_t y = 0;
+	int64_t z = -1;
+	int64_t y = 0;
 
-        while (y < num_buckets) {
-                z = y;
-                key = key * 2862933555777941757ULL + 1;
-                y = (z + 1) * ((double)(1LL << 31) /
-                               ((double)((key >> 33) + 1)));
-        }
-        return z;
+	while (y < num_buckets) {
+		z = y;
+		key = key * 2862933555777941757ULL + 1;
+		y = (z + 1) * ((double)(1LL << 31) /
+			((double)((key >> 33) + 1)));
+	}
+	return z;
 }
 
 /**
@@ -231,11 +234,11 @@ jump_consistent_hash(uint64_t key, uint32_t num_buckets)
 static inline uint32_t
 crc32c_sse42_u32(uint32_t data, uint32_t init_val)
 {
-        __asm__ volatile(
+	__asm__ volatile(
                 "crc32l %[data], %[init_val];"
-                : [init_val] "+r"(init_val)
-                : [data] "rm"(data));
-        return init_val;
+		: [init_val] "+r"(init_val)
+		: [data] "rm"(data));
+	return init_val;
 }
 
 /**
@@ -326,20 +329,20 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, uint32_t *used_targets,
 	   int shard_num)
 {
-	uint8_t         found_target = 0;
-	uint8_t         top = 0;
-	uint32_t        fail_num = 0;
-	uint32_t        selected_dom;
-	uint64_t 	root_pos;
+	uint8_t		found_target = 0;
+	uint8_t		top = 0;
+	uint32_t	fail_num = 0;
+	uint32_t	selected_dom;
+	uint64_t	root_pos;
 
 	root_pos = (uint64_t)curr_dom;
 
 	do {
-		uint32_t        i;
-		uint32_t        num_doms;
-		uint64_t        key;
-		uint64_t 	curr_pos;
-		uint64_t        start_bit;
+		uint32_t	i;
+		uint32_t	num_doms;
+		uint64_t	key;
+		uint64_t	curr_pos;
+		uint64_t	start_bit;
 
 		/* Retrieve number of nodes in this domain */
 		if (curr_dom->do_children == NULL)
@@ -355,6 +358,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 		if (curr_dom->do_children == NULL) {
 			uint32_t dom_id;
+
 			do {
 				/*
 				 * Must crc key because jump consistent hash
@@ -410,7 +414,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 */
 
 			range_set = is_range_set(dom_used, start_bit, start_bit
-                                + num_doms - 1);
+					+ num_doms - 1);
 			if (range_set  && curr_dom->do_children != NULL) {
 				clear_bitmap_range(dom_used, start_bit,
 						start_bit + (num_doms - 1));
@@ -487,6 +491,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		uint8_t skiped_targets = 0;
 		uint16_t num_bytes = 0;
 		uint32_t num_doms;
+
 		num_doms = root->do_child_nr;
 
 		uint64_t child_pos = (uint64_t)(root->do_children)
@@ -758,8 +763,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		return -DER_NONEXIST;
 	}
 
-
-	mplmap->dom_used_length = (get_dom_cnt(*root)/ 8) + 1;
+	mplmap->dom_used_length = (get_dom_cnt(*root) / 8) + 1;
 	*mapp = &mplmap->mmp_map;
 
 	D_FREE(root);
