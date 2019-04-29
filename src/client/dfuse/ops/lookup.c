@@ -76,6 +76,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	if (create) {
 		struct fuse_file_info fi = {0};
+
 		DFUSE_REPLY_CREATE(req, entry, &fi);
 	} else {
 		DFUSE_REPLY_ENTRY(req, entry);
