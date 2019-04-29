@@ -76,6 +76,17 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Convert from a dfs_obj_t to a daos_obj_id_t.
+ *
+ * \param[in]	obj	Object to convert
+ * \param[out]	oid	Daos object ID.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
+
+/**
  * Lookup a path in the DFS and return the associated open object and mode.
  * The object must be released with dfs_release().
  *
@@ -141,7 +152,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **obj);
 
-/*
+/**
  * Close/release open object.
  *
  * \param[in]	obj	Object to release.
