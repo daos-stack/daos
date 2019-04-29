@@ -24,17 +24,16 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
-	"os"
-	"strings"
 )
 
 type cliOptions struct {
-	Hostlist string `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Hostlist   string `short:"l" long:"hostlist" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	// TODO: implement host file parsing
 	Hostfile   string  `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
@@ -47,6 +46,7 @@ type cliOptions struct {
 var (
 	opts  = new(cliOptions)
 	conns = client.NewConnect()
+	config = client.NewConfiguration()
 )
 
 func connectHosts() error {
@@ -54,11 +54,8 @@ func connectHosts() error {
 	if opts.Hostfile != "" {
 		return errors.New("hostfile option not implemented")
 	}
-	hosts := strings.Split(opts.Hostlist, ",")
-	if len(hosts) < 1 {
-		return errors.New("no hosts to connect to")
-	}
-	fmt.Println(sprintConns(conns.ConnectClients(hosts)))
+
+	fmt.Println(sprintConns(conns.ConnectClients(config.HostList)))
 	return nil
 }
 
@@ -82,13 +79,20 @@ func dmgMain() error {
 	}
 
 	// Load the configuration file using the supplied path or the default path if none provided.
-	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	config, err = client.ProcessConfigFile(opts.ConfigPath)
 	if err != nil {
 		log.Errorf("Failed to load client config options %s", err)
 		return err
 	}
 
 	log.Debugf("Configuration read from %s", config.Path)
+
+	// Override configuration with any commandline values given
+	err = config.ApplyDMGCmdLineOverrides(opts.Hostlist)
+	if err != nil {
+		log.Errorf("Failed to apply command line overrides %s", err)
+		return err
+	}
 
 	err = connectHosts()
 	if err != nil {
