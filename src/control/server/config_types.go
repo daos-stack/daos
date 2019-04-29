@@ -173,9 +173,9 @@ type server struct {
 	BdevSize        int       `yaml:"bdev_size"`
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
-	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]
-	// Condition variable to announce formatting of storage
-	FormatCond *sync.Cond
+	CliOpts       []string        // tuples (short option, value) e.g. ["-p", "10000"...]
+	storWaitGroup *sync.WaitGroup // sync primitive for storage formatting events
+	formatted     bool            // I/O server formatted and superblock written
 }
 
 // newDefaultServer creates a new instance of server struct with default values.

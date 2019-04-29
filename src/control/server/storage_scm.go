@@ -279,11 +279,16 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 			return
 		}
 
+		log.Debugf(
+			"formatting scm device %s, should be quick!...", devPath)
+
 		if err := s.reFormat(devPath); err != nil {
 			addMretFormat(
 				pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
+
+		log.Debugf("format complete.\n")
 	case scmRAM:
 		devPath = "tmpfs"
 		devType = "tmpfs"
@@ -305,12 +310,18 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 		return
 	}
 
+	log.Debugf(
+		"mounting scm device %s at %s (%s)...",
+		devPath, mntPoint, devType)
+
 	if err := s.makeMount(devPath, mntPoint, devType, mntOpts); err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 		return
 	}
 
+	log.Debugf("mount complete.\n")
 	addMretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
+
 	s.formatted = true
 	return
 }

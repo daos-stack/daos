@@ -91,6 +91,7 @@ func formatIosrv(
 	op += " server " + srv.ScmMount
 
 	if _, err := os.Stat(iosrvSuperPath(srv.ScmMount)); err == nil {
+		srv.formatted = true
 		log.Debugf("server %d has already been formatted\n", i)
 
 		if reformat {
@@ -110,7 +111,7 @@ func formatIosrv(
 		log.Debugf("waiting for storage format on server %d\n", i)
 
 		// wait on format storage grpc call before creating superblock
-		srv.FormatCond.Wait()
+		srv.storWaitGroup.Wait()
 	}
 
 	// check scm has been mounted before proceeding to write to it

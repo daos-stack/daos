@@ -49,12 +49,14 @@ type controlService struct {
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
-	// init condition variables used to wait on storage formatting
-	for idx := range c.config.Servers {
-		cv := sync.NewCond(&sync.Mutex{})
-		cv.L.Lock()
+	if !c.config.FormatOverride {
+		// init sync primitive for storage formatting on each server
+		for idx := range c.config.Servers {
+			wg := new(sync.WaitGroup)
+			wg.Add(1)
 
-		c.config.Servers[idx].FormatCond = cv
+			c.config.Servers[idx].storWaitGroup = wg
+		}
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -80,12 +82,12 @@ func (c *controlService) Teardown() {
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
 
-	// unlock condition variables used to wait on storage formatting
-	for idx := range c.config.Servers {
-		cv := c.config.Servers[idx].FormatCond
-		cv.L.Unlock()
+	if !c.config.FormatOverride {
+		// decrement counter to release blocked goroutines
+		for idx := range c.config.Servers {
+			c.config.Servers[idx].storWaitGroup.Done()
+		}
 	}
-
 }
 
 func errAnnotate(err error, msg string) (e error) {

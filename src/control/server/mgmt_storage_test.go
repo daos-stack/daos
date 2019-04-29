@@ -24,7 +24,7 @@
 package main
 
 import (
-	"fmt"
+	"sync"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
@@ -207,7 +207,7 @@ func TestScanStorage(t *testing.T) {
 	}
 }
 
-func TestFormatStorageScm(t *testing.T) {
+func TestFormatStorage(t *testing.T) {
 	tests := []struct {
 		mountRet         error
 		unmountRet       error
@@ -219,6 +219,7 @@ func TestFormatStorageScm(t *testing.T) {
 		sSize            int
 		bClass           BdevClass
 		bDevs            []string
+		serverFormatted  bool
 		expNvmeFormatted bool
 		expScmFormatted  bool
 		mountRets        []*pb.ScmMountResult
@@ -285,9 +286,39 @@ func TestFormatStorageScm(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc:             "already formatted",
+			serverFormatted:  true,
+			sMount:           "/mnt/daos",
+			sClass:           scmRAM,
+			sDevs:            []string{"/dev/pmem1"}, // ignored if SCM class is ram
+			sSize:            6,
+			bClass:           bdNVMe,
+			expScmFormatted:  true,
+			bDevs:            []string{"0000:81:00.0"},
+			expNvmeFormatted: true,
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_APP,
+						Error:  msgBdevAlreadyFormatted,
+					},
+				},
+			},
+			mountRets: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_APP,
+						Error:  msgScmAlreadyFormatted,
+					},
+				},
+			},
+		},
 	}
 
-	serverIdx := 0
+	srvIdx := 0
 
 	for _, tt := range tests {
 		config := newMockStorageConfig(
@@ -298,66 +329,70 @@ func TestFormatStorageScm(t *testing.T) {
 		config.FormatOverride = false
 
 		cs := mockControlService(config)
-		cs.Setup() // set cond var locked
+		cs.Setup() // init and increment WaitGroup countera
 
-		c := cs.config.Servers[serverIdx].FormatCond
+		// superblock written (server already formatted)
+		cs.config.Servers[srvIdx].formatted = tt.serverFormatted
 
-		go func() {
-			// should wait for lock to be released on main thread
-			// then signal to unlock once format completed
-			mock := &mockFormatStorageServer{}
-
-			if err := cs.FormatStorage(nil, mock); err != nil {
-				// for purposes of test, signal cond on fail
-				c.L.Lock()
-				c.Broadcast()
-				c.L.Unlock()
-				t.Fatal(fmt.Sprintf("%+v", err))
-			}
-
-			AssertEqual(t, len(mock.Results), 1, "unexpected number of responses sent")
-
-			if len(tt.ctrlrRets) > 0 {
-				for i, result := range mock.Results[0].Crets {
-					expected := tt.ctrlrRets[i]
-					AssertEqual(
-						t, result.State.Error,
-						expected.State.Error,
-						"unexpected result error message, "+tt.desc)
-					AssertEqual(
-						t, result.State.Status,
-						expected.State.Status,
-						"unexpected response status, "+tt.desc)
-					AssertEqual(
-						t, result.Pciaddr,
-						expected.Pciaddr,
-						"unexpected pciaddr, "+tt.desc)
-				}
-			}
-
-			if len(tt.mountRets) > 0 {
-				for i, result := range mock.Results[0].Mrets {
-					expected := tt.mountRets[i]
-					AssertEqual(
-						t, result.State.Error,
-						expected.State.Error,
-						"unexpected result error message, "+tt.desc)
-					AssertEqual(
-						t, result.State.Status,
-						expected.State.Status,
-						"unexpected response status, "+tt.desc)
-					AssertEqual(
-						t, result.Mntpoint,
-						expected.Mntpoint,
-						"unexpected mntpoint, "+tt.desc)
-				}
-			}
-		}()
+		mock := &mockFormatStorageServer{}
+		mockWg := new(sync.WaitGroup)
+		mockWg.Add(1)
 
 		AssertEqual(t, cs.nvme.formatted, false, tt.desc)
 		AssertEqual(t, cs.scm.formatted, false, tt.desc)
 
-		c.Wait()
+		go func() {
+			// should signal wait group in srv to unlock if
+			// successful once format completed
+			cs.FormatStorage(nil, mock)
+			mockWg.Done()
+		}()
+
+		if !tt.serverFormatted && tt.expNvmeFormatted && tt.expScmFormatted {
+			// conditions met for storage format to succeed
+			cs.config.Servers[srvIdx].storWaitGroup.Wait()
+		}
+		mockWg.Wait() // wait for test goroutines to complete
+
+		AssertEqual(
+			t, len(mock.Results), 1,
+			"unexpected number of responses sent, "+tt.desc)
+
+		if len(tt.ctrlrRets) > 0 {
+			for i, result := range mock.Results[0].Crets {
+				expected := tt.ctrlrRets[i]
+				AssertEqual(
+					t, result.State.Error,
+					expected.State.Error,
+					"unexpected result error message, "+tt.desc)
+				AssertEqual(
+					t, result.State.Status,
+					expected.State.Status,
+					"unexpected response status, "+tt.desc)
+				AssertEqual(
+					t, result.Pciaddr,
+					expected.Pciaddr,
+					"unexpected pciaddr, "+tt.desc)
+			}
+		}
+
+		if len(tt.mountRets) > 0 {
+			for i, result := range mock.Results[0].Mrets {
+				expected := tt.mountRets[i]
+				AssertEqual(
+					t, result.State.Error,
+					expected.State.Error,
+					"unexpected result error message, "+tt.desc)
+				AssertEqual(
+					t, result.State.Status,
+					expected.State.Status,
+					"unexpected response status, "+tt.desc)
+				AssertEqual(
+					t, result.Mntpoint,
+					expected.Mntpoint,
+					"unexpected mntpoint, "+tt.desc)
+			}
+		}
 
 		AssertEqual(t, cs.nvme.formatted, tt.expNvmeFormatted, tt.desc)
 		AssertEqual(t, cs.scm.formatted, tt.expScmFormatted, tt.desc)

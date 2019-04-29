@@ -104,9 +104,9 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 // for use with the SPDK as an unprivileged user.
 type PrepNvmeCmd struct {
 	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
-	NrHugepages int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
-	TargetUser  string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	Reset       bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
+	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
+	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	Reset        bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
 }
 
 // Execute is run when PrepNvmeCmd activates

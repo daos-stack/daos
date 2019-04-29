@@ -147,9 +147,10 @@ func TestFormatScm(t *testing.T) {
 	}{
 		{
 			inited: false,
+			mount:  "/mnt/daos",
 			expResults: []*pb.ScmMountResult{
 				{
-					Mntpoint: "",
+					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_APP,
 						Error:  msgScmNotInited,
@@ -160,10 +161,11 @@ func TestFormatScm(t *testing.T) {
 		},
 		{
 			inited:    true,
+			mount:     "/mnt/daos",
 			formatted: true,
 			expResults: []*pb.ScmMountResult{
 				{
-					Mntpoint: "",
+					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_APP,
 						Error:  msgScmAlreadyFormatted,
@@ -322,11 +324,11 @@ func TestFormatScm(t *testing.T) {
 		result := resp.Mrets[0]
 
 		AssertEqual(
-			t, result.State.Status, tt.expResults[0].State.Status,
-			"unexpected response status, "+tt.desc)
-		AssertEqual(
 			t, result.State.Error, tt.expResults[0].State.Error,
 			"unexpected result error message, "+tt.desc)
+		AssertEqual(
+			t, result.State.Status, tt.expResults[0].State.Status,
+			"unexpected response status, "+tt.desc)
 		AssertEqual(
 			t, result.Mntpoint, tt.expResults[0].Mntpoint,
 			"unexpected mntpoint, "+tt.desc)

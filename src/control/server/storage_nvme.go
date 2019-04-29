@@ -314,6 +314,10 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 				continue
 			}
 
+			log.Debugf(
+				"formatting nvme controller at %s, may take "+
+					"several minutes!...", pciAddr)
+
 			cs, ns, err := n.nvme.Format(pciAddr)
 			if err != nil {
 				addCretFormat(
@@ -321,6 +325,8 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 					pciAddr+": "+err.Error())
 				continue
 			}
+
+			log.Debugf("format successful.\n")
 
 			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
 			n.controllers = loadControllers(cs, ns)

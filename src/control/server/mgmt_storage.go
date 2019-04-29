@@ -24,8 +24,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
@@ -59,31 +57,31 @@ func (c *controlService) ScanStorage(
 
 	resp := new(pb.ScanStorageResp)
 
-	log.Debugf("nvme scan, should be quick!\n")
 	c.nvme.Discover(resp)
-
-	log.Debugf("scm scan, should be quick!\n")
 	c.scm.Discover(resp)
 
 	return resp, nil
 }
 
-// doFormat locks format condition variable and performs format on storage
-// subsystems. Response results will be populated by the subsystem routines.
+// doFormat performs format on storage subsystems, populates response results
+// in storage subsystem routines and releases wait group if successful.
 func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) {
-	cond := c.config.Servers[i].FormatCond
-	// wait for lock to be released when main is ready
-	cond.L.Lock()
-	defer cond.L.Unlock()
+	srv := c.config.Servers[i]
 
-	log.Debugf("performing nvme format, may take several minutes!\n")
+	if srv.formatted {
+		// server already formatted, populate response appropriately
+		c.nvme.formatted = true
+		c.scm.formatted = true
+	}
+
 	c.nvme.Format(i, resp)
-
-	log.Debugf("performing scm format, should be quick!\n")
 	c.scm.Format(i, resp)
 
-	// storage subsystem format successful, signal to alert main.
-	cond.Signal()
+	if !srv.formatted && c.nvme.formatted && c.scm.formatted {
+		// storage subsystem format successful, signal main thread
+		srv.storWaitGroup.Done()
+		log.Debugf("storageformat successful on server %d\n", i)
+	}
 }
 
 // Format delegates to Storage implementation's Format methods to prepare
@@ -106,26 +104,12 @@ func (c *controlService) FormatStorage(
 				"format_override == true in server config file")
 	}
 
-	// TODO: execute in parallel across servers
 	for i := range c.config.Servers {
-		// verify superblock doesn't exist
-		if _, err := os.Stat(
-			iosrvSuperPath(c.config.Servers[i].ScmMount)); err == nil {
-
-			log.Debugf("FormatStorage: server %d already formatted", i)
-			continue
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-
 		c.doFormat(i, resp)
-
-		log.Debugf(
-			"FormatStorage: format successful on server %d\n", i)
 	}
 
 	if err := stream.Send(resp); err != nil {
-		return err
+		return errors.WithMessagef(err, "sending response (%+v)", resp)
 	}
 
 	return nil
