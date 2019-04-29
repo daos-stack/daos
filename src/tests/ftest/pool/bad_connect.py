@@ -70,7 +70,7 @@ class BadConnectTest(Test):
         # launch the server
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
-        server_group = self.params.get("server_group", '/server/',
+        server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
         self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
         server_utils.run_server(self.hostfile, server_group, self.basepath)

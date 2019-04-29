@@ -70,7 +70,7 @@ class BasicSnapshot(Test):
             build_paths = json.load(finput)
         basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        server_group = self.params.get("server_group", '/server/',
+        server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
         # setup the DAOS python API

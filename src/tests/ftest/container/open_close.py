@@ -60,7 +60,7 @@ class OpenClose(Test):
                                '../../../../.build_vars.json')) as build_file:
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 
         # setup the DAOS python API

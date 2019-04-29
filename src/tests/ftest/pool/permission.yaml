@@ -11,8 +11,8 @@ hosts:
         - boro-A
         - boro-B
 timeout: 300
-server:
-    server_group: daos_server
+server_config:
+    name: daos_server
 
 createtests:
     createmode: !mux

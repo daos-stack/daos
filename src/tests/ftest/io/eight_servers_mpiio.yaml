@@ -19,7 +19,7 @@ hosts:
             - boro-O
             - boro-P
 timeout: 2000
-server:
+server_config:
     name: daos_server
 pool:
     createmode:

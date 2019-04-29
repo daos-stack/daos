@@ -1,8 +1,8 @@
 hosts:
   test_machines1:
     - boro-A
-server:
-   server_group: daos_server
+server_config:
+   name: daos_server
 testparams:
    setnames:
       validsetname:

@@ -96,6 +96,7 @@ func formatIosrv(
 		if reformat {
 			return errors.New(op + ": reformat not implemented yet")
 		}
+
 		return nil
 	} else if !os.IsNotExist(err) {
 		return errors.Wrap(err, op)
@@ -119,11 +120,6 @@ func formatIosrv(
 			fmt.Sprintf(
 				"server%d scm mount path (%s) not mounted",
 				i, srv.ScmMount))
-	}
-
-	// process config parameters for nvme and persist nvme.conf in scm
-	if err := config.parseNvme(i); err != nil {
-		return errors.Wrap(err, "nvme config could not be processed")
 	}
 
 	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
@@ -230,6 +226,14 @@ func (srv *iosrv) start() (err error) {
 	defer func() {
 		err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount)
 	}()
+
+	// Process bdev config parameters and write nvme.conf to SCM to be
+	// consumed by SPDK in I/O server process. Populates env & cli opts.
+	if err = srv.config.parseNvme(srv.index); err != nil {
+		err = errors.WithMessage(
+			err, "nvme config could not be processed")
+		return
+	}
 
 	if err = srv.startCmd(); err != nil {
 		return
