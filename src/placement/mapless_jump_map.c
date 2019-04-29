@@ -104,6 +104,7 @@ get_bit(uint8_t *bitmap, uint64_t bit)
 {
 	uint64_t offset = bit / 8;
 	uint8_t position = bit % 8;
+
 	return ((bitmap[offset] & (0x80 >> position)) != 0);
 }
 
@@ -235,7 +236,7 @@ static inline uint32_t
 crc32c_sse42_u32(uint32_t data, uint32_t init_val)
 {
 	__asm__ volatile(
-                "crc32l %[data], %[init_val];"
+		"crc32l %[data], %[init_val];"
 		: [init_val] "+r"(init_val)
 		: [data] "rm"(data));
 	return init_val;
