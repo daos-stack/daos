@@ -523,8 +523,6 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *sg_idx,
 	int				 i, lcnt = 0;
 	int				 rc = 0;
 	
-	if (sgl->sg_iovs[*sg_idx] == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
 	for (i = 0; i < k; i++) {
 		if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off >= len) {
 			unsigned char *from =
@@ -560,8 +558,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *sg_idx,
 				} else
 					*sg_off += cp_amt;
 				cp_cnt += cp_amt;
-				if ( cp_amt < len &&
-						sgl->sg_iovs[*sg_idx] == NULL)
+				if ( cp_cnt < len && *sg_idx >= sgl->sg_nr)
 					D_GOTO(out, rc = -DER_INVAL);
 			}
 			data[i] = ldata[lcnt++];
