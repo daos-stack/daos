@@ -60,8 +60,6 @@ struct test_input_value tst_fn_val;
  * An example for integer key btree.
  */
 
-TMMID_DECLARE(struct ik_rec, 0);
-
 #define IK_ORDER_DEF	16
 
 static int ik_order = IK_ORDER_DEF;
