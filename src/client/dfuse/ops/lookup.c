@@ -105,6 +105,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!inode) {
 		D_GOTO(err, rc = ENOMEM);
 	}
+
 	inode->parent = parent->stat.st_ino;
 	inode->ie_dfs = parent->ie_dfs;
 

@@ -292,7 +292,6 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 
 	if (!inode->ie_dfs->dffs_ops->readdir) {
 		D_GOTO(decref, rc = ENOTSUP);
-		return;
 	}
 	inode->ie_dfs->dffs_ops->readdir(req, inode, size, offset);
 

@@ -54,22 +54,6 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOENT);
 	}
 
-	/* If looking up an existing file then check to see if dfuse is already
-	 * connected to the name.
-	 */
-	if (!create) {
-		struct dfuse_d_child *ddc;
-
-		dfs = parent->ie_dfs;
-
-		d_list_for_each_entry(ddc, &dfs->dffs_child, ddc_list) {
-			if ((strncmp(name, ddc->ddc_name, NAME_MAX)) == 0) {
-				DFUSE_TRA_ERROR(parent, "Found entry");
-				D_GOTO(stat, 0);
-			}
-		}
-	}
-
 	D_ALLOC_PTR(dfs);
 	if (!dfs) {
 		D_GOTO(err, rc = ENOMEM);
@@ -118,7 +102,6 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dffs_root = inode->stat.st_ino;
 	dfs->dffs_ops = &dfuse_dfs_ops;
 
-stat:
 	rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(inode, "dfs_ostat() failed: %d",

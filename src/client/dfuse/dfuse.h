@@ -79,6 +79,7 @@ struct dfuse_projection_info {
 	struct dfuse_projection		proj;
 	struct dfuse_info *dfuse_info;
 	struct fuse_session		*session;
+	struct dfuse_dfs		*dfpi_ddfs;
 	/** Feature Flags */
 	uint64_t			flags;
 	int				fs_id;
@@ -507,16 +508,6 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint	ie_ref;
-};
-
-/* List of direct children for root or a container
- *
- * This is used when automatically connecting to pools and containers to keep
- * a list of connections, to avoid calling pool_open() for each lookup() call.
- */
-struct dfuse_d_child {
-	char		ddc_name[NAME_MAX];
-	d_list_t	ddc_list;
 };
 
 /** Write buffer descriptor */

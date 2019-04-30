@@ -68,9 +68,9 @@ static int ik_order = IK_ORDER_DEF;
 
 struct utest_context		*ik_utx;
 struct umem_attr		*ik_uma;
-static TMMID(struct btr_root)	ik_root_mmid;
+static umem_off_t		 ik_root_off;
 static struct btr_root		*ik_root;
-static daos_handle_t		ik_toh;
+static daos_handle_t		 ik_toh;
 
 
 /** integer key record */
@@ -107,14 +107,14 @@ static int
 ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		  daos_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct ik_rec)   irec_mmid;
-	struct ik_rec		  *irec;
-	char			  *vbuf;
+	umem_off_t		 irec_off;
+	struct ik_rec		*irec;
+	char			*vbuf;
 
-	irec_mmid = umem_znew_typed(&tins->ti_umm, struct ik_rec);
-	D_ASSERT(!TMMID_IS_NULL(irec_mmid)); /* lazy bone... */
+	irec_off = umem_zalloc_off(&tins->ti_umm, sizeof(struct ik_rec));
+	D_ASSERT(!UMOFF_IS_NULL(irec_off)); /* lazy bone... */
 
-	irec = umem_id2ptr_typed(&tins->ti_umm, irec_mmid);
+	irec = umem_off2ptr(&tins->ti_umm, irec_off);
 
 	irec->ir_key = *(int *)key_iov->iov_buf;
 	irec->ir_val_size = irec->ir_val_msize = val_iov->iov_len;
@@ -125,7 +125,7 @@ ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	vbuf = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
 	memcpy(vbuf, (char *)val_iov->iov_buf, val_iov->iov_len);
 
-	rec->rec_mmid = umem_id_t2u(irec_mmid);
+	rec->rec_off = irec_off;
 	return 0;
 }
 
@@ -133,20 +133,18 @@ static int
 ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance *umm = &tins->ti_umm;
-	TMMID(struct ik_rec) irec_mmid;
 	struct ik_rec *irec;
 
-	irec_mmid = umem_id_u2t(rec->rec_mmid, struct ik_rec);
-	irec = umem_id2ptr_typed(umm, irec_mmid);
+	irec = umem_off2ptr(umm, rec->rec_off);
 
 	if (args != NULL) {
 		umem_id_t *rec_ret = (umem_id_t *) args;
 		 /** Provide the buffer to user */
-		*rec_ret	= rec->rec_mmid;
+		*rec_ret	= umem_off2id(&tins->ti_umm, rec->rec_off);
 		return 0;
 	}
 	utest_free(ik_utx, irec->ir_val_mmid);
-	utest_free_typed(ik_utx, irec_mmid);
+	utest_free_off(ik_utx, rec->rec_off);
 
 	return 0;
 }
@@ -163,7 +161,7 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (key_iov == NULL && val_iov == NULL)
 		return -EINVAL;
 
-	irec = (struct ik_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	irec = (struct ik_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	val_size = irec->ir_val_size;
 	key_size = sizeof(irec->ir_key);
 
@@ -202,7 +200,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 		return buf;
 	}
 
-	irec = (struct ik_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	irec = (struct ik_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	ikey = irec->ir_key;
 	nob = snprintf(buf, buf_len, DF_U64, ikey);
 
@@ -222,16 +220,14 @@ ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
 	char			*val;
-	TMMID(struct ik_rec)	 irec_mmid;
 
-	irec_mmid = umem_id_u2t(rec->rec_mmid, struct ik_rec);
-	irec = umem_id2ptr_typed(umm, irec_mmid);
+	irec = umem_off2ptr(umm, rec->rec_off);
 
 	if (irec->ir_val_msize >= val_iov->iov_len) {
 		umem_tx_add(umm, irec->ir_val_mmid, irec->ir_val_msize);
 
 	} else {
-		umem_tx_add_mmid_typed(umm, irec_mmid);
+		umem_tx_add_off(umm, rec->rec_off, sizeof(*irec));
 		umem_free(umm, irec->ir_val_mmid);
 
 		irec->ir_val_msize = val_iov->iov_len;
@@ -251,10 +247,8 @@ ik_rec_stat(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
-	TMMID(struct ik_rec)	 irec_mmid;
 
-	irec_mmid = umem_id_u2t(rec->rec_mmid, struct ik_rec);
-	irec = umem_id2ptr_typed(umm, irec_mmid);
+	irec = umem_off2ptr(umm, rec->rec_off);
 
 	stat->rs_ksize = sizeof(irec->ir_key);
 	stat->rs_vsize = irec->ir_val_size;
@@ -320,9 +314,8 @@ ik_btr_open_create(void **state)
 		}
 	} else if (!create) {
 		inplace = (ik_root->tr_class != 0);
-		if (TMMID_IS_NULL(ik_root_mmid) && !inplace) {
+		if (UMOFF_IS_NULL(ik_root_off) && !inplace)
 			fail_msg("Please create tree first\n");
-		}
 	}
 
 	if (create) {
@@ -334,7 +327,7 @@ ik_btr_open_create(void **state)
 						   &ik_toh);
 		} else {
 			rc = dbtree_create(IK_TREE_CLASS, feats, ik_order,
-					   ik_uma, &ik_root_mmid, &ik_toh);
+					   ik_uma, &ik_root_off, &ik_toh);
 		}
 	} else {
 		D_PRINT("Open btree%s\n", inplace ? " inplace" : "");
@@ -343,7 +336,7 @@ ik_btr_open_create(void **state)
 						 ik_uma,
 						 &ik_toh);
 		} else {
-			rc = dbtree_open(ik_root_mmid, ik_uma, &ik_toh);
+			rc = dbtree_open(ik_root_off, ik_uma, &ik_toh);
 		}
 	}
 	if (rc != 0) {
@@ -385,14 +378,12 @@ ik_btr_close_destroy(void **state)
 static int
 btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 {
-	TMMID(struct ik_rec)	irec_mmid;
 	struct umem_instance	*umm;
 	struct ik_rec		*irec;
 
 	umm = utest_utx2umm(ik_utx);
 
-	irec_mmid = umem_id_u2t(*rec, struct ik_rec);
-	irec	  = umem_id2ptr_typed(umm, irec_mmid);
+	irec	  = umem_id2ptr(umm, *rec);
 
 	if ((sizeof(irec->ir_key) != key->iov_len) ||
 		(irec->ir_key != *((uint64_t *)key->iov_buf))) {
@@ -401,7 +392,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 	}
 
 	utest_free(ik_utx, irec->ir_val_mmid);
-	utest_free_typed(ik_utx, irec_mmid);
+	utest_free(ik_utx, *rec);
 
 	return 0;
 }
@@ -954,7 +945,7 @@ main(int argc, char **argv)
 	srand(tv.tv_usec);
 
 	ik_toh = DAOS_HDL_INVAL;
-	ik_root_mmid = TMMID_NULL(struct btr_root);
+	ik_root_off = UMOFF_NULL;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
