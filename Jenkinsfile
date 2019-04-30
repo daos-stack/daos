@@ -735,7 +735,7 @@ pipeline {
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            # JENKINS-52781 tar function is breaking symlinks
 					   rm -rf test_results
-					   mkdir test_results
+					   mkdir -p test_results
                                            rm -f build/src/control/src/github.com/daos-stack/daos/src/control
                                            mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
