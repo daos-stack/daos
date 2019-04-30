@@ -186,7 +186,8 @@ func newDefaultServer() server {
 	}
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler on server struct.
+// UnmarshalYAML implements yaml.Unmarshaler on server struct enabling defaults
+// to be applied to each nested server.
 //
 // Type alias used to prevent recursive calls to UnmarshalYAML.
 func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -241,7 +242,7 @@ type configuration struct {
 
 // todo: implement UnMarshal for Provider discriminated union
 
-// parse decodes YAML representation of configure struct and checks for Group
+// parse decodes YAML representation of configuration
 func (c *configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }

@@ -162,16 +162,15 @@ func formatStorageRequest(mc Control, ch chan ClientResult) {
 
 // FormatStorage prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) FormatStorage() (ClientNvmeMap, ClientScmMap) {
+func (c *connList) FormatStorage() (ClientNvmeMap, ClientMountMap) {
 	cResults := c.makeRequests(formatStorageRequest)
-	cCtrlrs := make(ClientNvmeMap) // mapping of server address to NVMe SSDs
-	cModules := make(ClientScmMap) // mapping of server address to SCM modules
+	cNvmeResults := make(ClientNvmeMap) // srv address:NVMe SSDs
+	cScmResults := make(ClientMountMap) // srv address:SCM mounts
 
 	for _, res := range cResults {
-		fmt.Printf("format result: %#v\n", res)
 		if res.Err != nil {
-			cCtrlrs[res.Address] = NvmeResult{Err: res.Err}
-			cModules[res.Address] = ScmResult{Err: res.Err}
+			cNvmeResults[res.Address] = NvmeResult{Err: res.Err}
+			cScmResults[res.Address] = MountResult{Err: res.Err}
 			continue
 		}
 
@@ -181,16 +180,17 @@ func (c *connList) FormatStorage() (ClientNvmeMap, ClientScmMap) {
 				"type assertion failed, wanted %+v got %+v",
 				storageResult{}, res.Value)
 
-			cCtrlrs[res.Address] = NvmeResult{Err: err}
-			cModules[res.Address] = ScmResult{Err: err}
+			cNvmeResults[res.Address] = NvmeResult{Err: err}
+			cScmResults[res.Address] = MountResult{Err: err}
 			continue
 		}
 
-		cCtrlrs[res.Address] = storageRes.nvme
-		cModules[res.Address] = storageRes.scm
+		cNvmeResults[res.Address] = storageRes.nvme
+		cScmResults[res.Address] = storageRes.mount
+		// storageRes.scm ignored for format
 	}
 
-	return cCtrlrs, cModules
+	return cNvmeResults, cScmResults
 }
 
 // TODO: implement update and burnin in a similar way to format

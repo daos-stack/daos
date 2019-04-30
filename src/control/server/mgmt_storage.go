@@ -78,7 +78,6 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 		c.nvme.formatted = true
 		c.scm.formatted = true
 		serverFormatted = true
-		log.Debugf("FormatStorage: server %d already formatted\n", i)
 	}
 
 	c.nvme.Format(i, resp)
@@ -119,7 +118,6 @@ func (c *controlService) FormatStorage(
 		}
 	}
 
-	log.Debugf("sending response: %#v\n", resp)
 	if err := stream.Send(resp); err != nil {
 		return errors.WithMessagef(err, "sending response (%+v)", resp)
 	}

@@ -68,7 +68,7 @@ type Connect interface {
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
 	ScanStorage() (ClientNvmeMap, ClientScmMap)
-	FormatStorage() (ClientNvmeMap, ClientScmMap)
+	FormatStorage() (ClientNvmeMap, ClientMountMap)
 	//UpdateStorage() (ClientNvmeMap, ClientScmMap)
 	//BurninStorage() (ClientNvmeMap, ClientScmMap)
 	ListFeatures() ClientFeatureMap

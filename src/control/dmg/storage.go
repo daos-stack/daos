@@ -76,9 +76,10 @@ func formatStor() {
 			"Are you sure you want to continue? (yes/no)")
 
 	if getConsent() {
-		cCtrlrs, cModules := conns.FormatStorage()
-		fmt.Printf(unpackFormat(cCtrlrs), "NVMe storage format result")
-		fmt.Printf(unpackFormat(cModules), "SCM storage format result")
+		fmt.Println("")
+		cNvmeResults, cScmResults := conns.FormatStorage()
+		fmt.Printf(unpackFormat(cNvmeResults), "NVMe storage format result")
+		fmt.Printf(unpackFormat(cScmResults), "SCM storage format result")
 	}
 }
 

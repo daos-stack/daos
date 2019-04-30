@@ -140,3 +140,12 @@ func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
 	}
 	return cMap
 }
+
+// NewClientMount provides a mock ClientMountMap with responses for testing.
+func NewClientMount(results []*pb.ScmMountResult, addrs Addresses) ClientMountMap {
+	cMap := make(ClientMountMap)
+	for _, addr := range addrs {
+		cMap[addr] = MountResult{Responses: results}
+	}
+	return cMap
+}

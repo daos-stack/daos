@@ -86,19 +86,58 @@ func unpackFormat(i interface{}) string {
 		for addr, res := range v {
 			if res.Err != nil {
 				decoded[addr] = res.Err.Error()
-				continue
+			} else if len(res.Ctrlrs) > 0 {
+				decoded[addr] = res.Ctrlrs
+			} else {
+				// annotate with string representation of status num
+				for i := range res.Responses {
+					state := res.Responses[i].State
+					if state.Info == "" {
+						state.Info = fmt.Sprintf(
+							"status=%s",
+							state.Status.String())
+					}
+				}
+				decoded[addr] = res.Responses
 			}
-
-			decoded[addr] = res.Ctrlrs
 		}
 	case client.ClientScmMap:
 		for addr, res := range v {
 			if res.Err != nil {
 				decoded[addr] = res.Err.Error()
-				continue
+			} else if len(res.Modules) > 0 {
+				decoded[addr] = res.Modules
+			} else {
+				// annotate with string representation of status num
+				for i := range res.Responses {
+					state := res.Responses[i].State
+					if state.Info == "" {
+						state.Info = fmt.Sprintf(
+							"status=%s",
+							state.Status.String())
+					}
+				}
+				decoded[addr] = res.Responses
 			}
-
-			decoded[addr] = res.Modules
+		}
+	case client.ClientMountMap:
+		for addr, res := range v {
+			if res.Err != nil {
+				decoded[addr] = res.Err.Error()
+			} else if len(res.Mounts) > 0 {
+				decoded[addr] = res.Mounts
+			} else {
+				// annotate with string representation of status num
+				for i := range res.Responses {
+					state := res.Responses[i].State
+					if state.Info == "" {
+						state.Info = fmt.Sprintf(
+							"status=%s",
+							state.Status.String())
+					}
+				}
+				decoded[addr] = res.Responses
+			}
 		}
 	case client.ResultMap:
 		for addr, res := range v {

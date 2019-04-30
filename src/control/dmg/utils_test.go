@@ -112,6 +112,19 @@ func TestCheckSprint(t *testing.T) {
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
 			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
 		},
+		{
+			NewClientMount(
+				[]*pb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &pb.ResponseState{
+							Status: pb.ResponseStatus_CTRL_ERR_APP,
+							Error:  "example application error",
+						},
+					},
+				}, addresses),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n1.2.3.5:10001:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n\n\n",
+		},
 	}
 	for _, tt := range shelltests {
 		AssertEqual(t, unpackFormat(tt.m), tt.out, "bad output")
