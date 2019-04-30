@@ -131,41 +131,54 @@ failed:
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys)
+	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
-	struct vos_pool	  *vpool;
-	struct vos_object *obj;
-	int		   rc;
+	struct vos_container	*cont;
+	struct vos_object	*obj = NULL;
+	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epoch);
 
+	vos_dth_set(dth);
+	cont = vos_hdl2cont(coh);
+
+	rc = vos_tx_begin(cont->vc_pool);
+	if (rc != 0)
+		goto reset;
+
+	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
+	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
+	    dth->dth_dti_cos_done == 0) {
+		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
+					dth->dth_dti_cos_count);
+		dth->dth_dti_cos_done = 1;
+	}
+
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
 			  false, DAOS_INTENT_PUNCH, &obj);
-	if (rc != 0)
-		return rc;
-
-	vpool = vos_obj2pool(obj);
-
-	rc = vos_tx_begin(vpool);
-	if (rc != 0)
-		goto exit;
-
-	if (dkey) { /* key punch */
-		rc = key_punch(obj, epoch, pm_ver, dkey,
-			       akey_nr, akeys, flags);
-	} else { /* object punch */
-		rc = obj_punch(coh, obj, epoch, flags);
+	if (rc == 0) {
+		if (dkey) /* key punch */
+			rc = key_punch(obj, epoch, pm_ver, dkey,
+				       akey_nr, akeys, flags);
+		else /* object punch */
+			rc = obj_punch(coh, obj, epoch, flags);
 	}
 
-	rc = vos_tx_end(vpool, rc);
+	if (dth != NULL && rc == 0)
+		rc = vos_dtx_prepared(dth);
 
-exit:
+	rc = vos_tx_end(cont->vc_pool, rc);
+	if (obj != NULL)
+		vos_obj_release(vos_obj_cache_current(), obj);
+
+reset:
+	vos_dth_set(NULL);
 	if (rc != 0)
-		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
+		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
+			DP_UOID(oid), rc);
 
-	vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
 }
 
@@ -1393,6 +1406,12 @@ vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_ERROR("Setting punched flag not allowed\n");
 		return -DER_INVAL;
 	}
+
+	if (attr & VOS_OI_REMOVED) {
+		D_ERROR("Setting removed flag not allowed\n");
+		return -DER_INVAL;
+	}
+
 	D_DEBUG(DB_IO, "Set attributes "DF_UOID", epoch "DF_U64", attributes "
 		 DF_X64"\n", DP_UOID(oid), epoch, attr);
 
@@ -1407,6 +1426,12 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_ERROR("Reset of punched flag not allowed\n");
 		return -DER_INVAL;
 	}
+
+	if (attr & VOS_OI_REMOVED) {
+		D_ERROR("Reset of removed flag not allowed\n");
+		return -DER_INVAL;
+	}
+
 	D_DEBUG(DB_IO, "Clear attributes "DF_UOID", epoch "DF_U64
 		 ", attributes "DF_X64"\n", DP_UOID(oid), epoch, attr);
 
@@ -1415,7 +1440,7 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 int
 vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t *attr)
+		struct dtx_handle *dth, uint64_t *attr)
 {
 	struct vos_object *obj;
 	int		   rc = 0;
@@ -1428,8 +1453,10 @@ vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return -DER_INVAL;
 	}
 
+	vos_dth_set(dth);
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
 			  DAOS_INTENT_DEFAULT, &obj);
+	vos_dth_set(NULL);
 	if (rc != 0)
 		return rc;
 

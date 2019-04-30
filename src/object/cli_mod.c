@@ -40,13 +40,16 @@ bool	srv_io_dispatch = true;
 int
 dc_obj_init(void)
 {
-	int	 rc;
+	uint32_t	mode = DIM_DTX_FULL_ENABLED;
+	int		rc;
 
-	d_getenv_bool("DAOS_IO_SRV_DISPATCH", &srv_io_dispatch);
-	if (srv_io_dispatch)
-		D_DEBUG(DB_IO, "Server IO dispatch enabled.\n");
-	else
+	d_getenv_int("DAOS_IO_MODE", &mode);
+	if (mode == DIM_CLIENT_DISPATCH) {
+		srv_io_dispatch = false;
 		D_DEBUG(DB_IO, "Server IO dispatch disabled.\n");
+	} else {
+		D_DEBUG(DB_IO, "Server IO dispatch enabled.\n");
+	}
 
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
 				NULL, DAOS_OBJ_MODULE);

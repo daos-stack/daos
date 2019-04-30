@@ -15,7 +15,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  */
 /**
  * In-memory LRU cache for DAOS
@@ -169,6 +169,12 @@ static inline bool
 daos_lru_ref_evicted(struct daos_llink *llink)
 {
 	return llink->ll_evicted;
+}
+
+static inline void
+daos_lru_ref_add(struct daos_llink *llink)
+{
+	llink->ll_ref++;
 }
 
 #endif

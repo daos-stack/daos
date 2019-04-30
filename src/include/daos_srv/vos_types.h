@@ -26,7 +26,7 @@
 
 #include <daos_types.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/dtx_srv.h>
+#include <daos/dtx.h>
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -180,7 +180,7 @@ typedef struct {
 		/** Returned epoch. It is ignored for container iteration. */
 		daos_epoch_t			ie_epoch;
 		/** Return the DTX identifier. */
-		struct daos_tx_id		ie_xid;
+		struct dtx_id			ie_xid;
 	};
 	union {
 		/** Returned earliest update epoch for a key */
