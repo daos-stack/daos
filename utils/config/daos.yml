@@ -24,7 +24,7 @@ name: daos
 # default: 10000
 #port: 10001
 
-# Hostlist 
+# Hostlist
 # comma separated list of addresses <ipv4addr/hostname:port>
 # default: ['localhost:10001']
 #hostlist: ['localhost:10001']
