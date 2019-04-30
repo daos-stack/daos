@@ -15,7 +15,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016 Intel Corporation.
  */
 /**
  * In-memory LRU cache for DAOS
