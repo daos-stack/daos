@@ -522,8 +522,10 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *sg_idx,
 	unsigned char			*ldata[k];
 	int				 i, lcnt = 0;
 	int				 rc = 0;
-
-	for (i = 0; i < k; i++)
+	
+	if (sgl->sg_iovs[*sg_idx] == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+	for (i = 0; i < k; i++) {
 		if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off >= len) {
 			unsigned char *from =
 				(unsigned char *)sgl->sg_iovs[*sg_idx].iov_buf;
@@ -558,9 +560,13 @@ obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *sg_idx,
 				} else
 					*sg_off += cp_amt;
 				cp_cnt += cp_amt;
+				if ( cp_amt < len &&
+						sgl->sg_iovs[*sg_idx] == NULL)
+					D_GOTO(out, rc = -DER_INVAL);
 			}
 			data[i] = ldata[lcnt++];
 		}
+	}
 
 	ec_encode_data(len, k, p, codec->ec_gftbls, data,
 		       &parity->p_bufs[p_idx]);
