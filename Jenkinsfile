@@ -775,7 +775,7 @@ pipeline {
                                                    sleep 1
                                                    let x=\\\$x+1
                                                done"''',
-                              junit_files: 'test_results/results.xml, test_results/*.xml'
+                              junit_files: 'test_results/*.xml'
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -800,6 +800,7 @@ pipeline {
                         */
                         always {
                             archiveArtifacts artifacts: 'run_test.sh/**'
+			    junit 'test_results/*.xml'
                         }
                     }
                 }
