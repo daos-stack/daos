@@ -59,11 +59,11 @@ func (m *mockUpdateStorageServer) Send(resp *pb.UpdateStorageResp) error {
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass ScmClass, scmDevs []string, scmSize int,
-	bdevClass BdevClass, bdevDevs []string) *configuration {
+	bdevClass BdevClass, bdevDevs []string, existsRet bool) *configuration {
 
 	c := newDefaultConfiguration(
 		&mockExt{
-			nil, "", false, mountRet, unmountRet, mkdirRet,
+			nil, "", existsRet, mountRet, unmountRet, mkdirRet,
 			removeRet, []string{}})
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount
@@ -209,6 +209,7 @@ func TestScanStorage(t *testing.T) {
 
 func TestFormatStorage(t *testing.T) {
 	tests := []struct {
+		superblockExists bool
 		mountRet         error
 		unmountRet       error
 		mkdirRet         error
@@ -219,7 +220,6 @@ func TestFormatStorage(t *testing.T) {
 		sSize            int
 		bClass           BdevClass
 		bDevs            []string
-		serverFormatted  bool
 		expNvmeFormatted bool
 		expScmFormatted  bool
 		mountRets        []*pb.ScmMountResult
@@ -233,6 +233,21 @@ func TestFormatStorage(t *testing.T) {
 			sClass:          scmRAM,
 			sSize:           6,
 			expScmFormatted: true,
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  ": " + msgBdevClassNotSupported,
+					},
+				},
+			},
+			mountRets: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State:    new(pb.ResponseState),
+				},
+			},
 		},
 		{
 			desc:            "dcpm success",
@@ -240,6 +255,21 @@ func TestFormatStorage(t *testing.T) {
 			sClass:          scmDCPM,
 			sDevs:           []string{"/dev/pmem1"},
 			expScmFormatted: true,
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  ": " + msgBdevClassNotSupported,
+					},
+				},
+			},
+			mountRets: []*pb.ScmMountResult{
+				{
+					Mntpoint: "/mnt/daos",
+					State:    new(pb.ResponseState),
+				},
+			},
 		},
 		{
 			desc:             "nvme and dcpm success",
@@ -247,8 +277,8 @@ func TestFormatStorage(t *testing.T) {
 			sClass:           scmDCPM,
 			sDevs:            []string{"/dev/pmem1"},
 			bClass:           bdNVMe,
-			expScmFormatted:  true,
 			bDevs:            []string{"0000:81:00.0"},
+			expScmFormatted:  true,
 			expNvmeFormatted: true,
 			ctrlrRets: []*pb.NvmeControllerResult{
 				{
@@ -270,8 +300,8 @@ func TestFormatStorage(t *testing.T) {
 			sDevs:            []string{"/dev/pmem1"}, // ignored if SCM class is ram
 			sSize:            6,
 			bClass:           bdNVMe,
-			expScmFormatted:  true,
 			bDevs:            []string{"0000:81:00.0"},
+			expScmFormatted:  true,
 			expNvmeFormatted: true,
 			ctrlrRets: []*pb.NvmeControllerResult{
 				{
@@ -287,15 +317,15 @@ func TestFormatStorage(t *testing.T) {
 			},
 		},
 		{
-			desc:             "already formatted",
-			serverFormatted:  true,
+			desc: "already formatted",
+			// if superblock exists should set storage formatted
+			superblockExists: true,
 			sMount:           "/mnt/daos",
 			sClass:           scmRAM,
-			sDevs:            []string{"/dev/pmem1"}, // ignored if SCM class is ram
 			sSize:            6,
 			bClass:           bdNVMe,
-			expScmFormatted:  true,
 			bDevs:            []string{"0000:81:00.0"},
+			expScmFormatted:  true,
 			expNvmeFormatted: true,
 			ctrlrRets: []*pb.NvmeControllerResult{
 				{
@@ -324,15 +354,12 @@ func TestFormatStorage(t *testing.T) {
 		config := newMockStorageConfig(
 			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
 			tt.sMount, tt.sClass, tt.sDevs, tt.sSize,
-			tt.bClass, tt.bDevs)
+			tt.bClass, tt.bDevs, tt.superblockExists)
 
 		config.FormatOverride = false
 
 		cs := mockControlService(config)
 		cs.Setup() // init and increment WaitGroup countera
-
-		// superblock written (server already formatted)
-		cs.config.Servers[srvIdx].formatted = tt.serverFormatted
 
 		mock := &mockFormatStorageServer{}
 		mockWg := new(sync.WaitGroup)
@@ -348,8 +375,9 @@ func TestFormatStorage(t *testing.T) {
 			mockWg.Done()
 		}()
 
-		if !tt.serverFormatted && tt.expNvmeFormatted && tt.expScmFormatted {
-			// conditions met for storage format to succeed
+		if !tt.superblockExists && tt.expNvmeFormatted && tt.expScmFormatted {
+			// conditions met for storage format to succeed, expect
+			// wg.Done() to be called
 			cs.config.Servers[srvIdx].storWaitGroup.Wait()
 		}
 		mockWg.Wait() // wait for test goroutines to complete
@@ -358,40 +386,36 @@ func TestFormatStorage(t *testing.T) {
 			t, len(mock.Results), 1,
 			"unexpected number of responses sent, "+tt.desc)
 
-		if len(tt.ctrlrRets) > 0 {
-			for i, result := range mock.Results[0].Crets {
-				expected := tt.ctrlrRets[i]
-				AssertEqual(
-					t, result.State.Error,
-					expected.State.Error,
-					"unexpected result error message, "+tt.desc)
-				AssertEqual(
-					t, result.State.Status,
-					expected.State.Status,
-					"unexpected response status, "+tt.desc)
-				AssertEqual(
-					t, result.Pciaddr,
-					expected.Pciaddr,
-					"unexpected pciaddr, "+tt.desc)
-			}
+		for i, result := range mock.Results[0].Crets {
+			expected := tt.ctrlrRets[i]
+			AssertEqual(
+				t, result.State.Error,
+				expected.State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status,
+				expected.State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Pciaddr,
+				expected.Pciaddr,
+				"unexpected pciaddr, "+tt.desc)
 		}
 
-		if len(tt.mountRets) > 0 {
-			for i, result := range mock.Results[0].Mrets {
-				expected := tt.mountRets[i]
-				AssertEqual(
-					t, result.State.Error,
-					expected.State.Error,
-					"unexpected result error message, "+tt.desc)
-				AssertEqual(
-					t, result.State.Status,
-					expected.State.Status,
-					"unexpected response status, "+tt.desc)
-				AssertEqual(
-					t, result.Mntpoint,
-					expected.Mntpoint,
-					"unexpected mntpoint, "+tt.desc)
-			}
+		for i, result := range mock.Results[0].Mrets {
+			expected := tt.mountRets[i]
+			AssertEqual(
+				t, result.State.Error,
+				expected.State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status,
+				expected.State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Mntpoint,
+				expected.Mntpoint,
+				"unexpected mntpoint, "+tt.desc)
 		}
 
 		AssertEqual(t, cs.nvme.formatted, tt.expNvmeFormatted, tt.desc)

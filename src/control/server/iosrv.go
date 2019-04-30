@@ -90,8 +90,9 @@ func formatIosrv(
 	}
 	op += " server " + srv.ScmMount
 
-	if _, err := os.Stat(iosrvSuperPath(srv.ScmMount)); err == nil {
-		srv.formatted = true
+	if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+		return errors.Wrap(err, op)
+	} else if ok {
 		log.Debugf("server %d has already been formatted\n", i)
 
 		if reformat {
@@ -99,8 +100,6 @@ func formatIosrv(
 		}
 
 		return nil
-	} else if !os.IsNotExist(err) {
-		return errors.Wrap(err, op)
 	}
 
 	if config.FormatOverride {

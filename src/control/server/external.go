@@ -53,6 +53,7 @@ type External interface {
 	mkdir(string) error
 	remove(string) error
 	getHistory() []string
+	exists(string) (bool, error)
 }
 
 type ext struct {
@@ -165,4 +166,14 @@ func (e *ext) remove(path string) error {
 		return errors.WithMessage(err, "remove")
 	}
 	return nil
+}
+
+func (e *ext) exists(path string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	} else if !os.IsNotExist(err) {
+		return false, errors.Wrap(err, "os stat")
+	}
+
+	return false, nil
 }

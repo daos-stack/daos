@@ -65,23 +65,32 @@ func (c *controlService) ScanStorage(
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and releases wait group if successful.
-func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) {
+func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 	srv := c.config.Servers[i]
+	serverFormatted := false
 
-	if srv.formatted {
+	if ok, err := c.config.ext.exists(
+		iosrvSuperPath(srv.ScmMount)); err != nil {
+
+		return errors.Wrap(err, "locating superblock")
+	} else if ok {
 		// server already formatted, populate response appropriately
 		c.nvme.formatted = true
 		c.scm.formatted = true
+		serverFormatted = true
+		log.Debugf("FormatStorage: server %d already formatted\n", i)
 	}
 
 	c.nvme.Format(i, resp)
 	c.scm.Format(i, resp)
 
-	if !srv.formatted && c.nvme.formatted && c.scm.formatted {
+	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
 		// storage subsystem format successful, signal main thread
 		srv.storWaitGroup.Done()
-		log.Debugf("storageformat successful on server %d\n", i)
+		log.Debugf("storage format successful on server %d\n", i)
 	}
+
+	return nil
 }
 
 // Format delegates to Storage implementation's Format methods to prepare
@@ -105,9 +114,12 @@ func (c *controlService) FormatStorage(
 	}
 
 	for i := range c.config.Servers {
-		c.doFormat(i, resp)
+		if err := c.doFormat(i, resp); err != nil {
+			return errors.WithMessage(err, "formatting storage")
+		}
 	}
 
+	log.Debugf("sending response: %#v\n", resp)
 	if err := stream.Send(resp); err != nil {
 		return errors.WithMessagef(err, "sending response (%+v)", resp)
 	}

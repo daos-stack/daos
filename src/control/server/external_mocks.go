@@ -99,6 +99,10 @@ func (m *mockExt) remove(path string) error {
 	return m.removeRet
 }
 
+func (m *mockExt) exists(string) (bool, error) {
+	return m.existsRet, nil
+}
+
 func newMockExt(
 	cmdRet error, getenvRet string, existsRet bool, mountRet error,
 	unmountRet error, mkdirRet error, removeRet error) External {

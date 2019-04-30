@@ -168,6 +168,7 @@ func (c *connList) FormatStorage() (ClientNvmeMap, ClientScmMap) {
 	cModules := make(ClientScmMap) // mapping of server address to SCM modules
 
 	for _, res := range cResults {
+		fmt.Printf("format result: %#v\n", res)
 		if res.Err != nil {
 			cCtrlrs[res.Address] = NvmeResult{Err: res.Err}
 			cModules[res.Address] = ScmResult{Err: res.Err}

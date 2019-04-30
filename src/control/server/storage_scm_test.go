@@ -303,7 +303,7 @@ func TestFormatScm(t *testing.T) {
 		config := newMockStorageConfig(
 			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
 			tt.mount, tt.class, tt.devs, tt.size,
-			bdNVMe, []string{})
+			bdNVMe, []string{}, false)
 		ss := newMockScmStorage(
 			nil, []DeviceDiscovery{}, false, config)
 		ss.formatted = tt.formatted
