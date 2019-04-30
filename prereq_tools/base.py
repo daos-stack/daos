@@ -498,13 +498,13 @@ class WebRetriever(object):
         """Downloads and extracts sources from a url into subdir"""
         basename = os.path.basename(self.url)
 
-        if os.path.exists(basename) and os.path.exists(subdir):
+        if os.path.exists(subdir):
             # assume that nothing has changed
             return
 
-        commands = ['rm -rf %s' % subdir]
-        if not os.path.exists(basename):
-            commands.append('curl -L -O %s' % self.url)
+        # Always removes the tar file to avoid using garbage
+        commands = ['rm -rf %s %s' % (subdir, basename),
+                    'curl -L -O %s' % self.url]
 
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
@@ -513,11 +513,15 @@ class WebRetriever(object):
             if self.__dry_run:
                 print 'Would unpack gziped tar file: %s' % basename
                 return
-            tfile = tarfile.open(basename, 'r:gz')
-            members = tfile.getnames()
-            prefix = os.path.commonprefix(members)
-            tfile.extractall()
-            if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
+            try:
+                tfile = tarfile.open(basename, 'r:gz')
+                members = tfile.getnames()
+                prefix = os.path.commonprefix(members)
+                tfile.extractall()
+                if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
+                    raise ExtractionError(subdir)
+            except (IOError, tarfile.TarError):
+                print traceback.format_exc()
                 raise ExtractionError(subdir)
         else:
             raise UnsupportedCompression(subdir)

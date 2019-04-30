@@ -113,7 +113,7 @@ pipeline {
     GIT_PREVIOUS_COMMIT = "${env.GIT_PREVIOUS_COMMIT ? env.GIT_PREVIOUS_COMMIT : params.PGIT_PREVIOUS_COMMIT}"
     GIT_PREVIOUS_SUCCESSFUL_COMMIT = "${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT ? env.GIT_PREVIOUS_SUCCESSFUL_COMMIT : params.PGIT_PREVIOUS_SUCCESSFUL_COMMIT}"
 
-    FUSE_COMMIT = '3e2fcf3a630e575bc420df254525834504dc01b7'
+    FUSE_COMMIT = '7bf25b6987d84c816aebd5325b95cfa0d311b1e6'
     HWLOC_COMMIT = 'refs/tags/hwloc-1.11.5'
     MERCURY_COMMIT = '674e7f2bd17b5d8b85606cd152dd1bc189899b0e'
     OFI_COMMIT = '8c33f9d63d536cc3781017dd25b7bb480ac96cb5'
@@ -178,8 +178,10 @@ pipeline {
                        directory: 'scons_local',
                        scm: [url: 'https://github.com/libfuse/libfuse.git',
                              branch: "${env.FUSE_COMMIT}",
+                             checkoutDir: '${WORKSPACE}/fuse',
                              cleanAfterCheckout: true],
                        no_install: true,  // No separate install step
+                       SRC_PREFIX: '${WORKSPACE}',
                        TARGET_PREFIX: '/testbin',
                        target_work: 'testbin'
             echo "fuse build succeeded"
