@@ -44,7 +44,7 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * so check that the lookup is relative to the root of the sub-tree,
 	 * and abort if not.
 	 */
-	if (parent->stat.st_ino == parent->ie_dfs->dffs_root) {
+	if (parent->stat.st_ino != parent->ie_dfs->dffs_root) {
 		DFUSE_TRA_ERROR(parent, "Called on non sub-tree root");
 		D_GOTO(err, rc = EIO);
 	}
