@@ -352,12 +352,6 @@ struct dfuse_request_api {
 	bool	(*on_result)(struct dfuse_request *req);
 };
 
-enum dfuse_request_state {
-	RS_INIT = 1,
-	RS_RESET,
-	RS_LIVE
-};
-
 /** The type of any handle stored in the request.
  *
  * If set to other than RHS_NONE then the GAH from the appropriate
@@ -393,12 +387,6 @@ struct dfuse_request {
 	 *  on_result
 	 */
 	int				rc;
-	/** Request state.
-	 *
-	 * Used to ensure REQUEST_INIT()/REQUEST_RESET() have been invoked
-	 * correctly.
-	 */
-	enum dfuse_request_state		ir_rs;
 
 	/** Request handle type */
 	enum dfuse_request_htype		ir_ht;
@@ -423,17 +411,12 @@ struct dfuse_request {
 #define DFUSE_REQUEST_INIT(REQUEST, FSH)		\
 	do {						\
 		(REQUEST)->fsh = FSH;			\
-		(REQUEST)->ir_rs = RS_INIT;		\
 		D_INIT_LIST_HEAD(&(REQUEST)->ir_list);	\
 	} while (0)
 
 /** Reset a request for re-use.  To be called before each use */
 #define DFUSE_REQUEST_RESET(REQUEST)				\
 	do {							\
-		D_ASSERT((REQUEST)->ir_rs == RS_INIT ||		\
-			(REQUEST)->ir_rs == RS_RESET ||		\
-			(REQUEST)->ir_rs == RS_LIVE);		\
-		(REQUEST)->ir_rs = RS_RESET;			\
 		(REQUEST)->ir_ht = RHS_NONE;			\
 		(REQUEST)->ir_inode = NULL;			\
 		(REQUEST)->rc = 0;				\
@@ -524,15 +507,6 @@ struct dfuse_wb {
 struct common_req {
 	d_list_t			list;
 	struct dfuse_request		request;
-};
-
-/** Callback structure for inode migrate RPC.
- *
- * Used so migrate callback function has access to the filesystem handle.
- */
-struct dfuse_inode_migrate {
-	struct dfuse_inode_entry *im_ie;
-	struct dfuse_projection_info *im_fsh;
 };
 
 /** Entry request type.
