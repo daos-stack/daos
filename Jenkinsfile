@@ -775,7 +775,7 @@ pipeline {
                                                    sleep 1
                                                    let x=\\\$x+1
                                                done"''',
-                              junit_files: 'test_results/results.xml, test_results/*_results.xml' 
+                              junit_files: 'test_results/results.xml, test_results/*_results.xml'
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
