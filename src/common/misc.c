@@ -926,9 +926,8 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 			break;
 		case DAOS_PROP_PO_OWNER:
 		case DAOS_PROP_PO_OWNER_GROUP:
-			entry_dup->dpe_str =
-					strndup(entry->dpe_str,
-						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_dup->dpe_str == NULL) {
 				D_ERROR("failed to dup ownership info.\n");
 				daos_prop_free(prop_dup);
@@ -974,11 +973,11 @@ int
 daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 {
 	struct daos_prop_entry	*entry_req, *entry_reply;
-	struct daos_prop_entry	*entries_alloc = NULL;
-	d_string_t		 label_alloc = NULL;
-	void			*acl_alloc = NULL;
-	d_string_t		 owner_alloc = NULL;
-	d_string_t		 group_alloc = NULL;
+	bool			 entries_alloc = false;
+	bool			 label_alloc = false;
+	bool			 acl_alloc = false;
+	bool			 owner_alloc = false;
+	bool			 group_alloc = false;
 	struct daos_acl		*acl;
 	uint32_t		 type;
 	int			 i;
@@ -994,7 +993,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		D_ALLOC_ARRAY(prop_req->dpp_entries, prop_req->dpp_nr);
 		if (prop_req->dpp_entries == NULL)
 			return -DER_NOMEM;
-		entries_alloc = prop_req->dpp_entries;
+		entries_alloc = true;
 	}
 
 	for (i = 0; i < prop_req->dpp_nr; i++) {
@@ -1016,29 +1015,29 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 						     DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			label_alloc = entry_req->dpe_str;
+			label_alloc = true;
 		} else if (type == DAOS_PROP_PO_ACL) {
 			acl = entry_reply->dpe_val_ptr;
 			entry_req->dpe_val_ptr = daos_acl_dup(acl);
 			if (entry_req->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			acl_alloc = entry_req->dpe_val_ptr;
+			acl_alloc = true;
 		} else if (type == DAOS_PROP_CO_ACL) {
 			/* TODO: Implement container ACL */
 		} else if (type == DAOS_PROP_PO_OWNER) {
-			entry_req->dpe_str =
-					strndup(entry_reply->dpe_str,
-						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(entry_req->dpe_str,
+				  entry_reply->dpe_str,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			owner_alloc = entry_req->dpe_str;
+			owner_alloc = true;
 		} else if (type == DAOS_PROP_PO_OWNER_GROUP) {
-			entry_req->dpe_str =
-					strndup(entry_reply->dpe_str,
-						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(entry_req->dpe_str,
+				  entry_reply->dpe_str,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			group_alloc = entry_req->dpe_str;
+			group_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -1046,33 +1045,28 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 
 out:
 	if (rc) {
-		if (entries_alloc) {
-			D_FREE(entries_alloc);
-			prop_req->dpp_entries = NULL;
-		}
 		if (label_alloc) {
-			D_FREE(label_alloc);
 			entry_req = daos_prop_entry_get(prop_req,
 							DAOS_PROP_PO_LABEL);
-			entry_req->dpe_str = NULL;
+			D_FREE(entry_req->dpe_str);
 		}
 		if (acl_alloc) {
-			D_FREE(acl_alloc);
 			entry_req = daos_prop_entry_get(prop_req,
 							DAOS_PROP_PO_ACL);
-			entry_req->dpe_val_ptr = NULL;
+			D_FREE(entry_req->dpe_val_ptr);
 		}
 		if (owner_alloc) {
-			D_FREE(owner_alloc);
 			entry_req = daos_prop_entry_get(prop_req,
 							DAOS_PROP_PO_OWNER);
-			entry_req->dpe_str = NULL;
+			D_FREE(entry_req->dpe_str);
 		}
 		if (group_alloc) {
-			D_FREE(group_alloc);
 			entry_req = daos_prop_entry_get(prop_req,
 						DAOS_PROP_PO_OWNER_GROUP);
-			entry_req->dpe_str = NULL;
+			D_FREE(entry_req->dpe_str);
+		}
+		if (entries_alloc) {
+			D_FREE(prop_req->dpp_entries);
 		}
 	}
 	return rc;
