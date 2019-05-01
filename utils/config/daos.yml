@@ -1,8 +1,8 @@
 # DAOS client configuration file.
 #
 # Location of this configuration file is determined by first checking for the
-# path specified through the -o option of the daos_agent command line.
-# Otherwise, /etc/daos.yml is used.
+# path specified through the -o option of the daos_agent and DMG command line.
+# Otherwise, etc/daos.yml is used.
 #
 # Section describing the client configuration
 #
@@ -13,7 +13,7 @@
 # Name must match name specifed in the daos_server.yml file on the server.
 #
 # default: daos
-name: daos
+#name: daos
 
 # Management server access points
 # default: hostname of this node at port 10001 for local testing
@@ -38,7 +38,8 @@ name: daos
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent
-runtime_dir: /var/run/daos_agent
+#runtime_dir: /var/run/daos_agent
 
+# Full path and name of the DAOS agent logfile.
 # default: /tmp/daos_agent.log
-log_file: /tmp/daos_agent.log
+#log_file: /tmp/daos_agent.log
