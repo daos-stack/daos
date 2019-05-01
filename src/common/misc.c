@@ -536,11 +536,6 @@ daos_hhash_link_insert(struct d_hlink *hlink, int type)
 {
 	D_ASSERT(daos_ht.dht_hhash != NULL);
 
-	/* check if custom type fits in allocated bits */
-	D_ASSERTF(type < (1 << D_HTYPE_BITS),
-		  "Custom handle int (%d) does not fit D_HTYPE_BITS (%d)\n",
-		  type, D_HTYPE_BITS);
-
 	if (d_hhash_is_ptrtype(daos_ht.dht_hhash) &&
 	    d_hhash_key_isptr((uintptr_t)hlink))
 		type = D_HTYPE_PTR;
