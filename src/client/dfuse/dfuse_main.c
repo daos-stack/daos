@@ -111,6 +111,7 @@ main(int argc, char **argv)
 	daos_pool_info_t	pool_info;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
+	bool			cont_open = false;
 	dfs_t			*ddfs;
 	char			c;
 	int			ret = -DER_SUCCESS;
@@ -234,6 +235,7 @@ main(int argc, char **argv)
 			DFUSE_LOG_ERROR("Failed container open (%d)", rc);
 			D_GOTO(out_pool, 0);
 		}
+		cont_open = true;
 
 		rc = dfs_mount(dfuse_info->dfi_poh, coh, O_RDWR, &ddfs);
 		if (rc != -DER_SUCCESS) {
@@ -256,7 +258,9 @@ main(int argc, char **argv)
 	fuse_session_destroy(dfuse_info->dfi_session);
 
 out_cont:
-	daos_cont_close(coh, NULL);
+	if (cont_open) {
+		daos_cont_close(coh, NULL);
+	}
 out_pool:
 	daos_pool_disconnect(dfuse_info->dfi_poh, NULL);
 out:
