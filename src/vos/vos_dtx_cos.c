@@ -61,14 +61,17 @@ struct dtx_cos_rec_child {
 	/* Link into related dcr_{update,punch}_list. */
 	d_list_t		 dcrc_link;
 	/* The DTX identifier. */
-	struct daos_tx_id	 dcrc_dti;
+	struct dtx_id		 dcrc_dti;
+	/* Timestamp of handling the DTX on server. */
+	uint64_t		 dcrc_time;
 	/* Pointer to the dtx_cos_rec. */
 	struct dtx_cos_rec	*dcrc_ptr;
 };
 
 struct dtx_cos_rec_bundle {
 	struct vos_container	*cont;
-	struct daos_tx_id	*dti;
+	struct dtx_id		*dti;
+	uint64_t		 time;
 	bool			 punch;
 };
 
@@ -133,6 +136,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	}
 
 	dcrc->dcrc_dti = *rbund->dti;
+	dcrc->dcrc_time = rbund->time;
 	dcrc->dcrc_ptr = dcr;
 
 	d_list_add_tail(&dcrc->dcrc_committable,
@@ -212,6 +216,7 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		return -DER_NOMEM;
 
 	dcrc->dcrc_dti = *rbund->dti;
+	dcrc->dcrc_time = rbund->time;
 	dcrc->dcrc_ptr = dcr;
 
 	d_list_add_tail(&dcrc->dcrc_committable,
@@ -255,84 +260,103 @@ vos_dtx_cos_register(void)
 }
 
 int
-vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		 daos_key_t *dkey, uint32_t types, struct daos_tx_id **dtis)
+vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
+		 uint32_t types, int max, struct dtx_id **dtis)
 {
 	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
 	daos_iov_t			 kiov;
 	daos_iov_t			 riov;
-	struct daos_tx_id		*dti = NULL;
-	struct dtx_cos_rec		*dcr;
+	struct dtx_id			*dti = NULL;
+	struct dtx_cos_rec		*dcr = NULL;
+	struct dtx_cos_rec		*dcr2 = NULL;
 	struct dtx_cos_rec_child	*dcrc;
 	int				 count = 0;
 	int				 rc;
 	int				 i = 0;
 
-	if (dkey == NULL)
-		return 0;
-
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	D_ASSERT(dkey->iov_buf != NULL);
-	D_ASSERT(dkey->iov_len != 0);
-
 	key.oid = *oid;
-	key.dkey = d_hash_murmur64(dkey->iov_buf, dkey->iov_len,
-				   VOS_BTR_MUR_SEED);
+	key.dkey = dkey_hash;
 	daos_iov_set(&kiov, &key, sizeof(key));
 	daos_iov_set(&riov, NULL, 0);
 
 	rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
-	if (rc != 0)
-		return rc == -DER_NONEXIST ? 0 : rc;
+	if (rc == 0) {
+		dcr = (struct dtx_cos_rec *)riov.iov_buf;
+		if (types & DCLT_PUNCH)
+			count += dcr->dcr_punch_count;
+		if (types & DCLT_UPDATE)
+			count += dcr->dcr_update_count;
+	} else if (rc == -DER_NONEXIST) {
+		/* The DTX with zero hash for punch is potential conflict
+		 * with any other subsequent DTX against the same object.
+		 * So let's list them.
+		 */
+		if (dkey_hash == 0 || !(types & DCLT_PUNCH))
+			goto out;
 
-	dcr = (struct dtx_cos_rec *)riov.iov_buf;
-	if (types & DCLT_PUNCH)
-		count += dcr->dcr_punch_count;
-	if (types & DCLT_UPDATE)
-		count += dcr->dcr_update_count;
+		key.dkey = 0;
+		daos_iov_set(&riov, NULL, 0);
+
+		rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
+		if (rc != 0)
+			D_GOTO(out, count = (rc == -DER_NONEXIST ? 0 : rc));
+
+		dcr2 = (struct dtx_cos_rec *)riov.iov_buf;
+		count += dcr2->dcr_punch_count;
+	} else {
+		D_GOTO(out, count = rc);
+	}
 
 	if (count == 0)
-		return 0;
+		goto out;
 
 	/* There are too many shared DTXs to be committed, as to
 	 * cannot be taken via the normal UPDATE RPC. Return the
 	 * DTXs count directly without filling the DTX array.
 	 */
-	if (count > DTX_THRESHOLD_COUNT) {
+	if (count > max) {
 		*dtis = NULL;
-		return count;
+		goto out;
 	}
 
 	D_ALLOC_ARRAY(dti, count);
 	if (dti == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, count = -DER_NOMEM);
 
 	if (types & DCLT_PUNCH) {
-		d_list_for_each_entry(dcrc, &dcr->dcr_punch_list,
-				      dcrc_link) {
-			dti[i++] = dcrc->dcrc_dti;
+		if (dcr != NULL) {
+			d_list_for_each_entry(dcrc, &dcr->dcr_punch_list,
+					      dcrc_link)
+				dti[i++] = dcrc->dcrc_dti;
+		}
+
+		if (dcr2 != NULL) {
+			d_list_for_each_entry(dcrc, &dcr2->dcr_punch_list,
+					      dcrc_link)
+				dti[i++] = dcrc->dcrc_dti;
 		}
 	}
 
-	if (types & DCLT_UPDATE) {
-		d_list_for_each_entry(dcrc, &dcr->dcr_update_list,
-				      dcrc_link) {
+	if (types & DCLT_UPDATE && dcr != NULL) {
+		d_list_for_each_entry(dcrc, &dcr->dcr_update_list, dcrc_link)
 			dti[i++] = dcrc->dcrc_dti;
-		}
 	}
 
 	D_ASSERT(i == count);
 
 	*dtis = dti;
+
+out:
 	return count;
 }
 
 int
-vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		struct daos_tx_id *dti, uint64_t dkey, bool punch)
+vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
+		uint64_t dkey_hash, uint64_t time, bool punch)
 {
 	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
@@ -341,78 +365,33 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
 	daos_iov_t			 riov;
 	int				 rc;
 
-	D_ASSERT(dkey != 0);
-
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
 	key.oid = *oid;
-	key.dkey = dkey;
+	key.dkey = dkey_hash;
 	daos_iov_set(&kiov, &key, sizeof(key));
 
 	rbund.cont = cont;
 	rbund.dti = dti;
+	rbund.time = time;
 	rbund.punch = punch;
 	daos_iov_set(&riov, &rbund, sizeof(rbund));
 
 	rc = dbtree_upsert(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
+	D_DEBUG(DB_TRACE, "Insert DTX "DF_DTI" to CoS cache, key %llu, "
+		"intent %s: rc = %d\n",
+		DP_DTI(dti), (unsigned long long)dkey_hash,
+		punch ? "Punch" : "Update", rc);
+
 	return rc;
-}
-
-void
-vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct daos_tx_id *xid, uint64_t dkey, bool punch)
-{
-	struct dtx_cos_key		 key;
-	daos_iov_t			 kiov;
-	daos_iov_t			 riov;
-	struct dtx_cos_rec		*dcr;
-	struct dtx_cos_rec_child	*dcrc;
-	d_list_t			*head;
-	int				 rc;
-
-	D_ASSERT(dkey != 0);
-
-	key.oid = *oid;
-	key.dkey = dkey;
-	daos_iov_set(&kiov, &key, sizeof(key));
-	daos_iov_set(&riov, NULL, 0);
-
-	rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
-	if (rc != 0)
-		return;
-
-	dcr = (struct dtx_cos_rec *)riov.iov_buf;
-	if (punch)
-		head = &dcr->dcr_punch_list;
-	else
-		head = &dcr->dcr_update_list;
-
-	d_list_for_each_entry(dcrc, head, dcrc_link) {
-		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
-			continue;
-
-		d_list_del(&dcrc->dcrc_committable);
-		d_list_del(&dcrc->dcrc_link);
-		D_FREE_PTR(dcrc);
-
-		cont->vc_dtx_committable_count--;
-		if (punch)
-			dcr->dcr_punch_count--;
-		else
-			dcr->dcr_update_count--;
-		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0)
-			dbtree_delete(cont->vc_dtx_cos_hdl, &kiov, NULL);
-
-		return;
-	}
 }
 
 int
 vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		   struct daos_tx_id *xid, uint64_t dkey, bool punch)
+		   struct dtx_id *xid, uint64_t dkey_hash, bool punch)
 {
 	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
@@ -423,14 +402,11 @@ vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
 	d_list_t			*head;
 	int				 rc;
 
-	if (dkey == 0)
-		return -DER_NONEXIST;
-
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
 	key.oid = *oid;
-	key.dkey = dkey;
+	key.dkey = dkey_hash;
 	daos_iov_set(&kiov, &key, sizeof(key));
 	daos_iov_set(&riov, NULL, 0);
 
@@ -453,9 +429,9 @@ vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
 }
 
 int
-vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes)
+vos_dtx_fetch_committable(daos_handle_t coh, int max, struct dtx_entry **dtes)
 {
-	struct daos_tx_entry		*dte = NULL;
+	struct dtx_entry		*dte = NULL;
 	struct dtx_cos_rec_child	*dcrc;
 	struct vos_container		*cont;
 	int				 count;
@@ -464,13 +440,15 @@ vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (cont->vc_dtx_committable_count > DTX_THRESHOLD_COUNT)
-		count = DTX_THRESHOLD_COUNT;
+	if (cont->vc_dtx_committable_count > max)
+		count = max;
 	else
 		count = cont->vc_dtx_committable_count;
 
-	if (count == 0)
+	if (count == 0) {
+		*dtes = NULL;
 		return 0;
+	}
 
 	D_ALLOC_ARRAY(dte, count);
 	if (dte == NULL)
@@ -487,4 +465,70 @@ vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes)
 
 	*dtes = dte;
 	return count;
+}
+
+void
+vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
+		struct dtx_id *xid, uint64_t dkey_hash, bool punch)
+{
+	struct dtx_cos_key		 key;
+	daos_iov_t			 kiov;
+	daos_iov_t			 riov;
+	struct dtx_cos_rec		*dcr;
+	struct dtx_cos_rec_child	*dcrc;
+	d_list_t			*head;
+	int				 rc;
+
+	key.oid = *oid;
+	key.dkey = dkey_hash;
+	daos_iov_set(&kiov, &key, sizeof(key));
+	daos_iov_set(&riov, NULL, 0);
+
+	rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
+	if (rc != 0)
+		return;
+
+	dcr = (struct dtx_cos_rec *)riov.iov_buf;
+	if (punch)
+		head = &dcr->dcr_punch_list;
+	else
+		head = &dcr->dcr_update_list;
+
+	d_list_for_each_entry(dcrc, head, dcrc_link) {
+		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
+			continue;
+
+		D_DEBUG(DB_TRACE, "Remove DTX "DF_DTI" from CoS cache, "
+			"key %llu, intent %s\n",
+			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash,
+			punch ? "Punch" : "Update");
+
+		d_list_del(&dcrc->dcrc_committable);
+		d_list_del(&dcrc->dcrc_link);
+		D_FREE_PTR(dcrc);
+
+		cont->vc_dtx_committable_count--;
+		if (punch)
+			dcr->dcr_punch_count--;
+		else
+			dcr->dcr_update_count--;
+
+		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0)
+			dbtree_delete(cont->vc_dtx_cos_hdl, &kiov, NULL);
+
+		return;
+	}
+}
+
+uint64_t
+vos_dtx_cos_oldest(struct vos_container *cont)
+{
+	struct dtx_cos_rec_child	*dcrc;
+
+	if (d_list_empty(&cont->vc_dtx_committable))
+		return 0;
+
+	dcrc = d_list_entry(cont->vc_dtx_committable.next,
+			    struct dtx_cos_rec_child, dcrc_committable);
+	return dcrc->dcrc_time;
 }

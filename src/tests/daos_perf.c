@@ -109,7 +109,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh);
+					      &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
@@ -139,7 +139,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
 		else
 			rc = vos_fetch_end(ioh, rc);
 	}

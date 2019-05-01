@@ -127,8 +127,6 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
-	/** The time in second when commit the DTXs for the last time. */
-	uint64_t		vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -162,7 +160,7 @@ struct vos_imem_strts {
 struct vos_imem_strts		*vsa_imems_inst;
 struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
-struct daos_tx_handle		*vsa_dth;
+struct dtx_handle		*vsa_dth;
 bool vsa_nvme_init;
 
 static inline struct bio_xs_context *
@@ -202,7 +200,7 @@ struct vos_object {
 	/** epoch when the object(cache) is initialized */
 	daos_epoch_t			obj_epoch;
 	/** cached vos_obj_df::vo_incarnation, for revalidation. */
-	uint64_t			obj_incarnation;
+	uint32_t			obj_incarnation;
 	/** Persistent memory address of the object */
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
@@ -233,7 +231,7 @@ struct vos_tls {
 	 *	 processing. Otherwise, the vtl_dth may be changed by other
 	 *	 ULTs. The user needs to guarantee that by itself.
 	 */
-	struct daos_tx_handle		*vtl_dth;
+	struct dtx_handle		*vtl_dth;
 };
 
 static inline struct vos_tls *
@@ -277,7 +275,7 @@ vos_txd_get(void)
 #endif
 }
 
-static inline struct daos_tx_handle *
+static inline struct dtx_handle *
 vos_dth_get(void)
 {
 #ifdef VOS_STANDALONE
@@ -288,7 +286,7 @@ vos_dth_get(void)
 }
 
 static inline void
-vos_dth_set(struct daos_tx_handle *dth)
+vos_dth_set(struct dtx_handle *dth)
 {
 #ifdef VOS_STANDALONE
 	D_ASSERT(dth == NULL || vsa_dth == NULL);
@@ -521,16 +519,17 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t flags);
 
 /**
- * Degister the record from the DTX entry.
+ * Deregister the record from the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param entry		[IN]	The DTX entry address (offset).
- * \param record	[IN]	Address (offset) of the record to be degistered.
+ * \param record	[IN]	Address (offset) of the record to be
+ *				deregistered.
  * \param type		[IN]	The record type, vos_dtx_record_types.
  */
 void
-vos_dtx_degister_record(struct umem_instance *umm,
-			umem_off_t entry, umem_off_t record, uint32_t type);
+vos_dtx_deregister_record(struct umem_instance *umm, umem_off_t entry,
+			  umem_off_t record, uint32_t type);
 
 /**
  * Mark the DTX as prepared locally.
@@ -540,14 +539,14 @@ vos_dtx_degister_record(struct umem_instance *umm,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct daos_tx_handle *dth);
+vos_dtx_prepared(struct dtx_handle *dth);
 
 void
-vos_dtx_commit_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
 
 int
-vos_dtx_abort_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+vos_dtx_abort_internal(struct vos_container *cont, struct dtx_id *dtis,
 		       int count, bool force);
 
 /**
@@ -561,15 +560,26 @@ vos_dtx_cos_register(void);
 /**
  * Remove the DTX from the CoS cache.
  *
- * \param cont	[IN]	Pointer to the container.
- * \param oid	[IN]	Pointer to the object ID.
- * \param xid	[IN]	Pointer to the DTX identifier.
- * \param dkey	[IN]	The hashed dkey.
- * \param punch	[IN]	For punch DTX or not.
+ * \param cont		[IN]	Pointer to the container.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch DTX or not.
  */
 void
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct daos_tx_id *xid, uint64_t dkey, bool punch);
+		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+
+/**
+ * Query the oldest DTX's timestamp in the CoS cache.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ *
+ * \return		The oldest DTX's timestamp in the CoS cache.
+ *			Zero if the CoS cache is empty.
+ */
+uint64_t
+vos_dtx_cos_oldest(struct vos_container *cont);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
