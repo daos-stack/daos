@@ -366,6 +366,8 @@ class DaosPool(object):
 
         self.pool_info = PoolInfo()
         func = self.context.get_function('query-pool')
+        #Query space and Rebuild info
+        self.pool_info.pi_bits = ctypes.c_ulong(-1)
 
         if cb_func is None:
             ret = func(self.handle, None, ctypes.byref(self.pool_info),
@@ -548,7 +550,7 @@ class DaosPool(object):
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
         buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                           for i in xrange(attr_count)])
+                         for i in xrange(attr_count)])
 
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
@@ -1337,7 +1339,7 @@ class DaosContainer(object):
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
             ret = func(self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
-                      ctypes.byref(self.info), None)
+                       ctypes.byref(self.info), None)
             if ret != 0:
                 raise DaosApiError("Container open returned non-zero. RC: {0}"
                                    .format(ret))
@@ -1780,7 +1782,7 @@ class DaosContainer(object):
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
         buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                       for i in xrange(attr_count)])
+                         for i in xrange(attr_count)])
 
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)

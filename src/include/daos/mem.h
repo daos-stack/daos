@@ -40,7 +40,6 @@
  *
  * umem		Unified memory abstraction
  * ummid	Unified Memory ID
- * tmmid	Typedef ummid.
  */
 
 #include <libpmemobj.h>
@@ -97,23 +96,11 @@ typedef PMEMoid			umem_id_t;
 #define UMMID_NULL		OID_NULL
 #define UMMID_IS_NULL(ummid)	OID_IS_NULL(ummid)
 
-/** typedef memory ID */
-#define TMMID(type)		TOID(type)
-#define TMMID_DECLARE(t, i)	TOID_DECLARE(t, i)
-
-#define TMMID_NULL(t)		TOID_NULL(t)
-#define TMMID_IS_NULL(tmmid)	UMMID_IS_NULL((tmmid).oid)
-
-#define TMMID_TYPE_NUM(t)	TOID_TYPE_NUM(t)
-
 int umem_tx_errno(int err);
 
-/* print format of ummid and tmmid */
+/* print format of ummid */
 #define UMMID_PF		DF_X64
 #define UMMID_P(id)		((id).off)
-
-#define TMMID_PF		DF_X64
-#define TMMID_P(id)		((id).oid.off)
 
 typedef enum {
 	/** volatile memory */
@@ -425,32 +412,6 @@ umem_has_tx(struct umem_instance *umm)
 #define umem_alloc_off_noflush(umm, size)				\
 	umem_alloc_off_verb(umm, POBJ_FLAG_NO_FLUSH, size)
 
-
-#define umem_alloc_typed_verb(umm, type, flags, size)			\
-({									\
-	umem_id_t   __ummid;						\
-	TMMID(type) __tmmid;						\
-									\
-	__ummid = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
-					   TMMID_TYPE_NUM(type));	\
-	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF" size %d\n",	\
-		(umm)->umm_name, UMMID_P(__ummid), (int)size);		\
-	__tmmid.oid = __ummid;						\
-	__tmmid;							\
-})
-
-#define umem_alloc_typed(umm, type, size)				\
-	umem_alloc_typed_verb(umm, type, 0, size)
-
-#define umem_zalloc_typed(umm, type, size)				\
-	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, size)
-
-#define umem_new_typed(umm, type)					\
-	umem_alloc_typed_verb(umm, type, 0, sizeof(type))
-
-#define umem_znew_typed(umm, type)					\
-	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, sizeof(type))
-
 #define umem_free(umm, ummid)						\
 ({									\
 	D_DEBUG(DB_MEM, "Free %s mmid "UMMID_PF"\n",			\
@@ -461,9 +422,6 @@ umem_has_tx(struct umem_instance *umm)
 
 #define umem_free_off(umm, umoff)					\
 	umem_free(umm, umem_off2id(umm, umoff))
-
-#define umem_free_typed(umm, tmmid)					\
-	umem_free(umm, (tmmid).oid)
 
 static inline int
 umem_tx_add_range(struct umem_instance *umm, umem_id_t ummid, uint64_t offset,
@@ -486,15 +444,6 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 
 #define umem_tx_add(umm, ummid, size)					\
 	umem_tx_add_range(umm, ummid, 0, size)
-
-#define	umem_tx_add_range_typed(umm, tmmid, off, size)			\
-	umem_tx_add_range(umm, (tmmid).oid, off, size)
-
-#define	umem_tx_add_typed(umm, tmmid, size)				\
-	umem_tx_add_range(umm, (tmmid).oid, 0, size)
-
-#define umem_tx_add_mmid_typed(umm, tmmid)				\
-	umem_tx_add_typed(umm, tmmid, sizeof(*(tmmid)._type))
 
 #define umem_tx_add_off(umm, off, size)					\
 	umem_tx_add(umm, umem_off2id(umm, off), size)
@@ -526,26 +475,11 @@ umem_tx_abort(struct umem_instance *umm, int err)
 		return 0;
 }
 
-#define umem_id2ptr_typed(umm, tmmid)					\
-((__typeof__(*(tmmid)._type) *)((umm)->umm_ops->mo_addr(umm, (tmmid).oid)))
-
 static inline bool
 umem_id_equal(struct umem_instance *umm, umem_id_t ummid_1, umem_id_t ummid_2)
 {
 	return umm->umm_ops->mo_equal(umm, ummid_1, ummid_2);
 }
-#define umem_id_equal_typed(umm, tmmid_1, tmmid_2)			\
-	umem_id_equal(umm, (tmmid_1).oid, (tmmid_2).oid)
-
-#define umem_id_u2t(ummid, type)					\
-({									\
-	TMMID(type)	__tmmid;					\
-									\
-	__tmmid.oid = ummid;						\
-	__tmmid;							\
-})
-
-#define umem_id_t2u(tmmid)	((tmmid).oid)
 
 static inline umem_id_t
 umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
