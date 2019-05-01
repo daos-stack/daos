@@ -33,7 +33,7 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_info *dfuse_info = fs_handle->dfuse_info;
-	struct dfuse_inode_entry	*inode = NULL;
+	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_dfs		*dfs = NULL;
 	uuid_t				co_uuid;
 	dfs_t				*ddfs;
@@ -44,7 +44,7 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * so check that the lookup is relative to the root of the sub-tree,
 	 * and abort if not.
 	 */
-	if (parent->stat.st_ino != parent->ie_dfs->dffs_root) {
+	if (parent->ie_stat.st_ino != parent->ie_dfs->dffs_root) {
 		DFUSE_TRA_ERROR(parent, "Called on non sub-tree root");
 		D_GOTO(err, rc = EIO);
 	}
@@ -77,8 +77,8 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, 0);
 	}
 
-	D_ALLOC_PTR(inode);
-	if (!inode) {
+	D_ALLOC_PTR(ie);
+	if (!ie) {
 		D_GOTO(close, rc = ENOMEM);
 	}
 
@@ -90,45 +90,45 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs->dffs_dfs = ddfs;
 
-	rc = dfs_lookup(dfs->dffs_dfs, "/", O_RDONLY, &inode->obj, &mode);
+	rc = dfs_lookup(dfs->dffs_dfs, "/", O_RDONLY, &ie->ie_obj, &mode);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(inode, "dfs_lookup() failed: %d",
+		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d",
 				rc);
 		D_GOTO(close, 0);
 	}
 
-	inode->parent = parent->stat.st_ino;
-	strncpy(inode->name, name, NAME_MAX);
+	ie->ie_parent = parent->ie_stat.st_ino;
+	strncpy(ie->ie_name, name, NAME_MAX);
 
-	rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
+	rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(inode, "dfs_ostat() failed: %d",
+		DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: %d",
 				rc);
 		D_GOTO(release, 0);
 	}
 
-	atomic_fetch_add(&inode->ie_ref, 1);
-	inode->ie_dfs = dfs;
+	atomic_fetch_add(&ie->ie_ref, 1);
+	ie->ie_dfs = dfs;
 
 	rc = dfuse_lookup_inode(fs_handle,
-				inode->ie_dfs,
+				ie->ie_dfs,
 				NULL,
-				&inode->stat.st_ino);
+				&ie->ie_stat.st_ino);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(inode, "no ino");
+		DFUSE_TRA_ERROR(ie, "no ino");
 		D_GOTO(release, rc = EIO);
 	}
 
-	dfs->dffs_root = inode->stat.st_ino;
+	dfs->dffs_root = ie->ie_stat.st_ino;
 	dfs->dffs_ops = &dfuse_dfs_ops;
 
-	dfuse_reply_entry(fs_handle, inode, false, req);
+	dfuse_reply_entry(fs_handle, ie, false, req);
 	return true;
 release:
-	dfs_release(inode->obj);
+	dfs_release(ie->ie_obj);
 close:
 	daos_cont_close(dfs->dffs_coh, NULL);
-	D_FREE(inode);
+	D_FREE(ie);
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);

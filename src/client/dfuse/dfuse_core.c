@@ -122,7 +122,7 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return *ino == ie->stat.st_ino;
+	return *ino == ie->ie_stat.st_ino;
 }
 
 static void
@@ -156,7 +156,7 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->parent);
+	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->ie_parent);
 	ie_close(fs_handle, ie);
 }
 
@@ -245,7 +245,7 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
-	struct dfuse_inode_entry	*inode = NULL;
+	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_dfs		*dfs = NULL;
 	mode_t				mode;
 	int				rc;
@@ -271,14 +271,14 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 					  D_HASH_FT_EPHEMERAL,
 					  3,
 					  fs_handle, &ie_hops,
-					  &fs_handle->inode_ht);
+					  &fs_handle->dfpi_iet);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK,
 					 3,
 					 fs_handle, &ir_hops,
-					 &fs_handle->dfpi_ir_ht);
+					 &fs_handle->dfpi_irt);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
@@ -309,7 +309,7 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	if (!args.argv[3])
 		D_GOTO(err, 0);
 
-	fuse_ops = dfuse_get_fuse_ops(fs_handle->flags);
+	fuse_ops = dfuse_get_fuse_ops();
 	if (!fuse_ops)
 		D_GOTO(err, 0);
 
@@ -330,8 +330,8 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 		D_GOTO(err, 0);
 
 	/* Create the root inode and insert into table */
-	D_ALLOC_PTR(inode);
-	if (!inode) {
+	D_ALLOC_PTR(ie);
+	if (!ie) {
 		D_GOTO(err, 0);
 	}
 
@@ -344,14 +344,14 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 		dfs->dffs_dfs = ddfs;
 
 		rc = dfs_lookup(dfs->dffs_dfs,
-				"/", O_RDONLY, &inode->obj, &mode);
+				"/", O_RDONLY, &ie->ie_obj, &mode);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %d",
 					rc);
 			D_GOTO(err, 0);
 		}
 
-		rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
+		rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
 					rc);
@@ -362,21 +362,21 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 
 	} else {
 
-		/* Populate inode->stat */
+		/* Populate ie->ie_stat */
 		dfs->dffs_ops = &dfuse_pool_ops;
 		D_INIT_LIST_HEAD(&dfs->dffs_child);
 	}
 
-	inode->ie_dfs = dfs;
-	inode->parent = 1;
-	atomic_fetch_add(&inode->ie_ref, 1);
-	inode->stat.st_ino = 1;
-	dfs->dffs_root = inode->stat.st_ino;
+	ie->ie_dfs = dfs;
+	ie->ie_parent = 1;
+	atomic_fetch_add(&ie->ie_ref, 1);
+	ie->ie_stat.st_ino = 1;
+	dfs->dffs_root = ie->ie_stat.st_ino;
 
-	rc = d_hash_rec_insert(&fs_handle->inode_ht,
-			       &inode->stat.st_ino,
-			       sizeof(inode->stat.st_ino),
-			       &inode->ie_htl,
+	rc = d_hash_rec_insert(&fs_handle->dfpi_iet,
+			       &ie->ie_stat.st_ino,
+			       sizeof(ie->ie_stat.st_ino),
+			       &ie->ie_htl,
 			       false);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
@@ -396,7 +396,7 @@ err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed");
 	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
-	D_FREE(inode);
+	D_FREE(ie);
 	D_FREE(dfs);
 	D_FREE(fs_handle);
 	return -DER_INVAL;
@@ -414,23 +414,23 @@ ino_flush(d_list_t *rlink, void *arg)
 	/* Only evict entries that are direct children of the root, the kernel
 	 * will walk the tree for us
 	 */
-	if (ie->parent != 1)
+	if (ie->ie_parent != 1)
 		return 0;
 
 	rc = fuse_lowlevel_notify_inval_entry(fs_handle->session,
-					      ie->parent,
-					      ie->name,
-					      strlen(ie->name));
+					      ie->ie_parent,
+					      ie->ie_name,
+					      strlen(ie->ie_name));
 	if (rc != 0)
 		DFUSE_TRA_WARNING(ie,
 				  "%lu %lu '%s': %d %s",
-				  ie->parent, ie->stat.st_ino, ie->name, rc,
-				  strerror(-rc));
+				  ie->ie_parent, ie->ie_stat.st_ino,
+				  ie->ie_name, rc, strerror(-rc));
 	else
 		DFUSE_TRA_INFO(ie,
 			       "%lu %lu '%s': %d %s",
-			       ie->parent, ie->stat.st_ino, ie->name, rc,
-			       strerror(-rc));
+			       ie->ie_parent, ie->ie_stat.st_ino,
+			       ie->ie_name, rc, strerror(-rc));
 
 	/* If the FUSE connection is dead then do not traverse further, it
 	 * doesn't matter what gets returned here, as long as it's negative
@@ -453,7 +453,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
-	rc = d_hash_table_traverse(&fs_handle->inode_ht, ino_flush,
+	rc = d_hash_table_traverse(&fs_handle->dfpi_iet, ino_flush,
 				   fs_handle);
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
@@ -463,7 +463,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		struct dfuse_inode_entry *ie;
 		uint ref;
 
-		rlink = d_hash_rec_first(&fs_handle->inode_ht);
+		rlink = d_hash_rec_first(&fs_handle->dfpi_iet);
 
 		if (!rlink)
 			break;
@@ -475,8 +475,8 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
-		ie->parent = 0;
-		d_hash_rec_ndecref(&fs_handle->inode_ht, ref, rlink);
+		ie->ie_parent = 0;
+		d_hash_rec_ndecref(&fs_handle->dfpi_iet, ref, rlink);
 		handles++;
 	} while (rlink);
 
@@ -490,13 +490,13 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 			       refs, handles);
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->inode_ht, false);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_iet, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_ir_ht, true);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_irt, true);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;

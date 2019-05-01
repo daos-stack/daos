@@ -52,7 +52,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		D_GOTO(err, rc = ENOMEM);
 	}
 
-	rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->obj, &anchor,
+	rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj, &anchor,
 			 &nr, dirents);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
@@ -70,7 +70,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * inode number we need to do a lookup, then a stat from the
 		 * object, rather than a stat on the path.
 		 */
-		rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs, inode->obj,
+		rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs, inode->ie_obj,
 				    dirents[i].d_name, O_RDONLY, &obj, &mode);
 
 		rc = dfs_ostat(inode->ie_dfs->dffs_dfs, obj, &stbuf);

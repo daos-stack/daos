@@ -77,11 +77,9 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
-	struct dfuse_info *dfuse_info;
+	struct dfuse_info		*dfuse_info;
 	struct fuse_session		*session;
 	struct dfuse_dfs		*dfpi_ddfs;
-	/** Feature Flags */
-	uint64_t			flags;
 	int				fs_id;
 	struct dfuse_da			da;
 	struct dfuse_da_type		*fgh_da;
@@ -89,8 +87,8 @@ struct dfuse_projection_info {
 	struct dfuse_da_type		*symlink_da;
 	uint32_t			max_read;
 	/** Hash table of open inodes */
-	struct d_hash_table		inode_ht;
-	struct d_hash_table		dfpi_ir_ht;
+	struct d_hash_table		dfpi_iet;
+	struct d_hash_table		dfpi_irt;
 	ATOMIC uint64_t			dfpi_ino_next;
 };
 
@@ -128,7 +126,7 @@ struct dfuse_dfs {
 	d_list_t		dffs_child;
 };
 
-struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
+struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
@@ -461,9 +459,9 @@ struct dfuse_inode_entry {
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
 	 */
-	struct stat	stat;
+	struct stat		ie_stat;
 
-	dfs_obj_t	*obj;
+	dfs_obj_t		*ie_obj;
 
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
@@ -471,7 +469,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char		name[NAME_MAX];
+	char			ie_name[NAME_MAX];
 
 	/** The parent inode of this entry.
 	 *
@@ -479,20 +477,20 @@ struct dfuse_inode_entry {
 	 * be incorrect at any point after that.  The inode does not hold
 	 * a reference on the parent so the inode may not be valid.
 	 */
-	fuse_ino_t	parent;
+	fuse_ino_t		ie_parent;
 
-	struct dfuse_dfs *ie_dfs;
+	struct dfuse_dfs	*ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table
 	 * locking.
 	 */
-	d_list_t	ie_htl;
+	d_list_t		ie_htl;
 
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
-	ATOMIC uint	ie_ref;
+	ATOMIC uint		ie_ref;
 };
 
 /**

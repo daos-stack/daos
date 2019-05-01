@@ -48,9 +48,7 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 	dfir->ir_ino = atomic_fetch_add(&fs_handle->dfpi_ino_next, 1);
 	dfir->ir_id.irid_dfs = dfs;
 
-	DFUSE_TRA_DEBUG(dfs, "Considering inode %lu", dfir->ir_ino);
-
-	rlink = d_hash_rec_find_insert(&fs_handle->dfpi_ir_ht,
+	rlink = d_hash_rec_find_insert(&fs_handle->dfpi_irt,
 				       &dfir->ir_id,
 				       sizeof(dfir->ir_id),
 				       &dfir->ir_htl);
@@ -59,8 +57,6 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		D_FREE(dfir);
 		dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 	}
-
-	DFUSE_TRA_DEBUG(dfs, "Using inode %lu", dfir->ir_ino);
 
 	*_ino = dfir->ir_ino;
 
@@ -75,7 +71,7 @@ find_inode(struct dfuse_request *request)
 	struct dfuse_inode_entry *ie;
 	d_list_t *rlink;
 
-	rlink = d_hash_rec_find(&fs_handle->inode_ht,
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet,
 				&request->ir_inode_num,
 				sizeof(request->ir_inode_num));
 	if (!rlink)
@@ -92,13 +88,13 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
 	d_list_t *rlink;
 
-	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
 
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Could not find entry %lu", ino);
 		return;
 	}
-	d_hash_rec_ndecref(&fs_handle->inode_ht, 2, rlink);
+	d_hash_rec_ndecref(&fs_handle->dfpi_iet, 2, rlink);
 }
 
 void
@@ -108,15 +104,15 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
 	DFUSE_TRA_DEBUG(ie, "closing, inode %lu ref %u, name '%s', parent %lu",
-			ie->stat.st_ino, ref, ie->name, ie->parent);
+			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
 
-	if (ie->parent != 0) {
-		drop_ino_ref(fs_handle, ie->parent);
+	if (ie->ie_parent != 0) {
+		drop_ino_ref(fs_handle, ie->ie_parent);
 	}
 
-	rc = dfs_release(ie->obj);
+	rc = dfs_release(ie->ie_obj);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(ie, "dfs_release failed: %d", rc);
 	}
