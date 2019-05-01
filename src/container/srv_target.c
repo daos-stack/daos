@@ -69,7 +69,7 @@ cont_alloc_ref(void *key, unsigned int ksize, void *varg,
 		return -DER_NOMEM;
 
 	uuid_copy(cont->sc_uuid, key);
-	cont->sc_dtx_resync_time = time(NULL);
+	cont->sc_dtx_resync_time = crt_hlc_get();
 
 	rc = vos_cont_open(pool->spc_hdl, key, &cont->sc_hdl);
 	if (rc != 0) {
@@ -456,6 +456,12 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 }
 
 void
+ds_cont_get(struct ds_cont *cont)
+{
+	daos_lru_ref_add(&cont->sc_list);
+}
+
+void
 ds_cont_put(struct ds_cont *cont)
 {
 	struct dsm_tls	*tls = dsm_tls_get();
@@ -512,6 +518,10 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				      DP_UUID(cont_hdl_uuid), hdl->sch_capas);
 			}
 		}
+
+		if (rc == 0)
+			hdl->sch_deleted = 0;
+
 		if (cont_hdl != NULL && rc == 0)
 			*cont_hdl = hdl;
 		else
@@ -577,6 +587,14 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (cont_uuid != NULL) {
 		struct ds_dtx_resync_args	*ddra = NULL;
 
+		rc = dtx_batched_commit_register(hdl);
+		if (rc != 0) {
+			D_ERROR("Failed to register the container "DF_UUID
+				" to the DTX batched commit list: rc = %d\n",
+				DP_UUID(cont_uuid), rc);
+			D_GOTO(err_cont, rc);
+		}
+
 		D_ALLOC_PTR(ddra);
 		if (ddra == NULL)
 			D_GOTO(err_cont, rc = -DER_NOMEM);
@@ -595,6 +613,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	return 0;
 
 err_cont:
+	dtx_batched_commit_deregister(hdl);
 	if (hdl->sch_cont)
 		cont_put(tls->dt_cont_cache, hdl->sch_cont);
 
@@ -669,11 +688,19 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 		return 0;
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
+	D_ASSERT(hdl->sch_cont != NULL);
+
+	D_DEBUG(DF_DSMS, DF_CONT": closing (%s): hdl="DF_UUID" hce="DF_U64"\n",
 		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
+		hdl->sch_cont->sc_closing ? "resent" : "new",
 		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
 
-	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+	dtx_batched_commit_deregister(hdl);
+	if (!hdl->sch_deleted) {
+		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		hdl->sch_deleted = 1;
+	}
+
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
 }

@@ -230,12 +230,23 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 
 		if ((!(obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) ||
 		     obj->obj_df->vo_latest >= epoch) &&
-		    obj->obj_df->vo_incarnation == obj->obj_incarnation) {
-			if (obj->obj_epoch <= epoch)
-				goto out; /* belong to the same incarnation */
+		    (obj->obj_df->vo_incarnation == obj->obj_incarnation) &&
+		    (obj->obj_epoch <= epoch || obj->obj_incarnation == 0)) {
+			struct umem_instance	*umm = &cont->vc_pool->vp_umm;
 
-			if (obj->obj_incarnation == 0) { /* never punched */
-				obj->obj_epoch = epoch;
+			rc = vos_dtx_check_availability(umm, coh,
+						obj->obj_df->vo_dtx,
+						umem_ptr2off(umm, obj->obj_df),
+						intent, DTX_RT_OBJ);
+			if (rc < 0) {
+				vos_obj_release(occ, obj);
+				D_GOTO(failed, rc);
+			}
+
+			if (rc != ALB_UNAVAILABLE) {
+				if (obj->obj_incarnation == 0)
+					obj->obj_epoch = epoch;
+
 				goto out;
 			}
 		}

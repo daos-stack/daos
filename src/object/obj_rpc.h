@@ -104,8 +104,8 @@ enum obj_rpc_flags {
 	ORF_RESEND		= (1 << 1),
 	/** The request is from leader server (replica). */
 	ORF_FROM_LEADER		= (1 << 2),
-	/** Abort the (dead) DTX by force on conflict. */
-	ORF_DTX_AOC		= (1 << 3),
+	/** Disable DTX or not. */
+	ORF_DTX_DISABLED	= (1 << 3),
 };
 
 /** to identify each obj shard's target */
@@ -118,15 +118,16 @@ struct daos_obj_shard_tgt {
 
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
-	((struct daos_tx_id)	(orw_dti)		CRT_VAR) \
+	((struct dtx_id)	(orw_dti)		CRT_VAR) \
 	((daos_unit_oid_t)	(orw_oid)		CRT_VAR) \
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
 	((uint64_t)		(orw_epoch)		CRT_VAR) \
+	((uint64_t)		(orw_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
 	((uint32_t)		(orw_nr)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
-	((struct daos_tx_id)	(orw_dti_cos)		CRT_ARRAY) \
+	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
@@ -137,6 +138,8 @@ struct daos_obj_shard_tgt {
 	((int32_t)		(orw_ret)		CRT_VAR) \
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
 	((uint64_t)		(orw_attr)		CRT_VAR) \
+	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
+	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
 	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
 	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY)
@@ -181,21 +184,24 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
 #define DAOS_ISEQ_OBJ_PUNCH	/* input fields */		 \
-	((struct daos_tx_id)	(opi_dti)		CRT_VAR) \
+	((struct dtx_id)	(opi_dti)		CRT_VAR) \
 	((uuid_t)		(opi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(opi_oid)		CRT_VAR) \
 	((uint64_t)		(opi_epoch)		CRT_VAR) \
+	((uint64_t)		(opi_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(opi_map_ver)		CRT_VAR) \
 	((uint32_t)		(opi_flags)		CRT_VAR) \
-	((struct daos_tx_id)	(opi_dti_cos)		CRT_ARRAY) \
+	((struct dtx_id)	(opi_dti_cos)		CRT_ARRAY) \
 	((daos_iov_t)		(opi_dkeys)		CRT_ARRAY) \
 	((daos_iov_t)		(opi_akeys)		CRT_ARRAY) \
 	((struct daos_obj_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_PUNCH	/* output fields */		 \
 	((int32_t)		(opo_ret)		CRT_VAR) \
-	((uint32_t)		(opo_map_version)	CRT_VAR)
+	((uint32_t)		(opo_map_version)	CRT_VAR) \
+	((uint64_t)		(opo_dkey_conflict)	CRT_VAR) \
+	((struct dtx_id)	(opo_dti_conflict)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
@@ -241,5 +247,6 @@ void obj_reply_set_status(crt_rpc_t *rpc, int status);
 int obj_reply_get_status(crt_rpc_t *rpc);
 void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);
 uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
+void obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce);
 
 #endif /* __DAOS_OBJ_RPC_H__ */
