@@ -734,8 +734,8 @@ pipeline {
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            # JENKINS-52781 tar function is breaking symlinks
-					   rm -rf $DAOS_BASE/test_results
-					   mkdir -p $DAOS_BASE/test_results
+					   rm -rf test_results
+					   mkdir test_results
                                            rm -f build/src/control/src/github.com/daos-stack/daos/src/control
                                            mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
@@ -775,7 +775,7 @@ pipeline {
                                                    sleep 1
                                                    let x=\\\$x+1
                                                done"''',
-                              junit_files: '$DAOS_BASE/test_results/*.xml'
+                              junit_files: 'test_results/*.xml'
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -799,8 +799,8 @@ pipeline {
                         }
                         */
                         always {
+			    junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
-			    junit '$DAOS_BASE/test_results/*.xml'
                         }
                     }
                 }
