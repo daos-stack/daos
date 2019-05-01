@@ -160,16 +160,16 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 	ie_close(fs_handle, ie);
 }
 
-static d_hash_table_ops_t
-ie_hops = {.hop_key_cmp		= ih_key_cmp,
-	   .hop_rec_addref	= ih_addref,
-	   .hop_rec_decref	= ih_decref,
-	   .hop_rec_free	= ih_free,
+static d_hash_table_ops_t ie_hops = {
+	.hop_key_cmp	= ih_key_cmp,
+	.hop_rec_addref	= ih_addref,
+	.hop_rec_decref	= ih_decref,
+	.hop_rec_free	= ih_free,
 };
 
-static d_hash_table_ops_t
-ir_hops = {.hop_key_cmp		= ir_key_cmp,
-	   .hop_rec_free	= ir_free,
+static d_hash_table_ops_t ir_hops = {
+	.hop_key_cmp	= ir_key_cmp,
+	.hop_rec_free	= ir_free,
 };
 
 #define COMMON_INIT(type)						\
