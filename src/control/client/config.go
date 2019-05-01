@@ -26,7 +26,6 @@ package client
 import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
@@ -117,7 +116,8 @@ func ProcessConfigFile(ConfigPath string) (Configuration, error) {
 
 	err := config.LoadConfig()
 	if err != nil {
-		return config, errors.Wrap(err, "failed to read config file")
+		log.Debugf("Unable to read the configuration file from: '%s'  Using default configuration.", config.Path)
+		return config, nil
 	}
 	log.Debugf("DAOS Client config read from %s", config.Path)
 

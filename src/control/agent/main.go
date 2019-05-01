@@ -72,7 +72,7 @@ func agentMain() error {
 	// Load the configuration file using the supplied path or the default path if none provided.
 	config, err := client.ProcessConfigFile(opts.ConfigPath)
 	if err != nil {
-		log.Errorf("Failed to load agent config options %s", err)
+		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
 		return err
 	}
 
