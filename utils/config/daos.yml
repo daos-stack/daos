@@ -12,7 +12,7 @@
 # Specify the associated DAOS systems.
 # Name must match name specifed in the daos_server.yml file on the server.
 #
-# default: daos
+# default: daos_server
 #name: daos
 
 # Management server access points
