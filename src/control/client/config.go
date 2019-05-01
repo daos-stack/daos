@@ -39,7 +39,7 @@ const (
 	defaultRuntimeDir = "/var/run/daos_agent"
 	defaultLogFile =  "/tmp/daos_agent.log"
 	defaultConfigPath = "etc/daos.yml"
-	defaultSystemName = "daos"
+	defaultSystemName = "daos_server"
 	defaultPort = 10000
 )
 
