@@ -52,5 +52,4 @@ struct dfuse_status_out {
 	int err;
 };
 
-
 #endif /* __DFUSE_COMMON_H__ */

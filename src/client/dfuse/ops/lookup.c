@@ -51,7 +51,14 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 			DFUSE_TRA_ERROR(inode, "no oid");
 			D_GOTO(err, rc = EIO);
 		}
-		inode->stat.st_ino = (ino_t)oid.hi;
+		rc = dfuse_lookup_inode(fs_handle,
+					inode->ie_dfs,
+					&oid,
+					&inode->stat.st_ino);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(inode, "no ino");
+			D_GOTO(err, rc = EIO);
+		}
 	}
 
 	entry.attr = inode->stat;

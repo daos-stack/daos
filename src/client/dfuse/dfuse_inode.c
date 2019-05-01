@@ -24,6 +24,50 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+/* Lookup a unique inode for the specific dfs/oid combination */
+int
+dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
+		   struct dfuse_dfs *dfs,
+		   daos_obj_id_t *oid,
+		   ino_t *_ino)
+{
+	struct dfuse_inode_record	*dfir;
+	d_list_t			*rlink;
+	int				rc = -DER_SUCCESS;
+
+	D_ALLOC_PTR(dfir);
+	if (!dfir) {
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (oid) {
+		dfir->ir_id.irid_oid.lo = oid->lo;
+		dfir->ir_id.irid_oid.hi = oid->hi;
+	}
+
+	dfir->ir_ino = atomic_fetch_add(&fs_handle->dfpi_ino_next, 1);
+	dfir->ir_id.irid_dfs = dfs;
+
+	DFUSE_TRA_DEBUG(dfs, "Considering inode %lu", dfir->ir_ino);
+
+	rlink = d_hash_rec_find_insert(&fs_handle->dfpi_ir_ht,
+				       &dfir->ir_id,
+				       sizeof(dfir->ir_id),
+				       &dfir->ir_htl);
+
+	if (rlink != &dfir->ir_htl) {
+		D_FREE(dfir);
+		dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+	}
+
+	DFUSE_TRA_DEBUG(dfs, "Using inode %lu", dfir->ir_ino);
+
+	*_ino = dfir->ir_ino;
+
+out:
+	return rc;
+};
+
 int
 find_inode(struct dfuse_request *request)
 {

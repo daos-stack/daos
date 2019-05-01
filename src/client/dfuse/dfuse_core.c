@@ -64,6 +64,55 @@ err:
 	return rc;
 }
 
+/* Inode record hash table operations */
+
+static bool
+ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
+	   const void *key, unsigned int ksize)
+{
+	const struct dfuse_inode_record		*ir;
+	const struct dfuse_inode_record_id	*ir_id = key;
+
+	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	/* First check if the both parts of the OID match */
+	if (ir->ir_id.irid_oid.lo != ir_id->irid_oid.lo)
+		return false;
+
+	if (ir->ir_id.irid_oid.hi != ir_id->irid_oid.hi)
+		return false;
+
+	/* Then check if it's the same container (dfs struct) */
+	if (ir->ir_id.irid_dfs == ir_id->irid_dfs) {
+		return true;
+	}
+
+	/* Now check the container name */
+	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
+		    ir_id->irid_dfs->dffs_cont,
+		    NAME_MAX) != 0) {
+		return false;
+	}
+
+	/* This case means it's the same container name, but a different dfs
+	 * struct which can happen with repeated lookups of already open
+	 * containers
+	 */
+	return true;
+}
+
+static void
+ir_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dfuse_inode_record *ir;
+
+	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	D_FREE(ir);
+}
+
+/* Inode entry hash table operations */
+
 static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	   const void *key, unsigned int ksize)
@@ -111,10 +160,16 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 	ie_close(fs_handle, ie);
 }
 
-d_hash_table_ops_t hops = {.hop_key_cmp = ih_key_cmp,
-			   .hop_rec_addref = ih_addref,
-			   .hop_rec_decref = ih_decref,
-			   .hop_rec_free = ih_free,
+static d_hash_table_ops_t
+ie_hops = {.hop_key_cmp		= ih_key_cmp,
+	   .hop_rec_addref	= ih_addref,
+	   .hop_rec_decref	= ih_decref,
+	   .hop_rec_free	= ih_free,
+};
+
+static d_hash_table_ops_t
+ir_hops = {.hop_key_cmp		= ir_key_cmp,
+	   .hop_rec_free	= ir_free,
 };
 
 #define COMMON_INIT(type)						\
@@ -215,12 +270,21 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
 					  D_HASH_FT_EPHEMERAL,
 					  3,
-					  fs_handle, &hops,
+					  fs_handle, &ie_hops,
 					  &fs_handle->inode_ht);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK,
+					 3,
+					 fs_handle, &ir_hops,
+					 &fs_handle->dfpi_ir_ht);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
 	fs_handle->proj.progress_thread = 1;
+
+	atomic_fetch_add(&fs_handle->dfpi_ino_next, 2);
 
 	args.argc = 4;
 
@@ -427,6 +491,12 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	}
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->inode_ht, false);
+	if (rc) {
+		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
+		rcp = EINVAL;
+	}
+
+	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_ir_ht, true);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;

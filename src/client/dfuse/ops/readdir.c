@@ -33,15 +33,16 @@ void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 size_t size, off_t offset)
 {
-	size_t		b_offset = 0;
-	daos_anchor_t	anchor = {};
-	uint32_t	nr = NUM_DIRENTS;
-	struct dirent	dirents[NUM_DIRENTS];
-	struct stat	stbuf;
-	int		i;
-	void		*buf;
-	int		ns;
-	int		rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	size_t				b_offset = 0;
+	daos_anchor_t			anchor = {};
+	uint32_t			nr = NUM_DIRENTS;
+	struct dirent			dirents[NUM_DIRENTS];
+	struct stat			stbuf;
+	int				i;
+	void				*buf;
+	int				ns;
+	int				rc;
 
 	DFUSE_TRA_DEBUG(inode, "Offset %zi",
 			offset);
@@ -84,7 +85,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			D_GOTO(err, rc = EIO);
 		}
 
-		stbuf.st_ino = (ino_t)oid.hi;
+		rc = dfuse_lookup_inode(fs_handle,
+					inode->ie_dfs,
+					&oid,
+					&stbuf.st_ino);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(inode, "no ino");
+			D_GOTO(err, rc = EIO);
+		}
 
 		dfs_release(obj);
 

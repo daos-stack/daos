@@ -29,7 +29,7 @@
 /* Lookup a container within a pool */
 static bool
 dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name, bool create)
+		   const char *name, bool create)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_info *dfuse_info = fs_handle->dfuse_info;
@@ -99,8 +99,6 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	inode->parent = parent->stat.st_ino;
 	strncpy(inode->name, name, NAME_MAX);
-	dfs->dffs_root = inode->stat.st_ino;
-	dfs->dffs_ops = &dfuse_dfs_ops;
 
 	rc = dfs_ostat(dfs->dffs_dfs, inode->obj, &inode->stat);
 	if (rc != -DER_SUCCESS) {
@@ -111,7 +109,18 @@ dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	atomic_fetch_add(&inode->ie_ref, 1);
 	inode->ie_dfs = dfs;
-	inode->stat.st_ino = 2;
+
+	rc = dfuse_lookup_inode(fs_handle,
+				inode->ie_dfs,
+				NULL,
+				&inode->stat.st_ino);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(inode, "no ino");
+		D_GOTO(release, rc = EIO);
+	}
+
+	dfs->dffs_root = inode->stat.st_ino;
+	dfs->dffs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, inode, false, req);
 	return true;
@@ -129,7 +138,7 @@ err:
 
 void
 dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name)
+		  const char *name)
 {
 	dfuse_pool_connect(req, parent, name, false);
 }

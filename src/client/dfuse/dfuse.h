@@ -90,6 +90,8 @@ struct dfuse_projection_info {
 	uint32_t			max_read;
 	/** Hash table of open inodes */
 	struct d_hash_table		inode_ht;
+	struct d_hash_table		dfpi_ir_ht;
+	ATOMIC uint64_t			dfpi_ino_next;
 };
 
 struct dfuse_inode_entry;
@@ -493,10 +495,26 @@ struct dfuse_inode_entry {
 	ATOMIC uint	ie_ref;
 };
 
-/** Write buffer descriptor */
-struct dfuse_wb {
-	struct dfuse_request		wb_req;
-	bool				failure;
+/**
+ * Inode record.
+ *
+ * Describes all inodes observed by the system since start, including all inodes
+ * known by the kernel, and all inodes that have been in the past.
+ *
+ * This is needed to be able to generate 64 bit inode numbers from 128 bit DAOS
+ * objects, to support multiple containers/pools within a filesystem and to
+ * provide consistent inode numbering for the same file over time, even if the
+ * kernel cache is dropped, for example because of memory pressure.
+ */
+struct dfuse_inode_record_id {
+	struct dfuse_dfs	*irid_dfs;
+	daos_obj_id_t		irid_oid;
+};
+
+struct dfuse_inode_record {
+	struct dfuse_inode_record_id	ir_id;
+	d_list_t			ir_htl;
+	ino_t				ir_ino;
 };
 
 /** Common request type.
@@ -522,6 +540,12 @@ struct entry_req {
 };
 
 /* dfuse_inode.c */
+
+int
+dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
+		   struct dfuse_dfs *dfs,
+		   daos_obj_id_t *oid,
+		   ino_t *_ino);
 
 int
 find_inode(struct dfuse_request *);
