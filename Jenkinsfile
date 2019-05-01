@@ -799,6 +799,7 @@ pipeline {
                         }
                         */
                         always {
+                            sh '''mv test_results/*.xml run_test.sh/'''
 			    junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
                         }
