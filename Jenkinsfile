@@ -212,6 +212,51 @@ pipeline {
                         }
                     }
                 }
+                stage('Build master CentOS 7') {
+                    when { branch 'master' }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
+                        }
+                    }
+                    steps {
+                        sconsBuild(clean: "_build.external${arch}",
+                                   scons_args: '--build-config=utils/build-master.config')
+                        // this really belongs in the test stage CORCI-530
+                        sh '''scons utest --utest-mode=memcheck
+                              mv build/Linux/src/utest{,_valgrind}
+                              scons utest'''
+                        stash name: 'CentOS-master-install', includes: 'install/**'
+                        stash name: 'CentOS-master-build-vars', includes: ".build_vars${arch}.*"
+                    }
+                    post {
+                        always {
+                            node('lightweight') {
+                                recordIssues enabledForFailure: true,
+                                             aggregatingResults: true,
+                                             id: "analysis-master-centos7",
+                                             tools: [ gcc4(), cppCheck() ],
+                                             filters: [excludeFile('.*\\/_build\\.external-Linux\\/.*'),
+                                                       excludeFile('_build\\.external-Linux\\/.*')]
+                            }
+                            archiveArtifacts artifacts: '''build/Linux/src/utest_valgrind/utest.log,
+                                                           build/Linux/src/utest_valgrind/test_output,
+                                                           build/Linux/src/utest/utest.log,
+                                                           build/Linux/src/utest/test_output'''
+                        }
+                        unstable {
+                            sh "mv config${arch}.log config.log-master"
+                            archiveArtifacts artifacts: 'config.log-master'
+                        }
+                        failure {
+                            sh "mv config${arch}.log config.log-master"
+                            archiveArtifacts artifacts: 'config.log-master'
+                        }
+                    }
+                }
                 stage('Build on CentOS 7') {
                     agent {
                         dockerfile {

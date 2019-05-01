@@ -85,15 +85,10 @@ def scons():
     platform = os.uname()[0]
     opts_file = os.path.join(Dir('#').abspath, 'cart-%s.conf' % platform)
 
-    commits_file = os.path.join(Dir('#').abspath, 'build.config')
-    if not os.path.exists(commits_file):
-        commits_file = None
-
     env = DefaultEnvironment()
 
     opts = Variables(opts_file)
-    prereqs = PreReqComponent(env, opts,
-                              config_file=commits_file, arch=platform)
+    prereqs = PreReqComponent(env, opts, arch=platform)
     prereqs.load_definitions(prebuild=['ompi', 'mercury', 'uuid', 'crypto',
                                        'pmix', 'boost'])
 
