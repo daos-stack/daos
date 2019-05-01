@@ -692,7 +692,8 @@ daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
 		D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
-	len = strlen(str);
+	/* Detect if it's longer than max_len */
+	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
 		D_ERROR("invalid %s len=%lu, max=%lu\n",
 			prop_name, len, max_len);
