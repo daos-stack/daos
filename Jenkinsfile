@@ -294,7 +294,7 @@ pipeline {
                         }
                         */
                         always {
-				sh '''mv test_results/ run_test.sh/'''
+				sh '''ls -l test_results/'''
 				junit 'test_results/*.xml'
 				archiveArtifacts artifacts: 'run_test.sh/**'
                         }
