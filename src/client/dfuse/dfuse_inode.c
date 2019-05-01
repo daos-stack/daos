@@ -24,11 +24,6 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define POOL_NAME close_da
-#define TYPE_NAME common_req
-#define REQ_NAME request
-#include "dfuse_ops.h"
-
 int
 find_inode(struct dfuse_request *request)
 {
@@ -53,64 +48,33 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
 	d_list_t *rlink;
 
-	if (ino == 1)
-		return;
-
-	if (ino == 0)
-		return;
-
 	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
 
 	if (!rlink) {
-		DFUSE_TRA_WARNING(fs_handle, "Could not find entry %lu", ino);
+		DFUSE_TRA_ERROR(fs_handle, "Could not find entry %lu", ino);
 		return;
 	}
 	d_hash_rec_ndecref(&fs_handle->inode_ht, 2, rlink);
 }
 
-static bool
-ie_close_cb(struct dfuse_request *request)
+void
+ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
-	struct TYPE_NAME	*desc = CONTAINER(request);
-
-	DFUSE_TRA_DOWN(request);
-	dfuse_da_release(desc->request.fsh->close_da, desc);
-	return false;
-}
-
-static const struct dfuse_request_api api = {
-	.on_result	= ie_close_cb,
-};
-
-void ie_close(struct dfuse_projection_info *fs_handle,
-	      struct dfuse_inode_entry *ie)
-{
-	struct TYPE_NAME	*desc = NULL;
 	int			rc;
 	int			ref = atomic_load_consume(&ie->ie_ref);
 
-	DFUSE_TRA_DEBUG(ie, "closing, ref %u, parent %lu", ref, ie->parent);
+	DFUSE_TRA_DEBUG(ie, "closing, inode %lu ref %u, name '%s', parent %lu",
+			ie->stat.st_ino, ref, ie->name, ie->parent);
 
 	D_ASSERT(ref == 0);
-	atomic_fetch_add(&ie->ie_ref, 1);
 
-	drop_ino_ref(fs_handle, ie->parent);
+	if (ie->parent != 0) {
+		drop_ino_ref(fs_handle, ie->parent);
+	}
 
-	DFUSE_REQ_INIT(desc, fs_handle, api, in, rc);
-	if (rc)
-		D_GOTO(err, 0);
-
-	DFUSE_TRA_UP(&desc->request, ie, "close_req");
-
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, 0);
-
-	DFUSE_TRA_DOWN(ie);
-	return;
-
-err:
-	DFUSE_TRA_DOWN(ie);
-	if (desc)
-		dfuse_da_release(fs_handle->close_da, desc);
+	rc = dfs_release(ie->obj);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(ie, "dfs_release failed: %d", rc);
+	}
+	D_FREE(ie);
 }

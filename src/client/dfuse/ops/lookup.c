@@ -21,95 +21,116 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <fuse3/fuse.h>
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME lookup_da
-#define TYPE_NAME entry_req
-#include "dfuse_ops.h"
-
-bool
-dfuse_entry_cb(struct dfuse_request *request)
+void
+dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
+		  struct dfuse_inode_entry *inode,
+		  bool create,
+		  fuse_req_t req)
 {
-	struct entry_req		*desc = container_of(request, struct entry_req, request);
-	struct dfuse_projection_info	*fs_handle = desc->request.fsh;
-	struct dfuse_entry_out		*out = request->out;
 	struct fuse_entry_param		entry = {0};
 	d_list_t			*rlink;
-	bool				keep_ref = false;
+	daos_obj_id_t			oid;
+	int				rc;
 
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc)
-		D_GOTO(out, 0);
+	if (!inode->parent) {
+		DFUSE_TRA_ERROR(inode, "no parent");
+		D_GOTO(err, rc = EIO);
+	}
 
-	entry.attr = out->stat;
+	if (!inode->ie_dfs) {
+		DFUSE_TRA_ERROR(inode, "ie_dfs");
+		D_GOTO(err, rc = EIO);
+	}
+
+	rc = dfs_obj2id(inode->obj, &oid);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(inode, "no oid");
+		D_GOTO(err, rc = EIO);
+	}
+
+	inode->stat.st_ino = (ino_t)oid.hi;
+
+	entry.attr = inode->stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
+	DFUSE_TRA_INFO(inode, "Inserting inode %lu", entry.ino);
 
-	desc->ie->stat = out->stat;
-	DFUSE_TRA_UP(desc->ie, fs_handle, "inode");
 	rlink = d_hash_rec_find_insert(&fs_handle->inode_ht,
-				       &desc->ie->stat.st_ino,
-				       sizeof(desc->ie->stat.st_ino),
-				       &desc->ie->ie_htl);
+				       &inode->stat.st_ino,
+				       sizeof(inode->stat.st_ino),
+				       &inode->ie_htl);
 
-	if (rlink == &desc->ie->ie_htl) {
-		desc->ie = NULL;
-		keep_ref = true;
-	} else {
+	if (rlink != &inode->ie_htl) {
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
 		 * keep a reference on the parent.
-		 * Note that this function will be called with a reference on
-		 * the parent anyway, so keep that one, but drop one in the call
-		 * to ie_close().
 		 */
-		atomic_fetch_sub(&desc->ie->ie_ref, 1);
-		keep_ref = true;
-		ie_close(fs_handle, desc->ie);
+		atomic_fetch_sub(&inode->ie_ref, 1);
+		inode->parent = 0;
+
+		ie_close(fs_handle, inode);
 	}
 
-	DFUSE_REPLY_ENTRY(request, entry);
-	dfuse_da_release(desc->da, desc);
-	return keep_ref;
-out:
-	DFUSE_REPLY_ERR(request, request->rc);
-	dfuse_da_release(desc->da, desc);
-	return false;
-}
+	if (create) {
+		struct fuse_file_info fi = {0};
 
-static const struct dfuse_request_api api = {
-	.on_result	= dfuse_entry_cb,
-};
-
-void
-dfuse_cb_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
-{
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct TYPE_NAME		*desc = NULL;
-	int rc;
-
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
-	if (rc)
-		D_GOTO(err, rc);
-
-	DFUSE_TRA_INFO(desc, "ie %p", &desc->ie);
-
-	desc->request.ir_inode_num = parent;
-
-	strncpy(desc->ie->name, name, NAME_MAX);
-	desc->ie->parent = parent;
-	desc->da = fs_handle->lookup_da;
-
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, 0);
+		DFUSE_REPLY_CREATE(req, entry, &fi);
+	} else {
+		DFUSE_REPLY_ENTRY(req, entry);
+	}
 	return;
 err:
-	if (desc)
-		dfuse_da_release(fs_handle->lookup_da, desc);
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfs_release(inode->obj);
+}
+
+void
+dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		const char *name)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode = NULL;
+	mode_t				mode;
+	int rc;
+
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->parent, name);
+
+	DFUSE_TRA_INFO(parent, "parent");
+
+	D_ALLOC_PTR(inode);
+	if (!inode) {
+		D_GOTO(err, rc = ENOMEM);
+	}
+	inode->parent = parent->parent;
+	inode->ie_dfs = parent->ie_dfs;
+
+	rc = dfs_lookup_rel(parent->ie_dfs->dffs_dfs, parent->obj, name,
+			    O_RDONLY, &inode->obj, &mode);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %d",
+			       rc);
+		if (rc == -DER_NONEXIST) {
+			D_GOTO(err, rc = ENOENT);
+		} else {
+			D_GOTO(err, rc = EIO);
+		}
+	}
+
+	strncpy(inode->name, name, NAME_MAX);
+	atomic_fetch_add(&inode->ie_ref, 1);
+
+	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, inode->obj, &inode->stat);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(err, 0);
+	}
+
+	dfuse_reply_entry(fs_handle, inode, false, req);
+	return;
+
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	D_FREE(inode);
 }

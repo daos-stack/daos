@@ -53,12 +53,17 @@ void ds_cont_svc_step_down(struct cont_svc *svc);
  * handle.
  */
 struct ds_cont {
-	struct daos_llink	sc_list;
-	daos_handle_t		sc_hdl;
-	uuid_t			sc_uuid;
+	struct daos_llink	 sc_list;
+	daos_handle_t		 sc_hdl;
+	uuid_t			 sc_uuid;
+	void			*sc_dtx_flush_cbdata;
+	void			*sc_dtx_resync_cbdata;
 	/* The time for the latest DTX resync operation. */
-	uint64_t		sc_dtx_resync_time;
-	uint32_t		sc_dtx_resyncing:1;
+	uint64_t		 sc_dtx_resync_time;
+	uint32_t		 sc_dtx_resyncing:1,
+				 sc_dtx_aggregating:1,
+				 sc_closing:1;
+	uint32_t		 sc_dtx_flush_wait_count;
 };
 
 /*
@@ -74,10 +79,13 @@ struct ds_cont_hdl {
 	struct ds_pool_child   *sch_pool;
 	struct ds_cont	       *sch_cont;
 	int			sch_ref;
+	uint32_t		sch_dtx_registered:1,
+				sch_deleted:1;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
 void ds_cont_hdl_put(struct ds_cont_hdl *hdl);
+void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
@@ -93,6 +101,7 @@ int
 ds_cont_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont **ds_cont);
 
 void ds_cont_put(struct ds_cont *cont);
+void ds_cont_get(struct ds_cont *cont);
 
 int
 ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
