@@ -496,12 +496,6 @@ void d_hash_table_debug(struct d_hash_table *htable);
  */
 enum {
 	D_HTYPE_PTR		= 0, /**< pointer type handle */
-	D_HTYPE_EQ		= 1, /**< event queue */
-	D_HTYPE_POOL		= 3, /**< pool */
-	D_HTYPE_CO		= 5, /**< container */
-	D_HTYPE_OBJ		= 7, /**< object */
-	D_HTYPE_ARRAY		= 9, /**< object */
-	D_HTYPE_TX		= 11, /**< object */
 	/* Must enlarge D_HTYPE_BITS to add more types */
 };
 

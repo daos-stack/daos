@@ -1029,6 +1029,11 @@ d_hhash_link_insert(struct d_hhash *hhtab, struct d_hlink *hlink, int type)
 {
 	D_ASSERT(hlink->hl_link.rl_initialized);
 
+	/* check if handle type fits in allocated bits */
+	D_ASSERTF(type < (1 << D_HTYPE_BITS),
+		  "Type (%d) does not fit in D_HTYPE_BITS (%d)\n",
+		  type, D_HTYPE_BITS);
+
 	if (d_hhash_is_ptrtype(hhtab)) {
 		uint64_t ptr_key = (uintptr_t)hlink;
 
