@@ -134,7 +134,7 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
 
         ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node " \
                   " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={} " \
-                  " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {} " \
+                  " /home/standan/mpiio/install/ior-hpc_daos_new/bin/ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {} " \
                   " --daos.svcl {} --daos.cont {} --daos.destroy " \
                   "--daos.chunk_size {} --daos.oclass {} " \
                   .format(client_processes, client_file, attach_info_path,

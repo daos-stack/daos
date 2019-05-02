@@ -38,9 +38,9 @@ import write_host_file
 import ior_utils
 from daos_api import DaosContext, DaosPool, DaosApiError
 
-class MultipleClients(Test):
+class FourServers(Test):
     """
-    Test class Description: Runs IOR with multiple clients.
+    Test class Description: Runs IOR with four servers.
 
     """
     def setUp(self):
@@ -66,11 +66,11 @@ class MultipleClients(Test):
         print("Host file servers is: {}".format(self.hostfile_servers))
 
         self.hostlist_clients = (
-            self.params.get("clients",
-                            '/run/hosts/test_machines/test_clients/*'))
+            self.params.get("test_clients",
+                            '/run/hosts/test_machines/*'))
         self.hostfile_clients = (
             write_host_file.write_host_file(self.hostlist_clients,
-                                            self.workdir))
+                                            self.workdir, None))
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
         self.agent_sessions = AgentUtils.run_agent(self.basepath,
@@ -79,8 +79,8 @@ class MultipleClients(Test):
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
-        if int(str(self.name).split("-")[0]) == 1:
-            ior_utils.build_ior(self.basepath)
+        #if int(str(self.name).split("-")[0]) == 1:
+        #    ior_utils.build_ior(self.basepath)
 
     def tearDown(self):
         try:
@@ -96,13 +96,13 @@ class MultipleClients(Test):
                                       self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
-    def test_multipleclients(self):
+    def test_fourservers(self):
         """
         Test ID: DAOS-1263
-        Test Description: Test IOR with 16 and 32 clients config.
-        Use Cases: Different combinations of 16/32 Clients, 8b/1k/4k
-                   record size, 1m/8m stripesize and 16 async io.
-        :avocado: tags=ior,twoservers,multipleclients
+        Test Description: Test IOR with four servers.
+        Use Cases: Different combinations of 1/64/128 Clients,
+                   1K/4K/32K/128K/512K/1M transfer size.
+        :avocado: tags=ior,fourservers
         """
 
         # parameters used in pool create
@@ -112,14 +112,15 @@ class MultipleClients(Test):
         createsetid = self.params.get("setname", '/run/pool/createset/')
         createsize = self.params.get("size", '/run/pool/createsize/')
         createsvc = self.params.get("svcn", '/run/pool/createsvc/')
+
+        # ior parameters
         iteration = self.params.get("iter", '/run/ior/iteration/')
-        slots = self.params.get("slots", '/run/ior/clientslots/*')
+        client_processes = self.params.get("np", '/run/ior/clientslots/*')
         ior_flags = self.params.get("F", '/run/ior/iorflags/')
-        transfer_size = self.params.get("t", '/run/ior/transfersize/')
-        record_size = self.params.get("r", '/run/ior/recordsize/*')
-        stripe_size = self.params.get("s", '/run/ior/stripesize/*')
-        stripe_count = self.params.get("c", '/run/ior/stripecount/')
-        async_io = self.params.get("a", '/run/ior/asyncio/')
+        transfer_size = self.params.get("t",
+                                        '/run/ior/transfersize_blocksize/*/')
+        block_size = self.params.get("b",
+                                     '/run/ior/transfersize_blocksize/*/')
         object_class = self.params.get("o", '/run/ior/objectclass/')
 
         try:
@@ -129,13 +130,6 @@ class MultipleClients(Test):
             self.pool.create(createmode, createuid, creategid, createsize,
                              createsetid, None, None, createsvc)
 
-            with open(self.hostfile_clients) as client_file:
-                new_text = client_file.read().replace('slots=1',
-                                                      'slots={0}').format(slots)
-
-            with open(self.hostfile_clients, "w") as client_file:
-                client_file.write(new_text)
-
             pool_uuid = self.pool.get_uuid_str()
             tmp_rank_list = []
             svc_list = ""
@@ -144,18 +138,10 @@ class MultipleClients(Test):
                 svc_list += str(tmp_rank_list[i]) + ":"
             svc_list = svc_list[:-1]
 
-            if slots == 8:
-                block_size = '3g'
-            elif slots == 16:
-                block_size = '1536m'
-
-            if stripe_size == '8m':
-                transfer_size = stripe_size
-
-            ior_utils.run_ior(self.hostfile_clients, ior_flags, iteration,
-                              block_size, transfer_size, pool_uuid, svc_list,
-                              record_size, stripe_size, stripe_count, async_io,
-                              object_class, self.basepath, slots)
+            ior_utils.run_ior_daos(self.hostfile_clients, ior_flags, iteration,
+                                   block_size, transfer_size, pool_uuid,
+                                   svc_list, object_class, self.basepath,
+                                   client_processes)
 
         except (DaosApiError, ior_utils.IorFailed) as excep:
-            self.fail("<MultipleClients Test run Failed>\n {}".format(excep))
+            self.fail("<FourServers Test run Failed>\n {}".format(excep))
