@@ -583,7 +583,8 @@ obj_op_hdlr(int argc, char *argv[])
 	int			rc;
 	int			ret;
 
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "c:o:s:p:", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -696,6 +697,142 @@ disconnect:
 }
 
 static int
+module_str2id(const char *name, int name_len)
+{
+	if (strncmp(name, "object", name_len) == 0)
+		return DAOS_OBJ_MODULE;
+	else if (strncmp(name, "rebuild", name_len) == 0)
+		return DAOS_REBUILD_MODULE;
+	else if (strncmp(name, "vos", name_len) == 0)
+		return DAOS_VOS_MODULE;
+	else if (strncmp(name, "pool", name_len) == 0)
+		return DAOS_VOS_MODULE;
+	else
+		return -DER_INVAL;
+}
+
+static int
+module_opt_parse(char *opt_str, uint64_t *module_p)
+{
+	char *ptr = opt_str;
+	uint64_t module = 0;
+	int rc = 0;
+
+	while (1) {
+		char *end;
+		int mod_id;
+
+		/* skip the space & , to locate the start */
+		while (*ptr && (*ptr == ' ' || *ptr == ','))
+			ptr++;
+
+		if (!*ptr)
+			break;
+
+		/* find the word end */
+		end = ptr;
+		while (*end && *end != ' ' && *end != ',')
+			end++;
+
+		mod_id = module_str2id(ptr, end - ptr);
+		if (mod_id < 0)
+			return mod_id;
+
+		if (mod_id > 64) {
+			fprintf(stderr, "wrong module %s id %d\n", ptr, mod_id);
+			return -DER_INVAL;
+		}
+		module |= 1 << mod_id;
+
+		ptr = end;
+	}
+
+	if (module > 0)
+		*module_p = module;
+
+	return rc;
+}
+
+int
+file_path_copy(char *opt_str, char **path)
+{
+	int len = strlen(opt_str) + 1;
+
+	*path = calloc(len, 1);
+	if (*path == NULL)
+		return -DER_NOMEM;
+
+	memcpy(*path, opt_str, len);
+	return 0;
+}
+
+static int
+profile_op_hdlr(int argc, char *argv[])
+{
+	uint64_t		modules = -1;
+	char			*path = NULL;
+	bool			start = false;
+	bool			stop = false;
+	int			rc;
+	struct option		options[] = {
+		{"start",	no_argument,		NULL,	's'},
+		{"end",		no_argument,		NULL,	'e'},
+		{"path",	required_argument,	NULL,	'p'},
+		{"module",	required_argument,	NULL,	'm'},
+		{NULL,		0,			NULL,	0}
+	};
+
+	while ((rc = getopt_long(argc, argv, "em:p:s", options, NULL)) != -1) {
+		switch (rc) {
+		case 'm':
+			rc = module_opt_parse(optarg, &modules);
+			if (rc != 0) {
+				fprintf(stderr, "failed to parse module: %s\n",
+					optarg);
+				goto out;
+			}
+
+			break;
+		case 'p':
+			rc = file_path_copy(optarg, &path);
+			if (rc != 0) {
+				fprintf(stderr, "failed to parse path: %s\n",
+					optarg);
+				goto out;
+			}
+			break;
+		case 's':
+			start = true;
+			break;
+		case 'e':
+			stop = true;
+			break;
+		default:
+			rc = -DER_INVAL;
+			goto out;
+		}
+	}
+
+	if (start == stop) {
+		fprintf(stderr, "Indicate start or stop profile.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (start && (modules == (uint64_t)(-1))) {
+		fprintf(stderr, "module option and path are needed\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = dc_mgmt_profile(modules, path, start);
+out:
+	if (path)
+		free(path);
+	return rc;
+}
+
+static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
@@ -796,7 +933,8 @@ main(int argc, char *argv[])
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "layout") == 0)
 		hdlr = obj_op_hdlr;
-
+	else if (strcmp(argv[1], "profile") == 0)
+		hdlr = profile_op_hdlr;
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);
 		return hdlr == NULL ? 2 : 0;

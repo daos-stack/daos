@@ -52,22 +52,18 @@
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern bool	srv_io_dispatch;
+extern bool	srv_enable_dtx;
 
 /** client object shard */
 struct dc_obj_shard {
 	/* Metadata for this shard */
-	struct daos_obj_shard_md do_md;
+	uint64_t		do_attr;
 	/** refcount */
 	unsigned int		do_ref;
-	/** number of partitions on the remote target */
-	int			do_part_nr;
-
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	/** list to the container */
-	d_list_t		do_co_list;
 	uint32_t		do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
@@ -79,6 +75,13 @@ struct dc_obj_shard {
 #define do_target_id	do_pl_shard.po_target
 #define do_fseq		do_pl_shard.po_fseq
 #define do_rebuilding	do_pl_shard.po_rebuilding
+
+/** client object layout */
+struct dc_obj_layout {
+	/** The reference for the shards that are opened (in-using). */
+	unsigned int		do_open_count;
+	struct dc_obj_shard	do_shards[0];
+};
 
 /** Client stack object */
 struct dc_object {
@@ -103,7 +106,18 @@ struct dc_object {
 	unsigned int		cob_version;
 	unsigned int		cob_shards_nr;
 	/** shard object ptrs */
-	struct dc_obj_shard	*cob_shards;
+	struct dc_obj_layout	*cob_shards;
+};
+
+/** EC codec for object EC encoding/decoding */
+struct obj_ec_codec {
+	/** encode matrix, can be used to generate decode matrix */
+	unsigned char		*ec_en_matrix;
+	/**
+	 * GF (galois field) tables, pointer to array of input tables generated
+	 * from coding coefficients. Needed for both encoding and decoding.
+	 */
+	unsigned char		*ec_gftbls;
 };
 
 static inline void
@@ -113,9 +127,27 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 }
 
 extern struct dss_module_key obj_module_key;
-struct obj_tls {
-	d_sg_list_t	ot_echo_sgl;
+enum obj_profile_op {
+	OBJ_PF_UPDATE_PREP = 0,
+	OBJ_PF_UPDATE_DISPATCH,
+	OBJ_PF_UPDATE_LOCAL,
+	OBJ_PF_UPDATE_END,
+	OBJ_PF_UPDATE_WAIT,
+	OBJ_PF_UPDATE_REPLY,
+	OBJ_PF_UPDATE
 };
+
+struct obj_tls {
+	d_sg_list_t		ot_echo_sgl;
+	struct srv_profile	*ot_sp;
+};
+
+static inline struct obj_tls *
+obj_tls_get()
+{
+	return dss_module_key_get(dss_tls_get(), &obj_module_key);
+}
+
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
@@ -127,7 +159,7 @@ int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
 			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
 			uint32_t fw_cnt, tse_task_t *task,
-			struct daos_tx_id *dti, uint32_t flags);
+			struct dtx_id *dti, uint32_t flags);
 
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
@@ -151,7 +183,7 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
 		       uint32_t fw_cnt, tse_task_t *task,
-		       struct daos_tx_id *dti, uint32_t flags);
+		       struct dtx_id *dti, uint32_t flags);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
@@ -180,15 +212,15 @@ void ds_obj_query_key_handler(crt_rpc_t *rpc);
 #define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
-typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, uint32_t shard, void *arg);
+typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 struct obj_req_disp_arg;
 int ds_obj_req_disp_prepare(crt_opcode_t opc,
 			struct daos_obj_shard_tgt *fw_shard_tgts,
 			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
-			void *prefw_arg, ds_iofw_cb_t postfw_cb,
-			void *postfw_arg, struct obj_req_disp_arg **arg);
+			ds_iofw_cb_t postfw_cb, void *cb_data,
+			uint32_t flags, int dti_cos_count,
+			struct dtx_id *dti_cos, struct obj_req_disp_arg **arg);
 void ds_obj_req_dispatch(void *arg);
-int ds_obj_req_disp_wait(struct obj_req_disp_arg *obj_arg);
 void ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg);
 
 static inline uint64_t
@@ -201,5 +233,10 @@ obj_dkey2hash(daos_key_t *dkey)
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
 }
+
+/* obj_class.c */
+int obj_ec_codec_init(void);
+void obj_ec_codec_fini(void);
+struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

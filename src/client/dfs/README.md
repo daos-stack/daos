@@ -47,7 +47,7 @@ table will look like this (includes two extended attributes: xattr1, xattr2):
 Directory Object
   D-key "entry1_name"
     A-key "mode"	// mode_t (permission bit mask + type of entry)
-    A-key "oid"		// object id of entry (bogus if symlink)
+    A-key "oid"		// object id of entry (akey does not exist if symlink)
     A-key "syml"	// symlink value (akey does not exist if not a symlink)
     A-key "atime"	// access time
     A-key "mtime"	// modify time
@@ -151,30 +151,9 @@ function `check_access()`.
 setuid(), setgid() programs, supplementary groups, ACLs are not supported at the
 moment.
 
-## DFUSE
+## DFUSE_HL
 
-A simple high level fuse plugin (dfuse) is implemented to test the DFS API and
-functionality with existing POSIX tests and benchmarks (IOR, mdtest, etc.). The
-DFS fuse exposes one mounpoint as a single DFS namespace with a single pool and
-container. To test dfuse, the following steps need to be done:
-
-1) Launch DAOS server(s):
-   orterun --mca mtl ^psm2,ofi --enable-recovery -np 1 --report-uri ~/uri.txt daos_server -c 8
-
-2) Create a DAOS Pool with dmg tool:
-   this will return a pool uuid "puuid" and service rank list "svcl"
-
-3) Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs_test
-
-4) Mount dfuse with the following command:
-   orterun -np 1 --ompi-server file:~/uri.txt dfuse /tmp/dfs_test -s -f -p puuid -l svcl
-   -p specifies the pool uuid and -l specifies the service rank list (from dmg).
-
-5) Other arguments to dfuse:
-   -r: option to destroy the container associated with the namespace when you umount.
-   -d: prints debug messages at the fuse mount terminal
-
-6) Now /tmp/dfs_test can be used as a POSIX file system (can run things like IOR/mdtest on it)
-
-7) when you are done, unmount the file system:
-   fusermount -u /tmp/dfs_test
+A simple high level fuse plugin (dfuse_hl) is implemented to test the DFS API
+and functionality with existing POSIX tests and benchmarks (IOR, mdtest,
+etc.). The DFS high level fuse exposes one mounpoint as a single DFS namespace
+with a single pool and container.

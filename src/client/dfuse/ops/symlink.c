@@ -29,9 +29,7 @@
 #define TYPE_NAME entry_req
 #include "dfuse_ops.h"
 
-static const struct dfuse_request_api api = {
-	.on_result	= dfuse_entry_cb,
-};
+static const struct dfuse_request_api api;
 
 void
 dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,

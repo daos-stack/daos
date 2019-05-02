@@ -250,6 +250,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		goto close;
 	}
 
+	pool_df = vos_pool_pop2df(ph);
+
 	/* If the file is fallocated seperately we need the fallocated size
 	 * for setting in the root object.
 	 */
@@ -270,8 +272,6 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	rc = umem_tx_begin(&umem, NULL);
 	if (rc != 0)
 		goto close;
-
-	pool_df = vos_pool_pop2df(ph);
 
 	rc = pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
 	if (rc != 0)

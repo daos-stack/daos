@@ -105,6 +105,20 @@ typedef void (*utest_init_cb)(void *ptr, size_t size, const void *cb_arg);
 int utest_alloc(struct utest_context *utx, umem_id_t *mmid, size_t size,
 		utest_init_cb cb, const void *cb_arg);
 
+/** Allocate an object and, optionally, initialize it.  If the context
+ *  is a pmem context, this will be done in a transaction.
+ *
+ *  \param	utx[IN]		The context
+ *  \param	off[OUT]	The allocated offset
+ *  \param	size[IN]	The size to allocate
+ *  \param	cb[IN]		Optional initialization callback
+ *  \param	cb_arg[IN]	Optional argument to pass to initialization
+ *
+ *  \return 0 on success, error otherwise
+ */
+int utest_alloc_off(struct utest_context *utx, umem_off_t *umoff, size_t size,
+		    utest_init_cb cb, const void *cb_arg);
+
 /** Free an object
  *
  *  \param	utx[IN]		The context
@@ -114,14 +128,14 @@ int utest_alloc(struct utest_context *utx, umem_id_t *mmid, size_t size,
  */
 int utest_free(struct utest_context *utx, umem_id_t mmid);
 
-/** Free a typed object
+/** Free an object
  *
  *  \param	utx[IN]		The context
- *  \param	tmmid[IN]	The allocated pointer to free
+ *  \param	umoff[IN]	The allocated offset to free
  *
  *  \return 0 on success, error otherwise
  */
-#define utest_free_typed(utx, tmmid) utest_free(utx, (tmmid).oid)
+int utest_free_off(struct utest_context *utx, umem_off_t umoff);
 
 /** Get the umem_instance for a context
  *
@@ -166,3 +180,17 @@ struct umem_attr *utest_utx2uma(struct utest_context *utx);
  */
 #define utest_off2ptr(utx, offset)					\
 	umem_id2ptr(utest_utx2umm(utx), utest_off2mmid(utx, offset))
+
+/** Start a transaction, if applicable
+ *  \param	utx[IN]		The context
+ *
+ *  \return 0 on success
+ */
+int utest_tx_begin(struct utest_context *utx);
+
+/** Commit or abort and finish a transaction, if applicable
+ *  \param	utx[IN]		The context
+ *
+ *  \return 0 on success
+ */
+int utest_tx_end(struct utest_context *utx, int rc);

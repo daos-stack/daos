@@ -54,22 +54,19 @@ stab_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 static int
 stab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	TMMID(struct smd_nvme_stream_df)	nstream_mmid;
 	struct umem_instance			*umm = &tins->ti_umm;
 
-	nstream_mmid = umem_id_u2t(rec->rec_mmid, struct smd_nvme_stream_df);
-	if (TMMID_IS_NULL(nstream_mmid))
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	umem_free_typed(umm, nstream_mmid);
-	return 0;
+	return umem_free_off(umm, rec->rec_off);
 }
 
 static int
 stab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		  daos_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct smd_nvme_stream_df)	nstream_mmid;
+	umem_off_t				 nstream_off;
 	struct smd_nvme_stream_df		*nstream_df;
 	int					*ukey = NULL;
 
@@ -77,15 +74,15 @@ stab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	ukey = (int *)key_iov->iov_buf;
 	D_DEBUG(DB_DF, "Allocating device uuid=%d\n", *ukey);
 
-	nstream_mmid = umem_znew_typed(&tins->ti_umm,
-				       struct smd_nvme_stream_df);
-	if (TMMID_IS_NULL(nstream_mmid))
+	nstream_off = umem_zalloc_off(&tins->ti_umm,
+				      sizeof(struct smd_nvme_stream_df));
+	if (UMOFF_IS_NULL(nstream_off))
 		return -DER_NOMEM;
 
-	nstream_df = umem_id2ptr_typed(&tins->ti_umm, nstream_mmid);
+	nstream_df = umem_off2ptr(&tins->ti_umm, nstream_off);
 	nstream_df->ns_map.nsm_stream_id = *ukey;
 	memcpy(nstream_df, val_iov->iov_buf, sizeof(*nstream_df));
-	rec->rec_mmid = umem_id_t2u(nstream_mmid);
+	rec->rec_off = nstream_off;
 	return 0;
 }
 
@@ -93,9 +90,9 @@ static int
 stab_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		  daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct smd_nvme_stream_df		*nstream_df = NULL;
+	struct smd_nvme_stream_df		*nstream_df;
 
-	nstream_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	nstream_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	memcpy(val_iov->iov_buf, nstream_df, sizeof(*nstream_df));
 	return 0;
 }
@@ -105,10 +102,14 @@ stab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		   daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct smd_nvme_stream_df		*nstream_df;
+	int					 rc;
 
-	umem_tx_add(&tins->ti_umm, rec->rec_mmid,
-		    sizeof(struct smd_nvme_stream_df));
-	nstream_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	rc = umem_tx_add_off(&tins->ti_umm, rec->rec_off,
+			     sizeof(struct smd_nvme_stream_df));
+	if (rc != 0)
+		return rc;
+
+	nstream_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	memcpy(nstream_df, val_iov->iov_buf, val_iov->iov_len);
 	return 0;
 }

@@ -46,13 +46,13 @@ struct umem_tx_stage_item {
 /** persistent memory operations (depends on pmdk) */
 
 static umem_id_t
-pmem_id(struct umem_instance *umm, void *addr)
+pmem_id(const struct umem_instance *umm, void *addr)
 {
 	return pmemobj_oid(addr);
 }
 
 static void *
-pmem_addr(struct umem_instance *umm, umem_id_t ummid)
+pmem_addr(const struct umem_instance *umm, umem_id_t ummid)
 {
 	return pmemobj_direct(ummid);
 }
@@ -339,7 +339,7 @@ umem_tx_errno(int err)
 /* volatile memroy operations */
 
 static umem_id_t
-vmem_id(struct umem_instance *umm, void *addr)
+vmem_id(const struct umem_instance *umm, void *addr)
 {
 	umem_id_t	ummid = UMMID_NULL;
 
@@ -348,7 +348,7 @@ vmem_id(struct umem_instance *umm, void *addr)
 }
 
 static void *
-vmem_addr(struct umem_instance *umm, umem_id_t ummid)
+vmem_addr(const struct umem_instance *umm, umem_id_t ummid)
 {
 	return (void *)ummid.off;
 }
@@ -471,6 +471,29 @@ static struct umem_class umem_class_defined[] = {
 	},
 };
 
+/** Workout the necessary offsets and base address for the pool */
+static void
+set_offsets(struct umem_instance *umm)
+{
+	char		*root;
+	umem_id_t	 root_oid;
+
+	if (umm->umm_id == UMEM_CLASS_VMEM) {
+		umm->umm_base = 0;
+		umm->umm_pool_uuid_lo = 0;
+		return;
+	}
+
+	root_oid = pmemobj_root(umm->umm_pool, 0);
+	D_ASSERTF(!UMMID_IS_NULL(root_oid),
+		  "You must call pmemobj_root before umem_class_init\n");
+
+	root = pmemobj_direct(root_oid);
+
+	umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
+	umm->umm_base = (uint64_t)root - root_oid.off;
+}
+
 /**
  * Instantiate a memory class \a umm by attributes in \a uma
  *
@@ -503,6 +526,8 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_ops	= umc->umc_ops;
 	umm->umm_name	= umc->umc_name;
 	umm->umm_pool	= uma->uma_pool;
+
+	set_offsets(umm);
 	return 0;
 }
 
@@ -514,22 +539,6 @@ umem_attr_get(struct umem_instance *umm, struct umem_attr *uma)
 {
 	uma->uma_id = umm->umm_id;
 	uma->uma_pool = umm->umm_pool;
-}
-
-/**
- * Get pmemobj pool uuid
- */
-uint64_t
-umem_get_uuid(struct umem_instance *umm)
-{
-	umem_id_t root_oid;
-
-	if (umm->umm_id == UMEM_CLASS_VMEM)
-		return 0; /* empty uuid */
-
-	root_oid = pmemobj_root(umm->umm_pool, 0);
-	D_ASSERT(!UMMID_IS_NULL(root_oid));
-	return root_oid.pool_uuid_lo;
 }
 
 /*

@@ -32,19 +32,38 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+static inline struct dc_obj_layout *
+obj_shard2layout(struct dc_obj_shard *shard)
+{
+	return container_of(shard, struct dc_obj_layout,
+			    do_shards[shard->do_shard]);
+}
+
 void
 obj_shard_decref(struct dc_obj_shard *shard)
 {
-	bool final_release;
+	struct dc_obj_layout	*layout;
+	struct dc_object	*obj;
+	bool			 release = false;
 
-	D_ASSERT(shard != NULL && shard->do_ref > 0);
+	D_ASSERT(shard != NULL);
+	D_ASSERT(shard->do_ref > 0);
 	D_ASSERT(shard->do_obj != NULL);
-	D_SPIN_LOCK(&shard->do_obj->cob_spin);
-	shard->do_ref--;
-	final_release = (shard->do_ref == 0);
-	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
-	if (final_release)
+
+	obj = shard->do_obj;
+	layout = obj_shard2layout(shard);
+
+	D_SPIN_LOCK(&obj->cob_spin);
+	if (--(shard->do_ref) == 0) {
+		layout->do_open_count--;
+		if (layout->do_open_count == 0 && layout != obj->cob_shards)
+			release = true;
 		shard->do_obj = NULL;
+	}
+	D_SPIN_UNLOCK(&obj->cob_spin);
+
+	if (release)
+		D_FREE(layout);
 }
 
 void
@@ -64,6 +83,8 @@ dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 	int			rc;
 
 	D_ASSERT(obj != NULL && shard != NULL);
+	D_ASSERT(shard->do_obj == NULL);
+
 	rc = dc_cont_tgt_idx2ptr(obj->cob_coh, shard->do_target_id,
 				 &map_tgt);
 	if (rc)
@@ -75,6 +96,10 @@ dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 	shard->do_obj = obj;
 	shard->do_co_hdl = obj->cob_coh;
 	obj_shard_addref(shard);
+
+	D_SPIN_LOCK(&obj->cob_spin);
+	obj->cob_shards->do_open_count++;
+	D_SPIN_UNLOCK(&obj->cob_spin);
 
 	return 0;
 }
@@ -166,7 +191,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
 	orwo = crt_reply_get(rw_args->rpc);
-	rw_args->dobj->do_md.smd_attr = orwo->orw_attr;
+	rw_args->dobj->do_attr = orwo->orw_attr;
 	if (opc_get(rw_args->rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		daos_iod_t	*iods;
 		uint64_t	*sizes;
@@ -323,7 +348,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
 	     struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-	     tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
+	     tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	struct dc_pool	       *pool;
 	crt_rpc_t	       *req = NULL;
@@ -387,6 +412,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dti_cos.ca_arrays = NULL;
 
 	orw->orw_epoch = epoch;
+	orw->orw_dkey_hash = dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
 	orw->orw_iods.ca_count = nr;
@@ -508,7 +534,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 		   const uuid_t coh_uuid, const uuid_t cont_uuid,
 		   unsigned int *map_ver,
 		   struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-		   tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
+		   tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	struct dc_pool			*pool;
 	struct obj_punch_in		*opi;
@@ -554,6 +580,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 
 	opi->opi_map_ver	 = *map_ver;
 	opi->opi_epoch		 = epoch;
+	opi->opi_dkey_hash	 = dkey_hash;
 	opi->opi_oid		 = oid;
 	opi->opi_dkeys.ca_count  = (dkey == NULL) ? 0 : 1;
 	opi->opi_dkeys.ca_arrays = dkey;
@@ -593,7 +620,7 @@ dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		    daos_sg_list_t *sgls, unsigned int *map_ver,
 		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-		    tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
+		    tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_UPDATE, epoch, dkey,
 			    nr, iods, sgls, map_ver, fw_shard_tgts, fw_cnt,
