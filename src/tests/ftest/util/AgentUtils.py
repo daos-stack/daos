@@ -113,7 +113,6 @@ def run_agent(basepath, server_list, client_list=None):
         build_vars = json.load(json_vars)
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 
-    client = None
     for client in client_list:
         cmd = [
             "ssh",
@@ -146,6 +145,7 @@ def run_agent(basepath, server_list, client_list=None):
                 if excpn.errno != errno.EAGAIN:
                     raise AgentFailed("Error in starting daos_agent: "
                                       "{0}".format(str(excpn)))
+                time.sleep(1)
                 continue
             expected_data += output
 
@@ -154,7 +154,6 @@ def run_agent(basepath, server_list, client_list=None):
                 print("<AGENT> agent started on node {} in {} "
                         "seconds".format(client, time.time() - start_time))
                 break
-            time.sleep(1)
 
     return sessions
 # pylint: enable=too-many-locals
