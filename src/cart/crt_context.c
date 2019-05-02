@@ -878,11 +878,19 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	crt_set_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
+
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
 	    (epi->epi_req_num - epi->epi_reply_num) >=
 	     crt_gdata.cg_credit_ep_ctx) {
-		d_list_add_tail(&rpc_priv->crp_epi_link,
-				&epi->epi_req_waitq);
+
+		if (rpc_priv->crp_opc_info->coi_queue_front) {
+			d_list_add(&rpc_priv->crp_epi_link,
+					&epi->epi_req_waitq);
+		} else {
+			d_list_add_tail(&rpc_priv->crp_epi_link,
+					&epi->epi_req_waitq);
+		}
+
 		epi->epi_req_wait_num++;
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;

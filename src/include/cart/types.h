@@ -416,6 +416,13 @@ typedef enum {
  */
 #define CRT_RPC_FEAT_NO_TIMEOUT		(1U << 2)
 
+/**
+ * If RPC ends up being queued due to exceeding in-flight rpc limit, queue
+ * at the front of the queue. If not set, queues at the end
+ */
+#define CRT_RPC_FEAT_QUEUE_FRONT	(1U << 3)
+
+
 typedef void *crt_bulk_opid_t;
 
 /** Bulk transfer permissions */

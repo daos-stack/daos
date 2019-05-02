@@ -365,8 +365,6 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	    size_t output_size, crt_rpc_cb_t rpc_cb,
 	    struct crt_corpc_ops *co_ops)
 {
-	bool	disable_reply;
-	bool	enable_reset_timer;
 	int	rc = 0;
 
 	if (opc_info->coi_inited == 1) {
@@ -406,20 +404,15 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 		opc_info->coi_input_size;
 
 	/* set RPC features */
-	disable_reply =  flags & CRT_RPC_FEAT_NO_REPLY;
-	enable_reset_timer = flags & CRT_RPC_FEAT_NO_TIMEOUT;
+	opc_info->coi_no_reply = D_BIT_IS_SET(flags, CRT_RPC_FEAT_NO_REPLY);
+	opc_info->coi_reset_timer = D_BIT_IS_SET(flags, CRT_RPC_FEAT_NO_TIMEOUT);
+	opc_info->coi_queue_front = D_BIT_IS_SET(flags, CRT_RPC_FEAT_QUEUE_FRONT);
 
-	opc_info->coi_no_reply = disable_reply;
-	if (disable_reply)
-		D_DEBUG(DB_TRACE, "opc %#x, reply disabled.\n", opc);
-	else
-		D_DEBUG(DB_TRACE, "opc %#x, reply enabled.\n", opc);
-
-	opc_info->coi_reset_timer = enable_reset_timer;
-	if (enable_reset_timer)
-		D_DEBUG(DB_TRACE, "opc %#x, reset_timer enabled.\n", opc);
-	else
-		D_DEBUG(DB_TRACE, "opc %#x, reset_timer disabled.\n", opc);
+	D_DEBUG(DB_TRACE, "opc %#x, reply %s, reset_timer %s, queue_front %s\n",
+		opc,
+		opc_info->coi_no_reply ? "enabled" : "disabled",
+		opc_info->coi_reset_timer ? "enabled" : "disabled",
+		opc_info->coi_queue_front ? "enabled" : "disabled");
 
 out:
 	return rc;

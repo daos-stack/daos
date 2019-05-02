@@ -78,6 +78,9 @@ test_init()
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
+	rc = sem_init(&test.tg_queue_front_token, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed.\n");
+
 	opt.cio_use_credits = 1;
 	opt.cio_ep_credits = test.tg_credits;
 
@@ -111,6 +114,8 @@ static int sent_count;
 static void
 rpc_handle_reply(const struct crt_cb_info *info)
 {
+	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
+		info->cci_rc);
 	resp_count++;
 	D_DEBUG(DB_TRACE, "Response count=%d\n", resp_count);
 
@@ -118,6 +123,15 @@ rpc_handle_reply(const struct crt_cb_info *info)
 		D_DEBUG(DB_ALL, "received all expected replies\n");
 		sem_post(&test.tg_token_to_proceed);
 	}
+}
+
+static void
+rpc_handle_ping_front_q(const struct crt_cb_info *info)
+{
+	D_DEBUG(DB_TRACE, "Response from front queued rpc\n");
+	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
+		info->cci_rc);
+	sem_post(&test.tg_queue_front_token);
 }
 
 static void
@@ -137,17 +151,44 @@ test_run()
 
 	for (i = 0; i < test.tg_burst_count; i++) {
 		rc = crt_req_create(test.tg_crt_ctx, &ep, OPC_PING, &rpc);
-		assert(rc == 0);
+		D_ASSERTF(rc == 0, "crt_req_create() failed. rc: %d\n", rc);
 
 		input = crt_req_get(rpc);
-		if (i == 0)
-			input->pi_delay = 1;
-		else
+
+		if (i == 0) {
+			/* If we test 'send to front of queue' flag we
+			 * want to increase response delay of first rpc to 3
+			 * seconds in order to allow sufficient queue up
+			 */
+			if (test.tg_send_queue_front)
+				input->pi_delay = 3;
+			else
+				input->pi_delay = 1;
+		} else {
 			input->pi_delay = 0;
+		}
 
 		rc = crt_req_send(rpc, rpc_handle_reply, NULL);
-		assert(rc == 0);
+		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 		sent_count++;
+	}
+
+	/* Send RPC message to be in front of the queue. This option
+	 * should only be used when test.tg_burst_count is large while
+	 * test.tg_credits is small, allowing sufficient queue up of
+	 * rpcs
+	 */
+	if (test.tg_send_queue_front) {
+		rc = crt_req_create(test.tg_crt_ctx, &ep, OPC_PING_FRONT,
+				&rpc);
+		D_ASSERTF(rc == 0, "crt_req_create() failed. rc: %d\n", rc);
+
+		rc = crt_req_send(rpc, rpc_handle_ping_front_q, NULL);
+		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+		test_sem_timedwait(&test.tg_queue_front_token, 61, __LINE__);
+		D_ASSERTF(sent_count != resp_count,
+			"Send count matches response count\n");
 	}
 
 	D_DEBUG(DB_TRACE, "Waiting for responses to %d rpcs\n",
@@ -187,6 +228,9 @@ test_fini()
 	}
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
+	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+	rc = sem_destroy(&test.tg_queue_front_token);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 
 	rc = crt_finalize();

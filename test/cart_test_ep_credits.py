@@ -108,7 +108,8 @@ class TestEpCredits(commontestsuite.CommonTestSuite):
                        % srv_proc.returncode)
 
         # Important: 0 should be last in tuple, as client shuts down server
-        # for credit=0 case
+        # for credits=0 case
+        # For credits=1 case, we force 'front of queue' rpc via -f flag
         credits_to_test = (1, 5, 10, 20, 255, 0)
 
         for credit in credits_to_test:
@@ -118,6 +119,11 @@ class TestEpCredits(commontestsuite.CommonTestSuite):
 
             if credit == 0:
                 cli_cmd = cli_cmd + " -q"
+
+            # Force special rpc to front of the queue via -f flag. We do
+            # this for credit=1 to make sure enough of rpcs get queued up
+            if credit == 1:
+                cli_cmd = cli_cmd + " -f"
 
             cli_rtn = self.launch_test(testmsg, '1', self.pass_env,
                                        cli=hosts, cli_arg=cli_cmd)

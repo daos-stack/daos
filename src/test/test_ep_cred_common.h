@@ -46,7 +46,8 @@
 
 #define OPC_MY_PROTO    (0x01000000)
 #define OPC_PING	(0x01000000)
-#define OPC_SHUTDOWN    (0x01000001)
+#define OPC_PING_FRONT	(0x01000001)
+#define OPC_SHUTDOWN    (0x01000002)
 
 struct test_global_t {
 	crt_group_t		*tg_local_group;
@@ -64,9 +65,11 @@ struct test_global_t {
 	pthread_t		 tg_tid;
 	int			 tg_thread_id;
 	sem_t			 tg_token_to_proceed;
+	sem_t			 tg_queue_front_token;
 	int			 tg_credits;
 	int			 tg_burst_count;
 	int			 tg_send_shutdown;
+	int			 tg_send_queue_front;
 };
 
 struct test_global_t test = {0};
@@ -98,6 +101,16 @@ ping_hdlr_0(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 }
 
+static void
+ping_hdlr_1(crt_rpc_t *rpc_req)
+{
+	int rc;
+
+	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+}
+
 
 static void
 shutdown_handler(crt_rpc_t *rpc_req)
@@ -117,6 +130,11 @@ struct crt_proto_rpc_format my_proto_rpc_fmt_0[] = {
 		.prf_flags	= 0,
 		.prf_req_fmt	= &CQF_ping,
 		.prf_hdlr	= ping_hdlr_0,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_QUEUE_FRONT,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_1,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
@@ -148,12 +166,13 @@ test_parse_args(int argc, char **argv)
 		{"is_service",	no_argument,		0, 's'},
 		{"credits",	required_argument,	0, 'c'},
 		{"burst",	required_argument,	0, 'b'},
+		{"queue_front",	no_argument,		0, 'f'},
 		{"shutdown",	no_argument,		0, 'q'},
 		{0, 0, 0, 0}
 	};
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:b:c:hsq", long_options,
+		rc = getopt_long(argc, argv, "n:a:b:c:fhsq", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -182,6 +201,9 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'q':
 			test.tg_send_shutdown = 1;
+			break;
+		case 'f':
+			test.tg_send_queue_front = 1;
 			break;
 		case '?':
 			return 1;

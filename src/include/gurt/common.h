@@ -72,6 +72,10 @@
 extern "C" {
 #endif
 
+/* Check if bit is set in passed val */
+#define D_BIT_IS_SET(val, bit) (((val) & bit) ? 1 : 0)
+
+
 /**
  * Get the current time using a monotonic timer
  * param[out] ts A timespec structure for the result

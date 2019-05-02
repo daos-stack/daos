@@ -74,7 +74,8 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req);
 
 static struct crt_proto_rpc_format crt_swim_proto_rpc_fmt[] = {
 	{
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY |
+				CRT_RPC_FEAT_QUEUE_FRONT,
 		.prf_req_fmt	= &CQF_crt_rpc_swim,
 		.prf_hdlr	= crt_swim_srv_cb,
 		.prf_co_ops	= NULL,

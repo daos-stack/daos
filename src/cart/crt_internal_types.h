@@ -236,6 +236,7 @@ struct crt_opc_info {
 				 coi_rpccb_init:1,
 				 coi_coops_init:1,
 				 coi_no_reply:1, /* flag of one-way RPC */
+				 coi_queue_front:1, /* add to front of queue */
 				 coi_reset_timer:1; /* reset timer on timeout */
 
 	crt_rpc_cb_t		 coi_rpc_cb;
