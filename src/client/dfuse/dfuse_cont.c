@@ -28,11 +28,11 @@
 
 /* Lookup a container within a pool */
 static bool
-dfuse_pool_connect(fuse_req_t req, struct dfuse_inode_entry *parent,
-		   const char *name, bool create)
+dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
+		const char *name, bool create)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_info *dfuse_info = fs_handle->dfuse_info;
+	struct dfuse_info		*dfuse_info = fs_handle->dfuse_info;
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_dfs		*dfs = NULL;
 	uuid_t				co_uuid;
@@ -137,15 +137,15 @@ err:
 }
 
 void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name)
 {
-	dfuse_pool_connect(req, parent, name, false);
+	dfuse_cont_open(req, parent, name, false);
 }
 
 bool
-dfuse_pool_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode)
 {
-	return dfuse_pool_connect(req, parent, name, true);
+	return dfuse_cont_open(req, parent, name, true);
 }

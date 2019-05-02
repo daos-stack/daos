@@ -363,7 +363,7 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 	} else {
 
 		/* Populate ie->ie_stat */
-		dfs->dffs_ops = &dfuse_pool_ops;
+		dfs->dffs_ops = &dfuse_cont_ops;
 		D_INIT_LIST_HEAD(&dfs->dffs_child);
 	}
 

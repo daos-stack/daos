@@ -321,9 +321,9 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.create		= dfuse_cb_create,
 };
 
-struct dfuse_inode_ops dfuse_pool_ops = {
-	.lookup		= dfuse_pool_lookup,
-	.mkdir		= dfuse_pool_mkdir,
+struct dfuse_inode_ops dfuse_cont_ops = {
+	.lookup		= dfuse_cont_lookup,
+	.mkdir		= dfuse_cont_mkdir,
 };
 
 /* Return the ops that should be passed to fuse */

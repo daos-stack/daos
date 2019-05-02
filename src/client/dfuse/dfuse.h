@@ -114,7 +114,7 @@ struct dfuse_inode_ops {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
-extern struct dfuse_inode_ops dfuse_pool_ops;
+extern struct dfuse_inode_ops dfuse_cont_ops;
 
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dffs_ops;
@@ -614,13 +614,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  bool create,
 		  fuse_req_t req);
 
-/* dfuse_pool.c */
+/* dfuse_cont.c */
 void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 bool
-dfuse_pool_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 #endif /* __DFUSE_H__ */
