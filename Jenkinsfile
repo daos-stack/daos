@@ -260,7 +260,6 @@ pipeline {
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
                                                cd $DAOS_BASE
                                                OLD_CI=false utils/run_test.sh
-					       python utils/fix_cmocka_xml.py
                                                rm -rf run_test.sh/
                                                mkdir run_test.sh/
                                                [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
@@ -295,7 +294,8 @@ pipeline {
                         }
                         */
                         always {
-				sh '''ls -l test_results/'''
+				sh '''python utils/fix_cmocka_xml.py
+					ls -l test_results/'''
 				junit 'test_results/*.xml'
 				archiveArtifacts artifacts: 'run_test.sh/**'
                         }
