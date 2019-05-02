@@ -43,7 +43,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		return;
 	}
 
-	rlink = d_hash_rec_find(&fs_handle->inode_ht, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
 				ino);
@@ -57,7 +57,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	daos_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_read(inode->ie_dfs->dffs_dfs, inode->obj, sgl, position,
+	rc = dfs_read(inode->ie_dfs->dffs_dfs, inode->ie_obj, sgl, position,
 		      &read_size);
 	if (rc == -DER_SUCCESS) {
 		rc = fuse_reply_buf(req, buff, read_size);
@@ -70,5 +70,5 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		D_FREE(buff);
 	}
 
-	d_hash_rec_decref(&fs_handle->inode_ht, rlink);
+	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
 }
