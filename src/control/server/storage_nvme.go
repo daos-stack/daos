@@ -274,6 +274,7 @@ func addCret(
 func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 	var pciAddr string
 	srv := n.config.Servers[i]
+	log.Debugf("performing device format on NVMe controllers")
 
 	// wraps around addCret to provide format specific function
 	addCretFormat := func(status pb.ResponseStatus, errMsg string) {
@@ -326,7 +327,8 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 				continue
 			}
 
-			log.Debugf("format successful.\n")
+			log.Debugf(
+				"controller format successful (%s)\n", pciAddr)
 
 			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
 			n.controllers = loadControllers(cs, ns)
@@ -338,6 +340,7 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 		return
 	}
 
+	log.Debugf("device format on NVMe controllers completed")
 	n.formatted = true
 	return
 }

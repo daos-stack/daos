@@ -241,7 +241,6 @@ func (c *control) BurnInNvme(pciAddr string, configPath string) (
 	defer cancel()
 
 	params := &pb.BurninNvmeParams{
-		//		Pciaddr: pciAddr,
 		Fioconfig: &pb.FilePath{Path: configPath},
 	}
 	_, err = c.client.BurninStorage(

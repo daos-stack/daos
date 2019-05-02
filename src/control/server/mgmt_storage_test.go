@@ -423,6 +423,7 @@ func TestFormatStorage(t *testing.T) {
 	}
 }
 
+// TODO: to be used during the limitation of fw update feature
 //func TestUpdateNvmeCtrlr(t *testing.T) {
 //	cs := defaultMockControlService(t)
 //

@@ -153,6 +153,7 @@ func (c *controlService) UpdateStorage(
 	return nil
 }
 
+// TODO: to be used during the limitation of fw update feature
 //// UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the
 //// fwrev reported changes after update.
 ////
@@ -199,6 +200,7 @@ func (c *controlService) FetchFioConfigPaths(
 	return nil
 }
 
+// TODO: to be used during the limitation of burnin feature
 //// BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 //// in a stream to the gRPC consumer.
 //func (c *controlService) BurnInNvme(

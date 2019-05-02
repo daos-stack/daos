@@ -29,6 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func hasConns(results client.ResultMap) (out string) {
@@ -67,6 +68,15 @@ func sprintConns(results client.ResultMap) (out string) {
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
+// annotateState adds status string representation if no Info provided
+func annotateState(state *pb.ResponseState) {
+	if state.Info == "" {
+		state.Info = fmt.Sprintf(
+			"status=%s",
+			state.Status.String())
+	}
+}
+
 // unpackFormat takes a map of addresses to result type and prints either
 // decoded struct or provided error.
 func unpackFormat(i interface{}) string {
@@ -89,14 +99,8 @@ func unpackFormat(i interface{}) string {
 			} else if len(res.Ctrlrs) > 0 {
 				decoded[addr] = res.Ctrlrs
 			} else {
-				// annotate with string representation of status num
 				for i := range res.Responses {
-					state := res.Responses[i].State
-					if state.Info == "" {
-						state.Info = fmt.Sprintf(
-							"status=%s",
-							state.Status.String())
-					}
+					annotateState(res.Responses[i].State)
 				}
 				decoded[addr] = res.Responses
 			}
@@ -108,14 +112,8 @@ func unpackFormat(i interface{}) string {
 			} else if len(res.Modules) > 0 {
 				decoded[addr] = res.Modules
 			} else {
-				// annotate with string representation of status num
 				for i := range res.Responses {
-					state := res.Responses[i].State
-					if state.Info == "" {
-						state.Info = fmt.Sprintf(
-							"status=%s",
-							state.Status.String())
-					}
+					annotateState(res.Responses[i].State)
 				}
 				decoded[addr] = res.Responses
 			}
@@ -127,14 +125,8 @@ func unpackFormat(i interface{}) string {
 			} else if len(res.Mounts) > 0 {
 				decoded[addr] = res.Mounts
 			} else {
-				// annotate with string representation of status num
 				for i := range res.Responses {
-					state := res.Responses[i].State
-					if state.Info == "" {
-						state.Info = fmt.Sprintf(
-							"status=%s",
-							state.Status.String())
-					}
+					annotateState(res.Responses[i].State)
 				}
 				decoded[addr] = res.Responses
 			}

@@ -113,7 +113,7 @@ func TestCheckSprint(t *testing.T) {
 			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
 		},
 		{
-			NewClientMount(
+			NewClientMountResults(
 				[]*pb.ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",

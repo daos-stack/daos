@@ -59,7 +59,7 @@ type ScmStorage interface {
 // for accessing SCM devices (API) in addition to storage of device
 // details.
 //
-// IpaCtl provides necessary methods to interact with Storage Class
+// IpmCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
@@ -75,7 +75,7 @@ type scmStorage struct {
 // return
 // }
 
-// Setup placeholder implementation for scmStorage
+// Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
 	resp := new(pb.ScanStorageResp)
 	s.Discover(resp)
@@ -87,7 +87,7 @@ func (s *scmStorage) Setup() error {
 	return nil
 }
 
-// Teardown placeholder implementation for scmStorage
+// Teardown implementation for scmStorage
 func (s *scmStorage) Teardown() error {
 	s.initialized = false
 	return nil
@@ -232,6 +232,7 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 
 	srv := s.config.Servers[i]
 	mntPoint := srv.ScmMount
+	log.Debugf("performing SCM device reset, format and mount")
 
 	// wraps around addMret to provide format specific function
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
@@ -288,7 +289,7 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 			return
 		}
 
-		log.Debugf("format complete.\n")
+		log.Debugf("scm format complete.\n")
 	case scmRAM:
 		devPath = "tmpfs"
 		devType = "tmpfs"
@@ -319,9 +320,10 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 		return
 	}
 
-	log.Debugf("mount complete.\n")
+	log.Debugf("scm mount complete.\n")
 	addMretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
 
+	log.Debugf("SCM device reset, format and mount completed")
 	s.formatted = true
 	return
 }
