@@ -55,7 +55,7 @@ struct evt_desc {
 	/** Magic number for validation */
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
-	umem_id_t			dc_dtx;
+	umem_off_t			dc_dtx;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
@@ -240,7 +240,7 @@ struct evt_entry {
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
 	/** The DTX entry address */
-	umem_id_t			en_dtx;
+	umem_off_t			en_dtx;
 };
 
 struct evt_list_entry {

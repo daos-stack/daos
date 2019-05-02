@@ -71,12 +71,10 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 
-	TMMID(struct vos_cont_df) cont_mmid = umem_id_u2t(rec->rec_mmid,
-							  struct vos_cont_df);
-	if (TMMID_IS_NULL(cont_mmid))
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	umem_free_typed(umm, cont_mmid);
+	umem_free_off(umm, rec->rec_off);
 	return 0;
 }
 
@@ -84,7 +82,7 @@ static int
 cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	     daos_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct vos_cont_df)	cont_mmid;
+	umem_off_t			 offset;
 	struct vos_cont_df		*cont_df;
 	struct cont_df_args		*args = NULL;
 	struct d_uuid			*ukey = NULL;
@@ -95,14 +93,14 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	D_DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
 
 	args = (struct cont_df_args *)(val_iov->iov_buf);
-	cont_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cont_df);
-	if (TMMID_IS_NULL(cont_mmid))
+	offset = umem_zalloc_off(&tins->ti_umm, sizeof(struct vos_cont_df));
+	if (UMOFF_IS_NULL(offset))
 		return -DER_NOMEM;
 
-	cont_df = umem_id2ptr_typed(&tins->ti_umm, cont_mmid);
+	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 	args->ca_cont_df = cont_df;
-	rec->rec_mmid = umem_id_t2u(cont_mmid);
+	rec->rec_off = offset;
 
 	rc = vos_obj_tab_create(args->ca_pool, &cont_df->cd_otab_df);
 	if (rc) {
@@ -131,10 +129,10 @@ static int
 cont_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		  daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct vos_cont_df		*cont_df = NULL;
+	struct vos_cont_df		*cont_df;
 	struct cont_df_args		*args = NULL;
 
-	cont_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	args->ca_cont_df = cont_df;
 	val_iov->iov_len = sizeof(struct cont_df_args);
@@ -368,7 +366,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable);
 	cont->vc_dtx_committable_count = 0;
-	cont->vc_dtx_time_last_commit = time(NULL);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,
