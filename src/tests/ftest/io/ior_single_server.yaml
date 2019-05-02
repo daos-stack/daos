@@ -1,0 +1,48 @@
+hosts:
+   test_machines:
+        test_servers:
+            - boro-A
+        diff_clients: !mux
+            single_client:
+                clients:
+                    - boro-B
+            two_clients:
+                clients:
+                    - boro-B
+                    - boro-C
+            four_clients:
+                clients:
+                    - boro-B
+                    - boro-C
+                    - boro-D
+                    - boro-E
+timeout: 540
+server_config:
+    name: daos_server
+createtests:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 20000000000
+    createsvc:
+        svcn: 1
+ior:
+    iteration:
+        iter: 1
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize:
+        r: '1m'
+    segmentcount:
+        s: '1m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"

@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
+                 '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wframe-larger-than=4096']

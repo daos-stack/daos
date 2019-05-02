@@ -1,0 +1,78 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines:
+    - boro-A
+    - boro-B
+server_config:
+  name: daos_server
+tests:
+  modes: !mux
+    modeall:
+      mode:
+        - 511
+        - PASS
+    readonly:
+      mode:
+        - 73
+        - FAIL
+    writeonly:
+      mode:
+        - 146
+        - PASS
+    execonly:
+      mode:
+        - 292
+        - PASS
+    modebogus:
+      mode:
+        - 111093499399299949949949949
+        - FAIL
+  uids: !mux
+    validuid:
+      uid:
+        - valid
+        - PASS
+    rootuid:
+      uid:
+        - 0
+        - PASS
+    anotheruid:
+      uid:
+        - 1001
+        - PASS
+  gids: !mux
+    validgid:
+      gid:
+        - valid
+        - PASS
+    rootuid:
+      gid:
+        - 0
+        - PASS
+    anotheruid:
+      gid:
+        - 1001
+        - PASS
+  setnames: !mux
+    validsetname:
+      setname:
+        - daos_server
+        - PASS
+    badsetname:
+      setname:
+        - complete_rubbish
+        - FAIL
+  tgtlist: !mux
+    firsttgt:
+      tgt:
+        - "0"
+        - PASS
+    bothtgt:
+      tgt:
+        - "0:1"
+        - PASS
+    badtgt:
+      tgt:
+        - "0:1:2"
+        - FAIL

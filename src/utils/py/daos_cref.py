@@ -95,6 +95,7 @@ class PoolInfo(ctypes.Structure):
                 ("pi_gid", ctypes.c_uint32),
                 ("pi_mode", ctypes.c_uint32),
                 ("pi_leader", ctypes.c_uint32),
+                ("pi_bits", ctypes.c_uint64),
                 ("pi_space", PoolSpace),
                 ("pi_rebuild_st", RebuildStatus)]
 

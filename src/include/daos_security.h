@@ -38,7 +38,16 @@ extern "C" {
 #include <stdbool.h>
 #include <sys/types.h>
 
-#define	DAOS_ACL_VERSION		1
+/**
+ * Version of the ACL structure format
+ */
+#define	DAOS_ACL_VERSION		(1)
+
+/**
+ * Maximum length of the user@domain principal string, not including null
+ * terminator.
+ */
+#define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
 
 /**
  * Header for the Access Control List, followed by the table of variable-length
@@ -154,7 +163,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
  *		allocated
  */
 struct daos_acl *
-daos_acl_copy(struct daos_acl *acl);
+daos_acl_dup(struct daos_acl *acl);
 
 /**
  * Free a DAOS Access Control List.
@@ -163,6 +172,18 @@ daos_acl_copy(struct daos_acl *acl);
  */
 void
 daos_acl_free(struct daos_acl *acl);
+
+/**
+ * Get the total size of the DAOS Access Control List in bytes.
+ * This includes the size of the header as well as the ACE list.
+ *
+ * \param[in]	acl	ACL to get the size of
+ *
+ * \return	Size of ACL in bytes
+ *		-DER_INVAL		Invalid input
+ */
+ssize_t
+daos_acl_get_size(struct daos_acl *acl);
 
 /**
  * Get the next Access Control Entry in the Access Control List, for iterating
@@ -291,8 +312,8 @@ daos_ace_free(struct daos_ace *ace);
  *
  * \param[in]	ace	ACE to get the size of
  *
- * \return	Success		Size of ACE in bytes
- *		-DER_INVAL	Invalid input
+ * \return	Size of ACE in bytes
+ *		-DER_INVAL		Invalid input
  */
 ssize_t
 daos_ace_get_size(struct daos_ace *ace);

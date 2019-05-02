@@ -103,7 +103,7 @@ static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
 }
 
 static inline bool
-daos_csum_isvalid(daos_csum_buf_t *csum)
+daos_csum_isvalid(const daos_csum_buf_t *csum)
 {
 	return csum != NULL &&
 	       csum->cs_len > 0 &&
@@ -306,6 +306,21 @@ struct daos_rebuild_status {
 };
 
 /**
+ * Pool info query bits.
+ * The basic pool info like fields from pi_uuid to pi_leader will always be
+ * queried for each daos_pool_query() calling. But the pi_space and
+ * pi_rebuild_st are optional based on pi_mask's value.
+ */
+enum daos_pool_info_bit {
+	/** true to query pool space usage */
+	DPI_SPACE		= 1ULL << 0,
+	/** true to query rebuild status */
+	DPI_REBUILD_STATUS	= 1ULL << 1,
+	/** query all above optional info */
+	DPI_ALL			= -1,
+};
+
+/**
  * Storage pool
  */
 typedef struct {
@@ -327,6 +342,8 @@ typedef struct {
 	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
+	/** pool info bits, see daos_pool_info_bit */
+	uint64_t			pi_bits;
 	/** Space usage */
 	struct daos_pool_space		pi_space;
 	/** rebuild status */
@@ -552,6 +569,12 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
+	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cell,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
+				 * cell size 1MB.
+				 */
 };
 
 /** Object class attributes */
@@ -581,14 +604,12 @@ typedef struct daos_oclass_attr {
 
 		/** Erasure coding attributes */
 		struct daos_ec_attr {
-			/** Type of EC */
-			unsigned int	 e_type;
-			/** EC group size */
-			unsigned int	 e_grp_size;
-			/**
-			 * TODO: add members to describe erasure coding
-			 * attributes
-			 */
+			/** number of data cells (k) */
+			unsigned short	 e_k;
+			/** number of parity cells (p) */
+			unsigned short	 e_p;
+			/** length of each block of data (cell) */
+			unsigned int	 e_len;
 		} ec;
 	} u;
 	/** TODO: add more attributes */
@@ -889,8 +910,23 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
+	/**
+	 * The user who acts as the owner of the pool.
+	 * Format: user@[domain]
+	 */
+	DAOS_PROP_PO_OWNER,
+	/**
+	 * The group that acts as the owner of the pool.
+	 * Format: group@[domain]
+	 */
+	DAOS_PROP_PO_OWNER_GROUP,
 	DAOS_PROP_PO_MAX,
 };
+
+/**
+ * Number of pool property types
+ */
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 /** DAOS space reclaim strategy */
 enum {

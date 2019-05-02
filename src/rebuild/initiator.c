@@ -170,7 +170,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      &rdone->ro_dkey, rdone->ro_iod_num,
-			      rdone->ro_iods, &ioh);
+			      rdone->ro_iods, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -223,7 +223,7 @@ post:
 	}
 
 end:
-	vos_update_end(ioh, rdone->ro_version, &rdone->ro_dkey, rc);
+	vos_update_end(ioh, rdone->ro_version, &rdone->ro_dkey, rc, NULL);
 	return rc;
 }
 
@@ -244,7 +244,8 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 			(char *)rdone->ro_dkey.iov_buf, rdone->ro_max_eph);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
 				   rdone->ro_max_eph, rpt->rt_rebuild_ver,
-				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL);
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL,
+				   NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -268,7 +269,7 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
 				   rdone->ro_ephs[i], rpt->rt_rebuild_ver,
 				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 1,
-				   &rdone->ro_ephs_keys[i]);
+				   &rdone->ro_ephs_keys[i], NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -681,9 +682,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		D_DEBUG(DB_REBUILD, "create rebuild dkey ult %d\n",
 			iter_arg->tgt_idx);
 		rpt_get(rpt);
-		rc = dss_rebuild_ult_create(rebuild_one_ult, rpt,
-			DSS_ULT_REBUILD, iter_arg->tgt_idx,
-			PULLER_STACK_SIZE, &puller->rp_ult);
+		rc = dss_ult_create(rebuild_one_ult, rpt, DSS_ULT_REBUILD,
+				    iter_arg->tgt_idx, PULLER_STACK_SIZE,
+				    &puller->rp_ult);
 		if (rc) {
 			rpt_put(rpt);
 			D_GOTO(free, rc);
@@ -735,7 +736,7 @@ rebuild_obj_punch_one(void *data)
 	D_ASSERT(rc == 0);
 
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
-			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL);
+			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL, NULL);
 	ds_cont_put(cont);
 	if (rc)
 		D_ERROR(DF_UOID" rebuild punch failed rc %d\n",
@@ -906,9 +907,9 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 		obj_arg->rpt->rt_toberb_objs++;
 
 	/* Let's iterate the object on different xstream */
-	rc = dss_rebuild_ult_create(rebuild_obj_ult, obj_arg, DSS_ULT_REBUILD,
-				    oid.id_pub.lo % dss_tgt_nr,
-				    PULLER_STACK_SIZE, NULL);
+	rc = dss_ult_create(rebuild_obj_ult, obj_arg, DSS_ULT_REBUILD,
+			    oid.id_pub.lo % dss_tgt_nr,
+			    PULLER_STACK_SIZE, NULL);
 	if (rc) {
 		rpt_put(iter_arg->rpt);
 		D_FREE(obj_arg);
@@ -1413,8 +1414,8 @@ rebuild_obj_handler(crt_rpc_t *rpc)
 
 		rpt->rt_lead_puller_running = 1;
 		D_ASSERT(rpt->rt_pullers != NULL);
-		rc = dss_rebuild_ult_create(rebuild_puller_ult, arg,
-					    DSS_ULT_SELF, 0, 0, NULL);
+		rc = dss_ult_create(rebuild_puller_ult, arg, DSS_ULT_REBUILD,
+				    DSS_TGT_SELF, 0, NULL);
 		if (rc) {
 			rpt_put(rpt);
 			D_FREE(arg);

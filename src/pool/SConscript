@@ -12,8 +12,7 @@ def scons():
     # ds_pool: Pool Server
     ds_pool = daos_build.library(denv, 'pool',
                                  ['srv.c', 'srv_pool.c', 'srv_layout.c',
-                                  'srv_target.c', 'srv_rdb.c',
-                                  'srv_util.c', 'srv_iv.c',
+                                  'srv_target.c', 'srv_util.c', 'srv_iv.c',
                                   common])
     denv.Install('$PREFIX/lib/daos_srv', ds_pool)
 

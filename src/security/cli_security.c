@@ -34,7 +34,6 @@
 
 /* Prototypes for static helper functions */
 static int request_credentials_via_drpc(Drpc__Response **response);
-static char *get_agent_socket_path(void);
 static int process_credential_response(Drpc__Response *response,
 		daos_iov_t *creds);
 static int sanity_check_credential_response(Drpc__Response *response);
@@ -67,7 +66,12 @@ request_credentials_via_drpc(Drpc__Response **response)
 	struct drpc	*agent_socket;
 	int		rc;
 
-	agent_socket = drpc_connect(get_agent_socket_path());
+	if (dc_agent_sockpath == NULL) {
+		D_ERROR("DAOS Socket Path is Unitialized\n");
+		return -DER_UNINIT;
+	}
+
+	agent_socket = drpc_connect(dc_agent_sockpath);
 	if (agent_socket == NULL) {
 		D_ERROR("Can't connect to agent socket\n");
 		return -DER_BADPATH;
@@ -87,21 +91,6 @@ request_credentials_via_drpc(Drpc__Response **response)
 	drpc_close(agent_socket);
 	drpc_call_free(request);
 	return rc;
-}
-
-static char *
-get_agent_socket_path(void)
-{
-	/*
-	 * UDS path may be set in an environment variable.
-	 */
-	char *path = getenv(DAOS_AGENT_DRPC_SOCK_ENV);
-
-	if (path == NULL) {
-		path = DEFAULT_DAOS_AGENT_DRPC_SOCK;
-	}
-
-	return path;
 }
 
 static int

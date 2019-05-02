@@ -3392,7 +3392,7 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
-		rc = cmocka_run_group_tests_name("DAOS I/O tests", io_tests,
+		rc = cmocka_run_group_tests_name("DAOS IO tests", io_tests,
 						 obj_setup, test_teardown);
 		MPI_Barrier(MPI_COMM_WORLD);
 		return rc;

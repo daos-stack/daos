@@ -1,0 +1,58 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines1:
+    test_machines:
+      - boro-A
+timeout: 50
+server_config:
+  name: daos_server
+createtests:
+  createmode:
+    mode: 511
+  createset:
+    setname: daos_server
+  createsize:
+    size: 10737418
+  ContainerUUIDS: !mux
+    gooduid:
+      uuid:
+        - 0cf3086e-daa3-44a7-a5d4-cba9d639bf19
+        - PASS
+    nonexistingUUID:
+      uuid:
+        - INVALID
+        - PASS
+  # pass for opened should probably be fail when force works, DAOS-1935
+  ConnectionOpened: !mux
+    #CTopened:
+    #  opened:
+    #    - TRUE
+    #    - PASS
+    CTclosed:
+      opened:
+        - FALSE
+        - PASS
+  # does not work at the moment, DAOS bug DAOS-1935
+  ForceDestroy: !mux
+    #noForce:
+    #  force:
+    #    - 0
+    #    - FAIL
+        validForce:
+          force:
+            - 1
+            - PASS
+    #    randomForce:
+    #      force:
+    #        - 99999999
+    #        - PASS
+  PoolHandles: !mux
+    validPH:
+      poh:
+        - VALID
+        - PASS
+    invalidPH:
+      poh:
+        - 99999
+        - FAIL

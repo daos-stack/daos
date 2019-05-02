@@ -187,11 +187,26 @@
 #
 #  rank: 0
 #
-#  # Logical CPU assignments as identified in /proc/cpuinfo
+#  # Targets represent logical CPU assignments as identified in /proc/cpuinfo.
 #  # e.g. [0-24] for CPU 0 to 24.
+#  # Note: currently converted to a core count and not explicitly assigned.
+#
+#  # Targets will be used to run XStreams.
 #  # Immutable after reformat.
 #
-#  cpus: [0-20]
+#  targets: [1-20]
+#
+#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Immutable after reformat.
+#
+#  # default: 2
+#  nr_xs_helpers: 0
+#
+#  # Index of first core for service thread.
+#  # Immutable after reformat.
+#
+#  # default: 0
+#  first_core: 1
 #
 #  # Use specific OFI interfaces.
 #  # Specify the fabric network interface that will be used by this server.
@@ -218,7 +233,6 @@
 #  # Empty by default.
 #
 #  env_vars:
-#      - ABT_MAX_NUM_XSTREAMS=100
 #      - CRT_TIMEOUT=30
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used
@@ -267,11 +281,26 @@
 #
 #  rank: 1
 #
-#  # Logical CPU assignments as identified in /proc/cpuinfo
+#  # Targets represent logical CPU assignments as identified in /proc/cpuinfo.
 #  # e.g. [0-24] for CPU 0 to 24.
+#  # Note: currently converted to a core count and not explicitly assigned.
+#
+#  # Targets will be used to run XStreams.
 #  # Immutable after reformat.
 #
-#  cpus: [21-40]
+#  targets: [21-40]
+#
+#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Immutable after reformat.
+#
+#  # default: 2
+#  nr_xs_helpers: 1
+#
+#  # Index of first core for service thread.
+#  # Immutable after reformat.
+#
+#  # default: 0
+#  first_core: 21
 #
 #  # Use specific OFI interfaces.
 #  # Specify the fabric network interface that will be used by this server.
@@ -298,7 +327,6 @@
 #  # Empty by default.
 #
 #  env_vars:
-#      - ABT_MAX_NUM_XSTREAMS=200
 #      - CRT_TIMEOUT=100
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used

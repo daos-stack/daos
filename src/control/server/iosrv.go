@@ -38,6 +38,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 )
@@ -95,29 +96,30 @@ func formatIosrv(
 		if reformat {
 			return errors.New(op + ": reformat not implemented yet")
 		}
+
 		return nil
 	} else if !os.IsNotExist(err) {
 		return errors.Wrap(err, op)
 	}
 
-	if !config.FormatOverride {
+	if config.FormatOverride {
+		log.Debugf(
+			"continuing without storage format on server %d "+
+				"(format_override set in config)\n", i)
+	} else {
 		log.Debugf("waiting for storage format on server %d\n", i)
 
 		// wait on format storage grpc call before creating superblock
 		srv.FormatCond.Wait()
-	} else {
-		log.Debugf(
-			"continuing without storage format on server %d "+
-				"(format_override set in config)\n", i)
+	}
 
-		// check scm has been mounted if skipping storage format
-		if err := config.checkMount(srv.ScmMount); err != nil {
-			return errors.WithMessage(
-				err,
-				fmt.Sprintf(
-					"server%d scm mount path (%s) not mounted",
-					i, srv.ScmMount))
-		}
+	// check scm has been mounted before proceeding to write to it
+	if err := config.checkMount(srv.ScmMount); err != nil {
+		return errors.WithMessage(
+			err,
+			fmt.Sprintf(
+				"server%d scm mount path (%s) not mounted",
+				i, srv.ScmMount))
 	}
 
 	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
@@ -198,7 +200,7 @@ type iosrv struct {
 	index   int
 	cmd     *exec.Cmd
 	sigchld chan os.Signal
-	ready   chan struct{}
+	ready   chan *srvpb.NotifyReadyReq
 	conn    *drpc.ClientConnection
 }
 
@@ -213,7 +215,7 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 		config:  config,
 		index:   i,
 		sigchld: make(chan os.Signal, 1),
-		ready:   make(chan struct{}),
+		ready:   make(chan *srvpb.NotifyReadyReq),
 		conn:    getDrpcClientConnection(config.SocketDir),
 	}
 
@@ -224,6 +226,14 @@ func (srv *iosrv) start() (err error) {
 	defer func() {
 		err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount)
 	}()
+
+	// Process bdev config parameters and write nvme.conf to SCM to be
+	// consumed by SPDK in I/O server process. Populates env & cli opts.
+	if err = srv.config.parseNvme(srv.index); err != nil {
+		err = errors.WithMessage(
+			err, "nvme config could not be processed")
+		return
+	}
 
 	if err = srv.startCmd(); err != nil {
 		return
@@ -236,11 +246,13 @@ func (srv *iosrv) start() (err error) {
 
 	// Wait for the notifyReady request or the SIGCHLD from the I/O server.
 	// If the I/O server is ready, make a dRPC connection to it.
+	var ready *srvpb.NotifyReadyReq
 	select {
-	case <-srv.ready:
+	case ready = <-srv.ready:
 	case <-srv.sigchld:
 		return errors.New("received SIGCHLD")
 	}
+	log.Debugf("iosrv ready: %+v", *ready)
 	if err = srv.conn.Connect(); err != nil {
 		return
 	}

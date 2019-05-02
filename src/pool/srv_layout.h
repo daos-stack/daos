@@ -60,9 +60,12 @@ extern daos_iov_t ds_pool_prop_map_version;	/* uint32_t */
 extern daos_iov_t ds_pool_prop_map_buffer;	/* pool_buf */
 extern daos_iov_t ds_pool_prop_map_uuids;	/* uuid_t[] (unused now) */
 extern daos_iov_t ds_pool_prop_label;		/* string */
+extern daos_iov_t ds_pool_prop_acl;		/* daos_acl */
 extern daos_iov_t ds_pool_prop_space_rb;	/* uint64_t */
 extern daos_iov_t ds_pool_prop_self_heal;	/* uint64_t */
 extern daos_iov_t ds_pool_prop_reclaim;		/*  uint64_t */
+extern daos_iov_t ds_pool_prop_owner;		/* string */
+extern daos_iov_t ds_pool_prop_owner_group;	/* string */
 extern daos_iov_t ds_pool_prop_nhandles;	/* uint32_t */
 
 /** pool handle KVS */
@@ -77,5 +80,19 @@ struct pool_hdl {
 };
 
 extern daos_prop_t pool_prop_default;
+
+/**
+ * Initializes the default pool properties.
+ *
+ * \return	0		Success
+ *		-DER_NOMEM	Could not allocate
+ */
+int ds_pool_prop_default_init(void);
+
+/**
+ * Finalizes the default pool properties.
+ * Frees any properties that were dynamically allocated.
+ */
+void ds_pool_prop_default_fini(void);
 
 #endif /* __POOL_SRV_LAYOUT_H__ */

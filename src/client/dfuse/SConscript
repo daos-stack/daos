@@ -1,0 +1,154 @@
+"""Build DFuse"""
+import os
+import daos_build
+
+HEADERS = ['ioil_io.h', 'ioil_defines.h',
+           'ioil_api.h', 'ioil_preload.h']
+COMMON_SRC = ['dfuse_fs.c',
+              'dfuse_da.c',
+              'dfuse_obj_da.c',
+              'dfuse_vector.c']
+DFUSE_SRC = ['dfuse_core.c',
+             'dfuse_main.c',
+             'dfuse_fuseops.c',
+             'dfuse_inode.c']
+OPS_SRC = ['create',
+           'fgetattr',
+           'forget',
+           'lookup',
+           'mkdir',
+           'read',
+           'readdir',
+           'readlink',
+           'rename',
+           'setattr',
+           'symlink',
+           'unlink',
+           'write']
+
+IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
+
+def build_common(env, files, is_shared):
+    """Build the common objects as shared or static"""
+    common = []
+
+    for src_file in files:
+        if is_shared:
+            common += env.SharedObject(src_file, SHOBJPREFIX='s_')
+        else:
+            common += env.Object(src_file)
+
+    return common
+
+def build_client_libs_shared(env):
+    """build the shared interception library"""
+
+    ilenv = env.Clone()
+    ilenv.AppendUnique(CFLAGS=['-fPIC'])
+    ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
+    penv = ilenv.Clone()
+    penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
+
+    il_obj = []
+    for src in IOIL_SRC:
+        il_obj += ilenv.SharedObject(os.path.join('il', src),
+                                     SHOBJPREFIX='s_')
+    common = build_common(penv, COMMON_SRC, True)
+
+    # Now build the interception library
+    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), il_lib)
+    dfuse_lib = daos_build.library(ilenv, 'common/libdfuse', common)
+
+    gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'],
+                                    LIBS=[])
+    script = ilenv.Command('il/check_ioil_syms', gen_script,
+                           "$SOURCE -s $TARGET")
+    env.Install('$PREFIX/TESTING/scripts', script)
+    script = ilenv.Command('il/ioil-ld-opts', gen_script,
+                           '$SOURCE -l $TARGET')
+    env.Install('$PREFIX/share', script)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), dfuse_lib)
+
+    return dfuse_lib + il_lib
+
+def build_client_libs_static(env, common):
+    """build the static interception library"""
+
+    ilenv = env.Clone()
+    il_obj = []
+    for src in IOIL_SRC:
+        il_obj += ilenv.Object(os.path.join('il', src))
+
+    # Now build the interception library
+    il_lib_src = ilenv.Library('il/libioil_source', il_obj + common)
+    il_lib = ilenv.Command('il/libioil.a', il_lib_src,
+                           'objcopy --localize-hidden $SOURCE $TARGET')
+
+    env.Install('$PREFIX/lib', il_lib)
+
+    # Now build the interception library
+    dfuse_lib_src = ilenv.Library('common/libdfuse_source', common)
+    dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
+                              'objcopy --localize-hidden $SOURCE $TARGET')
+    env.Install('$PREFIX/lib', dfuse_lib)
+
+    return il_lib + dfuse_lib
+
+def scons():
+    """Scons function"""
+
+    Import('env prereqs')
+
+    # Set options which are used throughout the src.
+    dfuse_env = env.Clone()
+    dfuse_env.AppendUnique(CPPPATH=['.'])
+    dfuse_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
+    dfuse_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
+
+    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
+
+    libs = build_client_libs_shared(dfuse_env)
+
+    static_env = dfuse_env.Clone()
+
+    # Set this after cloning environment used for interception library.
+    # Otherwise, can't define open and open64 entry points
+    dfuse_env.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
+
+    # Build a static library of the common parts.
+    common = build_common(dfuse_env, COMMON_SRC, False)
+    libs += build_client_libs_static(static_env, common)
+
+    # Now build the CNSS application
+    cenv = dfuse_env.Clone()
+    # Set the define in SConscript so that it's in place for the prereqs.require
+    # check which will verify fuse3/fuse.h can be loaded.
+    cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+    cenv.AppendUnique(LIBPATH=["../dfs"])
+
+    cenv.AppendUnique(LIBS=['dfs'])
+
+    prereqs.require(cenv, 'fuse')
+
+    dfuse_obj = []
+    for src in DFUSE_SRC:
+        dfuse_obj += cenv.Object(src)
+    for src in OPS_SRC:
+        dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+    progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
+
+    Default(progs + libs)
+
+    cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
+
+    # Do not install headers currently.
+    # for header in HEADERS:
+    #  dfuse_env.Install(os.path.join("$PREFIX", 'include'), 'il/%s' % header)
+
+    Export('dfuse_env')
+
+    SConscript('test/SConscript')
+
+if __name__ == "SCons.Script":
+    scons()

@@ -1,14 +1,15 @@
 name: daos
 servers:
 - rank: 0
-  cpus:
-  - 0-20
+  targets:
+  - 1-20
+  nr_xs_helpers: 0
+  first_core: 1
   fabric_iface: qib0
   fabric_iface_port: 20000
   log_mask: WARN
   log_file: /tmp/daos_server1.log
   env_vars:
-  - ABT_MAX_NUM_XSTREAMS=100
   - CRT_TIMEOUT=30
   scm_mount: /mnt/daos/1
   scm_class: ram
@@ -22,14 +23,15 @@ servers:
   cliopts: []
   formatcond: null
 - rank: 1
-  cpus:
+  targets:
   - 21-40
+  nr_xs_helpers: 1
+  first_core: 21
   fabric_iface: qib0
   fabric_iface_port: 20000
   log_mask: WARN
   log_file: /tmp/daos_server2.log
   env_vars:
-  - ABT_MAX_NUM_XSTREAMS=200
   - CRT_TIMEOUT=100
   scm_mount: /mnt/daos/2
   scm_class: dcpm
@@ -71,11 +73,8 @@ hyperthreads: true
 nr_hugepages: 4096
 control_log_mask: ERROR
 control_log_file: /tmp/daos_control.log
-targets: 0
 modules: ""
 attach: ""
-xshelpernr: 0
-firstcore: 0
 systemmap: ""
 path: testdata/.daos_server_uncomment.yml
 nvmeshmid: 0

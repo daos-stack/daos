@@ -50,6 +50,21 @@ struct loaded_mod {
 D_LIST_HEAD(loaded_mod_list);
 pthread_mutex_t loaded_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/* Define an array for faster accessing the module by mod_id */
+static struct dss_module	*dss_modules[DAOS_MAX_MODULE];
+
+struct dss_module *
+dss_module_get(int mod_id)
+{
+	/* If the mod_id comes from CART initialized RPC,
+	 * let's return NULL for now.
+	 */
+	if (mod_id >= DAOS_MAX_MODULE)
+		return NULL;
+
+	return dss_modules[mod_id];
+}
+
 static struct loaded_mod *
 dss_module_search(const char *modname)
 {
@@ -153,7 +168,9 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	/* module successfully loaded, add it to the tracking list */
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
 	d_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
+	dss_modules[smod->sm_mod_id] = smod;
 	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
+
 	return 0;
 
 err_rpc:
@@ -188,6 +205,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 
 	dss_unregister_key(smod->sm_key);
 
+	dss_modules[smod->sm_mod_id] = NULL;
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
