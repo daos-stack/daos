@@ -1488,14 +1488,11 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			enumerate_rec(DAOS_TX_NONE, dkeys[i], "akey", &size,
 				      &enum_num, recxs, eprs, &anchor_out, true,
 				      &req);
-
 			total_keys += enum_num;
-
-			if (enum_num == 0)
-				break;
 		}
 		print_message("\tdkey:%s, akey:'akey', #rec:%d\n", dkeys[i],
 			      total_keys);
+		assert_int_equal(total_keys, 1);
 
 		D_FREE(rec_fetch);
 	}
@@ -1525,9 +1522,6 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		enumerate_rec(DAOS_TX_NONE, dkeys[0], "akey0", &size, &enum_num,
 			      recxs, eprs, &anchor_out, true, &req);
 		total_keys += enum_num;
-
-		if (enum_num == 0)
-			break;
 	}
 	print_message("\tdkey:%s, akey:'akey0', #rec:%d\n", dkeys[0],
 		      total_keys);
@@ -1548,9 +1542,6 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		enumerate_rec(DAOS_TX_NONE, dkeys[0], "akey1", &size, &enum_num,
 			      recxs, eprs, &anchor_out, true, &req);
 		total_keys += enum_num;
-
-		if (enum_num == 0)
-			break;
 	}
 	print_message("\tdkey:%s, akey:'akey1', #rec:%d\n", dkeys[0],
 		      total_keys);
@@ -1574,14 +1565,12 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		memset(&anchor_out, 0, sizeof(anchor_out));
 		memset(buf, 0, 512);
 		total_keys = 0;
-		while (enum_num > 0) {
+		while (!daos_anchor_is_eof(&anchor_out)) {
 			enum_num = PUNCH_ENUM_NUM;
 			rc = enumerate_akey(DAOS_TX_NONE, dkeys[i], &enum_num,
 					    kds, &anchor_out, buf, 512, &req);
 			assert_int_equal(rc, 0);
 			total_keys += enum_num;
-			if (daos_anchor_is_eof(&anchor_out))
-				break;
 		}
 		print_message("\tdkey:%s, #akeys:%d\n", dkeys[i], total_keys);
 		assert_int_equal(total_keys, 0);
@@ -1599,14 +1588,12 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	memset(&anchor_out, 0, sizeof(anchor_out));
 	memset(buf, 0, 512);
 	total_keys = 0;
-	while (enum_num > 0) {
+	while (!daos_anchor_is_eof(&anchor_out)) {
 		enum_num = PUNCH_ENUM_NUM;
 		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
 				    buf, 512, &req);
 		assert_int_equal(rc, 0);
 		total_keys += enum_num;
-		if (daos_anchor_is_eof(&anchor_out))
-			break;
 	}
 	print_message("\t#dkeys:%d\n", total_keys);
 	assert_int_equal(total_keys, 0);
@@ -1651,14 +1638,12 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	memset(&anchor_out, 0, sizeof(anchor_out));
 	memset(buf, 0, 512);
 	total_keys = 0;
-	while (enum_num > 0) {
+	while (!daos_anchor_is_eof(&anchor_out)) {
 		enum_num = PUNCH_ENUM_NUM;
 		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
 				    buf, 512, &req);
 		assert_int_equal(rc, 0);
 		total_keys += enum_num;
-		if (daos_anchor_is_eof(&anchor_out))
-			break;
 	}
 	print_message("\t#dkeys:%d\n", total_keys);
 	assert_int_equal(total_keys, 0);
