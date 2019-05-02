@@ -161,7 +161,7 @@ def define_pmix(reqs):
     url = 'https://www.open-mpi.org/software/hwloc/v1.11' \
         '/downloads/hwloc-1.11.5.tar.gz'
     web_retriever = \
-        WebRetriever(url)
+        WebRetriever(url, "8f5fe6a9be2eb478409ad5e640b2d3ba")
     reqs.define('hwloc', retriever=web_retriever,
                 commands=['./configure --prefix=$HWLOC_PREFIX',
                           'make $JOBS_OPT', 'make install'],
@@ -346,7 +346,7 @@ def define_components(reqs):
 
     url = 'https://github.com/protobuf-c/protobuf-c/releases/download/' \
         'v1.3.0/protobuf-c-1.3.0.tar.gz'
-    web_retriever = WebRetriever(url)
+    web_retriever = WebRetriever(url, "08804f8bdbb3d6d44c2ec9e71e47ef6f")
     reqs.define('protobufc',
                 retriever=web_retriever,
                 commands=['./configure --prefix=$PROTOBUFC_PREFIX '

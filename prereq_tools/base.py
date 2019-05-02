@@ -31,6 +31,7 @@
 import os
 import traceback
 import hashlib
+import time
 import subprocess
 try:
     from subprocess import DEVNULL
@@ -487,26 +488,68 @@ class GitRepoRetriever(object):
 class WebRetriever(object):
     """Identify a location from where to download a source package"""
 
-    def __init__(self, url):
+    def __init__(self, url, md5):
         self.url = url
+        self.md5 = md5
         self.__dry_run = GetOption('check_only')
         if self.__dry_run:
             SetOption('no_exec', True)
         self.__dry_run = GetOption('no_exec')
 
+    def check_md5(self, filename):
+        """Return True if md5 matches"""
+
+        if not os.path.exists(filename):
+            return False
+
+        with open(filename, "r") as src:
+            hexdigest = hashlib.md5(src.read()).hexdigest()
+
+        if hexdigest != self.md5:
+            print "Removing exising file %s: md5 %s != %s" % (filename,
+                                                              self.md5,
+                                                              hexdigest)
+            os.remove(filename)
+            return False
+
+        print "File %s matches md5 %s" % (filename, self.md5)
+        return True
+
+    def download(self, basename):
+        """Download the file"""
+        initial_sleep = 1
+        retries = 3
+        # Retry download a few times if it fails
+        for i in range(0, retries + 1):
+            command = ['curl -L -O %s' % self.url]
+
+            failure_reason = "Download command failed"
+            if RUNNER.run_commands(command):
+                if self.check_md5(basename):
+                    print "Successfully downloaded %s" % self.url
+                    return True
+
+                failure_reason = "md5 mismatch"
+
+            print "Try #%d to get %s failed: %s" % (i + 1, self.url,
+                                                    failure_reason)
+
+            if i != retries:
+                time.sleep(initial_sleep)
+                initial_sleep *= 2
+
+        return False
+
     def get(self, subdir, **kw):
         """Downloads and extracts sources from a url into subdir"""
+
         basename = os.path.basename(self.url)
 
         if os.path.exists(subdir):
             # assume that nothing has changed
             return
 
-        # Always removes the tar file to avoid using garbage
-        commands = ['rm -rf %s %s' % (subdir, basename),
-                    'curl -L -O %s' % self.url]
-
-        if not RUNNER.run_commands(commands):
+        if not self.check_md5(basename) and not self.download(basename):
             raise DownloadFailure(self.url, subdir)
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):

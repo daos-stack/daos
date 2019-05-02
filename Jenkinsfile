@@ -174,14 +174,15 @@ pipeline {
             // Newer one looked up the last known good build of master branch.
             // Pipeline currently does not have access that info.
             sh 'rm -rf testbin/ && mkdir -p testbin'
+            sh 'rm -rf srcpath/fuse'
             sconsBuild target: 'fuse',
                        directory: 'scons_local',
                        scm: [url: 'https://github.com/libfuse/libfuse.git',
                              branch: "${env.FUSE_COMMIT}",
-                             checkoutDir: '${WORKSPACE}/fuse',
+                             checkoutDir: 'srcpath/fuse',
                              cleanAfterCheckout: true],
                        no_install: true,  // No separate install step
-                       SRC_PREFIX: '${WORKSPACE}',
+                       SRC_PREFIX: '\${WORKSPACE}/srcpath',
                        TARGET_PREFIX: '/testbin',
                        target_work: 'testbin'
             echo "fuse build succeeded"
