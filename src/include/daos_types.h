@@ -910,8 +910,23 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
+	/**
+	 * The user who acts as the owner of the pool.
+	 * Format: user@[domain]
+	 */
+	DAOS_PROP_PO_OWNER,
+	/**
+	 * The group that acts as the owner of the pool.
+	 * Format: group@[domain]
+	 */
+	DAOS_PROP_PO_OWNER_GROUP,
 	DAOS_PROP_PO_MAX,
 };
+
+/**
+ * Number of pool property types
+ */
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 /** DAOS space reclaim strategy */
 enum {

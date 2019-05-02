@@ -61,8 +61,6 @@ struct test_input_value tst_fn_val;
  * An example for string key
  */
 
-TMMID_DECLARE(struct sk_rec, 0);
-
 #define SK_MAX_KEY_LEN 128
 
 /** string key record */
