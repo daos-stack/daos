@@ -24,38 +24,13 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME fgh_da
-#define TYPE_NAME common_req
-#include "dfuse_ops.h"
-
-static bool
-dfuse_getattr_result_fn(struct dfuse_request *request)
-{
-	struct dfuse_attr_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-
-	if (request->rc == 0)
-		DFUSE_REPLY_ATTR(request->req, &out->stat);
-	else
-		DFUSE_REPLY_ERR(request, request->rc);
-
-	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
-	return false;
-}
-
-static const struct dfuse_request_api getattr_api = {
-	.on_result	= dfuse_getattr_result_fn,
-};
-
 void
-dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *inode)
+dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
 	struct stat	stat = {};
 	int		rc;
 
-	rc = dfs_ostat(inode->ie_dfs->dffs_dfs, inode->obj, &stat);
+	rc = dfs_ostat(ie->ie_dfs->dffs_dfs, ie->ie_obj, &stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
 	}
@@ -63,48 +38,10 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *inode)
 	/* Copy the inode number from the inode struct, to avoid having to
 	 * recompute it each time.
 	 */
-	stat.st_ino = inode->stat.st_ino;
+	stat.st_ino = ie->ie_stat.st_ino;
 	DFUSE_REPLY_ATTR(req, &stat);
 
 	return;
 err:
-	DFUSE_REPLY_ERR_RAW(inode, req, rc);
-}
-
-void
-Xdfuse_cb_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
-{
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_file_handle	*handle = NULL;
-	struct common_req		*desc = NULL;
-	int rc;
-
-	if (fi)
-		handle = (void *)fi->fh;
-
-	DFUSE_TRA_INFO(fs_handle, "inode %lu handle %p", ino, handle);
-
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, getattr_api, req, rc);
-	if (rc)
-		D_GOTO(err, rc);
-
-	if (handle) {
-		desc->request.ir_ht = RHS_FILE;
-		desc->request.ir_file = handle;
-		rc = dfuse_fs_send(&desc->request);
-		if (rc != 0)
-			D_GOTO(err, rc);
-	} else {
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(err, rc = ENOTSUP);
-		}
-	}
-
-	return;
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (desc) {
-		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_da_release(fs_handle->POOL_NAME, desc);
-	}
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }

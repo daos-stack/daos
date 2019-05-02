@@ -79,7 +79,9 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 		if (rc)
 			break;
 		if (entry->dpe_type == DAOS_PROP_PO_LABEL ||
-		    entry->dpe_type == DAOS_PROP_CO_LABEL)
+		    entry->dpe_type == DAOS_PROP_CO_LABEL ||
+		    entry->dpe_type == DAOS_PROP_PO_OWNER ||
+		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP)
 			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
 		else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
 			 entry->dpe_type == DAOS_PROP_CO_ACL)

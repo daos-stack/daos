@@ -314,7 +314,7 @@ dc_cont_put(struct dc_cont *dc)
 static void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
-	daos_hhash_link_insert(&dc->dc_hlink, D_HTYPE_CO);
+	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
 }
 
 static void
