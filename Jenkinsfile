@@ -763,6 +763,8 @@ pipeline {
                                                          ps axf
                                                      }' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
+					       export CMOCKA_MESSAGE_OUTPUT="xml"
+					       export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                OLD_CI=false utils/run_test.sh
                                                rm -rf run_test.sh/
