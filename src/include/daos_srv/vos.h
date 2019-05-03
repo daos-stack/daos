@@ -47,71 +47,30 @@ vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
 			      uint32_t, struct pl_obj_layout **));
 
 /**
- * Prepare the DTX handle in DRAM.
- *
- * XXX: Currently, we only support to prepare the DTX against single DAOS
- *	object and single dkey.
- *
- * \param dti		[IN]	The DTX identifier.
- * \param oid		[IN]	The target object (shard) ID.
- * \param dkey		[IN]	The target dkey to be modified.
- * \param coh		[IN]	Container open handle.
- * \param epoch		[IN]	Epoch for the DTX.
- * \param pm_ver	[IN]	Pool map version for the DTX.
- * \param intent	[IN]	The intent of related modification.
- * \param flags		[IN]	The flags for the DTX, see daos_tx_flags.
- * \param dth		[OUT]	Pointer to the DTX handle.
- *
- * \return			Zero on success, negative value if error.
- */
-int
-vos_dtx_begin(struct daos_tx_id *dti, daos_unit_oid_t *oid, daos_key_t *dkey,
-	      daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver,
-	      uint32_t intent, uint32_t flags, struct daos_tx_handle **dth);
-
-/**
- * Release the DTX handle in DRAM.
- *
- * \param dth		[IN]	Pointer to the DTX handle.
- * \param result	[IN]	The modification result.
- * \param leader	[IN]	Whether is leader for current DTX or not.
- *
- * \return		DTX_ACT_COMMIT_SYNC	Ask the caller to commit
- *						current DTX sychronously.
- * \return		DTX_ACT_COMMIT_ASYNC	Ask the caller to commit
- *						some old DTXs asychronously.
- * \return		DTX_ACT_AGGREGATE	Ask the caller to aggregate
- *						some old DTXs.
- * \return		Zero on success (no additional action required).
- * \return		Negative value if error.
- */
-int
-vos_dtx_end(struct daos_tx_handle *dth, int result, bool leader);
-
-/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	The target object (shard) ID.
- * \param dti	[IN]	The DTX identifier.
- * \param dkey	[IN]	The hashed dkey.
- * \param punch	[IN]	For punch DTX or not.
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	The target object (shard) ID.
+ * \param dti		[IN]	The DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param time		[IN]	Timestamp of handling the DTX on server.
+ * \param punch		[IN]	For punch DTX or not.
  *
  * \return		Zero on success and need not additional actions.
  * \return		Negative value if error.
  */
 int
-vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		struct daos_tx_id *dti, uint64_t dkey, bool punch);
+vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
+		uint64_t dkey_hash, uint64_t time, bool punch);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
  *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Pointer to the object ID.
- * \param xid	[IN]	Pointer to the DTX identifier.
- * \param dkey	[IN]	The hashed dkey.
- * \param punch	[IN]	For punch DTX or not.
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch DTX or not.
  *
  * \return	0 if the DTX exists in the CoS cache.
  * \return	-DER_NONEXIST if not in the CoS cache.
@@ -119,35 +78,37 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid,
  */
 int
 vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		   struct daos_tx_id *xid, uint64_t dkey, bool punch);
+		   struct dtx_id *xid, uint64_t dkey_hash, bool punch);
 
 /**
  * Fetch the list of the DTXs to be committed because of (potential) share.
  *
  * \param coh		[IN]	Container open handle.
  * \param oid		[IN]	The target object (shard) ID.
- * \param dkey		[IN]	The target dkey to be modified.
+ * \param dkey_hash	[IN]	The hashed dkey.
  * \param types		[IN]	The DTX types to be listed.
+ * \param max		[IN]	The max size of the array for DTX entries.
  * \param dtis		[OUT]	The DTX IDs array to be committed for share.
  *
  * \return			The count of DTXs to be committed for share
  *				on success, negative value if error.
  */
 int
-vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		 daos_key_t *dkey, uint32_t types, struct daos_tx_id **dtis);
+vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
+		 uint32_t types, int max, struct dtx_id **dtis);
 
 /**
  * Fetch the list of the DTXs that can be committed.
  *
  * \param coh	[IN]	Container open handle.
+ * \param max	[IN]	The max size of the array for DTX entries.
  * \param dtes	[OUT]	The array for DTX entries can be committed.
  *
- * \return		The count of DTXs can be committed on success,
- *			negative value if error.
+ * \return		Positve value for the @dtes array size.
+ *			Negative value on failure.
  */
 int
-vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
+vos_dtx_fetch_committable(daos_handle_t coh, int max, struct dtx_entry **dtes);
 
 /**
  * Check whether the specified DTX can be committed or not.
@@ -170,7 +131,7 @@ vos_dtx_list_committable(daos_handle_t coh, struct daos_tx_entry **dtes);
  */
 int
 vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
-			  struct daos_tx_id *dti, uint64_t dkey_hash,
+			  struct dtx_id *dti, uint64_t dkey_hash,
 			  bool punch);
 
 /**
@@ -186,7 +147,7 @@ vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
  * \return		Negative value if error.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct daos_tx_id *dtis, int count);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
 
 /**
  * Abort the specified DTXs.
@@ -200,24 +161,31 @@ vos_dtx_commit(daos_handle_t coh, struct daos_tx_id *dtis, int count);
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, struct daos_tx_id *dtis, int count,
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dtis, int count,
 	      bool force);
 
 /**
  * Aggregate the committed DTXs.
  *
  * \param coh	[IN]	Container open handle.
+ * \param max	[IN]	The max count of DTXs to be aggregated.
+ * \param age	[IN]	Not aggregate the DTX which age is newer than that.
  *
- * \return	DTX_ACT_AGGREGATE	Succeed but there are still some old
- *					DTXs to be aggregated. Usually the
- *					caller needs yield CPU, then trigger
- *					DTX aggegation again.
- * \return	Zero			Succeed and no more old DTXs to be
- *					aggregated.
+ * \return	Positive value if no more DTXs can be aggregated.
+ * \return	Zero if the requested (@max) DTXs have been aggregated.
  * \return	Negative value if error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh);
+vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
+
+/**
+ * Query the container's DTXs information.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param stat	[OUT]	The structure to hold the DTXs information.
+ */
+void
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
 
 /**
  * Initialize the environment for a VOS instance
@@ -504,12 +472,14 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			provided.
  * \param akey_nr [IN]	Number of akeys in \a akeys.
  * \param akeys [IN]	Array of akeys to be punched.
-
+ * \param dth	[IN]	Pointer to the DTX handle.
+ *
+ * \return		Zero on success, negative value if error
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys);
+	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth);
 
 /**
  * I/O APIs
@@ -571,13 +541,14 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
  * \param ioh	[OUT]	The returned handle for the I/O.
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		 daos_handle_t *ioh);
+		 daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -589,11 +560,13 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_update_begin with a non-zero error code.
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err);
+vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
+	       struct dtx_handle *dth);
 
 /**
  * Get the I/O descriptor.
@@ -836,6 +809,7 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param coh   [IN]		Container handle
  * \param oid   [IN]		DAOS object ID
  * \param epoch [IN]		Epoch to get
+ * \param dth	[IN]		Pointer to the DTX handle.
  * \param attr	[IN, OUT]	Attributes bitmask
  *
  * \return			0 on success and negative on
@@ -843,7 +817,7 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t *attr);
+		struct dtx_handle *dth, uint64_t *attr);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

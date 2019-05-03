@@ -965,8 +965,8 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 		return 0;
 
 	desc = evt_off2desc(tcx, ne->ne_child);
-	vos_dtx_degister_record(evt_umm(tcx), desc->dc_dtx,
-				ne->ne_child, DTX_RT_EVT);
+	vos_dtx_deregister_record(evt_umm(tcx), desc->dc_dtx,
+				  ne->ne_child, DTX_RT_EVT);
 	rc = evt_desc_free(tcx, desc,
 			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
 	if (rc == 0)

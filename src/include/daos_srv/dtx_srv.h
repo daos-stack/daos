@@ -27,23 +27,15 @@
 #include <daos/mem.h>
 #include <daos/dtx.h>
 #include <daos/placement.h>
+#include <daos_srv/vos_types.h>
+#include <daos_srv/pool.h>
+#include <daos_srv/container.h>
 
-#define DTX_THRESHOLD_COUNT			512
-#define DTX_COMMIT_THRESHOLD_TIME		60ULL
-#define DTX_AGGREGATION_THRESHOLD_COUNT		(1 << 27)
-#define DTX_AGGREGATION_THRESHOLD_TIME		3600ULL
-#define DTX_AGGREGATION_YIELD_INTERVAL		DTX_THRESHOLD_COUNT
-
-struct daos_tx_entry {
+struct dtx_entry {
 	/** The identifier of the DTX */
-	struct daos_tx_id	dte_xid;
+	struct dtx_id		dte_xid;
 	/** The identifier of the modified object (shard). */
 	daos_unit_oid_t		dte_oid;
-};
-
-enum daos_tx_flags {
-	/* Abort related DTX by force on conflict. */
-	DTX_F_AOC		= 1,
 };
 
 enum dtx_cos_list_types {
@@ -54,34 +46,54 @@ enum dtx_cos_list_types {
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
-struct daos_tx_handle {
-	/** The identifier of the DTX */
-	struct daos_tx_id	 dth_xid;
-	/** The identifier of the object (shard) to be modified. */
-	daos_unit_oid_t		 dth_oid;
-	/* The dkey to be modified if applicable */
-	daos_key_t		*dth_dkey;
+struct dtx_handle {
+	union {
+		struct {
+			/** The identifier of the DTX */
+			struct dtx_id		dth_xid;
+			/** The identifier of the shard to be modified. */
+			daos_unit_oid_t		dth_oid;
+		};
+		struct dtx_entry		dth_dte;
+	};
 	/** The container handle */
-	daos_handle_t		 dth_coh;
+	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
-	daos_epoch_t		 dth_epoch;
+	daos_epoch_t			 dth_epoch;
 	/** The {obj/dkey/akey}-tree records that are created
 	 * by other DTXs, but not ready for commit yet.
 	 */
-	d_list_t		 dth_shares;
+	d_list_t			 dth_shares;
+	/* The time when the DTX is handled on the server. */
+	uint64_t			 dth_handled_time;
+	/* The hash of the dkey to be modified if applicable */
+	uint64_t			 dth_dkey_hash;
 	/** Pool map version. */
-	uint32_t		 dth_ver;
+	uint32_t			 dth_ver;
 	/** The intent of related modification. */
-	uint32_t		 dth_intent;
-	/* Flags for related modification, see daos_tx_flags. */
-	uint32_t		 dth_flags;
-	uint32_t		 dth_sync:1, /* commit DTX synchronously. */
-				 dth_leader:1, /* leader replica or not. */
-				 dth_non_rep:1; /* non-replicated object. */
+	uint32_t			 dth_intent;
+	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 dth_leader:1, /* leader replica. */
+					 dth_non_rep:1, /* non-replicated. */
+					 /* dti_cos has been committed. */
+					 dth_dti_cos_done:1;
+	/* The count the DTXs in the dth_dti_cos array. */
+	uint32_t			 dth_dti_cos_count;
+	/* The array of the DTXs for Commit on Share (conflcit). */
+	struct dtx_id			*dth_dti_cos;
 	/* The identifier of the DTX that conflict with current one. */
-	struct daos_tx_id	 dth_conflict;
+	struct dtx_conflict_entry	*dth_conflict;
 	/** The address of the DTX entry in SCM. */
-	umem_off_t		 dth_ent;
+	umem_off_t			 dth_ent;
+	/** The address (offset) of the (new) object to be modified. */
+	umem_off_t			 dth_obj;
+};
+
+struct dtx_stat {
+	uint64_t	dtx_committable_count;
+	uint64_t	dtx_oldest_committable_time;
+	uint64_t	dtx_committed_count;
+	uint64_t	dtx_oldest_committed_time;
 };
 
 /**
@@ -96,23 +108,42 @@ enum dtx_status {
 	DTX_ST_COMMITTED	= 3,
 };
 
-/**
- * Some actions to be done for DTX control.
- */
-enum dtx_actions {
-	/** Need to aggregate some old DTXs. */
-	DTX_ACT_AGGREGATE	= 1,
-	/** Need to commit some old DTXs asychronously. */
-	DTX_ACT_COMMIT_ASYNC	= 2,
-	/** Commit current DTX sychronously. */
-	DTX_ACT_COMMIT_SYNC	= 3,
-};
-
-int dtx_commit(uuid_t po_uuid, uuid_t co_uuid,
-	       struct daos_tx_entry *dtes, int count, uint32_t version);
-int dtx_abort(uuid_t po_uuid, uuid_t co_uuid,
-	      struct daos_tx_entry *dtes, int count, uint32_t version);
 int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
+
+int dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
+	      daos_epoch_t epoch, uint64_t dkey_hash,
+	      struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
+	      int dti_cos_count, uint32_t pm_ver, uint32_t intent, bool leader,
+	      struct dtx_handle **dth);
+
+int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
+	    struct ds_cont *cont, int result);
+
+int dtx_conflict(daos_handle_t coh, struct dtx_handle *dth, uuid_t po_uuid,
+		 uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,
+		 uint32_t version);
+
+int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
+
+void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
+
+int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
+		      struct dtx_id *dti, uint64_t dkey_hash, bool punch);
+
+/* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
+ *	logic clock that will be hidden when divided by NSEC_PER_SEC.
+ */
+static inline uint64_t
+dtx_hlc_age2sec(uint64_t hlc)
+{
+	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
+}
+
+static inline bool
+dtx_is_null(umem_off_t umoff)
+{
+	return umoff == UMOFF_NULL;
+}
 
 #endif /* __DAOS_DTX_SRV_H__ */

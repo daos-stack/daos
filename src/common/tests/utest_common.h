@@ -137,15 +137,6 @@ int utest_free(struct utest_context *utx, umem_id_t mmid);
  */
 int utest_free_off(struct utest_context *utx, umem_off_t umoff);
 
-/** Free a typed object
- *
- *  \param	utx[IN]		The context
- *  \param	tmmid[IN]	The allocated pointer to free
- *
- *  \return 0 on success, error otherwise
- */
-#define utest_free_typed(utx, tmmid) utest_free(utx, (tmmid).oid)
-
 /** Get the umem_instance for a context
  *
  *  \param	utx[IN]		The context

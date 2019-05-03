@@ -324,6 +324,15 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
 			break;
+		case DAOS_PROP_PO_OWNER:
+		case DAOS_PROP_PO_OWNER_GROUP:
+			D_FREE(entry_def->dpe_str);
+			entry_def->dpe_str =
+					strndup(entry->dpe_str,
+						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
+			break;
 		case DAOS_PROP_PO_SPACE_RB:
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_RECLAIM:
@@ -364,6 +373,22 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			daos_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_label,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_PO_OWNER:
+			daos_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			daos_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner_group,
 					   &value);
 			if (rc)
 				return rc;
@@ -1336,6 +1361,10 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_ACL)
 		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_OWNER)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP)
+		nr++;
 	if (nr == 0)
 		return 0;
 
@@ -1408,6 +1437,45 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			return -DER_NOMEM;
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
 		       value.iov_buf_len);
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_OWNER) {
+		daos_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
+		prop->dpp_entries[idx].dpe_str =
+			strndup(value.iov_buf, value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP) {
+		daos_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner_group,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner group length %zu (> %d).\n",
+				value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+		prop->dpp_entries[idx].dpe_str =
+			strndup(value.iov_buf, value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
 		idx++;
 	}
 	return 0;
