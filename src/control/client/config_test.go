@@ -33,7 +33,7 @@ const (
 	testRuntimeDir = "/var/tmp/runtime"
 )
 
-func TestParseEnvVars(t *testing.T) {
+func TestParseEnvVarsCheckDefault(t *testing.T) {
 	// Obtain the default client configuration
 	config := NewConfiguration()
 
@@ -43,25 +43,33 @@ func TestParseEnvVars(t *testing.T) {
 	// Clear the environment variable.  Process them.
 	// Make sure there were none found and the default config value was preserved.
 	os.Setenv(daosAgentDrpcSockEnv, "")
-	res1 := config.ProcessEnvOverrides()
+	res := config.ProcessEnvOverrides()
 	// Restore the environment to what it was before the test started
 	os.Setenv(daosAgentDrpcSockEnv, original)
 	AssertEqual(
-		t, res1, 0,
+		t, res, 0,
 		"clearing environment variable returned unexpected number of results")
 
 	AssertEqual(
 		t, config.RuntimeDir, defaultRuntimeDir,
 		"an empty environment variable failed to preserve default runtime socket path")
+}
+
+func TestParseEnvVarsSet(t *testing.T) {
+	// Obtain the default client configuration
+	config := NewConfiguration()
+
+	// Save the environment variable before we blow it away
+	original := config.ext.getenv(daosAgentDrpcSockEnv)
 
 	// Set the environment variable.  Process them.
 	// Make sure there was one found and that config value matches what we set it to.
 	os.Setenv(daosAgentDrpcSockEnv, testRuntimeDir)
-	res2 := config.ProcessEnvOverrides()
+	res := config.ProcessEnvOverrides()
 	// Restore the environment to what it was before the test started
 	os.Setenv(daosAgentDrpcSockEnv, original)
 	AssertEqual(
-		t, res2, 1,
+		t, res, 1,
 		"setting environment variable returned unexpected number of results")
 
 	AssertEqual(

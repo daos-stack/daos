@@ -29,7 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -85,12 +84,6 @@ func agentMain() error {
 	if err != nil {
 		log.Errorf("Failed to apply command line overrides %s", err)
 		return err
-	}
-
-	if config.RuntimeDir == "" {
-		log.Errorf("The path to the agent communications socket is undefined.  "+
-			"Use the config file: %s or command line option 'runtime_dir' to specify a value.", config.Path)
-		return errors.New("the path to the agent communications socket is undefined")
 	}
 
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
