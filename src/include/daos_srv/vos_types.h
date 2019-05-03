@@ -69,6 +69,10 @@ typedef struct {
 	uint64_t		ci_nobjs;
 	/** Used space by container */
 	daos_size_t		ci_used;
+	/** Lowest prepared (uncommitted) epoch */
+	daos_epoch_t		ci_lpe;
+	/** Highest committed epoch */
+	daos_epoch_t		ci_hce;
 	/** Highest (Last) aggregated epoch */
 	daos_epoch_t		ci_hae;
 	/** TODO */

@@ -234,6 +234,20 @@ vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df)
 	dtab_df->tt_entry_head = UMOFF_NULL;
 	dtab_df->tt_entry_tail = UMOFF_NULL;
 
+	/* For recording the lowest active epoch, we assume that epochs and
+	 * corresponding transactions are generated serially -- i.e. the last
+	 * allocated transaction also has the highest epoch number. This means
+	 * the lowest and highest epochs are guaranteed to be at the head and
+	 * tail of the active list (we only track the tail). If this assumption
+	 * is false, we may need a different approach to keep track of the
+	 * lowest active epoch (either insert new transactions in the correct
+	 * order, or use a min-heap instead of a list).
+	 *
+	 * On the other hand, the order in which transactions are committed
+	 * is not guaranteed and it should not really matter.
+	 */
+	dtab_df->tt_active_tail = UMOFF_NULL;
+
 	dbtree_close(hdl);
 	return 0;
 }
@@ -719,6 +733,46 @@ vos_dtx_unlink_entry(struct umem_instance *umm, struct vos_dtx_table_df *tab,
 	}
 }
 
+static void
+vos_dtx_unlink_active(struct vos_container *cont, struct vos_dtx_entry_df *dtx)
+{
+	struct umem_instance	*umm = &cont->vc_pool->vp_umm;
+	struct vos_dtx_table_df *tab = &cont->vc_cont_df->cd_dtx_table_df;
+	struct vos_dtx_entry_df	*ent;
+
+	umem_tx_add_ptr(umm, tab, sizeof(*tab));
+	if (dtx_is_null(dtx->te_next)) { /* The tail of the DTXs list. */
+		if (dtx_is_null(dtx->te_prev)) { /* The unique one on list. */
+			tab->tt_active_tail = UMOFF_NULL;
+			cont->vc_cont_df->cd_lpe = DAOS_EPOCH_MAX;
+		} else {
+			ent = umem_off2ptr(umm, dtx->te_prev);
+			umem_tx_add_ptr(umm, &ent->te_next,
+					sizeof(ent->te_next));
+			tab->tt_active_tail = dtx->te_prev;
+			ent->te_next = UMOFF_NULL;
+			dtx->te_prev = UMOFF_NULL;
+		}
+	} else if (dtx_is_null(dtx->te_prev)) { /* The head of DTXs list */
+		ent = umem_off2ptr(umm, dtx->te_next);
+		umem_tx_add_ptr(umm, &ent->te_prev, sizeof(ent->te_prev));
+		ent->te_prev = UMOFF_NULL;
+		dtx->te_next = UMOFF_NULL;
+		cont->vc_cont_df->cd_lpe = ent->te_epoch;
+	} else {
+		ent = umem_off2ptr(umm, dtx->te_next);
+		umem_tx_add_ptr(umm, &ent->te_prev, sizeof(ent->te_prev));
+		ent->te_prev = dtx->te_prev;
+
+		ent = umem_off2ptr(umm, dtx->te_prev);
+		umem_tx_add_ptr(umm, &ent->te_next, sizeof(ent->te_next));
+		ent->te_next = dtx->te_next;
+
+		dtx->te_prev = UMOFF_NULL;
+		dtx->te_next = UMOFF_NULL;
+	}
+}
+
 static int
 vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 {
@@ -727,8 +781,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	struct vos_dtx_entry_df		*ent;
 	struct vos_dtx_table_df		*tab;
 	struct dtx_rec_bundle		 rbund;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
 	umem_off_t			 umoff;
 	int				 rc = 0;
 
@@ -758,7 +812,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	tab = &cont->vc_cont_df->cd_dtx_table_df;
 	umem_tx_add_ptr(umm, tab, sizeof(*tab));
 
+	vos_dtx_unlink_active(cont, dtx);
 	tab->tt_count++;
+	cont->vc_cont_df->cd_hce = MAX(cont->vc_cont_df->cd_hce, dtx->te_epoch);
 	if (dtx_is_null(tab->tt_entry_tail)) {
 		D_ASSERT(dtx_is_null(tab->tt_entry_head));
 
@@ -794,15 +850,21 @@ static int
 vos_dtx_abort_one(struct vos_container *cont, struct dtx_id *dti,
 		  bool force)
 {
-	d_iov_t	 kiov;
-	umem_off_t	 dtx;
+	d_iov_t		 kiov;
+	umem_off_t	 umoff;
 	int		 rc;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, &dtx);
-	if (rc == 0)
-		dtx_rec_release(&cont->vc_pool->vp_umm, dtx, true, true);
+	rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov,
+			   &umoff);
+	if (rc == 0) {
+		struct vos_dtx_entry_df	*dtx;
 
+		dtx = umem_off2ptr(&cont->vc_pool->vp_umm, umoff);
+		umem_tx_add_ptr(&cont->vc_pool->vp_umm, dtx, sizeof(*dtx));
+		vos_dtx_unlink_active(cont, dtx);
+		dtx_rec_release(&cont->vc_pool->vp_umm, umoff, true, true);
+	}
 	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = %d\n", DP_DTI(dti), rc);
 
 	if (rc != 0 && force)
@@ -826,19 +888,23 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	      umem_off_t rec_umoff, struct vos_dtx_entry_df **dtxp)
 {
 	struct vos_dtx_entry_df	*dtx;
+	struct vos_dtx_entry_df	*ent;
+	struct vos_dtx_table_df	*tab;
 	struct vos_container	*cont;
 	umem_off_t		 dtx_umoff;
-	d_iov_t		 kiov;
-	d_iov_t		 riov;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	struct dtx_rec_bundle	 rbund;
-	int			 rc;
+	int			 rc = DER_SUCCESS;
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
 
 	dtx_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_entry_df));
-	if (dtx_is_null(dtx_umoff))
-		return -DER_NOSPACE;
+	if (dtx_is_null(dtx_umoff)) {
+		rc = -DER_NOSPACE;
+		goto out;
+	}
 
 	dtx = umem_off2ptr(umm, dtx_umoff);
 	dtx->te_xid = dth->dth_xid;
@@ -852,18 +918,39 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	dtx->te_sec = crt_hlc_get();
 	dtx->te_records = rec_umoff;
 	dtx->te_next = UMOFF_NULL;
-	dtx->te_prev = UMOFF_NULL;
 
 	rbund.trb_umoff = dtx_umoff;
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
-	if (rc == 0) {
-		dth->dth_ent = dtx_umoff;
-		*dtxp = dtx;
-	}
+	if (rc)
+		goto out;
 
+	dth->dth_ent = dtx_umoff;
+	*dtxp = dtx;
+
+	tab = &cont->vc_cont_df->cd_dtx_table_df;
+	umem_tx_add_ptr(umm, tab, sizeof(*tab));
+
+	dtx->te_prev = tab->tt_active_tail;
+	if (dtx_is_null(tab->tt_active_tail)) {
+		D_ASSERTF(cont->vc_cont_df->cd_lpe == DAOS_EPOCH_MAX,
+			  DF_U64" "DF_U64,
+			  cont->vc_cont_df->cd_lpe, dtx->te_epoch);
+		cont->vc_cont_df->cd_lpe = dtx->te_epoch;
+	} else {
+		D_ASSERTF(cont->vc_cont_df->cd_lpe <= dtx->te_epoch,
+			  DF_U64" "DF_U64,
+			  cont->vc_cont_df->cd_lpe, dtx->te_epoch);
+
+		ent = umem_off2ptr(umm, tab->tt_active_tail);
+		umem_tx_add_ptr(umm, &ent->te_next, sizeof(ent->te_next));
+
+		ent->te_next = dtx_umoff;
+	}
+	tab->tt_active_tail = dtx_umoff;
+out:
 	return rc;
 }
 

@@ -66,6 +66,14 @@ struct ds_cont_child {
 				 sc_closing:1,
 				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
+	/** Time when last aggregation was performed **/
+	uint64_t		 sc_aggregated_ts;
+	/** Time when snapshots were last refreshed **/
+	uint64_t		 sc_snapshots_ts;
+	/** Aggregation limit (set when snapshot is in progress) **/
+	uint64_t		 sc_aggregation_max;
+	uint32_t		 sc_snapshots_nr;
+	uint64_t		*sc_snapshots;
 };
 
 /*
@@ -111,8 +119,12 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 	     void *arg, uint32_t type);
 
 int
-cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
-			int *snap_count);
+cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
+int
+cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
+			 uint64_t *snapshots, int snap_count);
+
+
 /**
  * Query container properties.
  *

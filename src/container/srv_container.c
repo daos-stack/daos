@@ -388,7 +388,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct rdb_kvs_attr	attr;
 	rdb_path_t		kvs;
 	uint64_t		ghce = 0;
-	uint64_t		ghpce = 0;
 	uint64_t		max_oid = 0;
 	int			rc;
 
@@ -437,13 +436,9 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
-	/* Create the GHCE and GHPCE properties. */
+	/* Create the GHCE and MaxOID properties. */
 	d_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
-	if (rc != 0)
-		D_GOTO(out_kvs, rc);
-	d_iov_set(&value, &ghpce, sizeof(ghpce));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghpce, &value);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 	d_iov_set(&value, &max_oid, sizeof(max_oid));
@@ -463,16 +458,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 	rc = cont_prop_write(tx, &kvs, prop_dup);
-	if (rc != 0)
-		D_GOTO(out_kvs, rc);
-
-	/* Create the LRE and LHE KVSs. */
-	attr.dsa_class = RDB_KVS_INTEGER;
-	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_lres, &attr);
-	if (rc != 0)
-		D_GOTO(out_kvs, rc);
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_lhes, &attr);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
@@ -584,14 +569,6 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
-	/* Destroy the LHE and LRE KVSs. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_lhes);
-	if (rc != 0)
-		D_GOTO(out_kvs, rc);
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_lres);
-	if (rc != 0)
-		D_GOTO(out_kvs, rc);
-
 	/* Destroy the container attribute KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &svc->cs_conts, &key);
 out_kvs:
@@ -637,26 +614,10 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	if (rc != 0)
 		D_GOTO(err_attrs, rc);
 
-	/* c_lres */
-	rc = rdb_path_clone(&p->c_prop, &p->c_lres);
-	if (rc != 0)
-		D_GOTO(err_attrs, rc);
-	rc = rdb_path_push(&p->c_lres, &ds_cont_prop_lres);
-	if (rc != 0)
-		D_GOTO(err_lres, rc);
-
-	/* c_lhes */
-	rc = rdb_path_clone(&p->c_prop, &p->c_lhes);
-	if (rc != 0)
-		D_GOTO(err_lres, rc);
-	rc = rdb_path_push(&p->c_lhes, &ds_cont_prop_lhes);
-	if (rc != 0)
-		D_GOTO(err_lhes, rc);
-
 	/* c_snaps */
 	rc = rdb_path_clone(&p->c_prop, &p->c_snaps);
 	if (rc != 0)
-		D_GOTO(err_lhes, rc);
+		D_GOTO(err_attrs, rc);
 	rc = rdb_path_push(&p->c_snaps, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		D_GOTO(err_snaps, rc);
@@ -676,10 +637,6 @@ err_user:
 	rdb_path_fini(&p->c_user);
 err_snaps:
 	rdb_path_fini(&p->c_snaps);
-err_lhes:
-	rdb_path_fini(&p->c_lhes);
-err_lres:
-	rdb_path_fini(&p->c_lres);
 err_attrs:
 	rdb_path_fini(&p->c_prop);
 err_p:
@@ -691,8 +648,6 @@ err:
 static void
 cont_put(struct cont *cont)
 {
-	rdb_path_fini(&cont->c_lhes);
-	rdb_path_fini(&cont->c_lres);
 	rdb_path_fini(&cont->c_prop);
 	rdb_path_fini(&cont->c_snaps);
 	rdb_path_fini(&cont->c_user);

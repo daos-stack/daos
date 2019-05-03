@@ -98,6 +98,14 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		return -DER_NOSPACE;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
+
+	/* For continuous local aggregation, we record the lowest active
+	 * and the highest committed epoch; it should be safe to aggregate
+	 * up to the lower of the two values without racing wih dtx_aggregate.
+	 */
+	cont_df->cd_hae = 0;
+	cont_df->cd_hce = 0;
+	cont_df->cd_lpe = DAOS_EPOCH_MAX;
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 	args->ca_cont_df = cont_df;
 	rec->rec_off = offset;
@@ -485,6 +493,8 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 
 	cont_info->ci_nobjs = cont->vc_cont_df->cd_nobjs;
 	cont_info->ci_used = cont->vc_cont_df->cd_used;
+	cont_info->ci_lpe = cont->vc_cont_df->cd_lpe;
+	cont_info->ci_hce = cont->vc_cont_df->cd_hce;
 	cont_info->ci_hae = cont->vc_cont_df->cd_hae;
 
 	return 0;

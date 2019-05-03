@@ -87,6 +87,11 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	uuid_copy(cont->sc_uuid, key);
 	cont->sc_dtx_resync_time = crt_hlc_get();
+	cont->sc_snapshots_ts = crt_hlc_get();
+	cont->sc_aggregated_ts	= 0;
+	cont->sc_aggregation_max = 0;
+	cont->sc_snapshots_nr = 0;
+	cont->sc_snapshots = NULL;
 
 	*link = &cont->sc_list;
 	return 0;
@@ -831,6 +836,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		D_GOTO(out, rc);
 
 	cont->sc_iv_ns = pool->sp_iv_ns;
+	ds_cont_tgt_snapshots_refresh(pool_uuid, cont_uuid);
 out:
 	if (pool)
 		ds_pool_put(pool);
@@ -1142,146 +1148,285 @@ ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
+struct cont_snap_args {
+	uuid_t		 pool_uuid;
+	uuid_t		 cont_uuid;
+	int		 snap_count;
+	uint64_t	*snapshots;
+};
+
+static int
+cont_snap_update_one(void *vin)
+{
+	struct cont_snap_args	*args = vin;
+	struct ds_cont_child	*cont;
+	int			 rc;
+
+	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	if (rc != 0)
+		return rc;
+	if (args->snap_count == 0) {
+		if (cont->sc_snapshots != NULL) {
+			D_ASSERT(cont->sc_snapshots_nr > 0);
+			D_FREE(cont->sc_snapshots);
+			cont->sc_snapshots = NULL;
+		}
+	} else {
+		void	*buf;
+		size_t	 bufsize;
+
+		bufsize = args->snap_count * sizeof(*args->snapshots);
+		D_REALLOC(buf, cont->sc_snapshots, bufsize);
+		if (buf == NULL) {
+			rc = -DER_NOMEM;
+			goto out_cont;
+		}
+		memcpy(buf, args->snapshots, bufsize);
+		cont->sc_snapshots = buf;
+	}
+	cont->sc_snapshots_nr = args->snap_count;
+	cont->sc_aggregation_max = DAOS_EPOCH_MAX;
+	cont->sc_snapshots_ts = crt_hlc_get();
+out_cont:
+	ds_cont_child_put(cont);
+	return rc;
+}
+
+int
+ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
+			     uint64_t *snapshots, int snap_count)
+{
+	struct cont_snap_args	 args;
+
+	uuid_copy(args.pool_uuid, pool_uuid);
+	uuid_copy(args.cont_uuid, cont_uuid);
+	args.snap_count = snap_count;
+	args.snapshots = snapshots;
+	D_DEBUG(DB_TRACE, DF_UUID": refreshing snapshots %d\n",
+		DP_UUID(cont_uuid), snap_count);
+	return dss_thread_collective(cont_snap_update_one, &args, 0);
+}
+
+void
+cont_snapshots_refresh_ult(void *data)
+{
+	struct cont_snap_args	*args = data;
+	struct ds_pool		*pool;
+	int			 rc;
+
+	pool = ds_pool_lookup(args->pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
+	rc = cont_iv_snapshots_refresh(pool->sp_iv_ns, args->cont_uuid);
+	ds_pool_put(pool);
+out:
+	if (rc != 0)
+		D_WARN(DF_UUID": failed to refresh snapshots IV: rc %d;"
+			" Aggregation may not work correctly\n",
+			DP_UUID(args->cont_uuid), rc);
+	D_FREE(args);
+}
+
+int
+ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct cont_snap_args	*args;
+	int			 rc;
+
+	D_ALLOC(args, sizeof(*args));
+	if (args == NULL)
+		return -DER_NOMEM;
+	uuid_copy(args->pool_uuid, pool_uuid);
+	uuid_copy(args->cont_uuid, cont_uuid);
+	rc = dss_ult_create(cont_snapshots_refresh_ult, args,
+			    DSS_ULT_POOL_SRV, 0, 0, NULL);
+	if (rc != 0)
+		D_FREE(args);
+	return rc;
+}
+
+int
+cont_child_aggregate(struct ds_cont_child *cont)
+{
+	daos_epoch_t		 epoch_max;
+	daos_epoch_range_t	 epoch_range;
+	vos_cont_info_t		 cinfo;
+	int			 i;
+	int			 rc;
+
+	rc = vos_cont_query(cont->sc_hdl, &cinfo);
+	if (rc)
+		return rc;
+	/*
+	 * Upper bound for aggregation is the smallest of:
+	 * 1. Limit set when snapshot is in progress
+	 * 2. Lowest active (prepared) DTX epoch
+	 * 3. Highest committed DTX epoch
+	 */
+	epoch_max = MIN(cont->sc_aggregation_max,
+			MIN(cinfo.ci_lpe, cinfo.ci_hce));
+
+	D_ASSERTF(cinfo.ci_hae <= epoch_max,
+		  "Highest aggregated %lu; Max %lu",
+		  cinfo.ci_hae, epoch_max);
+	/*
+	 * Start from the beginning if snapshots were refreshed since
+	 * the last aggregation in order to handle deleted snapshots
+	 */
+	if (cont->sc_aggregated_ts < cont->sc_snapshots_ts) {
+		i = 0;
+		epoch_range.epr_lo = 0UL;
+	} else {
+		/** Find highest snapshot less than last aggregated epoch **/
+		for (i = 0; i < cont->sc_snapshots_nr &&
+		     cont->sc_snapshots[i] < cinfo.ci_hae; ++i)
+		     ;
+		/** Start from HAE if it is outside snapshot boundaries **/
+		if (i == 0 || i == cont->sc_snapshots_nr)
+			epoch_range.epr_lo = cinfo.ci_hae;
+		else
+			epoch_range.epr_lo = cont->sc_snapshots[i-1] + 1;
+	}
+
+	if (epoch_range.epr_lo == epoch_max)
+		return 0;
+	D_DEBUG(DB_TRACE, DF_UUID"[%d]: HAE: %lu; LPE: %lu; HCE: %lu; MAX: %lu",
+			  DP_UUID(cont->sc_uuid),
+			  dss_get_module_info()->dmi_tgt_id,
+			  cinfo.ci_hae, cinfo.ci_lpe, cinfo.ci_hce,
+			  cont->sc_aggregation_max);
+
+	for ( ; i < cont->sc_snapshots_nr &&
+		cont->sc_snapshots[i] < epoch_max; ++i) {
+		epoch_range.epr_hi = cont->sc_snapshots[i];
+		D_DEBUG(DB_TRACE, DF_UUID"[%d]: Aggregating {%lu -> %lu}\n",
+				  DP_UUID(cont->sc_uuid),
+				  dss_get_module_info()->dmi_tgt_id,
+				  epoch_range.epr_lo, epoch_range.epr_hi);
+		rc = vos_aggregate(cont->sc_hdl, &epoch_range);
+		if (rc)
+			return rc;
+		epoch_range.epr_lo = epoch_range.epr_hi + 1;
+	}
+	epoch_range.epr_hi = epoch_max;
+	D_DEBUG(DB_TRACE, DF_UUID"[%d]: Aggregating {%lu -> %lu}\n",
+			  DP_UUID(cont->sc_uuid),
+			  dss_get_module_info()->dmi_tgt_id,
+			  epoch_range.epr_lo, epoch_range.epr_hi);
+	vos_aggregate(cont->sc_hdl, &epoch_range);
+	cont->sc_aggregated_ts = crt_hlc_get();
+	return 0;
+}
+
+void
+ds_cont_aggregate_ult(void *arg)
+{
+	struct dss_module_info		*dmi = dss_get_module_info();
+	struct dsm_tls			*tls = dsm_tls_get();
+
+	for ( ;; ) {
+		struct daos_llink		*llink;
+		ABT_bool			 state;
+		int				 rc;
+
+		d_list_for_each_entry(llink,
+				      &tls->dt_cont_cache->dlc_busy_list,
+				      ll_qlink) {
+			rc = cont_child_aggregate(cont_child_obj(llink));
+		}
+
+		d_list_for_each_entry(llink,
+				      &tls->dt_cont_cache->dlc_idle_list,
+				      ll_qlink) {
+			rc = cont_child_aggregate(cont_child_obj(llink));
+		}
+
+		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		if (state == ABT_TRUE)
+			break;
+		ABT_thread_yield();
+	}
+	D_DEBUG(DB_TRACE, "Aggregation ULT [%d] Exiting...\n", dmi->dmi_tgt_id);
+}
+
+static int
+cont_snap_notify_one(void *vin)
+{
+	struct cont_snap_args	*args = vin;
+	struct ds_cont_child	*cont;
+	int			 rc;
+
+	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	if (rc != 0)
+		return rc;
+	cont->sc_aggregation_max = crt_hlc_get();
+	ds_cont_child_put(cont);
+	return rc;
+}
+void
+ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
+{
+	struct cont_tgt_snapshot_notify_in	*in	= crt_req_get(rpc);
+	struct cont_tgt_snapshot_notify_out	*out	= crt_reply_get(rpc);
+	struct cont_snap_args			 args	= { 0 };
+
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+		DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid), rpc);
+
+	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
+	uuid_copy(args.cont_uuid, in->tsi_cont_uuid);
+	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
+	if (out->tso_rc != 0)
+		D_ERROR(DF_CONT": Snapshot notify failed: %d\n",
+			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
+			out->tso_rc);
+	crt_reply_send(rpc);
+}
+
+int
+ds_cont_tgt_snapshot_notify_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				       void *priv)
+{
+	struct cont_tgt_snapshot_notify_out      *out_source;
+	struct cont_tgt_snapshot_notify_out      *out_result;
+
+	out_source = crt_reply_get(source);
+	out_result = crt_reply_get(result);
+	out_result->tso_rc += out_source->tso_rc;
+	return 0;
+}
+
 static int
 cont_epoch_aggregate_one(void *vin)
 {
-	struct cont_tgt_epoch_aggregate_in	*in  = vin;
-	struct ds_pool_child			*pool_child;
-	daos_handle_t				 cont_hdl;
-	vos_cont_info_t				 cont_info;
-	daos_epoch_range_t			 epr, epr_prev = { 0 };
-	uint64_t				 i;
-	int					 rc;
-
-	pool_child = ds_pool_child_lookup(in->tai_pool_uuid);
-	if (pool_child == NULL) {
-		D_ERROR(DF_CONT": Lookup pool child failed\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
-		return -DER_NO_HDL;
-	}
-
-	rc = vos_cont_open(pool_child->spc_hdl, in->tai_cont_uuid,
-			   &cont_hdl);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": Open container failed: %d\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
-		goto pool_child;
-	}
-
-	rc = vos_cont_query(cont_hdl, &cont_info);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": Query container failed: %d\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
-		goto cont_close;
-	}
-
-	for (i = 0; i < in->tai_epr_list.ca_count; i++) {
-		bool snap_delete = false;
-
-		epr = ((daos_epoch_range_t *)in->tai_epr_list.ca_arrays)[i];
-
-		D_ASSERTF(epr_prev.epr_hi == 0 || epr_prev.epr_hi < epr.epr_lo,
-			  "Previous epr_hi:"DF_U64" >= epr_lo:"DF_U64"\n",
-			  epr_prev.epr_hi, epr.epr_lo);
-
-		epr_prev = epr;
-		D_DEBUG(DB_EPC, DF_CONT": epr["DF_U64"]("DF_U64"->"DF_U64")\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-			i, epr.epr_lo, epr.epr_hi);
-		/*
-		 * TODO: Aggregation RPC will have a bit to indicate if the
-		 * aggregation is triggered for snapshot deletion.
-		 */
-		if (!snap_delete && cont_info.ci_hae >= epr.epr_hi) {
-			D_DEBUG(DB_EPC, DF_CONT": LAE:"DF_U64">="DF_U64"\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-				cont_info.ci_hae, epr.epr_hi);
-			continue;
-		}
-
-		rc = vos_aggregate(cont_hdl, &epr);
-		if (rc < 0) {
-			D_ERROR(DF_CONT": Agg "DF_U64"->"DF_U64" failed: %d\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-				epr.epr_lo, epr.epr_hi, rc);
-			break;
-		} else if (rc) {
-			D_DEBUG(DB_EPC, DF_CONT": Aggregation aborted\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
-			rc = -DER_CANCELED;
-			break;
-		}
-	}
-
-cont_close:
-	vos_cont_close(cont_hdl);
-pool_child:
-	ds_pool_child_put(pool_child);
-	return rc;
+	return 0;
 }
 
 void
 ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 {
-	struct cont_tgt_epoch_aggregate_in	 in_copy;
 	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
-	daos_epoch_range_t			*epr;
-	int					 i, rc;
+	int					 rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
 		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
-	epr = in->tai_epr_list.ca_arrays;
-	rc = 0;
-	for (i = 0; i < in->tai_epr_list.ca_count; i++) {
-		if (epr[i].epr_hi <= epr[i].epr_lo) {
-			D_ERROR(DF_CONT": Invalid Range "DF_U64"->"DF_U64"\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-				epr[i].epr_lo, epr[i].epr_hi);
-			rc = -DER_INVAL;
-			goto out;
-		} else if (epr[i].epr_hi == 0) {
-			D_ERROR(DF_CONT": Read-only Epoch "DF_U64"\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-				epr[i].epr_hi);
-			rc = -DER_EP_RO;
-			goto out;
-		} else if (epr[i].epr_hi >= DAOS_EPOCH_MAX) {
-			D_ERROR(DF_CONT": Epoch out of bounds "DF_U64"\n",
-				DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-				epr[i].epr_hi);
-			rc = -DER_OVERFLOW;
-			goto out;
-		}
-	}
-
-	/* TODO: Use bulk transfer to avoid memory copy? */
-	D_ALLOC_ARRAY(epr, (int) in->tai_epr_list.ca_count);
-	if (epr == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	memcpy(epr, in->tai_epr_list.ca_arrays,
-	       sizeof(*epr) * in->tai_epr_list.ca_count);
-	in_copy = *in;
-	in_copy.tai_epr_list.ca_arrays = epr;
-
-out:
 	/* Reply without waiting for the aggregation ULTs to finish. */
-	out->tao_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
-		rpc, out->tao_rc, rc);
+	out->tao_rc = 0;
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, out->tao_rc);
 	crt_reply_send(rpc);
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, &in_copy, 0);
+	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: %d\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
-	D_FREE(epr);
 }
 
 int
