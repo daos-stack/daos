@@ -23,6 +23,16 @@ Type		| Values
 
 Environment variables in this section apply to both the server side and the client side
 
+### `DAOS_IO_MODE`
+
+Control the DAOS IO mode: server dispatches modification RPCs to replicas or client does that, if it is the former case, whether enable DTX or not. `INTEGER`. Valid values are as following, default to 0 (server dispatches RPCs and enable DTX).
+
+0: server dispatches RPCs, enable DTX.
+
+1: server dispatches RPCs, disable DTX.
+
+2: client disptaches RPCs, disable DTX.
+
 ### `DAOS_IO_BYPASS`
 
 ## Server

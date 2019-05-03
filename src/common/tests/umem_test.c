@@ -166,17 +166,16 @@ static void
 test_invalid_flags(void **state)
 {
 	struct test_arg		*arg = *state;
-	umem_off_t		 umoff = 0;
+	umem_off_t		 umoff = UMOFF_NULL;
 	int			 i;
 
-	/* 0 is not considered NULL for an offset */
-	assert_false(UMOFF_IS_NULL(umoff));
+	assert_true(UMOFF_IS_NULL(umoff));
 
 	assert_int_equal(umem_off_get_invalid_flags(umoff), 0);
 
-	for (i = 0; i < UMOFF_NUM_FLAGS; i++) {
-		umem_off_set_invalid(&umoff, 1 << i);
-		assert_int_equal(umem_off_get_invalid_flags(umoff), 1 << i);
+	for (i = 0; i < UMOFF_MAX_FLAG; i++) {
+		umem_off_set_invalid(&umoff, i);
+		assert_int_equal(umem_off_get_invalid_flags(umoff), i);
 	}
 
 	umoff = UMOFF_NULL;
@@ -201,24 +200,41 @@ test_alloc(void **state)
 	int			 rc;
 
 	rc = utest_tx_begin(arg->ta_utx);
-	assert_int_equal(rc, 0);
+	if (rc != 0)
+		goto done;
 
 	umoff = umem_zalloc_off(umm, 4);
-	assert_false(UMOFF_IS_NULL(umoff));
+	if (UMOFF_IS_NULL(umoff)) {
+		print_message("umoff unexpectedly NULL\n");
+		rc = 1;
+		goto end;
+	}
 
 	mmid = umem_off2id(umm, umoff);
-	assert_false(UMMID_IS_NULL(mmid));
+	if (UMMID_IS_NULL(mmid)) {
+		print_message("mmid unexpectedly NULL\n");
+		rc = 1;
+		goto end;
+	}
 
 	value1 = umem_off2ptr(umm, umoff);
 	value2 = umem_id2ptr(umm, mmid);
-	assert_ptr_equal(value1, value2);
+	if (value1 != value2) {
+		print_message("different values returned for umoff and mmid\n");
+		rc = 1;
+		goto end;
+	}
 
-	assert_int_equal(*value1, 0);
+	if (*value1 != 0) {
+		print_message("Bad value for allocated umoff\n");
+		rc = 1;
+		goto end;
+	}
 
 	rc = umem_free(umm, mmid);
-	assert_int_equal(rc, 0);
-
+end:
 	rc = utest_tx_end(arg->ta_utx, rc);
+done:
 	assert_int_equal(rc, 0);
 }
 

@@ -348,7 +348,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
 	     struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-	     tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
+	     tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	struct dc_pool	       *pool;
 	crt_rpc_t	       *req = NULL;
@@ -412,6 +412,7 @@ obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dti_cos.ca_arrays = NULL;
 
 	orw->orw_epoch = epoch;
+	orw->orw_dkey_hash = dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
 	orw->orw_iods.ca_count = nr;
@@ -533,7 +534,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 		   const uuid_t coh_uuid, const uuid_t cont_uuid,
 		   unsigned int *map_ver,
 		   struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-		   tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
+		   tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	struct dc_pool			*pool;
 	struct obj_punch_in		*opi;
@@ -579,6 +580,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 
 	opi->opi_map_ver	 = *map_ver;
 	opi->opi_epoch		 = epoch;
+	opi->opi_dkey_hash	 = dkey_hash;
 	opi->opi_oid		 = oid;
 	opi->opi_dkeys.ca_count  = (dkey == NULL) ? 0 : 1;
 	opi->opi_dkeys.ca_arrays = dkey;
@@ -618,7 +620,7 @@ dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		    daos_sg_list_t *sgls, unsigned int *map_ver,
 		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
-		    tse_task_t *task, struct daos_tx_id *dti, uint32_t flags)
+		    tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_UPDATE, epoch, dkey,
 			    nr, iods, sgls, map_ver, fw_shard_tgts, fw_cnt,

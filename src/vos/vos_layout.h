@@ -176,11 +176,11 @@ enum vos_dtx_entry_flags {
  */
 struct vos_dtx_entry_df {
 	/** The DTX identifier. */
-	struct daos_tx_id		te_xid;
+	struct dtx_id			te_xid;
 	/** The identifier of the modified object (shard). */
 	daos_unit_oid_t			te_oid;
 	/** The hashed dkey if applicable. */
-	uint64_t			te_dkey_hash[2];
+	uint64_t			te_dkey_hash;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			te_epoch;
 	/** Pool map version. */
@@ -207,8 +207,6 @@ struct vos_dtx_entry_df {
 struct vos_dtx_table_df {
 	/** The count of committed DTXs in the table. */
 	uint64_t			tt_count;
-	/** The time in second when last aggregate the DTXs. */
-	uint64_t			tt_time_last_shrink;
 	/** The list head of committed DTXs. */
 	umem_off_t			tt_entry_head;
 	/** The list tail of committed DTXs. */
@@ -331,14 +329,12 @@ struct vos_obj_df {
 	daos_epoch_t			vo_latest;
 	/** Earliest known update timestamp */
 	daos_epoch_t			vo_earliest;
-	/** Incarnation of the object, it's increased each time it's punched. */
-	uint64_t			vo_incarnation;
 	/** The DTX entry in SCM. */
 	umem_off_t			vo_dtx;
 	/** The count of uncommitted DTXs that share the object. */
 	uint32_t			vo_dtx_shares;
-	/** For 64-bits alignment. */
-	uint32_t			vo_padding;
+	/** Incarnation of the object, it's increased each time it's punched. */
+	uint32_t			vo_incarnation;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };
