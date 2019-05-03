@@ -214,8 +214,6 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
                 stage('Build on CentOS 7 with Clang') {
                     when { beforeAgent true
                            branch 'master' }
