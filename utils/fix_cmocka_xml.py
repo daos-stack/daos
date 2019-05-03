@@ -27,8 +27,8 @@ import os
 
 # Some fixes for the CMOCKA headers
 xml_header ="<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
-parent_header = "<data>\n"
-parent_footer = "</data>"
+parent_header = "<testsuites>\n"
+parent_footer = "</testsuites>\n"
 path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"../test_results/*.xml")
 cmd = "ls {}".format(path)
 out = subprocess.check_output(cmd,shell=True)
@@ -38,17 +38,33 @@ out = subprocess.check_output(cmd,shell=True)
 # repeatedly].
 # If there is a fix by CMOCKA framework, this is not required.
 files = out.split('\n')
+#Two pass update on the files
+#Remove all testsuites tag out of the xml file.
 for file in files:
 	if (file != ""):
 		print(file)
 		file_handle =  open('{0}'.format(file), "r+")
 		lines = file_handle.readlines()
-		print(lines[0])
+		lines = [tmp.strip(' ') for tmp in lines]
+		while parent_footer in lines : lines.remove(parent_footer)
+		while parent_header in lines : lines.remove(parent_header)
+		file_handle.truncate(0)
+		file_handle.seek(0)
+		file_handle.writelines(lines)
+		file_handle.close()
+#Reconstruct the header and footer
+for file in files:
+	if (file != ""):
+		file_handle =  open('{0}'.format(file), "r+")
+		lines = file_handle.readlines()
 		if("xml" in lines[0]):
 			lines[0] = lines[0].replace(lines[0],lines[0]+parent_header)
 		else:
-			lines[0] = lines[0].replace(lines[0],xml_header+parent_header+lines[0])
+			lines[0] = lines[0].replace(lines[0],xml_header+parent_header)
+		print(lines[0])
+		file_handle.truncate(0)
 		file_handle.seek(0)
 		file_handle.writelines(lines)
 		file_handle.seek(0,os.SEEK_END)
 		file_handle.writelines(parent_footer)
+		file_handle.close()

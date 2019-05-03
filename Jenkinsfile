@@ -297,7 +297,7 @@ pipeline {
 				sh '''python utils/fix_cmocka_xml.py
 					ls -l test_results/'''
 				junit 'test_results/*.xml'
-				archiveArtifacts artifacts: 'run_test.sh/**,test_results/**'
+				archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }
                 }
