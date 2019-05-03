@@ -162,7 +162,7 @@ if [[ -z ${CMOCKA_MESSAGE_OUTPUT+x} || -z ${CMOCKA_XML_FILE+x} ]]; then
 	result=$?
 	echo Test returned $result
 	exit $result
-elif [[ "${CMOCKA_MESSAGE_OUTPUT}" == "xml" ]]; then
+else
 	echo Test complete
 	exit 0
 fi
