@@ -114,7 +114,7 @@ def scons():
     # CGO shell env vars.
     denv.AppendENVPath(
         "CGO_LDFLAGS",
-        denv.subst("-L$SPDK_PREFIX/lib -L$PREFIX/lib $_RPATH"))
+        denv.subst("-L$SPDK_PREFIX/lib -L%s $_RPATH" % gopath))
     denv.AppendENVPath(
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
@@ -131,7 +131,7 @@ def scons():
                 Copy("$TARGET", "$SOURCE")
             ])
 
-    install_go_bin(denv, gosrc, gopath, [nc_installed], "server", "daos_server")
+    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "server", "daos_server")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 

@@ -29,43 +29,44 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	       const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode = NULL;
+	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->parent, name);
+	DFUSE_TRA_INFO(fs_handle,
+		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
-	D_ALLOC_PTR(inode);
-	if (!inode) {
+	D_ALLOC_PTR(ie);
+	if (!ie) {
 		D_GOTO(err, rc = ENOMEM);
 	}
 
 	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
 
-	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->obj, name,
-		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &inode->obj);
+	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
 	}
 
-	strncpy(inode->name, name, NAME_MAX);
-	inode->parent = parent->parent;
-	inode->ie_dfs = parent->ie_dfs;
-	atomic_fetch_add(&inode->ie_ref, 1);
+	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_parent = parent->ie_stat.st_ino;
+	ie->ie_dfs = parent->ie_dfs;
+	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, inode->obj, &inode->stat);
+	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(release, 0);
 	}
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, inode, NULL, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
 	return true;
 release:
-	dfs_release(inode->obj);
+	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	D_FREE(inode);
+	D_FREE(ie);
 
 	return false;
 }

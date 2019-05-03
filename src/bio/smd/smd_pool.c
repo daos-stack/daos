@@ -88,7 +88,7 @@ ptab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	return umem_free_off(umm, rec->rec_off);
+	return umem_free(umm, rec->rec_off);
 }
 
 static int
@@ -102,8 +102,7 @@ ptab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	D_ASSERT(key_iov->iov_len == sizeof(struct pool_tab_key));
 	pkey = (struct pool_tab_key *)key_iov->iov_buf;
 
-	npool_off = umem_zalloc_off(&tins->ti_umm,
-				    sizeof(struct smd_nvme_pool_df));
+	npool_off = umem_zalloc(&tins->ti_umm, sizeof(struct smd_nvme_pool_df));
 	if (UMOFF_IS_NULL(npool_off))
 		return -DER_NOMEM;
 	npool_df = umem_off2ptr(&tins->ti_umm, npool_off);
@@ -134,8 +133,8 @@ ptab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct smd_nvme_pool_df		*npool_df;
 	int				 rc;
 
-	rc = umem_tx_add_off(&tins->ti_umm, rec->rec_off,
-			     sizeof(struct smd_nvme_pool_df));
+	rc = umem_tx_add(&tins->ti_umm, rec->rec_off,
+			 sizeof(struct smd_nvme_pool_df));
 	if (rc != 0)
 		return rc;
 

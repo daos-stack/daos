@@ -46,6 +46,9 @@ typedef struct {
 	uint32_t	ba_padding;
 } bio_addr_t;
 
+/** Ensure this remains compatible */
+D_CASSERT(sizeof(((bio_addr_t *)0)->ba_off) == sizeof(umem_off_t));
+
 struct bio_iov {
 	/*
 	 * For SCM, it's direct memory address of 'ba_off';
@@ -87,7 +90,7 @@ static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
 	addr->ba_type = type;
-	addr->ba_off = off;
+	addr->ba_off = umem_off2offset(off);
 }
 
 static inline bool
