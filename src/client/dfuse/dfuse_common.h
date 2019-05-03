@@ -41,27 +41,8 @@ struct dfuse_string_out {
 	int err;
 };
 
-struct dfuse_entry_out {
-	struct ios_gah gah;
-	struct stat stat;
-	int rc;
-	int err;
-};
-
 struct dfuse_attr_out {
 	struct stat stat;
-	int rc;
-	int err;
-};
-
-struct dfuse_open_out {
-	struct ios_gah gah;
-	int rc;
-	int err;
-};
-
-struct dfuse_data_out {
-	d_iov_t data;
 	int rc;
 	int err;
 };
