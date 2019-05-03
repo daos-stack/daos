@@ -637,7 +637,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
  */
 static int
 get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
-		uint16_t group_cnt, uint16_t group_size, daos_obj_id_t oid,
+		uint16_t group_size, uint16_t group_cnt, daos_obj_id_t oid,
 		uint32_t dom_map_size, struct remap_node *rebuild_list)
 {
 
@@ -658,11 +658,6 @@ get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
 	memset(used_targets, 0, (sizeof(*used_targets) * layout->ol_nr) + 1);
 
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
-
-	if (group_cnt*group_size > root->do_target_nr) {
-		D_ERROR("Too few targets for layout.\n");
-		return -DER_INVAL;
-	}
 
 	for (i = 0, k = 0; i < group_cnt; i++) {
 		for (j = 0; j < group_size; j++, k++) {
@@ -824,17 +819,52 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	uint16_t                group_cnt;
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
+	struct pool_domain	*root;
 	int rc;
 
 	mplmap = pl_map2mplmap(map);
+
+	pmap = map->pl_poolmap;
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
 	oc_attr = daos_oclass_attr_find(oid);
 
+	if (oc_attr == NULL) {
+		D_ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
+			DP_OID(oid));
+		return -DER_INVAL;
+	}
+
 	/* Retrieve group size and count */
 	group_size = daos_oclass_grp_size(oc_attr);
-	group_cnt = daos_oclass_grp_nr(oc_attr, md);
+
+	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
+
+	if(group_size == (uint16_t)DAOS_OBJ_REPL_MAX)
+		group_size = root->do_target_nr;
+
+	if (group_size > root->do_target_nr) {
+		D_ERROR("obj="DF_OID": group size (%u) (%u) is larger than "
+			"domain nr (%u)\n", DP_OID(oid),
+			group_size, DAOS_OBJ_REPL_MAX, root->do_target_nr);
+		return -DER_INVAL;
+	}
+
+	if(shard_md == NULL) {
+		unsigned int group_max = root->do_target_nr / group_size;
+
+		if (group_max == 0)
+			group_max = 1;
+
+		group_cnt = daos_oclass_grp_nr(oc_attr, md);
+
+		if(group_cnt > group_max)
+			group_cnt = group_max;
+
+	} else {
+		group_cnt = 1;
+	}
 
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(group_size * group_cnt, &layout);
@@ -842,8 +872,6 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
-
-	pmap = map->pl_poolmap;
 
 	/* Set the pool map version */
 	layout->ol_ver = pl_map_version(map);
