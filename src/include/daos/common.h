@@ -123,6 +123,15 @@ daos_rank_list_valid(const d_rank_list_t *rl)
 	return rl && rl->rl_ranks && rl->rl_nr;
 }
 
+static inline uint64_t
+daos_get_ntime(void)
+{
+	struct timespec	tv;
+
+	d_gettime(&tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
 /** Function table for combsort and binary search */
 typedef struct {
 	void    (*so_swap)(void *array, int a, int b);
@@ -410,24 +419,6 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-
-static inline
-bool daos_prop_label_valid(d_string_t label)
-{
-	size_t len;
-
-	if (label == NULL) {
-		D_ERROR("invalid NULL label.\n");
-		return false;
-	}
-	len = strlen(label);
-	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN) {
-		D_ERROR("invali label (len %zu cannot be zero or exceed %d).\n",
-			len, DAOS_PROP_LABEL_MAX_LEN);
-		return false;
-	}
-	return true;
-}
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

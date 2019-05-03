@@ -107,6 +107,25 @@ dss_tls_get()
 		pthread_getspecific(dss_tls_key);
 }
 
+#define D_TIME_START(sp, op)			\
+do {						\
+	if ((sp) == NULL)			\
+		break;				\
+	D_ASSERT(op < MAX_PROFILE_OP);		\
+	D_ASSERT(sp->sp_time[op] == 0);		\
+	sp->sp_time[op] = daos_get_ntime();	\
+} while (0)
+
+#define D_TIME_END(sp, op)			\
+do {						\
+	if ((sp) == NULL)			\
+		break;				\
+	D_ASSERT(op < MAX_PROFILE_OP);		\
+	D_ASSERT(sp->sp_time[op] != 0);		\
+	srv_profile_count(sp, op, (int)(daos_get_ntime() - sp->sp_time[op])); \
+	sp->sp_time[op] = 0;			\
+} while (0)
+
 /**
  * Get value from context by the key
  *
@@ -133,6 +152,47 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
+/**
+ * Different type of ES pools, there are 4 pools for now
+ *
+ *  DSS_POOL_URGENT	The highest priority pool. ULTs in this pool will be
+ *			scheduled firstly.
+ *  DSS_POOL_PRIV	Private pool: I/O requests will be added to this pool.
+ *  DSS_POOL_SHARE	Shared pool: Other requests and ULT created during
+ *			processing rpc.
+ *  DSS_POOL_REBUILD	rebuild pool: pools specially for rebuild tasks.
+ */
+enum {
+	DSS_POOL_URGENT,
+	DSS_POOL_PRIV,
+	DSS_POOL_SHARE,
+	DSS_POOL_REBUILD,
+	DSS_POOL_CNT,
+};
+
+#define DSS_XS_NAME_LEN		64
+
+/** Per-xstream configuration data */
+struct dss_xstream {
+	char		dx_name[DSS_XS_NAME_LEN];
+	ABT_future	dx_shutdown;
+	hwloc_cpuset_t	dx_cpuset;
+	ABT_xstream	dx_xstream;
+	ABT_pool	dx_pools[DSS_POOL_CNT];
+	ABT_sched	dx_sched;
+	ABT_thread	dx_progress;
+	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
+	int		dx_xs_id;
+	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
+	 * For offload XS it is same value as its main XS.
+	 */
+	int		dx_tgt_id;
+	/* CART context id, invalid (-1) for the offload XS w/o CART context */
+	int		dx_ctx_id;
+	bool		dx_main_xs;	/* true for main XS */
+	bool		dx_comm;	/* true with cart context */
+};
+
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
 	struct bio_xs_context	*dmi_nvme_ctxt;
@@ -143,6 +203,7 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
+	d_list_t		dmi_dtx_batched_list;
 	tse_sched_t		dmi_sched;
 	uint64_t		dmi_tse_ult_created:1;
 };
@@ -186,6 +247,51 @@ struct dss_drpc_handler {
 	drpc_handler_t	handler;	/** dRPC handler for the module */
 };
 
+/* The profile structure to record single operation */
+struct srv_profile_op {
+	int		pro_id;		/* id in obj_profile_op */
+	uint64_t	pro_time;	/* time cost for this id */
+};
+
+/* The chunk for a group of srv_profile */
+struct srv_profile_chunk {
+	d_list_t	      spc_chunk_list;
+	struct srv_profile_op *spc_profiles;
+	int		      spc_idx;
+	int		      spc_chunk_size;
+};
+
+#define MAX_PROFILE_OP	64
+/* Holding the total trunk list for a specific profiling module */
+struct srv_profile {
+	struct srv_profile_chunk *sp_current_chunk;
+	uint64_t	sp_time[MAX_PROFILE_OP];
+	d_list_t	sp_list;	/* active list for profile chunk */
+	d_list_t	sp_idle_list;	/* idle list for profile chunk */
+	/* Count in idle list & list */
+	int		sp_chunk_total_cnt;
+	/* count in list */
+	int		sp_chunk_cnt;
+	char		*sp_dir_path;	/* Where to dump the profiling */
+	char		**sp_names;	/* profile name */
+	ABT_thread	sp_dump_thread;	/* dump thread for profile */
+	int		sp_stop:1;
+};
+
+struct dss_module_ops {
+	/* The callback for each module will choose ABT pool to handle RPC */
+	ABT_pool (*dms_abt_pool_choose_cb)(crt_rpc_t *rpc, ABT_pool *pools);
+
+	/* Each module to start/stop the profiling */
+	int	(*dms_profile_start)(char *path);
+	int	(*dms_profile_stop)(void);
+};
+
+int srv_profile_stop(struct srv_profile *sp);
+int srv_profile_count(struct srv_profile *sp, int id, int time);
+int srv_profile_start(struct srv_profile **sp_p, char *path, char **names);
+void srv_profile_destroy(struct srv_profile *sp);
+
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
@@ -224,6 +330,9 @@ struct dss_module {
 	struct daos_rpc_handler	 *sm_handlers;
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler	 *sm_drpc_handlers;
+
+	/* Different module operation */
+	struct dss_module_ops	*sm_mod_ops;
 };
 
 /**
@@ -264,7 +373,7 @@ void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
-int dss_ult_create_all(void (*func)(void *), void *arg);
+int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
 			   int ult_type, int tgt_id, size_t stack_size);
@@ -353,7 +462,7 @@ int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
 int dss_eventual_create(ABT_eventual *eventual_ptr);
 int dss_eventual_wait(ABT_eventual eventual);
 void dss_eventual_free(ABT_eventual *eventual);
-
+struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
 dss_abterr2der(int abt_errno)
@@ -411,24 +520,6 @@ struct dss_acc_task {
  * ULT and FPGA
  */
 int dss_acc_offload(struct dss_acc_task *at_args);
-
-/**
- * Different type of ES pools, there are 4 pools for now
- *
- *  DSS_POOL_URGENT	The highest priority pool. ULTs in this pool will be
- *			scheduled firstly.
- *  DSS_POOL_PRIV	Private pool: I/O requests will be added to this pool.
- *  DSS_POOL_SHARE	Shared pool: Other requests and ULT created during
- *			processing rpc.
- *  DSS_POOL_REBUILD	rebuild pool: pools specially for rebuild tasks.
- */
-enum {
-	DSS_POOL_URGENT,
-	DSS_POOL_PRIV,
-	DSS_POOL_SHARE,
-	DSS_POOL_REBUILD,
-	DSS_POOL_CNT,
-};
 
 /* DAOS object API on the server side */
 int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,

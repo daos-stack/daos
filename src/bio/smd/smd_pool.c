@@ -83,37 +83,33 @@ ptab_df_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 static int
 ptab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	TMMID(struct smd_nvme_pool_df)	npool_mmid;
 	struct umem_instance		*umm = &tins->ti_umm;
 
-	npool_mmid = umem_id_u2t(rec->rec_mmid, struct smd_nvme_pool_df);
-	if (TMMID_IS_NULL(npool_mmid))
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	umem_free_typed(umm, npool_mmid);
-	return 0;
+	return umem_free(umm, rec->rec_off);
 }
 
 static int
 ptab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		  daos_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct smd_nvme_pool_df)	npool_mmid;
+	umem_off_t			 npool_off;
 	struct smd_nvme_pool_df		*npool_df;
 	struct pool_tab_key		*pkey = NULL;
 
 	D_ASSERT(key_iov->iov_len == sizeof(struct pool_tab_key));
 	pkey = (struct pool_tab_key *)key_iov->iov_buf;
 
-	npool_mmid = umem_znew_typed(&tins->ti_umm,
-				     struct smd_nvme_pool_df);
-	if (TMMID_IS_NULL(npool_mmid))
+	npool_off = umem_zalloc(&tins->ti_umm, sizeof(struct smd_nvme_pool_df));
+	if (UMOFF_IS_NULL(npool_off))
 		return -DER_NOMEM;
-	npool_df = umem_id2ptr_typed(&tins->ti_umm, npool_mmid);
+	npool_df = umem_off2ptr(&tins->ti_umm, npool_off);
 	uuid_copy(npool_df->np_info.npi_pool_uuid, pkey->ptk_pid);
 	npool_df->np_info.npi_stream_id = pkey->ptk_sid;
 	memcpy(npool_df, val_iov->iov_buf, sizeof(struct smd_nvme_pool_df));
-	rec->rec_mmid = umem_id_t2u(npool_mmid);
+	rec->rec_off = npool_off;
 
 	return 0;
 }
@@ -122,9 +118,9 @@ static int
 ptab_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		  daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct smd_nvme_pool_df		*npool_df = NULL;
+	struct smd_nvme_pool_df		*npool_df;
 
-	npool_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	npool_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	memcpy(val_iov->iov_buf, npool_df, sizeof(struct smd_nvme_pool_df));
 
 	return 0;
@@ -135,10 +131,14 @@ ptab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		   daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct smd_nvme_pool_df		*npool_df;
+	int				 rc;
 
-	umem_tx_add(&tins->ti_umm, rec->rec_mmid,
-		    sizeof(struct smd_nvme_pool_df));
-	npool_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	rc = umem_tx_add(&tins->ti_umm, rec->rec_off,
+			 sizeof(struct smd_nvme_pool_df));
+	if (rc != 0)
+		return rc;
+
+	npool_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	memcpy(npool_df, val_iov->iov_buf, val_iov->iov_len);
 	return 0;
 }

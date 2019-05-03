@@ -45,8 +45,8 @@
 
 #define MODID_MASK	0xff
 #define MODID_OFFSET	24
-#define MOD_ID_BITS	8
-#define opc_get_mod_id(opcode)	((opcode >> 24) & MODID_MASK)
+#define MOD_ID_BITS	7
+#define opc_get_mod_id(opcode)	((opcode >> MODID_OFFSET) & MODID_MASK)
 #define opc_get(opcode)		(opcode & OPCODE_MASK)
 
 #define DAOS_RPC_OPCODE(opc, mod_id, rpc_ver)			\
@@ -66,7 +66,7 @@ enum daos_module_id {
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_DTX_MODULE		= 10, /** DTX */
-	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
+	DAOS_MAX_MODULE		= 64, /** Size of uint64_t see dmg profile */
 };
 
 enum daos_rpc_flags {
@@ -222,6 +222,7 @@ daos2crt_sg(daos_sg_list_t *sgl)
 
 int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
+int daos_rpc_send_wait(crt_rpc_t *rpc);
 
 #define DAOS_DEFAULT_GROUP_ID "daos_server"
 

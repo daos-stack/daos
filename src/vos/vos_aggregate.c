@@ -595,25 +595,25 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	if (media == DAOS_MEDIA_SCM) {
 		struct pobj_action	*scm_ext;
-		umem_id_t		 mmid;
+		umem_off_t		 umoff;
 
 		D_ASSERT(io->ic_scm_max > io->ic_scm_cnt);
 		D_ASSERT(io->ic_scm_exts != NULL);
 		scm_ext = &io->ic_scm_exts[io->ic_scm_cnt];
 
 		if (vos_obj2umm(obj)->umm_ops->mo_reserve != NULL)
-			mmid = umem_reserve(vos_obj2umm(obj), scm_ext, size);
+			umoff = umem_reserve(vos_obj2umm(obj), scm_ext, size);
 		else
-			mmid = umem_alloc(vos_obj2umm(obj), size);
+			umoff = umem_alloc(vos_obj2umm(obj), size);
 
-		if (UMMID_IS_NULL(mmid)) {
+		if (UMOFF_IS_NULL(umoff)) {
 			D_ERROR("Reserve "DF_U64" bytes on SCM failed.\n",
 				size);
 			return -DER_NOSPACE;
 		}
 
 		io->ic_scm_cnt++;
-		bio_addr_set(addr, media, mmid.off);
+		bio_addr_set(addr, media, umoff);
 		return 0;
 	}
 

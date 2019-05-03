@@ -24,41 +24,49 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME mkdir_da
-#define TYPE_NAME entry_req
-#include "dfuse_ops.h"
-
-static const struct dfuse_request_api api = {
-	.on_result	= dfuse_entry_cb,
-};
-
-void
-dfuse_cb_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
+bool
+dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+	       const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct entry_req		*desc = NULL;
-	int rc;
+	struct dfuse_inode_entry	*ie = NULL;
+	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
-	if (rc)
-		D_GOTO(err, rc);
+	DFUSE_TRA_INFO(fs_handle,
+		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
-	strncpy(desc->ie->name, name, NAME_MAX);
-	desc->ie->parent = parent;
-	desc->da = fs_handle->mkdir_da;
+	D_ALLOC_PTR(ie);
+	if (!ie) {
+		D_GOTO(err, rc = ENOMEM);
+	}
 
-	desc->request.ir_inode_num = parent;
+	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
 
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
+	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
+	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
-	return;
+	}
+
+	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_parent = parent->ie_stat.st_ino;
+	ie->ie_dfs = parent->ie_dfs;
+	atomic_fetch_add(&ie->ie_ref, 1);
+
+	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(release, 0);
+	}
+
+	/* Return the new inode data, and keep the parent ref */
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
+
+	return true;
+release:
+	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (desc) {
-		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_da_release(fs_handle->mkdir_da, desc);
-	}
+	D_FREE(ie);
+
+	return false;
 }
