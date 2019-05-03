@@ -56,6 +56,17 @@ type External interface {
 	exists(string) (bool, error)
 }
 
+func errPermsAnnotate(err error) (e error) {
+	e = err
+	if os.IsPermission(e) {
+		e = errors.WithMessagef(
+			e,
+			"%s requires elevated privileges to perform this action",
+			os.Args[0])
+	}
+	return
+}
+
 type ext struct {
 	history []string
 }
@@ -119,7 +130,7 @@ func (e *ext) mount(
 	e.history = append(e.history, op)
 
 	if err := syscall.Mount(dev, mount, mntType, flags, opts); err != nil {
-		return os.NewSyscallError("mount", err)
+		return errPermsAnnotate(os.NewSyscallError("mount", err))
 	}
 	return nil
 }
@@ -140,7 +151,7 @@ func (e *ext) unmount(path string) error {
 			return nil
 		}
 
-		return os.NewSyscallError("umount", err)
+		return errPermsAnnotate(os.NewSyscallError("umount", err))
 	}
 	return nil
 }
@@ -151,7 +162,7 @@ func (e *ext) mkdir(path string) error {
 	e.history = append(e.history, fmt.Sprintf(msgMkdir, path))
 
 	if err := os.MkdirAll(path, 0777); err != nil {
-		return errors.WithMessage(err, "mkdir")
+		return errPermsAnnotate(errors.WithMessage(err, "mkdir"))
 	}
 	return nil
 }
@@ -163,7 +174,7 @@ func (e *ext) remove(path string) error {
 
 	// ignore NOENT errors, treat as success
 	if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
-		return errors.WithMessage(err, "remove")
+		return errPermsAnnotate(errors.WithMessage(err, "remove"))
 	}
 	return nil
 }
@@ -172,7 +183,8 @@ func (e *ext) exists(path string) (bool, error) {
 	if _, err := os.Stat(path); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
-		return false, errors.Wrap(err, "os stat")
+		return false, errPermsAnnotate(
+			errors.WithMessage(err, "os stat"))
 	}
 
 	return false, nil

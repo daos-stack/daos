@@ -219,7 +219,6 @@ type configuration struct {
 	FaultPath      string          `yaml:"fault_path"`
 	FaultCb        string          `yaml:"fault_cb"`
 	FabricIfaces   []string        `yaml:"fabric_ifaces"`
-	FormatOverride bool            `yaml:"format_override"`
 	ScmMountPath   string          `yaml:"scm_mount_path"`
 	BdevInclude    []string        `yaml:"bdev_include"`
 	BdevExclude    []string        `yaml:"bdev_exclude"`
@@ -227,6 +226,8 @@ type configuration struct {
 	NrHugepages    int             `yaml:"nr_hugepages"`
 	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
 	ControlLogFile string          `yaml:"control_log_file"`
+	UserName       string          `yaml:"user_name"`
+	GroupName      string          `yaml:"group_name"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
@@ -270,7 +271,6 @@ func newDefaultConfiguration(ext External) configuration {
 		Port:           10000,
 		Cert:           "./.daos/daos_server.crt",
 		Key:            "./.daos/daos_server.key",
-		FormatOverride: true,
 		ScmMountPath:   "/mnt/daos",
 		Hyperthreads:   false,
 		NrHugepages:    1024,

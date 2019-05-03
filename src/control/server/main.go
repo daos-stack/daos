@@ -27,14 +27,20 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime"
-
-	flags "github.com/jessevdk/go-flags"
-	"google.golang.org/grpc"
+	"os/user"
+	"strconv"
+	"syscall"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	secpb "github.com/daos-stack/daos/src/control/security/proto"
+	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
+	//#include <unistd.h>
+	//#include <errno.h>
+	"C"
 )
 
 func main() {
@@ -57,9 +63,73 @@ func parseCliOpts(opts *cliOptions) error {
 	return nil
 }
 
-func serverMain() error {
-	runtime.GOMAXPROCS(1)
+// drop will attempt to drop privileges by setting uid of running process to
+// that of the username specified in config file. If groupname is also
+// specified in config file then check user is a member of that group and
+// set relevant gid if so, otherwise use user.gid.
+func drop(userName string, groupName string) error {
+	log.Debugf("Running as root, downgrading to user ", userName)
 
+	if userName == "" {
+		return errors.New("no username supplied in config")
+	}
+
+	usr, err := user.Lookup(userName)
+	if err != nil {
+		return errors.WithMessage(err, "user lookup")
+	}
+
+	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
+	if err != nil {
+		return errors.WithMessage(err, "parsing uid to int")
+	}
+
+	_gid := usr.Gid
+
+	// attempt to assign group specified in config file
+	if group, err := user.LookupGroup(groupName); err == nil {
+		// check user group membership
+		if ids, err := usr.GroupIds(); err == nil {
+			for _, g := range ids {
+				if group.Gid == g {
+					_gid = g
+					break
+				}
+			}
+
+			if _gid != group.Gid {
+				log.Debugf(
+					"user %s not member of group %s",
+					usr.Username, group.Name)
+			}
+		} else {
+			return errors.WithMessage(err, "get group membership")
+		}
+	} else {
+		log.Debugf("lookup of group specified in config: %+v", err)
+	}
+
+	gid, err := strconv.ParseInt(_gid, 10, 32)
+	if err != nil {
+		return errors.WithMessage(err, "parsing gid to int")
+	}
+
+	cerr, errno := C.setgid(C.__gid_t(gid))
+	if cerr != 0 {
+		return errors.WithMessagef(
+			err, "setting gid (C.setgid) (%d)", errno)
+	}
+
+	cerr, errno = C.setuid(C.__uid_t(uid))
+	if cerr != 0 {
+		return errors.WithMessagef(
+			err, "setting uid (C.setuid) (%d)", errno)
+	}
+
+	return nil
+}
+
+func serverMain() error {
 	// Bootstrap default logger before config options get set.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
@@ -129,6 +199,14 @@ func serverMain() error {
 	if err = formatIosrvs(&config, false); err != nil {
 		log.Errorf("Failed to format servers: %s", err)
 		return err
+	}
+
+	if syscall.Getuid() == 0 {
+		log.Debugf("Dropping privileges...")
+		if err := drop(config.UserName, config.GroupName); err != nil {
+			log.Errorf("Failed to drop privileges: %s", err)
+			// TODO: don't continue as root
+		}
 	}
 
 	// Only start single io_server for now.

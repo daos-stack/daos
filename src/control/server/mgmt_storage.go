@@ -106,12 +106,6 @@ func (c *controlService) FormatStorage(
 
 	resp := new(pb.FormatStorageResp)
 
-	if c.config.FormatOverride {
-		return errors.New(
-			"FormatStorage call unsupported when " +
-				"format_override == true in server config file")
-	}
-
 	for i := range c.config.Servers {
 		if err := c.doFormat(i, resp); err != nil {
 			return errors.WithMessage(err, "formatting storage")
