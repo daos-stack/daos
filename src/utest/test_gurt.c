@@ -1128,9 +1128,12 @@ test_gurt_alloc(void **state)
 	D_ALLOC_ARRAY(ptr1, nr);
 	assert_non_null(ptr1);
 
-	D_REALLOC_ARRAY(ptr2, ptr1, nr*10);
+	D_REALLOC_ARRAY(ptr2, ptr1, nr + 10);
+
 	assert_non_null(ptr2);
 	assert_null(ptr1);
+	/* Fill memory to catch wrong allocation via valgrind */
+	memset(ptr2, 0x0, (nr + 10) * sizeof(*ptr2));
 
 	D_FREE(ptr2);
 	assert_null(ptr2);

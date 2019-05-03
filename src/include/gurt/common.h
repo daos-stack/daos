@@ -154,31 +154,31 @@ extern "C" {
 #define D_REALLOC_COMMON(newptr, oldptr, size, cnt)			\
 	do {								\
 		int _esz = (int)(size);					\
-		int _sz = (int)(size) * cnt;				\
+		int _sz = (int)(size) * (cnt);				\
 		/* Compiler check to ensure type match */		\
 		typeof(newptr) optr = oldptr;				\
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
 		(newptr) =  realloc(optr, (_sz));			\
 		if ((newptr) != NULL) {					\
-			if (cnt <= 1)					\
+			if ((cnt) <= 1)					\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr "': %i at %p (old '" #oldptr "':%p).\n", \
 					_esz, (newptr), (oldptr));	\
 			else						\
 				D_DEBUG(DB_MEM,				\
 					"realloc '" #newptr "': %i * '" #cnt "':%i at %p (old '" #oldptr "':%p).\n", \
-					_esz, cnt, (newptr), (oldptr));	\
+					_esz, (cnt), (newptr), (oldptr));	\
 			(oldptr) = NULL;				\
 			break;						\
 		}							\
-		if (cnt <= 1)						\
+		if ((cnt) <= 1)						\
 			D_ERROR("out of memory (tried to realloc "	\
 				"'" #newptr "': size=%i)\n",		\
 				_esz);					\
 		else							\
 			D_ERROR("out of memory (tried to realloc "	\
 				"'" #newptr "': size=%i count=%d)\n",	\
-				_esz, cnt);				\
+				_esz, (cnt));				\
 	} while (0)
 
 
@@ -186,7 +186,7 @@ extern "C" {
 	D_REALLOC_COMMON(newptr, oldptr, size, 1)
 
 #define D_REALLOC_ARRAY(newptr, oldptr, count) \
-	D_REALLOC_COMMON(newptr, oldptr, sizeof(*oldptr), count)
+	D_REALLOC_COMMON(newptr, oldptr, sizeof(*(oldptr)), count)
 
 
 #define D_FREE(ptr)							\
