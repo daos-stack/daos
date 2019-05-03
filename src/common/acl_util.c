@@ -50,7 +50,6 @@ next_state(enum validity_state current_state, char ch)
 		if (ch == '@')
 			return STATE_INVALID;
 		return STATE_NAME;
-		break;
 	case STATE_NAME:
 		if (ch == '@')
 			return STATE_DOMAIN;
