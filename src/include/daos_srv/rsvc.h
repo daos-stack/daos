@@ -40,6 +40,7 @@
 enum ds_rsvc_class_id {
 	DS_RSVC_CLASS_MGMT,
 	DS_RSVC_CLASS_POOL,
+	DS_RSVC_CLASS_TEST,
 	DS_RSVC_CLASS_COUNT
 };
 
