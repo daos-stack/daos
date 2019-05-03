@@ -59,7 +59,7 @@ stab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	return umem_free_off(umm, rec->rec_off);
+	return umem_free(umm, rec->rec_off);
 }
 
 static int
@@ -74,8 +74,8 @@ stab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	ukey = (int *)key_iov->iov_buf;
 	D_DEBUG(DB_DF, "Allocating device uuid=%d\n", *ukey);
 
-	nstream_off = umem_zalloc_off(&tins->ti_umm,
-				      sizeof(struct smd_nvme_stream_df));
+	nstream_off = umem_zalloc(&tins->ti_umm,
+				  sizeof(struct smd_nvme_stream_df));
 	if (UMOFF_IS_NULL(nstream_off))
 		return -DER_NOMEM;
 
@@ -104,8 +104,8 @@ stab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct smd_nvme_stream_df		*nstream_df;
 	int					 rc;
 
-	rc = umem_tx_add_off(&tins->ti_umm, rec->rec_off,
-			     sizeof(struct smd_nvme_stream_df));
+	rc = umem_tx_add(&tins->ti_umm, rec->rec_off,
+			 sizeof(struct smd_nvme_stream_df));
 	if (rc != 0)
 		return rc;
 

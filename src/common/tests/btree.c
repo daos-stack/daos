@@ -76,7 +76,7 @@ struct ik_rec {
 	uint64_t	ir_key;
 	uint32_t	ir_val_size;
 	uint32_t	ir_val_msize;
-	umem_id_t	ir_val_mmid;
+	umem_off_t	ir_val_off;
 };
 
 #define IK_TREE_CLASS	100
@@ -109,7 +109,7 @@ ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct ik_rec		*irec;
 	char			*vbuf;
 
-	irec_off = umem_zalloc_off(&tins->ti_umm, sizeof(struct ik_rec));
+	irec_off = umem_zalloc(&tins->ti_umm, sizeof(struct ik_rec));
 	D_ASSERT(!UMOFF_IS_NULL(irec_off)); /* lazy bone... */
 
 	irec = umem_off2ptr(&tins->ti_umm, irec_off);
@@ -117,10 +117,10 @@ ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	irec->ir_key = *(int *)key_iov->iov_buf;
 	irec->ir_val_size = irec->ir_val_msize = val_iov->iov_len;
 
-	irec->ir_val_mmid = umem_alloc(&tins->ti_umm, val_iov->iov_len);
-	D_ASSERT(!UMMID_IS_NULL(irec->ir_val_mmid));
+	irec->ir_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len);
+	D_ASSERT(!UMOFF_IS_NULL(irec->ir_val_off));
 
-	vbuf = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
+	vbuf = umem_off2ptr(&tins->ti_umm, irec->ir_val_off);
 	memcpy(vbuf, (char *)val_iov->iov_buf, val_iov->iov_len);
 
 	rec->rec_off = irec_off;
@@ -136,13 +136,13 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	irec = umem_off2ptr(umm, rec->rec_off);
 
 	if (args != NULL) {
-		umem_id_t *rec_ret = (umem_id_t *) args;
+		umem_off_t *rec_ret = (umem_off_t *) args;
 		 /** Provide the buffer to user */
-		*rec_ret	= umem_off2id(&tins->ti_umm, rec->rec_off);
+		*rec_ret	= rec->rec_off;
 		return 0;
 	}
-	utest_free(ik_utx, irec->ir_val_mmid);
-	utest_free_off(ik_utx, rec->rec_off);
+	utest_free(ik_utx, irec->ir_val_off);
+	utest_free(ik_utx, rec->rec_off);
 
 	return 0;
 }
@@ -163,7 +163,7 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	val_size = irec->ir_val_size;
 	key_size = sizeof(irec->ir_key);
 
-	val = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
+	val = umem_off2ptr(&tins->ti_umm, irec->ir_val_off);
 	if (key_iov != NULL) {
 		key_iov->iov_len = key_size;
 		if (key_iov->iov_buf == NULL)
@@ -205,7 +205,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 	buf[nob++] = ':';
 	buf_len -= nob;
 
-	val = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
+	val = umem_off2ptr(&tins->ti_umm, irec->ir_val_off);
 	strncpy(buf + nob, val, min(irec->ir_val_size, buf_len));
 
 	return buf;
@@ -222,17 +222,18 @@ ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	irec = umem_off2ptr(umm, rec->rec_off);
 
 	if (irec->ir_val_msize >= val_iov->iov_len) {
-		umem_tx_add(umm, irec->ir_val_mmid, irec->ir_val_msize);
+		umem_tx_add(umm, irec->ir_val_off, irec->ir_val_msize);
 
 	} else {
-		umem_tx_add_off(umm, rec->rec_off, sizeof(*irec));
-		umem_free(umm, irec->ir_val_mmid);
+		umem_tx_add(umm, rec->rec_off, sizeof(*irec));
+		umem_free(umm, irec->ir_val_off);
 
 		irec->ir_val_msize = val_iov->iov_len;
-		irec->ir_val_mmid = umem_alloc(umm, val_iov->iov_len);
-		D_ASSERT(!UMMID_IS_NULL(irec->ir_val_mmid));
+		irec->ir_val_off = umem_alloc(umm, val_iov->iov_len);
+		D_ASSERT(!UMOFF_IS_NULL(irec->ir_val_off));
 	}
-	val = umem_id2ptr(umm, irec->ir_val_mmid);
+	val = umem_off2ptr(umm, irec->ir_val_off);
+
 
 	memcpy(val, val_iov->iov_buf, val_iov->iov_len);
 	irec->ir_val_size = val_iov->iov_len;
@@ -374,14 +375,14 @@ ik_btr_close_destroy(void **state)
 }
 
 static int
-btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
+btr_rec_verify_delete(umem_off_t *rec, daos_iov_t *key)
 {
 	struct umem_instance	*umm;
 	struct ik_rec		*irec;
 
 	umm = utest_utx2umm(ik_utx);
 
-	irec	  = umem_id2ptr(umm, *rec);
+	irec	  = umem_off2ptr(umm, *rec);
 
 	if ((sizeof(irec->ir_key) != key->iov_len) ||
 		(irec->ir_key != *((uint64_t *)key->iov_buf))) {
@@ -389,7 +390,7 @@ btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
 		return -1;
 	}
 
-	utest_free(ik_utx, irec->ir_val_mmid);
+	utest_free(ik_utx, irec->ir_val_off);
 	utest_free(ik_utx, *rec);
 
 	return 0;
@@ -419,7 +420,7 @@ static void
 ik_btr_kv_operate(void **state)
 {
 	int					count = 0;
-	umem_id_t			rec_mmid;
+	umem_off_t				rec_off;
 	int					rc;
 	enum	ik_btr_opc	opc;
 	char				*str;
@@ -488,15 +489,15 @@ ik_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
-			rc = dbtree_delete(ik_toh, &key_iov, &rec_mmid);
+			rc = dbtree_delete(ik_toh, &key_iov, &rec_off);
 			if (rc != 0) {
 				sprintf(outbuf,
 					"Failed to delete "DF_U64"\n", key);
 				fail_msg("%s", outbuf);
 			}
 
-			/** Verify and delete rec_mmid here */
-			rc = btr_rec_verify_delete(&rec_mmid, &key_iov);
+			/** Verify and delete rec_off here */
+			rc = btr_rec_verify_delete(&rec_off, &key_iov);
 			if (rc != 0) {
 				fail_msg("Failed to verify and delete rec\n");
 			}
