@@ -355,8 +355,8 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	kbund = iov2key_bundle(key_iov);
 	rbund = iov2rec_bundle(val_iov);
 
-	rec->rec_mmid = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
-	if (UMMID_IS_NULL(rec->rec_mmid))
+	rec->rec_off = umem_zalloc_off(&tins->ti_umm, vos_krec_size(rbund));
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NOMEM;
 
 	krec = vos_rec2krec(tins, rec);
@@ -377,8 +377,7 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	/** Subtree will be created later */
 
-	rc = vos_dtx_register_record(&tins->ti_umm,
-				     umem_id2off(&tins->ti_umm, rec->rec_mmid),
+	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_off,
 				     DTX_RT_KEY, 0);
 	if (rc == 0)
 		ktr_rec_store(tins, rec, kbund, rbund);
@@ -394,15 +393,14 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t	    toh;
 	int		    rc = 0;
 
-	if (UMMID_IS_NULL(rec->rec_mmid))
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	krec = vos_rec2krec(tins, rec);
 	umem_attr_get(&tins->ti_umm, &uma);
 
-	vos_dtx_degister_record(&tins->ti_umm, krec->kr_dtx,
-				umem_id2off(&tins->ti_umm, rec->rec_mmid),
-				DTX_RT_KEY);
+	vos_dtx_deregister_record(&tins->ti_umm, krec->kr_dtx, rec->rec_off,
+				  DTX_RT_KEY);
 	if (krec->kr_dtx_shares > 0) {
 		D_ERROR("There are some unknown DTXs (%d) share the key rec\n",
 			krec->kr_dtx_shares);
@@ -432,7 +430,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			dbtree_destroy(toh);
 	} /* It's possible that neither tree is created in case of punch only */
 exit:
-	umem_free(&tins->ti_umm, rec->rec_mmid);
+	umem_free_off(&tins->ti_umm, rec->rec_off);
 	return rc;
 }
 
@@ -481,10 +479,10 @@ ktr_check_availability(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_krec_df	*key;
 
-	key = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	key = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-			key->kr_dtx, umem_id2off(&tins->ti_umm, rec->rec_mmid),
-			intent, DTX_RT_KEY);
+				  key->kr_dtx, rec->rec_off, intent,
+				  DTX_RT_KEY);
 }
 
 static btr_ops_t key_btr_ops = {
@@ -645,19 +643,18 @@ svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	rbund = iov2rec_bundle(val_iov);
 
 	if (UMMID_IS_NULL(rbund->rb_mmid)) {
-		rec->rec_mmid = umem_alloc(&tins->ti_umm,
+		rec->rec_off = umem_alloc_off(&tins->ti_umm,
 					   vos_irec_size(rbund));
-		if (UMMID_IS_NULL(rec->rec_mmid))
+		if (UMOFF_IS_NULL(rec->rec_off))
 			return -DER_NOMEM;
 	} else {
 		umem_tx_add(&tins->ti_umm, rbund->rb_mmid,
 			    vos_irec_msize(rbund));
-		rec->rec_mmid = rbund->rb_mmid;
+		rec->rec_off = umem_id2off(&tins->ti_umm, rbund->rb_mmid);
 		rbund->rb_mmid = UMMID_NULL; /* taken over by btree */
 	}
 
-	rc = vos_dtx_register_record(&tins->ti_umm,
-				     umem_id2off(&tins->ti_umm, rec->rec_mmid),
+	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_off,
 				     DTX_RT_SVT, 0);
 	if (rc != 0)
 		/* It is unnecessary to free the PMEM that will be dropped
@@ -676,15 +673,14 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
 	bio_addr_t *addr = &irec->ir_ex_addr;
 
-	if (UMMID_IS_NULL(rec->rec_mmid))
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
-	vos_dtx_degister_record(&tins->ti_umm, irec->ir_dtx,
-				umem_id2off(&tins->ti_umm, rec->rec_mmid),
-				DTX_RT_SVT);
+	vos_dtx_deregister_record(&tins->ti_umm, irec->ir_dtx, rec->rec_off,
+				  DTX_RT_SVT);
 	if (args != NULL) {
-		*(umem_id_t *)args = rec->rec_mmid;
-		rec->rec_mmid = UMMID_NULL; /** taken over by user */
+		*(umem_id_t *)args = umem_off2id(&tins->ti_umm, rec->rec_off);
+		rec->rec_off = UMOFF_NULL; /** taken over by user */
 		return 0;
 	}
 
@@ -704,7 +700,7 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
 			D_ERROR("Error on block free. %d\n", rc);
 	}
 
-	umem_free(&tins->ti_umm, rec->rec_mmid);
+	umem_free_off(&tins->ti_umm, rec->rec_off);
 	return 0;
 }
 
@@ -750,7 +746,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	skey = (struct svt_hkey *)&rec->rec_hkey[0];
 	D_DEBUG(DB_IO, "Overwrite epoch "DF_U64"\n", skey->sv_epoch);
 
-	umem_tx_add(&tins->ti_umm, rec->rec_mmid, vos_irec_size(rbund));
+	umem_tx_add_off(&tins->ti_umm, rec->rec_off, vos_irec_size(rbund));
 	return svt_rec_store(tins, rec, kbund, rbund);
 }
 
@@ -760,7 +756,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_irec_df	*svt;
 
-	svt = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
 					  svt->ir_dtx, UMOFF_NULL, intent,
 					  DTX_RT_SVT);

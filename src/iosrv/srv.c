@@ -95,30 +95,8 @@ unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
 
-#define DSS_XS_NAME_LEN		(64)
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
-
-/** Per-xstream configuration data */
-struct dss_xstream {
-	char		dx_name[DSS_XS_NAME_LEN];
-	ABT_future	dx_shutdown;
-	hwloc_cpuset_t	dx_cpuset;
-	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pools[DSS_POOL_CNT];
-	ABT_sched	dx_sched;
-	ABT_thread	dx_progress;
-	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
-	int		dx_xs_id;
-	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
-	 * For offload XS it is same value as its main XS.
-	 */
-	int		dx_tgt_id;
-	/* CART context id, invalid (-1) for the offload XS w/o CART context */
-	int		dx_ctx_id;
-	bool		dx_main_xs;	/* true for main XS */
-	bool		dx_comm;	/* true with cart context */
-};
 
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
@@ -373,6 +351,7 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
 
 	if (dx->dx_comm) {
 		/* create private transport context */
@@ -965,13 +944,14 @@ dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
  *
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
+ * \param[in] main	only create ULT on main XS or not.
  * \return		Success or negative error code
  *			0
  *			-DER_NOMEM
  *			-DER_INVAL
  */
 int
-dss_ult_create_all(void (*func)(void *), void *arg)
+dss_ult_create_all(void (*func)(void *), void *arg, bool main)
 {
 	struct dss_xstream      *dx;
 	int			 i;
@@ -979,6 +959,9 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (main && !dx->dx_main_xs)
+			continue;
+
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
 				       ABT_THREAD_ATTR_NULL,
 				       NULL /* new thread */);

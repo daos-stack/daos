@@ -138,7 +138,7 @@ tx_hdl2ptr(daos_handle_t th)
 static void
 tx_hdl_link(struct dc_tx *tx)
 {
-	daos_hhash_link_insert(&tx->tx_hlink, D_HTYPE_TX);
+	daos_hhash_link_insert(&tx->tx_hlink, DAOS_HTYPE_TX);
 }
 
 static void

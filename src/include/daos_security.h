@@ -38,7 +38,16 @@ extern "C" {
 #include <stdbool.h>
 #include <sys/types.h>
 
-#define	DAOS_ACL_VERSION		1
+/**
+ * Version of the ACL structure format
+ */
+#define	DAOS_ACL_VERSION		(1)
+
+/**
+ * Maximum length of the user@domain principal string, not including null
+ * terminator.
+ */
+#define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
 
 /**
  * Header for the Access Control List, followed by the table of variable-length

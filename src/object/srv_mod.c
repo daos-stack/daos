@@ -32,12 +32,24 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/**
+ * Swtich of enable DTX or not, enabled by default.
+ */
+bool srv_enable_dtx = true;
+
 static int
 obj_mod_init(void)
 {
+	uint32_t	mode;
 	int rc;
 
-	vos_dtx_register_check_leader(ds_pool_check_leader);
+	d_getenv_int("DAOS_IO_MODE", &mode);
+	if (mode != DIM_DTX_FULL_ENABLED) {
+		srv_enable_dtx = false;
+		D_DEBUG(DB_IO, "DTX is disabled.\n");
+	} else {
+		D_DEBUG(DB_IO, "DTX is enabled.\n");
+	}
 
 	rc = obj_ec_codec_init();
 	if (rc != 0)

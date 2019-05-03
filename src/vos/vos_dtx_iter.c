@@ -150,7 +150,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_oid = dtx->te_oid;
 	it_entry->ie_dtx_sec = dtx->te_sec;
 	it_entry->ie_dtx_intent = dtx->te_intent;
-	it_entry->ie_dtx_hash = dtx->te_dkey_hash[0];
+	it_entry->ie_dtx_hash = dtx->te_dkey_hash;
 
 	D_DEBUG(DB_TRACE, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&dtx->te_xid));
