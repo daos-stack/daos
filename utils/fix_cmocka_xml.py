@@ -57,11 +57,11 @@ for file in files:
 	if (file != ""):
 		file_handle =  open('{0}'.format(file), "r+")
 		lines = file_handle.readlines()
+		print(lines[0])
 		if("xml" in lines[0]):
 			lines[0] = lines[0].replace(lines[0],lines[0]+parent_header)
 		else:
-			lines[0] = lines[0].replace(lines[0],xml_header+parent_header)
-		print(lines[0])
+			lines[0] = lines[0].replace(lines[0],xml_header+parent_header+lines[0])
 		file_handle.truncate(0)
 		file_handle.seek(0)
 		file_handle.writelines(lines)
