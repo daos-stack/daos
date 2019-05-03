@@ -161,7 +161,7 @@ func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
 	return cMap
 }
 
-// NewClientMount provides a mock ClientMountMap populated with scm mount
+// NewClientMountResults provides a mock ClientMountMap populated with scm mount
 // operation responses
 func NewClientMountResults(
 	results []*pb.ScmMountResult, addrs Addresses) ClientMountMap {
