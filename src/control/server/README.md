@@ -1,5 +1,11 @@
 # DAOS Server (control-plane)
 
+## Workflow
+
+Control plane server (`daos_server`) instances will open and listen on gRPC channel for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through control plane [`dmg`](../dmg) management tool and when ready to start data plane, calling `dmg storage format` will enable the server to be formatted (superblock written) and start the data plane.
+
+![Server format diagram](/doc/graph/server_format_flow.png)
+
 ## Running
 
 `daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
@@ -174,6 +180,10 @@ See `daos_shell --help` for usage and [here](../dmg) for package details.
 The DAOS data plane utilises two forms of non-volatile storage, storage class memory (SCM) in the form of persistent memory modules and NVMe in the form of high-performance SSDs.
 
 The DAOS control plane provides capability to provision and manage the non-volatile storage including the allocation of resources to data plane instances.
+
+Storage format is required after other storage management operations have been performed as a precursor to bringing up the DAOS data plane:
+
+![Storage format diagram](/doc/graph/storage_format_detail.png)
 
 ### SCM management capabilities
 
