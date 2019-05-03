@@ -171,7 +171,7 @@ enum vos_dtx_entry_flags {
 };
 
 /**
- * Persisted DTX entry, it is referenced by btr_record::rec_mmid
+ * Persisted DTX entry, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DTX_TABLE.
  */
 struct vos_dtx_entry_df {
@@ -254,7 +254,7 @@ enum vos_krec_bf {
 };
 
 /**
- * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_mmid
+ * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.
  */
 struct vos_krec_df {
@@ -296,7 +296,7 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
 
 /**
  * Persisted VOS single value & epoch record, it is referenced by
- * btr_record::rec_mmid of btree VOS_BTR_SINGV.
+ * btr_record::rec_off of btree VOS_BTR_SINGV.
  */
 struct vos_irec_df {
 	/** key checksum size (in bytes) */

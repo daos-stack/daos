@@ -250,7 +250,7 @@ daos_eq_delete(struct daos_eq_private *eqx)
 static void
 daos_eq_insert(struct daos_eq_private *eqx)
 {
-	daos_hhash_link_insert(&eqx->eqx_hlink, D_HTYPE_EQ);
+	daos_hhash_link_insert(&eqx->eqx_hlink, DAOS_HTYPE_EQ);
 }
 
 static void

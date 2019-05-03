@@ -622,8 +622,8 @@ struct vos_key_bundle {
  * to the multi-nested btree.
  */
 struct vos_rec_bundle {
-	/** Optional, externally allocated buffer mmid */
-	umem_id_t		 rb_mmid;
+	/** Optional, externally allocated buffer umoff */
+	umem_off_t		 rb_off;
 	/** checksum buffer for the daos key */
 	daos_csum_buf_t		*rb_csum;
 	/**
@@ -1010,7 +1010,7 @@ tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound value (data buffer address, or ZC
- * buffer mmid, checksum etc).
+ * buffer umoff, checksum etc).
  */
 static inline void
 tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)

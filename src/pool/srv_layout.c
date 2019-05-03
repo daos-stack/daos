@@ -43,6 +43,8 @@ RDB_STRING_KEY(ds_pool_prop_, acl);
 RDB_STRING_KEY(ds_pool_prop_, space_rb);
 RDB_STRING_KEY(ds_pool_prop_, self_heal);
 RDB_STRING_KEY(ds_pool_prop_, reclaim);
+RDB_STRING_KEY(ds_pool_prop_, owner);
+RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
 
 /** pool handle KVS */
@@ -52,8 +54,7 @@ RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_attr_, user);
 
 /** default properties, should cover all optional pool properties */
-#define POOL_PROP_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
-struct daos_prop_entry pool_prop_entries_default[POOL_PROP_NUM] = {
+struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_PO_LABEL,
 		.dpe_str	= "pool label not set",
@@ -70,11 +71,17 @@ struct daos_prop_entry pool_prop_entries_default[POOL_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_ACL,
 		.dpe_val_ptr	= NULL, /* generated dynamically */
+	}, {
+		.dpe_type	= DAOS_PROP_PO_OWNER,
+		.dpe_str	= "nobody@",
+	}, {
+		.dpe_type	= DAOS_PROP_PO_OWNER_GROUP,
+		.dpe_str	= "nobody@",
 	}
 };
 
 daos_prop_t pool_prop_default = {
-	.dpp_nr		= POOL_PROP_NUM,
+	.dpp_nr		= DAOS_PROP_PO_NUM,
 	.dpp_entries	= pool_prop_entries_default,
 };
 

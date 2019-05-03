@@ -166,26 +166,52 @@ static void
 test_invalid_flags(void **state)
 {
 	struct test_arg		*arg = *state;
+	uint32_t		*value1;
+	uint32_t		*value2;
+	struct umem_instance	*umm = utest_utx2umm(arg->ta_utx);
 	umem_off_t		 umoff = UMOFF_NULL;
+	uint64_t		 offset;
 	int			 i;
 
 	assert_true(UMOFF_IS_NULL(umoff));
 
-	assert_int_equal(umem_off_get_invalid_flags(umoff), 0);
+	assert_int_equal(umem_off2flags(umoff), 0);
 
 	for (i = 0; i < UMOFF_MAX_FLAG; i++) {
-		umem_off_set_invalid(&umoff, i);
-		assert_int_equal(umem_off_get_invalid_flags(umoff), i);
+		umem_off_set_null_flags(&umoff, i);
+		assert_int_equal(umem_off2flags(umoff), i);
+		assert_true(UMOFF_IS_NULL(umoff));
 	}
 
 	umoff = UMOFF_NULL;
-	assert_int_equal(umem_off_get_invalid_flags(umoff), 0);
+	assert_int_equal(umem_off2flags(umoff), 0);
 
-	assert_int_equal(utest_alloc_off(arg->ta_utx, &umoff, 4, NULL, NULL),
-			 0);
-	assert_int_equal(umem_off_get_invalid_flags(umoff), 0);
+	assert_int_equal(utest_alloc(arg->ta_utx, &umoff, sizeof(*value1), NULL,
+				     NULL), 0);
+	assert_int_equal(umem_off2flags(umoff), 0);
 
-	assert_int_equal(utest_free_off(arg->ta_utx, umoff), 0);
+	offset = umem_off2offset(umoff);
+	value1 = umem_off2ptr(umm, umoff);
+	assert_ptr_not_equal(value1, NULL);
+
+	*value1 = 0xdeadbeef;
+	assert_int_equal(*value1, 0xdeadbeef);
+
+	for (i = 0; i < UMOFF_MAX_FLAG; i++) {
+		umem_off_set_flags(&umoff, i);
+		assert_int_equal(umem_off2flags(umoff), i);
+		assert_false(UMOFF_IS_NULL(umoff));
+		assert_int_equal(umem_off2offset(umoff), offset);
+	}
+	assert_int_equal(*value1, 0xdeadbeef);
+
+	value2 = umem_off2ptr(umm, umoff);
+	assert_ptr_equal(value1, value2);
+
+	assert_int_equal(*value2, 0xdeadbeef);
+
+	/* Even with flags set, the offset should be valid */
+	assert_int_equal(utest_free(arg->ta_utx, umoff), 0);
 }
 
 static void
@@ -194,36 +220,21 @@ test_alloc(void **state)
 	struct test_arg		*arg = *state;
 	struct umem_instance	*umm = utest_utx2umm(arg->ta_utx);
 	int			*value1;
-	int			*value2;
 	umem_off_t		 umoff = 0;
-	umem_id_t		 mmid;
 	int			 rc;
 
 	rc = utest_tx_begin(arg->ta_utx);
 	if (rc != 0)
 		goto done;
 
-	umoff = umem_zalloc_off(umm, 4);
+	umoff = umem_zalloc(umm, 4);
 	if (UMOFF_IS_NULL(umoff)) {
 		print_message("umoff unexpectedly NULL\n");
 		rc = 1;
 		goto end;
 	}
 
-	mmid = umem_off2id(umm, umoff);
-	if (UMMID_IS_NULL(mmid)) {
-		print_message("mmid unexpectedly NULL\n");
-		rc = 1;
-		goto end;
-	}
-
 	value1 = umem_off2ptr(umm, umoff);
-	value2 = umem_id2ptr(umm, mmid);
-	if (value1 != value2) {
-		print_message("different values returned for umoff and mmid\n");
-		rc = 1;
-		goto end;
-	}
 
 	if (*value1 != 0) {
 		print_message("Bad value for allocated umoff\n");
@@ -231,7 +242,7 @@ test_alloc(void **state)
 		goto end;
 	}
 
-	rc = umem_free(umm, mmid);
+	rc = umem_free(umm, umoff);
 end:
 	rc = utest_tx_end(arg->ta_utx, rc);
 done:
@@ -242,9 +253,9 @@ int
 main(int argc, char **argv)
 {
 	static const struct CMUnitTest umem_tests[] = {
-		{ "UMEM001: Test invalid flags pmem", test_invalid_flags,
+		{ "UMEM001: Test null flags pmem", test_invalid_flags,
 			setup_pmem, teardown_pmem},
-		{ "UMEM002: Test invalid flags vmem", test_invalid_flags,
+		{ "UMEM002: Test null flags vmem", test_invalid_flags,
 			setup_vmem, teardown_vmem},
 		{ "UMEM003: Test alloc pmem", test_alloc,
 			setup_pmem, teardown_pmem},

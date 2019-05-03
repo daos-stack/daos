@@ -64,6 +64,8 @@ extern daos_iov_t ds_pool_prop_acl;		/* daos_acl */
 extern daos_iov_t ds_pool_prop_space_rb;	/* uint64_t */
 extern daos_iov_t ds_pool_prop_self_heal;	/* uint64_t */
 extern daos_iov_t ds_pool_prop_reclaim;		/*  uint64_t */
+extern daos_iov_t ds_pool_prop_owner;		/* string */
+extern daos_iov_t ds_pool_prop_owner_group;	/* string */
 extern daos_iov_t ds_pool_prop_nhandles;	/* uint32_t */
 
 /** pool handle KVS */

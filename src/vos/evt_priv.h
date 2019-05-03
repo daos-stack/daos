@@ -111,9 +111,6 @@ struct evt_context {
 #define evt_umm(tcx)			(&(tcx)->tc_umm)
 #define evt_has_tx(tcx)			umem_has_tx(evt_umm(tcx))
 
-#define evt_off2mmid(tcx, offset)	\
-	umem_off2id(evt_umm(tcx), offset)
-
 #define evt_off2ptr(tcx, offset)			\
 	umem_off2ptr(evt_umm(tcx), offset)
 
