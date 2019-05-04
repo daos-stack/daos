@@ -83,7 +83,19 @@
 		ds_obj_punch_handler, NULL),				\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler, NULL)
+		ds_obj_query_key_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
+		0, &CQF_obj_update,					\
+		ds_obj_tgt_update_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
+		0, &CQF_obj_punch,					\
+		ds_obj_tgt_punch_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
+		0, &CQF_obj_punch,					\
+		ds_obj_tgt_punch_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
+		0, &CQF_obj_punch,					\
+		ds_obj_tgt_punch_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a

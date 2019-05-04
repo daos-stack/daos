@@ -297,34 +297,51 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 }
 
 int
-dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
-	struct ds_cont_child *cont, int result)
+dtx_end(struct dtx_handle *dth, dtx_wait_cb_t wait_cb,
+	struct ds_cont_hdl *cont_hdl, struct ds_cont_child *cont, int result)
 {
-	int	rc = 0;
+	struct dtx_conflict_entry	*dces = NULL;
+	int				rc = 0;
+	int				rc1;
 
-	if (result < 0) {
-		if (!dth->dth_leader && dth->dth_dti_cos_count > 0) {
-			/* XXX: For non-leader replica, even if we fail to
-			 *	make related modification for some reason,
-			 *	we still need to commit the DTXs for CoS.
-			 *	Because other replica may have already
-			 *	committed them. For leader case, it is
-			 *	not important even if we miss to commit
-			 *	the CoS DTXs, because they are still in
-			 *	CoS cache, and can be committed next time.
-			 */
-			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
-					    dth->dth_dti_cos_count);
-			if (rc != 0)
-				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
-					DP_UUID(cont->sc_uuid), rc);
-		}
-
-		goto fail;
-	}
+	if (dth == NULL)
+		return result;
 
 	if (!dth->dth_leader || dth->dth_non_rep ||  dtx_is_null(dth->dth_ent))
-		goto out;
+		goto out_free;
+
+	D_ASSERT(wait_cb != NULL);
+	D_ASSERT(dth->dth_disp_arg != NULL);
+	rc1 = wait_cb(dth->dth_disp_arg, rc >= 0 ? &dces : NULL);
+	if (dces != NULL) {
+		/* XXX: The local modification has been done, but remote
+		 *	replica failed because of some uncommitted DTX,
+		 *	it may be caused by some garbage DTXs on remote
+		 *	replicas or leader has more information because
+		 *	of CoS cache. So handle (abort or commit) them
+		 *	firstly then retry.
+		 */
+
+		D_ASSERT(dth != NULL);
+
+		D_DEBUG(DB_TRACE, "Hit conflict DTX (%d)"DF_DTI" for "
+			DF_DTI", handle them and retry update.\n",
+			rc1, DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
+
+		rc = dtx_conflict(cont->sc_hdl, dth,
+				  cont_hdl->sch_pool->spc_uuid,
+				  cont->sc_uuid, dces, rc1,
+				  cont_hdl->sch_pool->spc_map_version);
+		D_FREE(dces);
+		if (rc >= 0) {
+			D_DEBUG(DB_TRACE, "retry DTX "DF_DTI".\n",
+				DP_DTI(&dth->dth_xid));
+			D_GOTO(out, rc = -DER_AGAIN);
+		}
+	} else if (rc >= 0) {
+		rc = rc1;
+	}
+
 
 	/* If the DTX is started befoe DTX resync operation (for rebuild),
 	 * then it is possbile that the DTX resync ULT may have aborted
@@ -368,7 +385,7 @@ fail:
 		dtx_abort(cont_hdl->sch_pool->spc_uuid, cont->sc_uuid,
 			  &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);
-out:
+out_free:
 	D_DEBUG(DB_TRACE,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
 		"%s, %s, %s: rc = %d\n",
@@ -382,7 +399,7 @@ out:
 	if (dth->dth_leader && dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
 	D_FREE_PTR(dth);
-
+out:
 	return result > 0 ? 0 : result;
 }
 

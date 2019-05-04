@@ -83,6 +83,8 @@ struct dtx_handle {
 	struct dtx_id			*dth_dti_cos;
 	/* The identifier of the DTX that conflict with current one. */
 	struct dtx_conflict_entry	*dth_conflict;
+	/* The data attached to the dth for dispatch */
+	void				*dth_disp_arg;
 	/** The address of the DTX entry in SCM. */
 	umem_off_t			 dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
@@ -117,8 +119,11 @@ int dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	      int dti_cos_count, uint32_t pm_ver, uint32_t intent, bool leader,
 	      struct dtx_handle **dth);
 
-int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
-	    struct ds_cont_child *cont, int result);
+/* XXX this is not needed once we move req forward to dtx module */
+typedef int (*dtx_wait_cb_t)(void *obj_arg, struct dtx_conflict_entry **dces);
+int dtx_end(struct dtx_handle *dth, dtx_wait_cb_t wait_cb,
+	    struct ds_cont_hdl *cont_hdl, struct ds_cont_child *cont,
+	    int result);
 
 int dtx_conflict(daos_handle_t coh, struct dtx_handle *dth, uuid_t po_uuid,
 		 uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,

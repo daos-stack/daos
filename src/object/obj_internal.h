@@ -141,7 +141,7 @@ enum obj_profile_op {
 	OBJ_PF_UPDATE_END,
 	OBJ_PF_UPDATE_WAIT,
 	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE
+	OBJ_PF_UPDATE,
 };
 
 struct obj_tls {
@@ -218,22 +218,15 @@ int obj_get_grp_size(struct dc_object *obj);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
+void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
+void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 #define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
-struct obj_req_disp_arg;
-int ds_obj_req_disp_prepare(crt_opcode_t opc,
-			struct daos_obj_shard_tgt *fw_shard_tgts,
-			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
-			ds_iofw_cb_t postfw_cb, void *cb_data,
-			uint32_t flags, int dti_cos_count,
-			struct dtx_id *dti_cos, struct obj_req_disp_arg **arg);
-void ds_obj_req_dispatch(void *arg);
-void ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg);
 
 static inline uint64_t
 obj_dkey2hash(daos_key_t *dkey)
