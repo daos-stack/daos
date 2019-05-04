@@ -37,10 +37,6 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-
-	//#include <unistd.h>
-	//#include <errno.h>
-	"C"
 )
 
 func main() {
@@ -63,31 +59,25 @@ func parseCliOpts(opts *cliOptions) error {
 	return nil
 }
 
-// drop will attempt to drop privileges by setting uid of running process to
-// that of the username specified in config file. If groupname is also
-// specified in config file then check user is a member of that group and
-// set relevant gid if so, otherwise use user.gid.
-func drop(userName string, groupName string) error {
-	log.Debugf("Running as root, downgrading to user ", userName)
-
-	if userName == "" {
-		return errors.New("no username supplied in config")
-	}
-
-	usr, err := user.Lookup(userName)
+func getUid(ext External, userName string) (*user.User, int64, error) {
+	usr, err := ext.lookupUser(userName)
 	if err != nil {
-		return errors.WithMessage(err, "user lookup")
+		return nil, -1, errors.WithMessage(err, "user lookup")
 	}
 
 	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
 	if err != nil {
-		return errors.WithMessage(err, "parsing uid to int")
+		return nil, -1, errors.WithMessage(err, "parsing uid to int")
 	}
 
+	return usr, uid, nil
+}
+
+func getGid(ext External, usr *user.User, groupName string) (int64, error) {
 	_gid := usr.Gid
 
 	// attempt to assign group specified in config file
-	if group, err := user.LookupGroup(groupName); err == nil {
+	if group, err := ext.lookupGroup(groupName); err == nil {
 		// check user group membership
 		if ids, err := usr.GroupIds(); err == nil {
 			for _, g := range ids {
@@ -103,7 +93,8 @@ func drop(userName string, groupName string) error {
 					usr.Username, group.Name)
 			}
 		} else {
-			return errors.WithMessage(err, "get group membership")
+			return -1, errors.WithMessage(
+				err, "get group membership")
 		}
 	} else {
 		log.Debugf("lookup of group specified in config: %+v", err)
@@ -111,19 +102,39 @@ func drop(userName string, groupName string) error {
 
 	gid, err := strconv.ParseInt(_gid, 10, 32)
 	if err != nil {
-		return errors.WithMessage(err, "parsing gid to int")
+		return -1, errors.WithMessage(err, "parsing gid to int")
 	}
 
-	cerr, errno := C.setgid(C.__gid_t(gid))
-	if cerr != 0 {
-		return errors.WithMessagef(
-			err, "setting gid (C.setgid) (%d)", errno)
+	return gid, nil
+}
+
+// drop will attempt to drop privileges by setting uid of running process to
+// that of the username specified in config file. If groupname is also
+// specified in config file then check user is a member of that group and
+// set relevant gid if so, otherwise use user.gid.
+func drop(ext External, userName string, groupName string) error {
+	log.Debugf("Running as root, downgrading to user ", userName)
+
+	if userName == "" {
+		return errors.New("no username supplied in config")
 	}
 
-	cerr, errno = C.setuid(C.__uid_t(uid))
-	if cerr != 0 {
-		return errors.WithMessagef(
-			err, "setting uid (C.setuid) (%d)", errno)
+	usr, uid, err := getUid(ext, userName)
+	if err != nil {
+		return errors.WithMessage(err, "get uid")
+	}
+
+	gid, err := getGid(ext, usr, groupName)
+	if err != nil {
+		return errors.WithMessage(err, "get gid")
+	}
+
+	if err := ext.setGid(gid); err != nil {
+		return errors.WithMessage(err, "setting gid")
+	}
+
+	if err := ext.setUid(uid); err != nil {
+		return errors.WithMessage(err, "setting uid")
 	}
 
 	return nil
@@ -203,7 +214,9 @@ func serverMain() error {
 
 	if syscall.Getuid() == 0 {
 		log.Debugf("Dropping privileges...")
-		if err := drop(config.UserName, config.GroupName); err != nil {
+		if err := drop(
+			config.ext, config.UserName, config.GroupName); err != nil {
+
 			log.Errorf("Failed to drop privileges: %s", err)
 			// TODO: don't continue as root
 		}

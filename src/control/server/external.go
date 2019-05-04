@@ -26,12 +26,17 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
+
+	//#include <unistd.h>
+	//#include <errno.h>
+	"C"
 )
 
 const (
@@ -52,8 +57,12 @@ type External interface {
 	unmount(string) error
 	mkdir(string) error
 	remove(string) error
-	getHistory() []string
 	exists(string) (bool, error)
+	lookupUser(string) (*user.User, error)
+	lookupGroup(string) (*user.Group, error)
+	setUid(int64) error
+	setGid(int64) error
+	getHistory() []string
 }
 
 func errPermsAnnotate(err error) (e error) {
@@ -188,4 +197,26 @@ func (e *ext) exists(path string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (e *ext) lookupUser(userName string) (*user.User, error) {
+	return user.Lookup(userName)
+}
+
+func (e *ext) lookupGroup(groupName string) (*user.Group, error) {
+	return user.LookupGroup(groupName)
+}
+
+func (e *ext) setUid(uid int64) error {
+	if cerr, errno := C.setuid(C.__uid_t(uid)); cerr != 0 {
+		return errors.Errorf("C.setuid rc: %d, errno: %d", cerr, errno)
+	}
+	return nil
+}
+
+func (e *ext) setGid(gid int64) error {
+	if cerr, errno := C.setgid(C.__gid_t(gid)); cerr != 0 {
+		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
+	}
+	return nil
 }
