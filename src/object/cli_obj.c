@@ -476,7 +476,7 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard)
 
 static int
 obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
-		     struct daos_obj_shard_tgt *shard_tgt)
+		     struct daos_shard_tgt *shard_tgt)
 {
 	struct dc_obj_shard	*obj_shard;
 	int			 rc;
@@ -484,7 +484,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			shard_tgt->st_rank = OBJ_TGTS_IGNORE;
+			shard_tgt->st_rank = TGTS_IGNORE;
 			rc = 0;
 		} else {
 			D_ERROR(DF_OID" obj_shard_open failed, rc %d.\n",
@@ -506,7 +506,7 @@ out:
 #define OBJ_TGT_INLINE_NR	(1)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
-	struct daos_obj_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
+	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
 	/* Shard target array, with (ort_grp_nr * ort_grp_size) targets.
 	 * If #targets <= OBJ_TGT_INLINE_NR then it points to ort_tgts_inline.
 	 * Within the array, [0, ort_grp_size - 1] is for the first group,
@@ -517,16 +517,16 @@ struct obj_req_tgts {
 	 * Now there is only one case for (ort_grp_nr > 1) that for object
 	 * punch, all other cases with (ort_grp_nr == 1).
 	 */
-	struct daos_obj_shard_tgt	*ort_shard_tgts;
-	uint32_t			 ort_grp_nr;
-	uint32_t			 ort_grp_size;
+	struct daos_shard_tgt	*ort_shard_tgts;
+	uint32_t		 ort_grp_nr;
+	uint32_t		 ort_grp_size;
 	/* ort_start_shard is only for EC object, it is the start shard number
 	 * of the EC stripe. To facilitate calculate the offset of different
 	 * shards in the stripe.
 	 */
-	uint32_t			 ort_start_shard;
+	uint32_t		 ort_start_shard;
 	/* flag of server dispatch */
-	uint32_t			 ort_srv_disp:1;
+	uint32_t		 ort_srv_disp:1;
 };
 
 /* The tgt_set parameter is a bit map indicating the proper subset of targets
@@ -539,11 +539,11 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		    uint32_t start_shard, uint32_t shard_cnt, uint32_t grp_nr,
 		    struct obj_req_tgts *req_tgts)
 {
-	struct daos_obj_shard_tgt	*tgt = NULL;
-	uint32_t			 leader_shard = -1;
-	uint32_t			 i, j;
-	uint32_t			 shard_idx, shard_nr, grp_size;
-	int				 rc;
+	struct daos_shard_tgt	*tgt = NULL;
+	uint32_t		 leader_shard = -1;
+	uint32_t		 i, j;
+	uint32_t		 shard_idx, shard_nr, grp_size;
+	int			 rc;
 
 	D_ASSERT(shard_cnt >= 1);
 	grp_size = shard_cnt / grp_nr;
@@ -970,16 +970,6 @@ struct obj_auxi_args {
 		struct shard_punch_args	p_args;
 	};
 };
-
-static inline bool
-obj_is_modification_opc(uint32_t opc)
-{
-	if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_PUNCH ||
-	    opc == DAOS_OBJ_RPC_PUNCH_DKEYS || opc == DAOS_OBJ_RPC_PUNCH_AKEYS)
-		return true;
-
-	return false;
-}
 
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
@@ -1492,7 +1482,7 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 	struct obj_auxi_args		*obj_auxi = shard_auxi->obj_auxi;
 	struct dc_obj_shard		*obj_shard;
 	struct obj_req_tgts		*req_tgts;
-	struct daos_obj_shard_tgt	*fw_shard_tgts;
+	struct daos_shard_tgt		*fw_shard_tgts;
 	uint32_t			 fw_cnt;
 	int				 rc;
 
@@ -1542,10 +1532,10 @@ typedef int (*shard_io_prep_cb_t)(struct shard_auxi_args *shard_auxi,
 static int
 shard_task_reset_target(tse_task_t *shard_task, void *arg)
 {
-	struct obj_req_tgts		*req_tgts = arg;
-	struct obj_auxi_args		*obj_auxi;
-	struct shard_auxi_args		*shard_arg;
-	struct daos_obj_shard_tgt	*leader_tgt;
+	struct obj_req_tgts	*req_tgts = arg;
+	struct obj_auxi_args	*obj_auxi;
+	struct shard_auxi_args	*shard_arg;
+	struct daos_shard_tgt	*leader_tgt;
 
 	shard_arg = tse_task_buf_embedded(shard_task, sizeof(*shard_arg));
 	D_ASSERT(shard_arg->grp_idx < req_tgts->ort_grp_nr);
@@ -1565,11 +1555,11 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	       shard_io_prep_cb_t io_prep_cb, shard_io_cb_t io_cb,
 	       tse_task_t *obj_task)
 {
-	struct obj_req_tgts		*req_tgts = &obj_auxi->req_tgts;
-	d_list_t			*task_list = &obj_auxi->shard_task_head;
-	tse_task_t			*shard_task;
-	struct shard_auxi_args		*shard_auxi;
-	struct daos_obj_shard_tgt	*tgt;
+	struct obj_req_tgts	*req_tgts = &obj_auxi->req_tgts;
+	d_list_t		*task_list = &obj_auxi->shard_task_head;
+	tse_task_t		*shard_task;
+	struct shard_auxi_args	*shard_auxi;
+	struct daos_shard_tgt	*tgt;
 	uint32_t			 i, tgts_nr;
 	int				 rc = 0;
 
