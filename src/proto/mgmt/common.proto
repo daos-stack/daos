@@ -1,5 +1,4 @@
-//
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,37 +20,29 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+syntax = "proto3";
+package mgmt;
 
-import (
-	"testing"
+message EmptyParams {}
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/daos-stack/go-ipmctl/ipmctl"
-	"google.golang.org/grpc"
-)
-
-type mockListScmModulesServer struct {
-	grpc.ServerStream
-	Results []*pb.ScmModule
+message FilePath {
+	string path = 1;
 }
 
-func (m *mockListScmModulesServer) Send(module *pb.ScmModule) error {
-	m.Results = append(m.Results, module)
-	return nil
+enum ResponseStatus {
+	CTRL_SUCCESS = 0;
+	CTRL_IN_PROGRESS = 1;	// Not yet completed
+	CTRL_WAITING = 2;	// Blocked
+	CTRL_ERR_CONF = -1;	// Config file parsing error
+	CTRL_ERR_NVME = -2;	// NVMe subsystem error
+	CTRL_ERR_SCM = -3;	// SCM subsystem error
+	CTRL_ERR_APP = -4;	// Other application error
+	CTRL_ERR_UNKNOWN = -5;	// Unknown error
 }
 
-func TestListScmModules(t *testing.T) {
-	cs := defaultMockControlService(t)
-	cs.scm = newMockScmStorage([]DeviceDiscovery{MockModule()}, true, cs.config)
-
-	m := MockModulePB()
-	mock := &mockListScmModulesServer{}
-
-	cs.ListScmModules(nil, mock)
-
-	AssertEqual(t, len(cs.scm.modules), 1, "unexpected number of modules")
-	AssertEqual(t, len(mock.Results), 1, "unexpected number of modules sent")
-	AssertEqual(t, mock.Results, []*pb.ScmModule{m}, "unexpected list of modules sent")
+message ResponseState {
+	ResponseStatus status = 1;
+	string error = 2;
+	string info = 3;
 }
+

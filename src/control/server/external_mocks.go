@@ -41,15 +41,17 @@ type mockExt struct {
 	unmountRet error
 	mkdirRet   error
 	removeRet  error
+	history    []string
 }
 
-var (
-	commands []string // record commands executed in mocks
-	files    []string // record file content written in mocks
-)
+func (m *mockExt) getHistory() []string {
+	return m.history
+}
+
+var files []string // record file content written in mocks
 
 func (m *mockExt) runCommand(cmd string) error {
-	commands = append(commands, cmd)
+	m.history = append(m.history, fmt.Sprintf(msgCmd, cmd))
 
 	return m.cmdRet
 }
@@ -72,29 +74,33 @@ func (m *mockExt) createEmpty(path string, size int64) error {
 func (m *mockExt) mount(
 	dev string, mount string, typ string, flags uintptr, opts string) error {
 
-	commands = append(
-		commands,
-		fmt.Sprintf("mount %s %s %s %s", dev, mount, typ, opts))
+	op := fmt.Sprintf(msgMount, dev, mount, typ, fmt.Sprint(flags), opts)
+
+	m.history = append(m.history, op)
 
 	return m.mountRet
 }
 
 func (m *mockExt) unmount(path string) error {
-	commands = append(commands, "umount "+path)
+	m.history = append(m.history, fmt.Sprintf(msgUnmount, path))
 
 	return m.unmountRet
 }
 
 func (m *mockExt) mkdir(path string) error {
-	commands = append(commands, "mkdir "+path)
+	m.history = append(m.history, fmt.Sprintf(msgMkdir, path))
 
 	return m.mkdirRet
 }
 
 func (m *mockExt) remove(path string) error {
-	commands = append(commands, "remove "+path)
+	m.history = append(m.history, fmt.Sprintf(msgRemove, path))
 
 	return m.removeRet
+}
+
+func (m *mockExt) exists(string) (bool, error) {
+	return m.existsRet, nil
 }
 
 func newMockExt(
@@ -103,7 +109,8 @@ func newMockExt(
 
 	return &mockExt{
 		cmdRet, getenvRet, existsRet, mountRet, unmountRet,
-		mkdirRet, removeRet}
+		mkdirRet, removeRet, []string{},
+	}
 }
 
 func defaultMockExt() External {
@@ -111,7 +118,8 @@ func defaultMockExt() External {
 }
 
 func cmdFailMockExt() External {
-	return newMockExt(errors.New("exit status 1"), "", false, nil, nil, nil, nil)
+	return newMockExt(
+		errors.New("exit status 1"), "", false, nil, nil, nil, nil)
 }
 
 func envExistsMockExt() External {
