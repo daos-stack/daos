@@ -31,16 +31,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 const (
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultRuntimeDir = "/var/run/daos_agent"
-	defaultLogFile =  "/tmp/daos_agent.log"
-	defaultConfigPath = "etc/daos.yml"
-	defaultSystemName = "daos_server"
-	defaultPort = 10000
+	defaultRuntimeDir    = "/var/run/daos_agent"
+	defaultLogFile       = "/tmp/daos_agent.log"
+	defaultConfigPath    = "etc/daos.yml"
+	defaultSystemName    = "daos_server"
+	defaultPort          = 10000
 )
 
 // External interface provides methods to support various os operations.
@@ -63,16 +62,16 @@ func (e *ext) getenv(key string) string {
 
 // Configuration contains all known configuration variables available to the client
 type Configuration struct {
-	SystemName    string `yaml:"name"`
+	SystemName    string   `yaml:"name"`
 	AccessPoints  []string `yaml:"access_points"`
-	Port          int `yaml:"port"`
+	Port          int      `yaml:"port"`
 	HostList      []string `yaml:"hostlist"`
-	RuntimeDir    string `yaml:"runtime_dir"`
-	HostFile      string `yaml:"host_file"`
-	Cert          string `yaml:"cert"`
-	Key           string `yaml:"key"`
-	LogFile       string `yaml:"log_file"`
-	LogFileFormat string `yaml:"log_file_format"`
+	RuntimeDir    string   `yaml:"runtime_dir"`
+	HostFile      string   `yaml:"host_file"`
+	Cert          string   `yaml:"cert"`
+	Key           string   `yaml:"key"`
+	LogFile       string   `yaml:"log_file"`
+	LogFileFormat string   `yaml:"log_file_format"`
 	Path          string
 	ext           External
 }
@@ -86,11 +85,7 @@ func newDefaultConfiguration(ext External) Configuration {
 		Port:          defaultPort,
 		HostList:      []string{"localhost:10001"},
 		RuntimeDir:    defaultRuntimeDir,
-		HostFile:      "",
-		Cert:          "",
-		Key:           "",
 		LogFile:       defaultLogFile,
-		LogFileFormat: "",
 		Path:          defaultConfigPath,
 		ext:           ext,
 	}
@@ -116,7 +111,7 @@ func ProcessConfigFile(ConfigPath string) (Configuration, error) {
 
 	err := config.LoadConfig()
 	if err != nil {
-		log.Debugf("Unable to read the configuration file from: '%s'  Using default configuration.", config.Path)
+		log.Debugf("\nUnable to read the configuration file from: '%s'\nUsing default configuration.", config.Path)
 		return config, nil
 	}
 	log.Debugf("DAOS Client config read from %s", config.Path)
@@ -134,36 +129,6 @@ func (c *Configuration) LoadConfig() error {
 
 	if err = c.parse(bytes); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-// ApplyAgentCmdLineOverrides will overwrite Configuration values with any non empty
-// data provided, usually from the commandline.
-func (c *Configuration) ApplyAgentCmdLineOverrides(RuntimeDir string, LogFile string) error {
-
-	if RuntimeDir != "" {
-		log.Debugf("Overriding socket path from config file with %s", RuntimeDir)
-		c.RuntimeDir = RuntimeDir
-	}
-
-	if LogFile != "" {
-		log.Debugf("Overriding LogFile path from config file with %s", LogFile)
-		c.LogFile = LogFile
-	}
-
-	return nil
-}
-
-// ApplyDMGCmdLineOverrides will overwrite Configuration values with any non empty
-// data provided, usually from the commandline.
-func (c *Configuration) ApplyDMGCmdLineOverrides(Hostlist string) error {
-
-	if (len(Hostlist) > 0) {
-		hosts := strings.Split(Hostlist, ",")
-		log.Debugf("Overriding hostlist from config file with %s", hosts)
-		c.HostList = hosts
 	}
 
 	return nil

@@ -47,12 +47,30 @@ type cliOptions struct {
 
 var (
 	opts = new(cliOptions)
+	//config = client.NewConfiguration()
 )
 
 func main() {
 	if agentMain() != nil {
 		os.Exit(1)
 	}
+}
+
+// applyCmdLineOverrides will overwrite Configuration values with any non empty
+// data provided, usually from the commandline.
+func applyCmdLineOverrides(c *client.Configuration, RuntimeDir string, LogFile string) error {
+
+	if RuntimeDir != "" {
+		log.Debugf("Overriding socket path from config file with %s", RuntimeDir)
+		c.RuntimeDir = RuntimeDir
+	}
+
+	if LogFile != "" {
+		log.Debugf("Overriding LogFile path from config file with %s", LogFile)
+		c.LogFile = LogFile
+	}
+
+	return nil
 }
 
 func agentMain() error {
@@ -80,7 +98,7 @@ func agentMain() error {
 	log.Debugf("Found %d environment variable overrides", res)
 
 	// Override configuration with any commandline values given
-	err = config.ApplyAgentCmdLineOverrides(opts.RuntimeDir, opts.LogFile)
+	err = applyCmdLineOverrides(&config, opts.RuntimeDir, opts.LogFile)
 	if err != nil {
 		log.Errorf("Failed to apply command line overrides %s", err)
 		return err
