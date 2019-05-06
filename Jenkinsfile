@@ -763,6 +763,7 @@ pipeline {
                                                          ps axf
                                                      }' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
+					       # set CMOCKA envs here
 					       export CMOCKA_MESSAGE_OUTPUT="xml"
 					       export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
