@@ -22,22 +22,21 @@
   portions thereof marked with this legend must also reproduce the markings.
 
 '''
-import subprocess
 import os
 
 # Some fixes for the CMOCKA headers
 xml_header ="<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
 parent_header = "<testsuites>\n"
 parent_footer = "</testsuites>\n"
-path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"../test_results/*.xml")
-cmd = "ls {}".format(path)
-out = subprocess.check_output(cmd,shell=True)
+file_extensions = "*.xml"
+path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"../test_results/")
+files  = [path+fn for fn in os.listdir(path)
+              if any(fn.endswith(x) for x in file_extensions)]
 # This is done because some XML files are not formed correctly
 # by CMOCKA framework. Some files doesn't have <xml..> or
 # <root> having nested tags [eg: if one group test called
 # repeatedly].
 # If there is a fix by CMOCKA framework, this is not required.
-files = out.split('\n')
 #Two pass update on the files
 #Remove all testsuites tag out of the xml file.
 for file in files:
