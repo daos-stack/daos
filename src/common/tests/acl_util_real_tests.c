@@ -84,14 +84,21 @@ static void
 test_acl_all_gid_principal_conversion(void **state)
 {
 	struct group	*grp;
+	size_t		max_iterations = 30; /* arbitrary limit */
+	size_t		i = 0;
 
-	/* go through real GIDs on system */
+	/*
+	 * Sanity check. Try out some real GIDs from groups on the system
+	 * that aren't just the effective GID.
+	 */
+	setgrent();
 	do {
 		grp = getgrent();
 		if (grp != NULL) {
 			verify_gid_principal_conversion(grp->gr_gid);
 		}
-	} while (grp != NULL);
+		i++;
+	} while (grp != NULL && i < max_iterations);
 
 	endgrent();
 }
