@@ -47,7 +47,6 @@ type cliOptions struct {
 
 var (
 	opts = new(cliOptions)
-	//config = client.NewConfiguration()
 )
 
 func main() {
