@@ -63,3 +63,7 @@ message CreateMsReq {
 // StartMsReq is nil.
 
 // StartMsResp is identical to DaosResponse.
+
+// SetUpReq is nil.
+
+// SetUpResp is idential to DaosResponse.
