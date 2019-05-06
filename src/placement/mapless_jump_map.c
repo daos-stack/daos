@@ -1,6 +1,7 @@
 /**
  *
  *
+ *
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -612,9 +613,9 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
  * \param[in]   com_map         This is the collision map used during the
  *                              placement process for bookkeeping and
  *                              determining which domains have been used.
- * \param[in]   group_cnt       This number of redundancy groups for this
+ * \param[in]   grp_cnt       This number of redundancy groups for this
  *                              objects layout.
- * \param[in]   group_size      The size of each redundancy group in the layout.
+ * \param[in]   grp_size      The size of each redundancy group in the layout.
  *                              This will be multiplied with group_cnt to get
  *                              the total number of targets required for
  *                              placement.
@@ -637,14 +638,14 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
  */
 static int
 get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
-		uint16_t group_size, uint16_t group_cnt, daos_obj_id_t oid,
+		unsigned int grp_size, unsigned int grp_cnt, daos_obj_id_t oid,
 		uint32_t dom_map_size, struct remap_node *rebuild_list)
 {
 
 
 	struct pool_target *target;
 	uint8_t *dom_used;
-	struct remap_node rebuild_shard_num[group_size * group_cnt];
+	struct remap_node rebuild_shard_num[grp_size * grp_cnt];
 	uint32_t used_targets[layout->ol_nr + 1];
 	uint8_t rebuild_num = 0;
 	struct pool_domain *root;
@@ -659,8 +660,8 @@ get_object_layout(struct pool_map *pmap, struct pl_obj_layout *layout,
 
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
-	for (i = 0, k = 0; i < group_cnt; i++) {
-		for (j = 0; j < group_size; j++, k++) {
+	for (i = 0, k = 0; i < grp_cnt; i++) {
+		for (j = 0; j < grp_size; j++, k++) {
 			uint32_t tgt_id;
 
 			get_target(root, &target, crc(oid.lo, k),
@@ -815,8 +816,8 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_mapless_map   *mplmap;
 	struct pl_obj_layout    *layout;
 	struct pool_map         *pmap;
-	uint16_t                group_size;
-	uint16_t                group_cnt;
+	unsigned int		grp_size;
+	unsigned int		grp_cnt;
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
 	struct pool_domain	*root;
@@ -837,37 +838,37 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	/* Retrieve group size and count */
-	group_size = daos_oclass_grp_size(oc_attr);
+	grp_size = daos_oclass_grp_size(oc_attr);
 
 	pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 
-	if(group_size == (uint16_t)DAOS_OBJ_REPL_MAX)
-		group_size = root->do_target_nr;
+	if(grp_size == DAOS_OBJ_REPL_MAX)
+		grp_size = root->do_target_nr;
 
-	if (group_size > root->do_target_nr) {
-		D_ERROR("obj="DF_OID": group size (%u) (%u) is larger than "
+	if (grp_size > root->do_target_nr) {
+		D_ERROR("obj="DF_OID": grp size (%u) (%u) is larger than "
 			"domain nr (%u)\n", DP_OID(oid),
-			group_size, DAOS_OBJ_REPL_MAX, root->do_target_nr);
+			grp_size, DAOS_OBJ_REPL_MAX, root->do_target_nr);
 		return -DER_INVAL;
 	}
 
 	if(shard_md == NULL) {
-		unsigned int group_max = root->do_target_nr / group_size;
+		unsigned int grp_max = root->do_target_nr / grp_size;
 
-		if (group_max == 0)
-			group_max = 1;
+		if (grp_max == 0)
+			grp_max = 1;
 
-		group_cnt = daos_oclass_grp_nr(oc_attr, md);
+		grp_cnt = daos_oclass_grp_nr(oc_attr, md);
 
-		if(group_cnt > group_max)
-			group_cnt = group_max;
+		if(grp_cnt > grp_max)
+			grp_cnt = grp_max;
 
 	} else {
-		group_cnt = 1;
+		grp_cnt = 1;
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(group_size * group_cnt, &layout);
+	rc = pl_obj_layout_alloc(grp_size * grp_cnt, &layout);
 	if (rc != 0) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
@@ -877,7 +878,7 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	layout->ol_ver = pl_map_version(map);
 
 	/* Get root node of pool map */
-	rc = get_object_layout(pmap, layout, group_size, group_cnt, oid,
+	rc = get_object_layout(pmap, layout, grp_size, grp_cnt, oid,
 			mplmap->dom_used_length,  NULL);
 
 	if (rc < 0) {
@@ -919,8 +920,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_obj_layout    *layout;
 	struct remap_node       rebuild_list[array_size];
 	struct pool_map         *pmap;
-	uint16_t                group_size;
-	uint16_t                group_cnt;
+	uint16_t                grp_size;
+	uint16_t                grp_cnt;
 	struct daos_oclass_attr *oc_attr;
 	daos_obj_id_t           oid;
 	int failed_tgt_num;
@@ -940,11 +941,11 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	oc_attr = daos_oclass_attr_find(oid);
 
 	/* Retrieve group size and count */
-	group_size = daos_oclass_grp_size(oc_attr);
-	group_cnt = daos_oclass_grp_nr(oc_attr, md);
+	grp_size = daos_oclass_grp_size(oc_attr);
+	grp_cnt = daos_oclass_grp_nr(oc_attr, md);
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(group_size * group_cnt, &layout);
+	rc = pl_obj_layout_alloc(grp_size * grp_cnt, &layout);
 	if (rc) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
@@ -955,7 +956,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	/* Set the pool map version */
 	layout->ol_ver = pl_map_version(map);
 
-	failed_tgt_num = get_object_layout(pmap, layout, group_size, group_cnt,
+	failed_tgt_num = get_object_layout(pmap, layout, grp_size, grp_cnt,
 			oid, mplmap->dom_used_length,  rebuild_list);
 
 	for (i = 0; i < failed_tgt_num; ++i) {
