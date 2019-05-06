@@ -178,8 +178,8 @@ class TestWithServers(TestWithoutServers):
             self.hostlist_clients = test_clients[:client_count]
         elif test_servers:
             self.hostlist_servers = test_servers[:server_count]
-        self.log.info("hostlist_servers:  {}".format(self.hostlist_servers))
-        self.log.info("hostlist_clients:  {}".format(self.hostlist_clients))
+        self.log.info("hostlist_servers:  %s", self.hostlist_servers)
+        self.log.info("hostlist_clients:  %s", self.hostlist_clients)
 
         # If a specific count is specified, verify enough servers/clients are
         # specified to satisy the count
