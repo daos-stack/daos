@@ -1916,11 +1916,6 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 	else if (!S_ISDIR(parent->mode))
 		return -DER_NOTDIR;
 
-	rc = check_name(name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
-		return rc;
-	}
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
 	if (rc) {
 		D_ERROR("Permission Denied.\n");
@@ -1936,6 +1931,11 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		name = parent->name;
 		oh = dfs->super_oh;
 	} else {
+		rc = check_name(name);
+		if (rc) {
+			D_ERROR("Invalid file/dir Name\n");
+			return rc;
+		}
 		oh = parent->oh;
 	}
 
