@@ -37,7 +37,7 @@
 
 struct dtx_resync_entry {
 	d_list_t		dre_link;
-	struct daos_tx_entry	dre_dte;
+	struct dtx_entry	dre_dte;
 	uint64_t		dre_hash;
 	uint32_t		dre_intent;
 };
@@ -67,73 +67,46 @@ dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
 
 static int
 dtx_resync_commit(uuid_t po_uuid, struct ds_cont *cont,
-		  struct dtx_resync_head *drh, int count, uint32_t version,
-		  bool block)
+		  struct dtx_resync_head *drh, int count, uint32_t version)
 {
 	struct dtx_resync_entry		*dre;
+	struct dtx_entry		*dte = NULL;
 	int				 rc = 0;
 	int				 i = 0;
 
 	D_ASSERT(drh->drh_count >= count);
 
-	/* If we are in block mode, then we need to commit the DTXs as fast as
-	 * possible, so just add them into the CoS cache, then the general DTX
-	 * commit mechanism will commit them some time later.
-	 */
-	if (block) {
-		int	err;
+	D_ALLOC_ARRAY(dte, count);
+	if (dte == NULL)
+		return -DER_NOMEM;
 
-		do {
-			dre = d_list_entry(drh->drh_list.next,
-					   struct dtx_resync_entry, dre_link);
-			if (dre->dre_hash == 0)
-				/* For punch object or the case that the dkey
-				 * hash is just zero, commit them immediately
-				 * without caching.
-				 */
-				err = dtx_commit(po_uuid, cont->sc_uuid,
-						 &dre->dre_dte, 1, version);
-			else
-				err = vos_dtx_add_cos(cont->sc_hdl,
-					&dre->dre_oid, &dre->dre_xid,
-					dre->dre_hash, dre->dre_intent ==
-					DAOS_INTENT_PUNCH ? true : false);
-			if (err != 0) {
-				D_ERROR("Failed to %s the DTX " DF_UOID"/"DF_DTI
-					": rc = %d\n",
-					dre->dre_hash == 0 ? "commit" : "cache",
-					DP_UOID(dre->dre_oid),
-					DP_DTI(&dre->dre_xid), err);
-				rc = err;
-			}
-			dtx_dre_release(drh, dre);
-		} while (++i < count);
-	} else {
-		struct daos_tx_entry	*dte = NULL;
+	do {
+		dre = d_list_entry(drh->drh_list.next,
+				   struct dtx_resync_entry, dre_link);
+		dte[i].dte_xid = dre->dre_xid;
+		dte[i].dte_oid = dre->dre_oid;
 
-		D_ALLOC_ARRAY(dte, count);
-		if (dte == NULL)
-			return -DER_NOMEM;
+		rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid, &dre->dre_xid,
+				     dre->dre_hash, crt_hlc_get(),
+				     dre->dre_intent == DAOS_INTENT_PUNCH ?
+				     true : false);
+		if (rc != 0)
+			D_WARN("Fail to add DTX "DF_DTI" to CoS cache: %d.\n",
+			       DP_DTI(&dre->dre_xid), rc);
 
-		do {
-			dre = d_list_entry(drh->drh_list.next,
-					   struct dtx_resync_entry, dre_link);
-			dte[i].dte_xid = dre->dre_xid;
-			dte[i].dte_oid = dre->dre_oid;
-			dtx_dre_release(drh, dre);
-		} while (++i < count);
+		dtx_dre_release(drh, dre);
+	} while (++i < count);
 
-		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, count, version);
-		if (rc < 0)
-			D_ERROR("Failed to commit the DTX: rc = %d\n", rc);
-		D_FREE(dte);
-	}
+	rc = dtx_commit(po_uuid, cont->sc_uuid, dte, count, version);
+	D_FREE(dte);
+	if (rc < 0)
+		D_ERROR("Failed to commit the DTX: rc = %d\n", rc);
 
 	return rc > 0 ? 0 : rc;
 }
 
 static int
-dtx_status_handle(struct dtx_resync_args *dra, bool block)
+dtx_status_handle(struct dtx_resync_args *dra)
 {
 	struct ds_cont			*cont = dra->cont;
 	struct pl_obj_layout		*layout = NULL;
@@ -148,7 +121,7 @@ dtx_status_handle(struct dtx_resync_args *dra, bool block)
 		return 0;
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		int	local_rc;
+		int	rc1;
 
 		if (layout != NULL) {
 			pl_obj_layout_free(layout);
@@ -188,48 +161,27 @@ dtx_status_handle(struct dtx_resync_args *dra, bool block)
 			continue;
 		}
 
-		/* There is CPU yield during DTX operation (check/commit/abort)
-		 * remotely. Then the other DTXs may become committable by race.
-		 * So re-check the remaining DTXs status.
+		/* It is possible that the current DTX becomes committable (in
+		 * CoS cache) or has been committed (on-disk) during above dtx
+		 * check remotely. Let's re-check its state locally.
 		 */
-		local_rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
-			&dre->dre_xid, dre->dre_hash,
-			dre->dre_intent == DAOS_INTENT_PUNCH ? true : false);
-		if (local_rc == 0) {
+		rc1 = vos_dtx_check_committable(cont->sc_hdl, &dre->dre_oid,
+					&dre->dre_xid, dre->dre_hash,
+					dre->dre_intent == DAOS_INTENT_PUNCH ?
+					true : false);
+		if (rc1 == DTX_ST_COMMITTED) {
 			/* The DTX is in CoS cache (committable), do nothing. */
 			dtx_dre_release(drh, dre);
 			continue;
 		}
 
-		/* The DTX is not in CoS cache, but it has been committed on
-		 * some remote replica(s), then let's commit the it globally.
+		/* The DTX has been committed on some remote replica(s), let's
+		 * commit the it globally.
 		 */
 		if (rc == DTX_ST_COMMITTED)
 			goto commit;
 
-		if (local_rc != -DER_NONEXIST) {
-			D_WARN("Not sure about whether the DTX "DF_UOID
-			       "/"DF_DTI" can be committed or not: %d (2)\n",
-			       DP_UOID(dre->dre_oid),
-			       DP_DTI(&dre->dre_xid), rc);
-			dtx_dre_release(drh, dre);
-			continue;
-		}
-
-		/* It is possible that other ULT has committed the DTX during
-		 * we handle other DTXs, then such DTX will not be in the CoS
-		 * cache. Let's re-check the on-disk DTX table.
-		 *
-		 * Set the @dkey_hash parameter as zero, then it will skip CoS
-		 * cache since we just did that in above check.
-		 */
-		local_rc = vos_dtx_check_committable(cont->sc_hdl,
-					&dre->dre_oid, &dre->dre_xid, 0, false);
-		switch (local_rc) {
-		case DTX_ST_COMMITTED:
-			/* The DTX has been committed by other, do nothing. */
-			dtx_dre_release(drh, dre);
-			continue;
+		switch (rc1) {
 		case DTX_ST_PREPARED:
 			/* Both local and remote replicas are 'prepared', then
 			 * it is committable.
@@ -261,8 +213,8 @@ dtx_status_handle(struct dtx_resync_args *dra, bool block)
 
 commit:
 		if (++count >= DTX_THRESHOLD_COUNT) {
-			rc = dtx_resync_commit(dra->po_uuid, cont,
-					       drh, count, dra->version, block);
+			rc = dtx_resync_commit(dra->po_uuid, cont, drh, count,
+					       dra->version);
 			if (rc < 0)
 				err = rc;
 			count = 0;
@@ -271,7 +223,7 @@ commit:
 
 	if (count > 0) {
 		rc = dtx_resync_commit(dra->po_uuid, cont, drh, count,
-				       dra->version, block);
+				       dra->version);
 		if (rc < 0)
 			err = rc;
 	}
@@ -288,12 +240,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	struct dtx_resync_args		*dra = args;
 	struct dtx_resync_entry		*dre;
 
-	/* Ignore new DTX after the rebuild/recovery start.
-	 *
-	 * XXX: The time(NULL) based checking may be untrusted because of
-	 *	potential clock drift. We may consider to replace it with
-	 *	hybrid-clock based mechanism in future when it is ready.
-	 */
+	/* Ignore new DTX after the rebuild/recovery start. */
 	if (ent->ie_dtx_sec > dra->cont->sc_dtx_resync_time)
 		return 0;
 
@@ -322,13 +269,11 @@ int
 dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	   bool block)
 {
+	ABT_future			 future;
 	struct ds_cont			*cont = NULL;
 	struct dtx_resync_args		 dra = { 0 };
-	struct dtx_resync_entry		*dre;
-	struct dtx_resync_entry		*next;
 	int				 rc = 0;
 	int				 rc1 = 0;
-	bool				 shared = false;
 
 	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0) {
@@ -338,21 +283,32 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		return rc;
 	}
 
-	while (cont->sc_dtx_resyncing) {
+	if (cont->sc_dtx_resyncing) {
 		if (!block)
 			goto out;
 
-		shared = true;
-		/* Someone is resyncing the DTXs, let's wait and retry. */
-		ABT_thread_yield();
+		D_ASSERT(cont->sc_dtx_resync_cbdata == NULL);
+
+		rc = ABT_future_create(1, NULL, &future);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_future_create failed for DTX resync on"
+				DF_UUID": rc = %d\n", DP_UUID(co_uuid), rc);
+			D_GOTO(out, rc = dss_abterr2der(rc));
+		}
+
+		cont->sc_dtx_resync_cbdata = future;
+		rc = ABT_future_wait(future);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed for DTX "
+			  "resync on "DF_UUID" %d\n", DP_UUID(co_uuid), rc);
+
+		ABT_future_free(&future);
+
+		/* Someone just did the DTX resync, unnecessary to repeat. */
+		goto out;
 	}
 
-	/* Some others just did the DTX resync, needs not to repeat. */
-	if (shared)
-		goto out;
-
 	cont->sc_dtx_resyncing = 1;
-	cont->sc_dtx_resync_time = time(NULL);
+	cont->sc_dtx_resync_time = crt_hlc_get();
 
 	dra.cont = cont;
 	uuid_copy(dra.po_uuid, po_uuid);
@@ -368,10 +324,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	/* Handle the DTXs that have been scanned even if some failure happend
 	 * in above ds_cont_iter() step.
 	 */
-	rc1 = dtx_status_handle(&dra, block);
+	rc1 = dtx_status_handle(&dra);
 
-	d_list_for_each_entry_safe(dre, next, &dra.tables.drh_list, dre_link)
-		dtx_dre_release(&dra.tables, dre);
+	D_ASSERT(d_list_empty(&dra.tables.drh_list));
 
 	if (rc >= 0)
 		rc = rc1;
@@ -380,6 +335,15 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		DP_UUID(po_uuid), DP_UUID(co_uuid), rc);
 
 	cont->sc_dtx_resyncing = 0;
+
+	if (cont->sc_dtx_resync_cbdata != NULL) {
+		future = cont->sc_dtx_resync_cbdata;
+		rc = ABT_future_set(future, NULL);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
+			  "resync on "DF_UUID" %d\n", DP_UUID(co_uuid), rc);
+
+		cont->sc_dtx_resync_cbdata = NULL;
+	}
 
 out:
 	ds_cont_put(cont);

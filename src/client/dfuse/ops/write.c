@@ -24,136 +24,36 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static bool
-write_cb(struct dfuse_request *request)
-{
-	struct dfuse_wb		*wb = container_of(request, struct dfuse_wb, wb_req);
-	struct dfuse_writex_out	*out = request->out;
-
-	if (out->err) {
-		/* Convert the error types, out->err is a CaRT error code
-		 * so translate it to a errno we can pass back to FUSE.
-		 */
-		DFUSE_TRA_ERROR(wb, "Error from target %d", out->err);
-
-		D_GOTO(err, request->rc = EIO);
-	}
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc)
-		D_GOTO(err, 0);
-
-	DFUSE_REPLY_WRITE(wb, request->req, out->len);
-
-	dfuse_da_release(request->fsh->write_da, wb);
-
-	return false;
-
-err:
-	DFUSE_REPLY_ERR(request, request->rc);
-
-	dfuse_da_release(request->fsh->write_da, wb);
-	return false;
-}
-
-static const struct dfuse_request_api api = {
-	.on_result = write_cb,
-
-};
-
-static void
-dfuse_writex(size_t len, off_t position, struct dfuse_wb *wb)
-{
-	int rc;
-
-	wb->wb_req.ir_api = &api;
-
-	rc = dfuse_fs_send(&wb->wb_req);
-	if (rc) {
-		D_GOTO(err, rc = EIO);
-	}
-
-	return;
-
-err:
-	DFUSE_REPLY_ERR_RAW(wb, wb->wb_req.req, rc);
-	dfuse_da_release(wb->wb_req.fsh->write_da, wb);
-}
-
 void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
-	struct dfuse_file_handle *handle = (struct dfuse_file_handle *)fi->fh;
-	struct dfuse_wb *wb;
-	int rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*ie;
+	d_list_t			*rlink;
+	int				rc;
+	daos_iov_t			iov = {};
+	daos_sg_list_t			sgl = {};
 
-	wb = dfuse_da_acquire(handle->open_req.fsh->write_da);
-	if (!wb)
-		D_GOTO(err, rc = ENOMEM);
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				ino);
+		DFUSE_REPLY_ERR_RAW(NULL, req, ENOENT);
+		return;
+	}
 
-	DFUSE_TRA_UP(wb, handle, "writebuf");
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_INFO(wb, "%#zx-%#zx " GAH_PRINT_STR, position,
-		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
+	sgl.sg_nr = 1;
+	daos_iov_set(&iov, (void *)buff, len);
+	sgl.sg_iovs = &iov;
 
-	wb->wb_req.req = req;
-	wb->wb_req.ir_file = handle;
-
-	dfuse_writex(len, position, wb);
-
-	return;
-err:
-	DFUSE_REPLY_ERR_RAW(handle, req, rc);
-}
-
-/*
- * write_buf() callback for fuse.  Essentially the same as dfuse_cb_write()
- * however with two advantages, it allows us to check parameters before
- * doing any allocation/memcpy() and it uses fuse_buf_copy() to put the data
- * directly into our data buffer avoiding an additional memcpy().
- */
-void
-dfuse_cb_write_buf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
-		   off_t position, struct fuse_file_info *fi)
-{
-	struct dfuse_file_handle *handle = (struct dfuse_file_handle *)fi->fh;
-	struct dfuse_wb *wb = NULL;
-	size_t len = bufv->buf[0].size;
-	struct fuse_bufvec dst = { .count = 1 };
-	int rc;
-
-	/* Check for buffer count being 1.  According to the documentation this
-	 * will always be the case, and if it isn't then our code will be using
-	 * the wrong value for len
-	 */
-	if (bufv->count != 1)
-		D_GOTO(err, rc = EIO);
-
-	DFUSE_TRA_INFO(handle, "Count %zi [0].flags %#x",
-		       bufv->count, bufv->buf[0].flags);
-
-	wb = dfuse_da_acquire(handle->open_req.fsh->write_da);
-	if (!wb)
-		D_GOTO(err, rc = ENOMEM);
-	DFUSE_TRA_UP(wb, handle, "writebuf");
-
-	DFUSE_TRA_INFO(wb, "%#zx-%#zx " GAH_PRINT_STR, position,
-		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
-
-	wb->wb_req.req = req;
-	wb->wb_req.ir_file = handle;
-
-	dst.buf[0].size = len;
-	rc = fuse_buf_copy(&dst, bufv, 0);
-	if (rc != len)
-		D_GOTO(err, rc = EIO);
-
-	dfuse_writex(len, position, wb);
-
-	return;
-err:
-	DFUSE_REPLY_ERR_RAW(handle, req, rc);
-	if (wb)
-		dfuse_da_release(handle->open_req.fsh->write_da, wb);
+	rc = dfs_write(ie->ie_dfs->dffs_dfs, ie->ie_obj, sgl, position);
+	if (rc == -DER_SUCCESS) {
+		DFUSE_REPLY_WRITE(ie, req, len);
+	} else {
+		DFUSE_REPLY_ERR_RAW(ie, req, rc);
+	}
+	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
 }

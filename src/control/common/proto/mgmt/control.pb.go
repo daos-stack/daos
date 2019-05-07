@@ -35,16 +35,15 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type MgmtControlClient interface {
+	ScanStorage(ctx context.Context, in *ScanStorageParams, opts ...grpc.CallOption) (*ScanStorageResp, error)
+	FormatStorage(ctx context.Context, in *FormatStorageParams, opts ...grpc.CallOption) (MgmtControl_FormatStorageClient, error)
+	UpdateStorage(ctx context.Context, in *UpdateStorageParams, opts ...grpc.CallOption) (MgmtControl_UpdateStorageClient, error)
+	BurninStorage(ctx context.Context, in *BurninStorageParams, opts ...grpc.CallOption) (MgmtControl_BurninStorageClient, error)
+	KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResponse, error)
+	FetchFioConfigPaths(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_FetchFioConfigPathsClient, error)
 	GetFeature(ctx context.Context, in *FeatureName, opts ...grpc.CallOption) (*Feature, error)
 	ListAllFeatures(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListAllFeaturesClient, error)
 	ListFeatures(ctx context.Context, in *Category, opts ...grpc.CallOption) (MgmtControl_ListFeaturesClient, error)
-	ListNvmeCtrlrs(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListNvmeCtrlrsClient, error)
-	UpdateNvmeCtrlr(ctx context.Context, in *UpdateNvmeParams, opts ...grpc.CallOption) (*NvmeController, error)
-	FetchFioConfigPaths(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_FetchFioConfigPathsClient, error)
-	BurnInNvme(ctx context.Context, in *BurnInNvmeParams, opts ...grpc.CallOption) (MgmtControl_BurnInNvmeClient, error)
-	ListScmModules(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListScmModulesClient, error)
-	FormatStorage(ctx context.Context, in *FormatStorageParams, opts ...grpc.CallOption) (*FormatStorageResponse, error)
-	KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResponse, error)
 }
 
 type mgmtControlClient struct {
@@ -53,6 +52,152 @@ type mgmtControlClient struct {
 
 func NewMgmtControlClient(cc *grpc.ClientConn) MgmtControlClient {
 	return &mgmtControlClient{cc}
+}
+
+func (c *mgmtControlClient) ScanStorage(ctx context.Context, in *ScanStorageParams, opts ...grpc.CallOption) (*ScanStorageResp, error) {
+	out := new(ScanStorageResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtControl/ScanStorage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtControlClient) FormatStorage(ctx context.Context, in *FormatStorageParams, opts ...grpc.CallOption) (MgmtControl_FormatStorageClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[0], "/mgmt.MgmtControl/FormatStorage", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtControlFormatStorageClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MgmtControl_FormatStorageClient interface {
+	Recv() (*FormatStorageResp, error)
+	grpc.ClientStream
+}
+
+type mgmtControlFormatStorageClient struct {
+	grpc.ClientStream
+}
+
+func (x *mgmtControlFormatStorageClient) Recv() (*FormatStorageResp, error) {
+	m := new(FormatStorageResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *mgmtControlClient) UpdateStorage(ctx context.Context, in *UpdateStorageParams, opts ...grpc.CallOption) (MgmtControl_UpdateStorageClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[1], "/mgmt.MgmtControl/UpdateStorage", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtControlUpdateStorageClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MgmtControl_UpdateStorageClient interface {
+	Recv() (*UpdateStorageResp, error)
+	grpc.ClientStream
+}
+
+type mgmtControlUpdateStorageClient struct {
+	grpc.ClientStream
+}
+
+func (x *mgmtControlUpdateStorageClient) Recv() (*UpdateStorageResp, error) {
+	m := new(UpdateStorageResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *mgmtControlClient) BurninStorage(ctx context.Context, in *BurninStorageParams, opts ...grpc.CallOption) (MgmtControl_BurninStorageClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[2], "/mgmt.MgmtControl/BurninStorage", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtControlBurninStorageClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MgmtControl_BurninStorageClient interface {
+	Recv() (*BurninStorageResp, error)
+	grpc.ClientStream
+}
+
+type mgmtControlBurninStorageClient struct {
+	grpc.ClientStream
+}
+
+func (x *mgmtControlBurninStorageClient) Recv() (*BurninStorageResp, error) {
+	m := new(BurninStorageResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *mgmtControlClient) KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResponse, error) {
+	out := new(DaosResponse)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtControl/KillRank", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtControlClient) FetchFioConfigPaths(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_FetchFioConfigPathsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[3], "/mgmt.MgmtControl/FetchFioConfigPaths", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtControlFetchFioConfigPathsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type MgmtControl_FetchFioConfigPathsClient interface {
+	Recv() (*FilePath, error)
+	grpc.ClientStream
+}
+
+type mgmtControlFetchFioConfigPathsClient struct {
+	grpc.ClientStream
+}
+
+func (x *mgmtControlFetchFioConfigPathsClient) Recv() (*FilePath, error) {
+	m := new(FilePath)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *mgmtControlClient) GetFeature(ctx context.Context, in *FeatureName, opts ...grpc.CallOption) (*Feature, error) {
@@ -65,7 +210,7 @@ func (c *mgmtControlClient) GetFeature(ctx context.Context, in *FeatureName, opt
 }
 
 func (c *mgmtControlClient) ListAllFeatures(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListAllFeaturesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[0], "/mgmt.MgmtControl/ListAllFeatures", opts...)
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[4], "/mgmt.MgmtControl/ListAllFeatures", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +242,7 @@ func (x *mgmtControlListAllFeaturesClient) Recv() (*Feature, error) {
 }
 
 func (c *mgmtControlClient) ListFeatures(ctx context.Context, in *Category, opts ...grpc.CallOption) (MgmtControl_ListFeaturesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[1], "/mgmt.MgmtControl/ListFeatures", opts...)
+	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[5], "/mgmt.MgmtControl/ListFeatures", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,177 +273,141 @@ func (x *mgmtControlListFeaturesClient) Recv() (*Feature, error) {
 	return m, nil
 }
 
-func (c *mgmtControlClient) ListNvmeCtrlrs(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListNvmeCtrlrsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[2], "/mgmt.MgmtControl/ListNvmeCtrlrs", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtControlListNvmeCtrlrsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtControl_ListNvmeCtrlrsClient interface {
-	Recv() (*NvmeController, error)
-	grpc.ClientStream
-}
-
-type mgmtControlListNvmeCtrlrsClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtControlListNvmeCtrlrsClient) Recv() (*NvmeController, error) {
-	m := new(NvmeController)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtControlClient) UpdateNvmeCtrlr(ctx context.Context, in *UpdateNvmeParams, opts ...grpc.CallOption) (*NvmeController, error) {
-	out := new(NvmeController)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtControl/UpdateNvmeCtrlr", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtControlClient) FetchFioConfigPaths(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_FetchFioConfigPathsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[3], "/mgmt.MgmtControl/FetchFioConfigPaths", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtControlFetchFioConfigPathsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtControl_FetchFioConfigPathsClient interface {
-	Recv() (*FioConfigPath, error)
-	grpc.ClientStream
-}
-
-type mgmtControlFetchFioConfigPathsClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtControlFetchFioConfigPathsClient) Recv() (*FioConfigPath, error) {
-	m := new(FioConfigPath)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtControlClient) BurnInNvme(ctx context.Context, in *BurnInNvmeParams, opts ...grpc.CallOption) (MgmtControl_BurnInNvmeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[4], "/mgmt.MgmtControl/BurnInNvme", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtControlBurnInNvmeClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtControl_BurnInNvmeClient interface {
-	Recv() (*BurnInNvmeReport, error)
-	grpc.ClientStream
-}
-
-type mgmtControlBurnInNvmeClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtControlBurnInNvmeClient) Recv() (*BurnInNvmeReport, error) {
-	m := new(BurnInNvmeReport)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtControlClient) ListScmModules(ctx context.Context, in *EmptyParams, opts ...grpc.CallOption) (MgmtControl_ListScmModulesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtControl_serviceDesc.Streams[5], "/mgmt.MgmtControl/ListScmModules", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtControlListScmModulesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtControl_ListScmModulesClient interface {
-	Recv() (*ScmModule, error)
-	grpc.ClientStream
-}
-
-type mgmtControlListScmModulesClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtControlListScmModulesClient) Recv() (*ScmModule, error) {
-	m := new(ScmModule)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtControlClient) FormatStorage(ctx context.Context, in *FormatStorageParams, opts ...grpc.CallOption) (*FormatStorageResponse, error) {
-	out := new(FormatStorageResponse)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtControl/FormatStorage", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtControlClient) KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResponse, error) {
-	out := new(DaosResponse)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtControl/KillRank", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // MgmtControlServer is the server API for MgmtControl service.
 type MgmtControlServer interface {
+	ScanStorage(context.Context, *ScanStorageParams) (*ScanStorageResp, error)
+	FormatStorage(*FormatStorageParams, MgmtControl_FormatStorageServer) error
+	UpdateStorage(*UpdateStorageParams, MgmtControl_UpdateStorageServer) error
+	BurninStorage(*BurninStorageParams, MgmtControl_BurninStorageServer) error
+	KillRank(context.Context, *DaosRank) (*DaosResponse, error)
+	FetchFioConfigPaths(*EmptyParams, MgmtControl_FetchFioConfigPathsServer) error
 	GetFeature(context.Context, *FeatureName) (*Feature, error)
 	ListAllFeatures(*EmptyParams, MgmtControl_ListAllFeaturesServer) error
 	ListFeatures(*Category, MgmtControl_ListFeaturesServer) error
-	ListNvmeCtrlrs(*EmptyParams, MgmtControl_ListNvmeCtrlrsServer) error
-	UpdateNvmeCtrlr(context.Context, *UpdateNvmeParams) (*NvmeController, error)
-	FetchFioConfigPaths(*EmptyParams, MgmtControl_FetchFioConfigPathsServer) error
-	BurnInNvme(*BurnInNvmeParams, MgmtControl_BurnInNvmeServer) error
-	ListScmModules(*EmptyParams, MgmtControl_ListScmModulesServer) error
-	FormatStorage(context.Context, *FormatStorageParams) (*FormatStorageResponse, error)
-	KillRank(context.Context, *DaosRank) (*DaosResponse, error)
 }
 
 func RegisterMgmtControlServer(s *grpc.Server, srv MgmtControlServer) {
 	s.RegisterService(&_MgmtControl_serviceDesc, srv)
+}
+
+func _MgmtControl_ScanStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanStorageParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtControlServer).ScanStorage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtControl/ScanStorage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtControlServer).ScanStorage(ctx, req.(*ScanStorageParams))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtControl_FormatStorage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(FormatStorageParams)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MgmtControlServer).FormatStorage(m, &mgmtControlFormatStorageServer{stream})
+}
+
+type MgmtControl_FormatStorageServer interface {
+	Send(*FormatStorageResp) error
+	grpc.ServerStream
+}
+
+type mgmtControlFormatStorageServer struct {
+	grpc.ServerStream
+}
+
+func (x *mgmtControlFormatStorageServer) Send(m *FormatStorageResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _MgmtControl_UpdateStorage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(UpdateStorageParams)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MgmtControlServer).UpdateStorage(m, &mgmtControlUpdateStorageServer{stream})
+}
+
+type MgmtControl_UpdateStorageServer interface {
+	Send(*UpdateStorageResp) error
+	grpc.ServerStream
+}
+
+type mgmtControlUpdateStorageServer struct {
+	grpc.ServerStream
+}
+
+func (x *mgmtControlUpdateStorageServer) Send(m *UpdateStorageResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _MgmtControl_BurninStorage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BurninStorageParams)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MgmtControlServer).BurninStorage(m, &mgmtControlBurninStorageServer{stream})
+}
+
+type MgmtControl_BurninStorageServer interface {
+	Send(*BurninStorageResp) error
+	grpc.ServerStream
+}
+
+type mgmtControlBurninStorageServer struct {
+	grpc.ServerStream
+}
+
+func (x *mgmtControlBurninStorageServer) Send(m *BurninStorageResp) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _MgmtControl_KillRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DaosRank)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtControlServer).KillRank(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtControl/KillRank",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtControlServer).KillRank(ctx, req.(*DaosRank))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtControl_FetchFioConfigPaths_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(EmptyParams)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MgmtControlServer).FetchFioConfigPaths(m, &mgmtControlFetchFioConfigPathsServer{stream})
+}
+
+type MgmtControl_FetchFioConfigPathsServer interface {
+	Send(*FilePath) error
+	grpc.ServerStream
+}
+
+type mgmtControlFetchFioConfigPathsServer struct {
+	grpc.ServerStream
+}
+
+func (x *mgmtControlFetchFioConfigPathsServer) Send(m *FilePath) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _MgmtControl_GetFeature_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -361,166 +470,44 @@ func (x *mgmtControlListFeaturesServer) Send(m *Feature) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtControl_ListNvmeCtrlrs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyParams)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtControlServer).ListNvmeCtrlrs(m, &mgmtControlListNvmeCtrlrsServer{stream})
-}
-
-type MgmtControl_ListNvmeCtrlrsServer interface {
-	Send(*NvmeController) error
-	grpc.ServerStream
-}
-
-type mgmtControlListNvmeCtrlrsServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtControlListNvmeCtrlrsServer) Send(m *NvmeController) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtControl_UpdateNvmeCtrlr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateNvmeParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtControlServer).UpdateNvmeCtrlr(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtControl/UpdateNvmeCtrlr",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtControlServer).UpdateNvmeCtrlr(ctx, req.(*UpdateNvmeParams))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtControl_FetchFioConfigPaths_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyParams)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtControlServer).FetchFioConfigPaths(m, &mgmtControlFetchFioConfigPathsServer{stream})
-}
-
-type MgmtControl_FetchFioConfigPathsServer interface {
-	Send(*FioConfigPath) error
-	grpc.ServerStream
-}
-
-type mgmtControlFetchFioConfigPathsServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtControlFetchFioConfigPathsServer) Send(m *FioConfigPath) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtControl_BurnInNvme_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(BurnInNvmeParams)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtControlServer).BurnInNvme(m, &mgmtControlBurnInNvmeServer{stream})
-}
-
-type MgmtControl_BurnInNvmeServer interface {
-	Send(*BurnInNvmeReport) error
-	grpc.ServerStream
-}
-
-type mgmtControlBurnInNvmeServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtControlBurnInNvmeServer) Send(m *BurnInNvmeReport) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtControl_ListScmModules_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyParams)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtControlServer).ListScmModules(m, &mgmtControlListScmModulesServer{stream})
-}
-
-type MgmtControl_ListScmModulesServer interface {
-	Send(*ScmModule) error
-	grpc.ServerStream
-}
-
-type mgmtControlListScmModulesServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtControlListScmModulesServer) Send(m *ScmModule) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtControl_FormatStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FormatStorageParams)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtControlServer).FormatStorage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtControl/FormatStorage",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtControlServer).FormatStorage(ctx, req.(*FormatStorageParams))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtControl_KillRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DaosRank)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtControlServer).KillRank(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtControl/KillRank",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtControlServer).KillRank(ctx, req.(*DaosRank))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _MgmtControl_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "mgmt.MgmtControl",
 	HandlerType: (*MgmtControlServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetFeature",
-			Handler:    _MgmtControl_GetFeature_Handler,
-		},
-		{
-			MethodName: "UpdateNvmeCtrlr",
-			Handler:    _MgmtControl_UpdateNvmeCtrlr_Handler,
-		},
-		{
-			MethodName: "FormatStorage",
-			Handler:    _MgmtControl_FormatStorage_Handler,
+			MethodName: "ScanStorage",
+			Handler:    _MgmtControl_ScanStorage_Handler,
 		},
 		{
 			MethodName: "KillRank",
 			Handler:    _MgmtControl_KillRank_Handler,
 		},
+		{
+			MethodName: "GetFeature",
+			Handler:    _MgmtControl_GetFeature_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "FormatStorage",
+			Handler:       _MgmtControl_FormatStorage_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "UpdateStorage",
+			Handler:       _MgmtControl_UpdateStorage_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "BurninStorage",
+			Handler:       _MgmtControl_BurninStorage_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "FetchFioConfigPaths",
+			Handler:       _MgmtControl_FetchFioConfigPaths_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "ListAllFeatures",
 			Handler:       _MgmtControl_ListAllFeatures_Handler,
@@ -531,53 +518,32 @@ var _MgmtControl_serviceDesc = grpc.ServiceDesc{
 			Handler:       _MgmtControl_ListFeatures_Handler,
 			ServerStreams: true,
 		},
-		{
-			StreamName:    "ListNvmeCtrlrs",
-			Handler:       _MgmtControl_ListNvmeCtrlrs_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "FetchFioConfigPaths",
-			Handler:       _MgmtControl_FetchFioConfigPaths_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "BurnInNvme",
-			Handler:       _MgmtControl_BurnInNvme_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ListScmModules",
-			Handler:       _MgmtControl_ListScmModules_Handler,
-			ServerStreams: true,
-		},
 	},
 	Metadata: "control.proto",
 }
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_b5d5f2fa9b146102) }
+func init() { proto.RegisterFile("control.proto", fileDescriptor_control_efd1f5d296773aee) }
 
-var fileDescriptor_control_b5d5f2fa9b146102 = []byte{
-	// 328 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x92, 0xd1, 0x4e, 0xc2, 0x40,
-	0x10, 0x45, 0x35, 0x21, 0x46, 0x47, 0x0b, 0x71, 0x31, 0x26, 0xd6, 0x37, 0x3f, 0x80, 0xa0, 0x3e,
-	0xe8, 0x8b, 0x89, 0x58, 0xad, 0x21, 0x0a, 0x21, 0x10, 0x3f, 0x60, 0x85, 0xb5, 0x34, 0xee, 0x76,
-	0x9a, 0xd9, 0x81, 0x84, 0x4f, 0xf6, 0x2f, 0x4c, 0xbb, 0x4b, 0xc1, 0xd0, 0xf8, 0xd6, 0xb9, 0xbd,
-	0xe7, 0xf6, 0x76, 0x77, 0x20, 0x98, 0x62, 0xc6, 0x84, 0xba, 0x93, 0x13, 0x32, 0x8a, 0x86, 0x49,
-	0x0c, 0x87, 0x81, 0x65, 0x24, 0x99, 0x28, 0x27, 0x86, 0x47, 0x96, 0x96, 0xee, 0xf1, 0xe6, 0xa7,
-	0x01, 0xc7, 0x83, 0xc4, 0x70, 0xe4, 0x28, 0xd1, 0x05, 0x78, 0x55, 0x1c, 0x2b, 0xc9, 0x0b, 0x52,
-	0xe2, 0xb4, 0x53, 0xe0, 0x1d, 0x3f, 0x0e, 0xa5, 0x51, 0x61, 0xf0, 0x47, 0xba, 0xda, 0x13, 0x77,
-	0xd0, 0x7a, 0x4f, 0x2d, 0xf7, 0xb4, 0xf6, 0x9a, 0x5d, 0x63, 0x2f, 0x26, 0xe7, 0xd5, 0x48, 0x92,
-	0x34, 0x76, 0x07, 0xeb, 0xee, 0x8b, 0x6b, 0x38, 0x29, 0xc0, 0x8a, 0x6a, 0x3a, 0x4b, 0x24, 0x59,
-	0x25, 0x48, 0xab, 0x3a, 0xe4, 0x01, 0x9a, 0x05, 0x32, 0x5c, 0x1a, 0x15, 0x31, 0x69, 0xaa, 0xfd,
-	0xd4, 0x99, 0x93, 0x4a, 0x93, 0xfb, 0x2b, 0xad, 0xa8, 0xc4, 0x7b, 0xd0, 0xfa, 0xc8, 0x67, 0x92,
-	0x55, 0x15, 0x20, 0xce, 0x9d, 0x79, 0x23, 0xff, 0x1f, 0x22, 0x7a, 0xd0, 0x8e, 0x15, 0x4f, 0xe7,
-	0x71, 0x8a, 0x11, 0x66, 0x5f, 0x69, 0x32, 0x92, 0x3c, 0xaf, 0xad, 0xd1, 0xf6, 0xf5, 0xb7, 0x8d,
-	0x65, 0x8b, 0x47, 0x80, 0xa7, 0x05, 0x65, 0xfd, 0xac, 0x08, 0x5f, 0x17, 0xd8, 0x28, 0x1e, 0xdf,
-	0xd1, 0xc7, 0x2a, 0x47, 0xe2, 0x32, 0xe1, 0xde, 0x1d, 0xc3, 0x64, 0x6a, 0x06, 0x38, 0x5b, 0xe8,
-	0xfa, 0x13, 0x6f, 0x39, 0xa9, 0x32, 0x95, 0x64, 0x1f, 0x82, 0x18, 0xc9, 0x48, 0x9e, 0xb8, 0x85,
-	0x10, 0x17, 0xbe, 0xe5, 0xb6, 0xe8, 0x03, 0x2e, 0x6b, 0x5e, 0x8d, 0x95, 0xcd, 0x31, 0xb3, 0xc5,
-	0xbd, 0x77, 0xe1, 0xf0, 0x2d, 0xd5, 0x7a, 0x2c, 0xb3, 0xef, 0xf5, 0xd5, 0x3d, 0x4b, 0xb4, 0xc5,
-	0x1c, 0x8a, 0xad, 0xb9, 0x22, 0x3e, 0x0f, 0xca, 0x95, 0xbb, 0xfd, 0x0d, 0x00, 0x00, 0xff, 0xff,
-	0xa1, 0xe0, 0x5f, 0xd5, 0xa3, 0x02, 0x00, 0x00,
+var fileDescriptor_control_efd1f5d296773aee = []byte{
+	// 313 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x92, 0xcb, 0x4e, 0xf2, 0x40,
+	0x14, 0xc7, 0x21, 0x21, 0x5f, 0x3e, 0x07, 0x8a, 0x71, 0x8c, 0x21, 0x76, 0xc9, 0x03, 0x10, 0xd4,
+	0x85, 0x1b, 0x13, 0xa3, 0x68, 0x59, 0x78, 0x09, 0x81, 0xf8, 0x00, 0xc7, 0x7a, 0x28, 0x8d, 0x33,
+	0x73, 0x9a, 0x99, 0x83, 0x09, 0x4f, 0xe6, 0xeb, 0x99, 0x3a, 0x03, 0x61, 0xb0, 0xbb, 0xfe, 0x6f,
+	0xbf, 0xd3, 0xa4, 0x15, 0x49, 0x4e, 0x86, 0x2d, 0xa9, 0x51, 0x65, 0x89, 0x49, 0x76, 0x74, 0xa1,
+	0x39, 0xed, 0xe5, 0xa4, 0x35, 0x19, 0xef, 0xa5, 0x89, 0x63, 0xb2, 0x50, 0x60, 0x90, 0xfd, 0x25,
+	0x02, 0xaf, 0x2d, 0xba, 0xa0, 0x8f, 0x9c, 0xfd, 0xf2, 0x8f, 0x97, 0xdf, 0x1d, 0xd1, 0x7d, 0x29,
+	0x34, 0x4f, 0x3c, 0x53, 0xde, 0x8a, 0xee, 0x22, 0x07, 0xb3, 0xf0, 0x7b, 0x39, 0x18, 0xd5, 0xf4,
+	0xd1, 0x9e, 0x35, 0x03, 0x0b, 0xda, 0xa5, 0x67, 0x7f, 0x82, 0x39, 0xba, 0x6a, 0xd8, 0x92, 0x53,
+	0x91, 0x64, 0x64, 0x35, 0xf0, 0x16, 0x71, 0xee, 0x9b, 0x91, 0x19, 0x20, 0x83, 0x86, 0xc8, 0x63,
+	0xc6, 0xed, 0x1a, 0xf4, 0x56, 0x7d, 0x00, 0xe3, 0x01, 0x28, 0x32, 0x63, 0x50, 0x14, 0xed, 0x83,
+	0xee, 0xd7, 0xd6, 0x94, 0xe6, 0x00, 0x14, 0x99, 0x31, 0x28, 0x8a, 0x76, 0xa0, 0xb1, 0xf8, 0xff,
+	0x54, 0x2a, 0x35, 0x07, 0xf3, 0x29, 0xfb, 0xbe, 0xf8, 0x00, 0xe4, 0x6a, 0x9d, 0xca, 0x3d, 0x8d,
+	0xae, 0x22, 0xe3, 0x70, 0xd8, 0x92, 0x37, 0xe2, 0x34, 0x43, 0xce, 0x57, 0x59, 0x49, 0x13, 0x32,
+	0xcb, 0xb2, 0x98, 0x01, 0xaf, 0x9c, 0x3c, 0xf1, 0xe5, 0x47, 0x5d, 0xf1, 0x26, 0x1c, 0x0e, 0xbc,
+	0xac, 0x54, 0x58, 0x77, 0xc2, 0x3d, 0x31, 0x45, 0xce, 0xfc, 0xb7, 0xdb, 0x8e, 0x82, 0x7c, 0x05,
+	0x8d, 0x69, 0x12, 0x59, 0xc3, 0x96, 0xbc, 0x16, 0xc7, 0xcf, 0xa5, 0xe3, 0x3b, 0xa5, 0x82, 0xd7,
+	0x78, 0xeb, 0x70, 0x36, 0x6e, 0xcb, 0x0b, 0xd1, 0xab, 0x87, 0xbb, 0x55, 0x78, 0x9d, 0x09, 0x30,
+	0x16, 0x64, 0x37, 0x0d, 0x93, 0xf7, 0x7f, 0xbf, 0x3f, 0xd0, 0xd5, 0x4f, 0x00, 0x00, 0x00, 0xff,
+	0xff, 0x8e, 0x12, 0x0c, 0x8c, 0x8f, 0x02, 0x00, 0x00,
 }

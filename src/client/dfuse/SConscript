@@ -11,23 +11,18 @@ COMMON_SRC = ['dfuse_fs.c',
 DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
+             'dfuse_cont.c',
              'dfuse_inode.c']
-OPS_SRC = ['closedir',
-           'create',
+OPS_SRC = ['create',
            'fgetattr',
            'forget',
-           'fsync',
-           'ioctl',
            'lookup',
            'mkdir',
-           'open',
-           'opendir',
            'read',
+           'readdir',
            'readlink',
-           'release',
            'rename',
            'setattr',
-           'statfs',
            'symlink',
            'unlink',
            'write']
@@ -112,7 +107,7 @@ def scons():
     dfuse_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     dfuse_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
 
-    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
+    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
 
     libs = build_client_libs_shared(dfuse_env)
 

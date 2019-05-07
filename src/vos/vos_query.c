@@ -138,8 +138,8 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 	recx->rx_idx = 0;
 	recx->rx_nr = 0;
 
-	rc = evt_open_inplace(query->qt_recx_root, query->qt_uma,
-			      query->qt_coh, query->qt_vea_info, &toh);
+	rc = evt_open(query->qt_recx_root, query->qt_uma, query->qt_coh,
+		      query->qt_vea_info, &toh);
 	if (rc != 0)
 		return rc;
 
@@ -227,7 +227,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	kbund.kb_epoch	= query->qt_epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_mmid	= UMMID_NULL;
+	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_csum = &csum;
 	rbund.rb_tclass = tclass;
 

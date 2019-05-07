@@ -371,6 +371,7 @@ enum {
 #define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
+#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
@@ -419,24 +420,6 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-
-static inline
-bool daos_prop_label_valid(d_string_t label)
-{
-	size_t len;
-
-	if (label == NULL) {
-		D_ERROR("invalid NULL label.\n");
-		return false;
-	}
-	len = strlen(label);
-	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN) {
-		D_ERROR("invali label (len %zu cannot be zero or exceed %d).\n",
-			len, DAOS_PROP_LABEL_MAX_LEN);
-		return false;
-	}
-	return true;
-}
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
