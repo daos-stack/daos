@@ -64,7 +64,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	kbund.kb_epoch = epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_mmid	= UMMID_NULL;
+	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_ver	= pm_ver;
 	rbund.rb_csum	= &csum;
 	memset(&csum, 0, sizeof(csum));

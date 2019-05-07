@@ -35,7 +35,7 @@ import (
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := []struct {
-		bdevClass  BdClass
+		bdevClass  BdevClass
 		bdevList   []string
 		bdevSize   int  // relevant for MALLOC/FILE
 		bdevNumber int  // relevant for MALLOC

@@ -40,25 +40,25 @@
 static inline bool
 dtx_is_aborted(umem_off_t umoff)
 {
-	return umem_off_get_invalid_flags(umoff) == DTX_UMOFF_ABORTED;
+	return umem_off2flags(umoff) == DTX_UMOFF_ABORTED;
 }
 
 static inline bool
 dtx_is_unknown(umem_off_t umoff)
 {
-	return umem_off_get_invalid_flags(umoff) == DTX_UMOFF_UNKNOWN;
+	return umem_off2flags(umoff) == DTX_UMOFF_UNKNOWN;
 }
 
 static void
 dtx_set_aborted(umem_off_t *umoff)
 {
-	umem_off_set_invalid(umoff, DTX_UMOFF_ABORTED);
+	umem_off_set_null_flags(umoff, DTX_UMOFF_ABORTED);
 }
 
 static void
 dtx_set_unknown(umem_off_t *umoff)
 {
-	umem_off_set_invalid(umoff, DTX_UMOFF_UNKNOWN);
+	umem_off_set_null_flags(umoff, DTX_UMOFF_UNKNOWN);
 }
 
 static inline int
@@ -642,7 +642,7 @@ dtx_rec_release(struct umem_instance *umm, umem_off_t umoff,
 		}
 
 		dtx->te_records = rec->tr_next;
-		umem_free_off(umm, rec_umoff);
+		umem_free(umm, rec_umoff);
 	}
 
 	D_DEBUG(DB_TRACE, "dtx_rec_release: %s/%s the DTX "DF_DTI"\n",
@@ -650,7 +650,7 @@ dtx_rec_release(struct umem_instance *umm, umem_off_t umoff,
 		DP_DTI(&dtx->te_xid));
 
 	if (destroy)
-		umem_free_off(umm, umoff);
+		umem_free(umm, umoff);
 	else
 		dtx->te_flags &= ~(DTX_EF_EXCHANGE_PENDING | DTX_EF_SHARES);
 }
@@ -821,7 +821,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
 
-	dtx_umoff = umem_zalloc_off(umm, sizeof(struct vos_dtx_entry_df));
+	dtx_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_entry_df));
 	if (dtx_is_null(dtx_umoff))
 		return -DER_NOMEM;
 
@@ -915,7 +915,7 @@ vos_dtx_append_share(struct umem_instance *umm, struct vos_dtx_entry_df *dtx,
 	struct vos_dtx_record_df	*rec;
 	umem_off_t			 rec_umoff;
 
-	rec_umoff = umem_zalloc_off(umm, sizeof(struct vos_dtx_record_df));
+	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
 	if (dtx_is_null(rec_umoff))
 		return -DER_NOMEM;
 
@@ -1358,7 +1358,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		return 0;
 	}
 
-	rec_umoff = umem_zalloc_off(umm, sizeof(struct vos_dtx_record_df));
+	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
 	if (dtx_is_null(rec_umoff))
 		return -DER_NOMEM;
 
@@ -1434,7 +1434,7 @@ vos_dtx_deregister_record(struct umem_instance *umm,
 			prev->tr_next = rec->tr_next;
 		}
 
-		umem_free_off(umm, rec_umoff);
+		umem_free(umm, rec_umoff);
 		break;
 	};
 
