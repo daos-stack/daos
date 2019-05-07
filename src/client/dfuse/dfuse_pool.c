@@ -36,7 +36,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_dfs		*dfs = NULL;
 	uuid_t				pool_uuid;
-	int rc;
+	daos_pool_info_t		pool_info;
+	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
 	 * so check that the lookup is relative to the root of the sub-tree,
@@ -76,14 +77,17 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
-	ie->ie_stat.st_uid = geteuid();
-	ie->ie_stat.st_gid = getegid();
-	ie->ie_stat.st_nlink = 1;
-	ie->ie_stat.st_mode = S_IFDIR | 0755;
+	rc = daos_pool_query(dfs->dffs_poh, NULL, &pool_info, NULL, NULL);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "daos_pool_query() failed: (%d)", rc);
+		D_GOTO(close, rc);
+	}
 
-	ie->ie_stat.st_atim.tv_sec = time(NULL);
-	ie->ie_stat.st_mtim.tv_sec = ie->ie_stat.st_mtim.tv_sec;
-	ie->ie_stat.st_ctim.tv_sec = ie->ie_stat.st_mtim.tv_sec;
+	DFUSE_TRA_INFO(ie, "Mode is %o", pool_info.pi_mode);
+
+	ie->ie_stat.st_uid = pool_info.pi_uid;
+	ie->ie_stat.st_gid = pool_info.pi_gid;
+	ie->ie_stat.st_mode = pool_info.pi_mode | S_IFDIR;
 
 	rc = dfuse_lookup_inode(fs_handle,
 				ie->ie_dfs,

@@ -37,7 +37,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	uuid_t				co_uuid;
 	dfs_t				*ddfs;
 	mode_t				mode;
-	int rc;
+	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
 	 * so check that the lookup is relative to the root of the sub-tree,
