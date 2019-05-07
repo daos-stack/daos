@@ -224,12 +224,12 @@
 #  # default: ERR
 #  log_mask: WARN
 #
-#  # Force specific path for DAOS debug logs.
+#  # Force specific path for DAOS debug logs (D_LOG_FILE).
 #
 #  # default: /tmp/daos.log
 #  log_file: /tmp/daos_server1.log
 #
-#  # Pass specific environment variables to the DAOS server
+#  # Pass specific environment variables to the DAOS I/O server.
 #  # Empty by default.
 #
 #  env_vars:

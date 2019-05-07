@@ -403,12 +403,12 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	}
 
 	pluginDir := ""
-	pluginDir, err = common.GetAbsInstallPath(spdkFioPluginDir)
+	pluginDir, err = n.config.ext.getAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
 		return
 	}
 
-	fioPath, err = common.GetAbsInstallPath(fioExecPath)
+	fioPath, err = n.config.ext.getAbsInstallPath(fioExecPath)
 	if err != nil {
 		return
 	}
@@ -477,7 +477,7 @@ func loadNamespaces(
 // newNvmeStorage creates a new instance of nvmeStorage struct.
 func newNvmeStorage(config *configuration) (*nvmeStorage, error) {
 
-	scriptPath, err := common.GetAbsInstallPath(spdkSetupPath)
+	scriptPath, err := config.ext.getAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}

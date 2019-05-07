@@ -33,8 +33,6 @@ import (
 type mockExt struct {
 	// return error if cmd in shell fails
 	cmdRet error
-	// return empty string if os env not set/set empty
-	getenvRet string
 	// return true if file already exists
 	existsRet  bool
 	mountRet   error
@@ -55,8 +53,6 @@ func (m *mockExt) runCommand(cmd string) error {
 
 	return m.cmdRet
 }
-
-func (m *mockExt) getenv(key string) string { return m.getenvRet }
 
 func (m *mockExt) writeToFile(in string, outPath string) error {
 	files = append(files, fmt.Sprint(outPath, ":", in))
@@ -103,25 +99,25 @@ func (m *mockExt) exists(string) (bool, error) {
 	return m.existsRet, nil
 }
 
+func (m *mockExt) getAbsInstallPath(path string) (string, error) {
+	return path, nil
+}
+
 func newMockExt(
-	cmdRet error, getenvRet string, existsRet bool, mountRet error,
+	cmdRet error, existsRet bool, mountRet error,
 	unmountRet error, mkdirRet error, removeRet error) External {
 
 	return &mockExt{
-		cmdRet, getenvRet, existsRet, mountRet, unmountRet,
+		cmdRet, existsRet, mountRet, unmountRet,
 		mkdirRet, removeRet, []string{},
 	}
 }
 
 func defaultMockExt() External {
-	return newMockExt(nil, "", false, nil, nil, nil, nil)
+	return newMockExt(nil, false, nil, nil, nil, nil)
 }
 
 func cmdFailMockExt() External {
 	return newMockExt(
-		errors.New("exit status 1"), "", false, nil, nil, nil, nil)
-}
-
-func envExistsMockExt() External {
-	return newMockExt(nil, "somevalue", false, nil, nil, nil, nil)
+		errors.New("exit status 1"), false, nil, nil, nil, nil)
 }

@@ -38,11 +38,19 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const configOut = ".daos_server.active.yml"
+const (
+	configOut              = ".daos_server.active.yml"
+	relConfExamplesPath    = "utils/config/examples/"
+	msgBadConfig           = "insufficient config file, see examples in "
+	msgConfigNoProvider    = "provider not specified in config"
+	msgConfigNoPath        = "no config path set"
+	msgConfigNoServers     = "no servers specified in config"
+	msgConfigServerNoIface = "fabric interface not specified in config"
+)
 
 func (c *configuration) loadConfig() error {
 	if c.Path == "" {
-		return errors.New("no config path set")
+		return errors.New(msgConfigNoPath)
 	}
 
 	bytes, err := ioutil.ReadFile(c.Path)
@@ -73,7 +81,7 @@ func (c *configuration) setPath(path string) error {
 	}
 
 	if !filepath.IsAbs(c.Path) {
-		newPath, err := common.GetAbsInstallPath(c.Path)
+		newPath, err := c.ext.getAbsInstallPath(c.Path)
 		if err != nil {
 			return err
 		}
@@ -318,18 +326,17 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 // validateConfig asserts that config meets minimum requirements
 func (c *configuration) validateConfig() error {
 	if c.Provider == "" {
-		return errors.New("provider not specified in config")
+		return errors.New(msgConfigNoProvider)
 	}
 
 	if len(c.Servers) == 0 {
-		return errors.New("no servers specified in config")
+		return errors.New(msgConfigNoServers)
 	}
 
 	for i, srv := range c.Servers {
 		if srv.FabricIface == "" {
 			return errors.Errorf(
-				"fabric interface not specified in config "+
-					"for I/O service %d", i)
+				msgConfigServerNoIface+" for I/O service %d", i)
 		}
 	}
 
@@ -340,13 +347,9 @@ func (c *configuration) validateConfig() error {
 // to forked I/O service
 func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	if err := c.validateConfig(); err != nil {
-		examplesPath, _ := common.GetAbsInstallPath(
-			"utils/config/examples/")
+		examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
 
-		return errors.WithMessagef(
-			err,
-			"insufficient config file, see examples in %s",
-			examplesPath)
+		return errors.WithMessagef(err, msgBadConfig+examplesPath)
 	}
 
 	// override config with commandline supplied options
