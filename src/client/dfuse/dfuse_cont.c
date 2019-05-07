@@ -70,11 +70,11 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			    DAOS_COO_RW, &dfs->dffs_coh, &dfs->dffs_co_info,
 			    NULL);
 	if (rc == -DER_NONEXIST) {
-		DFUSE_LOG_INFO("daos_cont_create() failed: (%d)",
+		DFUSE_LOG_INFO("daos_cont_open() failed: (%d)",
 			       rc);
 		D_GOTO(err, rc = ENOENT);
 	} else if (rc != -DER_SUCCESS) {
-		DFUSE_LOG_ERROR("daos_cont_create() failed: (%d)",
+		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)",
 				rc);
 		D_GOTO(err, 0);
 	}
