@@ -106,16 +106,14 @@ def scons():
     # CGO prerequisite libs for go-spdk bindings
     denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
     # hack to avoid building this library with cov compiler for the moment
-    if denv.get('COMPILER').lower() == "covc":
-        nvmecontrol = denv.StaticLibrary(
-            "nvme_control",
-            join(gospdkpath, "src", "nvme_control.c"),
-            CC='gcc', LIBS=['spdk'])
-    else:
-        nvmecontrol = denv.StaticLibrary(
-            "nvme_control",
-            join(gospdkpath, "src", "nvme_control.c"),
-            LIBS=['spdk'])
+    compiler = denv.get('COMPILER').lower()
+    if compiler == "covc":
+        compiler = "gcc"
+
+    nvmecontrol = denv.StaticLibrary(
+        "nvme_control",
+        join(gospdkpath, "src", "nvme_control.c"),
+        CC=compiler, LIBS=['spdk'])
 
     denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
 
