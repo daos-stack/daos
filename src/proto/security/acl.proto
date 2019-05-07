@@ -22,13 +22,13 @@
 //
 
 syntax = "proto3";
-package proto;
+package acl;
 
 // Access Control List Protobuf Definitions
 // These are the request objects and gRPC services used to set or edit
 // permissions on an entity in DAOS (such as a pool, container, etc.).
 
-enum AclRequestStatus {
+enum RequestStatus {
 	SUCCESS = 0;
 	ERR_UNKNOWN = -1;		// Unknown error
 	ERR_PERM_DENIED = -2;		// Not authorized to make these changes
@@ -37,27 +37,27 @@ enum AclRequestStatus {
 	ERR_INVALID_UUID = -5;		// UUID requested is invalid
 }
 
-message AclResponse {
-	AclRequestStatus status = 1;
-	AclEntryPermissions permissions = 2;
+message Response {
+	RequestStatus status = 1;
+	EntryPermissions permissions = 2;
 }
 
 // Bits representing access permissions
-enum AclPermissions {
+enum Permissions {
 	NO_ACCESS = 0;
 	READ = 1;
 	WRITE = 2;
 }
 
 // A given user/group may have multiple different types of entries
-enum AclEntryType {
+enum EntryType {
 	ALLOW = 0;
 	AUDIT = 1;
 	ALARM = 2;
 }
 
 // Bits representing flags on a given ACL entry
-enum AclFlags {
+enum Flags {
 	NO_FLAGS = 0;
 	GROUP = 1;		// This entry is for a group not a user
 	ACCESS_SUCCESS = 2;	// audit/alarm on successful access
@@ -66,25 +66,25 @@ enum AclFlags {
 }
 
 // Identifier for a specific Access Control Entry
-message AclEntry {
-	AclEntryType type = 1;
+message Entry {
+	EntryType type = 1;
 	uint32 flags = 2;	// bitmask of AclFlags
 	string entity = 3;	// UUID of the entity (such as a pool)
 	string identity = 4;	// User/group who accesses the entity
 }
 
 // Permissions for the given entry
-message AclEntryPermissions {
-	AclEntry entry = 1;
+message EntryPermissions {
+	Entry entry = 1;
 	uint64 permission_bits = 2;	// Bitmask of AclPermissions
 }
 
 // gRPC API for ACL service
 service AccessControl {
 	// Set the permissions on a given ACE or create it if it doesn't exist
-	rpc SetPermissions(AclEntryPermissions) returns (AclResponse) {};
+	rpc SetPermissions(EntryPermissions) returns (Response) {};
 	// Fetch the permissions on a given ACE
-	rpc GetPermissions(AclEntry) returns (AclResponse) {};
+	rpc GetPermissions(Entry) returns (Response) {};
 	// Remove the given ACE completely from the ACL
-	rpc DestroyAclEntry(AclEntry) returns (AclResponse) {};
+	rpc DestroyAclEntry(Entry) returns (Response) {};
 }

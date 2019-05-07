@@ -34,7 +34,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-	secpb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
 )
 
 func main() {
@@ -120,7 +120,7 @@ func serverMain() error {
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	secpb.RegisterAccessControlServer(grpcServer, secServer)
+	acl.RegisterAccessControlServer(grpcServer, secServer)
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()

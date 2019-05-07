@@ -15,99 +15,99 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
-typedef struct _Proto__AclResponse Proto__AclResponse;
-typedef struct _Proto__AclEntry Proto__AclEntry;
-typedef struct _Proto__AclEntryPermissions Proto__AclEntryPermissions;
+typedef struct _Acl__Response Acl__Response;
+typedef struct _Acl__Entry Acl__Entry;
+typedef struct _Acl__EntryPermissions Acl__EntryPermissions;
 
 
 /* --- enums --- */
 
-typedef enum _Proto__AclRequestStatus {
-  PROTO__ACL_REQUEST_STATUS__SUCCESS = 0,
+typedef enum _Acl__RequestStatus {
+  ACL__REQUEST_STATUS__SUCCESS = 0,
   /*
    * Unknown error
    */
-  PROTO__ACL_REQUEST_STATUS__ERR_UNKNOWN = -1,
+  ACL__REQUEST_STATUS__ERR_UNKNOWN = -1,
   /*
    * Not authorized to make these changes
    */
-  PROTO__ACL_REQUEST_STATUS__ERR_PERM_DENIED = -2,
+  ACL__REQUEST_STATUS__ERR_PERM_DENIED = -2,
   /*
    * Permissions requested are invalid
    */
-  PROTO__ACL_REQUEST_STATUS__ERR_INVALID_PERMS = -3,
+  ACL__REQUEST_STATUS__ERR_INVALID_PERMS = -3,
   /*
    * Principal requested is invalid
    */
-  PROTO__ACL_REQUEST_STATUS__ERR_INVALID_PRINCIPAL = -4,
+  ACL__REQUEST_STATUS__ERR_INVALID_PRINCIPAL = -4,
   /*
    * UUID requested is invalid
    */
-  PROTO__ACL_REQUEST_STATUS__ERR_INVALID_UUID = -5
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(PROTO__ACL_REQUEST_STATUS)
-} Proto__AclRequestStatus;
+  ACL__REQUEST_STATUS__ERR_INVALID_UUID = -5
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(ACL__REQUEST_STATUS)
+} Acl__RequestStatus;
 /*
  * Bits representing access permissions
  */
-typedef enum _Proto__AclPermissions {
-  PROTO__ACL_PERMISSIONS__NO_ACCESS = 0,
-  PROTO__ACL_PERMISSIONS__READ = 1,
-  PROTO__ACL_PERMISSIONS__WRITE = 2
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(PROTO__ACL_PERMISSIONS)
-} Proto__AclPermissions;
+typedef enum _Acl__Permissions {
+  ACL__PERMISSIONS__NO_ACCESS = 0,
+  ACL__PERMISSIONS__READ = 1,
+  ACL__PERMISSIONS__WRITE = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(ACL__PERMISSIONS)
+} Acl__Permissions;
 /*
  * A given user/group may have multiple different types of entries
  */
-typedef enum _Proto__AclEntryType {
-  PROTO__ACL_ENTRY_TYPE__ALLOW = 0,
-  PROTO__ACL_ENTRY_TYPE__AUDIT = 1,
-  PROTO__ACL_ENTRY_TYPE__ALARM = 2
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(PROTO__ACL_ENTRY_TYPE)
-} Proto__AclEntryType;
+typedef enum _Acl__EntryType {
+  ACL__ENTRY_TYPE__ALLOW = 0,
+  ACL__ENTRY_TYPE__AUDIT = 1,
+  ACL__ENTRY_TYPE__ALARM = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(ACL__ENTRY_TYPE)
+} Acl__EntryType;
 /*
  * Bits representing flags on a given ACL entry
  */
-typedef enum _Proto__AclFlags {
-  PROTO__ACL_FLAGS__NO_FLAGS = 0,
+typedef enum _Acl__Flags {
+  ACL__FLAGS__NO_FLAGS = 0,
   /*
    * This entry is for a group not a user
    */
-  PROTO__ACL_FLAGS__GROUP = 1,
+  ACL__FLAGS__GROUP = 1,
   /*
    * audit/alarm on successful access
    */
-  PROTO__ACL_FLAGS__ACCESS_SUCCESS = 2,
+  ACL__FLAGS__ACCESS_SUCCESS = 2,
   /*
    * audit/alarm on failed access
    */
-  PROTO__ACL_FLAGS__ACCESS_FAILURE = 4,
+  ACL__FLAGS__ACCESS_FAILURE = 4,
   /*
    * entry should be inherited by pool's containers
    */
-  PROTO__ACL_FLAGS__POOL_INHERIT = 8
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(PROTO__ACL_FLAGS)
-} Proto__AclFlags;
+  ACL__FLAGS__POOL_INHERIT = 8
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(ACL__FLAGS)
+} Acl__Flags;
 
 /* --- messages --- */
 
-struct  _Proto__AclResponse
+struct  _Acl__Response
 {
   ProtobufCMessage base;
-  Proto__AclRequestStatus status;
-  Proto__AclEntryPermissions *permissions;
+  Acl__RequestStatus status;
+  Acl__EntryPermissions *permissions;
 };
-#define PROTO__ACL_RESPONSE__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&proto__acl_response__descriptor) \
-    , PROTO__ACL_REQUEST_STATUS__SUCCESS, NULL }
+#define ACL__RESPONSE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&acl__response__descriptor) \
+    , ACL__REQUEST_STATUS__SUCCESS, NULL }
 
 
 /*
  * Identifier for a specific Access Control Entry
  */
-struct  _Proto__AclEntry
+struct  _Acl__Entry
 {
   ProtobufCMessage base;
-  Proto__AclEntryType type;
+  Acl__EntryType type;
   /*
    * bitmask of AclFlags
    */
@@ -121,149 +121,149 @@ struct  _Proto__AclEntry
    */
   char *identity;
 };
-#define PROTO__ACL_ENTRY__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&proto__acl_entry__descriptor) \
-    , PROTO__ACL_ENTRY_TYPE__ALLOW, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+#define ACL__ENTRY__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&acl__entry__descriptor) \
+    , ACL__ENTRY_TYPE__ALLOW, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
  * Permissions for the given entry
  */
-struct  _Proto__AclEntryPermissions
+struct  _Acl__EntryPermissions
 {
   ProtobufCMessage base;
-  Proto__AclEntry *entry;
+  Acl__Entry *entry;
   /*
    * Bitmask of AclPermissions
    */
   uint64_t permission_bits;
 };
-#define PROTO__ACL_ENTRY_PERMISSIONS__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&proto__acl_entry_permissions__descriptor) \
+#define ACL__ENTRY_PERMISSIONS__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&acl__entry_permissions__descriptor) \
     , NULL, 0 }
 
 
-/* Proto__AclResponse methods */
-void   proto__acl_response__init
-                     (Proto__AclResponse         *message);
-size_t proto__acl_response__get_packed_size
-                     (const Proto__AclResponse   *message);
-size_t proto__acl_response__pack
-                     (const Proto__AclResponse   *message,
+/* Acl__Response methods */
+void   acl__response__init
+                     (Acl__Response         *message);
+size_t acl__response__get_packed_size
+                     (const Acl__Response   *message);
+size_t acl__response__pack
+                     (const Acl__Response   *message,
                       uint8_t             *out);
-size_t proto__acl_response__pack_to_buffer
-                     (const Proto__AclResponse   *message,
+size_t acl__response__pack_to_buffer
+                     (const Acl__Response   *message,
                       ProtobufCBuffer     *buffer);
-Proto__AclResponse *
-       proto__acl_response__unpack
+Acl__Response *
+       acl__response__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   proto__acl_response__free_unpacked
-                     (Proto__AclResponse *message,
+void   acl__response__free_unpacked
+                     (Acl__Response *message,
                       ProtobufCAllocator *allocator);
-/* Proto__AclEntry methods */
-void   proto__acl_entry__init
-                     (Proto__AclEntry         *message);
-size_t proto__acl_entry__get_packed_size
-                     (const Proto__AclEntry   *message);
-size_t proto__acl_entry__pack
-                     (const Proto__AclEntry   *message,
+/* Acl__Entry methods */
+void   acl__entry__init
+                     (Acl__Entry         *message);
+size_t acl__entry__get_packed_size
+                     (const Acl__Entry   *message);
+size_t acl__entry__pack
+                     (const Acl__Entry   *message,
                       uint8_t             *out);
-size_t proto__acl_entry__pack_to_buffer
-                     (const Proto__AclEntry   *message,
+size_t acl__entry__pack_to_buffer
+                     (const Acl__Entry   *message,
                       ProtobufCBuffer     *buffer);
-Proto__AclEntry *
-       proto__acl_entry__unpack
+Acl__Entry *
+       acl__entry__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   proto__acl_entry__free_unpacked
-                     (Proto__AclEntry *message,
+void   acl__entry__free_unpacked
+                     (Acl__Entry *message,
                       ProtobufCAllocator *allocator);
-/* Proto__AclEntryPermissions methods */
-void   proto__acl_entry_permissions__init
-                     (Proto__AclEntryPermissions         *message);
-size_t proto__acl_entry_permissions__get_packed_size
-                     (const Proto__AclEntryPermissions   *message);
-size_t proto__acl_entry_permissions__pack
-                     (const Proto__AclEntryPermissions   *message,
+/* Acl__EntryPermissions methods */
+void   acl__entry_permissions__init
+                     (Acl__EntryPermissions         *message);
+size_t acl__entry_permissions__get_packed_size
+                     (const Acl__EntryPermissions   *message);
+size_t acl__entry_permissions__pack
+                     (const Acl__EntryPermissions   *message,
                       uint8_t             *out);
-size_t proto__acl_entry_permissions__pack_to_buffer
-                     (const Proto__AclEntryPermissions   *message,
+size_t acl__entry_permissions__pack_to_buffer
+                     (const Acl__EntryPermissions   *message,
                       ProtobufCBuffer     *buffer);
-Proto__AclEntryPermissions *
-       proto__acl_entry_permissions__unpack
+Acl__EntryPermissions *
+       acl__entry_permissions__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   proto__acl_entry_permissions__free_unpacked
-                     (Proto__AclEntryPermissions *message,
+void   acl__entry_permissions__free_unpacked
+                     (Acl__EntryPermissions *message,
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
-typedef void (*Proto__AclResponse_Closure)
-                 (const Proto__AclResponse *message,
+typedef void (*Acl__Response_Closure)
+                 (const Acl__Response *message,
                   void *closure_data);
-typedef void (*Proto__AclEntry_Closure)
-                 (const Proto__AclEntry *message,
+typedef void (*Acl__Entry_Closure)
+                 (const Acl__Entry *message,
                   void *closure_data);
-typedef void (*Proto__AclEntryPermissions_Closure)
-                 (const Proto__AclEntryPermissions *message,
+typedef void (*Acl__EntryPermissions_Closure)
+                 (const Acl__EntryPermissions *message,
                   void *closure_data);
 
 /* --- services --- */
 
-typedef struct _Proto__AccessControl_Service Proto__AccessControl_Service;
-struct _Proto__AccessControl_Service
+typedef struct _Acl__AccessControl_Service Acl__AccessControl_Service;
+struct _Acl__AccessControl_Service
 {
   ProtobufCService base;
-  void (*set_permissions)(Proto__AccessControl_Service *service,
-                          const Proto__AclEntryPermissions *input,
-                          Proto__AclResponse_Closure closure,
+  void (*set_permissions)(Acl__AccessControl_Service *service,
+                          const Acl__EntryPermissions *input,
+                          Acl__Response_Closure closure,
                           void *closure_data);
-  void (*get_permissions)(Proto__AccessControl_Service *service,
-                          const Proto__AclEntry *input,
-                          Proto__AclResponse_Closure closure,
+  void (*get_permissions)(Acl__AccessControl_Service *service,
+                          const Acl__Entry *input,
+                          Acl__Response_Closure closure,
                           void *closure_data);
-  void (*destroy_acl_entry)(Proto__AccessControl_Service *service,
-                            const Proto__AclEntry *input,
-                            Proto__AclResponse_Closure closure,
+  void (*destroy_acl_entry)(Acl__AccessControl_Service *service,
+                            const Acl__Entry *input,
+                            Acl__Response_Closure closure,
                             void *closure_data);
 };
-typedef void (*Proto__AccessControl_ServiceDestroy)(Proto__AccessControl_Service *);
-void proto__access_control__init (Proto__AccessControl_Service *service,
-                                  Proto__AccessControl_ServiceDestroy destroy);
-#define PROTO__ACCESS_CONTROL__BASE_INIT \
-    { &proto__access_control__descriptor, protobuf_c_service_invoke_internal, NULL }
-#define PROTO__ACCESS_CONTROL__INIT(function_prefix__) \
-    { PROTO__ACCESS_CONTROL__BASE_INIT,\
+typedef void (*Acl__AccessControl_ServiceDestroy)(Acl__AccessControl_Service *);
+void acl__access_control__init (Acl__AccessControl_Service *service,
+                                Acl__AccessControl_ServiceDestroy destroy);
+#define ACL__ACCESS_CONTROL__BASE_INIT \
+    { &acl__access_control__descriptor, protobuf_c_service_invoke_internal, NULL }
+#define ACL__ACCESS_CONTROL__INIT(function_prefix__) \
+    { ACL__ACCESS_CONTROL__BASE_INIT,\
       function_prefix__ ## set_permissions,\
       function_prefix__ ## get_permissions,\
       function_prefix__ ## destroy_acl_entry  }
-void proto__access_control__set_permissions(ProtobufCService *service,
-                                            const Proto__AclEntryPermissions *input,
-                                            Proto__AclResponse_Closure closure,
+void acl__access_control__set_permissions(ProtobufCService *service,
+                                          const Acl__EntryPermissions *input,
+                                          Acl__Response_Closure closure,
+                                          void *closure_data);
+void acl__access_control__get_permissions(ProtobufCService *service,
+                                          const Acl__Entry *input,
+                                          Acl__Response_Closure closure,
+                                          void *closure_data);
+void acl__access_control__destroy_acl_entry(ProtobufCService *service,
+                                            const Acl__Entry *input,
+                                            Acl__Response_Closure closure,
                                             void *closure_data);
-void proto__access_control__get_permissions(ProtobufCService *service,
-                                            const Proto__AclEntry *input,
-                                            Proto__AclResponse_Closure closure,
-                                            void *closure_data);
-void proto__access_control__destroy_acl_entry(ProtobufCService *service,
-                                              const Proto__AclEntry *input,
-                                              Proto__AclResponse_Closure closure,
-                                              void *closure_data);
 
 /* --- descriptors --- */
 
-extern const ProtobufCEnumDescriptor    proto__acl_request_status__descriptor;
-extern const ProtobufCEnumDescriptor    proto__acl_permissions__descriptor;
-extern const ProtobufCEnumDescriptor    proto__acl_entry_type__descriptor;
-extern const ProtobufCEnumDescriptor    proto__acl_flags__descriptor;
-extern const ProtobufCMessageDescriptor proto__acl_response__descriptor;
-extern const ProtobufCMessageDescriptor proto__acl_entry__descriptor;
-extern const ProtobufCMessageDescriptor proto__acl_entry_permissions__descriptor;
-extern const ProtobufCServiceDescriptor proto__access_control__descriptor;
+extern const ProtobufCEnumDescriptor    acl__request_status__descriptor;
+extern const ProtobufCEnumDescriptor    acl__permissions__descriptor;
+extern const ProtobufCEnumDescriptor    acl__entry_type__descriptor;
+extern const ProtobufCEnumDescriptor    acl__flags__descriptor;
+extern const ProtobufCMessageDescriptor acl__response__descriptor;
+extern const ProtobufCMessageDescriptor acl__entry__descriptor;
+extern const ProtobufCMessageDescriptor acl__entry_permissions__descriptor;
+extern const ProtobufCServiceDescriptor acl__access_control__descriptor;
 
 PROTOBUF_C__END_DECLS
 
