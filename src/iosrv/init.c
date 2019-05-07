@@ -616,7 +616,7 @@ parse(int argc, char **argv)
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
 			    DAOS_SYS_NAME_MAX) {
-				printf("group name must be at most %zu bytes\n",
+				printf("group name must be at most %d bytes\n",
 				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
