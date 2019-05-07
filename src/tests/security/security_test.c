@@ -58,7 +58,7 @@ compare_auth_sys(Auth__Sys *auth1, Auth__Sys *auth2)
 		return -1;
 	}
 
-	if (auth1-> uid != auth2->uid) {
+	if (auth1->uid != auth2->uid) {
 		printf("Tokens do not have a matching uid\n");
 		return -1;
 	}
