@@ -83,11 +83,13 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc);
 	}
 
-	DFUSE_TRA_INFO(ie, "Mode is %o", pool_info.pi_mode);
-
 	ie->ie_stat.st_uid = pool_info.pi_uid;
 	ie->ie_stat.st_gid = pool_info.pi_gid;
-	ie->ie_stat.st_mode = pool_info.pi_mode | S_IFDIR;
+
+	/* TODO: This should inspect pi_mode and corrrectly construct a correct
+	 * st_mode value accordingly.
+	 */
+	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 
 	rc = dfuse_lookup_inode(fs_handle,
 				ie->ie_dfs,
