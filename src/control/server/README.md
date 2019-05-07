@@ -2,7 +2,7 @@
 
 ## Workflow
 
-Control plane server (`daos_server`) instances will open and listen on gRPC channel for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through control plane [`dmg`](../dmg) management tool and when ready to start data plane, calling `dmg storage format` will enable the server to be formatted (superblock written) and start the data plane.
+Control plane server (`daos_server`) instances will open a gRPC channel to listen for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through the control plane [`dmg`](../dmg) management tool. Calling `dmg storage format` formats persistent storage on the server node, writes the superblock and starts the data plane.
 
 ![Server format diagram](/doc/graph/server_format_flow.png)
 
