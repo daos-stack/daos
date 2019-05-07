@@ -103,18 +103,26 @@ def scons():
     gospdkpath = join(gosrc, "vendor", "github.com", "daos-stack", "go-spdk",
                       "spdk")
 
-    # CGO prerequisite libs for nvme
+    # CGO prerequisite libs for go-spdk bindings
     denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
-    nvmecontrol = denv.StaticLibrary(
-        "nvme_control",
-        join(gospdkpath, "src", "nvme_control.c"),
-        LIBS=['spdk'])
-    nc_installed = denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
+    # hack to avoid building this library with cov compiler for the moment
+    if denv.get('COMPILER').lower() == "covc":
+        nvmecontrol = denv.StaticLibrary(
+            "nvme_control",
+            join(gospdkpath, "src", "nvme_control.c"),
+            CC='gcc', LIBS=['spdk'])
+    else:
+        nvmecontrol = denv.StaticLibrary(
+            "nvme_control",
+            join(gospdkpath, "src", "nvme_control.c"),
+            LIBS=['spdk'])
+
+    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
 
     # CGO shell env vars.
     denv.AppendENVPath(
         "CGO_LDFLAGS",
-        denv.subst("-L$SPDK_PREFIX/lib -L%s $_RPATH" % gopath))
+        denv.subst("-L%s -L$SPDK_PREFIX/lib $_RPATH" % gopath))
     denv.AppendENVPath(
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
