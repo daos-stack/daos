@@ -1,0 +1,22 @@
+hosts:
+  test_machines:
+    - boro-A
+    - boro-B
+    - boro-C
+timeout: 180
+server_config:
+  server_name: daos_server
+pool:
+  pool_mode: 511
+  pool_size: 1073741824
+  pool_group: daos_server
+container:
+  akey_size: 5
+  dkey_size: 5
+  data_size: 5
+  objects:
+    object_qty: 10
+  records:
+    record_qty: 10
+  class:
+    obj_class: 16

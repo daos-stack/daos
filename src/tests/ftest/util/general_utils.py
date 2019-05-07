@@ -24,6 +24,8 @@
 import os
 import re
 import json
+import random
+import string
 from pathlib import Path
 from errno import ENOENT
 
@@ -94,3 +96,24 @@ class DaosTestError(Exception):
     """
     DAOS API exception class
     """
+
+def get_random_string(length, exclude=None):
+    """Create a specified length string of random ascii letters and numbers.
+
+    Optionally exclude specific random strings from being returned.
+
+    Args:
+        length (int): length of the string to return
+        exclude (list|None): list of strings to not return
+
+    Returns:
+        str: a string of random ascii letters and numbers
+
+    """
+    exclude = exclude if isinstance(exclude, list) else []
+    random_string = None
+    while not isinstance(random_string, str) or random_string in exclude:
+        random_string = "".join(
+            random.choice(string.ascii_uppercase + string.digits)
+            for _ in range(length))
+    return random_string
