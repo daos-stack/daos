@@ -159,9 +159,9 @@ echo "$cmd"
 $cmd -t
 
 if [[ -z ${CMOCKA_MESSAGE_OUTPUT+x} || -z ${CMOCKA_XML_FILE+x} ]]; then
-	result=$?
+	result="${PIPESTATUS[0]}"
 	echo "Test returned $result"
-	exit $result
+	exit "$result"
 else
 	echo "Test complete"
 	exit 0

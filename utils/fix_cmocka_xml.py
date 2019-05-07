@@ -29,8 +29,7 @@ xml_header ="<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
 parent_header = "<testsuites>\n"
 parent_footer = "</testsuites>\n"
 file_extensions = "*.xml"
-pwd = os.getcwd()
-path = os.path.join(pwd,"..","test_results") + os.path.sep
+path = os.path.join(os.getcwd(), "..", "test_results") + os.path.sep
 files  = [path+fn for fn in os.listdir(path)
               if any(fn.endswith(x) for x in file_extensions)]
 # This is done because some XML files are not formed correctly
@@ -38,8 +37,9 @@ files  = [path+fn for fn in os.listdir(path)
 # <root> having nested tags [eg: if one group test called
 # repeatedly].
 # If there is a fix by CMOCKA framework, this is not required.
-#Two pass update on the files
-#Remove all testsuites tag out of the xml file.
+# Gitbug Issue: https://github.com/clibs/cmocka/issues/14
+# Two pass update on the files
+# Remove all testsuites tag out of the xml file.
 for file in files:
 	if (file != ""):
 		print(file)
