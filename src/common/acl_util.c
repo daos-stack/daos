@@ -80,20 +80,20 @@ daos_acl_principal_is_valid(const char *name)
 	enum validity_state	state = STATE_START;
 
 	if (name == NULL) {
-		D_ERROR("Name was NULL\n");
+		D_INFO("Name was NULL\n");
 		return false;
 	}
 
 	len = strnlen(name, DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
 	if (len == 0 || len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
-		D_ERROR("Invalid len: %lu\n", len);
+		D_INFO("Invalid len: %lu\n", len);
 		return false;
 	}
 
 	for (i = 0; i < (len + 1); i++) {
 		state = next_state(state, name[i]);
 		if (state == STATE_INVALID) {
-			D_ERROR("Name was badly formatted: %s\n", name);
+			D_INFO("Name was badly formatted: %s\n", name);
 			return false;
 		}
 	}
@@ -120,10 +120,11 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	struct passwd	user;
 	struct passwd	*result = NULL;
 	char		*buf = NULL;
+	char		*new_buf = NULL;
 	size_t		buflen = DEFAULT_BUF_LEN;
 
 	if (name == NULL) {
-		D_ERROR("name pointer was NULL!\n");
+		D_INFO("name pointer was NULL!\n");
 		return -DER_INVAL;
 	}
 
@@ -132,12 +133,13 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	 * sane value and double until it's big enough.
 	 */
 	do {
-		D_FREE(buf);
-		D_ALLOC(buf, buflen);
-		if (buf == NULL) {
+		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		if (new_buf == NULL) {
 			D_ERROR("Couldn't allocate memory for getpwuid_r\n");
 			return -DER_NOMEM;
 		}
+
+		buf = new_buf;
 
 		rc = getpwuid_r(uid, &user, buf, buflen, &result);
 
@@ -150,7 +152,7 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	}
 
 	if (result == NULL) {
-		D_ERROR("No user for uid %u\n", uid);
+		D_INFO("No user for uid %u\n", uid);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -168,10 +170,11 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	struct group	grp;
 	struct group	*result = NULL;
 	char		*buf = NULL;
+	char		*new_buf = NULL;
 	size_t		buflen = DEFAULT_BUF_LEN;
 
 	if (name == NULL) {
-		D_ERROR("name pointer was NULL!\n");
+		D_INFO("name pointer was NULL!\n");
 		return -DER_INVAL;
 	}
 
@@ -180,12 +183,13 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	 * sane value and double until it's big enough.
 	 */
 	do {
-		D_FREE(buf);
-		D_ALLOC(buf, buflen);
-		if (buf == NULL) {
+		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		if (new_buf == NULL) {
 			D_ERROR("Couldn't allocate memory for getgrgid_r\n");
 			return -DER_NOMEM;
 		}
+
+		buf = new_buf;
 
 		rc = getgrgid_r(gid, &grp, buf, buflen, &result);
 
@@ -198,7 +202,7 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	}
 
 	if (result == NULL) {
-		D_ERROR("No group for gid %u\n", gid);
+		D_INFO("No group for gid %u\n", gid);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -213,18 +217,22 @@ out:
  * Extracts the user/group name from the "name@[domain]" formatted principal
  * string.
  */
-int
+static int
 get_id_name_from_principal(const char *principal, char *name)
 {
 	int num_matches;
 
 	if (!daos_acl_principal_is_valid(principal)) {
-		D_ERROR("Invalid name format\n");
+		D_INFO("Invalid name format\n");
 		return -DER_INVAL;
 	}
 
 	num_matches = sscanf(principal, "%[^@]", name);
 	if (num_matches == 0) {
+		/*
+		 * This is a surprise - if it's formatted properly, we should
+		 * be able to extract the name.
+		 */
 		D_ERROR("Couldn't extract ID name from '%s'\n", principal);
 		return -DER_INVAL;
 	}
@@ -237,13 +245,14 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 {
 	char		username[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		*buf = NULL;
+	char		*new_buf = NULL;
 	size_t		buflen = DEFAULT_BUF_LEN;
 	struct passwd	passwd;
 	struct passwd	*result = NULL;
 	int		rc;
 
 	if (uid == NULL) {
-		D_ERROR("NULL uid pointer\n");
+		D_INFO("NULL uid pointer\n");
 		return -DER_INVAL;
 	}
 
@@ -252,12 +261,13 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 		return rc;
 
 	do {
-		D_FREE(buf);
-		D_ALLOC(buf, buflen);
-		if (buf == NULL) {
+		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		if (new_buf == NULL) {
 			D_ERROR("Couldn't alloc buffer for getpwnam_r\n");
 			return -DER_NOMEM;
 		}
+
+		buf = new_buf;
 
 		rc = getpwnam_r(username, &passwd, buf, buflen, &result);
 
@@ -270,7 +280,7 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 	}
 
 	if (result == NULL) {
-		D_ERROR("User '%s' not found\n", username);
+		D_INFO("User '%s' not found\n", username);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -286,13 +296,14 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 {
 	char		grpname[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		*buf = NULL;
+	char		*new_buf = NULL;
 	size_t		buflen = DEFAULT_BUF_LEN;
 	struct group	grp;
 	struct group	*result = NULL;
 	int		rc;
 
 	if (gid == NULL) {
-		D_ERROR("NULL gid pointer\n");
+		D_INFO("NULL gid pointer\n");
 		return -DER_INVAL;
 	}
 
@@ -301,12 +312,13 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 		return rc;
 
 	do {
-		D_FREE(buf);
-		D_ALLOC(buf, buflen);
-		if (buf == NULL) {
-			D_ERROR("Couldn't alloc buffer for gegrnam_r\n");
+		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		if (new_buf == NULL) {
+			D_ERROR("Couldn't alloc buffer for getgrnam_r\n");
 			return -DER_NOMEM;
 		}
+
+		buf = new_buf;
 
 		rc = getgrnam_r(grpname, &grp, buf, buflen, &result);
 
@@ -319,7 +331,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 	}
 
 	if (result == NULL) {
-		D_ERROR("Group '%s' not found\n", grpname);
+		D_INFO("Group '%s' not found\n", grpname);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 

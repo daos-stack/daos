@@ -103,6 +103,29 @@ test_acl_all_gid_principal_conversion(void **state)
 	endgrent();
 }
 
+static void
+test_acl_id_not_found(void **state)
+{
+	char	*name = NULL;
+
+	assert_int_equal(daos_acl_uid_to_principal(-1, &name), -DER_NONEXIST);
+	assert_null(name);
+
+	assert_int_equal(daos_acl_gid_to_principal(-1, &name), -DER_NONEXIST);
+	assert_null(name);
+}
+
+static void
+test_acl_name_not_found(void **state)
+{
+	const char	*name = "completelyfictionaluser@";
+	uid_t		uid;
+	gid_t		gid;
+
+	assert_int_equal(daos_acl_principal_to_uid(name, &uid), -DER_NONEXIST);
+	assert_int_equal(daos_acl_principal_to_gid(name, &gid), -DER_NONEXIST);
+}
+
 int
 main(void)
 {
@@ -110,6 +133,8 @@ main(void)
 		cmocka_unit_test(test_acl_euid_principal_conversion),
 		cmocka_unit_test(test_acl_egid_principal_conversion),
 		cmocka_unit_test(test_acl_all_gid_principal_conversion),
+		cmocka_unit_test(test_acl_id_not_found),
+		cmocka_unit_test(test_acl_name_not_found),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
