@@ -160,9 +160,9 @@ $cmd -t
 
 if [[ -z ${CMOCKA_MESSAGE_OUTPUT+x} || -z ${CMOCKA_XML_FILE+x} ]]; then
 	result=$?
-	echo Test returned $result
+	echo "Test returned $result"
 	exit $result
 else
-	echo Test complete
+	echo "Test complete"
 	exit 0
 fi

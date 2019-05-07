@@ -29,7 +29,8 @@ xml_header ="<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
 parent_header = "<testsuites>\n"
 parent_footer = "</testsuites>\n"
 file_extensions = "*.xml"
-path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"../test_results/")
+pwd = os.getcwd()
+path = os.path.join(pwd,"..","test_results") + os.path.sep
 files  = [path+fn for fn in os.listdir(path)
               if any(fn.endswith(x) for x in file_extensions)]
 # This is done because some XML files are not formed correctly

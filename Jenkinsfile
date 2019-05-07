@@ -802,8 +802,7 @@ pipeline {
                         }
                         */
                         always {
-				sh '''python utils/fix_cmocka_xml.py
-					ls -l test_results/'''
+				sh '''python utils/fix_cmocka_xml.py'''
 				junit 'test_results/*.xml'
 				archiveArtifacts artifacts: 'run_test.sh/**'
                         }
