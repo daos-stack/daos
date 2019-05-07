@@ -72,7 +72,7 @@ mgmt_svc_name_cb(daos_iov_t *id, char **name)
 {
 	char *s;
 
-	D_STRNDUP(s, mgmt_svc_id_s, strlen(mgmt_svc_id_s));
+	D_STRNDUP(s, mgmt_svc_id_s, DAOS_SYS_NAME_MAX);
 	if (s == NULL)
 		return -DER_NOMEM;
 	*name = s;
@@ -377,6 +377,7 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 	if (bootstrap) {
 		crt_group_t    *grp;
 		char	       *uri;
+		size_t		len;
 
 		/* Prepare a self-only replica list. */
 		replicas.rl_nr = 1;
@@ -388,11 +389,13 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		arg.sa_server.sr_nctxs = dss_ctx_nr_get();
 		uuid_copy(arg.sa_server.sr_uuid, srv_uuid);
 
-		if (strlen(addr) + 1 > ADDR_STR_MAX_LEN) {
-			D_ERROR("server address '%s' too long: %d\n", addr, rc);
+		len = strnlen(addr, ADDR_STR_MAX_LEN);
+		if (len >= ADDR_STR_MAX_LEN) {
+			D_ERROR("server address '%.*s...' too long\n",
+				ADDR_STR_MAX_LEN - 1, addr);
 			return -DER_INVAL;
 		}
-		strncpy(arg.sa_server.sr_addr, addr, ADDR_STR_MAX_LEN);
+		memcpy(arg.sa_server.sr_addr, addr, len + 1);
 
 		grp = crt_group_lookup(NULL);
 		D_ASSERT(grp != NULL);
@@ -401,12 +404,14 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 			D_ERROR("unable to get self URI: %d\n", rc);
 			return rc;
 		}
-		if (strlen(uri) + 1 > ADDR_STR_MAX_LEN) {
-			D_ERROR("self URI '%s' too long: %d\n", uri, rc);
+		len = strnlen(uri, ADDR_STR_MAX_LEN);
+		if (len >= ADDR_STR_MAX_LEN) {
+			D_ERROR("self URI '%.*s...' too long\n",
+				ADDR_STR_MAX_LEN, uri);
 			D_FREE(uri);
 			return rc;
 		}
-		strncpy(arg.sa_server.sr_uri, uri, ADDR_STR_MAX_LEN);
+		memcpy(arg.sa_server.sr_uri, uri, len + 1);
 		D_FREE(uri);
 	}
 
@@ -820,19 +825,21 @@ notify_map_distributord(struct mgmt_svc *svc)
 int
 ds_mgmt_system_module_init(void)
 {
-	crt_group_t *group;
+	crt_group_t    *group;
+	size_t		len;
 
 	/* Set the MS ID to the system name. */
 	group = crt_group_lookup(NULL);
 	D_ASSERT(group != NULL);
-	D_STRNDUP(mgmt_svc_id_s, group->cg_grpid, strlen(group->cg_grpid));
+	len = strnlen(group->cg_grpid, DAOS_SYS_NAME_MAX + 1);
+	D_ASSERT(len <= DAOS_SYS_NAME_MAX);
+	D_STRNDUP(mgmt_svc_id_s, group->cg_grpid, len);
 	if (mgmt_svc_id_s == NULL)
 		return -DER_NOMEM;
-	daos_iov_set(&mgmt_svc_id, mgmt_svc_id_s, strlen(mgmt_svc_id_s) + 1);
+	daos_iov_set(&mgmt_svc_id, mgmt_svc_id_s, len + 1);
 
 	/* Set the MS DB UUID bytes to the system name bytes. */
-	D_ASSERTF(mgmt_svc_id.iov_len <= sizeof(uuid_t), "%zu\n",
-		  mgmt_svc_id.iov_len);
+	D_CASSERT(DAOS_SYS_NAME_MAX + 1 <= sizeof(mgmt_svc_db_uuid));
 	memcpy(mgmt_svc_db_uuid, mgmt_svc_id.iov_buf, mgmt_svc_id.iov_len);
 
 	ds_rsvc_class_register(DS_RSVC_CLASS_MGMT, &mgmt_svc_rsvc_class);

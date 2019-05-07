@@ -614,9 +614,10 @@ parse(int argc, char **argv)
 			dss_core_offset = nr;
 			break;
 		case 'g':
-			if (strlen(optarg) > sizeof(uuid_t) - 1) {
-				printf("group name must be shorter than %zu "
-				       "bytes\n", sizeof(uuid_t) - 1);
+			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
+			    DAOS_SYS_NAME_MAX) {
+				printf("group name must be at most %zu bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
