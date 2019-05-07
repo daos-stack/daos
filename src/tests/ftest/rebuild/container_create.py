@@ -24,10 +24,12 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
-from general_utils import (
-    get_pool, get_container, kill_server, DaosTestError, get_pool_status,
-    wait_for_rebuild, verify_rebuild)
-from io_utilities import read_single_objects, write_single_objects
+from avocado import fail_on
+from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from general_utils import get_random_string
+
+from time import sleep
+from os import geteuid, getegid
 
 
 class ContainerCreate(TestWithServers):
@@ -449,25 +451,5 @@ class ContainerCreate(TestWithServers):
                 if read_data != rec_dict["data"]:
                     self.fail("Data post-rebuild does not match pre-rebuild.\n"
                               "Read data: {0}\n"
-                              "Expected data: {1}".format(read_data,
-                                                          rec_dict["data"]))
-
-        # verify the data written to 2nd container during rebuild is readable
-        rebuild_read = read_single_objects(
-            container2, 10,
-            rebuild_write[0]["record"][0]["dkey"],
-            rebuild_write[0]["record"][0]["akey"],
-            rebuild_write[0]["obj"],
-            rebuild_write[0]["txn"])
-
-        if rebuild_read != rebuild_write[0]["record"][0]["data"]:
-            self.fail("Data written to second container does not match "
-                      "expected data.\n"
-                      "Read data: {0}\n"
-                      "Expected data: {1}".format(rebuild_read,
-                                                  rebuild_write[0]["data"]))
-
-        verify_err_list = verify_rebuild(self.pool, self.d_log, object_qty +1,
-                                         object_qty + 1, record_qty + 1)
-
-        self.assertTrue(len(verify_err_list) == 0, "\n".join(verify_err_list))
+                              "Expected {1}".format(read_data,
+                                                    rec_dict["data"]))
