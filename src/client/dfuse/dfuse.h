@@ -188,14 +188,20 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __err = status;					\
 		int __rc;						\
-		if (__err <= 0) {					\
+		if (__err < 0) {					\
+			__err = daos_der2errno(status);			\
+			if (__err == EIO) {				\
+				DFUSE_TRA_ERROR(handle,			\
+						"Unable to convert DAOS error errno: %d '-%s'", \
+						status, d_errstr(status)); \
+			}						\
+		} else if (__err == 0) {				\
 			DFUSE_TRA_ERROR(handle,				\
-					"Invalid call to fuse_reply_err: %d", \
-					__err);				\
+					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
 		if (__err == ENOTSUP || __err == EIO)			\
-			DFUSE_TRA_WARNING(handle, "Returning %d '%s'", \
+			DFUSE_TRA_WARNING(handle, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
 			DFUSE_TRA_DEBUG(handle, "Returning %d '%s'",	\
