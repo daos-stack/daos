@@ -157,9 +157,9 @@ cmd+=" -b -2 -D"
 echo "$cmd"
 
 $cmd -t
+result="${PIPESTATUS[0]}"
 
 if [[ -z ${CMOCKA_MESSAGE_OUTPUT+x} || -z ${CMOCKA_XML_FILE+x} ]]; then
-	result="${PIPESTATUS[0]}"
 	echo "Test returned $result"
 	exit "$result"
 else

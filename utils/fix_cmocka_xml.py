@@ -37,7 +37,7 @@ files  = [path+fn for fn in os.listdir(path)
 # <root> having nested tags [eg: if one group test called
 # repeatedly].
 # If there is a fix by CMOCKA framework, this is not required.
-# Gitbug Issue: https://github.com/clibs/cmocka/issues/14
+# Gitlab Issue: https://gitlab.com/cmocka/cmocka/issues/25
 # Two pass update on the files
 # Remove all testsuites tag out of the xml file.
 for file in files:
