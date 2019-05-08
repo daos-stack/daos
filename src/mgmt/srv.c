@@ -208,6 +208,7 @@ process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *resp)
 	Mgmt__JoinReq		*pb_req = NULL;
 	struct mgmt_join_in	in = {};
 	struct mgmt_join_out	out = {};
+	size_t			len;
 	int			rc;
 
 	mgmt__join_resp__init(resp);
@@ -234,16 +235,20 @@ process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *resp)
 		D_ERROR("Failed to parse UUID: %s\n", pb_req->uuid);
 		goto out;
 	}
-	if (strlen(pb_req->addr) + 1 > ADDR_STR_MAX_LEN) {
-		D_ERROR("Server address '%s' too long: %d\n", pb_req->addr, rc);
+	len = strnlen(pb_req->addr, ADDR_STR_MAX_LEN);
+	if (len >= ADDR_STR_MAX_LEN) {
+		D_ERROR("Server address '%.*s...' too long\n", ADDR_STR_MAX_LEN,
+			pb_req->addr);
 		goto out;
 	}
-	strncpy(in.ji_server.sr_addr, pb_req->addr, ADDR_STR_MAX_LEN);
-	if (strlen(pb_req->uri) + 1 > ADDR_STR_MAX_LEN) {
-		D_ERROR("Self URI '%s' too long: %d\n", pb_req->uri, rc);
+	memcpy(in.ji_server.sr_addr, pb_req->addr, len + 1);
+	len = strnlen(pb_req->uri, ADDR_STR_MAX_LEN);
+	if (len >= ADDR_STR_MAX_LEN) {
+		D_ERROR("Self URI '%.*s...' too long\n", ADDR_STR_MAX_LEN,
+			pb_req->uri);
 		goto out;
 	}
-	strncpy(in.ji_server.sr_uri, pb_req->uri, ADDR_STR_MAX_LEN);
+	memcpy(in.ji_server.sr_uri, pb_req->uri, len + 1);
 
 	rc = ds_mgmt_join_handler(&in, &out);
 	if (rc != 0) {
