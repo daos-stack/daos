@@ -22,7 +22,8 @@ This only needs to support the interception library, so should return pool/conta
  * extended attributes
  * Interception library
 
-This needs to be flushed out in three areas, the initial initilisation, so calling daos_init() correctly at startup and being able to attach, the ioctl() to fetch the array handle for forwarded files and do any pool/container connect and finally the dfs_array* calls from within the readv/writev functions.
+This needs to be flushed out in three areas, the initial initilisation, so calling daos_init() correctly at startup and being able to attach, the ioctl() to fetch the array handle for forwarded files and do any pool/container connect and finally the daos_array* calls from within the readv/writev functions.
+
 2. Incomplete implementations
  * readdir
  
@@ -32,7 +33,7 @@ A proper implentation of readdir() should use readdirplus() to correctly insert 
 
  * Read/Write
 
-These calls both currently work on inodes, not file handles which means there is no open file handle, or open()/release() callbacks.  The effect of this is that dfuse does not get to inspect or check the mode flags to open (permissions checks are done by the kernel) or get to save a fi->hp value, so there needs to be a hash table lookup for each I/O operation.  
+These calls both currently work on inodes, not file handles which means there is no open file handle, or open()/release() callbacks.  The effect of this is that dfuse does not get to inspect or check the mode flags to open (permissions checks are done by the kernel) or get to save a fi->fp value, so there needs to be a hash table lookup for each I/O operation.  
 For both read() and write() callbacks there are two options that control the data flow into the kernel, and given the size of the buffers these callbacks use this can make a big impact on performance, current dfuse implements the basic version only.
 
  * Containers/pools
@@ -44,4 +45,4 @@ For both read() and write() callbacks there are two options that control the dat
 3. Performance considerations
  * Inode lookup
 
-There is a seperate "inode record" hash table which is consulted on every new file, to check if it's been seen before and to allocate it a new inode.  To avoid two hash table searches and possible race conditions this code allocates a struct and a new inode number, then calls find_or_insert(), and frees the struct if the entry is already found.  This means the code will be doing lots of memory allocations which aren't requires and burning through the pid space as it does so.  Pids are 64 bit so this side isn't a concern, but using the "da" code to keep a cache of pre-allocated inode record entries would speed this up considerably.
+There is a seperate "inode record" hash table which is consulted on every new file, to check if it's been seen before and to allocate it a new inode.  To avoid two hash table searches and possible race conditions this code allocates a struct and a new inode number, then calls find_or_insert(), and frees the struct if the entry is already found.  This means the code will be doing lots of memory allocations which aren't requires and burning through the pid space as it does so.  inodes are 64 bit values so this side isn't a concern, but using the "da" code to keep a cache of pre-allocated inode record entries would speed this up considerably.
