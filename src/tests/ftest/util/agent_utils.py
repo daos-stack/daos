@@ -152,7 +152,7 @@ def run_agent(basepath, server_list, client_list=None):
             match = re.findall(pattern, output)
             if len(match) > 0:
                 print("<AGENT> agent started on node {} in {} "
-                        "seconds".format(client, time.time() - start_time))
+                      "seconds".format(client, time.time() - start_time))
                 break
 
     return sessions
