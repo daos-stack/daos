@@ -34,7 +34,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_info		*dfuse_info = fs_handle->dfuse_info;
 	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_dfs		*dfs = NULL;
+	struct dfuse_dfs		*dfs;
 	uuid_t				pool_uuid;
 	daos_pool_info_t		pool_info;
 	int				rc;
@@ -45,9 +45,16 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dffs_root);
 
+	/* Dentry names where are not valid uuids cannot possibly be added so in
+	 * this case return the negative dentry with a timeout to prevent future
+	 * lookups.
+	 */
 	if (uuid_parse(name, pool_uuid) < 0) {
+		struct fuse_entry_param entry = {.entry_timeout = 60};
+
 		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(err, rc = ENOENT);
+		DFUSE_REPLY_ENTRY(req, entry);
+		return false;
 	}
 
 	D_ALLOC_PTR(dfs);

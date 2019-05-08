@@ -66,6 +66,21 @@ err:
 
 /* Inode record hash table operations */
 
+/* Use a custom hash function for this table, as the key contains a pointer
+ * to some entries which need to be checked, therefore different pointer
+ * values will return different hash buckets, even if the data pointed to
+ * would match.  By providing a custom hash function this ensures that only
+ * invariant data is checked.
+ */
+static uint32_t
+ir_key_hash(struct d_hash_table *htable, const void *key,
+	    unsigned int ksize)
+{
+	const struct dfuse_inode_record_id *ir_id = key;
+
+	return (uint32_t)ir_id->irid_oid.hi;
+}
+
 static bool
 ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	   const void *key, unsigned int ksize)
@@ -87,7 +102,7 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		return true;
 	}
 
-	/* Now check the container name */
+	/* Now check the pool name */
 	if (strncmp(ir->ir_id.irid_dfs->dffs_pool,
 		    ir_id->irid_dfs->dffs_pool,
 		    NAME_MAX) != 0) {
@@ -95,9 +110,10 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	}
 
 	/* Now check the container name */
-	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
+	if (ir->ir_id.irid_dfs->dffs_cont &&
+		(strncmp(ir->ir_id.irid_dfs->dffs_cont,
 		    ir_id->irid_dfs->dffs_cont,
-		    NAME_MAX) != 0) {
+			NAME_MAX) != 0)) {
 		return false;
 	}
 
@@ -176,7 +192,9 @@ static d_hash_table_ops_t ie_hops = {
 
 static d_hash_table_ops_t ir_hops = {
 	.hop_key_cmp	= ir_key_cmp,
+	.hop_key_hash   = ir_key_hash,
 	.hop_rec_free	= ir_free,
+
 };
 
 #define COMMON_INIT(type)						\
