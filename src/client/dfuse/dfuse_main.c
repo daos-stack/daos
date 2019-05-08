@@ -105,14 +105,12 @@ main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
 	struct dfuse_data	*dfuse_fs;
-	d_rank_list_t		*svcl;
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
-	daos_pool_info_t	pool_info;
-	daos_cont_info_t	co_info;
-	daos_handle_t		coh;
+	char			*svcl = NULL;
 	bool			cont_open = false;
-	dfs_t			*ddfs;
+	bool			pool_open = false;
+	struct dfuse_dfs	*dfs = NULL;
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -156,7 +154,7 @@ main(int argc, char **argv)
 			dfuse_fs->cont = optarg;
 			break;
 		case 's':
-			dfuse_fs->svcl = optarg;
+			svcl = optarg;
 			break;
 		case 'g':
 			dfuse_fs->group = optarg;
@@ -176,19 +174,22 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!dfuse_fs->pool) {
-		DFUSE_LOG_ERROR("Pool is required");
-		D_GOTO(out, ret = -DER_INVAL);
-	}
-
 	if (!dfuse_fs->mountpoint) {
 		DFUSE_LOG_ERROR("Mountpoint is required");
 		D_GOTO(out, ret = -DER_INVAL);
 	}
 
+	/* Is this required, or can we assume some kind of default for
+	 * this.
+	 */
+	if (!svcl) {
+		DFUSE_LOG_ERROR("Svcl is required");
+		D_GOTO(out, ret = -DER_INVAL);
+	}
+
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	if (uuid_parse(dfuse_fs->pool, pool_uuid) < 0) {
+	if (dfuse_fs->pool && (uuid_parse(dfuse_fs->pool, pool_uuid) < 0)) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
 		D_GOTO(out, ret = -DER_INVAL);
 	}
@@ -198,8 +199,8 @@ main(int argc, char **argv)
 		D_GOTO(out, ret = -DER_INVAL);
 	}
 
-	svcl = daos_rank_list_parse(dfuse_fs->svcl, ":");
-	if (svcl == NULL) {
+	dfuse_fs->svcl = daos_rank_list_parse(svcl, ":");
+	if (dfuse_fs->svcl == NULL) {
 		DFUSE_LOG_ERROR("Invalid pool service rank list");
 		D_GOTO(out, ret = -DER_INVAL);
 	}
@@ -209,60 +210,73 @@ main(int argc, char **argv)
 		D_GOTO(out, ret = rc);
 	}
 
-	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid, dfuse_fs->group, svcl, DAOS_PC_RW,
-			       &dfuse_info->dfi_poh, &pool_info, NULL);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+	D_ALLOC_PTR(dfs);
+	if (!dfs) {
 		D_GOTO(out, 0);
 	}
 
-	if (dfuse_fs->cont) {
-		/** Try to open the DAOS container first (the mountpoint) */
-		rc = daos_cont_open(dfuse_info->dfi_poh, co_uuid, DAOS_COO_RW,
-				    &coh, &co_info, NULL);
-		/* If NOEXIST we create it */
-		if (rc == -DER_NONEXIST) {
-			rc = daos_cont_create(dfuse_info->dfi_poh, co_uuid,
-					      NULL, NULL);
-			if (rc == 0) {
-				rc = daos_cont_open(dfuse_info->dfi_poh,
-						    co_uuid, DAOS_COO_RW,
-						    &coh, &co_info, NULL);
-			}
-		}
-		if (rc) {
-			DFUSE_LOG_ERROR("Failed container open (%d)", rc);
-			D_GOTO(out_pool, 0);
-		}
-		cont_open = true;
+	if (dfuse_fs->pool) {
 
-		rc = dfs_mount(dfuse_info->dfi_poh, coh, O_RDWR, &ddfs);
+		/** Connect to DAOS pool */
+		rc = daos_pool_connect(pool_uuid, dfuse_fs->group,
+				       dfuse_fs->svcl, DAOS_PC_RW,
+				       &dfs->dffs_poh, &dfs->dffs_pool_info,
+				       NULL);
 		if (rc != -DER_SUCCESS) {
-			DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
-			D_GOTO(out_cont, 0);
+			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+			D_GOTO(out, 0);
 		}
-		rc = dfuse_start(dfuse_info, ddfs);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(out_cont, ret = rc);
+		pool_open = true;
+
+		if (dfuse_fs->cont) {
+			dfs_t *ddfs;
+
+			/** Try to open the DAOS container (the mountpoint) */
+			rc = daos_cont_open(dfs->dffs_poh, co_uuid, DAOS_COO_RW,
+					    &dfs->dffs_coh, &dfs->dffs_co_info,
+					    NULL);
+			if (rc) {
+				DFUSE_LOG_ERROR("Failed container open (%d)",
+						rc);
+				D_GOTO(out_open, 0);
+			}
+			cont_open = true;
+
+			rc = dfs_mount(dfs->dffs_poh, dfs->dffs_coh,
+				       O_RDWR, &ddfs);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+				D_GOTO(out_open, 0);
+			}
+
+			dfs->dffs_dfs = ddfs;
+
+			dfs->dffs_ops = &dfuse_dfs_ops;
+		} else {
+			dfs->dffs_ops = &dfuse_cont_ops;
 		}
 	} else {
-		rc = dfuse_start(dfuse_info, NULL);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(out_cont, ret = rc);
-		}
+		dfs->dffs_ops = &dfuse_pool_ops;
+	}
+
+	rc = dfuse_start(dfuse_info, dfs);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(out_open, ret = rc);
 	}
 
 	ret = dfuse_destroy_fuse(dfuse_info->dfi_handle);
 
 	fuse_session_destroy(dfuse_info->dfi_session);
 
-out_cont:
-	if (cont_open) {
-		daos_cont_close(coh, NULL);
+out_open:
+	if (dfs) {
+		if (pool_open) {
+			daos_pool_disconnect(dfs->dffs_poh, NULL);
+		}
+		if (cont_open) {
+			daos_cont_close(dfs->dffs_coh, NULL);
+		}
 	}
-out_pool:
-	daos_pool_disconnect(dfuse_info->dfi_poh, NULL);
 out:
 
 	DFUSE_TRA_DOWN(dfuse_info);
