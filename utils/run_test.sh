@@ -75,6 +75,7 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh perf -s 20000
     run_test src/common/tests/btree.sh perf direct -s 20000
     run_test src/common/tests/btree.sh perf ukey -s 20000
+    run_test build/src/common/tests/umem_test
     run_test build/src/common/tests/sched
     run_test build/src/common/tests/drpc_tests
     run_test build/src/client/api/tests/eq_tests
@@ -95,7 +96,10 @@ if [ -d "/mnt/daos" ]; then
     export OFI_INTERFACE=lo
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
+    run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
+    run_test build/src/common/tests/acl_util_tests
+    run_test build/src/common/tests/acl_util_real
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
     run_test build/src/iosrv/tests/drpc_listener_tests

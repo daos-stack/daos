@@ -43,6 +43,11 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
+	.co_aggregate	= ds_mgmt_tgt_map_update_aggregator,
+	.co_pre_forward	= ds_mgmt_tgt_map_update_pre_forward,
+};
+
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition
  */
@@ -151,32 +156,6 @@ static struct dss_drpc_handler mgmt_drpc_handlers[] = {
 };
 
 /**
- * Set parameter on a single target.
- */
-void
-ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
-{
-	struct mgmt_tgt_params_set_in	*in;
-	struct mgmt_tgt_params_set_out	*out;
-	int rc;
-
-	in = crt_req_get(rpc);
-	D_ASSERT(in != NULL);
-
-	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
-	if (rc == 0 && in->tps_key_id == DSS_KEY_FAIL_LOC)
-		rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
-					in->tps_value_extra);
-	if (rc)
-		D_ERROR("Set parameter failed key_id %d: rc %d\n",
-			 in->tps_key_id, rc);
-
-	out = crt_reply_get(rpc);
-	out->srv_rc = rc;
-	crt_reply_send(rpc);
-}
-
-/**
  * Set parameter on all of server targets, for testing or other
  * purpose.
  */
@@ -238,6 +217,57 @@ out:
 	crt_reply_send(rpc);
 }
 
+/**
+ * Set parameter on all of server targets, for testing or other
+ * purpose.
+ */
+void
+ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_profile_in	*in;
+	crt_opcode_t		opc;
+	int			topo;
+	crt_rpc_t		*tc_req;
+	struct mgmt_profile_in	*tc_in;
+	struct mgmt_profile_out	*out;
+	int			rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_PROFILE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
+				  opc, NULL, NULL, 0, topo, &tc_req);
+	if (rc)
+		D_GOTO(out, rc);
+
+	tc_in = crt_req_get(tc_req);
+	D_ASSERT(tc_in != NULL);
+
+	tc_in->p_module = in->p_module;
+	tc_in->p_path = in->p_path;
+	tc_in->p_op = in->p_op;
+	rc = dss_rpc_send(tc_req);
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D_GOTO(out, rc);
+	}
+
+	out = crt_reply_get(tc_req);
+	rc = out->p_rc;
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D_GOTO(out, rc);
+	}
+out:
+	out = crt_reply_get(rpc);
+	D_DEBUG(DB_MGMT, "profile hdlr: rc %d\n", rc);
+	out->p_rc = rc;
+	crt_reply_send(rpc);
+}
+
 void
 ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 {
@@ -282,6 +312,12 @@ ds_mgmt_init()
 	if (rc)
 		return rc;
 
+	rc = ds_mgmt_system_module_init();
+	if (rc != 0) {
+		ds_mgmt_tgt_fini();
+		return rc;
+	}
+
 	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
 }
@@ -289,9 +325,16 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_system_module_fini();
 	ds_mgmt_tgt_fini();
 	D_DEBUG(DB_MGMT, "successfull fini call\n");
 	return 0;
+}
+
+static int
+ds_mgmt_cleanup()
+{
+	return ds_mgmt_svc_stop();
 }
 
 struct dss_module mgmt_module = {
@@ -300,6 +343,7 @@ struct dss_module mgmt_module = {
 	.sm_ver			= DAOS_MGMT_VERSION,
 	.sm_init		= ds_mgmt_init,
 	.sm_fini		= ds_mgmt_fini,
+	.sm_cleanup		= ds_mgmt_cleanup,
 	.sm_proto_fmt		= &mgmt_proto_fmt,
 	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,
 	.sm_handlers		= mgmt_handlers,

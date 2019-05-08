@@ -90,35 +90,19 @@ unsigned int	dss_tgt_nr;
 /** number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 
+unsigned int
+dss_ctx_nr_get(void)
+{
+	return DSS_CTX_NR_TOTAL;
+}
+
 #define FIRST_DEFAULT_SCHEDULE_RATIO	80
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
 
-#define DSS_XS_NAME_LEN		(64)
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
-
-/** Per-xstream configuration data */
-struct dss_xstream {
-	char		dx_name[DSS_XS_NAME_LEN];
-	ABT_future	dx_shutdown;
-	hwloc_cpuset_t	dx_cpuset;
-	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pools[DSS_POOL_CNT];
-	ABT_sched	dx_sched;
-	ABT_thread	dx_progress;
-	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
-	int		dx_xs_id;
-	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
-	 * For offload XS it is same value as its main XS.
-	 */
-	int		dx_tgt_id;
-	/* CART context id, invalid (-1) for the offload XS w/o CART context */
-	int		dx_ctx_id;
-	bool		dx_main_xs;	/* true for main XS */
-	bool		dx_comm;	/* true with cart context */
-};
 
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
@@ -308,26 +292,6 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
-
-static dss_abt_pool_choose_cb_t abt_pool_choose_cbs[DAOS_MAX_MODULE];
-
-/**
- * Register abt choose pool callback for each module, so the module
- * can choose the pools by itself.
- *
- * \param mod_id [IN]	module ID.
- * \param cb [IN]	callback.
- *
- * \return		0 if succes, otherwise negative errno.
- */
-void
-dss_abt_pool_choose_cb_register(unsigned int mod_id,
-				dss_abt_pool_choose_cb_t cb)
-{
-	D_ASSERT(abt_pool_choose_cbs[mod_id] == NULL);
-	abt_pool_choose_cbs[mod_id] = cb;
-}
-
 /**
  * Process the rpc received, let's create a ABT thread for each request.
  */
@@ -336,12 +300,17 @@ dss_process_rpc(crt_context_t *ctx, crt_rpc_t *rpc,
 		void (*real_rpc_hdlr)(void *), void *arg)
 {
 	unsigned int	mod_id = opc_get_mod_id(rpc->cr_opc);
+	struct dss_module *module = dss_module_get(mod_id);
 	ABT_pool	*pools = arg;
 	ABT_pool	pool;
 	int		rc;
 
-	if (abt_pool_choose_cbs[mod_id] != NULL)
-		pool = abt_pool_choose_cbs[mod_id](rpc, pools);
+	/* For RPC originally from CART might still come here, and its mod_id
+	 * is 0xfe, and module would be NULL.
+	 */
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_abt_pool_choose_cb)
+		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
 	else
 		pool = pools[DSS_POOL_SHARE];
 
@@ -388,6 +357,7 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
 
 	if (dx->dx_comm) {
 		/* create private transport context */
@@ -980,13 +950,14 @@ dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
  *
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
+ * \param[in] main	only create ULT on main XS or not.
  * \return		Success or negative error code
  *			0
  *			-DER_NOMEM
  *			-DER_INVAL
  */
 int
-dss_ult_create_all(void (*func)(void *), void *arg)
+dss_ult_create_all(void (*func)(void *), void *arg, bool main)
 {
 	struct dss_xstream      *dx;
 	int			 i;
@@ -994,6 +965,9 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (main && !dx->dx_main_xs)
+			continue;
+
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
 				       ABT_THREAD_ATTR_NULL,
 				       NULL /* new thread */);

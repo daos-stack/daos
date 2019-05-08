@@ -811,7 +811,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	cb_info->result = rc;
 
-	if (cb_info->opc == IV_FETCH) {
+	if (cb_info->opc == IV_FETCH && cb_info->value) {
 		struct ds_iv_entry	*entry;
 
 		D_ASSERT(cb_info->ns != NULL);

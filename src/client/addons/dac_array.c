@@ -136,7 +136,7 @@ array_hdl2ptr(daos_handle_t oh)
 static void
 array_hdl_link(struct dac_array *array)
 {
-	daos_hhash_link_insert(&array->hlink, D_HTYPE_ARRAY);
+	daos_hhash_link_insert(&array->hlink, DAOS_HTYPE_ARRAY);
 }
 
 static void
@@ -424,13 +424,13 @@ dac_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh)
 	int			 rc = 0;
 
 	if (oh == NULL) {
-		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
+		D_ERROR("Invalid parameter, NULL coh.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
 	    glob.iov_len != dac_array_glob_buf_size()) {
-		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+		D_ERROR("Invalid parameter of glob, iov_buf %p, "
 			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
 		D_GOTO(out, rc = -DER_INVAL);

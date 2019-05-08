@@ -127,8 +127,6 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
-	/** The time in second when commit the DTXs for the last time. */
-	uint64_t		vc_dtx_time_last_commit;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -136,10 +134,10 @@ struct vos_container {
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
-	 * Corresponding in-memory block allocator hint for the
-	 * durable hint in vos_cont_df
+	 * Corresponding in-memory block allocator hints for the
+	 * durable hints in vos_cont_df
 	 */
-	struct vea_hint_context	*vc_hint_ctxt;
+	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
@@ -162,7 +160,7 @@ struct vos_imem_strts {
 struct vos_imem_strts		*vsa_imems_inst;
 struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
-struct daos_tx_handle		*vsa_dth;
+struct dtx_handle		*vsa_dth;
 bool vsa_nvme_init;
 
 static inline struct bio_xs_context *
@@ -202,7 +200,7 @@ struct vos_object {
 	/** epoch when the object(cache) is initialized */
 	daos_epoch_t			obj_epoch;
 	/** cached vos_obj_df::vo_incarnation, for revalidation. */
-	uint64_t			obj_incarnation;
+	uint32_t			obj_incarnation;
 	/** Persistent memory address of the object */
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
@@ -233,7 +231,7 @@ struct vos_tls {
 	 *	 processing. Otherwise, the vtl_dth may be changed by other
 	 *	 ULTs. The user needs to guarantee that by itself.
 	 */
-	struct daos_tx_handle		*vtl_dth;
+	struct dtx_handle		*vtl_dth;
 };
 
 static inline struct vos_tls *
@@ -277,7 +275,7 @@ vos_txd_get(void)
 #endif
 }
 
-static inline struct daos_tx_handle *
+static inline struct dtx_handle *
 vos_dth_get(void)
 {
 #ifdef VOS_STANDALONE
@@ -288,7 +286,7 @@ vos_dth_get(void)
 }
 
 static inline void
-vos_dth_set(struct daos_tx_handle *dth)
+vos_dth_set(struct dtx_handle *dth)
 {
 #ifdef VOS_STANDALONE
 	D_ASSERT(dth == NULL || vsa_dth == NULL);
@@ -484,8 +482,9 @@ vos_dtx_table_register(void);
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
- * \param entry		[IN]	Address of the DTX to be checked.
- * \param record	[IN]	Address of the record modified via the DTX.
+ * \param entry		[IN]	Address (offset) of the DTX to be checked.
+ * \param record	[IN]	Address (offset) of the record modified via
+ *				the DTX.
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -501,34 +500,36 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_id_t entry, umem_id_t record, uint32_t intent,
+			   umem_off_t entry, umem_off_t record, uint32_t intent,
 			   uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
- * \param record	[IN]	Address of the record (in SCM) to be modified.
+ * \param record	[IN]	Address (offset) of the record (in SCM)
+ *				to be modified.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_register_record(struct umem_instance *umm, umem_id_t record,
+vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t flags);
 
 /**
- * Degister the record from the DTX entry.
+ * Deregister the record from the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
- * \param entry		[IN]	The DTX entry address.
- * \param record	[IN]	Address of the record to be degistered.
+ * \param entry		[IN]	The DTX entry address (offset).
+ * \param record	[IN]	Address (offset) of the record to be
+ *				deregistered.
  * \param type		[IN]	The record type, vos_dtx_record_types.
  */
 void
-vos_dtx_degister_record(struct umem_instance *umm,
-			umem_id_t entry, umem_id_t record, uint32_t type);
+vos_dtx_deregister_record(struct umem_instance *umm, umem_off_t entry,
+			  umem_off_t record, uint32_t type);
 
 /**
  * Mark the DTX as prepared locally.
@@ -538,14 +539,14 @@ vos_dtx_degister_record(struct umem_instance *umm,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct daos_tx_handle *dth);
+vos_dtx_prepared(struct dtx_handle *dth);
 
 void
-vos_dtx_commit_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
 
 int
-vos_dtx_abort_internal(struct vos_container *cont, struct daos_tx_id *dtis,
+vos_dtx_abort_internal(struct vos_container *cont, struct dtx_id *dtis,
 		       int count, bool force);
 
 /**
@@ -559,15 +560,26 @@ vos_dtx_cos_register(void);
 /**
  * Remove the DTX from the CoS cache.
  *
- * \param cont	[IN]	Pointer to the container.
- * \param oid	[IN]	Pointer to the object ID.
- * \param xid	[IN]	Pointer to the DTX identifier.
- * \param dkey	[IN]	The hashed dkey.
- * \param punch	[IN]	For punch DTX or not.
+ * \param cont		[IN]	Pointer to the container.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch DTX or not.
  */
 void
 vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct daos_tx_id *xid, uint64_t dkey, bool punch);
+		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+
+/**
+ * Query the oldest DTX's timestamp in the CoS cache.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ *
+ * \return		The oldest DTX's timestamp in the CoS cache.
+ *			Zero if the CoS cache is empty.
+ */
+uint64_t
+vos_dtx_cos_oldest(struct vos_container *cont);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
@@ -610,8 +622,8 @@ struct vos_key_bundle {
  * to the multi-nested btree.
  */
 struct vos_rec_bundle {
-	/** Optional, externally allocated buffer mmid */
-	umem_id_t		 rb_mmid;
+	/** Optional, externally allocated buffer umoff */
+	umem_off_t		 rb_off;
 	/** checksum buffer for the daos key */
 	daos_csum_buf_t		*rb_csum;
 	/**
@@ -661,13 +673,13 @@ vos_size_round(uint64_t size)
 static inline struct vos_krec_df *
 vos_rec2krec(struct btr_instance *tins, struct btr_record *rec)
 {
-	return (struct vos_krec_df *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return (struct vos_krec_df *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 }
 
 static inline struct vos_irec_df *
 vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 {
-	return (struct vos_irec_df *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return (struct vos_irec_df *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 }
 
 static inline uint64_t
@@ -998,7 +1010,7 @@ tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound value (data buffer address, or ZC
- * buffer mmid, checksum etc).
+ * buffer umoff, checksum etc).
  */
 static inline void
 tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
@@ -1029,7 +1041,8 @@ uint16_t
 vos_media_select(struct vos_object *obj, daos_iod_type_t type,
 		 daos_size_t size);
 int
-vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish);
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
+		   enum vos_io_stream ios);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be
  * contiguous in the struct being updated.  This is ensured at present by

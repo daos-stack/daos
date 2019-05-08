@@ -102,15 +102,28 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvme(ctrlrs, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- id: 0\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- id: 0\n  model: ABC\n  serial: 123ABC\n  pciaddr: \"1:2:3.0\"\n  fwrev: \"\"\n  namespace:\n  - id: 12345\n    capacity: 99999\n\n\n",
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- model: ABC\n  serial: 123ABC\n  pciaddr: 0000:81:00.0\n  fwrev: \"\"\n  namespaces:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- model: ABC\n  serial: 123ABC\n  pciaddr: 0000:81:00.0\n  fwrev: \"\"\n  namespaces:\n  - id: 12345\n    capacity: 99999\n\n\n",
 		},
 		{
 			NewClientScm(modules, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n1.2.3.5:10001:\n- physicalid: 12345\n  channel: 1\n  channelpos: 2\n  memctrlr: 3\n  socket: 4\n  capacity: 12345\n\n\n",
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  capacity: 12345\n  loc:\n    channel: 1\n    channelpos: 2\n    memctrlr: 3\n    socket: 4\n1.2.3.5:10001:\n- physicalid: 12345\n  capacity: 12345\n  loc:\n    channel: 1\n    channelpos: 2\n    memctrlr: 3\n    socket: 4\n\n\n",
 		},
 		{
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
 			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
+		},
+		{
+			NewClientMountResults(
+				[]*pb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &pb.ResponseState{
+							Status: pb.ResponseStatus_CTRL_ERR_APP,
+							Error:  "example application error",
+						},
+					},
+				}, addresses),
+			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n1.2.3.5:10001:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n\n\n",
 		},
 	}
 	for _, tt := range shelltests {

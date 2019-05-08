@@ -123,6 +123,15 @@ daos_rank_list_valid(const d_rank_list_t *rl)
 	return rl && rl->rl_ranks && rl->rl_nr;
 }
 
+static inline uint64_t
+daos_get_ntime(void)
+{
+	struct timespec	tv;
+
+	d_gettime(&tv);
+	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
 /** Function table for combsort and binary search */
 typedef struct {
 	void    (*so_swap)(void *array, int a, int b);
@@ -230,7 +239,7 @@ static inline int
 daos_errno2der(int err)
 {
 	switch (err) {
-	case 0:			return 0;
+	case 0:			return -DER_SUCCESS;
 	case EPERM:
 	case EACCES:		return -DER_NO_PERM;
 	case ENOMEM:		return -DER_NOMEM;
@@ -254,6 +263,52 @@ daos_errno2der(int err)
 	default:		return -DER_MISC;
 	}
 }
+
+/**
+ * Convert DER_ errno to system variant. Default error code for any non-defined
+ * DER_ errnos is EIO (Input/Output error).
+ *
+ * \param[in] err	DER_ error code
+ *
+ * \return		Corresponding system error code
+ */
+static inline int
+daos_der2errno(int err)
+{
+	switch (err) {
+	case -DER_SUCCESS:	return 0;
+	case -DER_NO_PERM:
+	case -DER_EP_RO:
+	case -DER_EP_OLD:	return EPERM;
+	case -DER_NO_HDL:
+	case -DER_ENOENT:
+	case -DER_NONEXIST:	return ENOENT;
+	case -DER_INVAL:
+	case -DER_NOTYPE:
+	case -DER_NOSCHEMA:
+	case -DER_NOLOCAL:
+	case -DER_KEY2BIG:
+	case -DER_REC2BIG:
+	case -DER_IO_INVAL:	return EINVAL;
+	case -DER_EXIST:	return EEXIST;
+	case -DER_UNREACH:	return EHOSTUNREACH;
+	case -DER_NOSPACE:	return ENOSPC;
+	case -DER_ALREADY:	return EALREADY;
+	case -DER_NOMEM:	return ENOMEM;
+	case -DER_TIMEDOUT:	return ETIMEDOUT;
+	case -DER_BUSY:
+	case -DER_EQ_BUSY:	return EBUSY;
+	case -DER_AGAIN:	return EAGAIN;
+	case -DER_PROTO:	return EPROTO;
+	case -DER_IO:		return EIO;
+	case -DER_CANCELED:	return ECANCELED;
+	case -DER_OVERFLOW:	return EOVERFLOW;
+	case -DER_BADPATH:
+	case -DER_NOTDIR:	return ENOTDIR;
+	case -DER_STALE:	return ESTALE;
+	default:		return EIO;
+	}
+};
 
 static inline bool
 daos_crt_network_error(int err)
@@ -362,6 +417,7 @@ enum {
 #define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
+#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
@@ -410,24 +466,6 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-
-static inline
-bool daos_prop_label_valid(d_string_t label)
-{
-	size_t len;
-
-	if (label == NULL) {
-		D_ERROR("invalid NULL label.\n");
-		return false;
-	}
-	len = strlen(label);
-	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN) {
-		D_ERROR("invali label (len %zu cannot be zero or exceed %d).\n",
-			len, DAOS_PROP_LABEL_MAX_LEN);
-		return false;
-	}
-	return true;
-}
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

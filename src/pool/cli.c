@@ -121,7 +121,7 @@ dc_hdl2pool(daos_handle_t poh)
 static void
 dc_pool_hdl_link(struct dc_pool *pool)
 {
-	daos_hhash_link_insert(&pool->dp_hlink, D_HTYPE_POOL);
+	daos_hhash_link_insert(&pool->dp_hlink, DAOS_HTYPE_POOL);
 }
 
 static void
@@ -1329,6 +1329,12 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_ACL:
 			bits |= DAOS_PO_QUERY_PROP_ACL;
+			break;
+		case DAOS_PROP_PO_OWNER:
+			bits |= DAOS_PO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

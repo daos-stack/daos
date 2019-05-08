@@ -39,34 +39,85 @@
  * vmem		Volatile Memory
  *
  * umem		Unified memory abstraction
- * ummid	Unified Memory ID
- * tmmid	Typedef ummid.
+ * umoff	Unified Memory offset
  */
 
 #include <libpmemobj.h>
 
-/** memory ID without type */
-typedef PMEMoid			umem_id_t;
-#define UMMID_NULL		OID_NULL
-#define UMMID_IS_NULL(ummid)	OID_IS_NULL(ummid)
+/** The offset of an object from the base address of the pool */
+typedef uint64_t		umem_off_t;
+/** Number of flag bits to reserve for encoding extra information in
+ *  a umem_off_t entry.
+ */
+#define UMOFF_NUM_FLAG_BITS		(8)
+/** The absolute value of a flag mask must be <= this value */
+#define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAG_BITS)
+/** Number of bits to shift the flag bits */
+#define UMOFF_FLAG_SHIFT (63 - UMOFF_NUM_FLAG_BITS)
+/** Mask for flag bits */
+#define UMOFF_FLAG_MASK ((UMOFF_MAX_FLAG - 1) << UMOFF_FLAG_SHIFT)
+/** In theory and offset can be NULL but in practice, pmemobj_root
+ *  is not at offset 0 as pmdk reserves some space for its internal
+ *  use.   So, use 0 for NULL.   Invalid bits are also considered
+ *  NULL.
+ */
+#define UMOFF_NULL		(0ULL)
+/** Check for a NULL value including possible invalid flag bits */
+#define UMOFF_IS_NULL(umoff)	(umem_off2offset(umoff) == 0)
 
-/** typedef memory ID */
-#define TMMID(type)		TOID(type)
-#define TMMID_DECLARE(t, i)	TOID_DECLARE(t, i)
+/** Retrieves any flags that are set.
+ *
+ *  \param	offset[IN]	The value from which to get flags
+ */
+static inline uint64_t
+umem_off2flags(umem_off_t umoff)
+{
+	return (umoff & UMOFF_FLAG_MASK) >> UMOFF_FLAG_SHIFT;
+}
 
-#define TMMID_NULL(t)		TOID_NULL(t)
-#define TMMID_IS_NULL(tmmid)	UMMID_IS_NULL((tmmid).oid)
+/** Retrieves the offset portion of a umem_off_t
+ *
+ *  \param	offset[IN]	The value from which to get offset
+ */
+static inline uint64_t
+umem_off2offset(umem_off_t umoff)
+{
+	return umoff & ~UMOFF_FLAG_MASK;
+}
 
-#define TMMID_TYPE_NUM(t)	TOID_TYPE_NUM(t)
+/** Set flags on a umem_off_t address
+ *  The flags parameter must be < UMOFF_MAX_FLAG.
+ *
+ *  \param	offset[IN,OUT]	The value is marked NULL with additional flags
+ *  \param	flags[IN]	Auxilliarly information about the null entry
+ */
+static inline void
+umem_off_set_flags(umem_off_t *offset, uint64_t flags)
+{
+	D_ASSERTF(flags < UMOFF_MAX_FLAG,
+		  "Attempt to set invalid flag bits on umem_off_t\n");
+	*offset = umem_off2offset(*offset) | (flags << UMOFF_FLAG_SHIFT);
+}
+
+/** Set a umem_off_t address to NULL and set flags
+ *  The flags parameter must be < UMOFF_MAX_FLAG.
+ *
+ *  \param	offset[IN,OUT]	The value is marked NULL with additional flags
+ *  \param	flags[IN]	Auxilliarly information about the null entry
+ */
+static inline void
+umem_off_set_null_flags(umem_off_t *offset, uint64_t flags)
+{
+	D_ASSERTF(flags < UMOFF_MAX_FLAG,
+		  "Attempt to set invalid flag bits on umem_off_t\n");
+	*offset = flags << UMOFF_FLAG_SHIFT;
+}
 
 int umem_tx_errno(int err);
 
-/* print format of ummid and tmmid */
-#define UMMID_PF		DF_X64
-#define UMMID_P(id)		((id).off)
-
-#define TMMID_PF		DF_X64
-#define TMMID_P(id)		((id).oid.off)
+/* print format of umoff */
+#define UMOFF_PF		DF_X64
+#define UMOFF_P(umoff)		umem_off2offset(umoff)
 
 typedef enum {
 	/** volatile memory */
@@ -112,38 +163,30 @@ int  umem_init_txd(struct umem_tx_stage_data *txd);
 void umem_fini_txd(struct umem_tx_stage_data *txd);
 
 typedef struct {
-	/** convert directly accessible address to ummid */
-	umem_id_t	 (*mo_id)(struct umem_instance *umm, void *addr);
-	/** convert ummid to directly accessible address */
-	void		*(*mo_addr)(struct umem_instance *umm,
-				    umem_id_t ummid);
-	/** check if two ummid are equal */
-	bool		 (*mo_equal)(struct umem_instance *umm,
-				     umem_id_t ummid1, umem_id_t ummid2);
-	/** free ummid */
+	/** free umoff */
 	int		 (*mo_tx_free)(struct umem_instance *umm,
-				       umem_id_t ummid);
+				       umem_off_t umoff);
 	/**
-	 * allocate ummid with the specified size & flags
+	 * allocate umoff with the specified size & flags
 	 *
 	 * \param umm	[IN]	umem class instance.
 	 * \param size	[IN]	size to allocate.
 	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
 	 * \param type_num [IN]	struct type (for PMDK)
 	 */
-	umem_id_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
+	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
 					uint64_t flags, unsigned int type_num);
 	/**
-	 * Add the specified range of ummid to current memory transaction.
+	 * Add the specified range of umoff to current memory transaction.
 	 *
 	 * \param umm	[IN]	umem class instance.
-	 * \param ummid	[IN]	memory ID to be added to transaction.
-	 * \param offset [IN]	start offset of \a ummid tracked by the
+	 * \param umoff	[IN]	memory offset to be added to transaction.
+	 * \param offset [IN]	start offset of \a umoff tracked by the
 	 *			transaction.
-	 * \param size	[IN]	size of \a ummid tracked by the transaction.
+	 * \param size	[IN]	size of \a umoff tracked by the transaction.
 	 */
 	int		 (*mo_tx_add)(struct umem_instance *umm,
-				      umem_id_t ummid, uint64_t offset,
+				      umem_off_t umoff, uint64_t offset,
 				      size_t size);
 	/**
 	 * Add the directly accessible pointer to current memory transaction.
@@ -170,7 +213,7 @@ typedef struct {
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
 	 */
-	umem_id_t	 (*mo_reserve)(struct umem_instance *umm,
+	umem_off_t	 (*mo_reserve)(struct umem_instance *umm,
 				       struct pobj_action *act, size_t size,
 				       unsigned int type_num);
 
@@ -223,13 +266,59 @@ struct umem_instance {
 	umem_class_id_t		 umm_id;
 	const char		*umm_name;
 	PMEMobjpool		*umm_pool;
+	/** Cache the pool id field for umem addresses */
+	uint64_t		 umm_pool_uuid_lo;
+	/** Cache the base address of the pool */
+	uint64_t		 umm_base;
 	/** class member functions */
 	umem_ops_t		*umm_ops;
 };
 
 int  umem_class_init(struct umem_attr *uma, struct umem_instance *umm);
 void umem_attr_get(struct umem_instance *umm, struct umem_attr *uma);
-uint64_t umem_get_uuid(struct umem_instance *umm);
+
+/** Convert an offset to pointer.
+ *
+ *  \param	umm[IN]		The umem pool instance
+ *  \param	umoff[in]	The offset to convert
+ *
+ *  \return	The address in memory
+ */
+static inline void *
+umem_off2ptr(const struct umem_instance *umm, umem_off_t umoff)
+{
+	if (UMOFF_IS_NULL(umoff))
+		return NULL;
+
+	return (void *)(umm->umm_base + umem_off2offset(umoff));
+}
+
+/** Convert pointer to an offset.
+ *
+ *  \param	umm[IN]		The umem pool instance
+ *  \param	ptr[in]		The direct pointer to convert
+ *
+ *  Returns the umem offset
+ */
+static inline umem_off_t
+umem_ptr2off(const struct umem_instance *umm, void *ptr)
+{
+	if (ptr == NULL)
+		return UMOFF_NULL;
+
+	return (umem_off_t)ptr - umm->umm_base;
+}
+
+/**
+ * Get pmemobj pool uuid
+ *
+ * \param	umm[IN]	The umem pool instance
+ */
+static inline uint64_t
+umem_get_uuid(const struct umem_instance *umm)
+{
+	return umm->umm_pool_uuid_lo;
+}
 
 enum {
 	UMEM_TYPE_ANY,
@@ -241,17 +330,18 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-static inline umem_id_t
-umem_alloc_verb(struct umem_instance *umm, uint64_t flags, size_t size)
-{
-	umem_id_t __ummid;
-
-	__ummid = umm->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);
-
-	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF" size %zd\n",
-		(umm)->umm_name, UMMID_P(__ummid), size);
-	return __ummid;
-}
+#define umem_alloc_verb(umm, flags, size)				\
+({									\
+	umem_off_t	__umoff;					\
+									\
+	__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
+					      UMEM_TYPE_ANY);		\
+	D_ASSERTF(umem_off2flags(__umoff) == 0,				\
+		  "Invalid assumption about allocnot using flag bits");	\
+	D_DEBUG(DB_MEM, "allocate %s umoff "UMOFF_PF" size %zu\n",	\
+		(umm)->umm_name, UMOFF_P(__umoff), (size_t)(size));	\
+	__umoff;							\
+})
 
 #define umem_alloc(umm, size)						\
 	umem_alloc_verb(umm, 0, size)
@@ -262,50 +352,20 @@ umem_alloc_verb(struct umem_instance *umm, uint64_t flags, size_t size)
 #define umem_alloc_noflush(umm, size)					\
 	umem_alloc_verb(umm, POBJ_FLAG_NO_FLUSH, size)
 
-#define									\
-umem_alloc_typed_verb(umm, type, flags, size)				\
+#define umem_free(umm, umoff)						\
 ({									\
-	umem_id_t   __ummid;						\
-	TMMID(type) __tmmid;						\
+	D_DEBUG(DB_MEM, "Free %s umoff "UMOFF_PF"\n",			\
+		(umm)->umm_name, UMOFF_P(umoff));			\
 									\
-	__ummid = (umm)->umm_ops->mo_tx_alloc(umm, size, flags,		\
-					   TMMID_TYPE_NUM(type));	\
-	D_DEBUG(DB_MEM, "allocate %s mmid "UMMID_PF" size %d\n",	\
-		(umm)->umm_name, UMMID_P(__ummid), (int)size);		\
-	__tmmid.oid = __ummid;						\
-	__tmmid;							\
+	(umm)->umm_ops->mo_tx_free(umm, umoff);				\
 })
 
-#define umem_alloc_typed(umm, type, size)				\
-	umem_alloc_typed_verb(umm, type, 0, size)
-
-#define umem_zalloc_typed(umm, type, size)				\
-	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, size)
-
-#define umem_new_typed(umm, type)					\
-	umem_alloc_typed_verb(umm, type, 0, sizeof(type))
-
-#define umem_znew_typed(umm, type)					\
-	umem_alloc_typed_verb(umm, type, POBJ_FLAG_ZERO, sizeof(type))
-
 static inline int
-umem_free(struct umem_instance *umm, umem_id_t ummid)
-{
-	D_DEBUG(DB_MEM, "Free %s mmid "UMMID_PF"\n",
-		umm->umm_name, UMMID_P(ummid));
-
-	return umm->umm_ops->mo_tx_free(umm, ummid);
-}
-
-#define umem_free_typed(umm, tmmid)					\
-	umem_free(umm, (tmmid).oid)
-
-static inline int
-umem_tx_add_range(struct umem_instance *umm, umem_id_t ummid, uint64_t offset,
+umem_tx_add_range(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 		  size_t size)
 {
 	if (umm->umm_ops->mo_tx_add)
-		return umm->umm_ops->mo_tx_add(umm, ummid, offset, size);
+		return umm->umm_ops->mo_tx_add(umm, umoff, offset, size);
 	else
 		return 0;
 }
@@ -319,17 +379,8 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 		return 0;
 }
 
-#define umem_tx_add(umm, ummid, size)					\
-	umem_tx_add_range(umm, ummid, 0, size)
-
-#define	umem_tx_add_range_typed(umm, tmmid, off, size)			\
-	umem_tx_add_range(umm, (tmmid).oid, off, size)
-
-#define	umem_tx_add_typed(umm, tmmid, size)				\
-	umem_tx_add_range(umm, (tmmid).oid, 0, size)
-
-#define umem_tx_add_mmid_typed(umm, tmmid)				\
-	umem_tx_add_typed(umm, tmmid, sizeof(*(tmmid)._type))
+#define umem_tx_add(umm, umoff, size)					\
+	umem_tx_add_range(umm, umoff, 0, size)
 
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
@@ -358,46 +409,13 @@ umem_tx_abort(struct umem_instance *umm, int err)
 		return 0;
 }
 
-static inline void *
-umem_id2ptr(struct umem_instance *umm, umem_id_t ummid)
-{
-	return umm->umm_ops->mo_addr(umm, ummid);
-}
-
-static inline umem_id_t
-umem_ptr2id(struct umem_instance *umm, void *ptr)
-{
-	return umm->umm_ops->mo_id(umm, ptr);
-}
-
-#define umem_id2ptr_typed(umm, tmmid)					\
-((__typeof__(*(tmmid)._type) *)((umm)->umm_ops->mo_addr(umm, (tmmid).oid)))
-
-static inline bool
-umem_id_equal(struct umem_instance *umm, umem_id_t ummid_1, umem_id_t ummid_2)
-{
-	return umm->umm_ops->mo_equal(umm, ummid_1, ummid_2);
-}
-#define umem_id_equal_typed(umm, tmmid_1, tmmid_2)			\
-	umem_id_equal(umm, (tmmid_1).oid, (tmmid_2).oid)
-
-#define umem_id_u2t(ummid, type)					\
-({									\
-	TMMID(type)	__tmmid;					\
-									\
-	__tmmid.oid = ummid;						\
-	__tmmid;							\
-})
-
-#define umem_id_t2u(tmmid)	((tmmid).oid)
-
-static inline umem_id_t
+static inline umem_off_t
 umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
 {
 	if (umm->umm_ops->mo_reserve)
 		return umm->umm_ops->mo_reserve(umm, act, size,
 						UMEM_TYPE_ANY);
-	return UMMID_NULL;
+	return UMOFF_NULL;
 }
 
 static inline void

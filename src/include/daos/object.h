@@ -28,6 +28,12 @@
 #include <daos_types.h>
 #include <daos_api.h>
 
+enum daos_io_mode {
+	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
+	DIM_SERVER_DISPATCH	= 1,
+	DIM_CLIENT_DISPATCH	= 2,
+};
+
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
