@@ -133,7 +133,7 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	 * sane value and double until it's big enough.
 	 */
 	do {
-		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		D_REALLOC(new_buf, buf, buflen);
 		if (new_buf == NULL) {
 			D_ERROR("Couldn't allocate memory for getpwuid_r\n");
 			return -DER_NOMEM;
@@ -183,7 +183,7 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	 * sane value and double until it's big enough.
 	 */
 	do {
-		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		D_REALLOC(new_buf, buf, buflen);
 		if (new_buf == NULL) {
 			D_ERROR("Couldn't allocate memory for getgrgid_r\n");
 			return -DER_NOMEM;
@@ -261,7 +261,7 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 		return rc;
 
 	do {
-		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		D_REALLOC(new_buf, buf, buflen);
 		if (new_buf == NULL) {
 			D_ERROR("Couldn't alloc buffer for getpwnam_r\n");
 			return -DER_NOMEM;
@@ -312,7 +312,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 		return rc;
 
 	do {
-		D_REALLOC_ARRAY(new_buf, buf, (int)buflen);
+		D_REALLOC(new_buf, buf, buflen);
 		if (new_buf == NULL) {
 			D_ERROR("Couldn't alloc buffer for getgrnam_r\n");
 			return -DER_NOMEM;
