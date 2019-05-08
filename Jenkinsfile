@@ -831,17 +831,79 @@ pipeline {
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
-                                failure_artifacts: 'Functional'
+                                failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/ Functional/
-                                  mkdir Functional/
-                                  ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* Functional/
-                                  mv src/tests/ftest/avocado/job-results/* \
-                                     $(ls src/tests/ftest/*.stacktrace || true) Functional/'''
-                            junit 'Functional/*/results.xml, src/tests/ftest/*_results.xml'
-                            archiveArtifacts artifacts: 'Functional/**'
+                            sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
+                                      mv src/tests/ftest/avocado/job-results/* \
+                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                        }
+                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
+                        success {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                        }
+                        failure {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                        }
+                        */
+                    }
+                }
+                stage('Functional_Hardware') {
+                    agent {
+                        label 'ci_nvme9'
+                    }
+                    steps {
+                        // First snapshot provision the VM at beginning of list
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       snapshot: true
+                        // Then just reboot the physical nodes
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 9,
+                                       power_only: true
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
+                                           if [ -z "$test_tag" ]; then
+                                               test_tag=pr,hw
+                                           fi
+                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           ./ftest.sh "$test_tag" $tnodes''',
+                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
+                                failure_artifacts: env.STAGE_NAME
+                    }
+                    post {
+                        always {
+                            sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
+                                      mv src/tests/ftest/avocado/job-results/* \
+                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
