@@ -110,6 +110,7 @@ func serverMain() error {
 		log.Errorf("Unable to listen on management interface: %s", err)
 		return err
 	}
+	log.Debugf("DAOS control server listening on %s", addr)
 
 	// Create new grpc server, register services and start serving.
 	var sOpts []grpc.ServerOption
@@ -153,7 +154,7 @@ func serverMain() error {
 			err)
 		return err
 	}
-	log.Debugf("DAOS server listening on %s%s", addr, extraText)
+	log.Debugf("DAOS I/O server running %s", extraText)
 
 	// Wait for I/O server to return.
 	err = iosrv.wait()

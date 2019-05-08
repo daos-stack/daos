@@ -931,11 +931,7 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 		return 0;
 
 	if (addr->ba_type == DAOS_MEDIA_SCM) {
-		umem_id_t mmid;
-
-		mmid.pool_uuid_lo = umem_get_uuid(&tcx->tc_umm);
-		mmid.off = addr->ba_off;
-		rc = umem_free(evt_umm(tcx), mmid);
+		rc = umem_free(evt_umm(tcx), addr->ba_off);
 	} else {
 		struct vea_space_info *vsi = tcx->tc_blks_info;
 		uint64_t blk_off;
@@ -965,12 +961,12 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 		return 0;
 
 	desc = evt_off2desc(tcx, ne->ne_child);
-	vos_dtx_degister_record(evt_umm(tcx), desc->dc_dtx,
-				umem_ptr2id(evt_umm(tcx), desc), DTX_RT_EVT);
+	vos_dtx_deregister_record(evt_umm(tcx), desc->dc_dtx,
+				  ne->ne_child, DTX_RT_EVT);
 	rc = evt_desc_free(tcx, desc,
 			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
 	if (rc == 0)
-		rc = umem_free_off(evt_umm(tcx), ne->ne_child);
+		rc = umem_free(evt_umm(tcx), ne->ne_child);
 
 	return rc;
 }
@@ -1065,7 +1061,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	struct evt_node		*nd;
 	umem_off_t		 nd_off;
 
-	nd_off = umem_zalloc_off(evt_umm(tcx), evt_node_size(tcx));
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOMEM;
 
@@ -1091,7 +1087,7 @@ evt_node_tx_add(struct evt_context *tcx, struct evt_node *nd)
 static int
 evt_node_free(struct evt_context *tcx, umem_off_t nd_off)
 {
-	return umem_free_off(evt_umm(tcx), nd_off);
+	return umem_free(evt_umm(tcx), nd_off);
 }
 
 /**
@@ -1134,11 +1130,11 @@ evt_node_mbr_get(struct evt_context *tcx, struct evt_node *node)
 }
 
 int
-evt_dtx_check_availability(struct evt_context *tcx, umem_id_t entry,
+evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
 			   uint32_t intent)
 {
 	return vos_dtx_check_availability(evt_umm(tcx), tcx->tc_coh, entry,
-					  UMMID_NULL, intent, DTX_RT_EVT);
+					  UMOFF_NULL, intent, DTX_RT_EVT);
 }
 
 /** (Re)compute MBR for a tree node */
@@ -1312,7 +1308,7 @@ evt_root_free(struct evt_context *tcx)
 {
 	int	rc;
 	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
-		rc = umem_free_off(evt_umm(tcx), tcx->tc_root_off);
+		rc = umem_free(evt_umm(tcx), tcx->tc_root_off);
 		tcx->tc_root_off = EVT_ROOT_NULL;
 	} else {
 		rc = evt_root_tx_add(tcx);
@@ -1387,7 +1383,7 @@ evt_root_deactivate(struct evt_context *tcx)
 		return rc;
 
 	root->tr_depth = 0;
-	rc = umem_free_off(evt_umm(tcx), root->tr_node);
+	rc = umem_free(evt_umm(tcx), root->tr_node);
 	if (rc != 0)
 		return rc;
 
@@ -2394,13 +2390,12 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		size_t allocation_size = sizeof(struct evt_desc) +
 					 csum_buf_size;
 
-		desc_off = umem_zalloc_off(evt_umm(tcx), allocation_size);
+		desc_off = umem_zalloc(evt_umm(tcx), allocation_size);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOMEM;
 		ne->ne_child = desc_off;
 		desc = evt_off2ptr(tcx, desc_off);
-		rc = vos_dtx_register_record(evt_umm(tcx),
-					     umem_ptr2id(evt_umm(tcx), desc),
+		rc = vos_dtx_register_record(evt_umm(tcx), desc_off,
 					     DTX_RT_EVT, 0);
 		if (rc != 0)
 			/* It is unnecessary to free the PMEM that will be
@@ -2623,7 +2618,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 				desc = evt_off2desc(tcx, ne->ne_child);
 				rc = evt_desc_free(tcx, desc, width);
 			} else {
-				rc = umem_free_off(evt_umm(tcx), ne->ne_child);
+				rc = umem_free(evt_umm(tcx), ne->ne_child);
 			}
 			if (rc != 0)
 				return rc;
@@ -2637,7 +2632,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 			}
 
 			old_cur = nm_cur;
-			rc = umem_free_off(evt_umm(tcx), nm_cur);
+			rc = umem_free(evt_umm(tcx), nm_cur);
 			if (rc != 0)
 				return rc;
 			level--;
