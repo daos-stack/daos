@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 
 	"github.com/pkg/errors"
 )
@@ -101,6 +102,22 @@ func (m *mockExt) remove(path string) error {
 
 func (m *mockExt) exists(string) (bool, error) {
 	return m.existsRet, nil
+}
+
+func (m *mockExt) lookupUser(name string) (*user.User, error) {
+	return &user.User{}, nil
+}
+
+func (m *mockExt) lookupGroup(name string) (*user.Group, error) {
+	return &user.Group{}, nil
+}
+
+func (m *mockExt) setUid(uid int64) error {
+	return nil
+}
+
+func (m *mockExt) setGid(gid int64) error {
+	return nil
 }
 
 func newMockExt(

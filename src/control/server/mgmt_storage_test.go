@@ -356,8 +356,6 @@ func TestFormatStorage(t *testing.T) {
 			tt.sMount, tt.sClass, tt.sDevs, tt.sSize,
 			tt.bClass, tt.bDevs, tt.superblockExists)
 
-		config.FormatOverride = false
-
 		cs := mockControlService(config)
 		cs.Setup() // init and increment WaitGroup countera
 
