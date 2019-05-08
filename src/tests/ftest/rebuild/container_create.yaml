@@ -3,13 +3,34 @@ hosts:
     - boro-A
     - boro-B
     - boro-C
+    - boro-D
+    - boro-E
+    - boro-F
 timeout: 180
+testparams:
+  kill_rank: !mux
+    rank_zero:
+      rank: 0
+    rank_one:
+      rank: 1
+    rank_two:
+      rank: 2
+    rank_three:
+      rank: 3
+    rank_four:
+      rank: 4
+    rank_five:
+      rank: 5
 server_config:
   server_name: daos_server
-pool:
-  pool_mode: 511
-  pool_size: 1073741824
-  pool_group: daos_server
+poolparams:
+  createsvc:
+    svcn: 2
+  createmode:
+    mode: 511
+  createsize:
+    size: 1073741824
+  setname: daos_server
 container:
   akey_size: 5
   dkey_size: 5
