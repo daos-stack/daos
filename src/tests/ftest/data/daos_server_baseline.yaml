@@ -25,6 +25,7 @@ servers:
   - CRT_TIMEOUT=30
   - FI_SOCKETS_MAX_CONN_RETRY=1
   - FI_SOCKETS_CONN_TIMEOUT=2000
+  - DD_MASK=daos_default
   # uncomment to enable scalable endpoint
   # - CRT_CREDIT_EP_CTX=0
   # - CRT_CTX_SHARE_ADDR=1
