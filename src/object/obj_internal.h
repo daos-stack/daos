@@ -169,15 +169,16 @@ struct daos_obj_shard_tgt;
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
-			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
+			crt_bulk_t *bulks, unsigned int *map_ver,
+			struct daos_obj_shard_tgt *tgts,
 			uint32_t fw_cnt, tse_task_t *task,
 			struct dtx_id *dti, uint32_t flags);
 
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
-		       daos_iom_t *maps, unsigned int *map_ver,
-		       tse_task_t *task);
+		       crt_bulk_t *bulks, daos_iom_t *maps,
+		       unsigned int *map_ver, tse_task_t *task);
 
 int
 dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
