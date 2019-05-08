@@ -377,15 +377,19 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	return nil
 }
 
-// populateEnv adds envs from config options
+// populateEnv adds envs from config options to existing envs from user's shell
+// overwriting any existing values for given key
 func (c *configuration) populateEnv(i int, envs *[]string) {
-	for _, env := range c.Servers[i].EnvVars {
-		kv := strings.Split(env, "=")
+	for _, newEnv := range c.Servers[i].EnvVars {
+		key := strings.Split(newEnv, "=")[0]
 
-		if kv[1] == "" {
-			log.Debugf("empty value for env %s detected", kv[0])
-		}
-		*envs = append(*envs, env)
+		// filter out any matching keys in envs then adds new value
+		*envs = common.Filter(
+			*envs,
+			func(s string) bool {
+				return key != strings.Split(s, "=")[0]
+			})
+		*envs = append(*envs, newEnv)
 	}
 }
 
