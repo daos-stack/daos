@@ -64,12 +64,15 @@ func (c *controllerFactory) create(address string) (Control, error) {
 type Connect interface {
 	// ConnectClients attempts to connect a list of addresses
 	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states of controllers and removes inactive
+	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
+	ScanStorage() (ClientNvmeMap, ClientScmMap)
+	FormatStorage() (ClientNvmeMap, ClientMountMap)
+	// TODO: implement Update and Burnin client features
+	//UpdateStorage() (ClientNvmeMap, ClientScmMap)
+	//BurninStorage() (ClientNvmeMap, ClientScmMap)
 	ListFeatures() ClientFeatureMap
-	ListStorage() (ClientNvmeMap, ClientScmMap)
-	FormatStorage() ResultMap
 	KillRank(uuid string, rank uint32) ResultMap
 }
 
@@ -180,13 +183,27 @@ func (c *connList) makeRequests(
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
 
+	addrs := []string{}
 	for _, mc := range c.controllers {
+		addrs = append(addrs, mc.getAddress())
 		go requestFn(mc, ch)
 	}
 
-	for range c.controllers {
+	for {
 		res := <-ch
-		cMap[res.Address] = res
+
+		// remove received address from list
+		for i, v := range addrs {
+			if v == res.Address {
+				addrs = append(addrs[:i], addrs[i+1:]...)
+				cMap[res.Address] = res
+				break
+			}
+		}
+
+		if len(addrs) == 0 {
+			break // received responses from all connections
+		}
 	}
 
 	return cMap

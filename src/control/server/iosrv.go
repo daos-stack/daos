@@ -90,26 +90,32 @@ func formatIosrv(
 	}
 	op += " server " + srv.ScmMount
 
-	if _, err := os.Stat(iosrvSuperPath(srv.ScmMount)); err == nil {
+	if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+		return errors.Wrap(err, op)
+	} else if ok {
 		log.Debugf("server %d has already been formatted\n", i)
 
 		if reformat {
 			return errors.New(op + ": reformat not implemented yet")
 		}
+
 		return nil
-	} else if !os.IsNotExist(err) {
-		return errors.Wrap(err, op)
 	}
 
-	if config.FormatOverride {
-		log.Debugf(
-			"continuing without storage format on server %d "+
-				"(format_override set in config)\n", i)
-	} else {
-		log.Debugf("waiting for storage format on server %d\n", i)
+	msg := "continuing without storage format on server %d "
+	if syscall.Getuid() == 0 {
+		if config.UserName != "" {
+			log.Debugf("waiting for storage format on server %d\n", i)
 
-		// wait on format storage grpc call before creating superblock
-		srv.FormatCond.Wait()
+			// wait on format storage grpc call before creating superblock
+			srv.storWaitGroup.Wait()
+		} else {
+			log.Debugf(
+				msg+"(username not specified in server config)\n",
+				i)
+		}
+	} else {
+		log.Debugf(msg+"(%s running as non-root user)\n", i, os.Args[0])
 	}
 
 	// check scm has been mounted before proceeding to write to it
@@ -119,11 +125,6 @@ func formatIosrv(
 			fmt.Sprintf(
 				"server%d scm mount path (%s) not mounted",
 				i, srv.ScmMount))
-	}
-
-	// process config parameters for nvme and persist nvme.conf in scm
-	if err := config.parseNvme(i); err != nil {
-		return errors.Wrap(err, "nvme config could not be processed")
 	}
 
 	log.Debugf(op+" (createMS=%t bootstrapMS=%t)", createMS, bootstrapMS)
@@ -230,6 +231,14 @@ func (srv *iosrv) start() (err error) {
 	defer func() {
 		err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount)
 	}()
+
+	// Process bdev config parameters and write nvme.conf to SCM to be
+	// consumed by SPDK in I/O server process. Populates env & cli opts.
+	if err = srv.config.parseNvme(srv.index); err != nil {
+		err = errors.WithMessage(
+			err, "nvme config could not be processed")
+		return
+	}
 
 	if err = srv.startCmd(); err != nil {
 		return

@@ -22,9 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-from avocado import Test
 from avocado.utils import genio
 import aexpect
+from apricot import Test
 
 def print_helper(thestring):
     """
@@ -38,20 +38,13 @@ class ServerLaunch(Test):
     """
     Tests launching a DAOS server.
 
-    avocado: tags=server
+    :avocado: recursive
     """
-
-    def setUp(self):
-        # not used at present
-        pass
-
-    def tearDown(self):
-        # not used at present
-        pass
 
     def test_launch(self):
         """
         Test launching a DAOS server.
+        :avocado: tags=server
         """
         hostfile = self.params.get("hostfile1", '/files/', "/tmp/hostfile1")
         urifile = self.params.get("urifile", '/files/', "/tmp/urifile")

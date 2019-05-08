@@ -103,18 +103,24 @@ def scons():
     gospdkpath = join(gosrc, "vendor", "github.com", "daos-stack", "go-spdk",
                       "spdk")
 
-    # CGO prerequisite libs for nvme
+    # CGO prerequisite libs for go-spdk bindings
     denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
+    # hack to avoid building this library with cov compiler for the moment
+    compiler = denv.get('COMPILER').lower()
+    if compiler == "covc":
+        compiler = "gcc"
+
     nvmecontrol = denv.StaticLibrary(
         "nvme_control",
         join(gospdkpath, "src", "nvme_control.c"),
-        LIBS=['spdk'])
-    nc_installed = denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
+        CC=compiler, LIBS=['spdk'])
+
+    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
 
     # CGO shell env vars.
     denv.AppendENVPath(
         "CGO_LDFLAGS",
-        denv.subst("-L$SPDK_PREFIX/lib -L$PREFIX/lib $_RPATH"))
+        denv.subst("-L%s -L$SPDK_PREFIX/lib $_RPATH" % gopath))
     denv.AppendENVPath(
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include"))
@@ -131,7 +137,7 @@ def scons():
                 Copy("$TARGET", "$SOURCE")
             ])
 
-    install_go_bin(denv, gosrc, gopath, [nc_installed], "server", "daos_server")
+    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "server", "daos_server")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 

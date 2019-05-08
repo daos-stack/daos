@@ -146,4 +146,6 @@ pl_obj_get_shard(void *data, int idx)
 int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
 		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
+void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
+
 #endif /* __DAOS_PLACEMENT_H__ */

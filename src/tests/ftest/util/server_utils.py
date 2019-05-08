@@ -91,12 +91,6 @@ def create_server_yaml(basepath):
             elif key in default_value_set:
                 default_value_set[key] = new_value_set['server_config'][key]
 
-            if key in default_value_set.keys():
-                default_value_set[key] = new_value_set['server_config'][key]
-            else:
-                default_value_set['servers'][0][key] = new_value_set\
-                ['server_config'][key]
-
     #Write default_value_set dictionary in to AVOCADO_FILE
     #This will be used to start with daos_server -o option.
     try:

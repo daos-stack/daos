@@ -24,81 +24,52 @@
 from __future__ import print_function
 
 import os
-import sys
-import json
 import traceback
 import uuid
 import re
 import avocado
+from apricot import TestWithServers
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-import server_utils
 import write_host_file
 import ior_utils
-import AgentUtils
 import spdk
 
 from general_utils import DaosTestError
-from daos_api import DaosContext, DaosPool, DaosApiError, DaosLog
+from daos_api import DaosPool, DaosApiError
 
-class NvmeIo(avocado.Test):
+class NvmeIo(TestWithServers):
     """
-    Test Class Description:
-        Test the general Metadata operations and boundary conditions.
+    Run IO over NVMe and verify the pool size.
+    :avocado: recursive
     """
-
     def setUp(self):
         self.pool = None
-        self.hostlist = None
         self.hostfile_clients = None
-        self.hostfile = None
         self.out_queue = None
         self.pool_connect = False
-
-        with open('../../../.build_vars.json') as json_f:
-            build_paths = json.load(json_f)
-
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("name", '/server_config/',
-                                            'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.d_log = DaosLog(self.context)
-        self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-        self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
         #This is for NVMe Setup
         self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
-
         try:
             if self.nvme_parameter == "nvme":
-                spdk.nvme(self.hostlist, "setup")
-        except:
-            raise
-
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist,
-                                                   self.hostlist_clients)
-
-        #Start Server
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+                spdk.nvme_setup(self.hostlist_servers)
+        except spdk.SpdkFailed as error:
+            self.fail("Error setting up NVMe: {}".format(error))
+        super(NvmeIo, self).setUp()
 
     def tearDown(self):
-        try:
-            if self.pool_connect:
+        if self.pool_connect:
+            try:
                 self.pool.disconnect()
                 self.pool.destroy(1)
+            finally:
+                pass
+
+        try:
+            super(NvmeIo, self).tearDown()
         finally:
-            if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
-            #For NVMe Cleanup
             if self.nvme_parameter == "nvme":
-                spdk.nvme(self.hostlist)
+                spdk.nvme_cleanup(self.hostlist_servers)
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """
@@ -148,9 +119,11 @@ class NvmeIo(avocado.Test):
         hostlist_clients = self.params.get("clients", '/run/hosts/*')
         tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
+
         #Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
+                print (ior_param)
                 self.hostfile_clients = write_host_file.write_host_file(
                     hostlist_clients,
                     self.workdir,
@@ -168,16 +141,15 @@ class NvmeIo(avocado.Test):
                                  os.getegid(),
                                  ior_param[0],
                                  self.params.get("setname",
-                                                 '/run/pool/createset/*'),
-                                 nvme_size=ior_param[1])
+                                                 '/run/pool/createset/*', None))
                 self.pool.connect(1 << 1)
                 self.pool_connect = True
+
                 createsvc = self.params.get("svcn", '/run/pool/createsvc/')
                 svc_list = ""
                 for i in range(createsvc):
                     svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
                 svc_list = svc_list[:-1]
-
                 ior_args['client_hostfile'] = self.hostfile_clients
                 ior_args['pool_uuid'] = self.pool.get_uuid_str()
                 ior_args['svc_list'] = svc_list
@@ -201,22 +173,18 @@ class NvmeIo(avocado.Test):
                 #--daos.recordSize and Transfer size.
                 try:
                     size_before_ior = self.pool.pool_query()
-                    ior_utils.run_ior(ior_args['client_hostfile'],
-                                      ior_args['iorflags'],
-                                      ior_args['iteration'],
-                                      ior_args['block_size'],
-                                      ior_args['stripe_size'],
-                                      ior_args['pool_uuid'],
-                                      ior_args['svc_list'],
-                                      ior_args['stripe_size'],
-                                      ior_args['stripe_size'],
-                                      ior_args['stripe_count'],
-                                      ior_args['async_io'],
-                                      ior_args['object_class'],
-                                      ior_args['basepath'],
-                                      ior_args['slots'],
-                                      filename=str(uuid.uuid4()),
-                                      display_output=True)
+                    ior_utils.run_ior_daos(ior_args['client_hostfile'],
+                                           ior_args['iorflags'],
+                                           ior_args['iteration'],
+                                           ior_args['block_size'],
+                                           ior_args['stripe_size'],
+                                           ior_args['pool_uuid'],
+                                           ior_args['svc_list'],
+                                           ior_args['object_class'],
+                                           ior_args['basepath'],
+                                           ior_args['slots'],
+                                           str(uuid.uuid4()),
+                                           display_output=True)
                     self.verify_pool_size(size_before_ior, ior_args)
                 except ior_utils.IorFailed as exe:
                     print (exe)

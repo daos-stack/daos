@@ -25,21 +25,46 @@ package client
 
 import (
 	"fmt"
+	"io"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
 
+type mgmtControlFormatStorageClient struct {
+	grpc.ClientStream
+	ctrlrResults  NvmeControllerResults
+	mountResults  ScmMountResults
+	alreadyCalled bool
+}
+
+func (m mgmtControlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
+	if m.alreadyCalled {
+		return nil, io.EOF
+	}
+	m.alreadyCalled = true
+
+	return &pb.FormatStorageResp{
+		Crets: m.ctrlrResults,
+		Mrets: m.mountResults,
+	}, nil
+}
+
 // implement mock/stub behaviour for Control
 type mockControl struct {
-	address    string
-	connState  connectivity.State
-	features   []*pb.Feature
-	ctrlrs     NvmeControllers
-	modules    ScmModules
-	formatRet  error
-	killRet    error
-	connectRet error
+	address      string
+	connState    connectivity.State
+	features     []*pb.Feature
+	ctrlrs       NvmeControllers
+	ctrlrResults NvmeControllerResults
+	modules      ScmModules
+	mountResults ScmMountResults
+	scanRet      error
+	formatRet    error
+	killRet      error
+	connectRet   error
 }
 
 func (m *mockControl) connect(addr string) error {
@@ -62,27 +87,33 @@ func (m *mockControl) listAllFeatures() (FeatureMap, error) {
 	}
 	return fm, nil
 }
-func (m *mockControl) listNvmeCtrlrs() (NvmeControllers, error) {
-	return m.ctrlrs, nil
+func (m *mockControl) scanStorage() (*pb.ScanStorageResp, error) {
+	// return successful query results, state member messages
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.ScanStorageResp{
+		Ctrlrs:  m.ctrlrs,
+		Modules: m.modules,
+	}, m.scanRet
 }
-func (m *mockControl) listScmModules() (ScmModules, error) {
-	return m.modules, nil
-}
-func (m *mockControl) formatStorage() error {
-	return m.formatRet
+func (m *mockControl) formatStorage(ctx context.Context) (
+	pb.MgmtControl_FormatStorageClient, error) {
+
+	return mgmtControlFormatStorageClient{
+		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
+	}, m.formatRet
 }
 func (m *mockControl) killRank(uuid string, rank uint32) error {
 	return m.killRet
 }
-
 func newMockControl(
 	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, modules ScmModules,
+	ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
+	modules ScmModules, mountResults ScmMountResults, scanRet error,
 	formatRet error, killRet error, connectRet error) Control {
 
 	return &mockControl{
-		address, state, features, ctrlrs, modules,
-		formatRet, killRet, connectRet,
+		address, state, features, ctrlrs, ctrlrResults, modules,
+		mountResults, scanRet, formatRet, killRet, connectRet,
 	}
 }
 
@@ -100,20 +131,44 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
 	return cf
 }
 
-// NewClientNvme provides a mock ClientNvmeMap for testing.
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
+// NewClientNvmeResults provides a mock ClientNvmeMap populated with controller
+// operation responses
+func NewClientNvmeResults(
+	results []*pb.NvmeControllerResult, addrs Addresses) ClientNvmeMap {
+
 	cMap := make(ClientNvmeMap)
 	for _, addr := range addrs {
-		cMap[addr] = NvmeResult{ctrlrs, nil}
+		cMap[addr] = NvmeResult{Responses: results}
 	}
 	return cMap
 }
 
-// NewClientScm provides a mock ClientScmMap for testing.
+// NewClientNvme provides a mock ClientNvmeMap populated with ctrlr details
+func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
+	cMap := make(ClientNvmeMap)
+	for _, addr := range addrs {
+		cMap[addr] = NvmeResult{Ctrlrs: ctrlrs}
+	}
+	return cMap
+}
+
+// NewClientScm provides a mock ClientScmMap populated with scm module details
 func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
 	cMap := make(ClientScmMap)
 	for _, addr := range addrs {
-		cMap[addr] = ScmResult{mms, nil}
+		cMap[addr] = ScmResult{Modules: mms}
+	}
+	return cMap
+}
+
+// NewClientMountResults provides a mock ClientMountMap populated with scm mount
+// operation responses
+func NewClientMountResults(
+	results []*pb.ScmMountResult, addrs Addresses) ClientMountMap {
+
+	cMap := make(ClientMountMap)
+	for _, addr := range addrs {
+		cMap[addr] = MountResult{Responses: results}
 	}
 	return cMap
 }

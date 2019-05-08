@@ -1,5 +1,11 @@
 # DAOS Server (control-plane)
 
+## Workflow
+
+Control plane server (`daos_server`) instances will open a gRPC channel to listen for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through the control plane [`dmg`](../dmg) management tool. Calling `dmg storage format` formats persistent storage on the server node, writes the superblock and starts the data plane.
+
+![Server format diagram](/doc/graph/server_format_flow.png)
+
 ## Running
 
 `daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
@@ -109,9 +115,9 @@ TODO: examples for both DCPM and RAM (emulation) SCM classes including config fi
 
 This subcommand requires elevated permissions (sudo).
 
-NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server prep-nvme -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK.
+NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server storage prep-nvme -w 0000:81:00.0 -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK. The specification of `pci-whitelist` (`-w` short option) allows user to optionally specify which PCI devices to unbind from the Kernel driver for use with SPDK, as opposed to unbinding all devices by default. Multiple devices can be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (for example 000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted. A use for all device blacklisting could involve the need to only set up hugepages and skip all device unbindings.
 
-The configuration commands that require elevated permissions are in `src/control/mgmt/init/setup_spdk.sh` (script is installed as `install/share/setup_spdk.sh`).
+The configuration commands that require elevated permissions are in `src/control/server/init/setup_spdk.sh` (script is installed as `install/share/control/setup_spdk.sh`).
 
 The sudoers file can be accessed with command `visudo` and permissions can be granted to a user to execute a specific command pattern (requires prior knowledge of `daos_server` binary location):
 
@@ -119,7 +125,7 @@ The sudoers file can be accessed with command `visudo` and permissions can be gr
 linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 ```
 
-See `daos_server prep-nvme --help` for usage.
+See `daos_server storage prep-nvme --help` for usage.
 
 ### storage list
 
@@ -149,6 +155,32 @@ NVMe:
   namespace:
   - id: 1
     capacity: 375
+
+SCM:
+- physicalid: 28
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 0
+  capacity: 539661172736
+- physicalid: 40
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 0
+  capacity: 539661172736
+- physicalid: 50
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 1
+  capacity: 539661172736
+- physicalid: 62
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 1
+  capacity: 539661172736
 ```
 
 </p>
@@ -175,6 +207,10 @@ The DAOS data plane utilises two forms of non-volatile storage, storage class me
 
 The DAOS control plane provides capability to provision and manage the non-volatile storage including the allocation of resources to data plane instances.
 
+Storage format is required after other storage management operations have been performed as a precursor to bringing up the DAOS data plane:
+
+![Storage format diagram](/doc/graph/storage_format_detail.png)
+
 ### SCM management capabilities
 
 Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
@@ -185,7 +221,7 @@ Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
 
 Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
 
-The DAOS control plane wil provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
+The DAOS control plane will provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
 
 #### SCM module discovery
 

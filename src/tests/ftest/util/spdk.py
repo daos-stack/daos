@@ -86,25 +86,25 @@ def nvme_cleanup_thread(result_queue, hostname, debug=True):
     result_queue.put("PASS")
     host.disconnect()
 
-def nvme(hostlist, operation="cleanup"):
+def nvme_main(hostlist, operation=False):
     """
-    nvme function called from Avocado test, This will start
-    thread for each server doing SPDK setup or cleanup.
+    nvme main function starts thread for each server doing SPDK setup/cleanup.
     Args:
         hostlist[list]: List of servers hostname.
-        operation: setup or cleanup
+        operation:
+            True: setup
+            False: cleanup
     return:
         None
     """
-    function = {
-        'setup': nvme_setup_thread,
-        'cleanup': nvme_cleanup_thread
-        }
-    print("NVMe server {} Started......".format(operation))
+    _oper = ["cleanup", nvme_cleanup_thread]
+    if operation:
+        _oper = ["setup", nvme_setup_thread]
+    print("NVMe server {} Started......".format(_oper[0]))
     threads = []
     out_queue = Queue.Queue()
     for _hosts in hostlist:
-        threads.append(threading.Thread(target=function[operation],
+        threads.append(threading.Thread(target=_oper[1],
                                         args=(out_queue, _hosts)))
     #Start Threads
     for thrd in threads:
@@ -116,5 +116,33 @@ def nvme(hostlist, operation="cleanup"):
     #Check failure message in queue, and raise SpdkFailed if any thread Fails
     while not out_queue.empty():
         if out_queue.get() == "FAIL":
-            raise SpdkFailed("{} Failed".format(operation))
-    print("NVMe server {} Finished......".format(operation))
+            raise SpdkFailed("SPDK {} Failed".format(_oper[0]))
+    print("NVMe server {} Finished......".format(_oper[0]))
+
+def nvme_setup(hostlist):
+    """
+    nvme setup function called from Avocado test, This will start
+    thread for each server doing SPDK setup.
+    Args:
+        hostlist[list]: List of servers hostname.
+    return:
+        None
+    """
+    try:
+        nvme_main(hostlist, True)
+    except SpdkFailed:
+        raise
+
+def nvme_cleanup(hostlist):
+    """
+    nvme clenaup function called from Avocado test, This will start
+    thread for each server doing SPDK cleanup.
+    Args:
+        hostlist[list]: List of servers hostname.
+    return:
+        None
+    """
+    try:
+        nvme_main(hostlist, False)
+    except SpdkFailed:
+        raise
