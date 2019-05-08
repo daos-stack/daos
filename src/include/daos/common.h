@@ -239,7 +239,7 @@ static inline int
 daos_errno2der(int err)
 {
 	switch (err) {
-	case 0:			return 0;
+	case 0:			return -DER_SUCCESS;
 	case EPERM:
 	case EACCES:		return -DER_NO_PERM;
 	case ENOMEM:		return -DER_NOMEM;
@@ -263,6 +263,52 @@ daos_errno2der(int err)
 	default:		return -DER_MISC;
 	}
 }
+
+/**
+ * Convert DER_ errno to system variant. Default error code for any non-defined
+ * DER_ errnos is EIO (Input/Output error).
+ *
+ * \param[in] err	DER_ error code
+ *
+ * \return		Corresponding system error code
+ */
+static inline int
+daos_der2errno(int err)
+{
+	switch (err) {
+	case -DER_SUCCESS:	return 0;
+	case -DER_NO_PERM:
+	case -DER_EP_RO:
+	case -DER_EP_OLD:	return EPERM;
+	case -DER_NO_HDL:
+	case -DER_ENOENT:
+	case -DER_NONEXIST:	return ENOENT;
+	case -DER_INVAL:
+	case -DER_NOTYPE:
+	case -DER_NOSCHEMA:
+	case -DER_NOLOCAL:
+	case -DER_KEY2BIG:
+	case -DER_REC2BIG:
+	case -DER_IO_INVAL:	return EINVAL;
+	case -DER_EXIST:	return EEXIST;
+	case -DER_UNREACH:	return EHOSTUNREACH;
+	case -DER_NOSPACE:	return ENOSPC;
+	case -DER_ALREADY:	return EALREADY;
+	case -DER_NOMEM:	return ENOMEM;
+	case -DER_TIMEDOUT:	return ETIMEDOUT;
+	case -DER_BUSY:
+	case -DER_EQ_BUSY:	return EBUSY;
+	case -DER_AGAIN:	return EAGAIN;
+	case -DER_PROTO:	return EPROTO;
+	case -DER_IO:		return EIO;
+	case -DER_CANCELED:	return ECANCELED;
+	case -DER_OVERFLOW:	return EOVERFLOW;
+	case -DER_BADPATH:
+	case -DER_NOTDIR:	return ENOTDIR;
+	case -DER_STALE:	return ESTALE;
+	default:		return EIO;
+	}
+};
 
 static inline bool
 daos_crt_network_error(int err)

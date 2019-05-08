@@ -43,6 +43,9 @@ extern "C" {
 
 #include <daos_errno.h>
 
+/** Maximum length (excluding the '\0') of a DAOS system name */
+#define DAOS_SYS_NAME_MAX 15
+
 /** Scatter/gather list for memory buffers */
 #define daos_sg_list_t d_sg_list_t
 
