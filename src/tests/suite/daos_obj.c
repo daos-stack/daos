@@ -3295,7 +3295,10 @@ io_pool_map_refresh_trigger(void **state)
 	struct ioreq	req;
 	d_rank_t	leader;
 
-	/** choose random object */
+	/* needs at lest 2 targets */
+	if (!test_runable(arg, 2))
+		skip();
+
 	test_get_leader(arg, &leader);
 	D_ASSERT(leader > 0);
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
