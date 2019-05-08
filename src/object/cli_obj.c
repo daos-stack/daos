@@ -910,6 +910,8 @@ struct obj_auxi_args {
 	tse_task_t			*obj_task;
 	struct daos_obj_shard_tgt	*fw_shard_tgts;
 	uint32_t			 fw_cnt;
+	uint32_t			 bulk_nr;
+	crt_bulk_t			*bulks;
 };
 
 static inline bool
@@ -1017,6 +1019,113 @@ struct shard_update_args {
 	daos_iod_t		*iods;
 	daos_sg_list_t		*sgls;
 };
+
+/* prepare the bulk handle(s) for obj request */
+static int
+obj_bulk_prep(daos_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
+	      crt_bulk_perm_t bulk_perm, tse_task_t *task,
+	      struct obj_auxi_args *obj_auxi)
+{
+	crt_bulk_t	*bulks;
+	int		 i = 0;
+	int		 rc = 0;
+
+	D_ASSERTF(nr >= 1, "invalid nr %d.\n", nr);
+	D_ALLOC_ARRAY(bulks, nr);
+	if (bulks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* create bulk handles for sgls */
+	for (; i < nr; i++) {
+		if (sgls != NULL && sgls[i].sg_iovs != NULL &&
+		    sgls[i].sg_iovs[0].iov_buf != NULL) {
+			rc = crt_bulk_create(daos_task2ctx(task),
+					     daos2crt_sg(&sgls[i]),
+					     bulk_perm, &bulks[i]);
+			if (rc < 0)
+				D_GOTO(out, rc);
+			if (!bulk_bind)
+				continue;
+			rc = crt_bulk_bind(bulks[i], daos_task2ctx(task));
+			if (rc != 0) {
+				D_ERROR("crt_bulk_bind failed, rc: %d.\n", rc);
+				D_GOTO(out, rc);
+			}
+		}
+	}
+
+out:
+	if (rc == 0) {
+		obj_auxi->bulks = bulks;
+		obj_auxi->bulk_nr = nr;
+	} else {
+		int j;
+
+		for (j = 0; j < i; j++)
+			crt_bulk_free(bulks[j]);
+
+		D_FREE(bulks);
+	}
+	return rc;
+}
+
+static void
+obj_bulk_fini(struct obj_auxi_args *obj_auxi)
+{
+	crt_bulk_t	*bulks = obj_auxi->bulks;
+	unsigned int	 nr = obj_auxi->bulk_nr;
+	int		 i;
+
+	if (bulks == NULL)
+		return;
+
+	for (i = 0; i < nr; i++)
+		if (bulks[i] != CRT_BULK_NULL)
+			crt_bulk_free(bulks[i]);
+
+	D_FREE(bulks);
+	obj_auxi->bulks = NULL;
+	obj_auxi->bulk_nr = 0;
+}
+
+static int
+obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, daos_sg_list_t *sgls,
+		 unsigned int nr, bool update, bool bulk_bind,
+		 tse_task_t *task, struct obj_auxi_args *obj_auxi)
+{
+	daos_size_t		data_size;
+	daos_size_t		buf_size;
+	daos_size_t		sgls_size;
+	crt_bulk_perm_t		bulk_perm;
+	int			rc = 0;
+
+	data_size = daos_iods_len(iods, nr);
+	sgls_size = daos_sgls_packed_size(sgls, nr, &buf_size);
+	/* If the sgl buffer is not big enough, returns -REC2BIG
+	 * then user can provide appropriate buffer and redo it.
+	 */
+	if (data_size != -1 && data_size > buf_size) {
+		rc = -DER_REC2BIG;
+		D_ERROR("Object "DF_OID", iod_size "DF_U64", sg_buf"
+			" "DF_U64", failed %d.\n",
+			DP_OID(obj->cob_md.omd_id), data_size, buf_size,
+			rc);
+		D_GOTO(out, rc);
+	}
+	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
+	 * if need bulk transferring.
+	 */
+	data_size = sgls_size;
+
+	if (data_size >= OBJ_BULK_LIMIT) {
+		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
+		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
+				   obj_auxi);
+	}
+
+out:
+	return rc;
+}
 
 static int
 shard_result_process(tse_task_t *task, void *arg)
@@ -1169,6 +1278,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			tse_task_list_traverse(head, shard_task_remove, NULL);
 			D_ASSERT(d_list_empty(head));
 		}
+		obj_bulk_fini(obj_auxi);
 	}
 
 	obj_decref(obj);
@@ -1324,6 +1434,16 @@ dc_obj_fetch(tse_task_t *task)
 	if (shard < 0)
 		D_GOTO(out_task, rc = shard);
 
+	if (!obj_auxi->io_retry) {
+		rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
+				      false, false, task, obj_auxi);
+		if (rc != 0) {
+			D_ERROR("fetch "DF_OID", obj_rw_bulk_prep failed %d.\n",
+				DP_OID(obj->cob_md.omd_id), rc);
+			goto out_task;
+		}
+	}
+
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
@@ -1335,8 +1455,8 @@ dc_obj_fetch(tse_task_t *task)
 		(unsigned long long)dkey_hash, shard);
 	tse_task_stack_push_data(task, &dkey_hash, sizeof(dkey_hash));
 	rc = dc_obj_shard_fetch(obj_shard, epoch, args->dkey, args->nr,
-				args->iods, args->sgls, args->maps,
-				&obj_auxi->map_ver_reply, task);
+				args->iods, args->sgls, obj_auxi->bulks,
+				args->maps, &obj_auxi->map_ver_reply, task);
 	obj_shard_close(obj_shard);
 	return rc;
 
@@ -1393,7 +1513,9 @@ shard_update_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->dkey_hash,
 				 sizeof(args->dkey_hash));
 	rc = dc_obj_shard_update(obj_shard, args->epoch, args->dkey, args->nr,
-				 args->iods, args->sgls, &args->auxi.map_ver,
+				 args->iods, args->sgls,
+				 args->auxi.obj_auxi->bulks,
+				 &args->auxi.map_ver,
 				 args->auxi.obj_auxi->fw_shard_tgts,
 				 args->auxi.obj_auxi->fw_cnt, task,
 				 &args->dti, args->auxi.obj_auxi->flags);
@@ -1590,6 +1712,15 @@ dc_obj_update(tse_task_t *task)
 					       &shard);
 
 		goto task_sched;
+	}
+
+	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr, true,
+			      obj_auxi->fw_shard_tgts != NULL, task,
+			      obj_auxi);
+	if (rc != 0) {
+		D_ERROR("update "DF_OID", obj_rw_bulk_prep failed %d.\n",
+			DP_OID(obj->cob_md.omd_id), rc);
+		goto out_task;
 	}
 
 	obj_auxi->flags = 0;
