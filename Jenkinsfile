@@ -807,7 +807,7 @@ pipeline {
             parallel {
                 stage('Functional') {
                     agent {
-                        label 'ci_vm8'
+                        label 'ci_vm9'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
@@ -819,7 +819,8 @@ pipeline {
                                            if [ -z "$test_tag" ]; then
                                                test_tag=regression,vm
                                            fi
-                                           ./ftest.sh "$test_tag" ''' + env.NODELIST,
+                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
                                 failure_artifacts: 'Functional'
                     }
