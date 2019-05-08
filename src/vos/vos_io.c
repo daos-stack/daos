@@ -51,10 +51,10 @@ struct vos_io_context {
 	unsigned int		 ic_actv_cnt;
 	unsigned int		 ic_actv_at;
 	struct pobj_action	*ic_actv;
-	/** reserved mmids for SCM update */
-	umem_id_t		*ic_mmids;
-	unsigned int		 ic_mmids_cnt;
-	unsigned int		 ic_mmids_at;
+	/** reserved offsets for SCM update */
+	umem_off_t		*ic_umoffs;
+	unsigned int		 ic_umoffs_cnt;
+	unsigned int		 ic_umoffs_at;
 	/** reserved NVMe extents */
 	d_list_t		 ic_blk_exts;
 	/** flags */
@@ -99,9 +99,9 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 		ioc->ic_actv = NULL;
 	}
 
-	if (ioc->ic_mmids != NULL) {
-		D_FREE(ioc->ic_mmids);
-		ioc->ic_mmids = NULL;
+	if (ioc->ic_umoffs != NULL) {
+		D_FREE(ioc->ic_umoffs);
+		ioc->ic_umoffs = NULL;
 	}
 }
 
@@ -119,8 +119,8 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 		total_acts += iod->iod_nr;
 	}
 
-	D_ALLOC_ARRAY(ioc->ic_mmids, total_acts);
-	if (ioc->ic_mmids == NULL)
+	D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
+	if (ioc->ic_umoffs == NULL)
 		return -DER_NOMEM;
 
 	if (vos_obj2umm(ioc->ic_obj)->umm_ops->mo_reserve == NULL)
@@ -167,7 +167,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_size_fetch = size_fetch;
 	ioc->ic_actv = NULL;
 	ioc->ic_actv_cnt = ioc->ic_actv_at = 0;
-	ioc->ic_mmids_cnt = ioc->ic_mmids_at = 0;
+	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, read_only,
@@ -641,16 +641,16 @@ error:
 	return vos_fetch_end(vos_ioc2ioh(ioc), rc);
 }
 
-static umem_id_t
-iod_update_mmid(struct vos_io_context *ioc)
+static umem_off_t
+iod_update_umoff(struct vos_io_context *ioc)
 {
-	umem_id_t mmid;
+	umem_off_t umoff;
 
-	D_ASSERT(ioc->ic_mmids_at < ioc->ic_mmids_cnt);
-	mmid = ioc->ic_mmids[ioc->ic_mmids_at];
-	ioc->ic_mmids_at++;
+	D_ASSERT(ioc->ic_umoffs_at < ioc->ic_umoffs_cnt);
+	umoff = ioc->ic_umoffs[ioc->ic_umoffs_at];
+	ioc->ic_umoffs_at++;
 
-	return mmid;
+	return umoff;
 }
 
 static struct bio_iov *
@@ -678,7 +678,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	daos_csum_buf_t		 csum;
 	daos_iov_t		 kiov, riov;
 	struct bio_iov		*biov;
-	umem_id_t		 mmid;
+	umem_off_t		 umoff;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int			 rc;
 
@@ -687,8 +687,8 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 
 	daos_csum_set(&csum, NULL, 0);
 
-	mmid = iod_update_mmid(ioc);
-	D_ASSERT(!UMMID_IS_NULL(mmid));
+	umoff = iod_update_umoff(ioc);
+	D_ASSERT(!UMOFF_IS_NULL(umoff));
 
 	D_ASSERT(ioc->ic_iov_at == 0);
 	biov = iod_update_biov(ioc);
@@ -701,7 +701,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
-	rbund.rb_mmid	= mmid;
+	rbund.rb_off	= umoff;
 	rbund.rb_ver	= pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
@@ -916,7 +916,7 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	struct vea_hint_context	*hint_ctxt;
 	struct vea_resrvd_ext	*ext;
 	uint32_t		 blk_cnt;
-	umem_id_t		 mmid;
+	umem_off_t		 umoff;
 	int			 rc;
 
 	if (media == DAOS_MEDIA_SCM) {
@@ -927,27 +927,27 @@ vos_reserve(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 			D_ASSERT(ioc->ic_actv != NULL);
 			act = &ioc->ic_actv[ioc->ic_actv_at];
 
-			mmid = umem_reserve(vos_obj2umm(obj), act, size);
-			if (!UMMID_IS_NULL(mmid))
+			umoff = umem_reserve(vos_obj2umm(obj), act, size);
+			if (!UMOFF_IS_NULL(umoff))
 				ioc->ic_actv_at++;
 		} else {
-			mmid = umem_alloc(vos_obj2umm(obj), size);
+			umoff = umem_alloc(vos_obj2umm(obj), size);
 		}
 
-		if (!UMMID_IS_NULL(mmid)) {
-			ioc->ic_mmids[ioc->ic_mmids_cnt] = mmid;
-			ioc->ic_mmids_cnt++;
-			*off = mmid.off;
+		if (!UMOFF_IS_NULL(umoff)) {
+			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
+			ioc->ic_umoffs_cnt++;
+			*off = umoff;
 		}
 
-		return UMMID_IS_NULL(mmid) ? -DER_NOSPACE : 0;
+		return UMOFF_IS_NULL(umoff) ? -DER_NOSPACE : 0;
 	}
 
 	D_ASSERT(media == DAOS_MEDIA_NVME);
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt[VOS_IOS_GENERIC];
 	D_ASSERT(hint_ctxt);
 	blk_cnt = vos_byte2blkcnt(size);
 
@@ -993,7 +993,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_irec_df	*irec;
 	daos_size_t		 scm_size;
-	umem_id_t		 mmid;
+	umem_off_t		 umoff;
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
 	int			 rc;
@@ -1018,9 +1018,9 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		return rc;
 	}
 
-	D_ASSERT(ioc->ic_mmids_cnt > 0);
-	mmid = ioc->ic_mmids[ioc->ic_mmids_cnt - 1];
-	irec = (struct vos_irec_df *) umem_id2ptr(vos_obj2umm(obj), mmid);
+	D_ASSERT(ioc->ic_umoffs_cnt > 0);
+	umoff = ioc->ic_umoffs[ioc->ic_umoffs_cnt - 1];
+	irec = (struct vos_irec_df *) umem_off2ptr(vos_obj2umm(obj), umoff);
 	vos_irec_init_csum(irec, iod->iod_csums);
 
 	memset(&biov, 0, sizeof(biov));
@@ -1035,7 +1035,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 		/* Get the record payload offset */
 		payload_addr = vos_irec2data(irec);
 		D_ASSERT(payload_addr >= (char *)irec);
-		off = mmid.off + (payload_addr - (char *)irec);
+		off = umoff + (payload_addr - (char *)irec);
 	} else {
 		rc = vos_reserve(ioc, DAOS_MEDIA_NVME, size, &off);
 		if (rc) {
@@ -1061,8 +1061,8 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 	memset(&biov, 0, sizeof(biov));
 	/* recx punch */
 	if (size == 0) {
-		ioc->ic_mmids[ioc->ic_mmids_cnt] = UMMID_NULL;
-		ioc->ic_mmids_cnt++;
+		ioc->ic_umoffs[ioc->ic_umoffs_cnt] = UMOFF_NULL;
+		ioc->ic_umoffs_cnt++;
 		bio_addr_set_hole(&biov.bi_addr, 1);
 		goto done;
 	}
@@ -1149,7 +1149,8 @@ dkey_update_begin(struct vos_io_context *ioc, daos_key_t *dkey)
 
 /* Publish or cancel the NVMe block reservations */
 int
-vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish)
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
+		   enum vos_io_stream ios)
 {
 	struct vea_space_info	*vsi;
 	struct vea_hint_context	*hint_ctxt;
@@ -1160,7 +1161,7 @@ vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish)
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt[ios];
 	D_ASSERT(hint_ctxt);
 
 	rc = publish ? vea_tx_publish(vsi, hint_ctxt, blk_list) :
@@ -1181,7 +1182,7 @@ update_cancel(struct vos_io_context *ioc)
 		umem_cancel(vos_obj2umm(ioc->ic_obj), ioc->ic_actv,
 			    ioc->ic_actv_at);
 		ioc->ic_actv_at = 0;
-	} else if (ioc->ic_mmids_cnt != 0) {
+	} else if (ioc->ic_umoffs_cnt != 0) {
 		struct umem_instance *umem = vos_obj2umm(ioc->ic_obj);
 		int i, rc;
 
@@ -1191,10 +1192,10 @@ update_cancel(struct vos_io_context *ioc)
 			return;
 		}
 
-		for (i = 0; i < ioc->ic_mmids_cnt; i++) {
-			if (UMMID_IS_NULL(ioc->ic_mmids[i]))
+		for (i = 0; i < ioc->ic_umoffs_cnt; i++) {
+			if (UMOFF_IS_NULL(ioc->ic_umoffs[i]))
 				continue;
-			umem_free(umem, ioc->ic_mmids[i]);
+			umem_free(umem, ioc->ic_umoffs[i]);
 		}
 
 		rc =  umem_tx_commit(umem);
@@ -1205,7 +1206,8 @@ update_cancel(struct vos_io_context *ioc)
 	}
 
 	/* Cancel NVMe reservations */
-	vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, false);
+	vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, false,
+			   VOS_IOS_GENERIC);
 }
 
 int
@@ -1259,7 +1261,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	}
 
 	/* Publish NVMe reservations */
-	err = vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, true);
+	err = vos_publish_blocks(ioc->ic_obj, &ioc->ic_blk_exts, true,
+				 VOS_IOS_GENERIC);
 
 	if (dth != NULL && err == 0)
 		err = vos_dtx_prepared(dth);

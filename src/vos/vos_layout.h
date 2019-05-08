@@ -171,7 +171,7 @@ enum vos_dtx_entry_flags {
 };
 
 /**
- * Persisted DTX entry, it is referenced by btr_record::rec_mmid
+ * Persisted DTX entry, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DTX_TABLE.
  */
 struct vos_dtx_entry_df {
@@ -225,6 +225,17 @@ struct vos_obj_table_df {
 	struct btr_root			obt_btr;
 };
 
+enum vos_io_stream {
+	/**
+	 * I/O stream for generic purpose, like client updates, updates
+	 * initiated for rebuild , reintegration or rebalance.
+	 */
+	VOS_IOS_GENERIC		= 0,
+	/** I/O stream for extents coalescing, like aggregation. */
+	VOS_IOS_AGGREGATION,
+	VOS_IOS_CNT
+};
+
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
@@ -234,11 +245,8 @@ struct vos_cont_df {
 	struct vos_obj_table_df		cd_otab_df;
 	/** The DTXs table. */
 	struct vos_dtx_table_df		cd_dtx_table_df;
-	/*
-	 * Allocation hint for block allocator, it can be turned into
-	 * a hint vector when we need to support multiple active epochs.
-	 */
-	struct vea_hint_df		cd_hint_df;
+	/** Allocation hints for block allocator. */
+	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 };
 
 /** btree (d/a-key) record bit flags */
@@ -254,7 +262,7 @@ enum vos_krec_bf {
 };
 
 /**
- * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_mmid
+ * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.
  */
 struct vos_krec_df {
@@ -296,7 +304,7 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
 
 /**
  * Persisted VOS single value & epoch record, it is referenced by
- * btr_record::rec_mmid of btree VOS_BTR_SINGV.
+ * btr_record::rec_off of btree VOS_BTR_SINGV.
  */
 struct vos_irec_df {
 	/** key checksum size (in bytes) */

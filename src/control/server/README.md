@@ -1,5 +1,11 @@
 # DAOS Server (control-plane)
 
+## Workflow
+
+Control plane server (`daos_server`) instances will open a gRPC channel to listen for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through the control plane [`dmg`](../dmg) management tool. Calling `dmg storage format` formats persistent storage on the server node, writes the superblock and starts the data plane.
+
+![Server format diagram](/doc/graph/server_format_flow.png)
+
 ## Running
 
 `daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
@@ -149,6 +155,32 @@ NVMe:
   namespace:
   - id: 1
     capacity: 375
+
+SCM:
+- physicalid: 28
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 0
+  capacity: 539661172736
+- physicalid: 40
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 0
+  capacity: 539661172736
+- physicalid: 50
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 1
+  capacity: 539661172736
+- physicalid: 62
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 1
+  capacity: 539661172736
 ```
 
 </p>
@@ -175,6 +207,10 @@ The DAOS data plane utilises two forms of non-volatile storage, storage class me
 
 The DAOS control plane provides capability to provision and manage the non-volatile storage including the allocation of resources to data plane instances.
 
+Storage format is required after other storage management operations have been performed as a precursor to bringing up the DAOS data plane:
+
+![Storage format diagram](/doc/graph/storage_format_detail.png)
+
 ### SCM management capabilities
 
 Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
@@ -185,7 +221,7 @@ Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
 
 Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
 
-The DAOS control plane wil provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
+The DAOS control plane will provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
 
 #### SCM module discovery
 

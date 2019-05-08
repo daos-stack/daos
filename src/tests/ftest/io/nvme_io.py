@@ -35,7 +35,7 @@ sys.path.append('./util')
 sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 import ior_utils
@@ -71,7 +71,7 @@ class NvmeIo(avocado.Test):
                                                         self.workdir)
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
         # start agent
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                    self.hostlist,
                                                    self.hostlist_clients)
         #Start Server
@@ -84,7 +84,7 @@ class NvmeIo(avocado.Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist_clients,
+                agent_utils.stop_agent(self.hostlist_clients,
                                       self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
@@ -113,8 +113,8 @@ class NvmeIo(avocado.Test):
         replica_number = re.findall(r'\d+', "ior_args['object_class']")
         if replica_number:
             obj_multiplier = int(replica_number[0])
-        expected_pool_size = (ior_args['client_processes'] * ior_args['block_size'] *
-                              obj_multiplier)
+        expected_pool_size = (ior_args['client_processes'] *
+                              ior_args['block_size'] * obj_multiplier)
 
         if free_pool_size < expected_pool_size:
             raise DaosTestError(
@@ -182,17 +182,17 @@ class NvmeIo(avocado.Test):
                 try:
                     size_before_ior = self.pool.pool_query()
                     ior_utils.run_ior_daos(ior_args['client_hostfile'],
-                                      ior_args['iorflags'],
-                                      ior_args['iteration'],
-                                      ior_args['block_size'],
-                                      ior_args['transfer_size'],
-                                      ior_args['pool_uuid'],
-                                      ior_args['svc_list'],
-                                      ior_args['object_class'],
-                                      ior_args['basepath'],
-                                      ior_args['client_processes'],
-                                      cont_uuid=str(uuid.uuid4()),
-                                      display_output=True)
+                                           ior_args['iorflags'],
+                                           ior_args['iteration'],
+                                           ior_args['block_size'],
+                                           ior_args['transfer_size'],
+                                           ior_args['pool_uuid'],
+                                           ior_args['svc_list'],
+                                           ior_args['object_class'],
+                                           ior_args['basepath'],
+                                           ior_args['client_processes'],
+                                           cont_uuid=str(uuid.uuid4()),
+                                           display_output=True)
                     self.verify_pool_size(size_before_ior, ior_args)
                 except ior_utils.IorFailed as exe:
                     print (exe)

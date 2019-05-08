@@ -28,21 +28,6 @@
 #define TO_STR(s) STR_H(s)
 #define TRACE_TYPE TO_STR(TYPE_NAME)
 
-#define DFUSE_REQ_INIT(src, FSH, api, in, rc)				\
-	do {								\
-		rc = 0;							\
-		/* Acquire new object only if NULL */			\
-		if (!src) {						\
-			src = dfuse_da_acquire(FSH->POOL_NAME);	\
-			DFUSE_TRA_UP(src, FSH, TRACE_TYPE);		\
-		}							\
-		if (!src) {						\
-			rc = ENOMEM;					\
-			break;						\
-		}							\
-		(src)->REQ_NAME.ir_api = &api;				\
-	} while (0)
-
 /* Initialise a descriptor and make the dfuse_request a child of it */
 #define DFUSE_REQ_INIT_REQ(src, fsh, api, fuse_req, rc)			\
 	do {								\

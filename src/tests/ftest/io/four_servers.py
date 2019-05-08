@@ -24,15 +24,10 @@
 from __future__ import print_function
 
 import os
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 import ior_utils
@@ -41,7 +36,6 @@ from daos_api import DaosContext, DaosPool, DaosApiError
 class FourServers(Test):
     """
     Test class Description: Runs IOR with four servers.
-
     """
     def setUp(self):
         self.agent_sessions = None
@@ -73,9 +67,9 @@ class FourServers(Test):
                                             self.workdir, None))
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist_servers,
-                                                   self.hostlist_clients)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_servers,
+                                                    self.hostlist_clients)
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -92,8 +86,8 @@ class FourServers(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist_clients,
+                                       self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_fourservers(self):
