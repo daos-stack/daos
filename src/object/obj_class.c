@@ -236,6 +236,20 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "ec_k2p1_len32k",
+		.oc_id		= DAOS_OC_EC_K2P1_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.u.ec			= {
+				.e_k		= 2,
+				.e_p		= 1,
+				.e_len		= 1 << 15,
+			},
+		},
+	},
+	{
 		.oc_name	= "ec_k2p2_len32k",
 		.oc_id		= DAOS_OC_EC_K2P2_L32K,
 		{
@@ -481,4 +495,79 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
 	}
 
 	return NULL;
+}
+
+/**
+ * Encode (using ISA-L) a full stripe from the submitted scatter-gather list.
+ *
+ * oid		[IN]		The object id of the object undergoing encode.
+ * sgl		[IN]		The SGL containing the user data.
+ * sg_idx	[IN|OUT]	Index of sg_iov entry in array.
+ * sg_off	[IN|OUT]	Offset into sg_iovs' io_buf.
+ * parity	[IN|OUT]	Struct containing parity buffers.
+ * p_idx	[IN]		Index into parity p_bufs array.
+ */
+int
+obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *sg_idx,
+		       size_t *sg_off, struct obj_ec_parity *parity, int p_idx)
+{
+	struct obj_ec_codec		*codec = obj_ec_codec_get(
+							daos_obj_id2class(oid));
+	struct daos_oclass_attr		*oca = daos_oclass_attr_find(oid);
+	unsigned int			 len = oca->u.ec.e_len;
+	unsigned int			 k = oca->u.ec.e_k;
+	unsigned int			 p = oca->u.ec.e_p;
+	unsigned char			*data[k];
+	unsigned char			*ldata[k];
+	int				 i, lcnt = 0;
+	int				 rc = 0;
+
+	for (i = 0; i < k; i++) {
+		if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off >= len) {
+			unsigned char *from =
+				(unsigned char *)sgl->sg_iovs[*sg_idx].iov_buf;
+
+			data[i] = &from[*sg_off];
+			*sg_off += len;
+			if (*sg_off == sgl->sg_iovs[*sg_idx].iov_len) {
+				*sg_off = 0;
+				(*sg_idx)++;
+			}
+		} else {
+			int cp_cnt = 0;
+
+			D_ALLOC(ldata[lcnt], len);
+			if (ldata[lcnt] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			while (cp_cnt < len) {
+				int cp_amt =
+					sgl->sg_iovs[*sg_idx].iov_len-*sg_off <
+					len - cp_cnt ?
+					sgl->sg_iovs[*sg_idx].iov_len-*sg_off :
+					len - cp_cnt;
+				unsigned char *from =
+					sgl->sg_iovs[*sg_idx].iov_buf;
+
+				memcpy(&ldata[lcnt][cp_cnt], &from[*sg_off],
+				       cp_amt);
+				if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off <=
+					len - cp_cnt) {
+					*sg_off = 0;
+					(*sg_idx)++;
+				} else
+					*sg_off += cp_amt;
+				cp_cnt += cp_amt;
+				if (cp_cnt < len && *sg_idx >= sgl->sg_nr)
+					D_GOTO(out, rc = -DER_INVAL);
+			}
+			data[i] = ldata[lcnt++];
+		}
+	}
+
+	ec_encode_data(len, k, p, codec->ec_gftbls, data,
+		       &parity->p_bufs[p_idx]);
+out:
+	for (i = 0; i < lcnt; i++)
+		D_FREE(ldata[i]);
+	return rc;
 }

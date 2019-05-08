@@ -76,7 +76,7 @@ func setupShell() *ishell.Shell {
 		Func: func(c *ishell.Context) {
 			c.Println(hasConns(conns.GetActiveConns(nil)))
 
-			listStor()
+			scanStor()
 		},
 	})
 

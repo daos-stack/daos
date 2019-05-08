@@ -29,6 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func hasConns(results client.ResultMap) (out string) {
@@ -67,6 +68,15 @@ func sprintConns(results client.ResultMap) (out string) {
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
+// annotateState adds status string representation if no Info provided
+func annotateState(state *pb.ResponseState) {
+	if state.Info == "" {
+		state.Info = fmt.Sprintf(
+			"status=%s",
+			state.Status.String())
+	}
+}
+
 // unpackFormat takes a map of addresses to result type and prints either
 // decoded struct or provided error.
 func unpackFormat(i interface{}) string {
@@ -86,19 +96,40 @@ func unpackFormat(i interface{}) string {
 		for addr, res := range v {
 			if res.Err != nil {
 				decoded[addr] = res.Err.Error()
-				continue
+			} else if len(res.Ctrlrs) > 0 {
+				decoded[addr] = res.Ctrlrs
+			} else {
+				for i := range res.Responses {
+					annotateState(res.Responses[i].State)
+				}
+				decoded[addr] = res.Responses
 			}
-
-			decoded[addr] = res.Ctrlrs
 		}
 	case client.ClientScmMap:
 		for addr, res := range v {
 			if res.Err != nil {
 				decoded[addr] = res.Err.Error()
-				continue
+			} else if len(res.Modules) > 0 {
+				decoded[addr] = res.Modules
+			} else {
+				for i := range res.Responses {
+					annotateState(res.Responses[i].State)
+				}
+				decoded[addr] = res.Responses
 			}
-
-			decoded[addr] = res.Mms
+		}
+	case client.ClientMountMap:
+		for addr, res := range v {
+			if res.Err != nil {
+				decoded[addr] = res.Err.Error()
+			} else if len(res.Mounts) > 0 {
+				decoded[addr] = res.Mounts
+			} else {
+				for i := range res.Responses {
+					annotateState(res.Responses[i].State)
+				}
+				decoded[addr] = res.Responses
+			}
 		}
 	case client.ResultMap:
 		for addr, res := range v {

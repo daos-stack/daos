@@ -88,6 +88,13 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	}
 
 	/* Now check the container name */
+	if (strncmp(ir->ir_id.irid_dfs->dffs_pool,
+		    ir_id->irid_dfs->dffs_pool,
+		    NAME_MAX) != 0) {
+		return false;
+	}
+
+	/* Now check the container name */
 	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
 		    ir_id->irid_dfs->dffs_cont,
 		    NAME_MAX) != 0) {
@@ -240,14 +247,12 @@ entry_release(void *arg)
 }
 
 int
-dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
+dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 {
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
 	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_dfs		*dfs = NULL;
-	mode_t				mode;
 	int				rc;
 
 	struct dfuse_da_reg common = {.reset = common_reset,
@@ -335,38 +340,6 @@ dfuse_start(struct dfuse_info *dfuse_info, dfs_t *ddfs)
 		D_GOTO(err, 0);
 	}
 
-	D_ALLOC_PTR(dfs);
-	if (!dfs) {
-		D_GOTO(err, 0);
-	}
-
-	if (ddfs) {
-		dfs->dffs_dfs = ddfs;
-
-		rc = dfs_lookup(dfs->dffs_dfs,
-				"/", O_RDONLY, &ie->ie_obj, &mode);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(fs_handle, "dfs_lookup() failed: %d",
-					rc);
-			D_GOTO(err, 0);
-		}
-
-		rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(fs_handle, "dfs_ostat() failed: %d",
-					rc);
-			D_GOTO(err, 0);
-		}
-
-		dfs->dffs_ops = &dfuse_dfs_ops;
-
-	} else {
-
-		/* Populate ie->ie_stat */
-		dfs->dffs_ops = &dfuse_cont_ops;
-		D_INIT_LIST_HEAD(&dfs->dffs_child);
-	}
-
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
@@ -397,7 +370,6 @@ err:
 	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
 	D_FREE(ie);
-	D_FREE(dfs);
 	D_FREE(fs_handle);
 	return -DER_INVAL;
 }
