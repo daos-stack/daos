@@ -33,15 +33,16 @@ void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 size_t size, off_t offset)
 {
-	size_t		b_offset = 0;
-	daos_anchor_t	anchor = {};
-	uint32_t	nr = NUM_DIRENTS;
-	struct dirent	dirents[NUM_DIRENTS];
-	struct stat	stbuf;
-	int		i;
-	void		*buf;
-	int		ns;
-	int		rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	size_t				b_offset = 0;
+	daos_anchor_t			anchor = {};
+	uint32_t			nr = NUM_DIRENTS;
+	struct dirent			dirents[NUM_DIRENTS];
+	struct stat			stbuf;
+	int				i;
+	void				*buf;
+	int				ns;
+	int				rc;
 
 	DFUSE_TRA_DEBUG(inode, "Offset %zi",
 			offset);
@@ -51,7 +52,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		D_GOTO(err, rc = ENOMEM);
 	}
 
-	rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->obj, &anchor,
+	rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj, &anchor,
 			 &nr, dirents);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(err, 0);
@@ -69,7 +70,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * inode number we need to do a lookup, then a stat from the
 		 * object, rather than a stat on the path.
 		 */
-		rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs, inode->obj,
+		rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs, inode->ie_obj,
 				    dirents[i].d_name, O_RDONLY, &obj, &mode);
 
 		rc = dfs_ostat(inode->ie_dfs->dffs_dfs, obj, &stbuf);
@@ -84,7 +85,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			D_GOTO(err, rc = EIO);
 		}
 
-		stbuf.st_ino = (ino_t)oid.hi;
+		rc = dfuse_lookup_inode(fs_handle,
+					inode->ie_dfs,
+					&oid,
+					&stbuf.st_ino);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(inode, "no ino");
+			D_GOTO(err, rc = EIO);
+		}
 
 		dfs_release(obj);
 

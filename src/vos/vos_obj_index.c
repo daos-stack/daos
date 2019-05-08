@@ -121,7 +121,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = umem_zalloc_off(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOMEM;
 
@@ -185,7 +185,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		else
 			dbtree_destroy(toh);
 	}
-	umem_free_off(umm, rec->rec_off);
+	umem_free(umm, rec->rec_off);
 	return rc;
 }
 

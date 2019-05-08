@@ -42,12 +42,12 @@
 
 /* Command line configuration data */
 struct dfuse_data {
-	char	*pool;
-	char	*cont;
-	char	*svcl;
-	char	*group;
-	char	*mountpoint;
-	bool	threaded;
+	char		*pool;
+	char		*cont;
+	char		*group;
+	char		*mountpoint;
+	bool		threaded;
+	d_rank_list_t	*svcl;
 };
 
 struct dfuse_info {
@@ -56,8 +56,6 @@ struct dfuse_info {
 	struct dfuse_data		dfi_dfd;
 };
 
-/* dfuse_main.c */
-
 /* Launch fuse, and do not return until complete */
 bool
 dfuse_launch_fuse(struct dfuse_info *dfuse_info,
@@ -65,21 +63,11 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 		  struct fuse_args *args,
 		  struct dfuse_projection_info *dfi_handle);
 
-/* dfuse_core.c */
-/* Start a dfuse projection */
-int
-dfuse_start(struct dfuse_info *dfuse_info, dfs_t *dfs);
-
-/* Drain and free resources used by a projection */
-int
-dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
-
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
+	struct dfuse_info		*dfuse_info;
 	struct fuse_session		*session;
 	struct dfuse_dfs		*dfpi_ddfs;
-	/** Feature Flags */
-	uint64_t			flags;
 	int				fs_id;
 	struct dfuse_da			da;
 	struct dfuse_da_type		*fgh_da;
@@ -87,7 +75,9 @@ struct dfuse_projection_info {
 	struct dfuse_da_type		*symlink_da;
 	uint32_t			max_read;
 	/** Hash table of open inodes */
-	struct d_hash_table		inode_ht;
+	struct d_hash_table		dfpi_iet;
+	struct d_hash_table		dfpi_irt;
+	ATOMIC uint64_t			dfpi_ino_next;
 };
 
 struct dfuse_inode_entry;
@@ -98,7 +88,7 @@ struct dfuse_inode_ops {
 		       struct fuse_file_info *fi);
 	void (*getattr)(fuse_req_t req,
 			struct dfuse_inode_entry *inode);
-	void (*lookup)(fuse_req_t req,
+	bool (*lookup)(fuse_req_t req,
 		       struct dfuse_inode_entry *parent,
 		       const char *name);
 	bool (*mkdir)(fuse_req_t req,
@@ -112,13 +102,31 @@ struct dfuse_inode_ops {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
+extern struct dfuse_inode_ops dfuse_cont_ops;
+extern struct dfuse_inode_ops dfuse_pool_ops;
 
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dffs_ops;
 	dfs_t			*dffs_dfs;
+	char			dffs_pool[NAME_MAX];
+	char			dffs_cont[NAME_MAX];
+	daos_handle_t		dffs_poh;
+	daos_handle_t		dffs_coh;
+	daos_pool_info_t	dffs_pool_info;
+	daos_cont_info_t	dffs_co_info;
+	ino_t			dffs_root;
 };
 
-struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
+/* dfuse_core.c */
+/* Start a dfuse projection */
+int
+dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs);
+
+/* Drain and free resources used by a projection */
+int
+dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
+
+struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
@@ -180,14 +188,20 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops(uint64_t);
 	do {								\
 		int __err = status;					\
 		int __rc;						\
-		if (__err <= 0) {					\
+		if (__err < 0) {					\
+			__err = daos_der2errno(status);			\
+			if (__err == EIO) {				\
+				DFUSE_TRA_ERROR(handle,			\
+						"Unable to convert DAOS error errno: %d '-%s'", \
+						status, d_errstr(status)); \
+			}						\
+		} else if (__err == 0) {				\
 			DFUSE_TRA_ERROR(handle,				\
-					"Invalid call to fuse_reply_err: %d", \
-					__err);				\
+					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
 		if (__err == ENOTSUP || __err == EIO)			\
-			DFUSE_TRA_WARNING(handle, "Returning %d '%s'", \
+			DFUSE_TRA_WARNING(handle, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
 			DFUSE_TRA_DEBUG(handle, "Returning %d '%s'",	\
@@ -344,12 +358,6 @@ struct dfuse_request_api {
 	bool	(*on_result)(struct dfuse_request *req);
 };
 
-enum dfuse_request_state {
-	RS_INIT = 1,
-	RS_RESET,
-	RS_LIVE
-};
-
 /** The type of any handle stored in the request.
  *
  * If set to other than RHS_NONE then the GAH from the appropriate
@@ -385,12 +393,6 @@ struct dfuse_request {
 	 *  on_result
 	 */
 	int				rc;
-	/** Request state.
-	 *
-	 * Used to ensure REQUEST_INIT()/REQUEST_RESET() have been invoked
-	 * correctly.
-	 */
-	enum dfuse_request_state		ir_rs;
 
 	/** Request handle type */
 	enum dfuse_request_htype		ir_ht;
@@ -415,17 +417,12 @@ struct dfuse_request {
 #define DFUSE_REQUEST_INIT(REQUEST, FSH)		\
 	do {						\
 		(REQUEST)->fsh = FSH;			\
-		(REQUEST)->ir_rs = RS_INIT;		\
 		D_INIT_LIST_HEAD(&(REQUEST)->ir_list);	\
 	} while (0)
 
 /** Reset a request for re-use.  To be called before each use */
 #define DFUSE_REQUEST_RESET(REQUEST)				\
 	do {							\
-		D_ASSERT((REQUEST)->ir_rs == RS_INIT ||		\
-			(REQUEST)->ir_rs == RS_RESET ||		\
-			(REQUEST)->ir_rs == RS_LIVE);		\
-		(REQUEST)->ir_rs = RS_RESET;			\
 		(REQUEST)->ir_ht = RHS_NONE;			\
 		(REQUEST)->ir_inode = NULL;			\
 		(REQUEST)->rc = 0;				\
@@ -468,9 +465,9 @@ struct dfuse_inode_entry {
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
 	 */
-	struct stat	stat;
+	struct stat		ie_stat;
 
-	dfs_obj_t	*obj;
+	dfs_obj_t		*ie_obj;
 
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
@@ -478,7 +475,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char		name[256];
+	char			ie_name[NAME_MAX];
 
 	/** The parent inode of this entry.
 	 *
@@ -486,26 +483,42 @@ struct dfuse_inode_entry {
 	 * be incorrect at any point after that.  The inode does not hold
 	 * a reference on the parent so the inode may not be valid.
 	 */
-	fuse_ino_t	parent;
+	fuse_ino_t		ie_parent;
 
-	struct dfuse_dfs *ie_dfs;
+	struct dfuse_dfs	*ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table
 	 * locking.
 	 */
-	d_list_t	ie_htl;
+	d_list_t		ie_htl;
 
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
-	ATOMIC uint	ie_ref;
+	ATOMIC uint		ie_ref;
 };
 
-/** Write buffer descriptor */
-struct dfuse_wb {
-	struct dfuse_request		wb_req;
-	bool				failure;
+/**
+ * Inode record.
+ *
+ * Describes all inodes observed by the system since start, including all inodes
+ * known by the kernel, and all inodes that have been in the past.
+ *
+ * This is needed to be able to generate 64 bit inode numbers from 128 bit DAOS
+ * objects, to support multiple containers/pools within a filesystem and to
+ * provide consistent inode numbering for the same file over time, even if the
+ * kernel cache is dropped, for example because of memory pressure.
+ */
+struct dfuse_inode_record_id {
+	struct dfuse_dfs	*irid_dfs;
+	daos_obj_id_t		irid_oid;
+};
+
+struct dfuse_inode_record {
+	struct dfuse_inode_record_id	ir_id;
+	d_list_t			ir_htl;
+	ino_t				ir_ino;
 };
 
 /** Common request type.
@@ -516,15 +529,6 @@ struct dfuse_wb {
 struct common_req {
 	d_list_t			list;
 	struct dfuse_request		request;
-};
-
-/** Callback structure for inode migrate RPC.
- *
- * Used so migrate callback function has access to the filesystem handle.
- */
-struct dfuse_inode_migrate {
-	struct dfuse_inode_entry *im_ie;
-	struct dfuse_projection_info *im_fsh;
 };
 
 /** Entry request type.
@@ -542,6 +546,12 @@ struct entry_req {
 /* dfuse_inode.c */
 
 int
+dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
+		   struct dfuse_dfs *dfs,
+		   daos_obj_id_t *oid,
+		   ino_t *_ino);
+
+int
 find_inode(struct dfuse_request *);
 
 void
@@ -554,7 +564,7 @@ dfuse_fs_send(struct dfuse_request *request);
 
 /* ops/...c */
 
-void
+bool
 dfuse_cb_lookup(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
@@ -609,5 +619,19 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  bool create,
 		  fuse_req_t req);
+
+/* dfuse_cont.c */
+bool
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		  const char *name);
+
+bool
+dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+		 const char *name, mode_t mode);
+
+/* dfuse_pool.c */
+bool
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		  const char *name);
 
 #endif /* __DFUSE_H__ */

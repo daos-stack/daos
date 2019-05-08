@@ -129,16 +129,16 @@ func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// BdClass enum specifing block device type for storage
-type BdClass string
+// BdevClass enum specifing block device type for storage
+type BdevClass string
 
-// UnmarshalYAML implements yaml.Unmarshaler on BdClass type
-func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
+// UnmarshalYAML implements yaml.Unmarshaler on BdevClass type
+func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var class string
 	if err := unmarshal(&class); err != nil {
 		return err
 	}
-	bdevClass := BdClass(class)
+	bdevClass := BdevClass(class)
 	switch bdevClass {
 	case bdNVMe, bdMalloc, bdKdev, bdFile:
 		*b = bdevClass
@@ -154,28 +154,27 @@ func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // server defines configuration options for DAOS IO Server instances
 type server struct {
-	Rank            *rank    `yaml:"rank"`
-	Targets         []string `yaml:"targets"` // cpus to run xstreams
-	NrXsHelpers     int      `yaml:"nr_xs_helpers"`
-	FirstCore       int      `yaml:"first_core"`
-	FabricIface     string   `yaml:"fabric_iface"`
-	FabricIfacePort int      `yaml:"fabric_iface_port"`
-	LogMask         string   `yaml:"log_mask"`
-	LogFile         string   `yaml:"log_file"`
-	EnvVars         []string `yaml:"env_vars"`
-	ScmMount        string   `yaml:"scm_mount"`
-	ScmClass        ScmClass `yaml:"scm_class"`
-	ScmList         []string `yaml:"scm_list"`
-	ScmSize         int      `yaml:"scm_size"`
-	BdevClass       BdClass  `yaml:"bdev_class"`
-	BdevList        []string `yaml:"bdev_list"`
-	BdevNumber      int      `yaml:"bdev_number"`
-	BdevSize        int      `yaml:"bdev_size"`
+	Rank            *rank     `yaml:"rank"`
+	Targets         []string  `yaml:"targets"` // cpus to run xstreams
+	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
+	FirstCore       int       `yaml:"first_core"`
+	FabricIface     string    `yaml:"fabric_iface"`
+	FabricIfacePort int       `yaml:"fabric_iface_port"`
+	LogMask         string    `yaml:"log_mask"`
+	LogFile         string    `yaml:"log_file"`
+	EnvVars         []string  `yaml:"env_vars"`
+	ScmMount        string    `yaml:"scm_mount"`
+	ScmClass        ScmClass  `yaml:"scm_class"`
+	ScmList         []string  `yaml:"scm_list"`
+	ScmSize         int       `yaml:"scm_size"`
+	BdevClass       BdevClass `yaml:"bdev_class"`
+	BdevList        []string  `yaml:"bdev_list"`
+	BdevNumber      int       `yaml:"bdev_number"`
+	BdevSize        int       `yaml:"bdev_size"`
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
-	CliOpts []string // tuples (short option, value) e.g. ["-p", "10000"...]
-	// Condition variable to announce formatting of storage
-	FormatCond *sync.Cond
+	CliOpts       []string        // tuples (short option, value) e.g. ["-p", "10000"...]
+	storWaitGroup *sync.WaitGroup // sync primitive for storage formatting events
 }
 
 // newDefaultServer creates a new instance of server struct with default values.
@@ -187,7 +186,8 @@ func newDefaultServer() server {
 	}
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler on server struct.
+// UnmarshalYAML implements yaml.Unmarshaler on server struct enabling defaults
+// to be applied to each nested server.
 //
 // Type alias used to prevent recursive calls to UnmarshalYAML.
 func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -219,7 +219,6 @@ type configuration struct {
 	FaultPath      string          `yaml:"fault_path"`
 	FaultCb        string          `yaml:"fault_cb"`
 	FabricIfaces   []string        `yaml:"fabric_ifaces"`
-	FormatOverride bool            `yaml:"format_override"`
 	ScmMountPath   string          `yaml:"scm_mount_path"`
 	BdevInclude    []string        `yaml:"bdev_include"`
 	BdevExclude    []string        `yaml:"bdev_exclude"`
@@ -227,6 +226,8 @@ type configuration struct {
 	NrHugepages    int             `yaml:"nr_hugepages"`
 	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
 	ControlLogFile string          `yaml:"control_log_file"`
+	UserName       string          `yaml:"user_name"`
+	GroupName      string          `yaml:"group_name"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
@@ -242,7 +243,7 @@ type configuration struct {
 
 // todo: implement UnMarshal for Provider discriminated union
 
-// parse decodes YAML representation of configure struct and checks for Group
+// parse decodes YAML representation of configuration
 func (c *configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
@@ -270,7 +271,6 @@ func newDefaultConfiguration(ext External) configuration {
 		Port:           10000,
 		Cert:           "./.daos/daos_server.crt",
 		Key:            "./.daos/daos_server.key",
-		FormatOverride: true,
 		ScmMountPath:   "/mnt/daos",
 		Hyperthreads:   false,
 		NrHugepages:    1024,

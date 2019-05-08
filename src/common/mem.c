@@ -37,6 +37,44 @@
 #define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
 #define TXD_CB_MAX		(1 << 20)	/* 1 million callbacks */
 
+/** Convert an offset to an id.   No invalid flags will be maintained
+ *  in the conversion.
+ *
+ *  \param	umm[IN]		The umem pool instance
+ *  \param	umoff[in]	The offset to convert
+ *
+ *  \return	The oid.
+ */
+static inline PMEMoid
+umem_off2id(const struct umem_instance *umm, umem_off_t umoff)
+{
+	PMEMoid	oid;
+
+	if (UMOFF_IS_NULL(umoff))
+		return OID_NULL;
+
+	oid.pool_uuid_lo = umm->umm_pool_uuid_lo;
+	oid.off = umem_off2offset(umoff);
+
+	return oid;
+}
+
+/** Convert an id to an offset.
+ *
+ *  \param	umm[IN]		The umem pool instance
+ *  \param	oid[in]		The oid to convert
+ *
+ *  \return	The offset in the PMEM pool.
+ */
+static inline umem_off_t
+umem_id2off(const struct umem_instance *umm, PMEMoid oid)
+{
+	if (OID_IS_NULL(oid))
+		return UMOFF_NULL;
+
+	return oid.off;
+}
+
 struct umem_tx_stage_item {
 	int		 txi_magic;
 	umem_tx_cb_t	 txi_fn;
@@ -45,44 +83,26 @@ struct umem_tx_stage_item {
 
 /** persistent memory operations (depends on pmdk) */
 
-static umem_id_t
-pmem_id(const struct umem_instance *umm, void *addr)
-{
-	return pmemobj_oid(addr);
-}
-
-static void *
-pmem_addr(const struct umem_instance *umm, umem_id_t ummid)
-{
-	return pmemobj_direct(ummid);
-}
-
-static bool
-pmem_equal(struct umem_instance *umm, umem_id_t ummid1, umem_id_t ummid2)
-{
-	return OID_EQUALS(ummid1, ummid2);
-}
-
 static int
-pmem_tx_free(struct umem_instance *umm, umem_id_t ummid)
+pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
-	if (!OID_IS_NULL(ummid))
-		return pmemobj_tx_free(ummid);
+	if (!UMOFF_IS_NULL(umoff))
+		return pmemobj_tx_free(umem_off2id(umm, umoff));
 	return 0;
 }
 
-static umem_id_t
+static umem_off_t
 pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	      unsigned int type_num)
 {
-	return pmemobj_tx_xalloc(size, type_num, flags);
+	return umem_id2off(umm, pmemobj_tx_xalloc(size, type_num, flags));
 }
 
 static int
-pmem_tx_add(struct umem_instance *umm, umem_id_t ummid,
+pmem_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	    uint64_t offset, size_t size)
 {
-	return pmemobj_tx_add_range(ummid, offset, size);
+	return pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
 }
 
 
@@ -210,11 +230,12 @@ pmem_tx_commit(struct umem_instance *umm)
 	return rc ? umem_tx_errno(rc) : 0;
 }
 
-static umem_id_t
+static umem_off_t
 pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
 	     unsigned int type_num)
 {
-	return pmemobj_reserve(umm->umm_pool, act, size, type_num);
+	return umem_id2off(umm,
+			   pmemobj_reserve(umm->umm_pool, act, size, type_num));
 }
 
 static void
@@ -296,9 +317,6 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 }
 
 static umem_ops_t	pmem_ops = {
-	.mo_id			= pmem_id,
-	.mo_addr		= pmem_addr,
-	.mo_equal		= pmem_equal,
 	.mo_tx_free		= pmem_tx_free,
 	.mo_tx_alloc		= pmem_tx_alloc,
 	.mo_tx_add		= pmem_tx_add,
@@ -338,44 +356,20 @@ umem_tx_errno(int err)
 
 /* volatile memroy operations */
 
-static umem_id_t
-vmem_id(const struct umem_instance *umm, void *addr)
-{
-	umem_id_t	ummid = UMMID_NULL;
-
-	ummid.off = (uint64_t)addr;
-	return ummid;
-}
-
-static void *
-vmem_addr(const struct umem_instance *umm, umem_id_t ummid)
-{
-	return (void *)ummid.off;
-}
-
-static bool
-vmem_equal(struct umem_instance *umm, umem_id_t ummid1, umem_id_t ummid2)
-{
-	return ummid1.off == ummid2.off;
-}
-
 static int
-vmem_free(struct umem_instance *umm, umem_id_t ummid)
+vmem_free(struct umem_instance *umm, umem_off_t umoff)
 {
-	if (ummid.off != 0)
-		free((void *)ummid.off);
+	free(umem_off2ptr(umm, umoff));
+
 	return 0;
 }
 
-umem_id_t
+umem_off_t
 vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 	   unsigned int type_num)
 {
-	umem_id_t ummid = UMMID_NULL;
-
-	ummid.off = (uint64_t)(flags & POBJ_FLAG_ZERO ?
-			       calloc(1, size) : malloc(size));
-	return ummid;
+	return (uint64_t)((flags & POBJ_FLAG_ZERO) ?
+			  calloc(1, size) : malloc(size));
 }
 
 static int
@@ -400,9 +394,6 @@ vmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 }
 
 static umem_ops_t	vmem_ops = {
-	.mo_id		= vmem_id,
-	.mo_addr	= vmem_addr,
-	.mo_equal	= vmem_equal,
 	.mo_tx_free	= vmem_free,
 	.mo_tx_alloc	= vmem_alloc,
 	.mo_tx_add	= NULL,
@@ -411,8 +402,8 @@ static umem_ops_t	vmem_ops = {
 };
 
 static int
-pmem_no_tx_add(struct umem_instance *umm, umem_id_t ummid,
-	    uint64_t offset, size_t size)
+pmem_no_tx_add(struct umem_instance *umm, umem_off_t umoff,
+	       uint64_t offset, size_t size)
 {
 	return 0;
 }
@@ -424,9 +415,6 @@ pmem_no_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 }
 
 static umem_ops_t	pmem_no_snap_ops = {
-	.mo_id			= pmem_id,
-	.mo_addr		= pmem_addr,
-	.mo_equal		= pmem_equal,
 	.mo_tx_free		= pmem_tx_free,
 	.mo_tx_alloc		= pmem_tx_alloc,
 	.mo_tx_add		= pmem_no_tx_add,
@@ -476,7 +464,7 @@ static void
 set_offsets(struct umem_instance *umm)
 {
 	char		*root;
-	umem_id_t	 root_oid;
+	PMEMoid		 root_oid;
 
 	if (umm->umm_id == UMEM_CLASS_VMEM) {
 		umm->umm_base = 0;
@@ -485,7 +473,7 @@ set_offsets(struct umem_instance *umm)
 	}
 
 	root_oid = pmemobj_root(umm->umm_pool, 0);
-	D_ASSERTF(!UMMID_IS_NULL(root_oid),
+	D_ASSERTF(!OID_IS_NULL(root_oid),
 		  "You must call pmemobj_root before umem_class_init\n");
 
 	root = pmemobj_direct(root_oid);
