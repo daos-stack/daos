@@ -36,6 +36,9 @@
 #include <gurt/common.h>
 #include <gurt/errno.h>
 
+/*
+ * Utility helper methods
+ */
 static size_t
 aligned_strlen(const char *str)
 {
@@ -44,6 +47,9 @@ aligned_strlen(const char *str)
 	return D_ALIGNUP(len, 8);
 }
 
+/*
+ * Tests
+ */
 static void
 test_ace_alloc_principal_user(void **state)
 {

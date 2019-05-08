@@ -26,7 +26,6 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
-	"os"
 	"sync"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -49,14 +48,12 @@ type controlService struct {
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
-	if !c.config.FormatOverride {
-		// init sync primitive for storage formatting on each server
-		for idx := range c.config.Servers {
-			wg := new(sync.WaitGroup)
-			wg.Add(1)
+	// init sync primitive for storage formatting on each server
+	for idx := range c.config.Servers {
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
 
-			c.config.Servers[idx].storWaitGroup = wg
-		}
+		c.config.Servers[idx].storWaitGroup = wg
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -82,28 +79,10 @@ func (c *controlService) Teardown() {
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
 
-	if !c.config.FormatOverride {
-		// decrement counter to release blocked goroutines
-		for idx := range c.config.Servers {
-			c.config.Servers[idx].storWaitGroup.Done()
-		}
+	// decrement counter to release blocked goroutines
+	for idx := range c.config.Servers {
+		c.config.Servers[idx].storWaitGroup.Done()
 	}
-}
-
-func errAnnotate(err error, msg string) (e error) {
-	e = err
-	if os.IsPermission(e) {
-		e = errors.WithMessage(
-			e,
-			"daos_server needs root privileges to format")
-	}
-
-	e = errors.WithMessage(e, msg)
-
-	// log with context of previous frame
-	log.Errordf(common.UtilLogDepth, e.Error())
-
-	return
 }
 
 // loadInitData retrieves initial data from relative file path.

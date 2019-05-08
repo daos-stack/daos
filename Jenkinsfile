@@ -147,6 +147,8 @@ pipeline {
                                                  build/src/common/tests/sched,
                                                  build/src/common/tests/drpc_tests,
                                                  build/src/common/tests/acl_api_tests,
+                                                 build/src/common/tests/acl_util_tests,
+                                                 build/src/common/tests/acl_util_real,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,
