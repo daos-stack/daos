@@ -131,16 +131,6 @@ class ContainerAttributeTest(Test):
                 AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
-    def create_data_set(self):
-        """
-        To create the large attribute dictionary
-        """
-        allchar = string.ascii_letters + string.digits
-        for i in range(1024):
-            self.large_data_set[str(i)] = (
-                "".join(random.choice(allchar)
-                        for x in range(random.randint(1, 100))))
-
     def test_container_attribute(self):
         """
         Test basic container attribute tests.
@@ -153,11 +143,6 @@ class ContainerAttributeTest(Test):
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -176,13 +161,6 @@ class ContainerAttributeTest(Test):
 
             results = {}
             results = self.container.get_attr([name[0]])
-
-            # for this test the dictionary has been altered, need to just
-            # set it to what we are expecting to get back
-            if name[0] is not None:
-                if "largenumberofattr" in name[0]:
-                    attr_dict.clear()
-                    attr_dict[name[0]] = value[0]
 
             verify_get_attr(attr_dict, results)
 
@@ -211,11 +189,6 @@ class ContainerAttributeTest(Test):
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:

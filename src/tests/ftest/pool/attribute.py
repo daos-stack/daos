@@ -38,10 +38,10 @@ sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 import server_utils
 import write_host_file
-import AgentUtils
 
 from general_utils import DaosTestError
 from daos_api import DaosContext, DaosPool, DaosApiError
+from AgentUtils import run_agent, stop_agent
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
@@ -102,8 +102,7 @@ class PoolAttributeTest(Test):
                 self.hostlist = self.params.get("test_machines", '/run/hosts/*')
                 self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                                 self.workdir)
-                self.agent_sessions = AgentUtils.run_agent(basepath,
-                                                           self.hostlist)
+                self.agent_sessions = run_agent(basepath, self.hostlist)
                 server_utils.run_server(self.hostfile, server_group, basepath)
 
                 createmode = self.params.get("mode",
@@ -132,19 +131,11 @@ class PoolAttributeTest(Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
-            if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
-
-    def create_data_set(self):
-        """
-        To create the large attribute dictionary
-        """
-        allchar = string.ascii_letters + string.digits
-        for i in range(1024):
-            self.large_data_set[str(i)] = (
-                "".join(random.choice(allchar)
-                        for x in range(random.randint(1, 100))))
+            try:
+                if self.agent_sessions:
+                    stop_agent(None, self.agent_sessions)
+            finally:
+                server_utils.stop_server(hosts=self.hostlist)
 
     def test_pool_attributes(self):
         """
@@ -167,14 +158,6 @@ class PoolAttributeTest(Test):
                 break
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                #ramdonly generated data result is unpredictable
-                #let the callback function provide the result
-                expected_result = 'TBD'
-
         try:
             self.pool.set_attr(data=attr_dict)
             size, buf = self.pool.list_attr()
@@ -185,13 +168,9 @@ class PoolAttributeTest(Test):
                 # Request something that doesn't exist
                 if "Negative" in name[0]:
                     name[0] = "rubbish"
-                # large attr test messes with the dictionary so skip
-                # the get test
-                if "largenumberofattr" not in name[0]:
-                    results = {}
-                    results = self.pool.get_attr([name[0]])
-                    verify_get_attr(attr_dict, results)
-
+                results = {}
+                results = self.pool.get_attr([name[0]])
+                verify_get_attr(attr_dict, results)
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
@@ -229,14 +208,6 @@ class PoolAttributeTest(Test):
                 break
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                #ramdonly generated data result is unpredictable
-                #let the callback function provide the result
-                expected_result = 'TBD'
-
         try:
             GLOB_SIGNAL = threading.Event()
             self.pool.set_attr(attr_dict, None, cb_func)
