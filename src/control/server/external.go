@@ -60,8 +60,8 @@ type External interface {
 	getAbsInstallPath(string) (string, error)
 	lookupUser(string) (*user.User, error)
 	lookupGroup(string) (*user.Group, error)
-	setUid(int64) error
-	setGid(int64) error
+	setUID(int64) error
+	setGID(int64) error
 	getHistory() []string
 }
 
@@ -206,14 +206,14 @@ func (e *ext) lookupGroup(groupName string) (*user.Group, error) {
 	return user.LookupGroup(groupName)
 }
 
-func (e *ext) setUid(uid int64) error {
+func (e *ext) setUID(uid int64) error {
 	if cerr, errno := C.setuid(C.__uid_t(uid)); cerr != 0 {
 		return errors.Errorf("C.setuid rc: %d, errno: %d", cerr, errno)
 	}
 	return nil
 }
 
-func (e *ext) setGid(gid int64) error {
+func (e *ext) setGID(gid int64) error {
 	if cerr, errno := C.setgid(C.__gid_t(gid)); cerr != 0 {
 		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
 	}

@@ -25,8 +25,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"os"
 	"sync"
+	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -83,6 +86,53 @@ func (c *controlService) Teardown() {
 	for idx := range c.config.Servers {
 		c.config.Servers[idx].storWaitGroup.Done()
 	}
+}
+
+// awaitStorageFormat checks if running as root and server superblocks exist,
+// if both conditions are true, wait until storage is formatted through client
+// API calls from management tool. Then drop privileges of running process.
+func awaitStorageFormat(config *configuration) error {
+	msgFormat := "storage format on server %d "
+	msgSkip := "skipping " + msgFormat
+	msgWait := "waiting for " + msgFormat
+
+	if syscall.Getuid() == 0 {
+		for i, srv := range config.Servers {
+			if ok, err := config.ext.exists(
+				iosrvSuperPath(srv.ScmMount)); err != nil {
+
+				return errors.WithMessage(
+					err, "checking superblock exists")
+			} else if ok {
+				log.Debugf(
+					msgSkip+"(server already formatted)\n",
+					i)
+
+				continue
+			}
+
+			// want this to be visible on stdout and log
+			fmt.Printf(msgWait, i)
+			log.Debugf(msgWait, i)
+
+			// wait on storage format client API call
+			srv.storWaitGroup.Wait()
+		}
+
+		if err := dropPrivileges(
+			config.ext, config.UserName, config.GroupName); err != nil {
+
+			log.Errorf(
+				"Failed to drop privileges: %s, running as root"+
+					"is dangerous and is not advised!", err)
+		}
+	} else {
+		log.Debugf(
+			"skipping storage format (%s running as non-root user)\n",
+			os.Args[0])
+	}
+
+	return nil
 }
 
 // loadInitData retrieves initial data from relative file path.
