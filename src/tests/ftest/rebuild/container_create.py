@@ -21,17 +21,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from avocado import fail_on
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
-from general_utils import get_random_string
-
-from daos_utils import (
-    get_pool, get_container, get_pool_status, kill_server, write_single_objects,
-    read_single_objects, read_during_rebuild, wait_for_rebuild,
-    DaosUtilityError)
-
-from time import sleep
-from os import geteuid, getegid
+from general_utils import (
+    get_pool, get_container, kill_server, DaosTestError, get_pool_status,
+    wait_for_rebuild)
+from io_utilities import (
+    read_single_objects, read_during_rebuild, write_single_objects)
 
 
 class ContainerCreate(TestWithServers):
@@ -79,7 +73,7 @@ class ContainerCreate(TestWithServers):
                                                    record_qty, akey_size,
                                                    dkey_size, data_size, rank,
                                                    obj_class, self.d_log)
-        except DaosUtilityError as excep:
+        except DaosTestError as excep:
             self.fail("Failed to write initial objects to pool: "
                       "{0}".format(str(excep)))
 
@@ -103,7 +97,7 @@ class ContainerCreate(TestWithServers):
         try:
             rebuild_write = write_single_objects(container2, 1, 1, 5, 5, 10,
                                                  rebuild_write_rank, obj_class)
-        except DaosUtilityError as excep:
+        except DaosTestError as excep:
             self.fail("Failed to write object to second container: "
                       "{0}".format(str(excep)))
 

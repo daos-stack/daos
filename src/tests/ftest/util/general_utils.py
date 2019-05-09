@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+
 import os
 import re
 import json
@@ -28,6 +30,14 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from avocado import fail_on
+from time import sleep
+
+class DaosTestError(Exception):
+    """
+    DAOS API exception class
+    """
+
 
 def get_file_path(bin_name, dir_path=""):
     """
@@ -92,11 +102,6 @@ def process_host_list(hoststr):
 
     return host_list
 
-class DaosTestError(Exception):
-    """
-    DAOS API exception class
-    """
-
 def get_random_string(length, exclude=None):
     """Create a specified length string of random ascii letters and numbers.
 
@@ -117,3 +122,148 @@ def get_random_string(length, exclude=None):
             random.choice(string.ascii_uppercase + string.digits)
             for _ in range(length))
     return random_string
+
+@fail_on(DaosApiError)
+def get_pool(context, mode, size, name, svcn=1, log=None):
+    """Return a DAOS pool that has been created an connected.
+
+    Args:
+        context (DaosContext): the context to use to create the pool
+        mode (int): the pool mode
+        size (int): the size of the pool
+        name (str): the name of the pool
+        svcn (int): the number of pool replica leaders
+        log (DaosLog|None): object for logging messages
+
+    Returns:
+        DaosPool: an object representing a DAOS pool
+
+    """
+    if log:
+        log.info("Creating a pool")
+    pool = DaosPool(context)
+    pool.create(mode, os.geteuid(), os.getegid(), size, name, svcn=svcn)
+    if log:
+        log.info("Connecting to the pool")
+    pool.connect(1 << 1)
+    return pool
+
+
+@fail_on(DaosApiError)
+def get_container(context, pool, log=None):
+    """Retrun a DAOS a container that has been created an opened.
+
+    Args:
+        context (DaosContext): the context to use to create the container
+        pool (DaosPool): pool in which to create the container
+        log (DaosLog|None): object for logging messages
+
+    Returns:
+        DaosContainer: an object representing a DAOS container
+
+    """
+    if log:
+        log.info("Creating a container")
+    container = DaosContainer(context)
+    container.create(pool.handle)
+    if log:
+        log.info("Opening a container")
+    container.open()
+    return container
+
+
+@fail_on(DaosApiError)
+def kill_server(server_group, context, rank, pool, log=None):
+    """Kill a specific server rank.
+
+    Args:
+        server_group (str):
+        context (DaosContext): the context to use to create the DaosServer
+        rank (int): daos server rank to kill
+        pool (DaosPool): the DaosPool from which to exclude the rank
+        log (DaosLog|None): object for logging messages
+
+    Returns:
+        None
+
+    """
+    if log:
+        log.info("Killing DAOS server {} (rank {})".format(server_group, rank))
+    server = DaosServer(context, server_group, rank)
+    server.kill(1)
+    if log:
+        log.info("Excluding server rank {}".format(rank))
+    pool.exclude([rank])
+
+
+@fail_on(DaosApiError)
+def get_pool_status(pool, log):
+    """Determine if the pool rebuild is complete.
+
+    Args:
+        pool (DaosPool): pool for which to determine if rebuild is complete
+        log (logging): logging object used to report the pool status
+
+    Returns:
+        None
+
+    """
+    pool_info = pool.pool_query()
+    message = "Pool: pi_ntargets={}".format(pool_info.pi_ntargets)
+    message += ", pi_nnodes={}".format(
+        pool_info.pi_nnodes)
+    message += ", pi_ndisabled={}".format(
+        pool_info.pi_ndisabled)
+    message += ", rs_version={}".format(
+        pool_info.pi_rebuild_st.rs_version)
+    message += ", rs_done={}".format(
+        pool_info.pi_rebuild_st.rs_done)
+    message += ", rs_toberb_obj_nr={}".format(
+        pool_info.pi_rebuild_st.rs_toberb_obj_nr)
+    message += ", rs_obj_nr={}".format(
+        pool_info.pi_rebuild_st.rs_obj_nr)
+    message += ", rs_rec_nr={}".format(
+        pool_info.pi_rebuild_st.rs_rec_nr)
+    message += ", rs_errno={}".format(
+        pool_info.pi_rebuild_st.rs_errno)
+    log.info(message)
+    return pool_info
+
+
+def is_pool_rebuild_complete(pool, log):
+    """Determine if the pool rebuild is complete.
+
+    Args:
+        pool (DaosPool): pool for which to determine if rebuild is complete
+        log (logging): logging object used to report the pool status
+
+    Returns:
+        bool: pool rebuild completion status
+
+    """
+    get_pool_status(pool, log)
+    return pool.pool_info.pi_rebuild_st.rs_done == 1
+
+
+def wait_for_rebuild(pool, log, to_start, interval):
+    """Wait for the rebuild to start or end.
+
+    Args:
+        pool (DaosPool): pool for which to determine if rebuild is complete
+        log (logging): logging object used to report the pool status
+        to_start (bool): whether to wait for rebuild to start or end
+        interval (int): number of seconds to wait in between rebuild
+            completion checks
+
+    Returns:
+        None
+
+    """
+    log.info(
+        "Waiting for rebuild to %s ...",
+        "start" if to_start else "complete")
+    while is_pool_rebuild_complete(pool, log) == to_start:
+        log.info(
+            "  Rebuild %s ...",
+            "has not yet started" if to_start else "in progress")
+        sleep(interval)
