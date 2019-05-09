@@ -110,10 +110,9 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	}
 
 	/* Now check the container name */
-	if (ir->ir_id.irid_dfs->dffs_cont &&
-		(strncmp(ir->ir_id.irid_dfs->dffs_cont,
+	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
 		    ir_id->irid_dfs->dffs_cont,
-			NAME_MAX) != 0)) {
+			NAME_MAX) != 0) {
 		return false;
 	}
 
