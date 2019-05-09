@@ -36,6 +36,8 @@
 		print_message(__VA_ARGS__);	\
 }
 
+static bool slow_test;
+
 static void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	     char *dkey, char *akey, daos_iod_type_t type, daos_size_t iod_size,
@@ -1514,7 +1516,6 @@ fill_cont(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	return 0;
 }
 
-#define AT_REPEAT_AGG_CNT	10
 /*
  * Update & Aggregate EV repeatedly.
  */
@@ -1529,7 +1530,7 @@ aggregate_14(void **state)
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
 	char			 akey[UPDATE_AKEY_SIZE] = { 0 };
-	int			 i, rc;
+	int			 i, repeat_cnt, rc;
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
 	assert_int_equal(rc, 0);
@@ -1538,8 +1539,13 @@ aggregate_14(void **state)
 	fill_size = pool_info.pif_nvme_free ? : pool_info.pif_scm_free;
 	assert_true(fill_size > 0);
 
-	if (fill_size > VPOOL_2G)
-		fill_size = VPOOL_2G;
+	if (slow_test) {
+		fill_size = min(fill_size, VPOOL_2G);
+		repeat_cnt = 5;
+	} else {
+		fill_size = min(fill_size, VPOOL_1G);
+		repeat_cnt = 2;
+	}
 	fill_size = fill_size / 3;
 
 	oid = dts_unit_oid_gen(0, 0, 0);
@@ -1547,7 +1553,7 @@ aggregate_14(void **state)
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
 	epr.epr_lo = 0;
-	for (i = 0; i < AT_REPEAT_AGG_CNT; i++) {
+	for (i = 0; i < repeat_cnt; i++) {
 		VERBOSE_MSG("Fill round: %d, size:"DF_U64", epc_hi:"DF_U64"\n",
 			    i, fill_size, epc_hi);
 
@@ -1581,7 +1587,7 @@ aggregate_14(void **state)
 	assert_int_equal(rc, 0);
 	print_space_info(&pool_info, "FINAL");
 
-	assert_int_equal(i, AT_REPEAT_AGG_CNT);
+	assert_int_equal(i, repeat_cnt);
 }
 
 static int
@@ -1657,8 +1663,9 @@ run_discard_tests(void)
 }
 
 int
-run_aggregate_tests(void)
+run_aggregate_tests(bool slow)
 {
+	slow_test = slow;
 	return cmocka_run_group_tests_name("VOS Aggregate Test",
 					   aggregate_tests, setup_io,
 					   teardown_io);
