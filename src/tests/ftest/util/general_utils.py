@@ -101,7 +101,6 @@ def process_host_list(hoststr):
 
     return host_list
 
-
 def get_random_string(length, exclude=None):
     """Create a specified length string of random ascii letters and numbers.
 
@@ -122,7 +121,6 @@ def get_random_string(length, exclude=None):
             random.choice(string.ascii_uppercase + string.digits)
             for _ in range(length))
     return random_string
-
 
 @fail_on(DaosApiError)
 def get_pool(context, mode, size, name, svcn=1, log=None):
