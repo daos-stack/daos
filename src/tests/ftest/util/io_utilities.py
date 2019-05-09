@@ -23,13 +23,27 @@
 '''
 from __future__ import print_function
 
+from general_utils import get_random_string, DaosTestError
+from general_utils import is_pool_rebuild_complete
+from daos_api import DaosApiError
+
 import time
-import random
-import string
+
 
 def continuous_io(container, seconds):
-    """ Perform a combination of reads/writes for the specified time period """
+    """Perform a combination of reads/writes for the specified time period.
 
+    Args:
+        container (DaosContainer): contianer in which to write the data
+        seconds (int): how long to write data
+
+    Returns:
+        int: number of bytes written to the container
+
+    Raises:
+        ValueError: if a data mismatch is detected
+
+    """
     finish_time = time.time() + seconds
     oid = None
     total_written = 0
@@ -37,12 +51,9 @@ def continuous_io(container, seconds):
 
     while time.time() < finish_time:
         # make some stuff up
-        dkey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                       for _ in range(5))
-        akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                       for _ in range(5))
-        data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                       for _ in range(size))
+        dkey = get_random_string(5)
+        akey = get_random_string(5)
+        data = get_random_string(size)
 
         # write it then read it back
         oid, epoch = container.write_an_obj(data, size, dkey, akey, oid, 5)
@@ -59,11 +70,17 @@ def continuous_io(container, seconds):
 
     return total_written
 
-def write_until_full(container):
-    """
-    write until we get enospace back
-    """
 
+def write_until_full(container):
+    """Write until we get enospace back.
+
+    Args:
+        container (DaosContainer): contianer in which to write the data
+
+    Returns:
+        int: number of bytes written to the container
+
+    """
     total_written = 0
     size = 2048
     _oid = None
@@ -71,12 +88,9 @@ def write_until_full(container):
     try:
         while True:
             # make some stuff up and write
-            dkey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                           for _ in range(5))
-            akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                           for _ in range(5))
-            data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                           for _ in range(size))
+            dkey = get_random_string(5)
+            akey = get_random_string(5)
+            data = get_random_string(size)
 
             _oid, _epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -84,22 +98,28 @@ def write_until_full(container):
             # collapse down the commited epochs
             container.slip_epoch()
 
-
     except ValueError as exp:
         print(exp)
 
     return total_written
 
+
 def write_quantity(container, size_in_bytes):
-    """ Write a specific number of bytes.  Note the minimum amount
-        that will be written is 2048 bytes.
+    """Write a specific number of bytes.
 
-        container --which container to write to, it should be in an open
-                    state prior to the call
-        size_in_bytes --number of bytes to be written, although no less that
-                        2048 will be written.
+    Note:
+        The minimum amount that will be written is 2048 bytes.
+
+    Args:
+        container (DaosContainer): which container to write to, it should be in
+            an open state prior to the call
+        size_in_bytes (int): total number of bytes to be written, although no
+            less that 2048 will be written.
+
+    Returns:
+        int: number of bytes written to the container
+
     """
-
     total_written = 0
     size = 2048
     _oid = None
@@ -108,12 +128,9 @@ def write_quantity(container, size_in_bytes):
         while total_written < size_in_bytes:
 
             # make some stuff up and write
-            dkey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                           for _ in range(5))
-            akey = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                           for _ in range(5))
-            data = ''.join(random.choice(string.ascii_uppercase + string.digits)
-                           for _ in range(size))
+            dkey = get_random_string(5)
+            akey = get_random_string(5)
+            data = get_random_string(size)
 
             _oid, _epoch = container.write_an_obj(data, size, dkey, akey)
             total_written += size
@@ -125,3 +142,256 @@ def write_quantity(container, size_in_bytes):
         print(exp)
 
     return total_written
+
+
+def write_single_objects(
+        container, obj_qty, rec_qty, akey_size, dkey_size, data_size, rank,
+        object_class, log=None):
+    """Write random single objects to the container.
+
+    Args:
+        container (DaosContainer): the container in which to write objects
+        obj_qty (int): the number of objects to create in the container
+        rec_qty (int): the number of records to create in each object
+        akey_size (int): the akey length
+        dkey_size (int): the dkey length
+        data_size (int): the length of data to write in each record
+        rank (int): the server rank to which to write the records
+        log (DaosLog|None): object for logging messages
+
+    Returns:
+        list: a list of dictionaries containing the object, transaction
+            number, and data written to the container
+
+    Raises:
+        DaosTestError: if an error is detected writing the objects or
+            verifying the write of the objects
+
+    """
+    if log:
+        log.info("Creating objects in the container")
+    object_list = []
+    for x in range(obj_qty):
+        object_list.append({"obj": None, "txn": None, "record": []})
+        for _ in range(rec_qty):
+            akey = get_random_string(
+                akey_size,
+                [record["akey"] for record in object_list[x]["record"]])
+            dkey = get_random_string(
+                dkey_size,
+                [record["dkey"] for record in object_list[x]["record"]])
+            data = get_random_string(data_size)
+            object_list[x]["record"].append(
+                {"akey": akey, "dkey": dkey, "data": data})
+
+            # Write single data to the container
+            try:
+                (object_list[x]["obj"], object_list[x]["txn"]) = \
+                    container.write_an_obj(
+                        data, len(data), dkey, akey, object_list[x]["obj"],
+                        rank, object_class)
+            except DaosApiError as error:
+                raise DaosTestError(
+                    "Error writing data (dkey={}, akey={}, data={}) to "
+                    "the container: {}".format(dkey, akey, data, error))
+
+            # Verify the single data was written to the container
+            data_read = read_single_objects(
+                container, data_size, dkey, akey, object_list[x]["obj"],
+                object_list[x]["txn"])
+            if data != data_read:
+                raise DaosTestError(
+                    "Written data confirmation failed:"
+                    "\n  wrote: {}\n  read:  {}".format(data, data_read))
+
+    return object_list
+
+
+def read_single_objects(container, size, dkey, akey, obj, txn):
+    """Read data from the container.
+
+    Args:
+        container (DaosContainer): the container from which to read objects
+        size (int): amount of data to read
+        dkey (str): dkey used to access the data
+        akey (str): akey used to access the data
+        obj (object): object to read
+        txn (int): transaction number
+
+    Returns:
+        str: data read from the container
+
+    Raises:
+        DaosTestError: if an error is dectected reading the objects
+
+    """
+    try:
+        data = container.read_an_obj(size, dkey, akey, obj, txn)
+    except DaosApiError as error:
+        raise DaosTestError(
+            "Error reading data (dkey={}, akey={}, size={}) from the "
+            "container: {}".format(dkey, akey, size, error))
+    return data.value
+
+
+def write_array_objects(
+        container, obj_qty, rec_qty, akey_size, dkey_size, data_size, rank,
+        object_class, log=None):
+    """Write array objects to the container.
+
+    Args:
+        container (DaosContainer): the container in which to write objects
+        obj_qty (int): the number of objects to create in the container
+        rec_qty (int): the number of records to create in each object
+        akey_size (int): the akey length
+        dkey_size (int): the dkey length
+        data_size (int): the length of data to write in each record
+        rank (int): the server rank to which to write the records
+        log (DaosLog|None): object for logging messages
+
+    Returns:
+        list: a list of dictionaries containing the object, transaction
+            number, and data written to the container
+
+    Raises:
+        DaosTestError: if an error is detected writing the objects or
+            verifying the write of the objects
+
+    """
+    if log:
+        log.info("Creating objects in the container")
+    object_list = []
+    for x in range(obj_qty):
+        object_list.append({"obj": None, "txn": None, "record": []})
+        for _ in range(rec_qty):
+            akey = get_random_string(
+                akey_size,
+                [record["akey"] for record in object_list[x]["record"]])
+            dkey = get_random_string(
+                dkey_size,
+                [record["dkey"] for record in object_list[x]["record"]])
+            data = [get_random_string(data_size) for _ in range(data_size)]
+            object_list[x]["record"].append(
+                {"akey": akey, "dkey": dkey, "data": data})
+
+            # Write the data to the container
+            try:
+                object_list[x]["obj"], object_list[x]["txn"] = \
+                    container.write_an_array_value(
+                        data, dkey, akey, object_list[x]["obj"], rank,
+                        object_class)
+            except DaosApiError as error:
+                raise DaosTestError(
+                    "Error writing data (dkey={}, akey={}, data={}) to "
+                    "the container: {}".format(dkey, akey, data, error))
+
+            # Verify the data was written to the container
+            data_read = read_array_objects(
+                container, data_size, data_size + 1, dkey, akey,
+                object_list[x]["obj"], object_list[x]["txn"])
+            if data != data_read:
+                raise DaosTestError(
+                    "Written data confirmation failed:"
+                    "\n  wrote: {}\n  read:  {}".format(data, data_read))
+
+    return object_list
+
+
+def read_array_objects(container, size, items, dkey, akey, obj, txn):
+    """Read data from the container.
+
+    Args:
+        container (DaosContainer): the container from which to read objects
+        size (int): number of arrays to read
+        items (int): number of items in each array to read
+        dkey (str): dkey used to access the data
+        akey (str): akey used to access the data
+        obj (object): object to read
+        txn (int): transaction number
+
+    Returns:
+        str: data read from the container
+
+    Raises:
+        DaosTestError: if an error is dectected reading the objects
+
+    """
+    try:
+        data = container.read_an_array(
+            size, items, dkey, akey, obj, txn)
+    except DaosApiError as error:
+        raise DaosTestError(
+            "Error reading data (dkey={}, akey={}, size={}, items={}) "
+            "from the container: {}".format(
+                dkey, akey, size, items, error))
+    return [item[:-1] for item in data]
+
+
+def read_during_rebuild(
+        container, pool, log, written_objects, data_size, read_method):
+    """Read all the written data while rebuild is still in progress.
+
+    Args:
+        container (DaosContainer): the container from which to read objects
+        pool (DaosPool): pool for which to determine if rebuild is complete
+        log (logging): logging object used to report the pool status
+        written_objects (list): record data type to write/read
+        data_size (int):
+        read_method (object): function to call to read the data, e.g.
+            read_single_objects or read_array_objects
+
+    Returns:
+        None
+
+    Raises:
+        DaosTestError: if the rebuild completes before the read is complete
+            or read errors are detected
+
+    """
+    x = 0
+    y = 0
+    incomplete = True
+    failed_reads = False
+    while not is_pool_rebuild_complete(pool, log) and incomplete:
+        incomplete = x < len(written_objects)
+        if incomplete:
+            # Read the data from the previously written record
+            record_info = {
+                "container": container,
+                "size": data_size,
+                "dkey": written_objects[x]["record"][y]["dkey"],
+                "akey": written_objects[x]["record"][y]["akey"],
+                "obj": written_objects[x]["obj"],
+                "txn": written_objects[x]["txn"]}
+            if read_method.__name__ == "read_array_objects":
+                record_info["items"] = data_size + 1
+            read_data = read_method(**record_info)
+
+            # Verify the data just read matches the original data written
+            record_info["data"] = written_objects[x]["record"][y]["data"]
+            if record_info["data"] != read_data:
+                failed_reads = True
+                log.error(
+                    "<obj: %s, rec: %s>: Failed reading data "
+                    "(dkey=%s, akey=%s):\n  read:  %s\n  wrote: %s",
+                    x, y, record_info["dkey"], record_info["akey"],
+                    read_data, record_info["data"])
+            else:
+                log.info(
+                    "<obj: %s, rec: %s>: Passed reading data "
+                    "(dkey=%s, akey=%s)",
+                    x, y, record_info["dkey"], record_info["akey"])
+
+            # Read the next record in this object or the next object
+            y += 1
+            if y >= len(written_objects[x]["record"]):
+                x += 1
+                y = 0
+
+    # Verify that all of the objects and records were read successfully
+    # while the rebuild was still active
+    if incomplete:
+        raise DaosTestError(
+            "Rebuild completed before all the written data could be read")
+    elif failed_reads:
+        raise DaosTestError("Errors detected reading data during rebuild")
