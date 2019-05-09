@@ -28,7 +28,7 @@ struct utest_context {
 	char			uc_pool_name[UTEST_POOL_NAME_MAX + 1];
 	struct umem_instance	uc_umm;
 	struct umem_attr	uc_uma;
-	umem_id_t		uc_root;
+	umem_off_t		uc_root;
 };
 
 struct utest_root {
@@ -76,6 +76,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 {
 	struct utest_context	*ctx;
 	struct utest_root	*root;
+	PMEMoid			 root_oid;
 	int			 rc;
 
 	if (strnlen(name, UTEST_POOL_NAME_MAX + 1) > UTEST_POOL_NAME_MAX)
@@ -96,18 +97,19 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		goto free_ctx;
 	}
 
-	ctx->uc_root = pmemobj_root(ctx->uc_uma.uma_pool,
-				 sizeof(*root) + root_size);
-	if (OID_IS_NULL(ctx->uc_root)) {
+	root_oid = pmemobj_root(ctx->uc_uma.uma_pool,
+				sizeof(*root) + root_size);
+	if (OID_IS_NULL(root_oid)) {
 		perror("Could not get pmem root");
 		rc = -DER_MISC;
 		goto destroy;
 	}
 
+	ctx->uc_root = root_oid.off;
 
 	umem_class_init(&ctx->uc_uma, &ctx->uc_umm);
 
-	root = umem_id2ptr(&ctx->uc_umm, ctx->uc_root);
+	root = umem_off2ptr(&ctx->uc_umm, ctx->uc_root);
 
 	rc = utest_tx_begin(ctx);
 	if (rc != 0)
@@ -152,12 +154,12 @@ utest_vmem_create(size_t root_size, struct utest_context **utx)
 
 	ctx->uc_root = umem_zalloc(&ctx->uc_umm, sizeof(*root) + root_size);
 
-	if (UMMID_IS_NULL(ctx->uc_root)) {
+	if (UMOFF_IS_NULL(ctx->uc_root)) {
 		rc = -DER_NOMEM;
 		goto free_ctx;
 	}
 
-	root = umem_id2ptr(&ctx->uc_umm, ctx->uc_root);
+	root = umem_off2ptr(&ctx->uc_umm, ctx->uc_root);
 
 	root->ur_class = UMEM_CLASS_VMEM;
 	root->ur_root_size = root_size;
@@ -179,7 +181,7 @@ utest_utx_destroy(struct utest_context *utx)
 	int			 refcnt = 0;
 	int			 rc = 0;
 
-	root = umem_id2ptr(&utx->uc_umm, utx->uc_root);
+	root = umem_off2ptr(&utx->uc_umm, utx->uc_root);
 
 	if (utx->uc_uma.uma_id == UMEM_CLASS_VMEM) {
 		root->ur_ref_cnt--;
@@ -226,19 +228,19 @@ utest_utx2root(struct utest_context *utx)
 {
 	struct utest_root	*root;
 
-	root = umem_id2ptr(&utx->uc_umm, utx->uc_root);
+	root = umem_off2ptr(&utx->uc_umm, utx->uc_root);
 
 	return &root->ur_root[0];
 }
 
-umem_id_t
-utest_utx2rootmmid(struct utest_context *utx)
+umem_off_t
+utest_utx2rootoff(struct utest_context *utx)
 {
 	return utx->uc_root;
 }
 
 int
-utest_alloc(struct utest_context *utx, umem_id_t *mmid, size_t size,
+utest_alloc(struct utest_context *utx, umem_off_t *off, size_t size,
 	    utest_init_cb cb, const void *cb_arg)
 {
 	int	rc;
@@ -247,29 +249,7 @@ utest_alloc(struct utest_context *utx, umem_id_t *mmid, size_t size,
 	if (rc != 0)
 		return rc;
 
-	*mmid = umem_alloc(&utx->uc_umm, size);
-	if (UMMID_IS_NULL(*mmid)) {
-		rc = -DER_NOMEM;
-		goto end;
-	}
-
-	if (cb)
-		cb(umem_id2ptr(&utx->uc_umm, *mmid), size, cb_arg);
-end:
-	return utest_tx_end(utx, rc);
-}
-
-int
-utest_alloc_off(struct utest_context *utx, umem_off_t *off, size_t size,
-		utest_init_cb cb, const void *cb_arg)
-{
-	int	rc;
-
-	rc = utest_tx_begin(utx);
-	if (rc != 0)
-		return rc;
-
-	*off = umem_alloc_off(&utx->uc_umm, size);
+	*off = umem_alloc(&utx->uc_umm, size);
 	if (UMOFF_IS_NULL(*off)) {
 		rc = -DER_NOMEM;
 		goto end;
@@ -282,7 +262,7 @@ end:
 }
 
 int
-utest_free(struct utest_context *utx, umem_id_t mmid)
+utest_free(struct utest_context *utx, umem_off_t umoff)
 {
 	int	rc;
 
@@ -290,21 +270,7 @@ utest_free(struct utest_context *utx, umem_id_t mmid)
 	if (rc != 0)
 		return rc;
 
-	rc = umem_free(&utx->uc_umm, mmid);
-
-	return utest_tx_end(utx, rc);
-}
-
-int
-utest_free_off(struct utest_context *utx, umem_off_t umoff)
-{
-	int	rc;
-
-	rc = utest_tx_begin(utx);
-	if (rc != 0)
-		return rc;
-
-	rc = umem_free_off(&utx->uc_umm, umoff);
+	rc = umem_free(&utx->uc_umm, umoff);
 
 	return utest_tx_end(utx, rc);
 }

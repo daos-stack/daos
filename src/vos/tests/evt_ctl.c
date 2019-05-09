@@ -238,7 +238,7 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 	       size_t size)
 {
 	int		rc;
-	umem_id_t	mmid;
+	umem_off_t	umoff;
 
 	addr->ba_type = DAOS_MEDIA_SCM;
 	if (src == NULL) {
@@ -246,12 +246,12 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 		return 0;
 	}
 
-	rc = utest_alloc(utx, &mmid, size, init_mem, src);
+	rc = utest_alloc(utx, &umoff, size, init_mem, src);
 
 	if (rc != 0)
 		goto end;
 
-	addr->ba_off = mmid.off;
+	bio_addr_set(addr, DAOS_MEDIA_SCM, umoff);
 end:
 	return rc;
 }
@@ -357,12 +357,8 @@ ts_delete_rect(void **state)
 			D_FATAL("Returned rectangle width doesn't match\n");
 		}
 
-		if (!bio_addr_is_hole(&ent.en_addr)) {
-			umem_id_t	mmid;
-
-			mmid = utest_off2mmid(ts_utx, ent.en_addr.ba_off);
-			utest_free(ts_utx, mmid);
-		}
+		if (!bio_addr_is_hole(&ent.en_addr))
+			utest_free(ts_utx, ent.en_addr.ba_off);
 	} else {
 		if (rc == 0) {
 			D_FATAL("Delete rect should have failed\n");
@@ -759,7 +755,6 @@ test_evt_iter_delete(void **state)
 {
 	struct test_arg		*arg = *state;
 	int			*value;
-	umem_id_t		 mmid;
 	daos_handle_t		 toh;
 	daos_handle_t		 ih;
 	struct evt_entry_in	 entry = {0};
@@ -844,11 +839,10 @@ test_evt_iter_delete(void **state)
 
 		assert_false(bio_addr_is_hole(&addr));
 
-		mmid = utest_off2mmid(arg->ta_utx, addr.ba_off);
 		value = utest_off2ptr(arg->ta_utx, addr.ba_off);
 
 		sum += *value;
-		utest_free(arg->ta_utx, mmid);
+		utest_free(arg->ta_utx, addr.ba_off);
 	}
 	expected_sum = NUM_PARTIAL * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
@@ -872,11 +866,10 @@ test_evt_iter_delete(void **state)
 
 		assert_false(bio_addr_is_hole(&addr));
 
-		mmid = utest_off2mmid(arg->ta_utx, addr.ba_off);
 		value = utest_off2ptr(arg->ta_utx, addr.ba_off);
 
 		sum += *value;
-		utest_free(arg->ta_utx, mmid);
+		utest_free(arg->ta_utx, addr.ba_off);
 	}
 	rc = evt_iter_finish(ih);
 	assert_int_equal(rc, 0);

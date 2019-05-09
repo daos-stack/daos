@@ -147,6 +147,8 @@ pipeline {
                                                  build/src/common/tests/sched,
                                                  build/src/common/tests/drpc_tests,
                                                  build/src/common/tests/acl_api_tests,
+                                                 build/src/common/tests/acl_util_tests,
+                                                 build/src/common/tests/acl_util_real,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,
@@ -807,7 +809,7 @@ pipeline {
             parallel {
                 stage('Functional') {
                     agent {
-                        label 'ci_vm8'
+                        label 'ci_vm9'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
@@ -819,7 +821,8 @@ pipeline {
                                            if [ -z "$test_tag" ]; then
                                                test_tag=regression,vm
                                            fi
-                                           ./ftest.sh "$test_tag" ''' + env.NODELIST,
+                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
                                 failure_artifacts: 'Functional'
                     }

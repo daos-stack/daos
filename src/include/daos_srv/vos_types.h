@@ -26,7 +26,8 @@
 
 #include <daos_types.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/dtx_srv.h>
+#include <daos_srv/vea.h>
+#include <daos/dtx.h>
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -52,6 +53,10 @@ typedef struct {
 	daos_size_t		pif_scm_free;
 	/** Current NVMe free space in bytes */
 	daos_size_t		pif_nvme_free;
+	/** NVMe block allocator attributes */
+	struct vea_attr		pif_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		pif_vea_stat;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -180,7 +185,7 @@ typedef struct {
 		/** Returned epoch. It is ignored for container iteration. */
 		daos_epoch_t			ie_epoch;
 		/** Return the DTX identifier. */
-		struct daos_tx_id		ie_xid;
+		struct dtx_id			ie_xid;
 	};
 	union {
 		/** Returned earliest update epoch for a key */

@@ -171,16 +171,16 @@ enum vos_dtx_entry_flags {
 };
 
 /**
- * Persisted DTX entry, it is referenced by btr_record::rec_mmid
+ * Persisted DTX entry, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DTX_TABLE.
  */
 struct vos_dtx_entry_df {
 	/** The DTX identifier. */
-	struct daos_tx_id		te_xid;
+	struct dtx_id			te_xid;
 	/** The identifier of the modified object (shard). */
 	daos_unit_oid_t			te_oid;
 	/** The hashed dkey if applicable. */
-	uint64_t			te_dkey_hash[2];
+	uint64_t			te_dkey_hash;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			te_epoch;
 	/** Pool map version. */
@@ -207,8 +207,6 @@ struct vos_dtx_entry_df {
 struct vos_dtx_table_df {
 	/** The count of committed DTXs in the table. */
 	uint64_t			tt_count;
-	/** The time in second when last aggregate the DTXs. */
-	uint64_t			tt_time_last_shrink;
 	/** The list head of committed DTXs. */
 	umem_off_t			tt_entry_head;
 	/** The list tail of committed DTXs. */
@@ -227,6 +225,17 @@ struct vos_obj_table_df {
 	struct btr_root			obt_btr;
 };
 
+enum vos_io_stream {
+	/**
+	 * I/O stream for generic purpose, like client updates, updates
+	 * initiated for rebuild , reintegration or rebalance.
+	 */
+	VOS_IOS_GENERIC		= 0,
+	/** I/O stream for extents coalescing, like aggregation. */
+	VOS_IOS_AGGREGATION,
+	VOS_IOS_CNT
+};
+
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
@@ -236,11 +245,8 @@ struct vos_cont_df {
 	struct vos_obj_table_df		cd_otab_df;
 	/** The DTXs table. */
 	struct vos_dtx_table_df		cd_dtx_table_df;
-	/*
-	 * Allocation hint for block allocator, it can be turned into
-	 * a hint vector when we need to support multiple active epochs.
-	 */
-	struct vea_hint_df		cd_hint_df;
+	/** Allocation hints for block allocator. */
+	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 };
 
 /** btree (d/a-key) record bit flags */
@@ -256,7 +262,7 @@ enum vos_krec_bf {
 };
 
 /**
- * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_mmid
+ * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.
  */
 struct vos_krec_df {
@@ -298,7 +304,7 @@ D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
 
 /**
  * Persisted VOS single value & epoch record, it is referenced by
- * btr_record::rec_mmid of btree VOS_BTR_SINGV.
+ * btr_record::rec_off of btree VOS_BTR_SINGV.
  */
 struct vos_irec_df {
 	/** key checksum size (in bytes) */
@@ -331,14 +337,12 @@ struct vos_obj_df {
 	daos_epoch_t			vo_latest;
 	/** Earliest known update timestamp */
 	daos_epoch_t			vo_earliest;
-	/** Incarnation of the object, it's increased each time it's punched. */
-	uint64_t			vo_incarnation;
 	/** The DTX entry in SCM. */
 	umem_off_t			vo_dtx;
 	/** The count of uncommitted DTXs that share the object. */
 	uint32_t			vo_dtx_shares;
-	/** For 64-bits alignment. */
-	uint32_t			vo_padding;
+	/** Incarnation of the object, it's increased each time it's punched. */
+	uint32_t			vo_incarnation;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };

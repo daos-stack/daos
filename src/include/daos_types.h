@@ -43,6 +43,9 @@ extern "C" {
 
 #include <daos_errno.h>
 
+/** Maximum length (excluding the '\0') of a DAOS system name */
+#define DAOS_SYS_NAME_MAX 15
+
 /** Scatter/gather list for memory buffers */
 #define daos_sg_list_t d_sg_list_t
 
@@ -569,7 +572,10 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
-	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cell,
+	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
 				 * cell size 32KB.
 				 */
 	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
@@ -910,8 +916,23 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
+	/**
+	 * The user who acts as the owner of the pool.
+	 * Format: user@[domain]
+	 */
+	DAOS_PROP_PO_OWNER,
+	/**
+	 * The group that acts as the owner of the pool.
+	 * Format: group@[domain]
+	 */
+	DAOS_PROP_PO_OWNER_GROUP,
 	DAOS_PROP_PO_MAX,
 };
+
+/**
+ * Number of pool property types
+ */
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 /** DAOS space reclaim strategy */
 enum {
@@ -1044,6 +1065,22 @@ typedef struct {
 	/** property entries array */
 	struct daos_prop_entry	*dpp_entries;
 } daos_prop_t;
+
+/**
+ * DAOS Hash Table Handle Types
+ * The handle type, uses the least significant 4-bits in the 64-bits hhash key.
+ * The bit 0 is only used for D_HYTPE_PTR (pointer type), all other types MUST
+ * set bit 0 to 1.
+ */
+enum {
+	DAOS_HTYPE_EQ		= 1, /**< event queue */
+	DAOS_HTYPE_POOL		= 3, /**< pool */
+	DAOS_HTYPE_CO		= 5, /**< container */
+	DAOS_HTYPE_OBJ		= 7, /**< object */
+	DAOS_HTYPE_ARRAY	= 9, /**< array */
+	DAOS_HTYPE_TX		= 11, /**< transaction */
+	/* Must enlarge D_HTYPE_BITS to add more types */
+};
 
 #if defined(__cplusplus)
 }

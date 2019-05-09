@@ -33,7 +33,7 @@ from avocado import Test as avocadoTest
 from avocado import skip
 
 import fault_config_utils
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog
@@ -203,7 +203,7 @@ class TestWithServers(TestWithoutServers):
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir)
 
-        self.agent_sessions = AgentUtils.run_agent(
+        self.agent_sessions = agent_utils.run_agent(
             self.basepath, self.hostlist_servers, self.hostlist_clients)
         server_utils.run_server(
             self.hostfile_servers, self.server_group, self.basepath)
@@ -213,7 +213,7 @@ class TestWithServers(TestWithoutServers):
         try:
             if self.agent_sessions:
                 self.d_log.info("Stopping agents")
-                AgentUtils.stop_agent(
+                agent_utils.stop_agent(
                     self.hostlist_clients, self.agent_sessions)
         finally:
             self.d_log.info("Stopping servers")

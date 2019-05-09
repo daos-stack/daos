@@ -90,7 +90,9 @@ func formatIosrv(
 	}
 	op += " server " + srv.ScmMount
 
-	if _, err := os.Stat(iosrvSuperPath(srv.ScmMount)); err == nil {
+	if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+		return errors.Wrap(err, op)
+	} else if ok {
 		log.Debugf("server %d has already been formatted\n", i)
 
 		if reformat {
@@ -98,19 +100,22 @@ func formatIosrv(
 		}
 
 		return nil
-	} else if !os.IsNotExist(err) {
-		return errors.Wrap(err, op)
 	}
 
-	if config.FormatOverride {
-		log.Debugf(
-			"continuing without storage format on server %d "+
-				"(format_override set in config)\n", i)
-	} else {
-		log.Debugf("waiting for storage format on server %d\n", i)
+	msg := "continuing without storage format on server %d "
+	if syscall.Getuid() == 0 {
+		if config.UserName != "" {
+			log.Debugf("waiting for storage format on server %d\n", i)
 
-		// wait on format storage grpc call before creating superblock
-		srv.FormatCond.Wait()
+			// wait on format storage grpc call before creating superblock
+			srv.storWaitGroup.Wait()
+		} else {
+			log.Debugf(
+				msg+"(username not specified in server config)\n",
+				i)
+		}
+	} else {
+		log.Debugf(msg+"(%s running as non-root user)\n", i, os.Args[0])
 	}
 
 	// check scm has been mounted before proceeding to write to it

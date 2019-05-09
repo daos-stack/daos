@@ -30,7 +30,7 @@ import json
 import threading
 import string
 import random
-from avocado       import Test
+from avocado import Test
 
 sys.path.append('./util')
 sys.path.append('../util')

@@ -44,6 +44,13 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
+/* EC parity is stored in a private address range that is selected by setting
+ * the most-significant bit of the offset (an unsigned long). This effectively
+ * limits the addressing of user extents to the lower 63 bits of the offset
+ * range. The client stack should enforce this limitation.
+ */
+#define PARITY_INDICATOR (1UL << 63)
+
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -52,6 +59,7 @@
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern bool	srv_io_dispatch;
+extern bool	srv_enable_dtx;
 
 /** client object shard */
 struct dc_obj_shard {
@@ -128,8 +136,10 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 extern struct dss_module_key obj_module_key;
 enum obj_profile_op {
 	OBJ_PF_UPDATE_PREP = 0,
+	OBJ_PF_UPDATE_DISPATCH,
 	OBJ_PF_UPDATE_LOCAL,
 	OBJ_PF_UPDATE_END,
+	OBJ_PF_UPDATE_WAIT,
 	OBJ_PF_UPDATE_REPLY,
 	OBJ_PF_UPDATE
 };
@@ -137,6 +147,11 @@ enum obj_profile_op {
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	struct srv_profile	*ot_sp;
+};
+
+struct obj_ec_parity {
+       int             nr;
+       unsigned char   **p_bufs;
 };
 
 static inline struct obj_tls *
@@ -156,7 +171,7 @@ int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
 			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
 			uint32_t fw_cnt, tse_task_t *task,
-			struct daos_tx_id *dti, uint32_t flags);
+			struct dtx_id *dti, uint32_t flags);
 
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
@@ -180,7 +195,7 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
 		       uint32_t fw_cnt, tse_task_t *task,
-		       struct daos_tx_id *dti, uint32_t flags);
+		       struct dtx_id *dti, uint32_t flags);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
@@ -209,15 +224,15 @@ void ds_obj_query_key_handler(crt_rpc_t *rpc);
 #define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
-typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, uint32_t shard, void *arg);
+typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 struct obj_req_disp_arg;
 int ds_obj_req_disp_prepare(crt_opcode_t opc,
 			struct daos_obj_shard_tgt *fw_shard_tgts,
 			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
-			void *prefw_arg, ds_iofw_cb_t postfw_cb,
-			void *postfw_arg, struct obj_req_disp_arg **arg);
+			ds_iofw_cb_t postfw_cb, void *cb_data,
+			uint32_t flags, int dti_cos_count,
+			struct dtx_id *dti_cos, struct obj_req_disp_arg **arg);
 void ds_obj_req_dispatch(void *arg);
-int ds_obj_req_disp_wait(struct obj_req_disp_arg *obj_arg);
 void ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg);
 
 static inline uint64_t
@@ -235,5 +250,8 @@ obj_dkey2hash(daos_key_t *dkey)
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
+int obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl,
+			   uint32_t *sg_idx, size_t *sg_off,
+			   struct obj_ec_parity *parity, int p_idx);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
