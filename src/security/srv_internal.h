@@ -29,8 +29,8 @@
 #define __SECURITY_SRV_INTERNAL_H__
 
 #include <daos_types.h>
-#include "security.pb-c.h"
 #include <daos_srv/daos_server.h>
+#include "auth.pb-c.h"
 
 #define DAOS_SEC_VERSION 1
 
@@ -56,6 +56,6 @@ extern char *ds_sec_server_socket_path;
  */
 #define DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS	101
 
-int ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token);
+int ds_sec_validate_credentials(daos_iov_t *creds, Auth__Token **token);
 
 #endif /* __SECURITY_SRV_INTERNAL_H__ */

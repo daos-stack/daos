@@ -28,7 +28,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
-	pb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -45,7 +45,7 @@ type SecurityModule struct {
 }
 
 func processValidateCredentials(body []byte) ([]byte, error) {
-	credential := &pb.SecurityCredential{}
+	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
 		return nil, err
