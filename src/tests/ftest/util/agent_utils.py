@@ -113,7 +113,6 @@ def run_agent(basepath, server_list, client_list=None):
         build_vars = json.load(json_vars)
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 
-    client = None
     for client in client_list:
         cmd = [
             "ssh",
@@ -127,31 +126,34 @@ def run_agent(basepath, server_list, client_list=None):
         sessions[client] = p
 
     # double check agent launched successfully
-    file_desc = sessions[client].stderr.fileno()
-    flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
-    fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
     timeout = 5
-    start_time = time.time()
-    result = 0
-    pattern = "Starting daos_agent"
-    expected_data = ""
-    while True:
-        output = ""
-        try:
-            output = sessions[client].stderr.read()
-        except IOError as excpn:
-            if excpn.errno != errno.EAGAIN:
-                raise excpn
-            continue
-        match = re.findall(pattern, output)
-        expected_data += output
-        result += len(match)
-        if not output or time.time() - start_time > timeout:
-            print("<AGENT>: {}".format(expected_data))
-            raise AgentFailed("DAOS Agent didn't start!")
-        break
-    print("<AGENT> agent started and took %s seconds to start" % \
-            (time.time() - start_time))
+    for client in client_list:
+        file_desc = sessions[client].stderr.fileno()
+        flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
+        fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        start_time = time.time()
+        pattern = "Starting daos_agent"
+        expected_data = ""
+        while True:
+            if time.time() - start_time > timeout:
+                print("<AGENT>: {}".format(expected_data))
+                raise AgentFailed("DAOS Agent didn't start!")
+            output = ""
+            try:
+                output = sessions[client].stderr.read()
+            except IOError as excpn:
+                if excpn.errno != errno.EAGAIN:
+                    raise AgentFailed("Error in starting daos_agent: "
+                                      "{0}".format(str(excpn)))
+                time.sleep(1)
+                continue
+            expected_data += output
+
+            match = re.findall(pattern, output)
+            if len(match) > 0:
+                print("<AGENT> agent started on node {} in {} "
+                      "seconds".format(client, time.time() - start_time))
+                break
 
     return sessions
 # pylint: enable=too-many-locals
@@ -166,6 +168,10 @@ def stop_agent(client_list, sessions):
     client_list -- kill daos_agent on these hosts
     sessions    -- set of subprocess sessions returned by run_agent()
     """
+
+    # if empty client list, 'self' is effectively client
+    if client_list is None:
+        client_list = [socket.gethostname().split('.', 1)[0]]
 
     # this kills the agent
     for client in client_list:

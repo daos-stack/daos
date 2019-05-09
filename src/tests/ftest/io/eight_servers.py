@@ -24,21 +24,14 @@
 from __future__ import print_function
 
 import os
-import sys
 import json
 import distutils.spawn
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 import ior_utils
-import distutils.spawn
 from daos_api import DaosContext, DaosPool, DaosApiError
 
 class EightServers(Test):
@@ -88,9 +81,9 @@ class EightServers(Test):
                                             self.slots))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist_servers,
-                                                   self.hostlist_clients)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_servers,
+                                                    self.hostlist_clients)
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -104,8 +97,8 @@ class EightServers(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
+                agent_utils.stop_agent(self.hostlist_clients,
+                                       self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def executable(self, iorflags=None):

@@ -24,16 +24,11 @@
 from __future__ import print_function
 
 import os
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog, DaosApiError
@@ -43,7 +38,7 @@ class Permission(Test):
     Tests DAOS pool permissions while connect, whether
     modifying file with specific permissions work as expected.
 
-    :avocado: tags=pool,permission
+    :avocado: recursive
     """
     def setUp(self):
         self.agent_sessions = None
@@ -61,17 +56,19 @@ class Permission(Test):
         self.d_log = DaosLog(self.context)
 
         # getting hostfile
-        self.hostfile = None
-        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-        print ("Host file is: {}".format(self.hostfile))
+        self.hostfile_servers = None
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
+        print ("Host file is: {}".format(self.hostfile_servers))
 
         self.container = None
 
         # starting server
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_servers)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
     def tearDown(self):
         try:
@@ -80,8 +77,9 @@ class Permission(Test):
         finally:
             # stop servers
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_connectpermission(self):
         """
