@@ -24,8 +24,7 @@ from apricot import TestWithServers
 from general_utils import (
     get_pool, get_container, kill_server, DaosTestError, get_pool_status,
     wait_for_rebuild)
-from io_utilities import (
-    read_single_objects, read_during_rebuild, write_single_objects)
+from io_utilities import read_single_objects, write_single_objects
 
 
 class ContainerCreate(TestWithServers):
@@ -117,7 +116,7 @@ class ContainerCreate(TestWithServers):
                               "Read data: {0}\n"
                               "Expected data: {1}".format(read_data,
                                                           rec_dict["data"]))
-        
+
         # verify the data written to 2nd container during rebuild is readable
         rebuild_read = read_single_objects(
             container2, 10,
@@ -125,7 +124,7 @@ class ContainerCreate(TestWithServers):
             rebuild_write[0]["record"][0]["akey"],
             rebuild_write[0]["obj"],
             rebuild_write[0]["txn"])
-        
+
         if rebuild_read != rebuild_write[0]["record"][0]["data"]:
             self.fail("Data written to second container does not match "
                       "expected data.\n"
