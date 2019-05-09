@@ -136,33 +136,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-gcc'
-                        stash name: 'CentOS-install', includes: 'install/**'
-                        stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
-                        stash name: 'CentOS-tests',
-                                    includes: '''build/src/rdb/raft/src/tests_main,
-                                                 build/src/common/tests/btree_direct,
-                                                 build/src/common/tests/btree,
-                                                 build/src/common/tests/sched,
-                                                 build/src/common/tests/drpc_tests,
-                                                 build/src/common/tests/acl_api_tests,
-                                                 build/src/common/tests/acl_util_tests,
-                                                 build/src/common/tests/acl_util_real,
-                                                 build/src/iosrv/tests/drpc_progress_tests,
-                                                 build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
-                                                 build/src/client/api/tests/eq_tests,
-                                                 build/src/iosrv/tests/drpc_handler_tests,
-                                                 build/src/iosrv/tests/drpc_listener_tests,
-                                                 build/src/security/tests/cli_security_tests,
-                                                 build/src/security/tests/srv_acl_tests,
-                                                 build/src/vos/vea/tests/vea_ut,
-                                                 build/src/common/tests/umem_test,
-                                                 scons_local/build_info/**,
-                                                 src/common/tests/btree.sh,
-                                                 src/control/run_go_tests.sh,
-                                                 src/rdb/raft_tests/raft_tests.py,
-                                                 src/vos/tests/evt_ctl.sh'''
+                        sh 'false'
                     }
                     post {
                         always {
