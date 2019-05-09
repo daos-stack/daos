@@ -72,8 +72,8 @@ class NvmeIo(avocado.Test):
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
         # start agent
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                   self.hostlist,
-                                                   self.hostlist_clients)
+                                                    self.hostlist,
+                                                    self.hostlist_clients)
         #Start Server
         server_utils.run_server(self.hostfile, self.server_group, self.basepath)
 
@@ -85,7 +85,7 @@ class NvmeIo(avocado.Test):
         finally:
             if self.agent_sessions:
                 agent_utils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
+                                       self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def verify_pool_size(self, original_pool_info, ior_args):
