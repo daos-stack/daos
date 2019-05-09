@@ -50,8 +50,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	int				ns;
 	int				rc;
 
-	size = 1024;
-
 	DFUSE_TRA_DEBUG(inode, "Offset %zi",
 			offset);
 
