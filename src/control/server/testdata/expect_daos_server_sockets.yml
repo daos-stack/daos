@@ -15,6 +15,7 @@ servers:
   - CRT_TIMEOUT=30
   - FI_SOCKETS_MAX_CONN_RETRY=1
   - FI_SOCKETS_CONN_TIMEOUT=2000
+  - DD_MASK=daos_default
   scm_mount: /mnt/daos
   scm_class: ram
   scm_list: []
