@@ -1679,7 +1679,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_handle_t th,
 		if (rc != -DER_INVAL)
 			goto out_task;
 		/* FIXME: until distributed transaction. */
-		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+		epoch = daos_ts2epoch();
 		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
 	}
 	D_ASSERT(epoch);
