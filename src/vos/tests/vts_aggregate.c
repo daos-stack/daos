@@ -1645,7 +1645,7 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_12, NULL, agg_tst_teardown },
 	{ "VOS413: Aggregate EV, multiple objects, keys",
 	  aggregate_13, NULL, agg_tst_teardown },
-	{ "VOS414: Update & Aggregate EV repeatedly",
+	{ "VOS414: Update and Aggregate EV repeatedly",
 	  aggregate_14, NULL, agg_tst_teardown },
 };
 
