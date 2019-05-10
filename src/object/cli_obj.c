@@ -1295,8 +1295,13 @@ dc_obj_fetch(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_INVAL);
 
 	rc = dc_tx_check(args->th, false, &epoch);
-	if (rc)
-		goto out_task;
+	if (rc) {
+		if (rc != -DER_INVAL)
+			goto out_task;
+		/* FIXME: until distributed transaction. */
+		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
+	}
 	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(args->oh);
@@ -1525,8 +1530,13 @@ dc_obj_update(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_INVAL);
 
 	rc = dc_tx_check(args->th, true, &epoch);
-	if (rc)
-		goto out_task;
+	if (rc) {
+		if (rc != -DER_INVAL)
+			goto out_task;
+		/* FIXME: until distributed transaction. */
+		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
+	}
 	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(args->oh);
@@ -1665,8 +1675,13 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_handle_t th,
 	}
 
 	rc = dc_tx_check(th, false, &epoch);
-	if (rc)
-		goto out_task;
+	if (rc) {
+		if (rc != -DER_INVAL)
+			goto out_task;
+		/* FIXME: until distributed transaction. */
+		epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
+	}
 	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(oh);
@@ -1879,8 +1894,13 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	int			 rc;
 
 	rc = dc_tx_check(api_args->th, true, &epoch);
-	if (rc)
-		goto out_task;
+	if (rc) {
+		if (rc != -DER_INVAL)
+			goto out_task;
+		/* FIXME: until distributed transaction. */
+		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
+	}
 	D_ASSERT(epoch);
 
 	/** Register retry CB */
@@ -2192,8 +2212,12 @@ dc_obj_query_key(tse_task_t *api_task)
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = dc_tx_check(api_args->th, false, &epoch);
-	if (rc)
-		goto out_task;
+	if (rc) {
+		if (rc != -DER_INVAL)
+			goto out_task;
+		epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
+	}
 	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(api_args->oh);

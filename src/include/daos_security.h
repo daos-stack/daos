@@ -48,6 +48,7 @@ extern "C" {
  * terminator.
  */
 #define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+#define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
  * Header for the Access Control List, followed by the table of variable-length
@@ -337,6 +338,84 @@ daos_ace_dump(struct daos_ace *ace, uint tabs);
  */
 bool
 daos_ace_is_valid(struct daos_ace *ace);
+
+/**
+ * Sanity check that the principal is a properly-formatted name string for use
+ * in an Access Control List.
+ *
+ * The check is not very strict. It verifies that the name is in the
+ * name@[domain] format, but does not make assumptions about legal characters
+ * in the name or verify that the principal actually exists
+ *
+ * \param	name	Principal name to be validated
+ *
+ * \return	true if the name is properly formatted
+ *		false otherwise
+ */
+bool
+daos_acl_principal_is_valid(const char *name);
+
+/**
+ * Convert a local uid to a properly-formatted principal name for use with the
+ * Access Control List API.
+ *
+ * \param[in]	uid	UID to convert
+ * \param[out]	name	Newly allocated null-terminated string containing the
+ *			formatted principal name
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_uid_to_principal(uid_t uid, char **name);
+
+/**
+ * Convert a local gid to a properly-formatted principal name for use with the
+ * Access Control List API.
+ *
+ * \param[in]	gid	GID to convert
+ * \param[out]	name	Newly allocated null-terminated string containing the
+ *			formatted principal name
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	GID not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_gid_to_principal(gid_t gid, char **name);
+
+/**
+ * Convert the name of a user principal from an Access Control List to its
+ * corresponding local UID.
+ *
+ * \param[in]	principal	Principal name
+ * \param[out]	uid		UID of the principal
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	User not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_principal_to_uid(const char *principal, uid_t *uid);
+
+/**
+ * Convert the name of a group principal from an Access Control List to its
+ * corresponding local GID.
+ *
+ * \param[in]	principal	Principal name
+ * \param[out]	gid		GID of the principal
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	Group not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_principal_to_gid(const char *principal, gid_t *gid);
 
 #if defined(__cplusplus)
 }

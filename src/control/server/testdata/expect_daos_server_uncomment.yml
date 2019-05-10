@@ -59,7 +59,6 @@ fault_cb: ./.daos/fd_callback
 fabric_ifaces:
 - qib0
 - qib1
-format_override: false
 scm_mount_path: /mnt/daosa
 bdev_include:
 - 0000:81:00.1
@@ -71,6 +70,8 @@ hyperthreads: true
 nr_hugepages: 4096
 control_log_mask: ERROR
 control_log_file: /tmp/daos_control.log
+user_name: daosuser
+group_name: daosgroup
 modules: ""
 attach: ""
 systemmap: ""

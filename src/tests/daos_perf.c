@@ -306,7 +306,7 @@ objects_update(d_rank_t rank)
 		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
 
-		if (ts_mode == TS_MODE_DAOS) {
+		if (ts_mode == TS_MODE_DAOS || ts_mode == TS_MODE_ECHO) {
 			rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
 					   DAOS_OO_RW, &ts_ohs[i], NULL);
 			if (rc) {

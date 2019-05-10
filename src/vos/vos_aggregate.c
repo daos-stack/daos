@@ -78,7 +78,7 @@ struct agg_lgc_ent {
 };
 
 /*
- * EV tree logical segment (no holes), it'll be used to form new physical
+ * EV tree logical segment, it'll be used to form new physical
  * rectangle and being inserted in evtree on merge window flush.
  */
 struct agg_lgc_seg {
@@ -621,7 +621,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt[VOS_IOS_AGGREGATION];
 	D_ASSERT(hint_ctxt);
 	blk_cnt = vos_byte2blkcnt(size);
 
@@ -911,8 +911,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete "DF_RECT" error: %d\n",
-				DP_RECT(&rect), rc);
+			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: %d\n",
+				DP_RECT(&rect), phy_ent->pe_off, rc);
 			goto abort;
 		}
 
@@ -950,7 +950,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Publish NVMe reservations */
-	rc = vos_publish_blocks(obj, &io->ic_nvme_exts, true);
+	rc = vos_publish_blocks(obj, &io->ic_nvme_exts, true,
+				VOS_IOS_AGGREGATION);
 	if (rc) {
 		D_ERROR("Publish NVMe extents error: %d\n", rc);
 		goto abort;
@@ -979,7 +980,8 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 			io->ic_scm_cnt = 0;
 		}
 		if (!d_list_empty(&io->ic_nvme_exts))
-			vos_publish_blocks(obj, &io->ic_nvme_exts, false);
+			vos_publish_blocks(obj, &io->ic_nvme_exts, false,
+					   VOS_IOS_AGGREGATION);
 	}
 
 	/* Reset io context */

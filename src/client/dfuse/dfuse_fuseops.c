@@ -180,6 +180,7 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
+	bool				keep_ref;
 	int rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &parent, sizeof(parent));
@@ -191,9 +192,12 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	parent_inode->ie_dfs->dffs_ops->lookup(req, parent_inode, name);
+	keep_ref = parent_inode->ie_dfs->dffs_ops->lookup(req,
+							  parent_inode, name);
 
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	if (!keep_ref) {
+		d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	}
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -324,6 +328,10 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
 	.mkdir		= dfuse_cont_mkdir,
+};
+
+struct dfuse_inode_ops dfuse_pool_ops = {
+	.lookup		= dfuse_pool_lookup,
 };
 
 /* Return the ops that should be passed to fuse */

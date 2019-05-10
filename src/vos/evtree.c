@@ -945,7 +945,8 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 
 		rc = vea_free(vsi, blk_off, blk_cnt);
 		if (rc)
-			D_ERROR("Error on block free. %d\n", rc);
+			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
+				blk_off, blk_cnt, rc);
 	}
 
 	return rc;

@@ -28,14 +28,14 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security"
-	pb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/auth"
 
 	"github.com/golang/protobuf/proto"
 )
 
 // Helpers for the unit tests below
 
-func expectAuthSysErrorForToken(t *testing.T, badToken *pb.AuthToken, expectedErrorMessage string) {
+func expectAuthSysErrorForToken(t *testing.T, badToken *auth.Token, expectedErrorMessage string) {
 	authSys, err := security.AuthSysFromAuthToken(badToken)
 
 	if authSys != nil {
@@ -52,21 +52,21 @@ func TestAuthSysFromAuthToken_ErrorsWithNilAuthToken(t *testing.T) {
 }
 
 func TestAuthSysFromAuthToken_ErrorsWithWrongAuthTokenFlavor(t *testing.T) {
-	badFlavorToken := pb.AuthToken{Flavor: pb.AuthFlavor_AUTH_NONE}
+	badFlavorToken := auth.Token{Flavor: auth.Flavor_AUTH_NONE}
 	expectAuthSysErrorForToken(t, &badFlavorToken,
 		"Attempting to convert an invalid AuthSys Token")
 }
 
 func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	zeroArray := make([]byte, 16)
-	badToken := pb.AuthToken{Flavor: pb.AuthFlavor_AUTH_SYS,
+	badToken := auth.Token{Flavor: auth.Flavor_AUTH_SYS,
 		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
-		"unmarshaling AUTH_SYS: proto: proto.AuthSys: illegal tag 0 (wire type 0)")
+		"unmarshaling AUTH_SYS: proto: auth.Sys: illegal tag 0 (wire type 0)")
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
-	originalAuthSys := pb.AuthSys{
+	originalAuthSys := auth.Sys{
 		Stamp:       0,
 		Machinename: "something",
 		Uid:         50,
@@ -80,8 +80,8 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		t.Fatalf("Couldn't marshal during setup: %s", err)
 	}
 
-	goodToken := pb.AuthToken{
-		Flavor: pb.AuthFlavor_AUTH_SYS,
+	goodToken := auth.Token{
+		Flavor: auth.Flavor_AUTH_SYS,
 		Data:   marshaledToken,
 	}
 
