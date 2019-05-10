@@ -136,12 +136,11 @@ func (c *Configuration) LoadConfig() error {
 
 // ValidateEnv reads the value of a given environment variable and compares it with
 // the supplied value.  Issues a non-fatal debug message if there is a mismatch
-func (c *Configuration) ValidateEnv(envVar string, value string) error {
+func (c *Configuration) ValidateEnv(envVar string, value string) {
 	temp := c.ext.getenv(envVar)
 	if temp != value {
 		log.Debugf("Environment variable '%s' has value '%s' which does not match '%s'", envVar, temp, value)
 	}
-	return nil
 }
 
 // decodes YAML representation of Configuration struct

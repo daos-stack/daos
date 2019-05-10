@@ -102,12 +102,8 @@ func agentMain() error {
 
 	// ValidateEnv will issue a warning if there is a mismatch between the
 	// daosAgentDrpcSockEnv value and the config file / command line value.
-	res := config.ValidateEnv(daosAgentDrpcSockEnv, config.RuntimeDir)
-	if res != nil {
-		log.Errorf("Failed to validate runtime socket environment variable")
-		return err
-	}
-
+	config.ValidateEnv(daosAgentDrpcSockEnv, config.RuntimeDir)
+	
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
 
