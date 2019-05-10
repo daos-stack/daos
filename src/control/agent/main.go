@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	agentSockName = "agent.sock"
+	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
 )
 
@@ -103,7 +103,7 @@ func agentMain() error {
 	// ValidateEnv will issue a warning if there is a mismatch between the
 	// daosAgentDrpcSockEnv value and the config file / command line value.
 	config.ValidateEnv(daosAgentDrpcSockEnv, config.RuntimeDir)
-	
+
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
 
