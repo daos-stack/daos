@@ -30,8 +30,9 @@
 This script runs the rdb tests. From the command line the tests are run with:
 
 server:
-orterun -N 1 --report-uri /tmp/urifile <debug_cmds> -x LD_LIBRARY_PATH
-daos_server -d ./ -c 1 -m vos,rdb,rdbt
+orterun -N 1 --report-uri /tmp/urifile -x LD_LIBRARY_PATH
+daos_server -o <builddir>/utils/config/examples/daos_server_rdb_tests.yml
+-d ./ -c 1 -m vos,rdb,rdbt
 
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
@@ -55,6 +56,7 @@ import sys
 import time
 import signal
 import shlex
+import string
 
 build_root = os.path.join(sys.path[0], "../../../")
 sys.path.insert(0, os.path.join(build_root, "scons_local"))
@@ -62,7 +64,9 @@ from build_info import BuildInfo
 
 urifile = "/tmp/urifile"
 pid_file = "/tmp/" + str(os.getpid()) + "_output"
-debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
+config_file = os.path.join(build_root, "utils", "config", "examples",
+                           "daos_server_unittests.yml")
+debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \ # still needed in client
              "-x DD_SUBSYS=all -x DD_MASK=all"
 
 # To avoid repetition of parts of the oretrun command.
@@ -78,6 +82,14 @@ class ServerFailedToStart(Exception):
 class ServerTimedOut(Exception):
         pass
 
+def set_logfile(config, logfile):
+    f = open(config, "r+")
+    for line in f.readlines():
+        string.replace(line,
+                       "  log_file: /tmp/server.log",
+                       "  log_file: {}".format(logfile))
+    f.close()
+
 def start_server(binfo):
     """
     Start the DAOS server with an orterun command as a child process. We use
@@ -87,12 +99,14 @@ def start_server(binfo):
     log_file = os.path.join(binfo.get("PREFIX"),
                             "TESTING",
                             "daos-rdb-test.log")
+    set_logfile(config_file, log_file) # set D_LOG_FILE through config file
+
     print("Starting DAOS server\n")
     cmd = binfo.get("OMPI_PREFIX") + "/bin/orterun "
     cmd += "-N 1 --report-uri {} ".format(urifile)
-    cmd += "-x D_LOG_FILE=" + log_file + " "
-    cmd += debug_cmds + " -x LD_LIBRARY_PATH "
+    cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
+    cmd += "-o {} ".format(config_file)
     cmd += "-d ./ -c 1 -m vos,rdb,rdbt "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
