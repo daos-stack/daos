@@ -24,24 +24,9 @@
 // Package ipmctl provides Go bindings for libipmctl Native Management API
 package ipmctl
 
-// CGO_CFLAGS & CGO_LDFLAGS env vars can be used
-// to specify additional dirs.
+// STUB implementation
 
-/*
-#cgo LDFLAGS: -lipmctl
-
-#include "stdlib.h"
-#include "nvm_management.h"
-#include "nvm_types.h"
-#include "NvmSharedDefs.h"
-#include "export_api.h"
-*/
-import "C"
-
-import (
-	"fmt"
-	"unsafe"
-)
+import "fmt"
 
 // IpmCtl is the interface that provides access to libipmctl.
 type IpmCtl interface {
@@ -63,57 +48,6 @@ type NvmMgmt struct{}
 // Discover queries number of SCM modules and retrieves device_discovery structs
 // for each.
 func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
-	var count C.uint
-	if err = Rc2err(
-		"get_number_of_devices",
-		C.nvm_get_number_of_devices(&count)); err != nil {
-		return
-	}
-	if count == 0 {
-		return
-	}
-
-	devs := make([]C.struct_device_discovery, int(count))
-	// println(len(devs))
-
-	// don't need to defer free on devs as we allocated in go
-	if err = Rc2err(
-		"get_devices",
-		C.nvm_get_devices(&devs[0], C.NVM_UINT8(count))); err != nil {
-		return
-	}
-	// defer C.free(unsafe.Pointer(&devs))
-
-	// cast struct array to slice of go equivalent struct
-	// (get equivalent go struct def from cgo -godefs)
-	devices = (*[1 << 30]DeviceDiscovery)(unsafe.Pointer(&devs[0]))[:count:count]
-	if len(devices) != int(count) {
-		err = fmt.Errorf("expected %d devices but got %d", len(devices), int(count))
-	}
-
+	fmt.Print("ipmctl lib not present\n")
 	return
 }
-
-// Rc2err returns an failure if rc != NVM_SUCCESS.
-//
-// TODO: print human readable error with provided lib macros
-func Rc2err(label string, rc C.int) error {
-	if rc != C.NVM_SUCCESS {
-		// e := errors.Error(C.NVDIMM_ERR_W(FORMAT_STR_NL, rc))
-		return fmt.Errorf("%s: rc=%d", label, int(rc)) // e
-	}
-	return nil
-}
-
-// example unit test from NVM API source
-//TEST_F(NvmApi_Tests, GetDeviceStatus)
-//{
-//  unsigned int dimm_cnt = 0;
-//  nvm_get_number_of_devices(&dimm_cnt);
-//  device_discovery *p_devices = (device_discovery *)malloc(sizeof(device_discovery) * dimm_cnt);
-//  nvm_get_devices(p_devices, dimm_cnt);
-//  device_status *p_status = (device_status *)malloc(sizeof(device_status));
-//  EXPECT_EQ(nvm_get_device_status(p_devices->uid, p_status), NVM_SUCCESS);
-//  free(p_status);
-//  free(p_devices);
-//}

@@ -55,12 +55,12 @@ type DeviceDiscovery struct {
 	Pad_cgo_2                [5]byte
 	Capacity                 uint64
 	Interface_format_codes   [9]uint16
-	Security_capabilities    _Ctype_struct_device_security_capabilities
-	Device_capabilities      _Ctype_struct_device_capabilities
-	Uid                      [22]int8
-	Lock_state               uint32
-	Manageability            uint32
-	Controller_revision_id   uint16
-	Reserved                 [48]uint8
-	Pad_cgo_3                [6]byte
+	//Security_capabilities    _Ctype_struct_device_security_capabilities
+	//Device_capabilities      _Ctype_struct_device_capabilities
+	Uid                    [22]int8
+	Lock_state             uint32
+	Manageability          uint32
+	Controller_revision_id uint16
+	Reserved               [48]uint8
+	Pad_cgo_3              [6]byte
 }
