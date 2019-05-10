@@ -37,6 +37,7 @@ import (
 
 const (
 	agentSockName = "agent.sock"
+	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
 )
 
 type cliOptions struct {
@@ -92,14 +93,18 @@ func agentMain() error {
 		return err
 	}
 
-	// Apply environment variable overrides if found
-	res := config.ProcessEnvOverrides()
-	log.Debugf("Found %d environment variable overrides", res)
-
 	// Override configuration with any commandline values given
 	err = applyCmdLineOverrides(&config, opts.RuntimeDir, opts.LogFile)
 	if err != nil {
 		log.Errorf("Failed to apply command line overrides %s", err)
+		return err
+	}
+
+	// ValidateEnv will issue a warning if there is a mismatch between the
+	// daosAgentDrpcSockEnv value and the config file / command line value.
+	res := config.ValidateEnv(daosAgentDrpcSockEnv, config.RuntimeDir)
+	if res != nil {
+		log.Errorf("Failed to validate runtime socket environment variable")
 		return err
 	}
 

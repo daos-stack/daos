@@ -80,14 +80,14 @@ type Configuration struct {
 // populated with defaults.
 func newDefaultConfiguration(ext External) Configuration {
 	return Configuration{
-		SystemName:    defaultSystemName,
-		AccessPoints:  []string{"localhost"},
-		Port:          defaultPort,
-		HostList:      []string{"localhost:10001"},
-		RuntimeDir:    defaultRuntimeDir,
-		LogFile:       defaultLogFile,
-		Path:          defaultConfigPath,
-		ext:           ext,
+		SystemName:   defaultSystemName,
+		AccessPoints: []string{"localhost"},
+		Port:         defaultPort,
+		HostList:     []string{"localhost:10001"},
+		RuntimeDir:   defaultRuntimeDir,
+		LogFile:      defaultLogFile,
+		Path:         defaultConfigPath,
+		ext:          ext,
 	}
 }
 
@@ -134,18 +134,14 @@ func (c *Configuration) LoadConfig() error {
 	return nil
 }
 
-// ProcessEnvOverrides examines environment variables and applies the environment
-// variable value over an existing value if defined.
-func (c *Configuration) ProcessEnvOverrides() int {
-	var envVarsFound = 0
-
-	daosAgentDrpcSock := c.ext.getenv(daosAgentDrpcSockEnv)
-	if daosAgentDrpcSock != "" {
-		log.Debugf("DAOS_AGENT_DRPC_DIR found: %s", daosAgentDrpcSock)
-		c.RuntimeDir = daosAgentDrpcSock
-		envVarsFound++
+// ValidateEnv reads the value of a given environment variable and compares it with
+// the supplied value.  Issues a non-fatal debug message if there is a mismatch
+func (c *Configuration) ValidateEnv(envVar string, value string) error {
+	temp := c.ext.getenv(envVar)
+	if temp != value {
+		log.Debugf("Environment variable '%s' has value '%s' which does not match '%s'", envVar, temp, value)
 	}
-	return envVarsFound
+	return nil
 }
 
 // decodes YAML representation of Configuration struct
