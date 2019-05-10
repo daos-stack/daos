@@ -139,8 +139,7 @@ class DestroyTests(Test):
                 os.remove(hostfile_servers)
             finally:
                 if self.agent_sessions:
-                    agent_utils.stop_agent(self.hostlist_servers,
-                                           self.agent_sessions)
+                    agent_utils.stop_agent(self.agent_sessions)
                 server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_delete_doesnt_exist(self):
@@ -186,8 +185,7 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -257,8 +255,7 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -334,8 +331,7 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -420,11 +416,9 @@ class DestroyTests(Test):
         # no matter what happens shutdown the server
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers1,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             if self.agent_sessions2:
-                agent_utils.stop_agent(self.hostlist_servers2,
-                                       self.agent_sessions2)
+                agent_utils.stop_agent(self.agent_sessions2)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers1)
             os.remove(hostfile_servers2)
@@ -485,8 +479,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -552,8 +545,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -605,8 +597,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -674,8 +665,7 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)
 
@@ -751,7 +741,6 @@ class DestroyTests(Test):
         # no matter what happens cleanup
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
             os.remove(hostfile_servers)

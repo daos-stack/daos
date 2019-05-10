@@ -213,8 +213,8 @@ class TestWithServers(TestWithoutServers):
         try:
             if self.agent_sessions:
                 self.d_log.info("Stopping agents")
-                agent_utils.stop_agent(
-                    self.hostlist_clients, self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions,
+                                       self.hostlist_clients)
         finally:
             self.d_log.info("Stopping servers")
             try:
