@@ -64,10 +64,6 @@ from build_info import BuildInfo
 
 urifile = "/tmp/urifile"
 pid_file = "/tmp/" + str(os.getpid()) + "_output"
-config_file = os.path.join(build_root, "utils", "config", "examples",
-                           "daos_server_unittests.yml")
-debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \ # still needed in client
-             "-x DD_SUBSYS=all -x DD_MASK=all"
 
 # To avoid repetition of parts of the oretrun command.
 client_prefix = ""
@@ -96,6 +92,8 @@ def start_server(binfo):
     subprocess.Popen since it returns control to the calling process and
     provides access to the polling feature.
     """
+    config_file = os.path.join(build_root, "utils", "config", "examples",
+                               "daos_server_unittests.yml")
     log_file = os.path.join(binfo.get("PREFIX"),
                             "TESTING",
                             "daos-rdb-test.log")
@@ -236,6 +234,8 @@ if __name__ == "__main__":
     print("Running rdb tests")
     rc = 0
     binfo = BuildInfo(os.path.join(build_root, ".build_vars.json"));
+    debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
+                 "-x DD_SUBSYS=all -x DD_MASK=all"
 
     try:
         # Server operations
