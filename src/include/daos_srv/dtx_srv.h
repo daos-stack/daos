@@ -84,7 +84,7 @@ struct dtx_handle {
 	/* The identifier of the DTX that conflict with current one. */
 	struct dtx_conflict_entry	*dth_conflict;
 	/* The data attached to the dth for dispatch */
-	void				*dth_disp_arg;
+	void				*dth_exec_arg;
 	/** The address of the DTX entry in SCM. */
 	umem_off_t			 dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
@@ -110,6 +110,26 @@ enum dtx_status {
 	DTX_ST_COMMITTED	= 3,
 };
 
+typedef void (*dtx_exec_shard_comp_cb_t)(void *cb_arg, int rc);
+typedef int (*dtx_exec_shard_func_t)(struct dtx_handle *dth, void *arg, int idx,
+				     dtx_exec_shard_comp_cb_t comp_cb,
+				     void *cb_arg);
+struct dtx_exec_arg {
+	dtx_exec_shard_func_t	exec_func;
+	void			*exec_func_arg;
+	struct dtx_handle	*dth;
+	ABT_future		future;
+	uint32_t		shard_cnt;
+	int			exec_result;
+};
+
+struct dtx_exec_shard_arg {
+	struct daos_shard_tgt		*exec_shard_tgt;
+	struct dtx_exec_arg		*exec_arg;
+	struct dtx_conflict_entry	 exec_dce;
+	int				 exec_shard_rc;
+};
+
 int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
 
@@ -119,15 +139,15 @@ int dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	      int dti_cos_count, uint32_t pm_ver, uint32_t intent, bool leader,
 	      struct dtx_handle **dth);
 
-/* XXX this is not needed once we move req forward to dtx module */
-typedef int (*dtx_wait_cb_t)(void *obj_arg, struct dtx_conflict_entry **dces);
-int dtx_end(struct dtx_handle *dth, dtx_wait_cb_t wait_cb,
-	    struct ds_cont_hdl *cont_hdl, struct ds_cont_child *cont,
-	    int result);
+int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
+	    struct ds_cont_child *cont, int result);
 
 int dtx_conflict(daos_handle_t coh, struct dtx_handle *dth, uuid_t po_uuid,
 		 uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,
 		 uint32_t version);
+int dtx_exec_ops(struct daos_shard_tgt *shard_tgts, int tgts_cnt,
+		 struct dtx_handle *dth, dtx_exec_shard_func_t exec_func,
+		 void *func_arg);
 
 int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
 

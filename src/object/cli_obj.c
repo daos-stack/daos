@@ -476,7 +476,7 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard)
 
 static int
 obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
-		     struct daos_obj_shard_tgt *shard_tgt)
+		     struct daos_shard_tgt *shard_tgt)
 {
 	struct dc_obj_shard	*obj_shard;
 	int			 rc;
@@ -484,7 +484,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			shard_tgt->st_rank = OBJ_TGTS_IGNORE;
+			shard_tgt->st_rank = TGTS_IGNORE;
 			rc = 0;
 		} else {
 			D_ERROR(DF_OID" obj_shard_open failed, rc %d.\n",
@@ -505,12 +505,12 @@ out:
 static int
 obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver,
 		    uint32_t *start_shard, uint32_t *shard_cnt,
-		    struct daos_obj_shard_tgt **fw_shard_tgts, uint32_t *fw_cnt)
+		    struct daos_shard_tgt **fw_shard_tgts, uint32_t *fw_cnt)
 {
-	struct daos_obj_shard_tgt	*shard_tgts = *fw_shard_tgts;
-	uint32_t			 lead_shard;
-	uint32_t			 i, j;
-	int				 rc;
+	struct daos_shard_tgt	*shard_tgts = *fw_shard_tgts;
+	uint32_t		 lead_shard;
+	uint32_t		 i, j;
+	int			 rc;
 
 	D_ASSERT(*shard_cnt >= 1);
 	if (!srv_io_dispatch || *shard_cnt == 1)
@@ -908,7 +908,7 @@ struct obj_auxi_args {
 	int				 result;
 	d_list_t			 shard_task_head;
 	tse_task_t			*obj_task;
-	struct daos_obj_shard_tgt	*fw_shard_tgts;
+	struct daos_shard_tgt		*fw_shard_tgts;
 	uint32_t			 fw_cnt;
 };
 

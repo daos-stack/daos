@@ -737,7 +737,8 @@ rebuild_obj_punch_one(void *data)
 	D_ASSERT(rc == 0);
 
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
-			   arg->rpt->rt_rebuild_ver, 0, NULL, 0, NULL, NULL);
+			   arg->rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
+			   NULL, 0, NULL, NULL);
 	ds_cont_child_put(cont);
 	if (rc)
 		D_ERROR(DF_UOID" rebuild punch failed rc %d\n",

@@ -371,7 +371,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 
 
 static int
-crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *st)
+crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *st)
 {
 	int rc;
 

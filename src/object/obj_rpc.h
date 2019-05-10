@@ -120,14 +120,6 @@ enum obj_rpc_flags {
 	ORF_DTX_DISABLED	= (1 << 3),
 };
 
-/** to identify each obj shard's target */
-struct daos_obj_shard_tgt {
-	uint32_t		st_rank;	/* rank of the shard */
-	uint32_t		st_shard;	/* shard index */
-	uint32_t		st_tgt_idx;	/* target xstream index */
-	uint32_t		st_pad;		/* padding */
-};
-
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
 	((struct dtx_id)	(orw_dti)		CRT_VAR) \
@@ -143,7 +135,7 @@ struct daos_obj_shard_tgt {
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
-	((struct daos_obj_shard_tgt) (orw_shard_tgts)	CRT_ARRAY) \
+	((struct daos_shard_tgt) (orw_shard_tgts)	CRT_ARRAY) \
 	((uint32_t)		(orw_flags)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
@@ -207,7 +199,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((struct dtx_id)	(opi_dti_cos)		CRT_ARRAY) \
 	((daos_iov_t)		(opi_dkeys)		CRT_ARRAY) \
 	((daos_iov_t)		(opi_akeys)		CRT_ARRAY) \
-	((struct daos_obj_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
+	((struct daos_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_PUNCH	/* output fields */		 \
 	((int32_t)		(opo_ret)		CRT_VAR) \

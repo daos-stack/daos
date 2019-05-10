@@ -879,6 +879,15 @@ struct d_tgt_list {
 	uint32_t	tl_nr;
 };
 
+#define TGTS_IGNORE		((d_rank_t)-1)
+/** to identify each obj shard's target */
+struct daos_shard_tgt {
+	uint32_t	st_rank;	/* rank of the shard */
+	uint32_t	st_shard;	/* shard index */
+	uint32_t	st_tgt_idx;	/* target xstream index */
+	uint32_t	st_pad;		/* padding */
+};
+
 struct daos_eq;
 /**
  * DAOS pool property types

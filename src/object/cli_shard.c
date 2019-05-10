@@ -347,7 +347,7 @@ static int
 obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
 	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
-	     struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
+	     struct daos_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 	     tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	struct dc_pool	       *pool;
@@ -533,7 +533,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc, daos_epoch_t epoch,
 		   daos_key_t *dkey, daos_key_t *akeys, unsigned int akey_nr,
 		   const uuid_t coh_uuid, const uuid_t cont_uuid,
 		   unsigned int *map_ver,
-		   struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
+		   struct daos_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 		   tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	struct dc_pool			*pool;
@@ -619,7 +619,7 @@ int
 dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		    daos_sg_list_t *sgls, unsigned int *map_ver,
-		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
+		    struct daos_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 		    tse_task_t *task, struct dtx_id *dti, uint32_t flags)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_UPDATE, epoch, dkey,

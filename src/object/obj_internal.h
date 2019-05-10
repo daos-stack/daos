@@ -37,6 +37,7 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_types.h>
 
 /**
@@ -165,11 +166,10 @@ int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
 
-struct daos_obj_shard_tgt;
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
-			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
+			unsigned int *map_ver, struct daos_shard_tgt *tgts,
 			uint32_t fw_cnt, tse_task_t *task,
 			struct dtx_id *dti, uint32_t flags);
 
@@ -193,7 +193,7 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
 		       daos_epoch_t epoch, daos_key_t *dkey,
 		       daos_key_t *akeys, unsigned int akey_nr,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
+		       unsigned int *map_ver, struct daos_shard_tgt *tgts,
 		       uint32_t fw_cnt, tse_task_t *task,
 		       struct dtx_id *dti, uint32_t flags);
 
@@ -216,6 +216,19 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 
+struct ds_obj_exec_arg {
+	crt_rpc_t		*rpc;
+	struct ds_cont_hdl	*cont_hdl;
+	struct ds_cont_child	*cont;
+	uint32_t		flags;
+};
+
+int
+ds_obj_remote_update(struct dtx_handle *dth, void *arg, int idx,
+		     dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
+int
+ds_obj_remote_punch(struct dtx_handle *dth, void *arg, int idx,
+		    dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
@@ -223,7 +236,6 @@ void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
-#define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
