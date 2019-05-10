@@ -142,7 +142,7 @@ class NvmeIo(TestWithServers):
                                  ior_param[0],
                                  self.params.get("setname",
                                                  '/run/pool/createset/*'),
-                                nvme_size=ior_param[1])
+                                 nvme_size=ior_param[1])
                 self.pool.connect(1 << 1)
                 self.pool_connect = True
 
