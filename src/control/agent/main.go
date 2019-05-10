@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	agentSockName        = "agent.sock"
+	agentSockName = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
 )
 
@@ -58,7 +58,7 @@ func main() {
 
 // applyCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
-func applyCmdLineOverrides(c *client.Configuration, RuntimeDir string, LogFile string) error {
+func applyCmdLineOverrides(c *client.Configuration, RuntimeDir string, LogFile string) {
 
 	if RuntimeDir != "" {
 		log.Debugf("Overriding socket path from config file with %s", RuntimeDir)
@@ -70,7 +70,6 @@ func applyCmdLineOverrides(c *client.Configuration, RuntimeDir string, LogFile s
 		c.LogFile = LogFile
 	}
 
-	return nil
 }
 
 func agentMain() error {
@@ -94,16 +93,12 @@ func agentMain() error {
 	}
 
 	// Override configuration with any commandline values given
-	err = applyCmdLineOverrides(&config, opts.RuntimeDir, opts.LogFile)
-	if err != nil {
-		log.Errorf("Failed to apply command line overrides %s", err)
-		return err
-	}
+	applyCmdLineOverrides(&config, opts.RuntimeDir, opts.LogFile)
 
 	// ValidateEnv will issue a warning if there is a mismatch between the
 	// daosAgentDrpcSockEnv value and the config file / command line value.
 	config.ValidateEnv(daosAgentDrpcSockEnv, config.RuntimeDir)
-
+	
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
 
