@@ -123,7 +123,6 @@ class NvmeIo(TestWithServers):
         #Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                print (ior_param)
                 self.hostfile_clients = write_host_file.write_host_file(
                     hostlist_clients,
                     self.workdir,
