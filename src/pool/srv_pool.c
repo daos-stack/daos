@@ -1816,6 +1816,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	int				rc;
 	daos_prop_t		       *prop;
 	struct daos_prop_entry	       *acl_entry;
+	struct pool_owner		owner;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -1889,8 +1890,24 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	D_ASSERT(acl_entry != NULL);
 	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
 
-	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &ugm,
+	/*
+	 * TODO DAOS-2370: Switch to using pool props for owner/group once
+	 * they are set properly on pool create;
+	 */
+	rc = daos_acl_uid_to_principal(ugm.pp_uid, &owner.user);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	rc = daos_acl_gid_to_principal(ugm.pp_gid, &owner.group);
+	if (rc != 0) {
+		D_FREE(owner.user);
+		D_GOTO(out_map_version, rc);
+	}
+
+	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &owner,
 			&in->pci_cred, in->pci_capas);
+	D_FREE(owner.user);
+	D_FREE(owner.group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
