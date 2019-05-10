@@ -55,14 +55,14 @@ type DeviceDiscovery struct {
 	Pad_cgo_2                [5]byte
 	Capacity                 uint64
 	Interface_format_codes   [9]uint16
-	Security_capabilities    _Ctype_struct_device_security_capabilities
-	Device_capabilities      _Ctype_struct_device_capabilities
-	Uid                      [22]int8
-	Lock_state               uint32
-	Manageability            uint32
-	Controller_revision_id   uint16
-	Reserved                 [48]uint8
-	Pad_cgo_3                [6]byte
+	//Security_capabilities    _Ctype_struct_device_security_capabilities
+	//Device_capabilities      _Ctype_struct_device_capabilities
+	Uid                    [22]int8
+	Lock_state             uint32
+	Manageability          uint32
+	Controller_revision_id uint16
+	Reserved               [48]uint8
+	Pad_cgo_3              [6]byte
 }
 
 // DeviceStatus struct represents Go equivalent of C.struct_device_status
@@ -89,6 +89,6 @@ type DeviceStatus struct {
 	Boot_status                  uint64
 	Injected_media_errors        uint32
 	Injected_non_media_errors    uint32
-	Error_log_status             _Ctype_struct_device_error_log_status
-	Reserved                     [56]uint8
+	//Error_log_status             _Ctype_struct_device_error_log_status
+	Reserved [56]uint8
 }
