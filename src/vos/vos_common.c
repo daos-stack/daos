@@ -132,7 +132,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		goto failed;
 	}
 
-	rc = d_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
+	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
 			    &imem_inst->vis_cont_hhash);
 	if (rc) {
 		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
