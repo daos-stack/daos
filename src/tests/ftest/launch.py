@@ -137,6 +137,7 @@ if __name__ == "__main__":
     os.environ['DAOS_SINGLETON_CLI'] = "1"
     os.environ['CRT_CTX_SHARE_ADDR'] = "1"
     os.environ['CRT_ATTACH_INFO_PATH'] = envdata['PREFIX'] + '/tmp'
+    os.environ['TEST_TAG'] = test_request
 
     # build a list of test classes
     test_files = filelist(test_directory)

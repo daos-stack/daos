@@ -22,8 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import os
-import subprocess
+#import os
+#import subprocess
 from avocado.utils import process
 from apricot import TestWithServers
 
@@ -41,32 +41,6 @@ class DaosCoreTest(TestWithServers):
         self.subtest_name = self.params.get("test_name",
                                             '/run/daos_tests/Tests/*')
         self.subtest_name = self.subtest_name.replace(" ", "_")
-        logfile_env = os.environ['D_LOG_FILE']
-        self.log_dir, self.server_log = os.path.split(logfile_env)
-        self.client_log = os.path.join(self.log_dir,
-                                       self.subtest_name + "_" + CLIENT_LOG)
-        #To generate the seperate client log file
-        self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
-
-    def tearDown(self):
-        super(DaosCoreTest, self).tearDown()
-
-        # collect up a debug log so that we have a separate one for each
-        # subtest
-        if self.subtest_name:
-            try:
-                new_logfile = os.path.join(self.log_dir,
-                                           self.subtest_name + "_" + \
-                                           self.server_log)
-                # rename on each of the servers
-                for host in self.hostlist_servers:
-                    subprocess.check_call(['ssh', host,
-                                           '[ -f \"{0}\" ] && '
-                                           ' mv \"{0}\" '
-                                           ' \"{1}\"'.format("/tmp/server.log",
-                                                             new_logfile)])
-            except KeyError:
-                pass
 
     def test_subtest(self):
         """
@@ -88,10 +62,9 @@ class DaosCoreTest(TestWithServers):
         if not args:
             args = ""
 
-        cmd = "{} -n {} {} {} -s {} -{} {}".format(self.orterun, num_clients,
-                                                   self.orterun_env,
-                                                   self.daos_test,
-                                                   num_replicas, subtest, args)
+        cmd = "{} -n {} {} -s {} -{} {}".format(self.orterun, num_clients,
+                                                self.daos_test,
+                                                num_replicas, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"

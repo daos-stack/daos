@@ -27,6 +27,7 @@
 from __future__ import print_function
 
 import os
+import subprocess
 import json
 
 from avocado import Test as avocadoTest
@@ -82,6 +83,7 @@ class Test(avocadoTest):
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
+        self.subtest_name = None
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -164,6 +166,64 @@ class TestWithServers(TestWithoutServers):
                                        self.agent_sessions)
         finally:
             server_utils.stop_server(hosts=self.hostlist_servers)
+
+        # pylint: disable=no-member
+        test_name = str(self.name)
+        colon = test_name.index(':')
+        semicolon = test_name.index(';', colon)
+        test_name = test_name[colon+1:semicolon]
+        # collect up a debug log so that we have a separate one for each
+        # test
+        try:
+            server_logfile = os.path.sep + "tmp"
+            if os.getenv('TEST_TAG'):
+                server_logfile += os.path.sep + "Functional_" + \
+                                  os.getenv('TEST_TAG')
+
+            if self.subtest_name:
+                test_name += "-{}".format(self.subtest_name)
+
+            client_logfile = os.path.join(
+                server_logfile,
+                "{}_client_daos.log".format(test_name))
+            agent_logfile = os.path.join(
+                server_logfile,
+                "{}_agent_daos.log".format(test_name))
+            server_logfile += os.path.sep + \
+                "{}_server_daos.log".format(test_name)
+
+            client_cmd = '''if [ -f /tmp/client.log ]; then
+                if [ -e "{0}" ]; then
+                    echo "Not overwriting existing file {0}"
+                    exit 1
+                else
+                    mv /tmp/client.log {0}
+                fi
+            fi
+            if [ -f /tmp/daos_agent.log ]; then
+                if [ -e "{1}" ]; then
+                    echo "Not overwriting existing file {1}"
+                    exit 1
+                else
+                    mv /tmp/daos_agent.log {1}
+                fi
+            fi'''.format(client_logfile, agent_logfile)
+            cmd = '''if [ -f /tmp/server.log ]; then
+                if [ -e "{0}" ]; then
+                    echo "Not overwriting existing file {0}"
+                    exit 1
+                else
+                    mv /tmp/server.log {0}
+                fi
+            fi
+            {1}'''.format(server_logfile, client_cmd)
+            for host in self.hostlist_servers + \
+                        (self.hostlist_clients if self.hostlist_clients
+                         else []):
+                subprocess.check_call(['/usr/bin/ssh', host, cmd])
+            subprocess.check_call(client_cmd, shell=True)
+        except KeyError:
+            pass
 
         super(TestWithServers, self).tearDown()
 
