@@ -3591,10 +3591,10 @@ static const struct CMUnitTest io_tests[] = {
 	  split_sgl_update_fetch, async_disable, test_case_teardown},
 	{ "IO36: trigger server pool map refresh",
 	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
-    {"IO37: Fetch nonexistent keys", fetch_nonexistent_keys, async_disable,
-     test_case_teardown},
-    {"IO38: Fetch mixed existing/nonexistent keys", fetch_mixed_keys,
-     async_disable, test_case_teardown},
+	{ "IO37: Fetch nonexistent keys",
+	  fetch_nonexistent_keys, async_disable, test_case_teardown},
+	{ "IO38: Fetch mixed existing/nonexistent keys",
+	  fetch_mixed_keys, async_disable, test_case_teardown},
 };
 
 int
