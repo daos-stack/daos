@@ -52,7 +52,7 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 		// attempt to assign group specified in config file
 		if group, err := ext.lookupGroup(groupName); err == nil {
 			// check user group membership
-			if ids, err := usr.GroupIds(); err == nil {
+			if ids, err := ext.listGroups(usr); err == nil {
 				for _, g := range ids {
 					if group.Gid == g {
 						_gid = g

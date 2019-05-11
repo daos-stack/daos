@@ -45,6 +45,8 @@ const (
 	msgMkdir   = "os: mkdirall %s, 0777"
 	msgRemove  = "os: removeall %s"
 	msgCmd     = "cmd: %s"
+	msgSetUID  = "C: setuid %d"
+	msgSetGID  = "C: setgid %d"
 )
 
 // External interface provides methods to support various os operations.
@@ -60,6 +62,7 @@ type External interface {
 	getAbsInstallPath(string) (string, error)
 	lookupUser(string) (*user.User, error)
 	lookupGroup(string) (*user.Group, error)
+	listGroups(*user.User) ([]string, error)
 	setUID(int64) error
 	setGID(int64) error
 	getHistory() []string
@@ -206,7 +209,14 @@ func (e *ext) lookupGroup(groupName string) (*user.Group, error) {
 	return user.LookupGroup(groupName)
 }
 
+func (e *ext) listGroups(usr *user.User) ([]string, error) {
+	return usr.GroupIds()
+}
+
 func (e *ext) setUID(uid int64) error {
+	log.Debugf(msgSetUID, uid)
+	e.history = append(e.history, fmt.Sprintf(msgSetUID, uid))
+
 	if cerr, errno := C.setuid(C.__uid_t(uid)); cerr != 0 {
 		return errors.Errorf("C.setuid rc: %d, errno: %d", cerr, errno)
 	}
@@ -214,6 +224,9 @@ func (e *ext) setUID(uid int64) error {
 }
 
 func (e *ext) setGID(gid int64) error {
+	log.Debugf(msgSetGID, gid)
+	e.history = append(e.history, fmt.Sprintf(msgSetGID, gid))
+
 	if cerr, errno := C.setgid(C.__gid_t(gid)); cerr != 0 {
 		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
 	}

@@ -24,27 +24,61 @@
 package main
 
 import (
-	"fmt"
 	"os/user"
 	"testing"
+
+	. "github.com/daos-stack/daos/src/control/common"
 )
 
 func TestDropPrivileges(t *testing.T) {
 	tests := []struct {
-		desc      string
-		username  string
-		groupname string
-		lUsrRet   *user.User  // lookup user
-		lGrpRet   *user.Group // lookup group
-		lUsrErr   error       // lookup user error
-		lGrpErr   error       // lookup group error
-		sUidErr   error       // set uid error
-		sGidErr   error       // set gid error
+		desc        string
+		username    string
+		groupname   string
+		lUsrRet     *user.User  // lookup user
+		lGrpRet     *user.Group // lookup group
+		lUsrErr     error       // lookup user error
+		lGrpErr     error       // lookup group error
+		listGrpsRet []string    // list of user's groups
+		listGrpsErr error       // list groups error
+		sUidErr     error       // set uid error
+		sGidErr     error       // set gid error
+		expHistory  []string
+		errMsg      string
 	}{
 		{
-			desc:     "drop success",
+			desc:     "drop success uid",
 			username: "bob",
-			lUsrRet:  &user.User{Uid: "001"},
+			lUsrRet: &user.User{
+				Uid: "1001", Gid: "1001", Username: "bob",
+			},
+			expHistory: []string{"C: setgid 1001", "C: setuid 1001"},
+		},
+		{
+			desc:      "drop success uid and gid",
+			username:  "bob",
+			groupname: "builders",
+			lUsrRet: &user.User{
+				Uid: "1001", Gid: "1001", Username: "bob",
+			},
+			lGrpRet: &user.Group{
+				Gid: "1002", Name: "builders",
+			},
+			listGrpsRet: []string{"1001", "1002"},
+			expHistory:  []string{"C: setgid 1002", "C: setuid 1001"},
+		},
+		{
+			desc:      "drop success uid not member of gid",
+			username:  "bob",
+			groupname: "builders",
+			lUsrRet: &user.User{
+				Uid: "1001", Gid: "1001", Username: "bob",
+			},
+			lGrpRet: &user.Group{
+				Gid: "1002", Name: "builders",
+			},
+			listGrpsRet: []string{"1001"},
+			expHistory:  []string{"C: setgid 1001", "C: setuid 1001"},
 		},
 	}
 
@@ -52,10 +86,18 @@ func TestDropPrivileges(t *testing.T) {
 		ext := mockExt{
 			lUsrRet: tt.lUsrRet, lUsrErr: tt.lUsrErr,
 			lGrpRet: tt.lGrpRet, lGrpErr: tt.lGrpErr,
+			listGrpsRet: tt.listGrpsRet, listGrpsErr: tt.listGrpsErr,
 			sUidErr: tt.sUidErr, sGidErr: tt.sGidErr,
 		}
 
-		ret := dropPrivileges(&ext, tt.username, tt.groupname)
-		fmt.Printf("%+v\n", ret)
+		err := dropPrivileges(&ext, tt.username, tt.groupname)
+		if err != nil {
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, tt.desc)
+				continue
+			}
+			t.Fatal(err)
+		}
+		AssertEqual(t, ext.getHistory(), tt.expHistory, tt.desc)
 	}
 }

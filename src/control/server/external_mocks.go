@@ -35,18 +35,20 @@ type mockExt struct {
 	// return error if cmd in shell fails
 	cmdRet error
 	// return true if file already exists
-	existsRet  bool
-	mountRet   error
-	unmountRet error
-	mkdirRet   error
-	removeRet  error
-	lUsrRet    *user.User  // lookup user
-	lGrpRet    *user.Group // lookup group
-	lUsrErr    error       // lookup user error
-	lGrpErr    error       // lookup group error
-	sUidErr    error       // set uid error
-	sGidErr    error       // set gid error
-	history    []string
+	existsRet   bool
+	mountRet    error
+	unmountRet  error
+	mkdirRet    error
+	removeRet   error
+	lUsrRet     *user.User  // lookup user
+	lGrpRet     *user.Group // lookup group
+	lUsrErr     error       // lookup user error
+	lGrpErr     error       // lookup group error
+	listGrpsErr error       // list groups error
+	listGrpsRet []string    // list of user's groups
+	sUidErr     error       // set uid error
+	sGidErr     error       // set gid error
+	history     []string
 }
 
 func (m *mockExt) getHistory() []string {
@@ -118,11 +120,19 @@ func (m *mockExt) lookupGroup(name string) (*user.Group, error) {
 	return m.lGrpRet, m.lGrpErr
 }
 
+func (m *mockExt) listGroups(usr *user.User) ([]string, error) {
+	return m.listGrpsRet, m.listGrpsErr
+}
+
 func (m *mockExt) setUID(uid int64) error {
+	m.history = append(m.history, fmt.Sprintf(msgSetUID, uid))
+
 	return m.sUidErr
 }
 
 func (m *mockExt) setGID(gid int64) error {
+	m.history = append(m.history, fmt.Sprintf(msgSetGID, gid))
+
 	return m.sGidErr
 }
 
@@ -131,8 +141,8 @@ func newMockExt(
 	unmountRet error, mkdirRet error, removeRet error) External {
 
 	return &mockExt{
-		cmdRet, existsRet, mountRet, unmountRet,
-		mkdirRet, removeRet, nil, nil, nil, nil, nil, nil, []string{},
+		cmdRet, existsRet, mountRet, unmountRet, mkdirRet, removeRet,
+		nil, nil, nil, nil, nil, []string{}, nil, nil, []string{},
 	}
 }
 
