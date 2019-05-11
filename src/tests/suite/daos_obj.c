@@ -3371,12 +3371,12 @@ io_pool_map_refresh_trigger(void **state)
 static void nonexistent_internal(void **state, daos_obj_id_t oid,
 				 const char key_type[])
 {
-	test_arg_t		*arg = *state;
+	test_arg_t	*arg = *state;
 	struct ioreq	req;
-	char			*update_buf;
-	char			*fetch_buf;
+	char		*update_buf;
+	char		*fetch_buf;
 	unsigned int	size   = IO_SIZE_NVME;
-	const char		dkey[] = "nonexistent dkey";
+	const char	dkey[] = "nonexistent dkey";
 
 	D_ALLOC(update_buf, size);
 	assert_non_null(update_buf);
@@ -3411,11 +3411,11 @@ static void nonexistent_internal(void **state, daos_obj_id_t oid,
  */
 static void fetch_nonexistent_keys(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	int				invalid_object = 100;
-	int				rc;
+	int		invalid_object = 100;
+	int		rc;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
@@ -3440,18 +3440,18 @@ static void fetch_nonexistent_keys(void **state)
  */
 static void fetch_mixed_keys(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	struct ioreq	req;
-	const char		dkey[] = "io_complex dkey";
-	const char		akey[] = "io_complex akey";
-	char			*akeys[4];
-	char			*rec[4];
-	daos_size_t		rec_size[4];
-	daos_off_t		offset[4];
-	char			*val[4];
+	const char	dkey[] = "io_complex dkey";
+	const char	akey[] = "io_complex akey";
+	char		*akeys[4];
+	char		*rec[4];
+	daos_size_t	rec_size[4];
+	daos_off_t	offset[4];
+	char		*val[4];
 	unsigned int	size;
-	int				i;
+	int		i;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
