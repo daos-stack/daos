@@ -41,8 +41,8 @@ func TestDropPrivileges(t *testing.T) {
 		lGrpErr     error       // lookup group error
 		listGrpsRet []string    // list of user's groups
 		listGrpsErr error       // list groups error
-		sUidErr     error       // set uid error
-		sGidErr     error       // set gid error
+		sUIDErr     error       // set uid error
+		sGIDErr     error       // set gid error
 		expHistory  []string
 		errMsg      string
 	}{
@@ -87,7 +87,7 @@ func TestDropPrivileges(t *testing.T) {
 			lUsrRet: tt.lUsrRet, lUsrErr: tt.lUsrErr,
 			lGrpRet: tt.lGrpRet, lGrpErr: tt.lGrpErr,
 			listGrpsRet: tt.listGrpsRet, listGrpsErr: tt.listGrpsErr,
-			sUidErr: tt.sUidErr, sGidErr: tt.sGidErr,
+			sUIDErr: tt.sUIDErr, sGIDErr: tt.sGIDErr,
 		}
 
 		err := dropPrivileges(&ext, tt.username, tt.groupname)

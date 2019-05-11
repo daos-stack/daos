@@ -46,8 +46,8 @@ type mockExt struct {
 	lGrpErr     error       // lookup group error
 	listGrpsErr error       // list groups error
 	listGrpsRet []string    // list of user's groups
-	sUidErr     error       // set uid error
-	sGidErr     error       // set gid error
+	sUIDErr     error       // set uid error
+	sGIDErr     error       // set gid error
 	history     []string
 }
 
@@ -127,13 +127,13 @@ func (m *mockExt) listGroups(usr *user.User) ([]string, error) {
 func (m *mockExt) setUID(uid int64) error {
 	m.history = append(m.history, fmt.Sprintf(msgSetUID, uid))
 
-	return m.sUidErr
+	return m.sUIDErr
 }
 
 func (m *mockExt) setGID(gid int64) error {
 	m.history = append(m.history, fmt.Sprintf(msgSetGID, gid))
 
-	return m.sGidErr
+	return m.sGIDErr
 }
 
 func newMockExt(
