@@ -64,8 +64,49 @@ restore_dist_files() {
 
 }
 
+cleanup() {
+    restore_dist_files "${yaml_files[@]}"
+    i=5
+    while [ $i -gt 0 ]; do
+        pdsh -l ${REMOTE_ACCT:-jenkins} -R ssh -S \
+             -w "$(IFS=','; echo "${nodes[*]}")" "set -x
+        if grep /mnt/daos /proc/mounts; then
+            if ! sudo umount /mnt/daos; then
+                echo \"During shutdown, failed to unmount /mnt/daos.  \"\
+                     \"Continuing...\"
+            fi
+        fi
+        x=0
+        while [ \$x -lt 30 ] &&
+              grep $DAOS_BASE /proc/mounts &&
+              ! sudo umount $DAOS_BASE; do
+            sleep 1
+            let x+=1
+        done
+        sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
+        if ! sudo rmdir $DAOS_BASE; then
+            echo \"Failed to remove $DAOS_BASE\"
+            if [ -d $DAOS_BASE ]; then
+                ls -l $DAOS_BASE
+            else
+                echo \"because it doesnt exist\"
+            fi
+            exit 1
+        fi" 2>&1 | dshbak -c
+        if [ "${PIPESTATUS[0]}" = 0 ]; then
+            i=0
+        fi
+        ((i-=1))
+    done
+}
+
 # shellcheck disable=SC1091
 . .build_vars.sh
+
+if ${TEARDOWN_ONLY:-false}; then
+    cleanup
+    exit 0
+fi
 
 # set our machine names
 mapfile -t yaml_files < <(find src/tests/ftest -name \*.yaml)
@@ -87,29 +128,11 @@ sed -i.dist -e "s/- boro-A/- ${nodes[1]}/g" \
 rm -rf src/tests/ftest/avocado ./*_results.xml
 mkdir -p src/tests/ftest/avocado/job-results
 
-# shellcheck disable=SC2154
-trap 'set +e
-restore_dist_files "${yaml_files[@]}"
-i=5
-while [ $i -gt 0 ]; do
-    pdsh -l jenkins -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "sudo umount /mnt/daos
-    x=0
-    while [ \$x -lt 30 ] &&
-          grep $DAOS_BASE /proc/mounts &&
-          ! sudo umount $DAOS_BASE; do
-        sleep 1
-        let x+=1
-    done
-    sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-    sudo rmdir $DAOS_BASE" 2>&1 | dshbak -c
-    if [ ${PIPESTATUS[0]} = 0 ]; then
-        i=0
-    fi
-    let i-=1
-done' EXIT
+trap 'set +e; cleanup' EXIT
 
 DAOS_BASE=${SL_PREFIX%/install}
-if ! pdsh -l jenkins -R ssh -S -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
+if ! pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+    -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 ulimit -c unlimited
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
@@ -131,24 +154,30 @@ fi
 
 # make sure to set up for daos_agent
 current_username=\$(whoami)
-sudo mkdir /var/run/daos_agent
-sudo mkdir /var/run/daos_server
-sudo chown \${current_username} -R /var/run/daos_agent
-sudo chown \${current_username} -R /var/run/daos_server
-sudo chmod 0755 /var/run/daos_agent
-sudo chmod 0755 /var/run/daos_server
-ls -al /var/run/daos*
-
-sudo mkdir -p $DAOS_BASE
-sudo ed <<EOF /etc/fstab
-\\\$a
+sudo bash -c \"set -ex
+if [ -d  /var/run/daos_agent ]; then
+    rmdir /var/run/daos_agent
+fi
+if [ -d  /var/run/daos_server ]; then
+    rmdir /var/run/daos_server
+fi
+mkdir /var/run/daos_{agent,server}
+chown \$current_username -R /var/run/daos_{agent,server}
+chmod 0755 /var/run/daos_{agent,server}
+mkdir -p $DAOS_BASE
+ed <<EOF /etc/fstab
+\\\\\\\$a
 $NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
 .
 wq
 EOF
-sudo mount $DAOS_BASE
+mount \\\"$DAOS_BASE\\\"\"
+
 rm -rf /tmp/Functional_$TEST_TAG/
 mkdir -p /tmp/Functional_$TEST_TAG/
+if [ -z \"\$JENKINS_URL\" ]; then
+    exit 0
+fi
 sudo bash -c 'set -ex
 yum -y install yum-utils
 repo_file_base=\"*_job_${JOB_NAME%%/*}_job_\"
@@ -188,7 +217,8 @@ shift || true
 args+=" $*"
 
 # shellcheck disable=SC2029
-if ! ssh -i ci_key jenkins@"${nodes[0]}" "set -ex
+# shellcheck disable=SC2086
+if ! ssh $SSH_KEY_ARGS "${REMOTE_ACCT:-jenkins}"@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
@@ -217,6 +247,66 @@ dmesg
 df -h
 EOF
 
+# apply patch for https://github.com/avocado-framework/avocado/pull/3076/
+if ! grep TIMEOUT_TEARDOWN \
+    /usr/lib/python2.7/site-packages/avocado/core/runner.py; then
+    sudo yum -y install patch
+    sudo patch -p0 -d/ << \"EOF\"
+From d9e5210cd6112b59f7caff98883a9748495c07dd Mon Sep 17 00:00:00 2001
+From: Cleber Rosa <crosa@redhat.com>
+Date: Wed, 20 Mar 2019 12:46:57 -0400
+Subject: [PATCH] [RFC] Runner: add extra timeout for tests in teardown
+
+The current time given to tests performing teardown is pretty limited.
+Let's add a 60 seconds fixed timeout just for validating the idea, and
+once settled, we can turn that into a configuration setting.
+
+Signed-off-by: Cleber Rosa <crosa@redhat.com>
+---
+ avocado/core/runner.py             | 11 +++++++++--
+ examples/tests/longteardown.py     | 29 +++++++++++++++++++++++++++++
+ selftests/functional/test_basic.py | 18 ++++++++++++++++++
+ 3 files changed, 56 insertions(+), 2 deletions(-)
+ create mode 100644 examples/tests/longteardown.py
+
+diff --git /usr/lib/python2.7/site-packages/avocado/core/runner.py.old /usr/lib/python2.7/site-packages/avocado/core/runner.py
+index 1fc84844b..17e6215d0 100644
+--- /usr/lib/python2.7/site-packages/avocado/core/runner.py.old
++++ /usr/lib/python2.7/site-packages/avocado/core/runner.py
+@@ -45,6 +45,8 @@
+ TIMEOUT_PROCESS_DIED = 10
+ #: when test reported status but the process did not finish
+ TIMEOUT_PROCESS_ALIVE = 60
++#: extra timeout to give to a test in TEARDOWN phase
++TIMEOUT_TEARDOWN = 60
+ 
+ 
+ def add_runner_failure(test_state, new_status, message):
+@@ -219,7 +221,7 @@ def finish(self, proc, started, step, deadline, result_dispatcher):
+         wait.wait_for(lambda: not proc.is_alive() or self.status, 1, 0, step)
+         if self.status:     # status exists, wait for process to finish
+             deadline = min(deadline, time.time() + TIMEOUT_PROCESS_ALIVE)
+-            while time.time() < deadline:
++            while time.time() < deadline + TIMEOUT_TEARDOWN:
+                 result_dispatcher.map_method('test_progress', False)
+                 if wait.wait_for(lambda: not proc.is_alive(), 1, 0, step):
+                     return self._add_status_failures(self.status)
+@@ -422,7 +424,12 @@ def sigtstp_handler(signum, frame):     # pylint: disable=W0613
+ 
+         while True:
+             try:
+-                if time.time() >= deadline:
++                now = time.time()
++                if test_status.status.get('phase') == 'TEARDOWN':
++                    reached = now >= deadline + TIMEOUT_TEARDOWN
++                else:
++                    reached = now >= deadline
++                if reached:
+                     abort_reason = \"Timeout reached\"
+                     try:
+                         os.kill(proc.pid, signal.SIGTERM)
+EOF
+fi
 # apply fix for https://github.com/avocado-framework/avocado/issues/2908
 sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/core/runner.py
 /TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
@@ -235,6 +325,11 @@ pushd src/tests/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml
+
+# see if we just wanted to set up
+if ${SETUP_ONLY:-false}; then
+    exit 0
+fi
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
@@ -267,17 +362,26 @@ fi
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}
+    if ${SETUP_ONLY:-false}; then
+        exit "$rc"
+    fi
 else
+    if ${SETUP_ONLY:-false}; then
+        trap '' EXIT
+        exit 0
+    fi
     rc=0
 fi
 
 # collect the logs
-if ! rpdcp -l jenkins -R ssh -w "$(IFS=','; echo "${nodes[*]}")" \
+if ! rpdcp -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+    -w "$(IFS=','; echo "${nodes[*]}")" \
     /tmp/Functional_"$TEST_TAG"/\*daos.log "$PWD"/; then
     echo "Copying daos.logs from remote nodes failed"
     # pass
 fi
-if ! rpdcp -l jenkins -R ssh -w "$(IFS=','; echo "${nodes[*]}")" \
+if ! rpdcp -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+    -w "$(IFS=','; echo "${nodes[*]}")" \
     /tmp/daos_agent.log "$PWD"/; then
     echo "Copying daos_agent.logs from remote nodes failed"
     # pass

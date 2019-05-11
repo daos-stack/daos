@@ -734,7 +734,8 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
                                            # JENKINS-52781 tar function is breaking symlinks
 					   rm -rf test_results
 					   mkdir test_results
@@ -744,7 +745,7 @@ pipeline {
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
                                            NODE=${NODELIST%%,*}
-                                           ssh -i ci_key jenkins@$NODE "set -x
+                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
                                                if grep /mnt/daos\\  /proc/mounts; then
@@ -823,14 +824,15 @@ pipeline {
                                        node_count: 9,
                                        snapshot: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=regression,vm
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
+                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml src/tests/ftest/*_results.xml",
                                 failure_artifacts: 'Functional'
                     }
                     post {
