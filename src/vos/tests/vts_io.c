@@ -482,8 +482,9 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 }
 
 int
-io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		   daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
+io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
+		   daos_key_t *dkey, daos_iod_t *iod, daos_sg_list_t *sgl,
+		   bool verbose)
 {
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
@@ -537,8 +538,9 @@ end:
 }
 
 int
-io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		  daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
+io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
+		  daos_key_t *dkey, daos_iod_t *iod, daos_sg_list_t *sgl,
+		  bool verbose)
 {
 	struct bio_sglist *bsgl;
 	struct bio_iov	*biov;

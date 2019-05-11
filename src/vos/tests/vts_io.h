@@ -107,12 +107,12 @@ void			inc_cntr(unsigned long op_flags);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
-					   int epoch, daos_key_t *dkey,
+					   daos_epoch_t epoch, daos_key_t *dkey,
 					   daos_iod_t *iod,
 					   daos_sg_list_t *sgl,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
-					  int epoch, daos_key_t *dkey,
+					  daos_epoch_t epoch, daos_key_t *dkey,
 					  daos_iod_t *iod,
 					  daos_sg_list_t *sgl,
 					  bool verbose);
