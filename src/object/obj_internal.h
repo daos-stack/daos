@@ -39,6 +39,8 @@
 #include <daos_srv/daos_server.h>
 #include <daos_types.h>
 
+#include "obj_rpc.h"
+
 /**
  * This environment is mostly for performance evaluation.
  */
@@ -160,25 +162,40 @@ obj_tls_get()
 	return dss_module_key_get(dss_tls_get(), &obj_module_key);
 }
 
+/* shard update/punch auxiliary args, must be the first field of
+ * shard_rw_args and shard_punch_args.
+ */
+struct shard_auxi_args {
+	struct dc_object	*obj;
+	struct obj_auxi_args	*obj_auxi;
+	uint32_t		 shard;
+	uint32_t		 target;
+	uint32_t		 map_ver;
+};
+
+struct shard_rw_args {
+	struct shard_auxi_args	 auxi;
+	daos_epoch_t		 epoch;
+	struct dtx_id		 dti;
+	daos_key_t		*dkey;
+	uint64_t		 dkey_hash;
+	unsigned int		 nr;
+	daos_iod_t		*iods;
+	daos_sg_list_t		*sgls;
+	crt_bulk_t		*bulks;
+	daos_iom_t		*maps; /* only for fetch */
+	uint32_t		 flags;
+};
+
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
 
-struct daos_obj_shard_tgt;
-int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			daos_key_t *dkey, unsigned int nr,
-			daos_iod_t *iods, daos_sg_list_t *sgls,
-			crt_bulk_t *bulks, unsigned int *map_ver,
-			struct daos_obj_shard_tgt *tgts,
-			uint32_t fw_cnt, tse_task_t *task,
-			struct dtx_id *dti, uint32_t flags);
-
-int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
-		       daos_key_t *dkey, unsigned int nr,
-		       daos_iod_t *iods, daos_sg_list_t *sgls,
-		       crt_bulk_t *bulks, daos_iom_t *maps,
-		       unsigned int *map_ver, tse_task_t *task);
+int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+		    struct shard_rw_args *args, unsigned int *map_ver,
+		    struct daos_obj_shard_tgt *fw_shard_tgts,
+		    uint32_t fw_cnt, tse_task_t *task);
 
 int
 dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
