@@ -966,7 +966,75 @@ strided_array(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
+#define NUM_RECS 1048576
+
+static void
+large_io(void **state) {
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_array_iod_t iod;
+	daos_range_t	rg;
+	daos_sg_list_t	sgl;
+	daos_iov_t	iov;
+	int		*wbuf = NULL;
+	int		i;
+	int		rc;
+
+	/** create the array on rank 0 and share the oh. */
+	if (arg->myrank == 0) {
+		oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, 0);
+		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, NUM_RECS,
+				       &oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+	array_oh_share(arg->coh, arg->myrank, &oh);
+
+	/** Allocate and set buffer */
+	D_ALLOC_ARRAY(wbuf, NUM_RECS);
+	assert_non_null(wbuf);
+	for (i = 0; i < NUM_RECS; i++)
+		wbuf[i] = i+1;
+
+	/** set memory location */
+	sgl.sg_nr = 1;
+	daos_iov_set(&iov, wbuf, NUM_RECS);
+	sgl.sg_iovs = &iov;
+
+	double start, end, total = 0;
+
+	for (i = 0; i < 100; i++) {
+		/** set array location */
+		iod.arr_nr = 1;
+		rg.rg_len = NUM_RECS;
+		rg.rg_idx = (uint64_t)arg->myrank * NUM_RECS + 
+			(uint64_t)i * NUM_RECS * arg->rank_size;
+		iod.arr_rgs = &rg;
+
+		start = MPI_Wtime();
+		rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+		if (rc)
+			printf("%d: Rank %d (%d: idx %"PRIu64")\n", rc,
+			       arg->myrank, i, rg.rg_idx);
+		assert_int_equal(rc, 0);
+		end = MPI_Wtime();
+		total += (end - start);
+		if (end - start > 1)
+			printf("Rank %d - idx %"PRIu64": took %f seconds\n",
+			       arg->myrank, rg.rg_idx, end - start);
+	}
+	printf("total time = %f seconds\n", total);
+
+	D_FREE(wbuf);
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest array_io_tests[] = {
+	{"Array I/O: Large IO",
+	 large_io, async_disable, NULL},
 	{"Array I/O: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
 	{"Array I/O: small/simple array IO (blocking)",
