@@ -3366,7 +3366,7 @@ io_pool_map_refresh_trigger(void **state)
 }
 
 /**
- * Test to fetch the non existance keys.
+ * Test to fetch the non existence keys.
  */
 static void nonexistent_internal(void **state, daos_obj_id_t oid,
 				 const char key_type[])
@@ -3396,9 +3396,9 @@ static void nonexistent_internal(void **state, daos_obj_id_t oid,
 		      DAOS_TX_NONE, &req);
 
 	/**
- 	* As per current implementation non existing keys
-  	* will not use the buffer at all during fetch
- 	*/
+	* As per current implementation non existing keys
+	* will not use the buffer at all during fetch
+	*/
 	assert_false(fetch_buf[0] != '\0');
 
 	D_FREE(update_buf);
@@ -3408,15 +3408,82 @@ static void nonexistent_internal(void **state, daos_obj_id_t oid,
 }
 
 /**
- * Fetch the non existent dkey/akey.
+ * Fetch mixed existing and nonexistent akey with variable
+ * record sizes for both NVMe and SCM.
  */
-static void fetch_nonexistent_keys(void **state)
+static void fetch_mixed_keys_internal(void **state, daos_obj_id_t oid,
+				      unsigned int    size,
+				      daos_iod_type_t iod_type,
+				      const char dkey[], const char akey[])
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	daos_handle_t	oh;
-	int		invalid_object = 100;
-	int		rc;
+	test_arg_t   *arg = *state;
+	struct ioreq req;
+	char         *akeys[MANYREC_NUMRECS];
+	char         *rec[MANYREC_NUMRECS];
+	daos_size_t  rec_size[MANYREC_NUMRECS];
+	int          rx_nr[MANYREC_NUMRECS];
+	daos_off_t   offset[MANYREC_NUMRECS];
+	char         *val[MANYREC_NUMRECS];
+	daos_size_t  val_size[MANYREC_NUMRECS];
+	int          i;
+
+	ioreq_init(&req, arg->coh, oid, iod_type, arg);
+
+	for (i = 0; i < MANYREC_NUMRECS; i++) {
+		akeys[i] = calloc(30, 1);
+		assert_non_null(akeys[i]);
+		snprintf(akeys[i], 30, "%s%d", akey, i);
+		D_ALLOC(rec[i], size);
+		assert_non_null(rec[i]);
+		dts_buf_render(rec[i], size);
+		rec_size[i] = size;
+		rx_nr[i]    = 1;
+		offset[i]   = i * size;
+		val[i]      = calloc(size, 1);
+		assert_non_null(val[i]);
+		val_size[i] = size;
+	}
+
+	/** Insert */
+	insert(dkey, MANYREC_NUMRECS, (const char **)akeys, rec_size, rx_nr,
+	       offset, (void **)rec, DAOS_TX_NONE, &req);
+
+	/* update the non existent akeys*/
+	snprintf(akeys[1], 30, "%s8", akey);
+	snprintf(akeys[3], 30, "%s9", akey);
+
+	/** Lookup */
+	lookup(dkey, MANYREC_NUMRECS, (const char **)akeys, offset, rec_size,
+	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
+
+	/** Verify data consistency for valid akeys*/
+	for (i = 0; i < MANYREC_NUMRECS; i++) {
+		if (i == 1 || i == 3) {
+			/* for non existent akeys, buffer will not be used */
+			print_message("\tNon existent key=%s \tsize = %lu\n",
+				      akeys[i], req.iod[i].iod_size);
+			assert_false(val[i][0] != '\0');
+		} else {
+			print_message("\tExistent key=%s \tsize = %lu\n",
+				      akeys[i], req.iod[i].iod_size);
+			assert_int_equal(req.iod[i].iod_size, rec_size[i]);
+			assert_memory_equal(val[i], rec[i], rec_size[i]);
+		}
+		D_FREE(val[i]);
+		D_FREE(rec[i]);
+		D_FREE(akeys[i]);
+	}
+
+	ioreq_fini(&req);
+}
+
+/**
+ * Fetch mixed existing and nonexistent akeys in single fetch call.
+ */
+static void fetch_mixed_keys(void **state)
+{
+	test_arg_t    *arg = *state;
+	daos_obj_id_t oid;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
@@ -3428,96 +3495,25 @@ static void fetch_nonexistent_keys(void **state)
 	print_message("Fetch nonexistent AKEY\n");
 	nonexistent_internal(state, oid, "akey");
 
-	/** Test nonexistent object type */
-	print_message("Fetch nonexistent OBJECT\n");
-	oid = dts_oid_gen(invalid_object, 0, arg->myrank);
-	rc  = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_not_equal(rc, 0);
-}
+	print_message("DAOS_IOD_ARRAY:SCM\n");
+	fetch_mixed_keys_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
+				  "io_manyrec_scm_array dkey",
+				  "io_manyrec_scm_array akey");
 
-/**
- * Fetch mixed existing and nonexisent dkey, akey with variable
- * record sizes for both NVMe and SCM.
- */
-static void fetch_mixed_keys(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	struct ioreq	req;
-	const char	dkey[] = "io_complex dkey";
-	const char	akey[] = "io_complex akey";
-	char		*akeys[4];
-	char		*rec[4];
-	daos_size_t	rec_size[4];
-	daos_off_t	offset[4];
-	char		*val[4];
-	unsigned int	size;
-	int		i;
+	print_message("DAOS_IOD_ARRAY:NVME\n");
+	fetch_mixed_keys_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_ARRAY,
+				  "io_manyrec_nvme_array dkey",
+				  "io_manyrec_array akey");
 
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+	print_message("DAOS_IOD_SINGLE:SCM\n");
+	fetch_mixed_keys_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_SINGLE,
+				  "io_manyrec_scm_single dkey",
+				  "io_manyrec_scm_single akey");
 
-	for (i = 0; i < 4; i++) {
-		D_ASPRINTF(akeys[i], "%s%d", akey, i);
-		if (i % 2 == 0)
-			size = IO_SIZE_SCM;
-		else
-			size = IO_SIZE_NVME;
-		D_ALLOC(rec[i], size);
-		dts_buf_render(rec[i], size);
-		rec_size[i] = size;
-		offset[i]   = i * size;
-		D_ALLOC(val[i], size);
-	}
-
-	/** Insert */
-	for (i = 0; i < 4; i++) {
-		if (i == 0 || i == 3)
-			req.iod_type = DAOS_IOD_SINGLE;
-		else
-			req.iod_type = DAOS_IOD_ARRAY;
-		insert_single(dkey, akeys[i], offset[i], rec[i], rec_size[i],
-			      DAOS_TX_NONE, &req);
-	}
-
-	/** Lookup & verify */
-	for (i = 0; i < 4; i++) {
-		if (i == 0 || i == 3) {
-			req.iod_type = DAOS_IOD_SINGLE;
-			print_message("DAOS_IOD_SINGLE:%s",
-				      rec_size[i] == IO_SIZE_SCM ? "SCM"
-								 : "NVME");
-		} else {
-			req.iod_type = DAOS_IOD_ARRAY;
-			print_message("DAOS_IOD_ARRAY:%s",
-				      rec_size[i] == IO_SIZE_SCM ? "SCM"
-								 : "NVME");
-		}
-
-		/** verify existing record **/
-		lookup_single(dkey, akeys[i], offset[i], val[i], rec_size[i],
-			      DAOS_TX_NONE, &req);
-		print_message("\tsize = %lu\n", rec_size[i]);
-		assert_memory_equal(val[i], rec[i], rec_size[i]);
-
-		/** fetch the nonexistent dkey **/
-		memset(val[i], 0, rec_size[i]);
-		print_message("Fetch nonexistent DKEY\n");
-		lookup_single("nonexistent dkey", akeys[i], offset[i], val[i],
-			      rec_size[i], DAOS_TX_NONE, &req);
-		assert_false(val[i][0] != '\0');
-
-		/** fetch the nonexistent akey **/
-		print_message("Fetch nonexistent AKEY\n");
-		lookup_single(dkey, "nonexistent akey", offset[i], val[i],
-			      rec_size[i], DAOS_TX_NONE, &req);
-		assert_false(val[i][0] != '\0');
-
-		D_FREE(val[i]);
-		D_FREE(rec[i]);
-		D_FREE(akeys[i]);
-	}
-	ioreq_fini(&req);
+	print_message("DAOS_IOD_SINGLE:NVME\n");
+	fetch_mixed_keys_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_SINGLE,
+				  "io_manyrec_nvme_single dkey",
+				  "io_manyrec_nvme_single akey");
 }
 
 static const struct CMUnitTest io_tests[] = {
@@ -3592,9 +3588,7 @@ static const struct CMUnitTest io_tests[] = {
 	  split_sgl_update_fetch, async_disable, test_case_teardown},
 	{ "IO36: trigger server pool map refresh",
 	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
-	{ "IO37: Fetch nonexistent keys",
-	  fetch_nonexistent_keys, async_disable, test_case_teardown},
-	{ "IO38: Fetch mixed existing/nonexistent keys",
+	{ "IO37: Fetch existing and nonexistent akeys in single fetch call",
 	  fetch_mixed_keys, async_disable, test_case_teardown},
 };
 
