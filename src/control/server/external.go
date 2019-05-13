@@ -49,7 +49,6 @@ const (
 
 // External interface provides methods to support various os operations.
 type External interface {
-	getenv(string) string
 	runCommand(string) error
 	writeToFile(string, string) error
 	createEmpty(string, int64) error
@@ -58,6 +57,7 @@ type External interface {
 	mkdir(string) error
 	remove(string) error
 	exists(string) (bool, error)
+	getAbsInstallPath(string) (string, error)
 	lookupUser(string) (*user.User, error)
 	lookupGroup(string) (*user.Group, error)
 	setUid(int64) error
@@ -90,11 +90,6 @@ func (e *ext) runCommand(cmd string) error {
 	e.history = append(e.history, fmt.Sprintf(msgCmd, cmd))
 
 	return common.Run(cmd)
-}
-
-// getEnv wraps around os.GetEnv and implements External.getEnv().
-func (e *ext) getenv(key string) string {
-	return os.Getenv(key)
 }
 
 // writeToFile wraps around common.WriteString and writes input string to given
@@ -197,6 +192,10 @@ func (e *ext) exists(path string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (e *ext) getAbsInstallPath(path string) (string, error) {
+	return common.GetAbsInstallPath(path)
 }
 
 func (e *ext) lookupUser(userName string) (*user.User, error) {
