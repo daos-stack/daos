@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	agentSockName = "agent.sock"
+	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
 )
 
@@ -46,9 +46,7 @@ type cliOptions struct {
 	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 }
 
-var (
-	opts = new(cliOptions)
-)
+var opts = new(cliOptions)
 
 func main() {
 	if agentMain() != nil {
@@ -58,16 +56,16 @@ func main() {
 
 // applyCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
-func applyCmdLineOverrides(c *client.Configuration, RuntimeDir string, LogFile string) {
+func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
 
-	if RuntimeDir != "" {
-		log.Debugf("Overriding socket path from config file with %s", RuntimeDir)
-		c.RuntimeDir = RuntimeDir
+	if opts.RuntimeDir != "" {
+		log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
+		c.RuntimeDir = opts.RuntimeDir
 	}
 
-	if LogFile != "" {
-		log.Debugf("Overriding LogFile path from config file with %s", LogFile)
-		c.LogFile = LogFile
+	if opts.LogFile != "" {
+		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
+		c.LogFile = opts.LogFile
 	}
 
 }
@@ -93,12 +91,13 @@ func agentMain() error {
 	}
 
 	// Override configuration with any commandline values given
-	applyCmdLineOverrides(&config, opts.RuntimeDir, opts.LogFile)
+	applyCmdLineOverrides(&config, opts)
 
-	// ValidateEnv will issue a warning if there is a mismatch between the
-	// daosAgentDrpcSockEnv value and the config file / command line value.
-	config.ValidateEnv(daosAgentDrpcSockEnv, config.RuntimeDir)
-	
+	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
+	if env != config.RuntimeDir {
+		log.Debugf("Environment variable '%s' has value '%s' which does not match '%s'", daosAgentDrpcSockEnv, env, config.RuntimeDir)
+	}
+
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
 

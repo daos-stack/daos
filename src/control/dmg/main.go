@@ -68,16 +68,17 @@ func main() {
 
 // applyCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
-func applyCmdLineOverrides(c *client.Configuration, Hostlist string) error {
+func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) error {
 
-	if len(Hostlist) > 0 {
-		hosts := strings.Split(Hostlist, ",")
+	if len(opts.Hostlist) > 0 {
+		hosts := strings.Split(opts.Hostlist, ",")
 		log.Debugf("Overriding hostlist from config file with %s", hosts)
 		c.HostList = hosts
 	}
 
 	return nil
 }
+
 func dmgMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
@@ -99,7 +100,7 @@ func dmgMain() error {
 	}
 
 	// Override configuration with any commandline values given
-	err = applyCmdLineOverrides(&config, opts.Hostlist)
+	err = applyCmdLineOverrides(&config, opts)
 	if err != nil {
 		log.Errorf("Failed to apply command line overrides %s", err)
 		return err

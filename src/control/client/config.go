@@ -44,7 +44,8 @@ const (
 
 // External interface provides methods to support various os operations.
 type External interface {
-	getenv(string) string
+	Getenv(string) string
+	runCommand(string) error
 }
 
 type ext struct{}
@@ -56,7 +57,7 @@ func (e *ext) runCommand(cmd string) error {
 }
 
 // getEnv wraps around os.GetEnv and implements External.getEnv().
-func (e *ext) getenv(key string) string {
+func (e *ext) Getenv(key string) string {
 	return os.Getenv(key)
 }
 
@@ -73,7 +74,7 @@ type Configuration struct {
 	LogFile       string   `yaml:"log_file"`
 	LogFileFormat string   `yaml:"log_file_format"`
 	Path          string
-	ext           External
+	Ext           External
 }
 
 // newDefaultConfiguration creates a new instance of configuration struct
@@ -87,7 +88,7 @@ func newDefaultConfiguration(ext External) Configuration {
 		RuntimeDir:   defaultRuntimeDir,
 		LogFile:      defaultLogFile,
 		Path:         defaultConfigPath,
-		ext:          ext,
+		Ext:          ext,
 	}
 }
 
@@ -132,15 +133,6 @@ func (c *Configuration) LoadConfig() error {
 	}
 
 	return nil
-}
-
-// ValidateEnv reads the value of a given environment variable and compares it with
-// the supplied value.  Issues a non-fatal debug message if there is a mismatch
-func (c *Configuration) ValidateEnv(envVar string, value string) {
-	temp := c.ext.getenv(envVar)
-	if temp != value {
-		log.Debugf("Environment variable '%s' has value '%s' which does not match '%s'", envVar, temp, value)
-	}
 }
 
 // decodes YAML representation of Configuration struct
