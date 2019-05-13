@@ -114,23 +114,10 @@ func awaitStorageFormat(config *configuration) error {
 			srv.storWaitGroup.Wait()
 		}
 
-		if uid, gid, err := dropPrivileges(
-			config.ext, config.UserName, config.GroupName); err != nil {
-
+		if err := dropPrivileges(config); err != nil {
 			log.Errorf(
 				"Failed to drop privileges: %s, running as root "+
 					"is dangerous and is not advised!", err)
-		} else {
-			for i, srv := range config.Servers {
-				// chown ScmMount (uid/gid are 32bit)
-				err := os.Chown(srv.ScmMount, int(uid), int(gid))
-				if err != nil {
-					return errors.WithMessagef(
-						err,
-						"changing scm mount ownership"+
-							" on I/O server %d", i)
-				}
-			}
 		}
 	} else {
 		log.Debugf(

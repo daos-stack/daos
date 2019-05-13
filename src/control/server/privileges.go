@@ -24,6 +24,7 @@
 package main
 
 import (
+	"os"
 	"os/user"
 	"strconv"
 
@@ -82,44 +83,54 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 	return gid, nil
 }
 
+func chownScmMount(config *configuration, uid int64, gid int64) error {
+	for i, srv := range config.Servers {
+		// chown ScmMount (uid/gid are 32bit)
+		err := os.Chown(srv.ScmMount, int(uid), int(gid))
+		if err != nil {
+			return errors.WithMessagef(
+				err,
+				"changing scm mount ownership"+
+					" on I/O server %d", i)
+		}
+	}
+	return nil
+}
+
 // drop will attempt to drop privileges by setting uid of running process to
 // that of the username specified in config file. If groupname is also
 // specified in config file then check user is a member of that group and
 // set relevant gid if so, otherwise use user.gid.
-func dropPrivileges(ext External, userName string, groupName string) (
-	uid, gid int64, err error) {
-
-	log.Debugf("running as root, downgrading to user %s", userName)
-
-	if userName == "" {
-		err = errors.New("no username supplied in config")
-		return
+func dropPrivileges(config *configuration) error {
+	if config.UserName == "" {
+		return errors.New("no username supplied in config")
 	}
 
-	var usr *user.User
-	usr, uid, err = getUID(ext, userName)
+	log.Debugf("running as root, downgrading to user %s", config.UserName)
+
+	usr, uid, err := getUID(config.ext, config.UserName)
 	if err != nil {
-		err = errors.WithMessage(err, "get uid")
-		return
+		return errors.WithMessage(err, "get uid")
 	}
 
-	gid, err = getGID(ext, usr, groupName)
+	gid, err := getGID(config.ext, usr, config.GroupName)
 	if err != nil {
-		err = errors.WithMessage(err, "get gid")
-		return
+		return errors.WithMessage(err, "get gid")
 	}
 
-	if err = ext.setGID(gid); err != nil {
-		err = errors.WithMessage(err, "setting gid")
-		return
+	if err := chownScmMount(config, uid, gid); err != nil {
+		return err
 	}
 
-	if err = ext.setUID(uid); err != nil {
-		err = errors.WithMessage(err, "setting uid")
-		return
+	if err := config.ext.setGID(gid); err != nil {
+		return errors.WithMessage(err, "setting gid")
+	}
+
+	if err := config.ext.setUID(uid); err != nil {
+		return errors.WithMessage(err, "setting uid")
 	}
 
 	// TODO: chown sock path?
 
-	return uid, gid, nil
+	return nil
 }
