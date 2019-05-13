@@ -3396,9 +3396,9 @@ static void nonexistent_internal(void **state, daos_obj_id_t oid,
 		      DAOS_TX_NONE, &req);
 
 	/**
- 	* As per current implementation non existing keys
-  	* will not use the buffer at all during fetch
- 	*/
+	* As per current implementation non existing keys
+	* will not use the buffer at all during fetch
+	*/
 	assert_false(fetch_buf[0] != '\0');
 
 	D_FREE(update_buf);
