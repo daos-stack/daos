@@ -34,7 +34,6 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
-#include "rpc.h"
 
 /*
  * RPC operation codes
