@@ -81,20 +81,15 @@ func (c *controlService) Teardown() {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
-
-	// decrement counter to release blocked goroutines
-	for idx := range c.config.Servers {
-		c.config.Servers[idx].storWaitGroup.Done()
-	}
 }
 
 // awaitStorageFormat checks if running as root and server superblocks exist,
 // if both conditions are true, wait until storage is formatted through client
 // API calls from management tool. Then drop privileges of running process.
 func awaitStorageFormat(config *configuration) error {
-	msgFormat := "storage format on server %d "
+	msgFormat := "storage format on server %d"
 	msgSkip := "skipping " + msgFormat
-	msgWait := "waiting for " + msgFormat
+	msgWait := "waiting for " + msgFormat + "\n"
 
 	if syscall.Getuid() == 0 {
 		for i, srv := range config.Servers {
@@ -105,7 +100,7 @@ func awaitStorageFormat(config *configuration) error {
 					err, "checking superblock exists")
 			} else if ok {
 				log.Debugf(
-					msgSkip+"(server already formatted)\n",
+					msgSkip+" (server already formatted)\n",
 					i)
 
 				continue
@@ -119,12 +114,23 @@ func awaitStorageFormat(config *configuration) error {
 			srv.storWaitGroup.Wait()
 		}
 
-		if err := dropPrivileges(
+		if uid, gid, err := dropPrivileges(
 			config.ext, config.UserName, config.GroupName); err != nil {
 
 			log.Errorf(
-				"Failed to drop privileges: %s, running as root"+
+				"Failed to drop privileges: %s, running as root "+
 					"is dangerous and is not advised!", err)
+		} else {
+			for i, srv := range config.Servers {
+				// chown ScmMount (uid/gid are 32bit)
+				err := os.Chown(srv.ScmMount, int(uid), int(gid))
+				if err != nil {
+					return errors.WithMessagef(
+						err,
+						"changing scm mount ownership"+
+							" on I/O server %d", i)
+				}
+			}
 		}
 	} else {
 		log.Debugf(

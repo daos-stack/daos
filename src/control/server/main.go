@@ -108,13 +108,6 @@ func serverMain() error {
 	}
 	log.Debugf("DAOS control server listening on %s", addr)
 
-	// Wait for storage to be formatted if necessary and subsequently drop
-	// current process privileges to that of normal user.
-	if err = awaitStorageFormat(&config); err != nil {
-		log.Errorf("Failed to format storage: %s", err)
-		return err
-	}
-
 	// Create new grpc server, register services and start serving (after
 	// dropping privileges).
 	var sOpts []grpc.ServerOption
@@ -129,6 +122,13 @@ func serverMain() error {
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
+
+	// Wait for storage to be formatted if necessary and subsequently drop
+	// current process privileges to that of normal user.
+	if err = awaitStorageFormat(&config); err != nil {
+		log.Errorf("Failed to format storage: %s", err)
+		return err
+	}
 
 	// Format the unformatted servers by writing persistant superblock.
 	if err = formatIosrvs(&config, false); err != nil {

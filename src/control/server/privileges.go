@@ -86,30 +86,40 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 // that of the username specified in config file. If groupname is also
 // specified in config file then check user is a member of that group and
 // set relevant gid if so, otherwise use user.gid.
-func dropPrivileges(ext External, userName string, groupName string) error {
-	log.Debugf("running as root, downgrading to user ", userName)
+func dropPrivileges(ext External, userName string, groupName string) (
+	uid, gid int64, err error) {
+
+	log.Debugf("running as root, downgrading to user %s", userName)
 
 	if userName == "" {
-		return errors.New("no username supplied in config")
+		err = errors.New("no username supplied in config")
+		return
 	}
 
-	usr, uid, err := getUID(ext, userName)
+	var usr *user.User
+	usr, uid, err = getUID(ext, userName)
 	if err != nil {
-		return errors.WithMessage(err, "get uid")
+		err = errors.WithMessage(err, "get uid")
+		return
 	}
 
-	gid, err := getGID(ext, usr, groupName)
+	gid, err = getGID(ext, usr, groupName)
 	if err != nil {
-		return errors.WithMessage(err, "get gid")
+		err = errors.WithMessage(err, "get gid")
+		return
 	}
 
-	if err := ext.setGID(gid); err != nil {
-		return errors.WithMessage(err, "setting gid")
+	if err = ext.setGID(gid); err != nil {
+		err = errors.WithMessage(err, "setting gid")
+		return
 	}
 
-	if err := ext.setUID(uid); err != nil {
-		return errors.WithMessage(err, "setting uid")
+	if err = ext.setUID(uid); err != nil {
+		err = errors.WithMessage(err, "setting uid")
+		return
 	}
 
-	return nil
+	// TODO: chown sock path?
+
+	return uid, gid, nil
 }

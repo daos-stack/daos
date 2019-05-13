@@ -90,7 +90,9 @@ func TestDropPrivileges(t *testing.T) {
 			sUIDErr: tt.sUIDErr, sGIDErr: tt.sGIDErr,
 		}
 
-		err := dropPrivileges(&ext, tt.username, tt.groupname)
+		// TODO: verify chown gets called
+		// uid, gid, err := dropPrivileges(&ext, tt.username, tt.groupname)
+		_, _, err := dropPrivileges(&ext, tt.username, tt.groupname)
 		if err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
