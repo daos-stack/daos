@@ -152,10 +152,8 @@ dc_tx_check(daos_handle_t th, bool check_write, daos_epoch_t *epoch)
 {
 	struct dc_tx *tx = NULL;
 
-	if (daos_handle_is_inval(th)) {
-		*epoch = daos_ts2epoch();
-		return 0;
-	}
+	if (daos_handle_is_inval(th))
+		return -DER_INVAL;
 
 	tx = tx_hdl2ptr(th);
 	if (tx == NULL)

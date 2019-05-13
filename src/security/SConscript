@@ -1,7 +1,7 @@
 """Build security library"""
 import daos_build
 
-SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'security.pb-c.c']
+SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'auth.pb-c.c']
 
 def get_objects(cache, *args):
     """Retrieve built objects from the object cache"""
@@ -29,11 +29,11 @@ def scons():
     denv.Install('$PREFIX/lib/daos_srv', ds_sec)
 
     # dc_security: Security Client
-    dc_security_tgts = get_objects(cache, 'cli_security.c', 'security.pb-c.c')
+    dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
     Export('dc_security_tgts')
 
     dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',
-                                  'security.pb-c.c')
+                                  'auth.pb-c.c')
     Export('dc_sectest_tgts')
 
     SConscript('tests/SConscript', exports='denv')

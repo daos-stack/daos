@@ -190,7 +190,8 @@ cont_cmp(struct d_ulink *ulink, void *cmp_args)
 void
 cont_free(struct d_ulink *ulink)
 {
-	struct vos_container *cont;
+	struct vos_container	*cont;
+	int			 i;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
@@ -199,8 +200,11 @@ cont_free(struct d_ulink *ulink)
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
-	if (cont->vc_hint_ctxt)
-		vea_hint_unload(cont->vc_hint_ctxt);
+
+	for (i = 0; i < VOS_IOS_CNT; i++) {
+		if (cont->vc_hint_ctxt[i])
+			vea_hint_unload(cont->vc_hint_ctxt[i]);
+	}
 
 	D_FREE(cont);
 }
@@ -406,12 +410,17 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	}
 
 	if (cont->vc_pool->vp_vea_info != NULL) {
-		rc = vea_hint_load(&cont->vc_cont_df->cd_hint_df,
-				   &cont->vc_hint_ctxt);
-		if (rc) {
-			D_ERROR("Error load allocator hint "DF_UUID": %d\n",
-				DP_UUID(co_uuid), rc);
-			goto exit;
+		int	i;
+
+		for (i = 0; i < VOS_IOS_CNT; i++) {
+			rc = vea_hint_load(&cont->vc_cont_df->cd_hint_df[i],
+					   &cont->vc_hint_ctxt[i]);
+			if (rc) {
+				D_ERROR("Error loading allocator %d hint "
+					DF_UUID": %d\n", i, DP_UUID(co_uuid),
+					rc);
+				goto exit;
+			}
 		}
 	}
 

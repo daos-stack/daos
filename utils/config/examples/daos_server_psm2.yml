@@ -22,6 +22,7 @@ servers:
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
+  - DD_MASK=daos_default    # Enabled debug stream for default group
   # uncomment to enable scalable endpoint
   # - PSM2_MULTI_EP=1
   # - CRT_CTX_SHARE_ADDR=1

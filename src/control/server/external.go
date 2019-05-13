@@ -26,12 +26,17 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
+
+	//#include <unistd.h>
+	//#include <errno.h>
+	"C"
 )
 
 const (
@@ -44,7 +49,6 @@ const (
 
 // External interface provides methods to support various os operations.
 type External interface {
-	getenv(string) string
 	runCommand(string) error
 	writeToFile(string, string) error
 	createEmpty(string, int64) error
@@ -52,8 +56,24 @@ type External interface {
 	unmount(string) error
 	mkdir(string) error
 	remove(string) error
-	getHistory() []string
 	exists(string) (bool, error)
+	getAbsInstallPath(string) (string, error)
+	lookupUser(string) (*user.User, error)
+	lookupGroup(string) (*user.Group, error)
+	setUid(int64) error
+	setGid(int64) error
+	getHistory() []string
+}
+
+func errPermsAnnotate(err error) (e error) {
+	e = err
+	if os.IsPermission(e) {
+		e = errors.WithMessagef(
+			e,
+			"%s requires elevated privileges to perform this action",
+			os.Args[0])
+	}
+	return
 }
 
 type ext struct {
@@ -70,11 +90,6 @@ func (e *ext) runCommand(cmd string) error {
 	e.history = append(e.history, fmt.Sprintf(msgCmd, cmd))
 
 	return common.Run(cmd)
-}
-
-// getEnv wraps around os.GetEnv and implements External.getEnv().
-func (e *ext) getenv(key string) string {
-	return os.Getenv(key)
 }
 
 // writeToFile wraps around common.WriteString and writes input string to given
@@ -119,7 +134,7 @@ func (e *ext) mount(
 	e.history = append(e.history, op)
 
 	if err := syscall.Mount(dev, mount, mntType, flags, opts); err != nil {
-		return os.NewSyscallError("mount", err)
+		return errPermsAnnotate(os.NewSyscallError("mount", err))
 	}
 	return nil
 }
@@ -140,7 +155,7 @@ func (e *ext) unmount(path string) error {
 			return nil
 		}
 
-		return os.NewSyscallError("umount", err)
+		return errPermsAnnotate(os.NewSyscallError("umount", err))
 	}
 	return nil
 }
@@ -151,7 +166,7 @@ func (e *ext) mkdir(path string) error {
 	e.history = append(e.history, fmt.Sprintf(msgMkdir, path))
 
 	if err := os.MkdirAll(path, 0777); err != nil {
-		return errors.WithMessage(err, "mkdir")
+		return errPermsAnnotate(errors.WithMessage(err, "mkdir"))
 	}
 	return nil
 }
@@ -163,7 +178,7 @@ func (e *ext) remove(path string) error {
 
 	// ignore NOENT errors, treat as success
 	if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
-		return errors.WithMessage(err, "remove")
+		return errPermsAnnotate(errors.WithMessage(err, "remove"))
 	}
 	return nil
 }
@@ -172,8 +187,35 @@ func (e *ext) exists(path string) (bool, error) {
 	if _, err := os.Stat(path); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
-		return false, errors.Wrap(err, "os stat")
+		return false, errPermsAnnotate(
+			errors.WithMessage(err, "os stat"))
 	}
 
 	return false, nil
+}
+
+func (e *ext) getAbsInstallPath(path string) (string, error) {
+	return common.GetAbsInstallPath(path)
+}
+
+func (e *ext) lookupUser(userName string) (*user.User, error) {
+	return user.Lookup(userName)
+}
+
+func (e *ext) lookupGroup(groupName string) (*user.Group, error) {
+	return user.LookupGroup(groupName)
+}
+
+func (e *ext) setUid(uid int64) error {
+	if cerr, errno := C.setuid(C.__uid_t(uid)); cerr != 0 {
+		return errors.Errorf("C.setuid rc: %d, errno: %d", cerr, errno)
+	}
+	return nil
+}
+
+func (e *ext) setGid(gid int64) error {
+	if cerr, errno := C.setgid(C.__gid_t(gid)); cerr != 0 {
+		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
+	}
+	return nil
 }

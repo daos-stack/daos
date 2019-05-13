@@ -22,16 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('./../../utils/py')
-sys.path.append('../../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosPool, DaosLog
@@ -40,6 +35,7 @@ from conversion import c_uuid_to_str
 class InfoTests(Test):
     """
     Tests DAOS pool query.
+    :avocado: recursive
     """
     def setUp(self):
         self.agent_sessions = None
@@ -55,22 +51,26 @@ class InfoTests(Test):
 
         self.pool = DaosPool(context)
         self.d_log = DaosLog(context)
-        self.hostlist = self.params.get("test_machines1", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
+        self.hostlist_servers = self.params.get("test_machines1",
+                                                '/run/hosts/')
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_servers)
+        server_utils.run_server(self.hostfile_servers, self.server_group,
+                                self.basepath)
 
     def tearDown(self):
         # shut 'er down
         try:
             if self.pool:
                 self.pool.destroy(1)
-            os.remove(self.hostfile)
+            os.remove(self.hostfile_servers)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+                agent_utils.stop_agent(self.hostlist_servers,
+                                       self.agent_sessions)
+            server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_simple_query(self):
         """
@@ -114,7 +114,7 @@ class InfoTests(Test):
         #               .format(size, pool_info.pi_space))
 
         # number of targets
-        if pool_info.pi_ntargets != len(self.hostlist):
+        if pool_info.pi_ntargets != len(self.hostlist_servers):
             self.d_log.error("found number of targets in pool did not match "
                              "expected number, 1. num targets: "
                              "{0}".format(pool_info.pi_ntargets))

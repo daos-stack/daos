@@ -134,10 +134,10 @@ struct vos_container {
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
-	 * Corresponding in-memory block allocator hint for the
-	 * durable hint in vos_cont_df
+	 * Corresponding in-memory block allocator hints for the
+	 * durable hints in vos_cont_df
 	 */
-	struct vea_hint_context	*vc_hint_ctxt;
+	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
@@ -1041,7 +1041,8 @@ uint16_t
 vos_media_select(struct vos_object *obj, daos_iod_type_t type,
 		 daos_size_t size);
 int
-vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish);
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
+		   enum vos_io_stream ios);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be
  * contiguous in the struct being updated.  This is ensured at present by

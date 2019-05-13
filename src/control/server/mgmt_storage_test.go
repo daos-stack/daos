@@ -63,7 +63,7 @@ func newMockStorageConfig(
 
 	c := newDefaultConfiguration(
 		&mockExt{
-			nil, "", existsRet, mountRet, unmountRet, mkdirRet,
+			nil, existsRet, mountRet, unmountRet, mkdirRet,
 			removeRet, []string{}})
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount
@@ -355,8 +355,6 @@ func TestFormatStorage(t *testing.T) {
 			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
 			tt.sMount, tt.sClass, tt.sDevs, tt.sSize,
 			tt.bClass, tt.bDevs, tt.superblockExists)
-
-		config.FormatOverride = false
 
 		cs := mockControlService(config)
 		cs.Setup() // init and increment WaitGroup countera

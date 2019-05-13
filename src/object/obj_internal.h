@@ -44,6 +44,13 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
+/* EC parity is stored in a private address range that is selected by setting
+ * the most-significant bit of the offset (an unsigned long). This effectively
+ * limits the addressing of user extents to the lower 63 bits of the offset
+ * range. The client stack should enforce this limitation.
+ */
+#define PARITY_INDICATOR (1UL << 63)
+
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -142,6 +149,11 @@ struct obj_tls {
 	struct srv_profile	*ot_sp;
 };
 
+struct obj_ec_parity {
+       int             nr;
+       unsigned char   **p_bufs;
+};
+
 static inline struct obj_tls *
 obj_tls_get()
 {
@@ -238,5 +250,8 @@ obj_dkey2hash(daos_key_t *dkey)
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
+int obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl,
+			   uint32_t *sg_idx, size_t *sg_off,
+			   struct obj_ec_parity *parity, int p_idx);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

@@ -42,22 +42,19 @@
 
 /* Command line configuration data */
 struct dfuse_data {
-	char	*pool;
-	char	*cont;
-	char	*svcl;
-	char	*group;
-	char	*mountpoint;
-	bool	threaded;
+	char		*pool;
+	char		*cont;
+	char		*group;
+	char		*mountpoint;
+	bool		threaded;
+	d_rank_list_t	*svcl;
 };
 
 struct dfuse_info {
 	struct fuse_session		*dfi_session;
 	struct dfuse_projection_info	*dfi_handle;
 	struct dfuse_data		dfi_dfd;
-	daos_handle_t			dfi_poh;
 };
-
-/* dfuse_main.c */
 
 /* Launch fuse, and do not return until complete */
 bool
@@ -65,15 +62,6 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 		  struct fuse_lowlevel_ops *flo,
 		  struct fuse_args *args,
 		  struct dfuse_projection_info *dfi_handle);
-
-/* dfuse_core.c */
-/* Start a dfuse projection */
-int
-dfuse_start(struct dfuse_info *dfuse_info, dfs_t *dfs);
-
-/* Drain and free resources used by a projection */
-int
-dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
 struct dfuse_projection_info {
 	struct dfuse_projection		proj;
@@ -100,7 +88,7 @@ struct dfuse_inode_ops {
 		       struct fuse_file_info *fi);
 	void (*getattr)(fuse_req_t req,
 			struct dfuse_inode_entry *inode);
-	void (*lookup)(fuse_req_t req,
+	bool (*lookup)(fuse_req_t req,
 		       struct dfuse_inode_entry *parent,
 		       const char *name);
 	bool (*mkdir)(fuse_req_t req,
@@ -115,16 +103,28 @@ struct dfuse_inode_ops {
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
+extern struct dfuse_inode_ops dfuse_pool_ops;
 
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dffs_ops;
 	dfs_t			*dffs_dfs;
+	char			dffs_pool[NAME_MAX];
 	char			dffs_cont[NAME_MAX];
+	daos_handle_t		dffs_poh;
 	daos_handle_t		dffs_coh;
+	daos_pool_info_t	dffs_pool_info;
 	daos_cont_info_t	dffs_co_info;
-	fuse_ino_t		dffs_root;
-	d_list_t		dffs_child;
+	ino_t			dffs_root;
 };
+
+/* dfuse_core.c */
+/* Start a dfuse projection */
+int
+dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs);
+
+/* Drain and free resources used by a projection */
+int
+dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
@@ -188,14 +188,20 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __err = status;					\
 		int __rc;						\
-		if (__err <= 0) {					\
+		if (__err < 0) {					\
+			__err = daos_der2errno(status);			\
+			if (__err == EIO) {				\
+				DFUSE_TRA_ERROR(handle,			\
+						"Unable to convert DAOS error errno: %d '-%s'", \
+						status, d_errstr(status)); \
+			}						\
+		} else if (__err == 0) {				\
 			DFUSE_TRA_ERROR(handle,				\
-					"Invalid call to fuse_reply_err: %d", \
-					__err);				\
+					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
 		if (__err == ENOTSUP || __err == EIO)			\
-			DFUSE_TRA_WARNING(handle, "Returning %d '%s'", \
+			DFUSE_TRA_WARNING(handle, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
 			DFUSE_TRA_DEBUG(handle, "Returning %d '%s'",	\
@@ -558,7 +564,7 @@ dfuse_fs_send(struct dfuse_request *request);
 
 /* ops/...c */
 
-void
+bool
 dfuse_cb_lookup(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
@@ -615,12 +621,17 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
-void
+bool
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 bool
 dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
+
+/* dfuse_pool.c */
+bool
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
+		  const char *name);
 
 #endif /* __DFUSE_H__ */
