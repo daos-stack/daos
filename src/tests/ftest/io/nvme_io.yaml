@@ -2,7 +2,7 @@
 # required quantity is indicated by the placeholders
 
 hosts:
- servers:
+ test_machines:
   - boro-A
   - boro-B
   - boro-C

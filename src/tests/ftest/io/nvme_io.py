@@ -30,63 +30,31 @@ import traceback
 import uuid
 import re
 import avocado
+from apricot import TestWithServers
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-import agent_utils
-import server_utils
 import write_host_file
 import ior_utils
 
 from general_utils import DaosTestError
-from daos_api import DaosContext, DaosPool, DaosApiError, DaosLog
+from daos_api import DaosPool, DaosApiError
 
-class NvmeIo(avocado.Test):
+class NvmeIo(TestWithServers):
     """
     Test Class Description:
         Test the general Metadata operations and boundary conditions.
+    :avocado: recursive
     """
 
     def setUp(self):
-        self.pool = None
-        self.hostlist = None
+        super(NvmeIo, self).setUp()
+
+        # initialize variables
         self.hostlist_clients = None
         self.hostfile_clients = None
-        self.hostfile = None
         self.out_queue = None
         self.pool_connect = False
-
-        with open('../../../.build_vars.json') as json_f:
-            build_paths = json.load(json_f)
-
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("name", '/server_config/',
-                                            'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.d_log = DaosLog(self.context)
-        self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
+        # setting client list
         self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
-        # start agent
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                   self.hostlist,
-                                                   self.hostlist_clients)
-        #Start Server
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
-
-    def tearDown(self):
-        try:
-            if self.pool_connect:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """

@@ -1,25 +1,23 @@
 hosts:
     test_machines:
-        test_servers:
-            - boro-A
-            - boro-B
-            - boro-C
-            - boro-D
-        test_clients:
-            - boro-E
-            - boro-F
-            - boro-G
-            - boro-H
-            - boro-I
-            - boro-J
-            - boro-K
-            - boro-L
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
+    test_clients:
+        - boro-E
+        - boro-F
+        - boro-G
+        - boro-H
+        - boro-I
+        - boro-J
+        - boro-K
+        - boro-L
 server_config:
     name: daos_server
 pool:
     createmode:
-        mode_RW:
-             mode: 146
+        mode_RW: 146
     createset:
         setname: daos_server
     createsize:
