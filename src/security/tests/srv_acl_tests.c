@@ -49,25 +49,22 @@ static const uint32_t TEST_GID = 100;
 /*
  * Test helper functions
  */
-static AuthToken *
+static Auth__Token *
 create_valid_auth_token(uint32_t uid, uint32_t gid, uint32_t *gid_list,
 			size_t num_gids)
 {
-	AuthToken	*token;
-	AuthSys		*authsys;
+	Auth__Token	*token;
+	Auth__Sys	*authsys;
 	size_t		gid_list_size;
 
 	D_ALLOC_PTR(token);
-	auth_token__init(token);
-	token->flavor = AUTH_FLAVOR__AUTH_SYS;
-	token->has_flavor = true;
+	auth__token__init(token);
+	token->flavor = AUTH__FLAVOR__AUTH_SYS;
 
 	D_ALLOC_PTR(authsys);
-	auth_sys__init(authsys);
+	auth__sys__init(authsys);
 	authsys->uid = uid;
-	authsys->has_uid = true;
 	authsys->gid = gid;
-	authsys->has_gid = true;
 
 	if (num_gids > 0) {
 		authsys->n_gids = num_gids;
@@ -77,12 +74,11 @@ create_valid_auth_token(uint32_t uid, uint32_t gid, uint32_t *gid_list,
 		memcpy(authsys->gids, gid_list, gid_list_size);
 	}
 
-	token->data.len = auth_sys__get_packed_size(authsys);
+	token->data.len = auth__sys__get_packed_size(authsys);
 	D_ALLOC(token->data.data, token->data.len);
-	auth_sys__pack(authsys, token->data.data);
-	token->has_data = true;
+	auth__sys__pack(authsys, token->data.data);
 
-	auth_sys__free_unpacked(authsys, NULL);
+	auth__sys__free_unpacked(authsys, NULL);
 
 	return token;
 }
@@ -91,8 +87,8 @@ static void
 init_valid_cred(d_iov_t *cred, uint32_t uid, uint32_t gid, uint32_t *gid_list,
 		size_t num_gids)
 {
-	SecurityCredential	new_cred = SECURITY_CREDENTIAL__INIT;
-	AuthToken		*token;
+	Auth__Credential	new_cred = AUTH__CREDENTIAL__INIT;
+	Auth__Token		*token;
 	uint8_t			*buf;
 	size_t			buf_len;
 
@@ -100,15 +96,15 @@ init_valid_cred(d_iov_t *cred, uint32_t uid, uint32_t gid, uint32_t *gid_list,
 
 	/* Initialize the cred with token */
 	new_cred.token = token;
-	buf_len = security_credential__get_packed_size(&new_cred);
+	buf_len = auth__credential__get_packed_size(&new_cred);
 	D_ALLOC(buf, buf_len);
-	security_credential__pack(&new_cred, buf);
+	auth__credential__pack(&new_cred, buf);
 	d_iov_set(cred, buf, buf_len);
 
 	/* Return the cred token from the drpc mock, too */
 	pack_token_in_drpc_call_resp_body(token);
 
-	auth_token__free_unpacked(token, NULL);
+	auth__token__free_unpacked(token, NULL);
 }
 
 static void
@@ -154,7 +150,7 @@ srv_acl_teardown(void **state)
 static void
 test_validate_creds_null_cred(void **state)
 {
-	AuthToken *result = NULL;
+	Auth__Token *result = NULL;
 
 	assert_int_equal(ds_sec_validate_credentials(NULL, &result),
 			 -DER_INVAL);
@@ -176,7 +172,7 @@ test_validate_creds_null_token_ptr(void **state)
 static void
 test_validate_creds_empty_cred(void **state)
 {
-	AuthToken	*result = NULL;
+	Auth__Token	*result = NULL;
 	d_iov_t		cred;
 
 	d_iov_set(&cred, NULL, 0);
@@ -283,7 +279,7 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 	struct daos_acl		*acl;
 	d_iov_t			cred;
 	size_t			data_len = 8;
-	AuthToken		token = AUTH_TOKEN__INIT;
+	Auth__Token		token = AUTH__TOKEN__INIT;
 	struct pool_prop_ugm	ugm;
 
 	init_default_cred(&cred);
@@ -291,13 +287,11 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 	acl = daos_acl_create(NULL, 0);
 
 	token.flavor = auth_flavor;
-	token.has_flavor = true;
 
 	/* Put some junk in there */
 	D_ALLOC(token.data.data, data_len);
 	memset(token.data.data, 0xFF, data_len);
 	token.data.len = data_len;
-	token.has_data = true;
 
 	pack_token_in_drpc_call_resp_body(&token);
 
@@ -313,8 +307,8 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 static void
 test_check_pool_access_not_authsys(void **state)
 {
-	expect_no_access_bad_authsys_payload(AUTH_FLAVOR__AUTH_NONE);
-	expect_no_access_bad_authsys_payload(AUTH_FLAVOR__AUTH_SYS);
+	expect_no_access_bad_authsys_payload(AUTH__FLAVOR__AUTH_NONE);
+	expect_no_access_bad_authsys_payload(AUTH__FLAVOR__AUTH_SYS);
 }
 
 static void

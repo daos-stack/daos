@@ -29,7 +29,7 @@
 #include <daos_errno.h>
 #include <daos/common.h>
 #include "../../security/srv_internal.h"
-#include "../../security/security.pb-c.h"
+#include "../../security/auth.pb-c.h"
 
 /**
  * This is a bit of a hack to deal with the fact that the security module
@@ -51,27 +51,19 @@ check_valid_pointers(void *p1, void *p2)
 }
 
 int
-compare_auth_sys(AuthSys *auth1, AuthSys *auth2)
+compare_auth_sys(Auth__Sys *auth1, Auth__Sys *auth2)
 {
 	if (!auth1 || !auth2) {
 		printf("compare_auth_sys needs two valid pointers\n");
 		return -1;
 	}
 
-	if (auth1->has_uid != auth2->has_uid) {
-		printf("An AuthSys is missing a uid\n");
-		return -1;
-	}
-	if (auth1->has_uid && (auth1->uid != auth2->uid)) {
+	if (auth1->uid != auth2->uid) {
 		printf("Tokens do not have a matching uid\n");
 		return -1;
 	}
 
-	if (auth1->has_gid != auth2->has_gid) {
-		printf("An AuthSys is missing a gid\n");
-		return -1;
-	}
-	if (auth1->has_gid && (auth1->gid != auth2->gid)) {
+	if (auth1->gid != auth2->gid) {
 		printf("Tokens do not have a matching gid\n");
 		return -1;
 	}
@@ -118,11 +110,7 @@ compare_auth_sys(AuthSys *auth1, AuthSys *auth2)
 		}
 	}
 
-	if (auth1->has_stamp != auth2->has_stamp) {
-		printf("An AuthSys is missing a stamp\n");
-		return -1;
-	}
-	if (auth1->has_stamp && (auth1->stamp != auth2->stamp)) {
+	if (auth1->stamp != auth2->stamp) {
 		printf("Tokens do not have a matching stamps\n");
 		return -1;
 	}
@@ -130,16 +118,14 @@ compare_auth_sys(AuthSys *auth1, AuthSys *auth2)
 	return 0;
 }
 void
-print_auth_sys(AuthSys *auth)
+print_auth_sys(Auth__Sys *auth)
 {
 	if (!auth)
 		return;
 
 	printf("AuthSys Token:\n");
-	if (auth->has_uid)
-		printf("uid: %u\n", auth->uid);
-	if (auth->has_gid)
-		printf("gid: %u\n", auth->gid);
+	printf("uid: %u\n", auth->uid);
+	printf("gid: %u\n", auth->gid);
 	if (auth->gids) {
 		int i;
 
@@ -153,19 +139,18 @@ print_auth_sys(AuthSys *auth)
 		printf("secctx: %s\n", auth->secctx);
 	if (auth->machinename)
 		printf("machinename: %s\n", auth->machinename);
-	if (auth->has_stamp)
-		printf("stamp: %" PRIu64 "\n", auth->stamp);
+	printf("stamp: %" PRIu64 "\n", auth->stamp);
 }
 
 void
-print_auth_verifier(AuthToken *verifier)
+print_auth_verifier(Auth__Token *verifier)
 {
 	if (!verifier)
 		return;
 
 	printf("Authsys Verifier:\n");
 	printf("Flavor: %d\n", verifier->flavor);
-	if (verifier->has_data) {
+	if (verifier->data.data != NULL) {
 		int i;
 
 		printf("Verifier: ");
@@ -181,10 +166,10 @@ main(int argc, char **argv)
 {
 	int			ret;
 	daos_iov_t		creds;
-	SecurityCredential	*response = NULL;
-	AuthSys			*credentials = NULL;
-	AuthToken		*validated_token = NULL;
-	AuthSys			*validated_credentials = NULL;
+	Auth__Credential	*response = NULL;
+	Auth__Sys		*credentials = NULL;
+	Auth__Token		*validated_token = NULL;
+	Auth__Sys		*validated_credentials = NULL;
 
 	memset(&creds, 0, sizeof(daos_iov_t));
 
@@ -195,11 +180,11 @@ main(int argc, char **argv)
 		exit(ret);
 	}
 
-	response = security_credential__unpack(NULL,
-						creds.iov_len,
-						creds.iov_buf);
+	response = auth__credential__unpack(NULL,
+					    creds.iov_len,
+					    creds.iov_buf);
 
-	credentials = auth_sys__unpack(NULL,
+	credentials = auth__sys__unpack(NULL,
 					response->token->data.len,
 					response->token->data.data);
 
@@ -213,9 +198,9 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	validated_credentials = auth_sys__unpack(NULL,
-					validated_token->data.len,
-					validated_token->data.data);
+	validated_credentials = auth__sys__unpack(NULL,
+						  validated_token->data.len,
+						  validated_token->data.data);
 
 	printf("AuthToken as obtained from Server:\n");
 	print_auth_sys(validated_credentials);
@@ -228,10 +213,10 @@ main(int argc, char **argv)
 		printf("The credentials match.\n");
 	}
 
-	security_credential__free_unpacked(response, NULL);
-	auth_sys__free_unpacked(credentials, NULL);
-	auth_sys__free_unpacked(validated_credentials, NULL);
-	auth_token__free_unpacked(validated_token, NULL);
+	auth__credential__free_unpacked(response, NULL);
+	auth__sys__free_unpacked(credentials, NULL);
+	auth__sys__free_unpacked(validated_credentials, NULL);
+	auth__token__free_unpacked(validated_token, NULL);
 	daos_iov_free(&creds);
 
 	return 0;

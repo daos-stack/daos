@@ -28,7 +28,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
-	pb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -80,24 +80,24 @@ func newTestSecurityService(client *mockDrpcClient) *SecurityService {
 }
 
 // newValidAclEntry sets up a valid-looking ACL Entry for testing
-func newValidAclEntry() *pb.AclEntry {
-	return &pb.AclEntry{
-		Type:     pb.AclEntryType_ALLOW,
-		Flags:    uint32(pb.AclFlags_GROUP),
+func newValidAclEntry() *acl.Entry {
+	return &acl.Entry{
+		Type:     acl.EntryType_ALLOW,
+		Flags:    uint32(acl.Flags_GROUP),
 		Entity:   "12345678-1234-1234-1234-123456789ABC",
 		Identity: "group1",
 	}
 }
 
 // newValidAclEntryPermissions sets up valid-looking ACL Permissions for testing
-func newValidAclEntryPermissions() *pb.AclEntryPermissions {
-	return &pb.AclEntryPermissions{
-		PermissionBits: uint64(pb.AclPermissions_READ),
+func newValidAclEntryPermissions() *acl.EntryPermissions {
+	return &acl.EntryPermissions{
+		PermissionBits: uint64(acl.Permissions_READ),
 		Entry:          newValidAclEntry(),
 	}
 }
 
-func aclResponseToBytes(resp *pb.AclResponse) []byte {
+func aclResponseToBytes(resp *acl.Response) []byte {
 	bytes, _ := proto.Marshal(resp)
 	return bytes
 }
@@ -115,13 +115,13 @@ func TestSetPermissions_NilPermissions(t *testing.T) {
 
 	result, err := service.SetPermissions(nil, nil)
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "requested permissions were nil",
 		"Should report bad input")
 }
 
-func expectAclResponse(t *testing.T, result *pb.AclResponse, err error,
-	expectedResp *pb.AclResponse) {
+func expectAclResponse(t *testing.T, result *acl.Response, err error,
+	expectedResp *acl.Response) {
 	expectedPerms := expectedResp.Permissions
 
 	AssertTrue(t, err == nil, "Expected no error")
@@ -130,7 +130,7 @@ func expectAclResponse(t *testing.T, result *pb.AclResponse, err error,
 		"Reponse status was wrong")
 	if expectedPerms == nil {
 		AssertEqual(t, result.Permissions,
-			(*pb.AclEntryPermissions)(nil),
+			(*acl.EntryPermissions)(nil),
 			"Permissions should be nil")
 	} else {
 		AssertEqual(t, result.Permissions.PermissionBits,
@@ -166,8 +166,8 @@ func TestSetPermissions_Success(t *testing.T) {
 	client := newMockDrpcClient()
 	service := newTestSecurityService(client)
 	perms := newValidAclEntryPermissions()
-	expectedResp := &pb.AclResponse{
-		Status:      pb.AclRequestStatus_SUCCESS,
+	expectedResp := &acl.Response{
+		Status:      acl.RequestStatus_SUCCESS,
 		Permissions: perms,
 	}
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
@@ -192,7 +192,7 @@ func TestSetPermissions_SendMsgFailed(t *testing.T) {
 	result, err := service.SetPermissions(nil,
 		newValidAclEntryPermissions())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, expectedError, "Should pass up the dRPC call error")
 }
 
@@ -204,7 +204,7 @@ func TestSetPermissions_SendMsgResponseStatusFailed(t *testing.T) {
 	result, err := service.SetPermissions(nil,
 		newValidAclEntryPermissions())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "bad dRPC response status: FAILURE",
 		"Should report dRPC call failed")
 }
@@ -221,7 +221,7 @@ func TestSetPermissions_SendMsgResponseBodyInvalid(t *testing.T) {
 	result, err := service.SetPermissions(nil,
 		newValidAclEntryPermissions())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "invalid dRPC response body: unexpected EOF",
 		"Should report failed to unmarshal")
 }
@@ -233,7 +233,7 @@ func TestSetPermissions_SendMsgResponseNil(t *testing.T) {
 	result, err := service.SetPermissions(nil,
 		newValidAclEntryPermissions())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "dRPC returned no response",
 		"Should report nil response")
 }
@@ -247,7 +247,7 @@ func TestSetPermissions_ConnectFailed(t *testing.T) {
 	result, err := service.SetPermissions(nil,
 		newValidAclEntryPermissions())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, expectedError, "Should pass up the dRPC call error")
 }
 
@@ -257,7 +257,7 @@ func TestSetPermissions_CloseFailed(t *testing.T) {
 	client.CloseOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
-		aclResponseToBytes(&pb.AclResponse{}))
+		aclResponseToBytes(&acl.Response{}))
 
 	result, err := service.SetPermissions(nil,
 		newValidAclEntryPermissions())
@@ -275,7 +275,7 @@ func TestGetPermissions_NilEntry(t *testing.T) {
 
 	result, err := service.GetPermissions(nil, nil)
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "requested entry was nil",
 		"Should detect invalid input")
 }
@@ -285,13 +285,13 @@ func TestGetPermissions_Success(t *testing.T) {
 	service := newTestSecurityService(client)
 	entry := newValidAclEntry()
 
-	expectedPerms := &pb.AclEntryPermissions{
+	expectedPerms := &acl.EntryPermissions{
 		Entry: entry,
 		PermissionBits: uint64(
-			pb.AclPermissions_READ | pb.AclPermissions_WRITE),
+			acl.Permissions_READ | acl.Permissions_WRITE),
 	}
-	expectedResp := &pb.AclResponse{
-		Status:      pb.AclRequestStatus_SUCCESS,
+	expectedResp := &acl.Response{
+		Status:      acl.RequestStatus_SUCCESS,
 		Permissions: expectedPerms,
 	}
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
@@ -315,7 +315,7 @@ func TestGetPermissions_SendMsgFailed(t *testing.T) {
 
 	result, err := service.GetPermissions(nil, newValidAclEntry())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, expectedError, "Should pass up the dRPC call error")
 }
 
@@ -327,7 +327,7 @@ func TestGetPermissions_ConnectFailed(t *testing.T) {
 
 	result, err := service.GetPermissions(nil, newValidAclEntry())
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, expectedError, "Should pass up the dRPC call error")
 }
 
@@ -337,7 +337,7 @@ func TestGetPermissions_CloseFailed(t *testing.T) {
 	client.CloseOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
-		aclResponseToBytes(&pb.AclResponse{}))
+		aclResponseToBytes(&acl.Response{}))
 
 	result, err := service.GetPermissions(nil, newValidAclEntry())
 
@@ -354,7 +354,7 @@ func TestDestroyAclEntry_NilEntry(t *testing.T) {
 
 	result, err := service.DestroyAclEntry(nil, nil)
 
-	AssertEqual(t, result, (*pb.AclResponse)(nil), "Expected no response")
+	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "requested entry was nil",
 		"Should detect invalid input")
 }
@@ -364,8 +364,8 @@ func TestDestroyAclEntry_Success(t *testing.T) {
 	service := newTestSecurityService(client)
 	entry := newValidAclEntry()
 
-	expectedResp := &pb.AclResponse{
-		Status:      pb.AclRequestStatus_SUCCESS,
+	expectedResp := &acl.Response{
+		Status:      acl.RequestStatus_SUCCESS,
 		Permissions: nil,
 	}
 	client.setSendMsgResponse(drpc.Status_SUCCESS,

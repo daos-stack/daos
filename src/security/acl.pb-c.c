@@ -7,142 +7,142 @@
 #endif
 
 #include "acl.pb-c.h"
-void   proto__acl_response__init
-                     (Proto__AclResponse         *message)
+void   acl__response__init
+                     (Acl__Response         *message)
 {
-  static const Proto__AclResponse init_value = PROTO__ACL_RESPONSE__INIT;
+  static const Acl__Response init_value = ACL__RESPONSE__INIT;
   *message = init_value;
 }
-size_t proto__acl_response__get_packed_size
-                     (const Proto__AclResponse *message)
+size_t acl__response__get_packed_size
+                     (const Acl__Response *message)
 {
-  assert(message->base.descriptor == &proto__acl_response__descriptor);
+  assert(message->base.descriptor == &acl__response__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t proto__acl_response__pack
-                     (const Proto__AclResponse *message,
+size_t acl__response__pack
+                     (const Acl__Response *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &proto__acl_response__descriptor);
+  assert(message->base.descriptor == &acl__response__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t proto__acl_response__pack_to_buffer
-                     (const Proto__AclResponse *message,
+size_t acl__response__pack_to_buffer
+                     (const Acl__Response *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &proto__acl_response__descriptor);
+  assert(message->base.descriptor == &acl__response__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Proto__AclResponse *
-       proto__acl_response__unpack
+Acl__Response *
+       acl__response__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Proto__AclResponse *)
-     protobuf_c_message_unpack (&proto__acl_response__descriptor,
+  return (Acl__Response *)
+     protobuf_c_message_unpack (&acl__response__descriptor,
                                 allocator, len, data);
 }
-void   proto__acl_response__free_unpacked
-                     (Proto__AclResponse *message,
+void   acl__response__free_unpacked
+                     (Acl__Response *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &proto__acl_response__descriptor);
+  assert(message->base.descriptor == &acl__response__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   proto__acl_entry__init
-                     (Proto__AclEntry         *message)
+void   acl__entry__init
+                     (Acl__Entry         *message)
 {
-  static const Proto__AclEntry init_value = PROTO__ACL_ENTRY__INIT;
+  static const Acl__Entry init_value = ACL__ENTRY__INIT;
   *message = init_value;
 }
-size_t proto__acl_entry__get_packed_size
-                     (const Proto__AclEntry *message)
+size_t acl__entry__get_packed_size
+                     (const Acl__Entry *message)
 {
-  assert(message->base.descriptor == &proto__acl_entry__descriptor);
+  assert(message->base.descriptor == &acl__entry__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t proto__acl_entry__pack
-                     (const Proto__AclEntry *message,
+size_t acl__entry__pack
+                     (const Acl__Entry *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &proto__acl_entry__descriptor);
+  assert(message->base.descriptor == &acl__entry__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t proto__acl_entry__pack_to_buffer
-                     (const Proto__AclEntry *message,
+size_t acl__entry__pack_to_buffer
+                     (const Acl__Entry *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &proto__acl_entry__descriptor);
+  assert(message->base.descriptor == &acl__entry__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Proto__AclEntry *
-       proto__acl_entry__unpack
+Acl__Entry *
+       acl__entry__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Proto__AclEntry *)
-     protobuf_c_message_unpack (&proto__acl_entry__descriptor,
+  return (Acl__Entry *)
+     protobuf_c_message_unpack (&acl__entry__descriptor,
                                 allocator, len, data);
 }
-void   proto__acl_entry__free_unpacked
-                     (Proto__AclEntry *message,
+void   acl__entry__free_unpacked
+                     (Acl__Entry *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &proto__acl_entry__descriptor);
+  assert(message->base.descriptor == &acl__entry__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   proto__acl_entry_permissions__init
-                     (Proto__AclEntryPermissions         *message)
+void   acl__entry_permissions__init
+                     (Acl__EntryPermissions         *message)
 {
-  static const Proto__AclEntryPermissions init_value = PROTO__ACL_ENTRY_PERMISSIONS__INIT;
+  static const Acl__EntryPermissions init_value = ACL__ENTRY_PERMISSIONS__INIT;
   *message = init_value;
 }
-size_t proto__acl_entry_permissions__get_packed_size
-                     (const Proto__AclEntryPermissions *message)
+size_t acl__entry_permissions__get_packed_size
+                     (const Acl__EntryPermissions *message)
 {
-  assert(message->base.descriptor == &proto__acl_entry_permissions__descriptor);
+  assert(message->base.descriptor == &acl__entry_permissions__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t proto__acl_entry_permissions__pack
-                     (const Proto__AclEntryPermissions *message,
+size_t acl__entry_permissions__pack
+                     (const Acl__EntryPermissions *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &proto__acl_entry_permissions__descriptor);
+  assert(message->base.descriptor == &acl__entry_permissions__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t proto__acl_entry_permissions__pack_to_buffer
-                     (const Proto__AclEntryPermissions *message,
+size_t acl__entry_permissions__pack_to_buffer
+                     (const Acl__EntryPermissions *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &proto__acl_entry_permissions__descriptor);
+  assert(message->base.descriptor == &acl__entry_permissions__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Proto__AclEntryPermissions *
-       proto__acl_entry_permissions__unpack
+Acl__EntryPermissions *
+       acl__entry_permissions__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Proto__AclEntryPermissions *)
-     protobuf_c_message_unpack (&proto__acl_entry_permissions__descriptor,
+  return (Acl__EntryPermissions *)
+     protobuf_c_message_unpack (&acl__entry_permissions__descriptor,
                                 allocator, len, data);
 }
-void   proto__acl_entry_permissions__free_unpacked
-                     (Proto__AclEntryPermissions *message,
+void   acl__entry_permissions__free_unpacked
+                     (Acl__EntryPermissions *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &proto__acl_entry_permissions__descriptor);
+  assert(message->base.descriptor == &acl__entry_permissions__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor proto__acl_response__field_descriptors[2] =
+static const ProtobufCFieldDescriptor acl__response__field_descriptors[2] =
 {
   {
     "status",
@@ -150,8 +150,8 @@ static const ProtobufCFieldDescriptor proto__acl_response__field_descriptors[2] 
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclResponse, status),
-    &proto__acl_request_status__descriptor,
+    offsetof(Acl__Response, status),
+    &acl__request_status__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -162,38 +162,38 @@ static const ProtobufCFieldDescriptor proto__acl_response__field_descriptors[2] 
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclResponse, permissions),
-    &proto__acl_entry_permissions__descriptor,
+    offsetof(Acl__Response, permissions),
+    &acl__entry_permissions__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned proto__acl_response__field_indices_by_name[] = {
+static const unsigned acl__response__field_indices_by_name[] = {
   1,   /* field[1] = permissions */
   0,   /* field[0] = status */
 };
-static const ProtobufCIntRange proto__acl_response__number_ranges[1 + 1] =
+static const ProtobufCIntRange acl__response__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor proto__acl_response__descriptor =
+const ProtobufCMessageDescriptor acl__response__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "proto.AclResponse",
-  "AclResponse",
-  "Proto__AclResponse",
-  "proto",
-  sizeof(Proto__AclResponse),
+  "acl.Response",
+  "Response",
+  "Acl__Response",
+  "acl",
+  sizeof(Acl__Response),
   2,
-  proto__acl_response__field_descriptors,
-  proto__acl_response__field_indices_by_name,
-  1,  proto__acl_response__number_ranges,
-  (ProtobufCMessageInit) proto__acl_response__init,
+  acl__response__field_descriptors,
+  acl__response__field_indices_by_name,
+  1,  acl__response__number_ranges,
+  (ProtobufCMessageInit) acl__response__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[4] =
+static const ProtobufCFieldDescriptor acl__entry__field_descriptors[4] =
 {
   {
     "type",
@@ -201,8 +201,8 @@ static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[4] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntry, type),
-    &proto__acl_entry_type__descriptor,
+    offsetof(Acl__Entry, type),
+    &acl__entry_type__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -213,7 +213,7 @@ static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[4] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntry, flags),
+    offsetof(Acl__Entry, flags),
     NULL,
     NULL,
     0,             /* flags */
@@ -225,7 +225,7 @@ static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[4] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntry, entity),
+    offsetof(Acl__Entry, entity),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -237,40 +237,40 @@ static const ProtobufCFieldDescriptor proto__acl_entry__field_descriptors[4] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntry, identity),
+    offsetof(Acl__Entry, identity),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned proto__acl_entry__field_indices_by_name[] = {
+static const unsigned acl__entry__field_indices_by_name[] = {
   2,   /* field[2] = entity */
   1,   /* field[1] = flags */
   3,   /* field[3] = identity */
   0,   /* field[0] = type */
 };
-static const ProtobufCIntRange proto__acl_entry__number_ranges[1 + 1] =
+static const ProtobufCIntRange acl__entry__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 4 }
 };
-const ProtobufCMessageDescriptor proto__acl_entry__descriptor =
+const ProtobufCMessageDescriptor acl__entry__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "proto.AclEntry",
-  "AclEntry",
-  "Proto__AclEntry",
-  "proto",
-  sizeof(Proto__AclEntry),
+  "acl.Entry",
+  "Entry",
+  "Acl__Entry",
+  "acl",
+  sizeof(Acl__Entry),
   4,
-  proto__acl_entry__field_descriptors,
-  proto__acl_entry__field_indices_by_name,
-  1,  proto__acl_entry__number_ranges,
-  (ProtobufCMessageInit) proto__acl_entry__init,
+  acl__entry__field_descriptors,
+  acl__entry__field_indices_by_name,
+  1,  acl__entry__number_ranges,
+  (ProtobufCMessageInit) acl__entry__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor proto__acl_entry_permissions__field_descriptors[2] =
+static const ProtobufCFieldDescriptor acl__entry_permissions__field_descriptors[2] =
 {
   {
     "entry",
@@ -278,8 +278,8 @@ static const ProtobufCFieldDescriptor proto__acl_entry_permissions__field_descri
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntryPermissions, entry),
-    &proto__acl_entry__descriptor,
+    offsetof(Acl__EntryPermissions, entry),
+    &acl__entry__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -290,50 +290,50 @@ static const ProtobufCFieldDescriptor proto__acl_entry_permissions__field_descri
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Proto__AclEntryPermissions, permission_bits),
+    offsetof(Acl__EntryPermissions, permission_bits),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned proto__acl_entry_permissions__field_indices_by_name[] = {
+static const unsigned acl__entry_permissions__field_indices_by_name[] = {
   0,   /* field[0] = entry */
   1,   /* field[1] = permission_bits */
 };
-static const ProtobufCIntRange proto__acl_entry_permissions__number_ranges[1 + 1] =
+static const ProtobufCIntRange acl__entry_permissions__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor proto__acl_entry_permissions__descriptor =
+const ProtobufCMessageDescriptor acl__entry_permissions__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "proto.AclEntryPermissions",
-  "AclEntryPermissions",
-  "Proto__AclEntryPermissions",
-  "proto",
-  sizeof(Proto__AclEntryPermissions),
+  "acl.EntryPermissions",
+  "EntryPermissions",
+  "Acl__EntryPermissions",
+  "acl",
+  sizeof(Acl__EntryPermissions),
   2,
-  proto__acl_entry_permissions__field_descriptors,
-  proto__acl_entry_permissions__field_indices_by_name,
-  1,  proto__acl_entry_permissions__number_ranges,
-  (ProtobufCMessageInit) proto__acl_entry_permissions__init,
+  acl__entry_permissions__field_descriptors,
+  acl__entry_permissions__field_indices_by_name,
+  1,  acl__entry_permissions__number_ranges,
+  (ProtobufCMessageInit) acl__entry_permissions__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue proto__acl_request_status__enum_values_by_number[6] =
+static const ProtobufCEnumValue acl__request_status__enum_values_by_number[6] =
 {
-  { "ERR_INVALID_UUID", "PROTO__ACL_REQUEST_STATUS__ERR_INVALID_UUID", -5 },
-  { "ERR_INVALID_PRINCIPAL", "PROTO__ACL_REQUEST_STATUS__ERR_INVALID_PRINCIPAL", -4 },
-  { "ERR_INVALID_PERMS", "PROTO__ACL_REQUEST_STATUS__ERR_INVALID_PERMS", -3 },
-  { "ERR_PERM_DENIED", "PROTO__ACL_REQUEST_STATUS__ERR_PERM_DENIED", -2 },
-  { "ERR_UNKNOWN", "PROTO__ACL_REQUEST_STATUS__ERR_UNKNOWN", -1 },
-  { "SUCCESS", "PROTO__ACL_REQUEST_STATUS__SUCCESS", 0 },
+  { "ERR_INVALID_UUID", "ACL__REQUEST_STATUS__ERR_INVALID_UUID", -5 },
+  { "ERR_INVALID_PRINCIPAL", "ACL__REQUEST_STATUS__ERR_INVALID_PRINCIPAL", -4 },
+  { "ERR_INVALID_PERMS", "ACL__REQUEST_STATUS__ERR_INVALID_PERMS", -3 },
+  { "ERR_PERM_DENIED", "ACL__REQUEST_STATUS__ERR_PERM_DENIED", -2 },
+  { "ERR_UNKNOWN", "ACL__REQUEST_STATUS__ERR_UNKNOWN", -1 },
+  { "SUCCESS", "ACL__REQUEST_STATUS__SUCCESS", 0 },
 };
-static const ProtobufCIntRange proto__acl_request_status__value_ranges[] = {
+static const ProtobufCIntRange acl__request_status__value_ranges[] = {
 {-5, 0},{0, 6}
 };
-static const ProtobufCEnumValueIndex proto__acl_request_status__enum_values_by_name[6] =
+static const ProtobufCEnumValueIndex acl__request_status__enum_values_by_name[6] =
 {
   { "ERR_INVALID_PERMS", 2 },
   { "ERR_INVALID_PRINCIPAL", 1 },
@@ -342,93 +342,93 @@ static const ProtobufCEnumValueIndex proto__acl_request_status__enum_values_by_n
   { "ERR_UNKNOWN", 4 },
   { "SUCCESS", 5 },
 };
-const ProtobufCEnumDescriptor proto__acl_request_status__descriptor =
+const ProtobufCEnumDescriptor acl__request_status__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "proto.AclRequestStatus",
-  "AclRequestStatus",
-  "Proto__AclRequestStatus",
-  "proto",
+  "acl.RequestStatus",
+  "RequestStatus",
+  "Acl__RequestStatus",
+  "acl",
   6,
-  proto__acl_request_status__enum_values_by_number,
+  acl__request_status__enum_values_by_number,
   6,
-  proto__acl_request_status__enum_values_by_name,
+  acl__request_status__enum_values_by_name,
   1,
-  proto__acl_request_status__value_ranges,
+  acl__request_status__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue proto__acl_permissions__enum_values_by_number[3] =
+static const ProtobufCEnumValue acl__permissions__enum_values_by_number[3] =
 {
-  { "NO_ACCESS", "PROTO__ACL_PERMISSIONS__NO_ACCESS", 0 },
-  { "READ", "PROTO__ACL_PERMISSIONS__READ", 1 },
-  { "WRITE", "PROTO__ACL_PERMISSIONS__WRITE", 2 },
+  { "NO_ACCESS", "ACL__PERMISSIONS__NO_ACCESS", 0 },
+  { "READ", "ACL__PERMISSIONS__READ", 1 },
+  { "WRITE", "ACL__PERMISSIONS__WRITE", 2 },
 };
-static const ProtobufCIntRange proto__acl_permissions__value_ranges[] = {
+static const ProtobufCIntRange acl__permissions__value_ranges[] = {
 {0, 0},{0, 3}
 };
-static const ProtobufCEnumValueIndex proto__acl_permissions__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex acl__permissions__enum_values_by_name[3] =
 {
   { "NO_ACCESS", 0 },
   { "READ", 1 },
   { "WRITE", 2 },
 };
-const ProtobufCEnumDescriptor proto__acl_permissions__descriptor =
+const ProtobufCEnumDescriptor acl__permissions__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "proto.AclPermissions",
-  "AclPermissions",
-  "Proto__AclPermissions",
-  "proto",
+  "acl.Permissions",
+  "Permissions",
+  "Acl__Permissions",
+  "acl",
   3,
-  proto__acl_permissions__enum_values_by_number,
+  acl__permissions__enum_values_by_number,
   3,
-  proto__acl_permissions__enum_values_by_name,
+  acl__permissions__enum_values_by_name,
   1,
-  proto__acl_permissions__value_ranges,
+  acl__permissions__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue proto__acl_entry_type__enum_values_by_number[3] =
+static const ProtobufCEnumValue acl__entry_type__enum_values_by_number[3] =
 {
-  { "ALLOW", "PROTO__ACL_ENTRY_TYPE__ALLOW", 0 },
-  { "AUDIT", "PROTO__ACL_ENTRY_TYPE__AUDIT", 1 },
-  { "ALARM", "PROTO__ACL_ENTRY_TYPE__ALARM", 2 },
+  { "ALLOW", "ACL__ENTRY_TYPE__ALLOW", 0 },
+  { "AUDIT", "ACL__ENTRY_TYPE__AUDIT", 1 },
+  { "ALARM", "ACL__ENTRY_TYPE__ALARM", 2 },
 };
-static const ProtobufCIntRange proto__acl_entry_type__value_ranges[] = {
+static const ProtobufCIntRange acl__entry_type__value_ranges[] = {
 {0, 0},{0, 3}
 };
-static const ProtobufCEnumValueIndex proto__acl_entry_type__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex acl__entry_type__enum_values_by_name[3] =
 {
   { "ALARM", 2 },
   { "ALLOW", 0 },
   { "AUDIT", 1 },
 };
-const ProtobufCEnumDescriptor proto__acl_entry_type__descriptor =
+const ProtobufCEnumDescriptor acl__entry_type__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "proto.AclEntryType",
-  "AclEntryType",
-  "Proto__AclEntryType",
-  "proto",
+  "acl.EntryType",
+  "EntryType",
+  "Acl__EntryType",
+  "acl",
   3,
-  proto__acl_entry_type__enum_values_by_number,
+  acl__entry_type__enum_values_by_number,
   3,
-  proto__acl_entry_type__enum_values_by_name,
+  acl__entry_type__enum_values_by_name,
   1,
-  proto__acl_entry_type__value_ranges,
+  acl__entry_type__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue proto__acl_flags__enum_values_by_number[5] =
+static const ProtobufCEnumValue acl__flags__enum_values_by_number[5] =
 {
-  { "NO_FLAGS", "PROTO__ACL_FLAGS__NO_FLAGS", 0 },
-  { "GROUP", "PROTO__ACL_FLAGS__GROUP", 1 },
-  { "ACCESS_SUCCESS", "PROTO__ACL_FLAGS__ACCESS_SUCCESS", 2 },
-  { "ACCESS_FAILURE", "PROTO__ACL_FLAGS__ACCESS_FAILURE", 4 },
-  { "POOL_INHERIT", "PROTO__ACL_FLAGS__POOL_INHERIT", 8 },
+  { "NO_FLAGS", "ACL__FLAGS__NO_FLAGS", 0 },
+  { "GROUP", "ACL__FLAGS__GROUP", 1 },
+  { "ACCESS_SUCCESS", "ACL__FLAGS__ACCESS_SUCCESS", 2 },
+  { "ACCESS_FAILURE", "ACL__FLAGS__ACCESS_FAILURE", 4 },
+  { "POOL_INHERIT", "ACL__FLAGS__POOL_INHERIT", 8 },
 };
-static const ProtobufCIntRange proto__acl_flags__value_ranges[] = {
+static const ProtobufCIntRange acl__flags__value_ranges[] = {
 {0, 0},{4, 3},{8, 4},{0, 5}
 };
-static const ProtobufCEnumValueIndex proto__acl_flags__enum_values_by_name[5] =
+static const ProtobufCEnumValueIndex acl__flags__enum_values_by_name[5] =
 {
   { "ACCESS_FAILURE", 3 },
   { "ACCESS_SUCCESS", 2 },
@@ -436,71 +436,71 @@ static const ProtobufCEnumValueIndex proto__acl_flags__enum_values_by_name[5] =
   { "NO_FLAGS", 0 },
   { "POOL_INHERIT", 4 },
 };
-const ProtobufCEnumDescriptor proto__acl_flags__descriptor =
+const ProtobufCEnumDescriptor acl__flags__descriptor =
 {
   PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "proto.AclFlags",
-  "AclFlags",
-  "Proto__AclFlags",
-  "proto",
+  "acl.Flags",
+  "Flags",
+  "Acl__Flags",
+  "acl",
   5,
-  proto__acl_flags__enum_values_by_number,
+  acl__flags__enum_values_by_number,
   5,
-  proto__acl_flags__enum_values_by_name,
+  acl__flags__enum_values_by_name,
   3,
-  proto__acl_flags__value_ranges,
+  acl__flags__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCMethodDescriptor proto__access_control__method_descriptors[3] =
+static const ProtobufCMethodDescriptor acl__access_control__method_descriptors[3] =
 {
-  { "SetPermissions", &proto__acl_entry_permissions__descriptor, &proto__acl_response__descriptor },
-  { "GetPermissions", &proto__acl_entry__descriptor, &proto__acl_response__descriptor },
-  { "DestroyAclEntry", &proto__acl_entry__descriptor, &proto__acl_response__descriptor },
+  { "SetPermissions", &acl__entry_permissions__descriptor, &acl__response__descriptor },
+  { "GetPermissions", &acl__entry__descriptor, &acl__response__descriptor },
+  { "DestroyAclEntry", &acl__entry__descriptor, &acl__response__descriptor },
 };
-const unsigned proto__access_control__method_indices_by_name[] = {
+const unsigned acl__access_control__method_indices_by_name[] = {
   2,        /* DestroyAclEntry */
   1,        /* GetPermissions */
   0         /* SetPermissions */
 };
-const ProtobufCServiceDescriptor proto__access_control__descriptor =
+const ProtobufCServiceDescriptor acl__access_control__descriptor =
 {
   PROTOBUF_C__SERVICE_DESCRIPTOR_MAGIC,
-  "proto.AccessControl",
+  "acl.AccessControl",
   "AccessControl",
-  "Proto__AccessControl",
-  "proto",
+  "Acl__AccessControl",
+  "acl",
   3,
-  proto__access_control__method_descriptors,
-  proto__access_control__method_indices_by_name
+  acl__access_control__method_descriptors,
+  acl__access_control__method_indices_by_name
 };
-void proto__access_control__set_permissions(ProtobufCService *service,
-                                            const Proto__AclEntryPermissions *input,
-                                            Proto__AclResponse_Closure closure,
-                                            void *closure_data)
+void acl__access_control__set_permissions(ProtobufCService *service,
+                                          const Acl__EntryPermissions *input,
+                                          Acl__Response_Closure closure,
+                                          void *closure_data)
 {
-  assert(service->descriptor == &proto__access_control__descriptor);
+  assert(service->descriptor == &acl__access_control__descriptor);
   service->invoke(service, 0, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
-void proto__access_control__get_permissions(ProtobufCService *service,
-                                            const Proto__AclEntry *input,
-                                            Proto__AclResponse_Closure closure,
-                                            void *closure_data)
+void acl__access_control__get_permissions(ProtobufCService *service,
+                                          const Acl__Entry *input,
+                                          Acl__Response_Closure closure,
+                                          void *closure_data)
 {
-  assert(service->descriptor == &proto__access_control__descriptor);
+  assert(service->descriptor == &acl__access_control__descriptor);
   service->invoke(service, 1, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
-void proto__access_control__destroy_acl_entry(ProtobufCService *service,
-                                              const Proto__AclEntry *input,
-                                              Proto__AclResponse_Closure closure,
-                                              void *closure_data)
+void acl__access_control__destroy_acl_entry(ProtobufCService *service,
+                                            const Acl__Entry *input,
+                                            Acl__Response_Closure closure,
+                                            void *closure_data)
 {
-  assert(service->descriptor == &proto__access_control__descriptor);
+  assert(service->descriptor == &acl__access_control__descriptor);
   service->invoke(service, 2, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
-void proto__access_control__init (Proto__AccessControl_Service *service,
-                                  Proto__AccessControl_ServiceDestroy destroy)
+void acl__access_control__init (Acl__AccessControl_Service *service,
+                                Acl__AccessControl_ServiceDestroy destroy)
 {
   protobuf_c_service_generated_init (&service->base,
-                                     &proto__access_control__descriptor,
+                                     &acl__access_control__descriptor,
                                      (ProtobufCServiceDestroy) destroy);
 }
