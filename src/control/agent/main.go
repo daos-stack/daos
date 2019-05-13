@@ -126,6 +126,7 @@ func agentMain() error {
 
 	module := &SecurityModule{}
 	drpcServer.RegisterRPCModule(module)
+	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0]})
 
 	err = drpcServer.Start()
 	if err != nil {

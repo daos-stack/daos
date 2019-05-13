@@ -710,6 +710,70 @@ out:
 	return rc;
 }
 
+/* Callers are responsible for freeing resp->psrs. */
+int
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+{
+	struct mgmt_svc	       *svc;
+	d_rank_list_t	       *ranks;
+	crt_group_t	       *grp;
+	int			i;
+	int			rc;
+
+	rc = mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	D_ALLOC(resp->psrs, sizeof(*resp->psrs) * ranks->rl_nr);
+	if (resp->psrs == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	grp = crt_group_lookup(NULL);
+	D_ASSERT(grp != NULL);
+	for (i = 0; i < ranks->rl_nr; i++) {
+		d_rank_t rank = ranks->rl_ranks[i];
+
+		D_ALLOC(resp->psrs[i], sizeof(*(resp->psrs[i])));
+		if (resp->psrs[i] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		mgmt__get_attach_info_resp__psr__init(resp->psrs[i]);
+		resp->psrs[i]->rank = rank;
+		rc = crt_rank_uri_get(grp, rank, 0 /* tag */,
+				      &(resp->psrs[i]->uri));
+		if (rc != 0) {
+			D_ERROR("unable to get rank %u URI: %d\n", rank, rc);
+			break;
+		}
+	}
+	if (rc != 0) {
+		for (; i >= 0; i--) {
+			if (resp->psrs[i] != NULL) {
+				if (resp->psrs[i]->uri != NULL)
+					D_FREE(resp->psrs[i]->uri);
+				D_FREE(resp->psrs[i]);
+			}
+		}
+		D_FREE(resp->psrs);
+		resp->psrs = NULL; /* paranoid */
+		goto out_ranks;
+	}
+	resp->n_psrs = ranks->rl_nr;
+
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
 static int
 map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 		 int nservers, struct server_entry servers[])

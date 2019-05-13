@@ -97,6 +97,102 @@ void   mgmt__join_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__join_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__get_attach_info_req__init
+                     (Mgmt__GetAttachInfoReq         *message)
+{
+  static const Mgmt__GetAttachInfoReq init_value = MGMT__GET_ATTACH_INFO_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__get_attach_info_req__get_packed_size
+                     (const Mgmt__GetAttachInfoReq *message)
+{
+  assert(message->base.descriptor == &mgmt__get_attach_info_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__get_attach_info_req__pack
+                     (const Mgmt__GetAttachInfoReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__get_attach_info_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__get_attach_info_req__pack_to_buffer
+                     (const Mgmt__GetAttachInfoReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__get_attach_info_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__GetAttachInfoReq *
+       mgmt__get_attach_info_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__GetAttachInfoReq *)
+     protobuf_c_message_unpack (&mgmt__get_attach_info_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__get_attach_info_req__free_unpacked
+                     (Mgmt__GetAttachInfoReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__get_attach_info_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__get_attach_info_resp__psr__init
+                     (Mgmt__GetAttachInfoResp__Psr         *message)
+{
+  static const Mgmt__GetAttachInfoResp__Psr init_value = MGMT__GET_ATTACH_INFO_RESP__PSR__INIT;
+  *message = init_value;
+}
+void   mgmt__get_attach_info_resp__init
+                     (Mgmt__GetAttachInfoResp         *message)
+{
+  static const Mgmt__GetAttachInfoResp init_value = MGMT__GET_ATTACH_INFO_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__get_attach_info_resp__get_packed_size
+                     (const Mgmt__GetAttachInfoResp *message)
+{
+  assert(message->base.descriptor == &mgmt__get_attach_info_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__get_attach_info_resp__pack
+                     (const Mgmt__GetAttachInfoResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__get_attach_info_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__get_attach_info_resp__pack_to_buffer
+                     (const Mgmt__GetAttachInfoResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__get_attach_info_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__GetAttachInfoResp *
+       mgmt__get_attach_info_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__GetAttachInfoResp *)
+     protobuf_c_message_unpack (&mgmt__get_attach_info_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__get_attach_info_resp__free_unpacked
+                     (Mgmt__GetAttachInfoResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__get_attach_info_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[5] =
 {
   {
@@ -279,11 +375,153 @@ const ProtobufCMessageDescriptor mgmt__join_resp__descriptor =
   (ProtobufCMessageInit) mgmt__join_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[1] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__get_attach_info_req__field_indices_by_name[] = {
+  0,   /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__get_attach_info_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.GetAttachInfoReq",
+  "GetAttachInfoReq",
+  "Mgmt__GetAttachInfoReq",
+  "mgmt",
+  sizeof(Mgmt__GetAttachInfoReq),
+  1,
+  mgmt__get_attach_info_req__field_descriptors,
+  mgmt__get_attach_info_req__field_indices_by_name,
+  1,  mgmt__get_attach_info_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__psr__field_descriptors[2] =
+{
+  {
+    "rank",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp__Psr, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uri",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp__Psr, uri),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__get_attach_info_resp__psr__field_indices_by_name[] = {
+  0,   /* field[0] = rank */
+  1,   /* field[1] = uri */
+};
+static const ProtobufCIntRange mgmt__get_attach_info_resp__psr__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.GetAttachInfoResp.Psr",
+  "Psr",
+  "Mgmt__GetAttachInfoResp__Psr",
+  "mgmt",
+  sizeof(Mgmt__GetAttachInfoResp__Psr),
+  2,
+  mgmt__get_attach_info_resp__psr__field_descriptors,
+  mgmt__get_attach_info_resp__psr__field_indices_by_name,
+  1,  mgmt__get_attach_info_resp__psr__number_ranges,
+  (ProtobufCMessageInit) mgmt__get_attach_info_resp__psr__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, status),
+    &mgmt__daos_request_status__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "psrs",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__GetAttachInfoResp, n_psrs),
+    offsetof(Mgmt__GetAttachInfoResp, psrs),
+    &mgmt__get_attach_info_resp__psr__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
+  1,   /* field[1] = psrs */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__get_attach_info_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.GetAttachInfoResp",
+  "GetAttachInfoResp",
+  "Mgmt__GetAttachInfoResp",
+  "mgmt",
+  sizeof(Mgmt__GetAttachInfoResp),
+  2,
+  mgmt__get_attach_info_resp__field_descriptors,
+  mgmt__get_attach_info_resp__field_indices_by_name,
+  1,  mgmt__get_attach_info_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__get_attach_info_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[2] =
 {
   { "Join", &mgmt__join_req__descriptor, &mgmt__join_resp__descriptor },
+  { "GetAttachInfo", &mgmt__get_attach_info_req__descriptor, &mgmt__get_attach_info_resp__descriptor },
 };
 const unsigned mgmt__mgmt_svc__method_indices_by_name[] = {
+  1,        /* GetAttachInfo */
   0         /* Join */
 };
 const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
@@ -293,7 +531,7 @@ const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
   "MgmtSvc",
   "Mgmt__MgmtSvc",
   "mgmt",
-  1,
+  2,
   mgmt__mgmt_svc__method_descriptors,
   mgmt__mgmt_svc__method_indices_by_name
 };
@@ -304,6 +542,14 @@ void mgmt__mgmt_svc__join(ProtobufCService *service,
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
   service->invoke(service, 0, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+}
+void mgmt__mgmt_svc__get_attach_info(ProtobufCService *service,
+                                     const Mgmt__GetAttachInfoReq *input,
+                                     Mgmt__GetAttachInfoResp_Closure closure,
+                                     void *closure_data)
+{
+  assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
+  service->invoke(service, 1, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
                            Mgmt__MgmtSvc_ServiceDestroy destroy)
