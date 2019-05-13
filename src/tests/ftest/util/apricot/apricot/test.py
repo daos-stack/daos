@@ -156,7 +156,7 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).setUp()
 
         self.server_group = self.params.get(
-            "server_group", "/server/", "daos_server")
+            "name", "/server_config/", "daos_server")
 
         # Determine which hosts to use as servers and optionally clients.
         # Support the use of a host type count to test with subsets of the
