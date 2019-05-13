@@ -10,8 +10,6 @@ hosts:
     test_clients:
       - boro-H
   test_server_count: !mux
-    two_servers:
-      server_count: 2
     three_servers:
       server_count: 3
     six_servers:
@@ -21,7 +19,7 @@ hosts:
       client_count: 1
 timeout: 240
 server_config:
-  server_name: daos_server
+  name: daos_server
 pool:
   createmode:
     mode: 511
@@ -57,9 +55,9 @@ test:
       rank: 1
     third_rank:
       rank: 2
-    fourth_rank:
-      rank: 3
-    fifth_rank:
-      rank: 4
-    sixth_rank:
-      rank: 5
+    # fourth_rank:
+    #   rank: 3
+    # fifth_rank:
+    #   rank: 4
+    # sixth_rank:
+    #   rank: 5

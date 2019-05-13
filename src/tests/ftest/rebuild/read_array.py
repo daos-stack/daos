@@ -56,7 +56,10 @@ class ReadArrayTest(TestWithServers):
         data_size = self.params.get("data_size", "/run/container/*")
         obj_class = self.params.get("obj_class", "/run/container/*")
         rank = self.params.get("rank", "/run/test/*")
+        
         server_qty = len(self.hostlist_servers)
+        replica_qty = obj_class - 14
+        total_records = object_qty * record_qty * data_size
 
         # Do not execute any test variants that don't make sense
         if rank > server_qty - 1:
@@ -66,8 +69,10 @@ class ReadArrayTest(TestWithServers):
                 "Canceling test with a svcn greater than the server quantity")
 
         # Cancel any tests with tickets already assigned
-        if server_qty == 2 and obj_class == 17:
+        if server_qty < replica_qty:
             self.cancelForTicket("DAOS-2410")
+        if rank in [1, 2]:
+            self.cancelForTicket("DAOS-2434")
 
         # Create and connect to a pool
         self.log.info("Creating a pool")
@@ -119,4 +124,21 @@ class ReadArrayTest(TestWithServers):
 
         # Confirm rebuild completes
         wait_for_rebuild(self.pool, self.log, False, 1)
-        self.log.info("Rebuild complete - Test passed")
+        self.log.info("Rebuild completion detected")
+
+        # Confirm the number of rebuilt objects reported by the pool query
+        expected_pool_info = {
+            "rs_toberb_obj_nr": 0 if server_qty == replica_qty else object_qty,
+            "rs_obj_nr": 0 if server_qty == replica_qty else object_qty,
+            "rs_rec_nr": 0 if server_qty == replica_qty else total_records,
+            "rs_errno": 0
+        }
+        self.log.info("Verifying the number of rebuilt objects and status")
+        pool_info = get_pool_status(self.pool, self.log)
+        for key, expected in expected_pool_info.items():
+            detected = getattr(pool_info.pi_rebuild_st, key)
+            self.assertEqual(
+                detected, expected,
+                "Unexpected {} value: expected={}, detected={}".format(
+                    key, expected, detected))
+        self.log.info("Test passed")
