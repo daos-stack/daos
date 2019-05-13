@@ -268,3 +268,38 @@ def wait_for_rebuild(pool, log, to_start, interval):
             "  Rebuild %s ...",
             "has not yet started" if to_start else "in progress")
         sleep(interval)
+
+
+def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
+    """Confirm the number of rebuilt objects reported by the pool query.
+
+    Args:
+        pool (DaosPool): pool for which to determine if rebuild is complete
+        log (logging): logging object used to report the pool status
+        to_be_rebuilt (int): expected number of objects to be rebuilt
+        object_qty (int): expected number of rebuilt records
+        record_qty (int): expected total number of rebuilt records
+        errors (int): expected number of rebuild errors
+
+    Returns:
+        list: a list of error messages for each expected value that did not
+            match the actual value.  If all expected values were detected the
+            list will be empty.
+
+    """
+    messages = []
+    expected_pool_info = {
+        "rs_toberb_obj_nr": to_be_rebuilt,
+        "rs_obj_nr": object_qty,
+        "rs_rec_nr": record_qty,
+        "rs_errno": errors
+    }
+    log.info("Verifying the number of rebuilt objects and status")
+    pool_info = get_pool_status(pool, log)
+    for key, expected in expected_pool_info.items():
+        detected = getattr(pool_info.pi_rebuild_st, key)
+        if detected != expected:
+            messages.append(
+                "Unexpected {} value: expected={}, detected={}".format(
+                    key, expected, detected))
+    return messages
