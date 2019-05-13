@@ -958,9 +958,9 @@ out:
 int
 ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		     struct cont *cont, struct container_hdl *hdl,
-		     crt_rpc_t *rpc, bool snapshot)
+		     daos_epoch_t epoch, uuid_t ci_uuid, uuid_t ci_hdl,
+		     crt_context_t *ctx, bool snapshot)
 {
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct epoch_prop		prop;
 	daos_epoch_t			hce = hdl->ch_hce;
 	daos_epoch_t			lhe = hdl->ch_lhe;
@@ -968,49 +968,41 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t			glre = 0;
 	daos_iov_t			key;
 	daos_iov_t			value;
-	bool				slip_flag;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
-
-	/*
-	 * TODO - slip_flag should be set to true, but aggregation is not
-	 * working properly, so disable for now.
-	 */
-	slip_flag = false;
+	D_DEBUG(DF_DSMS, DF_CONT": processing epoch rpc: epoch="DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, ci_uuid),
+		epoch);
 
 	/* Verify the container handle capabilities. */
 	if (!(hdl->ch_capas & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
+	if (epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
 	rc = read_epoch_prop(tx, cont, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	if (slip_flag)
-		glre = prop.ep_glre;
+	
+	glre = prop.ep_glre;
 
 	if (check_epoch_invariant(cont, &prop, hdl) != 0)
 		D_GOTO(out, rc = -DER_IO);
 
-	if (in->cei_epoch <= hdl->ch_hce)
+	if (epoch <= hdl->ch_hce)
 		/* Committing an already committed epoch is okay and a no-op. */
 		D_GOTO(out_hdl, rc = 0);
-	else if (in->cei_epoch < hdl->ch_lhe)
+	else if (epoch < hdl->ch_lhe)
 		/* Committing an unheld epoch is not allowed. */
 		D_GOTO(out, rc = -DER_EP_RO);
 
-	hdl->ch_hce = in->cei_epoch;
+	hdl->ch_hce = epoch;
 	hdl->ch_lhe = hdl->ch_hce + 1;
 	if (!(hdl->ch_capas & DAOS_COO_NOSLIP))
 		hdl->ch_lre = hdl->ch_hce;
 
-	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
+	daos_iov_set(&key, ci_hdl, sizeof(uuid_t));
 	daos_iov_set(&value, hdl, sizeof(*hdl));
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0)
@@ -1054,7 +1046,7 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (snapshot) {
 		char		zero = 0;
 
-		daos_iov_set(&key, &in->cei_epoch, sizeof(in->cei_epoch));
+		daos_iov_set(&key, &epoch, sizeof(epoch));
 		daos_iov_set(&value, &zero, sizeof(zero));
 		rc = rdb_tx_update(tx, &cont->c_snaps, &key, &value);
 		if (rc != 0) {
@@ -1065,14 +1057,11 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		}
 	}
 
-	if (slip_flag) {
-		rc = trigger_aggregation(tx, glre, prop.ep_glre, prop.ep_ghce,
-					 cont, rpc->cr_ctx);
-		if (rc != 0) {
-			D_ERROR("Trigger aggregation from commit failed %d\n",
-				rc);
-			D_GOTO(out_hdl, rc);
-		}
+	rc = trigger_aggregation(tx, glre, prop.ep_glre, prop.ep_ghce, cont,
+				 ctx);
+	if (rc != 0) {
+		D_ERROR("Trigger aggregation from commit failed %d\n", rc);
+		D_GOTO(out_hdl, rc);
 	}
 
 out_hdl:
@@ -1082,9 +1071,8 @@ out_hdl:
 		hdl->ch_hce = hce;
 	}
 out:
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying epoch rpc: %d\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, ci_uuid), rc);
 	return rc;
 }
 

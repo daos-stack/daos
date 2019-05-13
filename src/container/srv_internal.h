@@ -118,7 +118,8 @@ int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			  crt_rpc_t *rpc);
 int ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
-			 crt_rpc_t *rpc, bool snapshot);
+			 daos_epoch_t epoch, uuid_t ci_uuid, uuid_t ci_hdl,
+			 crt_context_t *ctx, bool snapshot);
 int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		      struct cont *cont, struct container_hdl *hdl,
 		      crt_rpc_t *rpc);

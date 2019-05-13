@@ -960,6 +960,14 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uuid_copy(rec.tcr_hdl, in->cci_op.ci_hdl);
 	rec.tcr_hce = chdl.ch_hce;
 
+	daos_epoch_t epoch = daos_ts2epoch();
+
+	rc = ds_cont_epoch_commit(tx, pool_hdl, cont, &chdl, epoch,
+				  in->cci_op.ci_uuid, in->cci_op.ci_hdl,
+				  rpc->cr_ctx, false);
+	if (rc)
+		D_GOTO(out, rc);
+
 	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, in->cci_op.ci_uuid),
 		DP_UUID(rec.tcr_hdl), rec.tcr_hce);
@@ -1387,13 +1395,25 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	case CONT_EPOCH_DISCARD:
 		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_COMMIT:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
+	{
+		struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+
+		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl,
+					    in->cei_epoch, in->cei_op.ci_uuid,
+					    in->cei_op.ci_hdl, rpc->cr_ctx,
 					    false);
+	}
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
+	{
+		struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+
+		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl,
+					    in->cei_epoch, in->cei_op.ci_uuid,
+					    in->cei_op.ci_hdl, rpc->cr_ctx,
 					    true);
+	}
 	 case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
