@@ -160,6 +160,22 @@ func newMgmtSvc(config *configuration) *mgmtSvc {
 	}
 }
 
+func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq) (*pb.GetAttachInfoResp, error) {
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, getAttachInfo, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.GetAttachInfoResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
+	}
+
+	return resp, nil
+}
+
 func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, error) {
 	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, join, req)
