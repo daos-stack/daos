@@ -24,12 +24,19 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
+<<<<<<< HEAD
 from avocado import fail_on
 from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
 from general_utils import get_random_string
 
 from time import sleep
 from os import geteuid, getegid
+=======
+from general_utils import (
+    get_pool, get_container, kill_server, DaosTestError, get_pool_status,
+    wait_for_rebuild, verify_rebuild)
+from io_utilities import read_single_objects, write_single_objects
+>>>>>>> Minor yaml key change, adding post-rebuild obj validation
 
 
 class ContainerCreate(TestWithServers):
