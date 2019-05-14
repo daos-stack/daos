@@ -63,7 +63,7 @@ func newMockStorageConfig(
 
 	c := newDefaultConfiguration(
 		&mockExt{
-			nil, "", existsRet, mountRet, unmountRet, mkdirRet,
+			nil, existsRet, mountRet, unmountRet, mkdirRet,
 			removeRet, []string{}})
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount

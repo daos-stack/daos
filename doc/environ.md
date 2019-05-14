@@ -93,6 +93,10 @@ Whether to start existing pool services when starting a `daos_server`. `BOOL`. D
 
 Whether to aggregate unreferenced epochs. `BOOL`. Default to false.
 
+### `DAOS_PMIXLESS`
+
+Whether to disable PMIx. `BOOL`. Default to false.
+
 ## Client
 
 Environment variables in this section only apply to the client side.

@@ -38,6 +38,10 @@ import (
 const (
 	mgmtModuleID = C.DRPC_MODULE_MGMT
 	killRank     = C.DRPC_METHOD_MGMT_KILL_RANK
+	setRank      = C.DRPC_METHOD_MGMT_SET_RANK
+	createMS     = C.DRPC_METHOD_MGMT_CREATE_MS
+	startMS      = C.DRPC_METHOD_MGMT_START_MS
+	join         = C.DRPC_METHOD_MGMT_JOIN
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
