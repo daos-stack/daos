@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"sync"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -53,10 +52,7 @@ type controlService struct {
 func (c *controlService) Setup() {
 	// init sync primitive for storage formatting on each server
 	for idx := range c.config.Servers {
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-
-		c.config.Servers[idx].storWaitGroup = wg
+		c.config.Servers[idx].formatted = make(chan struct{})
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -111,7 +107,7 @@ func awaitStorageFormat(config *configuration) error {
 			log.Debugf(msgWait, i)
 
 			// wait on storage format client API call
-			srv.storWaitGroup.Wait()
+			<-srv.formatted
 		}
 
 		if err := dropPrivileges(config); err != nil {
@@ -119,10 +115,16 @@ func awaitStorageFormat(config *configuration) error {
 				"Failed to drop privileges: %s, running as root "+
 					"is dangerous and is not advised!", err)
 		}
-	} else {
-		log.Debugf(
-			"skipping storage format (%s running as non-root user)\n",
-			os.Args[0])
+
+		return nil
+	}
+
+	log.Debugf(
+		"skipping storage format (%s running as non-root user)\n",
+		os.Args[0])
+
+	for _, srv := range config.Servers {
+		close(srv.formatted)
 	}
 
 	return nil
