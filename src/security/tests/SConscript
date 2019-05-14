@@ -14,7 +14,7 @@ def scons():
 
     daos_build.test(denv, 'srv_acl_tests',
                     source=['srv_acl_tests.c', '../srv_acl.c',
-                            '../security.pb-c.c', mocks],
+                            '../auth.pb-c.c', mocks],
                     LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
 if __name__ == "SCons.Script":

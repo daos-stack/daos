@@ -922,6 +922,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	/* FIXME: until distributed transaction. */
+	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
+		orw->orw_epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
+	}
+
 	if (srv_enable_dtx && (!resend || dispatch)) {
 		/* XXX: In fact, we do not need to start the DTX for
 		 *	non-replicated object. But consider to handle
@@ -1471,6 +1477,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	opi = crt_req_get(rpc);
 	D_ASSERT(opi != NULL);
 	dispatch = opi->opi_shard_tgts.ca_arrays != NULL;
+
 	tag = dss_get_module_info()->dmi_tgt_id;
 
 	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
@@ -1535,6 +1542,12 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			rc = 0;
 		else
 			D_GOTO(out, rc);
+	}
+
+	/* FIXME: until distributed transaction. */
+	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
+		opi->opi_epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
 	if (srv_enable_dtx && (!resend || dispatch)) {

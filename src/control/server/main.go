@@ -33,7 +33,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-	secpb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -200,8 +200,9 @@ func serverMain() error {
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	secpb.RegisterAccessControlServer(grpcServer, secServer)
+	acl.RegisterAccessControlServer(grpcServer, secServer)
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()

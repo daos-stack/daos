@@ -85,7 +85,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]"
+                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]"
                     }
                     post {
                         always {
@@ -736,6 +736,8 @@ pipeline {
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                            # JENKINS-52781 tar function is breaking symlinks
+					   rm -rf test_results
+					   mkdir test_results
                                            rm -f build/src/control/src/github.com/daos-stack/daos/src/control
                                            mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
@@ -763,6 +765,9 @@ pipeline {
                                                          ps axf
                                                      }' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
+					       # set CMOCKA envs here
+					       export CMOCKA_MESSAGE_OUTPUT="xml"
+					       export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
                                                OLD_CI=false utils/run_test.sh
                                                rm -rf run_test.sh/
@@ -775,7 +780,7 @@ pipeline {
                                                    sleep 1
                                                    let x=\\\$x+1
                                                done"''',
-                              junit_files: null
+                              junit_files: 'test_results/*.xml'
                     }
                     post {
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -799,7 +804,9 @@ pipeline {
                         }
                         */
                         always {
-                            archiveArtifacts artifacts: 'run_test.sh/**'
+				sh 'python utils/fix_cmocka_xml.py'
+				junit 'test_results/*.xml'
+				archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }
                 }
