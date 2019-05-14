@@ -22,7 +22,7 @@ testparams:
     rank_five:
       rank: 5
 server_config:
-  server_name: daos_server
+  name: daos_server
 poolparams:
   createsvc:
     svcn: 2

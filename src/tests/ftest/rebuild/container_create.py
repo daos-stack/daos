@@ -23,7 +23,7 @@
 from apricot import TestWithServers
 from general_utils import (
     get_pool, get_container, kill_server, DaosTestError, get_pool_status,
-    wait_for_rebuild)
+    wait_for_rebuild, verify_rebuild)
 from io_utilities import read_single_objects, write_single_objects
 
 
@@ -131,3 +131,8 @@ class ContainerCreate(TestWithServers):
                       "Read data: {0}\n"
                       "Expected data: {1}".format(rebuild_read,
                                                   rebuild_write[0]["data"]))
+
+        verify_err_list = verify_rebuild(self.pool, self.d_log, object_qty +1,
+                                         object_qty + 1, record_qty + 1)
+
+        self.assertTrue(len(verify_err_list) == 0, "\n".join(verify_err_list))
