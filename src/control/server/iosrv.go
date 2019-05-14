@@ -32,15 +32,20 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/golang/protobuf/proto"
 )
 
 func formatIosrvs(config *configuration, reformat bool) error {
@@ -102,15 +107,20 @@ func formatIosrv(
 		return nil
 	}
 
-	if config.FormatOverride {
-		log.Debugf(
-			"continuing without storage format on server %d "+
-				"(format_override set in config)\n", i)
-	} else {
-		log.Debugf("waiting for storage format on server %d\n", i)
+	msg := "continuing without storage format on server %d "
+	if syscall.Getuid() == 0 {
+		if config.UserName != "" {
+			log.Debugf("waiting for storage format on server %d\n", i)
 
-		// wait on format storage grpc call before creating superblock
-		srv.storWaitGroup.Wait()
+			// wait on format storage grpc call before creating superblock
+			srv.storWaitGroup.Wait()
+		} else {
+			log.Debugf(
+				msg+"(username not specified in server config)\n",
+				i)
+		}
+	} else {
+		log.Debugf(msg+"(%s running as non-root user)\n", i, os.Args[0])
 	}
 
 	// check scm has been mounted before proceeding to write to it
@@ -136,6 +146,8 @@ type iosrvSuper struct {
 	UUID        string
 	System      string
 	Rank        *rank
+	ValidRank   bool
+	MS          bool
 	CreateMS    bool
 	BootstrapMS bool
 }
@@ -156,12 +168,16 @@ func createIosrvSuper(config *configuration, i int, reformat, createMS, bootstra
 	super := &iosrvSuper{
 		UUID:        u.String(),
 		System:      config.SystemName,
+		ValidRank:   createMS && bootstrapMS,
+		MS:          createMS,
 		CreateMS:    createMS,
 		BootstrapMS: bootstrapMS,
 	}
-	if config.Servers[i].Rank != nil {
+	if config.Servers[i].Rank != nil || createMS && bootstrapMS {
 		super.Rank = new(rank)
-		*super.Rank = *config.Servers[i].Rank
+		if config.Servers[i].Rank != nil {
+			*super.Rank = *config.Servers[i].Rank
+		}
 	}
 
 	// Write the superblock.
@@ -245,28 +261,42 @@ func (srv *iosrv) start() (err error) {
 	}()
 
 	// Wait for the notifyReady request or the SIGCHLD from the I/O server.
-	// If the I/O server is ready, make a dRPC connection to it.
+	// If we receive the notifyReady request, the I/O server is ready for
+	// dRPC connections.
 	var ready *srvpb.NotifyReadyReq
 	select {
 	case ready = <-srv.ready:
 	case <-srv.sigchld:
 		return errors.New("received SIGCHLD")
 	}
-	log.Debugf("iosrv ready: %+v", *ready)
-	if err = srv.conn.Connect(); err != nil {
+
+	// If we are launched using orterun and DAOS_PMIXLESS isn't set, use
+	// the old bootstrapping method.
+	if _, ok := os.LookupEnv("PMIX_RANK"); ok {
+		if _, ok := os.LookupEnv("DAOS_PMIXLESS"); !ok {
+			return
+		}
+	}
+
+	if err = srv.setRank(ready); err != nil {
 		return
 	}
-	defer func() {
-		if err != nil {
-			srv.conn.Close()
-		}
-	}()
 
-	// TODO:
-	//   1 Get the rank and send a SetRank request to the I/O server.
-	//   2 If CreateMs, send a CreateMs request to the I/O server.
-	//   3 Clear CreateMs and BootstrapMs in the superblock.
-	//   4 Send a StartMs request to the I/O server.
+	if srv.super.CreateMS {
+		log.Debugf("create MS (bootstrap=%t)", srv.super.BootstrapMS)
+		if err = srv.callCreateMS(); err != nil {
+			return
+		}
+		srv.super.CreateMS = false
+		srv.super.BootstrapMS = false
+		if err = srv.writeSuper(); err != nil {
+			return
+		}
+	}
+
+	if srv.super.MS {
+		err = srv.callStartMS()
+	}
 
 	return
 }
@@ -275,7 +305,6 @@ func (srv *iosrv) wait() error {
 	if err := srv.cmd.Wait(); err != nil {
 		return errors.Wrapf(err, "wait server %s", srv.config.Servers[srv.index].ScmMount)
 	}
-	srv.conn.Close()
 	return nil
 }
 
@@ -314,4 +343,128 @@ func (srv *iosrv) stopCmd() error {
 	}
 
 	return nil
+}
+
+// setRank determines the rank and send a SetRank request to the I/O server.
+func (srv *iosrv) setRank(ready *srvpb.NotifyReadyReq) error {
+	r := nilRank
+	if srv.super.Rank != nil {
+		r = *srv.super.Rank
+	}
+
+	if !srv.super.ValidRank || !srv.super.MS {
+		resp, err := mgmtJoin(srv.config.AccessPoints[0], &mgmtpb.JoinReq{
+			Uuid:  srv.super.UUID,
+			Rank:  uint32(r),
+			Uri:   ready.Uri,
+			Nctxs: ready.Nctxs,
+			Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
+		})
+		if err != nil {
+			return err
+		} else if resp.State == mgmtpb.JoinResp_OUT {
+			return errors.Errorf("rank %d excluded", resp.Rank)
+		}
+		r = rank(resp.Rank)
+
+		if !srv.super.ValidRank {
+			srv.super.Rank = new(rank)
+			*srv.super.Rank = r
+			srv.super.ValidRank = true
+			if err := srv.writeSuper(); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := srv.callSetRank(r); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (srv *iosrv) callCreateMS() error {
+	req := &mgmtpb.CreateMsReq{}
+	if srv.super.BootstrapMS {
+		req.Bootstrap = true
+		req.Uuid = srv.super.UUID
+		req.Addr = fmt.Sprintf("0.0.0.0:%d", srv.config.Port)
+	}
+
+	dresp, err := makeDrpcCall(srv.conn, mgmtModuleID, createMS, req)
+	if err != nil {
+		return err
+	}
+
+	resp := &mgmtpb.DaosResponse{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshal CreateMS response")
+	}
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+		return errors.Errorf("CreateMS: %d\n", resp.Status)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) callStartMS() error {
+	dresp, err := makeDrpcCall(srv.conn, mgmtModuleID, startMS, nil)
+	if err != nil {
+		return err
+	}
+
+	resp := &mgmtpb.DaosResponse{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshal StartMS response")
+	}
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+		return errors.Errorf("StartMS: %d\n", resp.Status)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) callSetRank(rank rank) error {
+	dresp, err := makeDrpcCall(srv.conn, mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	if err != nil {
+		return err
+	}
+
+	resp := &mgmtpb.DaosResponse{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshall SetRank response")
+	}
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+		return errors.Errorf("SetRank: %d\n", resp.Status)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) writeSuper() error {
+	return writeIosrvSuper(iosrvSuperPath(srv.config.Servers[srv.index].ScmMount), srv.super)
+}
+
+// mgmtJoin sends the Join request to MS, retrying indefinitely until MS
+// responses.
+func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+	log.Debugf("join(%s, %+v)", ap, *req)
+
+	conn, err := grpc.Dial(ap, grpc.WithInsecure(), grpc.WithBlock(),
+		grpc.WithBackoffMaxDelay(5*time.Second),
+		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
+	if err != nil {
+		return nil, errors.Wrapf(err, "dial %s", ap)
+	}
+	defer conn.Close()
+
+	client := mgmtpb.NewMgmtSvcClient(conn)
+
+	resp, err := client.Join(context.Background(), req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
+	}
+
+	return resp, nil
 }

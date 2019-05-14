@@ -630,25 +630,6 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 	return 0;
 }
 
-static size_t
-get_md_cap(void)
-{
-	const size_t	size_default = 1 << 27 /* 128 MB */;
-	char	       *v;
-	int		n;
-
-	v = getenv("DAOS_MD_CAP"); /* in MB */
-	if (v == NULL)
-		return size_default;
-	n = atoi(v);
-	if (n < size_default >> 20) {
-		D_ERROR("metadata capacity too low; using %zu MB\n",
-			size_default >> 20);
-		return size_default;
-	}
-	return (size_t)n << 20;
-}
-
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
  * a single storage node in the pool. "target_uuids" shall be an array of the
@@ -699,7 +680,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, rdb_uuid, ranks,
 				true /* create */, true /* bootstrap */,
-				get_md_cap());
+				ds_rsvc_get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -2980,7 +2961,8 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	case POOL_REPLICAS_ADD:
 		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, db_uuid,
 					in->pmi_targets, true /* create */,
-					false /* bootstrap */, get_md_cap());
+					false /* bootstrap */,
+					ds_rsvc_get_md_cap());
 		if (rc != 0)
 			break;
 		rc = rdb_add_replicas(db, ranks);

@@ -22,21 +22,21 @@
 //
 
 syntax = "proto3";
-package proto;
+package auth;
 
 // Authentication token includes a packed structure of the specified flavor
-enum AuthFlavor {
+enum Flavor {
 	AUTH_NONE = 0;
 	AUTH_SYS = 1;
 }
 
-message AuthToken {
-	AuthFlavor flavor = 1;
+message Token {
+	Flavor flavor = 1;
 	bytes data = 2;
 }
 
 // Token structure for AUTH_SYS flavor
-message AuthSys {
+message Sys {
 	uint64 stamp = 1;
 	string machinename = 2;
 	uint32 uid = 3;
@@ -45,14 +45,14 @@ message AuthSys {
 	string secctx = 6; // Additional field for MAC label
 }
 
-message AuthSysVerifier {
+message SysVerifier {
 	bytes signature = 1;
 }
 
 // SecurityCredential includes the auth token and a verifier that can be used by
 // the server to verify the integrity of the token.
 // Token and verifier are expected to have the same flavor type.
-message SecurityCredential {
-	AuthToken token = 1;
-	AuthToken verifier = 2;
+message Credential {
+	Token token = 1;
+	Token verifier = 2;
 }

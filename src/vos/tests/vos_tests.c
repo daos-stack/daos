@@ -65,7 +65,7 @@ run_all_tests(int keys, bool nest_iterators)
 	for (i = 0; i != DAOS_OF_MASK; i++)
 		failed += run_io_test(i, keys, nest_iterators);
 	failed += run_discard_tests();
-	failed += run_aggregate_tests();
+	failed += run_aggregate_tests(false);
 	return failed;
 }
 
@@ -125,7 +125,7 @@ main(int argc, char **argv)
 							 nest_iterators);
 				break;
 			case 'a':
-				nr_failed += run_aggregate_tests();
+				nr_failed += run_aggregate_tests(true);
 				break;
 			case 'd':
 				nr_failed += run_discard_tests();
@@ -156,5 +156,3 @@ exit_0:
 	daos_debug_fini();
 	return nr_failed;
 }
-
-
