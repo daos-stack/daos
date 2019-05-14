@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,8 @@ typedef int (*command_hdlr_t)(int, char *[]);
 enum cont_op {
 	CONT_CREATE,
 	CONT_DESTROY,
-	CONT_QUERY
+	CONT_QUERY,
+	CONT_AGGREGATE
 };
 
 static enum cont_op
@@ -46,6 +47,8 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY;
 	else if (strcmp(str, "query") == 0)
 		return CONT_QUERY;
+	else if (strcmp(str, "aggregate") == 0)
+		return CONT_AGGREGATE;
 	assert(0);
 	return -1;
 }
@@ -59,6 +62,7 @@ cont_op_hdlr(int argc, char *argv[])
 		{"pool",	required_argument,	NULL, 'p'},
 		{"svc",		required_argument,	NULL, 'v'},
 		{"cont",	required_argument,	NULL, 'c'},
+		{"epoch",	required_argument,	NULL, 'e'},
 		{NULL,		0,			NULL,  0}
 	};
 	const char		*group = default_group;
@@ -70,6 +74,8 @@ cont_op_hdlr(int argc, char *argv[])
 	d_rank_list_t	*svc;
 	daos_cont_info_t	cont_info;
 	enum cont_op		op = cont_op_parse(argv[1]);
+	daos_epoch_t		epoch = daos_ts2epoch();
+	char			*end;
 	int			rc;
 
 	uuid_clear(pool_uuid);
@@ -95,6 +101,15 @@ cont_op_hdlr(int argc, char *argv[])
 			if (uuid_parse(optarg, cont_uuid) != 0) {
 				fprintf(stderr,
 					"failed to parse cont UUID: %s\n",
+					optarg);
+				return 2;
+			}
+			break;
+		case 'e':
+			epoch = strtoul(optarg, &end, 10);
+			if (end == optarg || epoch == 0 ||
+			    epoch == DAOS_EPOCH_MAX) {
+				fprintf(stderr, "invalid epoch: %s\n",
 					optarg);
 				return 2;
 			}
@@ -165,6 +180,13 @@ cont_op_hdlr(int argc, char *argv[])
 		}
 	}
 
+	if (op == CONT_AGGREGATE) {
+		rc = daos_cont_aggregate(coh, epoch, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "cont aggregate failed: %d\n", rc);
+			return rc;
+		}
+	}
 
 	if (op != CONT_DESTROY) {
 		rc = daos_cont_close(coh, NULL);
@@ -203,6 +225,7 @@ commands:\n\
 	create        create a container\n\
 	destroy       destroy a conainer\n\
 	query         query a container\n\
+	aggregate     trigger aggregation for a container\n\
 	help          print this message and exit\n");
 
 	printf("\
@@ -226,6 +249,15 @@ query options:\n\
 	--group=STR   pool server process group (\"%s\")\n\
 	--svc=RANKS   pool service replicas like 1:2:3\n\
 	--cont=UUID   cont UUID\n", default_group);
+
+	printf("\
+aggregate options:\n\
+	--pool=UUID   pool UUID\n\
+	--group=STR   pool server process group (\"%s\")\n\
+	--svc=RANKS   pool service replicas like 1:2:3\n\
+	--epoch=EPC   the highest epoch to be aggregated to,\n\
+		      current time by default\n\
+	--cont=UUID   cont UUID\n", default_group);
 	return 0;
 }
 
@@ -242,6 +274,8 @@ main(int argc, char *argv[])
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "query") == 0)
+		hdlr = cont_op_hdlr;
+	else if (strcmp(argv[1], "aggregate") == 0)
 		hdlr = cont_op_hdlr;
 
 	if (hdlr == NULL || hdlr == help_hdlr) {

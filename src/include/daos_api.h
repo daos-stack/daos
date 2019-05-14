@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -531,6 +531,17 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 int
 daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
 		     daos_event_t *ev);
+
+/**
+ * Trigger aggregation to specified epoch
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to be aggregated to.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 
 /**
  * Rollback to a specific persistent snapshot.

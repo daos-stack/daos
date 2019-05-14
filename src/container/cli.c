@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1769,6 +1769,23 @@ out:
 	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
 		epoch == NULL ? 0 : *epoch, rc);
 	return rc;
+}
+
+int
+dc_cont_aggregate(tse_task_t *task)
+{
+	daos_cont_aggregate_t	*args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->epoch == 0 || args->epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("Invalid epoch: "DF_U64"\n", args->epoch);
+		tse_task_complete(task, -DER_INVAL);
+		return -DER_INVAL;
+	}
+
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, task);
 }
 
 int
