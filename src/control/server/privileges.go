@@ -24,7 +24,6 @@
 package main
 
 import (
-	"os"
 	"os/user"
 	"strconv"
 
@@ -86,7 +85,7 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 func chownScmMount(config *configuration, uid int64, gid int64) error {
 	for i, srv := range config.Servers {
 		// chown ScmMount (uid/gid are 32bit)
-		err := os.Chown(srv.ScmMount, int(uid), int(gid))
+		err := config.ext.chown(srv.ScmMount, int(uid), int(gid))
 		if err != nil {
 			return errors.WithMessagef(
 				err,

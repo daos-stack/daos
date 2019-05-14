@@ -47,6 +47,7 @@ const (
 	msgCmd     = "cmd: %s"
 	msgSetUID  = "C: setuid %d"
 	msgSetGID  = "C: setgid %d"
+	msgChown   = "os: chown %s %d %d"
 )
 
 // External interface provides methods to support various os operations.
@@ -65,6 +66,7 @@ type External interface {
 	listGroups(*user.User) ([]string, error)
 	setUID(int64) error
 	setGID(int64) error
+	chown(string, int, int) error
 	getHistory() []string
 }
 
@@ -231,4 +233,11 @@ func (e *ext) setGID(gid int64) error {
 		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
 	}
 	return nil
+}
+
+func (e *ext) chown(path string, uid int, gid int) error {
+	log.Debugf(msgChown, path, uid, gid)
+	e.history = append(e.history, fmt.Sprintf(msgChown, path, uid, gid))
+
+	return os.Chown(path, uid, gid)
 }

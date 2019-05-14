@@ -48,6 +48,7 @@ type mockExt struct {
 	listGrpsRet []string    // list of user's groups
 	sUIDErr     error       // set uid error
 	sGIDErr     error       // set gid error
+	chownErr    error
 	history     []string
 }
 
@@ -136,13 +137,19 @@ func (m *mockExt) setGID(gid int64) error {
 	return m.sGIDErr
 }
 
+func (m *mockExt) chown(path string, uid int, gid int) error {
+	m.history = append(m.history, fmt.Sprintf(msgChown, path, uid, gid))
+
+	return m.chownErr
+}
+
 func newMockExt(
 	cmdRet error, existsRet bool, mountRet error,
 	unmountRet error, mkdirRet error, removeRet error) External {
 
 	return &mockExt{
 		cmdRet, existsRet, mountRet, unmountRet, mkdirRet, removeRet,
-		nil, nil, nil, nil, nil, []string{}, nil, nil, []string{},
+		nil, nil, nil, nil, nil, []string{}, nil, nil, nil, []string{},
 	}
 }
 

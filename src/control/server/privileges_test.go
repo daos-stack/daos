@@ -52,7 +52,10 @@ func TestDropPrivileges(t *testing.T) {
 			lUsrRet: &user.User{
 				Uid: "1001", Gid: "1001", Username: "bob",
 			},
-			expHistory: []string{"C: setgid 1001", "C: setuid 1001"},
+			expHistory: []string{
+				"os: chown /mnt/daos 1001 1001",
+				"C: setgid 1001", "C: setuid 1001",
+			},
 		},
 		{
 			desc:      "drop success uid and gid",
@@ -65,7 +68,10 @@ func TestDropPrivileges(t *testing.T) {
 				Gid: "1002", Name: "builders",
 			},
 			listGrpsRet: []string{"1001", "1002"},
-			expHistory:  []string{"C: setgid 1002", "C: setuid 1001"},
+			expHistory: []string{
+				"os: chown /mnt/daos 1001 1002",
+				"C: setgid 1002", "C: setuid 1001",
+			},
 		},
 		{
 			desc:      "drop success uid not member of gid",
@@ -78,7 +84,10 @@ func TestDropPrivileges(t *testing.T) {
 				Gid: "1002", Name: "builders",
 			},
 			listGrpsRet: []string{"1001"},
-			expHistory:  []string{"C: setgid 1001", "C: setuid 1001"},
+			expHistory: []string{
+				"os: chown /mnt/daos 1001 1001",
+				"C: setgid 1001", "C: setuid 1001",
+			},
 		},
 	}
 
