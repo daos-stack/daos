@@ -25,7 +25,9 @@
 #include "dfuse.h"
 #include "daos_api.h"
 
-/* Lookup a unique inode for the specific dfs/oid combination */
+/* Lookup a the union inode number for the specific dfs/oid combination
+ * allocating a new one if necessary.
+ */
 int
 dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		   struct dfuse_dfs *dfs,
@@ -63,6 +65,51 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 
 out:
 	return rc;
+};
+
+/* Check a DFS to see if an inode is already in place for it.  This is used
+ * for looking up pools and containers to see if a record already exists to
+ * allow reuse of already open handles.
+ *
+ * Does not store the DFS, but simply checks for matching copies, and extracts
+ * the inode information from them.
+ *
+ * Return a inode_entry pointer, with reference held.
+ */
+int
+dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
+		      struct dfuse_dfs *dfs,
+		      struct dfuse_inode_entry **_entry)
+{
+	struct dfuse_inode_record	*dfir;
+	struct dfuse_inode_record_id	ir_id = {0};
+	d_list_t			*rlink;
+	struct dfuse_inode_entry	*entry;
+
+	ir_id.irid_dfs = dfs;
+
+	rlink = d_hash_rec_find(&fs_handle->dfpi_irt,
+				&ir_id,
+				sizeof(ir_id));
+
+	if (!rlink) {
+		return -DER_NONEXIST;
+	}
+
+	dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet,
+				&dfir->ir_ino,
+				sizeof(dfir->ir_ino));
+	if (!rlink) {
+		return -DER_NONEXIST;
+	}
+
+	entry = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	*_entry = entry;
+
+	return -DER_SUCCESS;
 };
 
 int
