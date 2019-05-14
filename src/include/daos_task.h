@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ typedef enum {
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
+	DAOS_OPC_CONT_AGGREGATE,
 	DAOS_OPC_CONT_ROLLBACK,
 	DAOS_OPC_CONT_SUBSCRIBE,
 	DAOS_OPC_CONT_LIST_ATTR,
@@ -270,6 +271,11 @@ typedef struct {
 	daos_cont_info_t	*info;
 	daos_prop_t		*prop;
 } daos_cont_query_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_epoch_t		epoch;
+} daos_cont_aggregate_t;
 
 typedef struct {
 	daos_handle_t		coh;

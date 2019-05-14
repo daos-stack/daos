@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -798,76 +798,28 @@ out:
 }
 
 int
-ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			struct cont *cont, struct container_hdl *hdl,
+			crt_rpc_t *rpc)
 {
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct epoch_prop		prop;
-	daos_epoch_t			lre = hdl->ch_lre;
-	daos_epoch_t			glre;
-	daos_iov_t			key;
-	daos_iov_t			value;
-	int				rc;
+	struct cont_epoch_op_in	*in = crt_req_get(rpc);
+	daos_epoch_t		 epoch = in->cei_epoch;
+	int			 rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
+	if (epoch >= DAOS_EPOCH_MAX)
+		return -DER_INVAL;
+	else if (in->cei_epoch == 0)
+		epoch = daos_ts2epoch();
 
-	rc = read_epoch_prop(tx, cont, &prop);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	glre = prop.ep_glre;
+	rc = trigger_aggregation(tx, 0, epoch, epoch, cont, rpc->cr_ctx);
 
-	if (check_epoch_invariant(cont, &prop, hdl) != 0)
-		D_GOTO(out, rc = -DER_IO);
-
-	if (in->cei_epoch < hdl->ch_lre)
-		/*
-		 * Since we don't allow LRE to decrease, let the new LRE be the
-		 * old one.  (This is actually unnecessary; we only have to
-		 * guarantee that the new LRE has not been aggregated away.)
-		 */
-		;
-	else
-		hdl->ch_lre = in->cei_epoch;
-
-	if (hdl->ch_lre == lre)
-		D_GOTO(out_hdl, rc = 0);
-
-	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
-
-	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, hdl, sizeof(*hdl));
-	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0)
-		D_GOTO(out_hdl, rc);
-
-	rc = ec_update_and_find_lowest(tx, cont, EC_LRE, &lre /* dec */,
-				       &hdl->ch_lre /* inc */,
-				       NULL /* emptyp */, &prop.ep_glre);
-	if (rc != 0)
-		D_GOTO(out_hdl, rc);
-
-	if (check_epoch_invariant(cont, &prop, hdl) != 0)
-		D_GOTO(out_hdl, rc = -DER_IO);
-
-	/** XXX
-	 * Once we have an aggregation daemon,
-	 * we need to mask the return value, we need not
-	 * fail if aggregation bcast fails
-	 */
-	rc = trigger_aggregation(tx, glre, prop.ep_glre, prop.ep_ghce,
-				 cont, rpc->cr_ctx);
-out_hdl:
-	if (rc != 0)
-		hdl->ch_lre = lre;
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
+		epoch, rc);
 	return rc;
 }
 
