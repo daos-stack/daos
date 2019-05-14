@@ -84,8 +84,8 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 	c.scm.Format(i, resp)
 
 	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
-		// storage subsystem format successful, signal main thread
-		srv.storWaitGroup.Done()
+		// storage subsystem format successful, broadcast formatted
+		close(srv.formatted)
 		log.Debugf("storage format successful on server %d\n", i)
 	}
 
