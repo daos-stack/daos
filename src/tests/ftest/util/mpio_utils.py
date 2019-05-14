@@ -130,7 +130,6 @@ class MpioUtils():
 
         # setting attributes
         cd_cmd = 'cd ' + test_repo
-        print("cd:{}".format(cd_cmd))
         # running 8 client processes
         if test_name == "llnl" and os.path.isfile(test_repo + "/testmpio_daos"):
             test_cmd = "mpirun -np {} --hostfile {} ./testmpio_daos 1"\
@@ -139,9 +138,8 @@ class MpioUtils():
                                                       "/test_io_daos.py"):
             test_cmd = "mpiexec -n {} --hostfile {} python test_io_daos.py"\
                            .format(client_processes, hostfile)
-        #elif test_name == "hdf5" and (os.path.isfile(test_repo + "./testphdf5")
-        #      and os.path.isfile(test_repo + "./t_shapesame")):
-        elif test_name == "hdf5":
+        elif test_name == "hdf5" and (os.path.isfile(test_repo + "/testphdf5")
+                and os.path.isfile(test_repo + "/t_shapesame")):
             test_cmd = ("echo ***Running testhdf5*** ;" +
                         " mpirun -np {} --hostfile {} ./testphdf5 ;"\
                         .format(client_processes, hostfile) +
