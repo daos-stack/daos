@@ -104,7 +104,7 @@ class MpioUtils():
                              .format(str(excep)))
 
     def run_llnl_mpi4py_hdf5(self, basepath, hostfile, pool_uuid, test_repo,
-                        test_name, client_processes):
+                             test_name, client_processes):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
@@ -142,12 +142,12 @@ class MpioUtils():
         #elif test_name == "hdf5" and (os.path.isfile(test_repo + "./testphdf5")
         #      and os.path.isfile(test_repo + "./t_shapesame")):
         elif test_name == "hdf5":
-            test_cmd = ("echo ***Running testhdf5*** ;" + 
-                       " mpirun -np {} --hostfile {} ./testphdf5 ;"\
-                       .format(client_processes, hostfile) +
-                       "echo ***Running t_shapesame*** ;" +
-                       "mpirun -np {} --hostfile {} ./t_shapesame"\
-                       .format(client_processes, hostfile))
+            test_cmd = ("echo ***Running testhdf5*** ;" +
+                        " mpirun -np {} --hostfile {} ./testphdf5 ;"\
+                        .format(client_processes, hostfile) +
+                        "echo ***Running t_shapesame*** ;" +
+                        "mpirun -np {} --hostfile {} ./t_shapesame"\
+                        .format(client_processes, hostfile))
         else:
             raise MpioFailed("Wrong test name or test repo location specified")
 

@@ -91,8 +91,8 @@ class LlnlMpi4pyHdf5(TestWithServers):
 
             # running tests
             self.mpio.run_llnl_mpi4py_hdf5(self.basepath, self.hostfile_clients,
-                                      pool_uuid, test_repo, test_name,
-                                      client_processes)
+                                           pool_uuid, test_repo, test_name,
+                                           client_processes)
 
             # Parsing output to look for failures
             # stderr directed to stdout
