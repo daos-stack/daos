@@ -2361,7 +2361,8 @@ out_replicas:
 out_map_version:
 	if (map_version_p != NULL)
 		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
-						    svc->ps_pool->sp_map : map);
+						      svc->ps_pool->sp_map :
+						      map);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (map)
