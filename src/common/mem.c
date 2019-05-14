@@ -86,6 +86,21 @@ struct umem_tx_stage_item {
 static int
 pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
+	/*
+	 * This free call could be on error cleanup code path where
+	 * the transaction is already aborted due to previous failed
+	 * pmemobj_tx call. Let's just skip it in this case.
+	 *
+	 * The reason we don't fix caller to avoid calling tx_free()
+	 * in an aborted transaction is that the caller code could be
+	 * shared by both transactional and non-transactional (where
+	 * UMEM_CLASS_VMEM is used, see btree code) interfaces, and
+	 * the explicit umem_free() on error cleanup is necessary for
+	 * non-transactional case.
+	 */
+	if (pmemobj_tx_stage() == TX_STAGE_ONABORT)
+		return 0;
+
 	if (!UMOFF_IS_NULL(umoff))
 		return pmemobj_tx_free(umem_off2id(umm, umoff));
 	return 0;
