@@ -696,53 +696,6 @@ cont_put(struct cont *cont)
 }
 
 static int
-cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
-		const uuid_t cont_hdl, uint64_t capas)
-{
-	struct cont_tgt_open_in	       *in;
-	struct cont_tgt_open_out       *out;
-	crt_rpc_t		       *rpc;
-	int				rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting: pool_hdl="DF_UUID" cont_hdl="
-		DF_UUID" capas="DF_X64"\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
-
-	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_OPEN, &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->toi_pool_uuid, cont->c_svc->cs_pool_uuid);
-	uuid_copy(in->toi_pool_hdl, pool_hdl);
-	uuid_copy(in->toi_uuid, cont->c_uuid);
-	uuid_copy(in->toi_hdl, cont_hdl);
-	in->toi_capas = capas;
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->too_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to open %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		rc = -DER_IO;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
-		" capas="DF_X64": %d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas, rc);
-	return rc;
-}
-
-static int
 cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc)
 {
@@ -777,12 +730,13 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	rc = cont_open_bcast(rpc->cr_ctx, cont, in->coi_op.ci_pool_hdl,
-			     in->coi_op.ci_hdl, in->coi_capas);
+	rc = cont_iv_capability_update(pool_hdl->sph_pool->sp_iv_ns,
+				       in->coi_op.ci_hdl, in->coi_op.ci_uuid,
+				       in->coi_capas);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* TODO: Rollback cont_open_bcast() on errors from now on. */
+	/* TODO: Rollback cont_iv_capability_update() on errors from now on. */
 
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);

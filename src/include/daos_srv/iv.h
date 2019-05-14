@@ -268,6 +268,7 @@ enum iv_key {
 	IV_REBUILD,
 	IV_OID,
 	IV_CONT_SNAP,
+	IV_CONT_CAPA,
 };
 
 int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value);
