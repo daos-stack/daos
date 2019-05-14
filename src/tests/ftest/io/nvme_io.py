@@ -43,8 +43,6 @@ class NvmeIo(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        self.pool = None
-        self.hostfile_clients = None
         self.out_queue = None
         self.pool_connect = False
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
@@ -112,7 +110,7 @@ class NvmeIo(TestWithServers):
         sizes.IOR will be run for all Object type supported. Purpose is to
         verify pool size (SCM and NVMe) for IOR file.
         This test is running multiple IOR on same server start instance.
-        :avocado: tags=nvme,nvme_io,large
+        :avocado: tags=hw,nvme,large
         """
         ior_args = {}
 

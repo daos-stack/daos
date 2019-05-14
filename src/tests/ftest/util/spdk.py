@@ -86,7 +86,7 @@ def nvme_cleanup_thread(result_queue, hostname, debug=True):
     result_queue.put("PASS")
     host.disconnect()
 
-def nvme_main(hostlist, operation=False):
+def _nvme_main(hostlist, operation=False):
     """
     nvme main function starts thread for each server doing SPDK setup/cleanup.
     Args:
@@ -128,10 +128,7 @@ def nvme_setup(hostlist):
     return:
         None
     """
-    try:
-        nvme_main(hostlist, True)
-    except SpdkFailed:
-        raise
+    _nvme_main(hostlist, True)
 
 def nvme_cleanup(hostlist):
     """
@@ -142,7 +139,4 @@ def nvme_cleanup(hostlist):
     return:
         None
     """
-    try:
-        nvme_main(hostlist, False)
-    except SpdkFailed:
-        raise
+    _nvme_main(hostlist, False)
