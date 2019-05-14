@@ -83,7 +83,8 @@ func agentMain() error {
 		return err
 	}
 
-	// Load the configuration file using the supplied path or the default path if none provided.
+	// Load the configuration file using the supplied path or the
+	// default path if none provided.
 	config, err := client.ProcessConfigFile(opts.ConfigPath)
 	if err != nil {
 		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
@@ -95,7 +96,8 @@ func agentMain() error {
 
 	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
 	if env != config.RuntimeDir {
-		log.Debugf("Environment variable '%s' has value '%s' which does not match '%s'", daosAgentDrpcSockEnv, env, config.RuntimeDir)
+		log.Debugf("Environment variable '%s' has value '%s' which does not "+
+			"match '%s'", daosAgentDrpcSockEnv, env, config.RuntimeDir)
 	}
 
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)

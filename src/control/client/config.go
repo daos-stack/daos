@@ -45,14 +45,14 @@ const (
 // External interface provides methods to support various os operations.
 type External interface {
 	Getenv(string) string
-	runCommand(string) error
+	RunCommand(string) error
 }
 
 type ext struct{}
 
 // runCommand executes command in subshell (to allow redirection) and returns
 // error result.
-func (e *ext) runCommand(cmd string) error {
+func (e *ext) RunCommand(cmd string) error {
 	return exec.Command("sh", "-c", cmd).Run()
 }
 
