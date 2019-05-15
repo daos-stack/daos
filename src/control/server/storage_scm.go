@@ -204,24 +204,16 @@ func (s *scmStorage) makeMount(
 	return
 }
 
-// addMret populates and adds to response SCM mount results list in addition
-// to logging any err.
-func addMret(
-	resp *pb.FormatStorageResp, op string, mntPoint string,
-	status pb.ResponseStatus, errMsg string, logDepth int) {
+// newMret creates and populates NVMe ctrlr result and logs error through
+// addState.
+func newMret(
+	op string, mntPoint string, status pb.ResponseStatus, errMsg string,
+	logDepth int) *pb.ScmMountResult {
 
-	resp.Mrets = append(
-		resp.Mrets,
-		&pb.ScmMountResult{
-			Mntpoint: mntPoint,
-			State: &pb.ResponseState{
-				Status: status,
-				Error:  errMsg,
-			},
-		})
-
-	if errMsg != "" {
-		log.Errordf(logDepth, "scm storage "+op+": "+errMsg)
+	return &pb.ScmMountResult{
+		Mntpoint: mntPoint,
+		State: addState(
+			status, errMsg, "", logDepth+1, "scm mount "+op),
 	}
 }
 
@@ -237,9 +229,11 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 	// wraps around addMret to provide format specific function
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
 		// log depth should be stack layer registering result
-		addMret(
-			resp, "format", mntPoint, status, errMsg,
-			common.UtilLogDepth+1)
+		resp.Mrets = append(
+			resp.Mrets,
+			newMret(
+				"format", mntPoint, status, errMsg,
+				common.UtilLogDepth+1))
 	}
 
 	if !s.initialized {

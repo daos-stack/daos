@@ -37,11 +37,9 @@ func addState(
 	status pb.ResponseStatus, errMsg string, infoMsg string, logDepth int,
 	contextMsg string) *pb.ResponseState {
 
-	state := new(pb.ResponseState)
-
-	state.Status = status
-	state.Error = errMsg
-	state.Info = infoMsg
+	state := &pb.ResponseState{
+		Status: status, Error: errMsg, Info: infoMsg,
+	}
 
 	if errMsg != "" {
 		log.Errordf(logDepth, contextMsg+": "+errMsg)

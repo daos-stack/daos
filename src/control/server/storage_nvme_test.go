@@ -34,7 +34,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var nvmeFormatCalls []string
+var nvmeFormatCalls []string // record calls to nvme.Format()
 
 // MockController is a mock NVMe SSD controller of type exported from go-spdk.
 func MockController(fwrev string) Controller {
@@ -43,6 +43,17 @@ func MockController(fwrev string) Controller {
 		Model:   c.Model,
 		Serial:  c.Serial,
 		PCIAddr: c.Pciaddr,
+		FWRev:   fwrev,
+	}
+}
+
+// NewMockController specifies customer details fr a mock NVMe SSD controller.
+func NewMockController(pciaddr string, fwrev string) Controller {
+	c := MockControllerPB(fwrev)
+	return Controller{
+		Model:   c.Model,
+		Serial:  c.Serial,
+		PCIAddr: pciaddr,
 		FWRev:   fwrev,
 	}
 }
@@ -79,10 +90,12 @@ type mockSpdkNvme struct {
 	updateRet    error // NVME interface Update() return value
 }
 
+// Discover mock implementation returns mock lists of devices
 func (m *mockSpdkNvme) Discover() ([]Controller, []Namespace, error) {
 	return m.initCtrlrs, m.initNss, m.discoverRet
 }
 
+// Format mock implementation records calls on devices with given pci address
 func (m *mockSpdkNvme) Format(pciAddr string) ([]Controller, []Namespace, error) {
 	if m.devFormatRet == nil {
 		nvmeFormatCalls = append(nvmeFormatCalls, pciAddr)
@@ -91,11 +104,17 @@ func (m *mockSpdkNvme) Format(pciAddr string) ([]Controller, []Namespace, error)
 	return m.initCtrlrs, m.initNss, m.devFormatRet
 }
 
+// Update mock implementation modifies Fwrev of device with given pci address
 func (m *mockSpdkNvme) Update(pciAddr string, path string, slot int32) (
 	[]Controller, []Namespace, error) {
-	c := MockController(m.fwRevAfter)
 
-	return []Controller{c}, []Namespace{MockNamespace(&c)}, m.updateRet
+	for i, ctrlr := range m.initCtrlrs {
+		if ctrlr.PCIAddr == pciAddr && m.updateRet == nil {
+			m.initCtrlrs[i].FWRev = m.fwRevAfter
+		}
+	}
+
+	return m.initCtrlrs, m.initNss, m.updateRet
 }
 
 func (m *mockSpdkNvme) Cleanup() { return }
@@ -519,52 +538,280 @@ func TestFormatNvme(t *testing.T) {
 		if tt.inited {
 			AssertEqual(
 				t, sn.controllers[0], pbC,
-				"unexpected list of protobuf format controllers, "+tt.desc)
+				"unexpected list of discovered controllers, "+tt.desc)
 		}
 	}
 }
 
 func TestUpdateNvmeStorage(t *testing.T) {
 	tests := []struct {
-		inited bool
-		errMsg string
+		inited       bool
+		devUpdateRet error
+		pciAddrs     []string                   // pci addresses in config to be updated
+		startRev     string                     // only update if at specified starting revision
+		endRev       string                     // force resultant revision to test no change
+		initCtrlrs   []Controller               // initially discovered ctrlrs
+		expResults   []*pb.NvmeControllerResult // expected response results
+		expCtrlrs    []*pb.NvmeController       // expected resultant ctrlr details
+		desc         string
 	}{
 		{
-			true,
-			"",
+			inited: true,
+			desc:   "no devices",
 		},
 		{
-			false,
-			"nvme storage not initialized",
+			inited: false,
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_APP,
+						Error:  msgBdevNotInited,
+					},
+				},
+			},
+			desc: "not initialized",
+		},
+		{
+			inited:   true,
+			pciAddrs: []string{""},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+						Error:  msgBdevEmpty,
+					},
+				},
+			},
+			desc: "empty device string",
+		},
+		{
+			inited:     true,
+			pciAddrs:   []string{"0000:81:00.0"},
+			startRev:   "1.0.0",
+			initCtrlrs: []Controller{MockController("1.0.0")},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:81:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_SUCCESS,
+						Error:  "",
+					},
+				},
+			},
+			expCtrlrs: []*pb.NvmeController{
+				NewMockControllerPB(
+					"0000:81:00.0", "1.0.1",
+					[]*pb.NvmeController_Namespace(nil)),
+			},
+			desc: "single device successfully discovered",
+		},
+		{
+			inited:   true,
+			pciAddrs: []string{"0000:81:00.0"},
+			startRev: "1.0.0",
+			initCtrlrs: []Controller{ // device at address not discovered
+				NewMockController("0000:aa:00.0", "1.0.0"),
+			},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:81:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error:  "0000:81:00.0: " + msgBdevNotFound,
+					},
+				},
+			},
+			expCtrlrs: []*pb.NvmeController{
+				NewMockControllerPB(
+					"0000:aa:00.0", "1.0.0",
+					[]*pb.NvmeController_Namespace(nil)),
+			},
+			desc: "single device not discovered",
+		},
+		{
+			inited:   true,
+			pciAddrs: []string{"0000:81:00.0"},
+			startRev: "1.0.0",
+			initCtrlrs: []Controller{ // device has different start rev
+				NewMockController("0000:81:00.0", "2.0.0"),
+			},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:81:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: "0000:81:00.0: " +
+							msgBdevFwrevStartMismatch +
+							" want 1.0.0, have 2.0.0",
+					},
+				},
+			},
+			expCtrlrs: []*pb.NvmeController{
+				NewMockControllerPB(
+					"0000:81:00.0", "2.0.0",
+					[]*pb.NvmeController_Namespace(nil)),
+			},
+			desc: "single device different starting rev",
+		},
+		{
+			inited:       true,
+			pciAddrs:     []string{"0000:81:00.0"},
+			startRev:     "1.0.0",
+			devUpdateRet: errors.New("spdk format failed"),
+			initCtrlrs: []Controller{
+				NewMockController("0000:81:00.0", "1.0.0"),
+			},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:81:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: "0000:81:00.0: " +
+							"*main.mockSpdkNvme: " +
+							"spdk format failed",
+					},
+				},
+			},
+			expCtrlrs: []*pb.NvmeController{
+				NewMockControllerPB(
+					"0000:81:00.0", "1.0.0",
+					[]*pb.NvmeController_Namespace(nil)),
+			},
+			desc: "single device update fails",
+		},
+		{
+			inited:   true,
+			pciAddrs: []string{"0000:81:00.0"},
+			startRev: "1.0.0",
+			endRev:   "1.0.0", // force resultant rev
+			initCtrlrs: []Controller{
+				NewMockController("0000:81:00.0", "1.0.0"),
+			},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:81:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_SUCCESS,
+						Error:  "",
+					},
+				},
+			},
+			expCtrlrs: []*pb.NvmeController{
+				NewMockControllerPB(
+					"0000:81:00.0", "1.0.0",
+					[]*pb.NvmeController_Namespace(nil)),
+			},
+			desc: "single device same rev after update",
+		},
+		{
+			inited:   true,
+			pciAddrs: []string{"0000:81:00.0", "0000:81:00.1", "0000:aa:00.0"},
+			startRev: "1.0.0",
+			initCtrlrs: []Controller{
+				NewMockController("0000:aa:00.0", "1.0.1"),
+				NewMockController("0000:81:00.1", "1.0.0"),
+			},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:81:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error:  "0000:81:00.0: " + msgBdevNotFound,
+					},
+				},
+				{
+					Pciaddr: "0000:81:00.1",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_SUCCESS,
+						Error:  "",
+					},
+				},
+				{
+					Pciaddr: "0000:aa:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: "0000:aa:00.0: " +
+							msgBdevFwrevStartMismatch +
+							" want 1.0.0, have 1.0.1",
+					},
+				},
+			},
+			expCtrlrs: []*pb.NvmeController{
+				NewMockControllerPB(
+					"0000:aa:00.0", "1.0.1",
+					[]*pb.NvmeController_Namespace(nil)),
+				NewMockControllerPB(
+					"0000:81:00.1", "1.0.1",
+					[]*pb.NvmeController_Namespace(nil)),
+			},
+			desc: "multiple devices one missing, one diff start rev",
 		},
 	}
 
-	// expected Controller protobuf representation should have updated
-	// firmware revision
-	c := MockControllerPB("1.0.1")
-	srvIdx := 0
+	srvIdx := 0 // assume just a single io_server (index 0)
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		sn := defaultMockNvmeStorage(&config)
+		config.Servers[srvIdx].BdevList = tt.pciAddrs
+
+		// create nvmeStorage struct with customised test behaviour
+		sn := newMockNvmeStorage(
+			defaultMockSpdkEnv(),
+			newMockSpdkNvme(
+				"1.0.0", "1.0.1", // before/after fw revs
+				tt.initCtrlrs, []Namespace{}, // Nss ignored
+				nil, nil, tt.devUpdateRet),
+			false, &config)
+
+		resp := new(pb.UpdateStorageResp)
 
 		if tt.inited {
-			// not concerned with response
-			sn.Discover(new(pb.ScanStorageResp))
+			sn.Discover(new(pb.ScanStorageResp)) // not concerned with response
 		}
 
-		if err := sn.Update(srvIdx, c.Pciaddr, "", 0); err != nil {
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, "")
-				continue
+		// call with desired starting fwrev and response to populate
+		sn.Update(srvIdx, tt.startRev, "", 0, resp)
+
+		// verify expected response results have been populated
+		AssertEqual(
+			t, len(resp.Crets), len(tt.expResults),
+			"unexpected number of response results, "+tt.desc)
+
+		successPciaddrs := []string{}
+		for i, result := range resp.Crets {
+			AssertEqual(
+				t, result.State.Error, tt.expResults[i].State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status, tt.expResults[i].State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Pciaddr, tt.expResults[i].Pciaddr,
+				"unexpected pciaddr, "+tt.desc)
+
+			if result.State.Status == pb.ResponseStatus_CTRL_SUCCESS {
+				successPciaddrs = append(successPciaddrs, result.Pciaddr)
 			}
-			t.Fatal(err)
 		}
 
-		//fmt.Printf("%+v != %+v\n", sn.controllers[0], []*pb.NvmeController{c}[0])
-		//		AssertEqual(
-		//			t, sn.controllers, []*pb.NvmeController{c},
-		//			"unexpected list of protobuf format controllers")
+		// verify controller details have been updated
+		AssertEqual(
+			t, len(sn.controllers), len(tt.expCtrlrs),
+			"unexpected number of controllers, "+tt.desc)
+
+		for i, c := range sn.controllers {
+			if tt.endRev != "" {
+				c.Fwrev = tt.endRev
+			}
+
+			AssertEqual(
+				t, c, tt.expCtrlrs[i],
+				fmt.Sprintf(
+					"entry %d in list of discovered controllers, %s\n",
+					i, tt.desc))
+		}
 	}
 }
 
