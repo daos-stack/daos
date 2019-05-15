@@ -62,6 +62,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 	strncpy(dfs->dffs_cont, name, NAME_MAX);
+	strncpy(dfs->dffs_pool, parent->ie_dfs->dffs_pool, NAME_MAX);
 
 	if (create) {
 		rc = daos_cont_create(parent->ie_dfs->dffs_poh, co_uuid,
@@ -71,16 +72,39 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 					rc);
 			D_GOTO(err, 0);
 		}
+	} else {
+		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
+		if (rc == -DER_SUCCESS) {
+			struct fuse_entry_param	entry = {0};
+
+			DFUSE_TRA_INFO(ie,
+				       "Reusing existing container entry without reconnect");
+
+			D_FREE(dfs);
+
+			/* Update the stat information, but copy in the
+			 * inode value afterwards.
+			 */
+			rc = dfs_ostat(ie->ie_dfs->dffs_dfs,
+				       ie->ie_obj, &entry.attr);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%d)",
+						rc);
+				D_GOTO(err, 0);
+			}
+
+			entry.attr.st_ino = ie->ie_stat.st_ino;
+			entry.generation = 1;
+			entry.ino = entry.attr.st_ino;
+			DFUSE_REPLY_ENTRY(req, entry);
+			return true;
+		}
 	}
 
 	rc = daos_cont_open(parent->ie_dfs->dffs_poh, co_uuid,
 			    DAOS_COO_RW, &dfs->dffs_coh, &dfs->dffs_co_info,
 			    NULL);
-	if (rc == -DER_NONEXIST) {
-		DFUSE_LOG_INFO("daos_cont_open() failed: (%d)",
-			       rc);
-		D_GOTO(err, rc = ENOENT);
-	} else if (rc != -DER_SUCCESS) {
+	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)",
 				rc);
 		D_GOTO(err, 0);

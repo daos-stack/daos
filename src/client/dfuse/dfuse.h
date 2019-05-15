@@ -317,18 +317,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_FUSE_REPLY_STATFS(dfuse_req, stat)			\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning statfs");	\
-		__rc = fuse_reply_statfs((dfuse_req)->req, stat);	\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
-					"fuse_reply_statfs returned %d:%s", \
-					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
-	} while (0)
-
 #define DFUSE_REPLY_IOCTL(handle, req, gah_info)			\
 	do {								\
 		int __rc;						\
@@ -550,6 +538,11 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		   struct dfuse_dfs *dfs,
 		   daos_obj_id_t *oid,
 		   ino_t *_ino);
+
+int
+dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
+		      struct dfuse_dfs *dfs,
+		      struct dfuse_inode_entry **_entry);
 
 int
 find_inode(struct dfuse_request *);

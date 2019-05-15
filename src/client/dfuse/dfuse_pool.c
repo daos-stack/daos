@@ -63,6 +63,25 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 	strncpy(dfs->dffs_pool, name, NAME_MAX);
 
+	{
+		struct fuse_entry_param	entry = {0};
+
+		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
+		if (rc == -DER_SUCCESS) {
+
+			DFUSE_TRA_INFO(ie,
+				       "Reusing existing pool entry without reconnect");
+
+			D_FREE(dfs);
+
+			entry.attr = ie->ie_stat;
+			entry.generation = 1;
+			entry.ino = entry.attr.st_ino;
+			DFUSE_REPLY_ENTRY(req, entry);
+			return true;
+		}
+	}
+
 	rc = daos_pool_connect(pool_uuid, dfuse_info->dfi_dfd.group,
 			       dfuse_info->dfi_dfd.svcl, DAOS_PC_RW,
 			       &dfs->dffs_poh, &dfs->dffs_pool_info,
