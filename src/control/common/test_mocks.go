@@ -60,12 +60,12 @@ func MockControllerPB(fwRev string) *pb.NvmeController {
 
 // NewMockControllerPB generates specific protobuf controller message
 func NewMockControllerPB(
-	pciAddr string, fwRev string,
+	pciAddr string, fwRev string, model string, serial string,
 	nss []*pb.NvmeController_Namespace) *pb.NvmeController {
 
 	return &pb.NvmeController{
-		Model:      "ABC",
-		Serial:     "123ABC",
+		Model:      model,
+		Serial:     serial,
 		Pciaddr:    pciAddr,
 		Fwrev:      fwRev,
 		Namespaces: nss,

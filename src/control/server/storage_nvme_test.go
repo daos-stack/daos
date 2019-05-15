@@ -48,11 +48,12 @@ func MockController(fwrev string) Controller {
 }
 
 // NewMockController specifies customer details fr a mock NVMe SSD controller.
-func NewMockController(pciaddr string, fwrev string) Controller {
-	c := MockControllerPB(fwrev)
+func NewMockController(
+	pciaddr string, fwrev string, model string, serial string) Controller {
+
 	return Controller{
-		Model:   c.Model,
-		Serial:  c.Serial,
+		Model:   model,
+		Serial:  serial,
 		PCIAddr: pciaddr,
 		FWRev:   fwrev,
 	}
@@ -544,11 +545,23 @@ func TestFormatNvme(t *testing.T) {
 }
 
 func TestUpdateNvmeStorage(t *testing.T) {
+	pciAddr := "0000:81:00.0" // default pciaddr for tests
+	model := "ABC"            // only update if ctrlr model name matches
+	serial := "123ABC"
+	startRev := "1.0.0" // only update if at specified starting revision
+	endRev := "1.0.1"   // only update if at specified starting revision
+	newDefaultCtrlrs := func(rev string) []*pb.NvmeController {
+		return []*pb.NvmeController{
+			NewMockControllerPB(
+				pciAddr, rev, model, serial,
+				[]*pb.NvmeController_Namespace(nil)),
+		}
+	}
+
 	tests := []struct {
 		inited       bool
 		devUpdateRet error
 		pciAddrs     []string                   // pci addresses in config to be updated
-		startRev     string                     // only update if at specified starting revision
 		endRev       string                     // force resultant revision to test no change
 		initCtrlrs   []Controller               // initially discovered ctrlrs
 		expResults   []*pb.NvmeControllerResult // expected response results
@@ -588,61 +601,72 @@ func TestUpdateNvmeStorage(t *testing.T) {
 		},
 		{
 			inited:     true,
-			pciAddrs:   []string{"0000:81:00.0"},
-			startRev:   "1.0.0",
-			initCtrlrs: []Controller{MockController("1.0.0")},
+			pciAddrs:   []string{pciAddr},
+			initCtrlrs: []Controller{MockController(startRev)},
 			expResults: []*pb.NvmeControllerResult{
 				{
-					Pciaddr: "0000:81:00.0",
+					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_SUCCESS,
 						Error:  "",
 					},
 				},
 			},
-			expCtrlrs: []*pb.NvmeController{
-				NewMockControllerPB(
-					"0000:81:00.0", "1.0.1",
-					[]*pb.NvmeController_Namespace(nil)),
+			expCtrlrs: newDefaultCtrlrs(endRev),
+			desc:      "single device successfully discovered",
+		},
+		{
+			inited:     true,
+			pciAddrs:   []string{"0000:aa:00.0"},
+			initCtrlrs: []Controller{MockController(startRev)},
+			expResults: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: "0000:aa:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error:  "0000:aa:00.0: " + msgBdevNotFound,
+					},
+				},
 			},
-			desc: "single device successfully discovered",
+			expCtrlrs: newDefaultCtrlrs(startRev),
+			desc:      "single device not discovered",
 		},
 		{
 			inited:   true,
-			pciAddrs: []string{"0000:81:00.0"},
-			startRev: "1.0.0",
-			initCtrlrs: []Controller{ // device at address not discovered
-				NewMockController("0000:aa:00.0", "1.0.0"),
+			pciAddrs: []string{pciAddr},
+			initCtrlrs: []Controller{ // device has different model
+				NewMockController(pciAddr, startRev, "UKNOWN1", serial),
 			},
 			expResults: []*pb.NvmeControllerResult{
 				{
-					Pciaddr: "0000:81:00.0",
+					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error:  "0000:81:00.0: " + msgBdevNotFound,
+						Error: pciAddr + ": " +
+							msgBdevModelMismatch +
+							" want " + model + ", have UKNOWN1",
 					},
 				},
 			},
 			expCtrlrs: []*pb.NvmeController{
 				NewMockControllerPB(
-					"0000:aa:00.0", "1.0.0",
+					pciAddr, startRev, "UKNOWN1", serial,
 					[]*pb.NvmeController_Namespace(nil)),
 			},
-			desc: "single device not discovered",
+			desc: "single device different model",
 		},
 		{
 			inited:   true,
-			pciAddrs: []string{"0000:81:00.0"},
-			startRev: "1.0.0",
+			pciAddrs: []string{pciAddr},
 			initCtrlrs: []Controller{ // device has different start rev
-				NewMockController("0000:81:00.0", "2.0.0"),
+				NewMockController(pciAddr, "2.0.0", model, serial),
 			},
 			expResults: []*pb.NvmeControllerResult{
 				{
-					Pciaddr: "0000:81:00.0",
+					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error: "0000:81:00.0: " +
+						Error: pciAddr + ": " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 2.0.0",
 					},
@@ -650,75 +674,63 @@ func TestUpdateNvmeStorage(t *testing.T) {
 			},
 			expCtrlrs: []*pb.NvmeController{
 				NewMockControllerPB(
-					"0000:81:00.0", "2.0.0",
+					pciAddr, "2.0.0", model, serial,
 					[]*pb.NvmeController_Namespace(nil)),
 			},
 			desc: "single device different starting rev",
 		},
 		{
 			inited:       true,
-			pciAddrs:     []string{"0000:81:00.0"},
-			startRev:     "1.0.0",
+			pciAddrs:     []string{pciAddr},
 			devUpdateRet: errors.New("spdk format failed"),
-			initCtrlrs: []Controller{
-				NewMockController("0000:81:00.0", "1.0.0"),
-			},
+			initCtrlrs:   []Controller{MockController(startRev)},
 			expResults: []*pb.NvmeControllerResult{
 				{
-					Pciaddr: "0000:81:00.0",
+					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error: "0000:81:00.0: " +
+						Error: pciAddr + ": " +
 							"*main.mockSpdkNvme: " +
 							"spdk format failed",
 					},
 				},
 			},
-			expCtrlrs: []*pb.NvmeController{
-				NewMockControllerPB(
-					"0000:81:00.0", "1.0.0",
-					[]*pb.NvmeController_Namespace(nil)),
-			},
-			desc: "single device update fails",
+			expCtrlrs: newDefaultCtrlrs(startRev),
+			desc:      "single device update fails",
 		},
 		{
-			inited:   true,
-			pciAddrs: []string{"0000:81:00.0"},
-			startRev: "1.0.0",
-			endRev:   "1.0.0", // force resultant rev
-			initCtrlrs: []Controller{
-				NewMockController("0000:81:00.0", "1.0.0"),
-			},
+			inited:     true,
+			pciAddrs:   []string{pciAddr},
+			endRev:     startRev, // force resultant rev
+			initCtrlrs: []Controller{MockController(startRev)},
 			expResults: []*pb.NvmeControllerResult{
 				{
-					Pciaddr: "0000:81:00.0",
+					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_SUCCESS,
 						Error:  "",
 					},
 				},
 			},
-			expCtrlrs: []*pb.NvmeController{
-				NewMockControllerPB(
-					"0000:81:00.0", "1.0.0",
-					[]*pb.NvmeController_Namespace(nil)),
-			},
-			desc: "single device same rev after update",
+			expCtrlrs: newDefaultCtrlrs(startRev),
+			desc:      "single device same rev after update",
 		},
 		{
-			inited:   true,
-			pciAddrs: []string{"0000:81:00.0", "0000:81:00.1", "0000:aa:00.0"},
-			startRev: "1.0.0",
+			inited: true,
+			pciAddrs: []string{
+				pciAddr, "0000:81:00.1", "0000:aa:00.0", "0000:ab:00.0",
+			},
 			initCtrlrs: []Controller{
-				NewMockController("0000:aa:00.0", "1.0.1"),
-				NewMockController("0000:81:00.1", "1.0.0"),
+				NewMockController("0000:ab:00.0", startRev, "UKN", serial),
+				NewMockController("0000:aa:00.0", endRev, model, serial),
+				NewMockController("0000:81:00.1", startRev, model, serial),
 			},
 			expResults: []*pb.NvmeControllerResult{
 				{
-					Pciaddr: "0000:81:00.0",
+					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error:  "0000:81:00.0: " + msgBdevNotFound,
+						Error:  pciAddr + ": " + msgBdevNotFound,
 					},
 				},
 				{
@@ -737,16 +749,28 @@ func TestUpdateNvmeStorage(t *testing.T) {
 							" want 1.0.0, have 1.0.1",
 					},
 				},
+				{
+					Pciaddr: "0000:ab:00.0",
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: "0000:ab:00.0: " +
+							msgBdevModelMismatch +
+							" want ABC, have UKN",
+					},
+				},
 			},
 			expCtrlrs: []*pb.NvmeController{
 				NewMockControllerPB(
-					"0000:aa:00.0", "1.0.1",
+					"0000:ab:00.0", startRev, "UKN", serial,
 					[]*pb.NvmeController_Namespace(nil)),
 				NewMockControllerPB(
-					"0000:81:00.1", "1.0.1",
+					"0000:aa:00.0", endRev, model, serial,
+					[]*pb.NvmeController_Namespace(nil)),
+				NewMockControllerPB(
+					"0000:81:00.1", endRev, model, serial,
 					[]*pb.NvmeController_Namespace(nil)),
 			},
-			desc: "multiple devices one missing, one diff start rev",
+			desc: "multiple devices (missing,mismatch rev/model,success)",
 		},
 	}
 
@@ -760,7 +784,7 @@ func TestUpdateNvmeStorage(t *testing.T) {
 		sn := newMockNvmeStorage(
 			defaultMockSpdkEnv(),
 			newMockSpdkNvme(
-				"1.0.0", "1.0.1", // before/after fw revs
+				startRev, endRev, // before/after fw revs
 				tt.initCtrlrs, []Namespace{}, // Nss ignored
 				nil, nil, tt.devUpdateRet),
 			false, &config)
@@ -772,7 +796,7 @@ func TestUpdateNvmeStorage(t *testing.T) {
 		}
 
 		// call with desired starting fwrev and response to populate
-		sn.Update(srvIdx, tt.startRev, "", 0, resp)
+		sn.Update(srvIdx, startRev, model, "", 0, resp)
 
 		// verify expected response results have been populated
 		AssertEqual(

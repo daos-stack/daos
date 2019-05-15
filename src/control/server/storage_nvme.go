@@ -58,16 +58,8 @@ var (
 	msgSpdkDiscoverFail       = "SPDK controller discovery"
 	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
+	msgBdevModelMismatch      = "controller model unexpected"
 )
-
-// newNvmeStorageErrLogger is a factory creating context aware local log util
-func newNvmeStorageErrLogger(op string) func(e error) {
-	return func(e error) {
-		log.Errordf(
-			common.UtilLogDepth,
-			errors.WithMessage(e, "nvme storage "+op).Error())
-	}
-}
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
@@ -132,15 +124,6 @@ func (s *spdkSetup) reset() error {
 		srv.Run(),
 		"spdk reset failed (%s)",
 		stderr.String())
-}
-
-// NvmeStorage interface specifies basic functionality for subsystem
-type NvmeStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-	Update(string) error
 }
 
 // nvmeStorage gives access to underlying SPDK interfaces
@@ -352,9 +335,10 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 // Update populates resp NvmeControllerResult for each NVMe controller
 // specified in config file bdev_list param.
 //
-// Firmware will only be updated if the controller reports the current fw rev
-// to be the same as the "startRev" fn parameter. path and slot refer to the
-// fw image file location and controller fw register to update respectively.
+// Firmware will only be updated if the controller the current fw rev
+// and model match the "startRev" and "model" fn parameters respectively.
+// Path and slot params refer to the fw image file location and controller
+// firmware register to update respectively.
 //
 // One result with empty Pciaddr will be reported if there are preliminary
 // errors occurring before devices could be accessed. Otherwise a result will
@@ -362,7 +346,7 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 //
 // TODO: take model name/number to verify we are updating expected model
 func (n *nvmeStorage) Update(
-	i int, startRev string, path string, slot int32,
+	i int, startRev string, model string, path string, slot int32,
 	resp *pb.UpdateStorageResp) {
 
 	var pciAddr string
@@ -400,6 +384,17 @@ func (n *nvmeStorage) Update(
 				addCretUpdate(
 					pb.ResponseStatus_CTRL_ERR_NVME,
 					pciAddr+": "+msgBdevNotFound)
+				continue
+			}
+
+			if ctrlr.Model != model {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(
+						pciAddr+": "+
+							msgBdevModelMismatch+
+							" want %s, have %s",
+						model, ctrlr.Model))
 				continue
 			}
 
