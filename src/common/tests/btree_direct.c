@@ -182,6 +182,27 @@ sk_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	return 0;
 }
 
+
+static int
+sk_hkey_size(void)
+{
+	return DAOS_HKEY_MAX;
+}
+
+static void
+sk_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+{
+	if (key && hkey) {
+		char *hash = hkey;
+
+		uint32_t hash_part = d_hash_string_u32(key->iov_buf,
+			(int)key->iov_len);
+		sprintf(hash, "HASH: %"PRIu32, hash_part);
+
+		D_ASSERT(strlen(hash) + 1 <= DAOS_HKEY_MAX);
+	}
+}
+
 static int
 sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	     daos_iov_t *key_iov, daos_iov_t *val_iov)
@@ -295,6 +316,8 @@ static btr_ops_t sk_ops = {
 	.to_rec_update	= sk_rec_update,
 	.to_rec_string	= sk_rec_string,
 	.to_rec_stat	= sk_rec_stat,
+	.to_hkey_size	= sk_hkey_size,
+	.to_hkey_gen	= sk_hkey_gen,
 };
 
 #define SK_SEP		','
@@ -306,9 +329,9 @@ sk_btr_open_create(void **state)
 	bool		inplace = false;
 	uint64_t	feats = BTR_FEAT_DIRECT_KEY;
 	int		rc;
-	bool	create;
-	char	*arg;
-	char	outbuf[64];
+	bool		create;
+	char	       *arg;
+	char		outbuf[64];
 
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
@@ -318,6 +341,10 @@ sk_btr_open_create(void **state)
 	}
 
 	if (create && arg != NULL) {
+		if (arg[0] == 'x') {
+			feats |= BTR_FEAT_CSUM;
+			arg++;
+		}
 		if (arg[0] == 'i') { /* inplace create/open */
 			inplace = true;
 			if (arg[1] != SK_SEP) {
@@ -1156,7 +1183,8 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_class_register(SK_TREE_CLASS, BTR_FEAT_DIRECT_KEY, &sk_ops);
+	rc = dbtree_class_register(SK_TREE_CLASS,
+		BTR_FEAT_DIRECT_KEY | BTR_FEAT_CSUM, &sk_ops);
 	D_ASSERT(rc == 0);
 
 	optind = 0;

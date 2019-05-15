@@ -69,6 +69,7 @@ struct btr_class {
 union btr_rec_buf {
 	struct btr_record		rb_rec;
 	struct {
+		struct btr_hash_direct	hash_node;
 		struct btr_record	rec;
 		char			key[DAOS_HKEY_MAX];
 	}				rb_buf;
@@ -177,11 +178,18 @@ btr_has_tx(struct btr_context *tcx)
 }
 
 #define BTR_IS_DIRECT_KEY(feats) ((feats) & BTR_FEAT_DIRECT_KEY)
+#define BTR_IS_CSUM_ENABLED(feats) ((feats) & BTR_FEAT_CSUM)
 
 static bool
 btr_is_direct_key(struct btr_context *tcx)
 {
 	return BTR_IS_DIRECT_KEY(tcx->tc_feats);
+}
+
+static bool
+btr_is_csum_enabled(struct btr_context *tcx)
+{
+	return BTR_IS_CSUM_ENABLED(tcx->tc_feats);
 }
 
 #define BTR_IS_UINT_KEY(feats) ((feats) & BTR_FEAT_UINT_KEY)
@@ -392,6 +400,9 @@ btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
 	int size;
 
+	if (BTR_IS_DIRECT_KEY(feats) && BTR_IS_CSUM_ENABLED(feats))
+		return sizeof(umem_off_t) + ops->to_hkey_size();
+
 	if (BTR_IS_DIRECT_KEY(feats))
 		return sizeof(umem_off_t);
 
@@ -416,7 +427,7 @@ btr_hkey_size(struct btr_context *tcx)
 static void
 btr_hkey_gen(struct btr_context *tcx, daos_iov_t *key, void *hkey)
 {
-	if (btr_is_direct_key(tcx)) {
+	if (btr_is_direct_key(tcx) && !btr_is_csum_enabled(tcx)) {
 		/* We store umem offset to record when bubbling up */
 		return;
 	}
@@ -918,7 +929,7 @@ btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
 }
 
 struct btr_check_alb {
-	umem_off_t	nd_off;
+	umem_off_t		nd_off;
 	int			at;
 	uint32_t		intent;
 };
@@ -1063,7 +1074,7 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	struct btr_node		*nd_right;
 	umem_off_t		 off_left;
 	umem_off_t		 off_right;
-	char			 hkey_buf[DAOS_HKEY_MAX];
+	char			 hkey_buf[DAOS_HKEY_MAX + sizeof(umem_off_t)];
 	int			 split_at;
 	int			 level;
 	int			 rc;
@@ -1102,7 +1113,11 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 		/* insert the right node and the first key of the right
 		 * node to its parent
 		 */
-		if (btr_is_direct_key(tcx))
+		if (btr_is_direct_key(tcx) && btr_is_csum_enabled(tcx)) {
+			rec->rec_hnode->rec_node = off_right;
+			btr_hkey_copy(tcx, &rec->rec_hnode->rec_hkey[0],
+				      &rec_dst->rec_hnode->rec_hkey[0]);
+		} else if (btr_is_direct_key(tcx))
 			rec->rec_node[0] = off_right;
 		else
 			btr_rec_copy_hkey(tcx, rec, rec_dst);
@@ -1194,9 +1209,13 @@ btr_cmp(struct btr_context *tcx, umem_off_t nd_off,
 	rec = btr_node_rec_at(tcx, nd_off, at);
 	if (btr_is_direct_key(tcx)) {
 		/* For direct keys, resolve the offset in the record */
-		if (!btr_node_is_leaf(tcx, nd_off))
-			rec = btr_node_rec_at(tcx, rec->rec_node[0], 0);
-
+		if (!btr_node_is_leaf(tcx, nd_off)) {
+			if (btr_is_csum_enabled(tcx))
+				rec = btr_node_rec_at(tcx,
+					rec->rec_hnode->rec_node, 0);
+			else
+				rec = btr_node_rec_at(tcx, rec->rec_node[0], 0);
+		}
 		cmp = btr_key_cmp(tcx, rec, key);
 	} else {
 		if (hkey) {
@@ -1746,8 +1765,13 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	union btr_rec_buf  rec_buf;
 	int		   rc;
 
+	memset(&rec_buf, 0, sizeof(rec_buf));
 	rec = &rec_buf.rb_rec;
-	btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
+
+	if (btr_is_direct_key(tcx) && btr_is_csum_enabled(tcx))
+		btr_hkey_gen(tcx, key, &rec->rec_hnode->rec_hkey[0]);
+	else
+		btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
 
 	rc = btr_rec_alloc(tcx, key, val, rec);
 	if (rc != 0) {
@@ -2010,8 +2034,15 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 		 */
 		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
 
-		/* NB: Direct key of parent already points here */
-		if (!btr_is_direct_key(tcx))
+		if (btr_is_direct_key(tcx) && btr_is_csum_enabled(tcx)) {
+			/* backup it because the below btr_rec_copy_hkey may
+			 * overwrite it. Want the parent node to stay
+			 */
+			umem_off_t tmp = par_rec->rec_hnode->rec_node;
+
+			btr_rec_copy_hkey(tcx, par_rec, src_rec);
+			par_rec->rec_hnode->rec_node = tmp;
+		} else if (!btr_is_direct_key(tcx))
 			btr_rec_copy_hkey(tcx, par_rec, src_rec);
 	} else {
 		/* grab the last record from the left sibling */
@@ -2024,8 +2055,16 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 		par_rec = btr_node_rec_at(tcx, par_tr->tr_node,
 					  par_tr->tr_at - 1);
 		/* NB: Direct key of parent already points to this leaf */
-		if (!btr_is_direct_key(tcx))
-			btr_rec_copy_hkey(tcx, par_rec, dst_rec);
+		if (btr_is_direct_key(tcx) && btr_is_csum_enabled(tcx)) {
+			/* backup it because the below btr_rec_copy_hkey may
+			 * overwrite it. Want the parent node to stay
+			 */
+			umem_off_t tmp = par_rec->rec_hnode->rec_node;
+
+			btr_rec_copy_hkey(tcx, par_rec, src_rec);
+			par_rec->rec_hnode->rec_node = tmp;
+		} else if (!btr_is_direct_key(tcx))
+			btr_rec_copy_hkey(tcx, par_rec, src_rec);
 	}
 	cur_nd->tn_keyn++;
 	sib_nd->tn_keyn--;

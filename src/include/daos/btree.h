@@ -34,6 +34,14 @@
 #include <daos/mem.h>
 
 /**
+ * With Checksum enabled, direct key should still have a hash
+ */
+struct btr_hash_direct {
+	umem_off_t		rec_node; /* direct key */
+	char		rec_hkey[0]; /* hashed key */
+};
+
+/**
  * KV record of the btree.
  *
  * NB: could be PM data structure.
@@ -63,6 +71,7 @@ struct btr_record {
 		char			rec_hkey[0]; /* hashed key */
 		uint64_t		rec_ukey[0]; /* uint key */
 		umem_off_t		rec_node[0]; /* direct key */
+		struct btr_hash_direct	rec_hnode[0]; /* direct key with hash */
 	};
 };
 
@@ -531,6 +540,7 @@ enum btr_feats {
 	 * to_key_cmp callback
 	 */
 	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	BTR_FEAT_CSUM			= (1 << 2),
 };
 
 /**
