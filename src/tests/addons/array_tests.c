@@ -1030,6 +1030,7 @@ large_io(void **state) {
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
 static const struct CMUnitTest array_io_tests[] = {
