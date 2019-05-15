@@ -354,9 +354,11 @@ def read_during_rebuild(
     incomplete = True
     failed_reads = False
     while not is_pool_rebuild_complete(pool, log) and incomplete:
+        # Continue to read records until all of the records have been read and
+        # while the rebuild is still in progress
         incomplete = obj_index < len(object_list)
         if incomplete:
-            # Read the data from the previously written record
+            # Define the arguments common to the read_* functions
             record_info = {
                 "container": container,
                 "size": data_size,
@@ -364,8 +366,13 @@ def read_during_rebuild(
                 "akey": object_list[obj_index]["record"][rec_index]["akey"],
                 "obj": object_list[obj_index]["obj"],
                 "txn": object_list[obj_index]["txn"]}
+
+            # The read_array_objects() function needs one additional argument
             if read_method.__name__ == "read_array_objects":
                 record_info["items"] = data_size + 1
+
+            # Use the specified read_* method to read this record from the
+            # container using the original dkey, akey, object, and txn
             read_data = read_method(**record_info)
 
             # Verify the data just read matches the original data written
