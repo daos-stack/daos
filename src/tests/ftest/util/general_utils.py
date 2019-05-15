@@ -205,7 +205,8 @@ def get_pool_status(pool, log):
         log (logging): logging object used to report the pool status
 
     Returns:
-        None
+        PoolInfo: the PoolInfo object returned by the pool's pool_query()
+                  function
 
     """
     pool_info = pool.pool_query()
