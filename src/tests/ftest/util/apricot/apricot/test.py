@@ -143,15 +143,15 @@ class TestWithServers(TestWithoutServers):
         self.nvme_parameter = None
 
     def init_server_param(self):
-        '''Read the server related paramter from test yaml file'''
+        '''Read the server related parameter from avocado yaml file'''
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
         self.server_group = self.params.get("server_group", '/server/',
                                             'daos_server')
+        self.nvme_parameter = self.params.get("bdev_class", '/server_config/',
+                                              None)
 
     def spdk_setup(self):
         '''SPDK setup for NVMe drives'''
-        self.init_server_param()
-        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
         try:
             if self.nvme_parameter == "nvme":
                 spdk.nvme_setup(self.hostlist_servers)
@@ -167,6 +167,7 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).setUp()
 
         self.init_server_param()
+        self.spdk_setup()
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers,
             self.workdir)
@@ -183,7 +184,10 @@ class TestWithServers(TestWithoutServers):
                 agent_utils.stop_agent(self.hostlist_servers,
                                        self.agent_sessions)
         finally:
-            server_utils.stop_server(hosts=self.hostlist_servers)
+            try:
+                server_utils.stop_server(hosts=self.hostlist_servers)
+            finally:
+                self.spdk_cleanup()
 
         super(TestWithServers, self).tearDown()
 
