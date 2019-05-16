@@ -45,15 +45,8 @@ var (
 	msgScmDevEmpty          = "scm dcpm device list must contain path"
 	msgScmClassNotSupported = "operation unsupported on scm class"
 	msgIpmctlDiscoverFail   = "ipmctl module discovery"
+	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
-
-// ScmStorage interface specifies basic functionality for subsystem
-type ScmStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-}
 
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device
@@ -204,9 +197,9 @@ func (s *scmStorage) makeMount(
 	return
 }
 
-// newMret creates and populates NVMe ctrlr result and logs error through
+// newMntRet creates and populates NVMe ctrlr result and logs error through
 // addState.
-func newMret(
+func newMntRet(
 	op string, mntPoint string, status pb.ResponseStatus, errMsg string,
 	logDepth int) *pb.ScmMountResult {
 
@@ -231,7 +224,7 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 		// log depth should be stack layer registering result
 		resp.Mrets = append(
 			resp.Mrets,
-			newMret(
+			newMntRet(
 				"format", mntPoint, status, errMsg,
 				common.UtilLogDepth+1))
 	}
@@ -320,6 +313,20 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 	log.Debugf("SCM device reset, format and mount completed")
 	s.formatted = true
 	return
+}
+
+// Update is currently a placeholder method stubbing SCM module fw update.
+func (s *scmStorage) Update(i int, resp *pb.UpdateStorageResp) {
+	// respond with single result indicating no implementation
+	resp.Mrets = append(
+		resp.Mrets,
+		&pb.ScmModuleResult{
+			Loc: &pb.ScmModule_Location{},
+			State: addState(
+				pb.ResponseStatus_CTRL_NO_IMPL,
+				msgScmUpdateNotImpl, "",
+				common.UtilLogDepth+1, "scm module update"),
+		})
 }
 
 // newScmStorage creates a new instance of ScmStorage struct.

@@ -62,7 +62,7 @@ func (c *controlService) ScanStorage(
 }
 
 // doFormat performs format on storage subsystems, populates response results
-// in storage subsystem routines and releases wait group if successful.
+// in storage subsystem routines and broadcasts (closes channel) if successful.
 func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 	srv := c.config.Servers[i]
 	serverFormatted := false
@@ -117,6 +117,34 @@ func (c *controlService) FormatStorage(
 	return nil
 }
 
+// Update delegates to Storage implementation's fw update methods to prepare
+// storage for use by DAOS data plane.
+func (c *controlService) UpdateStorage(
+	params *pb.UpdateStorageParams,
+	stream pb.MgmtControl_UpdateStorageServer) error {
+
+	resp := new(pb.UpdateStorageResp)
+
+	for i := range c.config.Servers {
+		// int, startRev string, model string, path string, slot int32,
+		c.nvme.Update(
+			i,
+			params.Nvme.Startrev,
+			params.Nvme.Model,
+			params.Nvme.Path,
+			params.Nvme.Slot,
+			resp)
+		c.scm.Update(i, resp)
+	}
+
+	if err := stream.Send(resp); err != nil {
+		return errors.WithMessagef(err, "sending response (%+v)", resp)
+	}
+
+	return nil
+}
+
+// TODO: to be used during the limitation of fw update feature
 // Burnin delegates to Storage implementation's Burnin methods to prepare
 // storage for use by DAOS data plane.
 func (c *controlService) BurninStorage(
@@ -131,21 +159,6 @@ func (c *controlService) BurninStorage(
 	return nil
 }
 
-// Update delegates to Storage implementation's Burnin methods to prepare
-// storage for use by DAOS data plane.
-func (c *controlService) UpdateStorage(
-	params *pb.UpdateStorageParams,
-	stream pb.MgmtControl_UpdateStorageServer) error {
-
-	// TODO: return something useful like ack in response
-	if err := stream.Send(&pb.UpdateStorageResp{}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// TODO: to be used during the limitation of fw update feature
 //// UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the
 //// fwrev reported changes after update.
 ////

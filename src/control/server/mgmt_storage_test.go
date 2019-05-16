@@ -357,7 +357,7 @@ func TestFormatStorage(t *testing.T) {
 			tt.bClass, tt.bDevs, tt.superblockExists)
 
 		cs := mockControlService(config)
-		cs.Setup() // init and increment WaitGroup countera
+		cs.Setup() // init channel used for sync
 
 		mock := &mockFormatStorageServer{}
 		mockWg := new(sync.WaitGroup)
@@ -417,6 +417,159 @@ func TestFormatStorage(t *testing.T) {
 
 		AssertEqual(t, cs.nvme.formatted, tt.expNvmeFormatted, tt.desc)
 		AssertEqual(t, cs.scm.formatted, tt.expScmFormatted, tt.desc)
+	}
+}
+
+func TestUpdateStorage(t *testing.T) {
+	pciAddr := "0000:81:00.0" // default pciaddr for tests
+
+	tests := []struct {
+		updateRet  error
+		bDevs      []string
+		nvmeParams *pb.UpdateNvmeParams // provided in client gRPC call
+		scmParams  *pb.UpdateScmParams
+		moduleRets []*pb.ScmModuleResult
+		ctrlrRets  []*pb.NvmeControllerResult
+		desc       string
+		errMsg     string
+	}{
+		{
+			desc:  "nvme update success",
+			bDevs: []string{pciAddr},
+			nvmeParams: &pb.UpdateNvmeParams{
+				Startrev: "1.0.0",
+				Model:    "ABC",
+			},
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: pciAddr,
+					State:   new(pb.ResponseState),
+				},
+			},
+			moduleRets: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+		},
+		{
+			desc:  "nvme update wrong model",
+			bDevs: []string{pciAddr},
+			nvmeParams: &pb.UpdateNvmeParams{
+				Startrev: "1.0.0",
+				Model:    "AB",
+			},
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: pciAddr,
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: pciAddr + ": " +
+							msgBdevModelMismatch +
+							" want AB, have ABC",
+					},
+				},
+			},
+			moduleRets: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+		},
+		{
+			desc:  "nvme update wrong starting revision",
+			bDevs: []string{pciAddr},
+			nvmeParams: &pb.UpdateNvmeParams{
+				Startrev: "2.0.0",
+				Model:    "ABC",
+			},
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: pciAddr,
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: pciAddr + ": " +
+							msgBdevFwrevStartMismatch +
+							" want 2.0.0, have 1.0.0",
+					},
+				},
+			},
+			moduleRets: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		config := defaultMockConfig(t)
+		cs := mockControlService(&config)
+		cs.Setup() // init channel used for sync
+
+		mock := &mockUpdateStorageServer{}
+		mockWg := new(sync.WaitGroup)
+		mockWg.Add(1)
+
+		params := &pb.UpdateStorageParams{
+			Nvme: tt.nvmeParams,
+			Scm:  tt.scmParams,
+		}
+
+		go func() {
+			cs.UpdateStorage(params, mock)
+			mockWg.Done()
+		}()
+
+		mockWg.Wait() // wait for test goroutines to complete
+
+		AssertEqual(
+			t, len(mock.Results), 1,
+			"unexpected number of responses sent, "+tt.desc)
+
+		for i, result := range mock.Results[0].Crets {
+			expected := tt.ctrlrRets[i]
+			AssertEqual(
+				t, result.State.Error,
+				expected.State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status,
+				expected.State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Pciaddr,
+				expected.Pciaddr,
+				"unexpected pciaddr, "+tt.desc)
+		}
+
+		for i, result := range mock.Results[0].Mrets {
+			expected := tt.moduleRets[i]
+			AssertEqual(
+				t, result.State.Error,
+				expected.State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status,
+				expected.State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Loc,
+				expected.Loc,
+				"unexpected mntpoint, "+tt.desc)
+		}
 	}
 }
 

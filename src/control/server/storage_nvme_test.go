@@ -391,10 +391,7 @@ func TestFormatNvme(t *testing.T) {
 			[]*pb.NvmeControllerResult{
 				{
 					Pciaddr: "0000:81:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_SUCCESS,
-						Error:  "",
-					},
+					State:   new(pb.ResponseState),
 				},
 			},
 			"single device",
@@ -606,10 +603,7 @@ func TestUpdateNvmeStorage(t *testing.T) {
 			expResults: []*pb.NvmeControllerResult{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_SUCCESS,
-						Error:  "",
-					},
+					State:   new(pb.ResponseState),
 				},
 			},
 			expCtrlrs: newDefaultCtrlrs(endRev),
@@ -706,10 +700,7 @@ func TestUpdateNvmeStorage(t *testing.T) {
 			expResults: []*pb.NvmeControllerResult{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_SUCCESS,
-						Error:  "",
-					},
+					State:   new(pb.ResponseState),
 				},
 			},
 			expCtrlrs: newDefaultCtrlrs(startRev),
@@ -735,10 +726,7 @@ func TestUpdateNvmeStorage(t *testing.T) {
 				},
 				{
 					Pciaddr: "0000:81:00.1",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_SUCCESS,
-						Error:  "",
-					},
+					State:   new(pb.ResponseState),
 				},
 				{
 					Pciaddr: "0000:aa:00.0",
