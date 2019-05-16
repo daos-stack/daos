@@ -97,8 +97,8 @@ class EightServers(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_clients,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions,
+                                       self.hostlist_clients)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def executable(self, iorflags=None):
@@ -137,8 +137,8 @@ class EightServers(Test):
 
             pool_uuid = self.pool.get_uuid_str()
             svc_list = ""
-            for i in range(createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+            for item in range(createsvc):
+                svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
             svc_list = svc_list[:-1]
 
             print ("svc_list: {}".format(svc_list))

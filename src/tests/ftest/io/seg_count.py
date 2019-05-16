@@ -91,8 +91,8 @@ class SegCount(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_clients,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions,
+                                       self.hostlist_clients)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_segcount(self):
@@ -158,8 +158,8 @@ class SegCount(Test):
 
             pool_uuid = self.pool.get_uuid_str()
             svc_list = ""
-            for i in range(createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+            for item in range(createsvc):
+                svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
             svc_list = svc_list[:-1]
 
             ior_utils.run_ior(self.hostfile_clients, ior_flags, iteration,

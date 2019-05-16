@@ -118,7 +118,7 @@ class SimpleCreateDeleteTest(TestWithoutServers):
                 pool.disconnect()
                 pool.destroy(1)
             if self.agent_sessions:
-                agent_utils.stop_agent(hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=hostlist)
 
 if __name__ == "__main__":
