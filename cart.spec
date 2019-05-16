@@ -2,7 +2,7 @@
 
 Name:          cart
 Version:       0.0.1
-Release:       2%{?dist}
+Release:       3%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -29,11 +29,17 @@ Requires: openpa
 Requires: mercury
 Requires: ompi
 Requires: libevent
-Requires: boost
-Requires: libuuid
+%if (0%{?rhel} >= 7)
+Requires:libuuid
+Requires: libyaml
+%else
+%if (0%{?suse_version} >= 1315)
+Requires: libuuid1
+Requires: libyaml-0-2
+%endif
+%endif
 Requires: hwloc
 Requires: openssl
-Requires: libyaml
 
 %description
 Collective and RPC Transport (CaRT)
@@ -73,12 +79,14 @@ CaRT tests
 # remove rpathing from the build
 find . -name SConscript | xargs sed -i -e '/AppendUnique(RPATH=.*)/d'
 
+SL_PREFIX=%{_prefix}                      \
 scons %{?_smp_mflags}                     \
       --config=force                      \
       USE_INSTALLED=all                   \
-      PREFIX=%{?buildroot}
+      PREFIX=%{?buildroot}%{_prefix}
 
 %install
+SL_PREFIX=%{_prefix}                      \
 scons %{?_smp_mflags}                     \
       --config=force                      \
       install                             \
@@ -111,6 +119,13 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Tue May 07 2019 Brian J. Murrell <brian.murrell@intel.com>
+- update for SLES 12.3:
+  - libuuid -> libuuid1
+
+* Thu May 02 2019 Brian J. Murrell <brian.murrell@intel.com>
+- fix build to use _prefix as install does
+
 * Fri Apr 05 2019 Brian J. Murrell <brian.murrell@intel.com>
 - split out devel and tests subpackages
 - have devel depend on the main package since we only have the

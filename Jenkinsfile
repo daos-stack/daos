@@ -167,7 +167,8 @@ pipeline {
                             filename 'Dockerfile-mockbuild.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs  '--build-arg UID=$(id -u)'
+                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
+                                                env.JENKINS_URL
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
@@ -178,16 +179,18 @@ pipeline {
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
                         sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/
-                                      mkdir -p artifacts/
+                           script: '''rm -rf artifacts/centos7/
+                                      mkdir -p artifacts/centos7/
                                       if make srpm; then
                                           if make mockbuild; then
-                                              (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
-                                              createrepo artifacts/
+                                              (cd /var/lib/mock/epel-7-x86_64/result/ &&
+                                               cp -r . $OLDPWD/artifacts/centos7/)
+                                              createrepo artifacts/centos7/
                                           else
                                               rc=\${PIPESTATUS[0]}
-                                              (cd /var/lib/mock/epel-7-x86_64/result/ && cp -r . $OLDPWD/artifacts/)
-                                              cp -af _topdir/SRPMS artifacts/
+                                              (cd /var/lib/mock/epel-7-x86_64/result/ &&
+                                               cp -r . $OLDPWD/artifacts/centos7/)
+                                              cp -af _topdir/SRPMS artifacts/centos7/
                                               exit \$rc
                                           fi
                                       else
@@ -196,7 +199,57 @@ pipeline {
                     }
                     post {
                         always {
-                            archiveArtifacts artifacts: 'artifacts/**'
+                            archiveArtifacts artifacts: 'artifacts/centos7/**'
+                        }
+                        success {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
+                    }
+                }
+                stage('Build RPM on SLES 12.3') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-rpmbuild.sles.12.3'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs  '--build-arg UID=$(id -u) ' +
+                                                 "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/sles12.3/
+                              mkdir -p artifacts/sles12.3/
+                              rm -rf _topdir/SRPMS
+                              if make srpm; then
+                                  rm -rf _topdir/RPMS
+                                  if make rpms; then
+                                      ln _topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
+                                      createrepo artifacts/sles12.3/
+                                  else
+                                      exit \${PIPESTATUS[0]}
+                                  fi
+                              else
+                                  exit \${PIPESTATUS[0]}
+                              fi'''
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'artifacts/sles12.3/**'
                         }
                         success {
                             stepResult name: env.STAGE_NAME, context: "build",
