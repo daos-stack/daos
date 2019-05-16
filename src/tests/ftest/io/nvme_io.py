@@ -44,7 +44,7 @@ class NvmeIo(TestWithServers):
     def setUp(self):
         self.out_queue = None
         self.pool_connect = False
-        super(NvmeIo, self).spdkSetup()
+        super(NvmeIo, self).spdk_setup()
         super(NvmeIo, self).setUp()
 
     def tearDown(self):
@@ -56,7 +56,7 @@ class NvmeIo(TestWithServers):
             try:
                 super(NvmeIo, self).tearDown()
             finally:
-                super(NvmeIo, self).spdkSetup()
+                super(NvmeIo, self).spdk_cleanup()
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """

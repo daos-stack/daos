@@ -140,15 +140,17 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
-	self.nvme_parameter = None
+        self.nvme_parameter = None
 
-    def initserverParam(self):
+    def init_server_param(self):
+        '''Read the server related paramter from test yaml file'''
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
         self.server_group = self.params.get("server_group", '/server/',
                                             'daos_server')
 
-    def spdkSetup(self):
-	self.initserverParam()
+    def spdk_setup(self):
+        '''SPDK setup for NVMe drives'''
+        self.init_server_param()
         self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
         try:
             if self.nvme_parameter == "nvme":
@@ -156,14 +158,15 @@ class TestWithServers(TestWithoutServers):
         except spdk.SpdkFailed as error:
             self.fail("Error setting up NVMe: {}".format(error))
 
-    def spdkCleanup(self):
+    def spdk_cleanup(self):
+        '''SPDK cleanup for NVMe drives'''
         if self.nvme_parameter == "nvme":
             spdk.nvme_cleanup(self.hostlist_servers)
 
     def setUp(self):
         super(TestWithServers, self).setUp()
 
-        self.initserverParam()
+        self.init_server_param()
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers,
             self.workdir)
