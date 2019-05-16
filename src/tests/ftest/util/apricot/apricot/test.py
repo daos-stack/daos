@@ -36,6 +36,7 @@ import fault_config_utils
 import agent_utils
 import server_utils
 import write_host_file
+import spdk
 from daos_api import DaosContext, DaosLog
 
 # pylint: disable=invalid-name
@@ -139,14 +140,30 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
+	self.nvme_parameter = None
+
+    def initserverParam(self):
+        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
+        self.server_group = self.params.get("server_group", '/server/',
+                                            'daos_server')
+
+    def spdkSetup(self):
+	self.initserverParam()
+        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
+        try:
+            if self.nvme_parameter == "nvme":
+                spdk.nvme_setup(self.hostlist_servers)
+        except spdk.SpdkFailed as error:
+            self.fail("Error setting up NVMe: {}".format(error))
+
+    def spdkCleanup(self):
+        if self.nvme_parameter == "nvme":
+            spdk.nvme_cleanup(self.hostlist_servers)
 
     def setUp(self):
         super(TestWithServers, self).setUp()
 
-        self.server_group = self.params.get("server_group", '/server/',
-                                            'daos_server')
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
-
+        self.initserverParam()
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers,
             self.workdir)

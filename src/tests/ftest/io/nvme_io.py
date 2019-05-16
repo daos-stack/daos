@@ -32,7 +32,6 @@ from apricot import TestWithServers
 
 import write_host_file
 import ior_utils
-import spdk
 
 from general_utils import DaosTestError
 from daos_api import DaosPool, DaosApiError
@@ -45,29 +44,19 @@ class NvmeIo(TestWithServers):
     def setUp(self):
         self.out_queue = None
         self.pool_connect = False
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
-        #This is for NVMe Setup
-        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
-        try:
-            if self.nvme_parameter == "nvme":
-                spdk.nvme_setup(self.hostlist_servers)
-        except spdk.SpdkFailed as error:
-            self.fail("Error setting up NVMe: {}".format(error))
+        super(NvmeIo, self).spdkSetup()
         super(NvmeIo, self).setUp()
 
     def tearDown(self):
-        if self.pool_connect:
-            try:
+        try:
+            if self.pool_connect:
                 self.pool.disconnect()
                 self.pool.destroy(1)
-            except:
-                pass
-
-        try:
-            super(NvmeIo, self).tearDown()
         finally:
-            if self.nvme_parameter == "nvme":
-                spdk.nvme_cleanup(self.hostlist_servers)
+            try:
+                super(NvmeIo, self).tearDown()
+            finally:
+                super(NvmeIo, self).spdkSetup()
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """
