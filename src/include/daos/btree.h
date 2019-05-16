@@ -37,7 +37,7 @@
  * With Checksum enabled, direct key should still have a hash
  */
 struct btr_hash_direct {
-	umem_off_t		rec_node; /* direct key */
+	umem_off_t	rec_node;    /* direct key */
 	char		rec_hkey[0]; /* hashed key */
 };
 

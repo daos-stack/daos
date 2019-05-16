@@ -400,11 +400,11 @@ btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
 	int size;
 
-	if (BTR_IS_DIRECT_KEY(feats) && BTR_IS_CSUM_ENABLED(feats))
-		return sizeof(umem_off_t) + ops->to_hkey_size();
-
-	if (BTR_IS_DIRECT_KEY(feats))
+	if (BTR_IS_DIRECT_KEY(feats)) {
+		if (BTR_IS_CSUM_ENABLED(feats))
+			return sizeof(umem_off_t) + ops->to_hkey_size();
 		return sizeof(umem_off_t);
+	}
 
 	if (BTR_IS_UINT_KEY(feats))
 		return sizeof(uint64_t);
