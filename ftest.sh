@@ -77,14 +77,18 @@ cleanup() {
             fi
         fi
         x=0
+        sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
         while [ \$x -lt 30 ] &&
               grep $DAOS_BASE /proc/mounts &&
               ! sudo umount $DAOS_BASE; do
             sleep 1
             let x+=1
         done
-        sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-        if ! sudo rmdir $DAOS_BASE; then
+        if grep $DAOS_BASE /proc/mounts; then
+            echo \"Failed to unmount $DAOS_BASE\"
+            exit 1
+        fi
+        if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
             echo \"Failed to remove $DAOS_BASE\"
             if [ -d $DAOS_BASE ]; then
                 ls -l $DAOS_BASE
