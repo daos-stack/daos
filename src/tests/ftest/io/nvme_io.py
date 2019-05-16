@@ -60,7 +60,7 @@ class NvmeIo(TestWithServers):
             try:
                 self.pool.disconnect()
                 self.pool.destroy(1)
-            finally:
+            except:
                 pass
 
         try:
