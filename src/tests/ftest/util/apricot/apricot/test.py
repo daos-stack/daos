@@ -143,7 +143,7 @@ class TestWithServers(TestWithoutServers):
         self.nvme_parameter = None
 
     def init_server_param(self):
-        '''Read the server related paramter from test yaml file'''
+        '''Read the server related parameter from avocado yaml file'''
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
         self.server_group = self.params.get("server_group", '/server/',
                                             'daos_server')
