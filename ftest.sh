@@ -45,6 +45,7 @@ if [ -f .localenv ]; then
 fi
 
 TEST_TAG="${1:-quick}"
+TEST_DIR="/tmp/Functional_${TEST_TAG//[, ]/_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
@@ -147,8 +148,8 @@ $NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
 wq
 EOF
 sudo mount $DAOS_BASE
-rm -rf /tmp/Functional_$TEST_TAG/
-mkdir -p /tmp/Functional_$TEST_TAG/
+rm -rf $TEST_DIR/
+mkdir -p $TEST_DIR/
 sudo bash -c 'set -ex
 yum -y install yum-utils
 repo_file_base=\"*_job_${JOB_NAME%%/*}_job_\"
@@ -197,7 +198,7 @@ export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!
-export D_LOG_FILE=/tmp/Functional_$TEST_TAG/server_daos.log
+export D_LOG_FILE=$TEST_DIR/server_daos.log
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
@@ -238,7 +239,7 @@ rm -f core.* *_results.xml
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -s \"$TEST_TAG\"; then
+if ! ./launch.py -s $TEST_TAG; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
@@ -273,7 +274,7 @@ fi
 
 # collect the logs
 if ! rpdcp -l jenkins -R ssh -w "$(IFS=','; echo "${nodes[*]}")" \
-    /tmp/Functional_"$TEST_TAG"/\*daos.log "$PWD"/; then
+    "$TEST_DIR"/\*daos.log "$PWD"/; then
     echo "Copying daos.logs from remote nodes failed"
     # pass
 fi
