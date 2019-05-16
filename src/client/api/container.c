@@ -28,13 +28,13 @@
 #include "task_internal.h"
 
 int
-daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
+daos_cont_local2global(daos_handle_t coh, d_iov_t *glob)
 {
 	return dc_cont_local2global(coh, glob);
 }
 
 int
-daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
+daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 {
 	return dc_cont_global2local(poh, glob, coh);
 }

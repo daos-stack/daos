@@ -50,11 +50,11 @@ btr_check_tx(struct btr_attr *attr)
 }
 
 static int
-lookup_ptr(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
+lookup_ptr(daos_handle_t tree, d_iov_t *key, d_iov_t *val)
 {
 	int rc;
 
-	daos_iov_set(val, NULL /* buf */, 0 /* size */);
+	d_iov_set(val, NULL /* buf */, 0 /* size */);
 
 	rc = dbtree_lookup(tree, key, val);
 	if (rc != 0)
@@ -64,12 +64,12 @@ lookup_ptr(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
 }
 
 static int
-create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
+create_tree(daos_handle_t tree, d_iov_t *key, unsigned int class,
 	    uint64_t feats, unsigned int order, daos_handle_t *tree_new)
 {
 	struct btr_root		buf;
 	struct btr_attr		attr;
-	daos_iov_t		val;
+	d_iov_t		val;
 	daos_handle_t		h;
 	int			rc;
 
@@ -81,7 +81,7 @@ create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
 		 btr_check_tx(&attr) == BTR_IN_TX);
 
 	memset(&buf, 0, sizeof(buf));
-	daos_iov_set(&val, &buf, sizeof(buf));
+	d_iov_set(&val, &buf, sizeof(buf));
 
 	rc = dbtree_update(tree, key, &val);
 	if (rc != 0)
@@ -105,11 +105,11 @@ create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
 }
 
 static int
-open_tree(daos_handle_t tree, daos_iov_t *key, struct btr_attr *attr,
+open_tree(daos_handle_t tree, d_iov_t *key, struct btr_attr *attr,
 	  daos_handle_t *tree_child)
 {
 	struct btr_attr		bta;
-	daos_iov_t		val;
+	d_iov_t		val;
 	int			rc;
 
 	rc = dbtree_query(tree, &bta, NULL);
@@ -131,7 +131,7 @@ open_tree(daos_handle_t tree, daos_iov_t *key, struct btr_attr *attr,
 }
 
 static int
-destroy_tree(daos_handle_t tree, daos_iov_t *key)
+destroy_tree(daos_handle_t tree, d_iov_t *key)
 {
 	daos_handle_t		hdl;
 	struct btr_attr		attr;
@@ -197,7 +197,7 @@ struct nv_rec {
 };
 
 static void
-nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+nv_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	const char	*key = key_iov->iov_buf;
 	size_t		key_size = key_iov->iov_len;
@@ -219,7 +219,7 @@ nv_hkey_size(void)
 }
 
 static int
-nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
+nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 {
 	struct nv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -229,7 +229,7 @@ nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
 }
 
 static int
-nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
 	struct nv_rec  *r;
@@ -285,7 +285,7 @@ nv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     daos_iov_t *key, daos_iov_t *val)
+	     d_iov_t *key, d_iov_t *val)
 {
 	struct nv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -317,7 +317,7 @@ nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	struct nv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void	       *v;
@@ -378,15 +378,15 @@ int
 dbtree_nv_update(daos_handle_t tree, const void *key, size_t key_size,
 		 const void *value, size_t size)
 {
-	daos_iov_t	key_iov;
-	daos_iov_t	val;
+	d_iov_t	key_iov;
+	d_iov_t	val;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, "updating \"%s\":%p+%zu\n", (char *)key, key,
 		key_size);
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
-	daos_iov_set(&val, (void *)value, size);
+	d_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&val, (void *)value, size);
 
 	rc = dbtree_update(tree, &key_iov, &val);
 	if (rc != 0)
@@ -399,14 +399,14 @@ int
 dbtree_nv_lookup(daos_handle_t tree, const void *key, size_t key_size,
 		 void *value, size_t size)
 {
-	daos_iov_t	key_iov;
-	daos_iov_t	val;
+	d_iov_t	key_iov;
+	d_iov_t	val;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, "looking up \"%s\"\n", (char *)key);
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
-	daos_iov_set(&val, value, size);
+	d_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&val, value, size);
 
 	rc = dbtree_lookup(tree, &key_iov, &val);
 	if (rc != 0) {
@@ -429,13 +429,13 @@ int
 dbtree_nv_lookup_ptr(daos_handle_t tree, const void *key, size_t key_size,
 		     void **value, size_t *size)
 {
-	daos_iov_t	key_iov;
-	daos_iov_t	val;
+	d_iov_t	key_iov;
+	d_iov_t	val;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, "looking up \"%s\" ptr\n", (char *)key);
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&key_iov, (void *)key, key_size);
 
 	rc = lookup_ptr(tree, &key_iov, &val);
 	if (rc != 0) {
@@ -455,12 +455,12 @@ dbtree_nv_lookup_ptr(daos_handle_t tree, const void *key, size_t key_size,
 int
 dbtree_nv_delete(daos_handle_t tree, const void *key, size_t key_size)
 {
-	daos_iov_t	key_iov;
+	d_iov_t	key_iov;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, "deleting \"%s\"\n", (char *)key);
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&key_iov, (void *)key, key_size);
 
 	rc = dbtree_delete(tree, &key_iov, NULL);
 	if (rc != 0) {
@@ -485,10 +485,10 @@ dbtree_nv_create_tree(daos_handle_t tree, const void *key, size_t key_size,
 		      unsigned int class, uint64_t feats, unsigned int order,
 		      daos_handle_t *tree_new)
 {
-	daos_iov_t	key_iov;
+	d_iov_t	key_iov;
 	int		rc;
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&key_iov, (void *)key, key_size);
 
 	rc = create_tree(tree, &key_iov, class, feats, order, tree_new);
 	if (rc != 0)
@@ -501,10 +501,10 @@ int
 dbtree_nv_open_tree(daos_handle_t tree, const void *key, size_t key_size,
 		    daos_handle_t *tree_child)
 {
-	daos_iov_t	key_iov;
+	d_iov_t	key_iov;
 	int		rc;
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&key_iov, (void *)key, key_size);
 
 	rc = open_tree(tree, &key_iov, NULL, tree_child);
 	if (rc != 0) {
@@ -521,10 +521,10 @@ dbtree_nv_open_tree(daos_handle_t tree, const void *key, size_t key_size,
 int
 dbtree_nv_destroy_tree(daos_handle_t tree, const void *key, size_t key_size)
 {
-	daos_iov_t	key_iov;
+	d_iov_t	key_iov;
 	int		rc;
 
-	daos_iov_set(&key_iov, (void *)key, key_size);
+	d_iov_set(&key_iov, (void *)key, key_size);
 
 	rc = destroy_tree(tree, &key_iov);
 	if (rc != 0) {
@@ -552,7 +552,7 @@ struct uv_rec {
 };
 
 static void
-uv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+uv_hkey_gen(struct btr_instance *tins, d_iov_t *key, void *hkey)
 {
 	uuid_copy(*(uuid_t *)hkey, *(uuid_t *)key->iov_buf);
 }
@@ -564,7 +564,7 @@ uv_hkey_size(void)
 }
 
 static int
-uv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+uv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
 	struct uv_rec  *r;
@@ -612,7 +612,7 @@ uv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     daos_iov_t *key, daos_iov_t *val)
+	     d_iov_t *key, d_iov_t *val)
 {
 	/* TODO: What sanity checks are required for key and val? */
 
@@ -645,7 +645,7 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	struct uv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void	       *v;
@@ -713,12 +713,12 @@ int
 dbtree_uv_update(daos_handle_t tree, const uuid_t uuid, const void *value,
 		 size_t size)
 {
-	daos_iov_t	key;
-	daos_iov_t	val;
+	d_iov_t	key;
+	d_iov_t	val;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
-	daos_iov_set(&val, (void *)value, size);
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&val, (void *)value, size);
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
@@ -731,12 +731,12 @@ int
 dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
 		 size_t size)
 {
-	daos_iov_t	key;
-	daos_iov_t	val;
+	d_iov_t	key;
+	d_iov_t	val;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
-	daos_iov_set(&val, value, size);
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&val, value, size);
 
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
@@ -756,14 +756,14 @@ int
 dbtree_uv_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 		const uuid_t uuid_in, uuid_t uuid_out, void *value, size_t size)
 {
-	daos_iov_t	key_in;
-	daos_iov_t	key_out;
-	daos_iov_t	val;
+	d_iov_t	key_in;
+	d_iov_t	key_out;
+	d_iov_t	val;
 	int		rc;
 
-	daos_iov_set(&key_in, (void *)uuid_in, sizeof(uuid_t));
-	daos_iov_set(&key_out, uuid_out, sizeof(uuid_t));
-	daos_iov_set(&val, value, size);
+	d_iov_set(&key_in, (void *)uuid_in, sizeof(uuid_t));
+	d_iov_set(&key_out, uuid_out, sizeof(uuid_t));
+	d_iov_set(&val, value, size);
 
 	rc = dbtree_fetch(tree, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
 			  &val);
@@ -779,10 +779,10 @@ dbtree_uv_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 int
 dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 {
-	daos_iov_t	key;
+	d_iov_t	key;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = dbtree_delete(tree, &key, NULL);
 	if (rc != 0) {
@@ -808,10 +808,10 @@ dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
 		      uint64_t feats, unsigned int order,
 		      daos_handle_t *tree_new)
 {
-	daos_iov_t	key;
+	d_iov_t	key;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = create_tree(tree, &key, class, feats, order, tree_new);
 	if (rc != 0)
@@ -824,10 +824,10 @@ int
 dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid,
 		    daos_handle_t *tree_child)
 {
-	daos_iov_t	key;
+	d_iov_t	key;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = open_tree(tree, &key, NULL, tree_child);
 	if (rc != 0) {
@@ -846,10 +846,10 @@ dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid,
 int
 dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid)
 {
-	daos_iov_t	key;
+	d_iov_t	key;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = destroy_tree(tree, &key);
 	if (rc != 0) {
@@ -876,7 +876,7 @@ struct ec_rec {
 };
 
 static int
-ec_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+ec_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
 	struct ec_rec  *r;
@@ -908,7 +908,7 @@ ec_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 ec_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     daos_iov_t *key, daos_iov_t *val)
+	     d_iov_t *key, d_iov_t *val)
 {
 	/* TODO: What sanity checks are required for key and val? */
 
@@ -937,7 +937,7 @@ ec_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	struct ec_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -977,14 +977,14 @@ btr_ops_t dbtree_ec_ops = {
 int
 dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 {
-	daos_iov_t	key;
-	daos_iov_t	val;
+	d_iov_t	key;
+	d_iov_t	val;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, "updating "DF_U64":"DF_U64"\n", epoch, *count);
 
-	daos_iov_set(&key, &epoch, sizeof(epoch));
-	daos_iov_set(&val, (void *)count, sizeof(*count));
+	d_iov_set(&key, &epoch, sizeof(epoch));
+	d_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
@@ -996,12 +996,12 @@ dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 int
 dbtree_ec_lookup(daos_handle_t tree, uint64_t epoch, uint64_t *count)
 {
-	daos_iov_t	key;
-	daos_iov_t	val;
+	d_iov_t	key;
+	d_iov_t	val;
 	int		rc;
 
-	daos_iov_set(&key, &epoch, sizeof(epoch));
-	daos_iov_set(&val, (void *)count, sizeof(*count));
+	d_iov_set(&key, &epoch, sizeof(epoch));
+	d_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc == -DER_NONEXIST)
@@ -1016,14 +1016,14 @@ int
 dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 		const uint64_t *epoch_in, uint64_t *epoch_out, uint64_t *count)
 {
-	daos_iov_t	key_in;
-	daos_iov_t	key_out;
-	daos_iov_t	val;
+	d_iov_t	key_in;
+	d_iov_t	key_out;
+	d_iov_t	val;
 	int		rc;
 
-	daos_iov_set(&key_in, (void *)epoch_in, sizeof(*epoch_in));
-	daos_iov_set(&key_out, epoch_out, sizeof(*epoch_out));
-	daos_iov_set(&val, (void *)count, sizeof(*count));
+	d_iov_set(&key_in, (void *)epoch_in, sizeof(*epoch_in));
+	d_iov_set(&key_out, epoch_out, sizeof(*epoch_out));
+	d_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_fetch(tree, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
 			  &val);
@@ -1039,12 +1039,12 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 int
 dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 {
-	daos_iov_t	key;
+	d_iov_t	key;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, "deleting "DF_U64"\n", epoch);
 
-	daos_iov_set(&key, &epoch, sizeof(epoch));
+	d_iov_set(&key, &epoch, sizeof(epoch));
 
 	rc = dbtree_delete(tree, &key, NULL);
 	if (rc == -DER_NONEXIST)
@@ -1068,7 +1068,7 @@ struct kv_rec {
 };
 
 static void
-kv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+kv_hkey_gen(struct btr_instance *tins, d_iov_t *key, void *hkey)
 {
 	uint64_t *hash = hkey;
 
@@ -1085,7 +1085,7 @@ kv_hkey_size(void)
 }
 
 static int
-kv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
+kv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 {
 	struct kv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	int		rc;
@@ -1097,7 +1097,7 @@ kv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
 }
 
 static int
-kv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+kv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	     struct btr_record *rec)
 {
 	struct kv_rec  *r;
@@ -1145,8 +1145,8 @@ kv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 }
 
 static int
-kv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key,
-	     daos_iov_t *val)
+kv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
+	     d_iov_t *val)
 {
 	struct kv_rec *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -1171,7 +1171,7 @@ kv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key,
 
 static int
 kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	struct kv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void	       *v;
@@ -1235,7 +1235,7 @@ struct iv_rec {
 };
 
 static int
-iv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	     struct btr_record *rec)
 {
 	struct iv_rec  *r;
@@ -1280,8 +1280,8 @@ iv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 }
 
 static int
-iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key,
-	     daos_iov_t *val)
+iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
+	     d_iov_t *val)
 {
 	if (key != NULL) {
 		if (key->iov_buf == NULL)
@@ -1305,7 +1305,7 @@ iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key,
 
 static int
 iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void	       *v;
@@ -1360,7 +1360,7 @@ struct recx_rec {
 };
 
 static int
-recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
+recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 {
 	struct recx_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	daos_recx_t	*key_recx = (daos_recx_t *)(key->iov_buf);
@@ -1380,7 +1380,7 @@ recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
 }
 
 static int
-recx_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+recx_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	     struct btr_record *rec)
 {
 	struct recx_rec	*r;
@@ -1410,7 +1410,7 @@ recx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 recx_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		daos_iov_t *key, daos_iov_t *val)
+		d_iov_t *key, d_iov_t *val)
 {
 	D_ASSERTF(0, "recx_rec_update should never be called.\n");
 	return 0;
@@ -1418,21 +1418,21 @@ recx_rec_update(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 recx_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *key, daos_iov_t *val)
+	       d_iov_t *key, d_iov_t *val)
 {
 	D_ASSERTF(0, "recx_rec_fetch should never be called.\n");
 	return 0;
 }
 
 static void
-recx_key_encode(struct btr_instance *tins, daos_iov_t *key,
+recx_key_encode(struct btr_instance *tins, d_iov_t *key,
 	daos_anchor_t *anchor)
 {
 	D_ASSERTF(0, "recx_key_encode should never be called.\n");
 }
 
 static void
-recx_key_decode(struct btr_instance *tins, daos_iov_t *key,
+recx_key_decode(struct btr_instance *tins, d_iov_t *key,
 	daos_anchor_t *anchor)
 {
 	D_ASSERTF(0, "recx_key_decode should never be called.\n");

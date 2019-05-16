@@ -145,14 +145,14 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
  */
 int
 daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-	     daos_key_desc_t *kds, daos_sg_list_t *sgl, daos_anchor_t *anchor,
+	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 	     daos_event_t *ev);
 
 typedef struct {
 	daos_key_t	*ioa_dkey;
 	unsigned int	ioa_nr;
 	daos_iod_t	*ioa_iods;
-	daos_sg_list_t	*ioa_sgls;
+	d_sg_list_t	*ioa_sgls;
 	daos_iom_t	*ioa_maps;
 } daos_dkey_io_t;
 
@@ -321,7 +321,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *					glob->iov_buf_len.
  */
 int
-daos_array_local2global(daos_handle_t oh, daos_iov_t *glob);
+daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
 
 /**
  * Create a local array open handle for global representation data. This handle
@@ -339,7 +339,7 @@ daos_array_local2global(daos_handle_t oh, daos_iov_t *glob);
  *			-DER_NO_HDL	Container handle is nonexistent
  */
 int
-daos_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh);
+daos_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh);
 
 /**
  * Close an opened array object.
@@ -383,7 +383,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  */
 int
 daos_array_read(daos_handle_t oh, daos_handle_t th,
-		daos_array_iod_t *iod, daos_sg_list_t *sgl,
+		daos_array_iod_t *iod, d_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev);
 
 /**
@@ -412,7 +412,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
  */
 int
 daos_array_write(daos_handle_t oh, daos_handle_t th,
-		 daos_array_iod_t *iod, daos_sg_list_t *sgl,
+		 daos_array_iod_t *iod, d_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev);
 
 /**
