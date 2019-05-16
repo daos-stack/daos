@@ -45,7 +45,7 @@ if [ -f .localenv ]; then
 fi
 
 TEST_TAG="${1:-quick}"
-TEST_DIR="/tmp/Functional_${TEST_TAG//[, ]/_}"
+TEST_DIR="/tmp/Functional_${TEST_TAG//[, ]/-}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
