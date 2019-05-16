@@ -40,8 +40,12 @@ class ReadArrayTest(TestWithServers):
     def test_read_array_during_rebuild(self):
         """DAOS-691 write a dkey, fail a target, read the dkey during rebuild.
 
-        Specifically use an array as the value not a single value (single is
-        covered elsewhere).
+        Test rebuild of a single target failure with a pool containing array
+        records.  Verify that:
+            - the records can be read during the rebuild process
+            - rebuild completes successfully when at least one pool service
+                leader exists
+            - the data is rebuilt when more targets exist than replicas
 
         :avocado: tags=rebuild,rebuildreadarray
         """

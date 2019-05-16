@@ -133,7 +133,7 @@ def get_pool(context, mode, size, name, svcn=1, log=None):
         mode (int): the pool mode
         size (int): the size of the pool
         name (str): the name of the pool
-        svcn (int): the number of pool replica leaders
+        svcn (int): the pool service leader quantity
         log (DaosLog|None): object for logging messages
 
     Returns:
@@ -178,7 +178,7 @@ def kill_server(server_group, context, rank, pool, log=None):
     """Kill a specific server rank.
 
     Args:
-        server_group (str):
+        server_group (str): daos server group name
         context (DaosContext): the context to use to create the DaosServer
         rank (int): daos server rank to kill
         pool (DaosPool): the DaosPool from which to exclude the rank
