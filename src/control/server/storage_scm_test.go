@@ -307,21 +307,22 @@ func TestFormatScm(t *testing.T) {
 		ss := newMockScmStorage(
 			nil, []DeviceDiscovery{}, false, config)
 		ss.formatted = tt.formatted
-		resp := new(pb.FormatStorageResp)
+
+		results := []*pb.ScmMountResult{}
 
 		if tt.inited {
 			// not concerned with response
 			ss.Discover(new(pb.ScanStorageResp))
 		}
 
-		ss.Format(srvIdx, resp)
+		ss.Format(srvIdx, &results)
 
 		// only ocm result in response for the moment
 		AssertEqual(
-			t, len(resp.Mrets), 1,
+			t, len(results), 1,
 			"unexpected number of response results, "+tt.desc)
 
-		result := resp.Mrets[0]
+		result := results[0]
 
 		AssertEqual(
 			t, result.State.Error, tt.expResults[0].State.Error,
@@ -377,16 +378,18 @@ func TestUpdateScm(t *testing.T) {
 		config := defaultMockConfig(t)
 		ss := newMockScmStorage(
 			nil, []DeviceDiscovery{}, false, &config)
-		resp := new(pb.UpdateStorageResp)
 
-		ss.Update(srvIdx, resp)
+		results := []*pb.ScmModuleResult{}
+
+		params := &pb.UpdateScmParams{}
+		ss.Update(srvIdx, params, &results)
 
 		// only ocm result in response for the moment
 		AssertEqual(
-			t, len(resp.Mrets), 1,
+			t, len(results), 1,
 			"unexpected number of response results, "+tt.desc)
 
-		result := resp.Mrets[0]
+		result := results[0]
 
 		AssertEqual(
 			t, result.State.Error, tt.expResults[0].State.Error,

@@ -78,8 +78,8 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 		serverFormatted = true
 	}
 
-	c.nvme.Format(i, resp)
-	c.scm.Format(i, resp)
+	c.nvme.Format(i, &resp.Crets)
+	c.scm.Format(i, &resp.Mrets)
 
 	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
 		// storage subsystem format successful, broadcast formatted
@@ -94,7 +94,7 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 // storage for use by DAOS data plane.
 //
 // Errors returned will stop other servers from formatting, non-fatal errors
-// specific to a particular device should be reported within resp results.
+// specific to particular device should be reported within resp results instead.
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
@@ -117,8 +117,12 @@ func (c *controlService) FormatStorage(
 	return nil
 }
 
+// TODO: implement gRPC fw update feature in scm subsystem
 // Update delegates to Storage implementation's fw update methods to prepare
 // storage for use by DAOS data plane.
+//
+// Send response containing multiple results of update operations on scm mounts
+// and nvme controllers.
 func (c *controlService) UpdateStorage(
 	params *pb.UpdateStorageParams,
 	stream pb.MgmtControl_UpdateStorageServer) error {
@@ -126,15 +130,8 @@ func (c *controlService) UpdateStorage(
 	resp := new(pb.UpdateStorageResp)
 
 	for i := range c.config.Servers {
-		// int, startRev string, model string, path string, slot int32,
-		c.nvme.Update(
-			i,
-			params.Nvme.Startrev,
-			params.Nvme.Model,
-			params.Nvme.Path,
-			params.Nvme.Slot,
-			resp)
-		c.scm.Update(i, resp)
+		c.nvme.Update(i, params.Nvme, &resp.Crets)
+		c.scm.Update(i, params.Scm, &resp.Mrets)
 	}
 
 	if err := stream.Send(resp); err != nil {
@@ -144,19 +141,27 @@ func (c *controlService) UpdateStorage(
 	return nil
 }
 
-// TODO: to be used during the limitation of fw update feature
+// TODO: implement gRPC burn-in feature in nvme and scm subsystems
 // Burnin delegates to Storage implementation's Burnin methods to prepare
 // storage for use by DAOS data plane.
+//
+// Send response containing multiple results of burn-in operations on scm mounts
+// and nvme controllers.
 func (c *controlService) BurninStorage(
 	params *pb.BurninStorageParams,
 	stream pb.MgmtControl_BurninStorageServer) error {
 
-	// TODO: return something useful like ack in response
-	if err := stream.Send(&pb.BurninStorageResp{}); err != nil {
-		return err
-	}
+	return errors.New("BurninStorage not implemented")
+	//	for i := range c.config.Servers {
+	//		c.nvme.BurnIn(i, params.Nvme, resp)
+	//		c.scm.BurnIn(i, params.Scm, resp)
+	//	}
 
-	return nil
+	//	if err := stream.Send(resp); err != nil {
+	//		return errors.WithMessagef(err, "sending response (%+v)", resp)
+	//	}
+
+	//	return nil
 }
 
 //// UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the

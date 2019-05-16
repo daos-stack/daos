@@ -212,7 +212,7 @@ func newMntRet(
 
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
-func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
+func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
 	var devType, devPath, mntOpts string
 
 	srv := s.config.Servers[i]
@@ -222,8 +222,8 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 	// wraps around addMret to provide format specific function
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
 		// log depth should be stack layer registering result
-		resp.Mrets = append(
-			resp.Mrets,
+		*results = append(
+			*results,
 			newMntRet(
 				"format", mntPoint, status, errMsg,
 				common.UtilLogDepth+1))
@@ -316,10 +316,12 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 }
 
 // Update is currently a placeholder method stubbing SCM module fw update.
-func (s *scmStorage) Update(i int, resp *pb.UpdateStorageResp) {
+func (s *scmStorage) Update(
+	i int, req *pb.UpdateScmParams, results *([]*pb.ScmModuleResult)) {
+
 	// respond with single result indicating no implementation
-	resp.Mrets = append(
-		resp.Mrets,
+	*results = append(
+		*results,
 		&pb.ScmModuleResult{
 			Loc: &pb.ScmModule_Location{},
 			State: addState(
@@ -337,4 +339,5 @@ func newScmStorage(config *configuration) *scmStorage {
 		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,
 	}
+
 }

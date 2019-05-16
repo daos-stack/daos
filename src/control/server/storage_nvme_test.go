@@ -498,21 +498,21 @@ func TestFormatNvme(t *testing.T) {
 			false, &config)
 		sn.formatted = tt.formatted
 
-		resp := new(pb.FormatStorageResp)
+		results := []*pb.NvmeControllerResult{}
 
 		if tt.inited {
 			// not concerned with response
 			sn.Discover(new(pb.ScanStorageResp))
 		}
 
-		sn.Format(srvIdx, resp)
+		sn.Format(srvIdx, &results)
 
 		AssertEqual(
-			t, len(resp.Crets), len(tt.expResults),
+			t, len(results), len(tt.expResults),
 			"unexpected number of response results, "+tt.desc)
 
 		successPciaddrs := []string{}
-		for i, result := range resp.Crets {
+		for i, result := range results {
 			AssertEqual(
 				t, result.State.Status, tt.expResults[i].State.Status,
 				"unexpected response status, "+tt.desc)
@@ -777,22 +777,25 @@ func TestUpdateNvmeStorage(t *testing.T) {
 				nil, nil, tt.devUpdateRet),
 			false, &config)
 
-		resp := new(pb.UpdateStorageResp)
+		results := []*pb.NvmeControllerResult{}
 
 		if tt.inited {
 			sn.Discover(new(pb.ScanStorageResp)) // not concerned with response
 		}
 
 		// call with desired starting fwrev and response to populate
-		sn.Update(srvIdx, startRev, model, "", 0, resp)
+		params := &pb.UpdateNvmeParams{
+			Startrev: startRev, Model: model, Path: "", Slot: 0,
+		}
+		sn.Update(srvIdx, params, &results)
 
 		// verify expected response results have been populated
 		AssertEqual(
-			t, len(resp.Crets), len(tt.expResults),
+			t, len(results), len(tt.expResults),
 			"unexpected number of response results, "+tt.desc)
 
 		successPciaddrs := []string{}
-		for i, result := range resp.Crets {
+		for i, result := range results {
 			AssertEqual(
 				t, result.State.Error, tt.expResults[i].State.Error,
 				"unexpected result error message, "+tt.desc)
