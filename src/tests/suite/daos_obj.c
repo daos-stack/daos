@@ -3376,7 +3376,6 @@ static void nonexistent_internal(void **state, daos_obj_id_t oid,
 	char		*update_buf;
 	char		*fetch_buf;
 	unsigned int	size   = IO_SIZE_NVME;
-	const char	dkey[] = "nonexistent dkey";
 
 	D_ALLOC(update_buf, size);
 	assert_non_null(update_buf);
@@ -3386,14 +3385,23 @@ static void nonexistent_internal(void **state, daos_obj_id_t oid,
 	assert_non_null(fetch_buf);
 	memset(fetch_buf, 0, size);
 
-	/** create dkey to fetch nonexist akey*/
-	if (strcmp(key_type, "akey") == 0) {
-		insert_single(dkey, "first_akey", 0, update_buf, size,
-			      DAOS_TX_NONE, &req);
-	}
+	/* Insert single dkey/akey*/
+	insert_single("exist dkey", "exist akey", 0, update_buf, size,
+			DAOS_TX_NONE, &req);
 
-	lookup_single(dkey, "nonexistent akey", 0, fetch_buf, size,
-		      DAOS_TX_NONE, &req);
+	if (strcmp(key_type, "akey") == 0) {
+		/*Fetch non existent akey*/
+		lookup_single("exist dkey", "nonexistent akey", 0, fetch_buf,
+			      size, DAOS_TX_NONE, &req);
+	} else if (strcmp(key_type, "dkey") == 0) {
+		/*Fetch non existent dkey*/
+		lookup_single("nonexistent dkey", "exist akey", 0, fetch_buf,
+			      size, DAOS_TX_NONE, &req);
+	} else if (strcmp(key_type, "oid") == 0) {
+		/*Fetch non existent oid*/
+		lookup_single("nonexistent dkey", "nonexistent akey", 0,
+			      fetch_buf, size, DAOS_TX_NONE, &req);
+	}
 
 	/**
 	* As per current implementation non existing keys
@@ -3494,6 +3502,10 @@ static void fetch_mixed_keys(void **state)
 	/** Test non nonexistent akey */
 	print_message("Fetch nonexistent AKEY\n");
 	nonexistent_internal(state, oid, "akey");
+
+	/** Test non nonexistent oid */
+	print_message("Fetch nonexistent OID\n");
+	nonexistent_internal(state, oid, "oid");
 
 	print_message("DAOS_IOD_ARRAY:SCM\n");
 	fetch_mixed_keys_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
