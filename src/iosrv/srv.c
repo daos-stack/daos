@@ -90,6 +90,12 @@ unsigned int	dss_tgt_nr;
 /** number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 
+unsigned int
+dss_ctx_nr_get(void)
+{
+	return DSS_CTX_NR_TOTAL;
+}
+
 #define FIRST_DEFAULT_SCHEDULE_RATIO	80
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
@@ -576,7 +582,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		 * that creates ULT in DSS_XS_SELF. So ABT_POOL_ACCESS_PRIV
 		 * is fine.
 		 */
-		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD) ?
+		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD ||
+			  i == DSS_POOL_URGENT) ?
 			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
 
 		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,

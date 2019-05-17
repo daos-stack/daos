@@ -1381,6 +1381,7 @@ enumerate_simple(void **state)
 #define PUNCH_IOD_SIZE 1024
 #define PUNCH_SCM_NUM_EXTS 2 /* SCM 2k record */
 #define PUNCH_NVME_NUM_EXTS 5 /* NVMe 5k record */
+#define PUNCH_ENUM_NUM 2
 /**
  * Test akey punch, dkey punch, record punch and object punch with mixed large
  * NVMe and small SCM record sizes. Verify punched keys with key
@@ -1458,8 +1459,11 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			    DAOS_TX_NONE, &req);
 
 
-	/* TODO Record enumeration still under development, use lookup. */
-	print_message("Lookup non-punched records:\n");
+	/**
+	 * Lookup and enumerate records for both punched and non-punched
+	 * entries.
+	 */
+	print_message("Lookup & enumerate non-punched records:\n");
 	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
 		if (i % 2 == 0)
 			num_rec_exts = PUNCH_SCM_NUM_EXTS;
@@ -1467,15 +1471,34 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			num_rec_exts = PUNCH_NVME_NUM_EXTS;
 		size = PUNCH_IOD_SIZE * num_rec_exts;
 		D_ALLOC(rec_fetch, size);
-		print_message("\tlookup:dkey:%s, akey:'akey'\n", dkeys[i]);
+
+		/* Lookup all non-punched records */
 		lookup_single_with_rxnr(dkeys[i], "akey", /*idx*/0, rec_fetch,
 					PUNCH_IOD_SIZE, size, DAOS_TX_NONE,
 					&req);
 		assert_memory_equal(rec_fetch, data_buf, size);
+		/* Enumerate all non-punched records */
+		memset(&anchor_out, 0, sizeof(anchor_out));
+		total_keys = 0;
+		while (!daos_anchor_is_eof(&anchor_out)) {
+			daos_epoch_range_t	eprs[PUNCH_ENUM_NUM];
+			daos_recx_t		recxs[PUNCH_ENUM_NUM];
+
+			enum_num = PUNCH_ENUM_NUM;
+			enumerate_rec(DAOS_TX_NONE, dkeys[i], "akey", &size,
+				      &enum_num, recxs, eprs, &anchor_out, true,
+				      &req);
+			total_keys += enum_num;
+		}
+		print_message("\tdkey:%s, akey:'akey', #rec:%d\n", dkeys[i],
+			      total_keys);
+		assert_int_equal(total_keys, 1);
+
 		D_FREE(rec_fetch);
 	}
-	/* Lookup punched records */
-	print_message("Lookup punched records:\n");
+
+	/* Lookup punched records, verify no data was fetched by lookup */
+	print_message("Lookup & enumerate punched records:\n");
 	num_rec_exts = PUNCH_NVME_NUM_EXTS;
 	size = PUNCH_IOD_SIZE * num_rec_exts;
 	D_ALLOC(rec_verify, size);
@@ -1484,17 +1507,46 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	memcpy(rec_fetch, rec_verify, size);
 	assert_memory_equal(rec_fetch, rec_verify, size);
 
-	print_message("\tlookup dkey:%s, akey:'akey0'\n", dkeys[0]);
+	/* Lookup first punched record */
 	lookup_single_with_rxnr(dkeys[0], "akey0", /*idx*/0, rec_fetch,
 				/*iod_size*/0, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(rec_fetch, rec_verify, size);
-	print_message("\trecord punched\n");
+	/* Enumerate first punched record*/
+	memset(&anchor_out, 0, sizeof(anchor_out));
+	total_keys = 0;
+	while (!daos_anchor_is_eof(&anchor_out)) {
+		daos_epoch_range_t	eprs[PUNCH_ENUM_NUM];
+		daos_recx_t		recxs[PUNCH_ENUM_NUM];
 
-	print_message("\tlookup dkey:%s, akey:'akey1'\n", dkeys[0]);
+		enum_num = PUNCH_ENUM_NUM;
+		enumerate_rec(DAOS_TX_NONE, dkeys[0], "akey0", &size, &enum_num,
+			      recxs, eprs, &anchor_out, true, &req);
+		total_keys += enum_num;
+	}
+	print_message("\tdkey:%s, akey:'akey0', #rec:%d\n", dkeys[0],
+		      total_keys);
+	assert_int_equal(total_keys, 0);
+
+	/* Lookup second punched record */
 	lookup_single_with_rxnr(dkeys[0], "akey1", /*idx*/0, rec_fetch,
 				/*iod_size*/0, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(rec_fetch, rec_verify, size);
-	print_message("\trecord punched\n");
+	/* Enumerate second punched record */
+	memset(&anchor_out, 0, sizeof(anchor_out));
+	total_keys = 0;
+	while (!daos_anchor_is_eof(&anchor_out)) {
+		daos_epoch_range_t	eprs[PUNCH_ENUM_NUM];
+		daos_recx_t		recxs[PUNCH_ENUM_NUM];
+
+		enum_num = PUNCH_ENUM_NUM;
+		enumerate_rec(DAOS_TX_NONE, dkeys[0], "akey1", &size, &enum_num,
+			      recxs, eprs, &anchor_out, true, &req);
+		total_keys += enum_num;
+	}
+	print_message("\tdkey:%s, akey:'akey1', #rec:%d\n", dkeys[0],
+		      total_keys);
+	assert_int_equal(total_keys, 0);
+
 	D_FREE(rec_fetch);
 	D_FREE(rec_verify);
 
@@ -1512,16 +1564,13 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
 		memset(&anchor_out, 0, sizeof(anchor_out));
 		memset(buf, 0, 512);
-		enum_num = 2;
 		total_keys = 0;
-		while (enum_num > 0) {
+		while (!daos_anchor_is_eof(&anchor_out)) {
+			enum_num = PUNCH_ENUM_NUM;
 			rc = enumerate_akey(DAOS_TX_NONE, dkeys[i], &enum_num,
 					    kds, &anchor_out, buf, 512, &req);
 			assert_int_equal(rc, 0);
 			total_keys += enum_num;
-			if (daos_anchor_is_eof(&anchor_out))
-				break;
-			enum_num = 2;
 		}
 		print_message("\tdkey:%s, #akeys:%d\n", dkeys[i], total_keys);
 		assert_int_equal(total_keys, 0);
@@ -1538,16 +1587,13 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	print_message("Enumerate dkeys:\n");
 	memset(&anchor_out, 0, sizeof(anchor_out));
 	memset(buf, 0, 512);
-	enum_num = 2;
 	total_keys = 0;
-	while (enum_num > 0) {
+	while (!daos_anchor_is_eof(&anchor_out)) {
+		enum_num = PUNCH_ENUM_NUM;
 		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
 				    buf, 512, &req);
 		assert_int_equal(rc, 0);
 		total_keys += enum_num;
-		if (daos_anchor_is_eof(&anchor_out))
-			break;
-		enum_num = 2;
 	}
 	print_message("\t#dkeys:%d\n", total_keys);
 	assert_int_equal(total_keys, 0);
@@ -1591,16 +1637,13 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	print_message("Enumerate dkeys:\n");
 	memset(&anchor_out, 0, sizeof(anchor_out));
 	memset(buf, 0, 512);
-	enum_num = 2;
 	total_keys = 0;
-	while (enum_num > 0) {
+	while (!daos_anchor_is_eof(&anchor_out)) {
+		enum_num = PUNCH_ENUM_NUM;
 		rc = enumerate_dkey(DAOS_TX_NONE, &enum_num, kds, &anchor_out,
 				    buf, 512, &req);
 		assert_int_equal(rc, 0);
 		total_keys += enum_num;
-		if (daos_anchor_is_eof(&anchor_out))
-			break;
-		enum_num = 2;
 	}
 	print_message("\t#dkeys:%d\n", total_keys);
 	assert_int_equal(total_keys, 0);
@@ -3287,6 +3330,41 @@ split_sgl_update_fetch(void **state)
 	split_sgl_internal(state, 10000);
 }
 
+static void
+io_pool_map_refresh_trigger(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	d_rank_t	leader;
+
+	/* needs at lest 2 targets */
+	if (!test_runable(arg, 2))
+		skip();
+
+	test_get_leader(arg, &leader);
+	D_ASSERT(leader > 0);
+	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, leader - 1);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+				 DAOS_FORCE_REFRESH_POOL_MAP | DAOS_FAIL_ONCE,
+				 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, 0, NULL);
+
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -3357,6 +3435,8 @@ static const struct CMUnitTest io_tests[] = {
 	  punch_then_lookup, async_disable, test_case_teardown},
 	{ "IO35: split update fetch",
 	  split_sgl_update_fetch, async_disable, test_case_teardown},
+	{ "IO36: trigger server pool map refresh",
+	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
 };
 
 int

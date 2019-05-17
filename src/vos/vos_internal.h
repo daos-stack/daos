@@ -134,10 +134,10 @@ struct vos_container {
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
-	 * Corresponding in-memory block allocator hint for the
-	 * durable hint in vos_cont_df
+	 * Corresponding in-memory block allocator hints for the
+	 * durable hints in vos_cont_df
 	 */
-	struct vea_hint_context	*vc_hint_ctxt;
+	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
@@ -622,8 +622,8 @@ struct vos_key_bundle {
  * to the multi-nested btree.
  */
 struct vos_rec_bundle {
-	/** Optional, externally allocated buffer mmid */
-	umem_id_t		 rb_mmid;
+	/** Optional, externally allocated buffer umoff */
+	umem_off_t		 rb_off;
 	/** checksum buffer for the daos key */
 	daos_csum_buf_t		*rb_csum;
 	/**
@@ -1010,7 +1010,7 @@ tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
 /**
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound value (data buffer address, or ZC
- * buffer mmid, checksum etc).
+ * buffer umoff, checksum etc).
  */
 static inline void
 tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
@@ -1041,7 +1041,8 @@ uint16_t
 vos_media_select(struct vos_object *obj, daos_iod_type_t type,
 		 daos_size_t size);
 int
-vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish);
+vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
+		   enum vos_io_stream ios);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be
  * contiguous in the struct being updated.  This is ensured at present by

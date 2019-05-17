@@ -7,7 +7,10 @@ socket_dir: /tmp/daos_sockets
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
-format_override: true       # don't require manual storage format over client API
+## uncomment to drop privileges before starting data plane
+## (if started as root to perform hardware provisioning)
+# user_name: daosuser
+# group_name: daosgroup # (optional)
 
 # single server instance per config file for now
 servers:
@@ -23,6 +26,7 @@ servers:
   - CRT_TIMEOUT=30
   - FI_SOCKETS_MAX_CONN_RETRY=1
   - FI_SOCKETS_CONN_TIMEOUT=2000
+  - DD_MASK=daos_default    # Enabled debug stream for default group
   # uncomment to enable scalable endpoint
   # - CRT_CREDIT_EP_CTX=0
   # - CRT_CTX_SHARE_ADDR=1

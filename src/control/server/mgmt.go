@@ -25,16 +25,16 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"sync"
+	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 var jsonDBRelPath = "share/control/mgmtinit_db.json"
@@ -50,12 +50,9 @@ type controlService struct {
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *controlService) Setup() {
-	// init condition variables used to wait on storage formatting
+	// init sync primitive for storage formatting on each server
 	for idx := range c.config.Servers {
-		cv := sync.NewCond(&sync.Mutex{})
-		cv.L.Lock()
-
-		c.config.Servers[idx].FormatCond = cv
+		c.config.Servers[idx].formatted = make(chan struct{})
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -82,81 +79,55 @@ func (c *controlService) Teardown() {
 	}
 }
 
-func errAnnotate(err error, msg string) (e error) {
-	e = err
-	if os.IsPermission(e) {
-		e = errors.WithMessage(
-			e,
-			"daos_server needs root privileges to format")
+// awaitStorageFormat checks if running as root and server superblocks exist,
+// if both conditions are true, wait until storage is formatted through client
+// API calls from management tool. Then drop privileges of running process.
+func awaitStorageFormat(config *configuration) error {
+	msgFormat := "storage format on server %d"
+	msgSkip := "skipping " + msgFormat
+	msgWait := "waiting for " + msgFormat + "\n"
+
+	if syscall.Getuid() == 0 {
+		for i, srv := range config.Servers {
+			if ok, err := config.ext.exists(
+				iosrvSuperPath(srv.ScmMount)); err != nil {
+
+				return errors.WithMessage(
+					err, "checking superblock exists")
+			} else if ok {
+				log.Debugf(
+					msgSkip+" (server already formatted)\n",
+					i)
+
+				continue
+			}
+
+			// want this to be visible on stdout and log
+			fmt.Printf(msgWait, i)
+			log.Debugf(msgWait, i)
+
+			// wait on storage format client API call
+			<-srv.formatted
+		}
+
+		if err := dropPrivileges(config); err != nil {
+			log.Errorf(
+				"Failed to drop privileges: %s, running as root "+
+					"is dangerous and is not advised!", err)
+		}
+
+		return nil
 	}
 
-	e = errors.WithMessage(e, msg)
+	log.Debugf(
+		"skipping storage format (%s running as non-root user)\n",
+		os.Args[0])
 
-	// log with context of previous frame
-	log.Errordf(common.UtilLogDepth, e.Error())
-
-	return
-}
-
-func (c *controlService) doFormat(i int) error {
-	cond := c.config.Servers[i].FormatCond
-	// wait for lock to be released when main is ready
-	cond.L.Lock()
-	defer cond.L.Unlock()
-
-	msg := "nvme format"
-	log.Debugf("performing %s, may take several minutes!\n", msg)
-	if err := c.nvme.Format(i); err != nil {
-		return errAnnotate(err, msg)
+	for _, srv := range config.Servers {
+		close(srv.formatted)
 	}
-
-	msg = "scm format"
-	log.Debugf("performing %s, should be quick!\n", msg)
-	if err := c.scm.Format(i); err != nil {
-		return errAnnotate(err, msg)
-	}
-
-	// storage subsystem format successful, signal to alert main.
-	cond.Signal()
 
 	return nil
-}
-
-// Format delegates to Storage implementation's Format methods to prepare
-// storage for use by DAOS data plane.
-func (c *controlService) FormatStorage(
-	ctx context.Context, params *pb.FormatStorageParams) (
-	*pb.FormatStorageResponse, error) {
-
-	if c.config.FormatOverride {
-		return nil, errors.New(
-			"FormatStorage call unsupported when " +
-				"format_override set in server config file, ")
-	}
-
-	// TODO: execute in parallel across servers
-	for i := range c.config.Servers {
-		// verify superblock don't exist
-		if _, err := os.Stat(
-			iosrvSuperPath(c.config.Servers[i].ScmMount)); err == nil {
-
-			return nil, errors.Errorf(
-				"FormatStorage: server %d already formatted", i)
-		} else if !os.IsNotExist(err) {
-			return nil, errors.Wrap(err, "FormatStorage")
-		}
-
-		if err := c.doFormat(i); err != nil {
-			return nil, err
-		}
-
-		log.Debugf(
-			"FormatStorage: storage format successful on server %d\n",
-			i)
-	}
-
-	// TODO: return something useful like ack in response
-	return &pb.FormatStorageResponse{}, nil
 }
 
 // loadInitData retrieves initial data from relative file path.

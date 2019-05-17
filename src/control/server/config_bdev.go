@@ -58,12 +58,14 @@ const (
 	gbyte   = 1000000000
 	blkSize = 4096
 
-	bdNVMe   BdClass = "nvme"
-	bdMalloc BdClass = "malloc"
-	bdKdev   BdClass = "kdev"
-	bdFile   BdClass = "file"
+	bdNVMe   BdevClass = "nvme"
+	bdMalloc BdevClass = "malloc"
+	bdKdev   BdevClass = "kdev"
+	bdFile   BdevClass = "file"
 
-	msgBdevNone = "in config, no nvme.conf generated for server"
+	msgBdevNone    = "in config, no nvme.conf generated for server"
+	msgBdevEmpty   = "bdev device list entry empty"
+	msgBdevBadSize = "bdev_size should be greater than 0"
 )
 
 // bdev describes parameters and behaviours for a particular bdev class.
@@ -99,7 +101,7 @@ func isValidList(srv *server) string {
 	for i, elem := range srv.BdevList {
 		if elem == "" {
 			return fmt.Sprintf(
-				"element %d in bdev_list is empty", i)
+				"%s (index %d)", msgBdevEmpty, i)
 		}
 	}
 
@@ -108,7 +110,7 @@ func isValidList(srv *server) string {
 
 func isValidSize(srv *server) string {
 	if srv.BdevSize < 1 {
-		return "bdev_size should be greater than 0"
+		return msgBdevBadSize
 	}
 
 	return ""
@@ -133,7 +135,7 @@ func prepBdevFile(i int, c *configuration) error {
 }
 
 // bdevMap provides lookup of params and behaviour for each bdev class.
-var bdevMap = map[BdClass]bdev{
+var bdevMap = map[BdevClass]bdev{
 	bdNVMe:   {nvmeTempl, "", isEmptyList, isValidList, nilPrep},
 	bdMalloc: {mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep},
 	bdKdev:   {kdevTempl, "AIO", isEmptyList, isValidList, nilPrep},
@@ -167,7 +169,7 @@ func (c *configuration) createConf(srv *server, templ string, path string) (
 	confStr := confBytes.String()
 	if confStr == "" {
 		return errors.New(
-			"spdk: generated NVMe config unexpectedly empty")
+			"spdk: generated NVMe config is unexpectedly empty")
 	}
 
 	if err = c.ext.writeToFile(confStr, path); err != nil {

@@ -1,5 +1,11 @@
 # DAOS Server (control-plane)
 
+## Workflow
+
+Control plane server (`daos_server`) instances will open a gRPC channel to listen for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through the control plane [`dmg`](../dmg) management tool. Calling `dmg storage format` formats persistent storage on the server node, writes the superblock and starts the data plane.
+
+![Server format diagram](/doc/graph/server_format_flow.png)
+
 ## Running
 
 `daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
@@ -67,24 +73,24 @@ DAOS I/O server (v0.0.2) process 23680 started on rank 0 (out of 2) with 1 targe
 
 ## Configuration files
 
-`daos_server` config file is parsed when starting `daos_server` process, it's location can be specified on the commandline (`-o` option) or default location (`<daos install dir>/install/etc/daos_server.yml`).
+A populated `daos_server` config file is required when starting `daos_server` process, it's location can be specified on the commandline (`-o` option) or default location (`<daos install dir>/install/etc/daos_server.yml`).
 
 Example config files can be found in the [examples folder](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
 
-Some parameters will be parsed and populated with defaults as documented in the [default daos server config](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml) if not present in config file.
+Config file parameters will be parsed and populated with defaults as documented in the [default daos server config](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml).
 
 Parameters passed to `daos_server` on the commandline as application options (excluding environment variables) take precedence over values specified in config file.
 
 For convenience, active parsed config values are written to the directory where the server config file was read from or `/tmp/` if that fails.
 
-If user shell executing `daos_server` has environment variable `CRT_PHY_ADDR_STR` set, user os environment will be used when spawning `daos_io_server` instances. In this situation an error message beginning "using os env vars..." will be printed and no environment variables will be added as specified in the `env_vars` list within the per-server section of the server config file. This behaviour provides backward compatibility with historic mechanism of specifying all parameters through environment variables.
-
 It is strongly recommended to specify all parameters and environment for running DAOS servers in the [server config file](https://github.com/daos-stack/daos/tree/master/utils/config/daos_server.yml).
 
-To clarify with respect to environment variables affecting the behaviour of `daos_io_server` instances:
-
-- If the trigger environment variable is set in the user's shell, the control plane will use the environment variables set in the shell. The config file will be ignored.
-- If the trigger environment variable is NOT set in the user's shell, the shell environment variables will be overridden by the parameters set in the config file.
+NOTES:
+* some environment variables can only be supplied to `daos_io_server` instances through the server config file
+  * `CRT_PHY_ADDR_STR`, `OFI_INTERFACE`, `OFI_PORT`, `D_LOG_MASK`, `D_LOG_FILE`
+* other environment variables can be specified in config file as "key=value" strings in the per-server `env_vars` list
+  * these environment variables will be applied to the `daos_io_server` environment overriding any specified in the environment used to launch  `daos_io_server` (e.g. using "-x" orterun option)
+* while it is very highly recommended to use the server config file as a means to supply parameters, environment variables not applied through the config file but specified in the calling environment will still be present in the environment used to launch `daos_io_server`
 
 ### Logging
 
@@ -149,6 +155,32 @@ NVMe:
   namespace:
   - id: 1
     capacity: 375
+
+SCM:
+- physicalid: 28
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 0
+  capacity: 539661172736
+- physicalid: 40
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 0
+  capacity: 539661172736
+- physicalid: 50
+  channel: 0
+  channelpos: 1
+  memctrlr: 0
+  socket: 1
+  capacity: 539661172736
+- physicalid: 62
+  channel: 0
+  channelpos: 1
+  memctrlr: 1
+  socket: 1
+  capacity: 539661172736
 ```
 
 </p>
@@ -175,6 +207,10 @@ The DAOS data plane utilises two forms of non-volatile storage, storage class me
 
 The DAOS control plane provides capability to provision and manage the non-volatile storage including the allocation of resources to data plane instances.
 
+Storage format is required after other storage management operations have been performed as a precursor to bringing up the DAOS data plane:
+
+![Storage format diagram](/doc/graph/storage_format_detail.png)
+
 ### SCM management capabilities
 
 Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
@@ -185,7 +221,7 @@ Formatting SCM involves creating an ext4 filesystem on the nvdimm device.
 
 Mounting SCM results in an active mount using the DAX extension enabling direct access without restrictions imposed by legacy HDD hardware.
 
-The DAOS control plane wil provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
+The DAOS control plane will provide SCM storage management capabilities enabling the discovery, initial burn-in testing, firmware update and allocation of devices to data plane instances.
 
 #### SCM module discovery
 

@@ -32,26 +32,29 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, bool create)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_info		*dfuse_info = fs_handle->dfuse_info;
 	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_dfs		*dfs = NULL;
+	struct dfuse_dfs		*dfs;
 	uuid_t				co_uuid;
 	dfs_t				*ddfs;
 	mode_t				mode;
-	int rc;
+	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
 	 * so check that the lookup is relative to the root of the sub-tree,
 	 * and abort if not.
 	 */
-	if (parent->ie_stat.st_ino != parent->ie_dfs->dffs_root) {
-		DFUSE_TRA_ERROR(parent, "Called on non sub-tree root");
-		D_GOTO(err, rc = EIO);
-	}
+	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dffs_root);
 
+	/* Dentry names where are not valid uuids cannot possibly be added so in
+	 * this case return the negative dentry with a timeout to prevent future
+	 * lookups.
+	 */
 	if (uuid_parse(name, co_uuid) < 0) {
+		struct fuse_entry_param entry = {.entry_timeout = 60};
+
 		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(err, rc = ENOENT);
+		DFUSE_REPLY_ENTRY(req, entry);
+		return false;
 	}
 
 	D_ALLOC_PTR(dfs);
@@ -59,21 +62,51 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 	strncpy(dfs->dffs_cont, name, NAME_MAX);
+	strncpy(dfs->dffs_pool, parent->ie_dfs->dffs_pool, NAME_MAX);
 
 	if (create) {
-		rc = daos_cont_create(dfuse_info->dfi_poh, co_uuid,
+		rc = daos_cont_create(parent->ie_dfs->dffs_poh, co_uuid,
 				      NULL, NULL);
 		if (rc != -DER_SUCCESS) {
+			DFUSE_LOG_ERROR("daos_cont_create() failed: (%d)",
+					rc);
 			D_GOTO(err, 0);
+		}
+	} else {
+		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
+		if (rc == -DER_SUCCESS) {
+			struct fuse_entry_param	entry = {0};
+
+			DFUSE_TRA_INFO(ie,
+				       "Reusing existing container entry without reconnect");
+
+			D_FREE(dfs);
+
+			/* Update the stat information, but copy in the
+			 * inode value afterwards.
+			 */
+			rc = dfs_ostat(ie->ie_dfs->dffs_dfs,
+				       ie->ie_obj, &entry.attr);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%d)",
+						rc);
+				D_GOTO(err, 0);
+			}
+
+			entry.attr.st_ino = ie->ie_stat.st_ino;
+			entry.generation = 1;
+			entry.ino = entry.attr.st_ino;
+			DFUSE_REPLY_ENTRY(req, entry);
+			return true;
 		}
 	}
 
-	rc = daos_cont_open(dfuse_info->dfi_poh, co_uuid,
+	rc = daos_cont_open(parent->ie_dfs->dffs_poh, co_uuid,
 			    DAOS_COO_RW, &dfs->dffs_coh, &dfs->dffs_co_info,
 			    NULL);
-	if (rc == -DER_NONEXIST) {
-		D_GOTO(err, rc = ENOENT);
-	} else if (rc != -DER_SUCCESS) {
+	if (rc != -DER_SUCCESS) {
+		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)",
+				rc);
 		D_GOTO(err, 0);
 	}
 
@@ -82,9 +115,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc = ENOMEM);
 	}
 
-	rc = dfs_mount(dfuse_info->dfi_poh, dfs->dffs_coh, O_RDWR, &ddfs);
+	rc = dfs_mount(parent->ie_dfs->dffs_poh, dfs->dffs_coh, O_RDWR, &ddfs);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+		DFUSE_LOG_ERROR("dfs_mount() failed: (%d)", rc);
 		D_GOTO(close, 0);
 	}
 
@@ -92,7 +125,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_lookup(dfs->dffs_dfs, "/", O_RDONLY, &ie->ie_obj, &mode);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d",
+		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%d)",
 				rc);
 		D_GOTO(close, 0);
 	}
@@ -102,7 +135,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: %d",
+		DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%d)",
 				rc);
 		D_GOTO(release, 0);
 	}
@@ -115,7 +148,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				NULL,
 				&ie->ie_stat.st_ino);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(ie, "no ino");
+		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)",
+				rc);
 		D_GOTO(release, rc = EIO);
 	}
 
@@ -136,11 +170,11 @@ err:
 	return false;
 }
 
-void
+bool
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name)
 {
-	dfuse_cont_open(req, parent, name, false);
+	return dfuse_cont_open(req, parent, name, false);
 }
 
 bool

@@ -1119,8 +1119,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 			D_GOTO(out_task, rc = -DER_INVAL);
 		}
 
-		D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets:"
-			" tgts[0]=%u/%d\n", DP_UUID(args->uuid),
+		D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u"
+			" tgts[0]=%u/%d\n", DP_UUID(args->uuid), opc,
 			args->tgts->tl_nr, args->tgts->tl_ranks[0],
 			args->tgts->tl_tgts[0]);
 

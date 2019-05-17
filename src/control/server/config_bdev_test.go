@@ -35,7 +35,7 @@ import (
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := []struct {
-		bdevClass  BdClass
+		bdevClass  BdevClass
 		bdevList   []string
 		bdevSize   int  // relevant for MALLOC/FILE
 		bdevNumber int  // relevant for MALLOC
@@ -148,7 +148,7 @@ func TestParseBdev(t *testing.T) {
 		// files is a mock store of written file contents
 		files = []string{}
 
-		ext := newMockExt(nil, "", tt.fileExists, nil, nil, nil, nil)
+		ext := newMockExt(nil, tt.fileExists, nil, nil, nil, nil)
 		config := mockConfigFromFile(t, ext, socketsExample)
 
 		srvIdx := 0 // we know that socketsExample only specifies one srv

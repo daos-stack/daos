@@ -27,14 +27,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime"
-
-	flags "github.com/jessevdk/go-flags"
-	"google.golang.org/grpc"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-	secpb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
+	flags "github.com/jessevdk/go-flags"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -58,8 +56,6 @@ func parseCliOpts(opts *cliOptions) error {
 }
 
 func serverMain() error {
-	runtime.GOMAXPROCS(1)
-
 	// Bootstrap default logger before config options get set.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
@@ -103,28 +99,38 @@ func serverMain() error {
 	mgmtControlServer.Setup()
 	defer mgmtControlServer.Teardown()
 
-	// Create listener on management network.
+	// Create and start listener on management network.
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
-	lis, err := net.Listen("tcp", addr)
+	lis, err := net.Listen("tcp4", addr)
 	if err != nil {
 		log.Errorf("Unable to listen on management interface: %s", err)
 		return err
 	}
+	log.Debugf("DAOS control server listening on %s", addr)
 
-	// Create new grpc server, register services and start serving.
+	// Create new grpc server, register services and start serving (after
+	// dropping privileges).
 	var sOpts []grpc.ServerOption
 	// TODO: This will need to be extended to take certificate information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	secpb.RegisterAccessControlServer(grpcServer, secServer)
+	acl.RegisterAccessControlServer(grpcServer, secServer)
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Format the unformatted servers and related hardware.
+	// Wait for storage to be formatted if necessary and subsequently drop
+	// current process privileges to that of normal user.
+	if err = awaitStorageFormat(&config); err != nil {
+		log.Errorf("Failed to format storage: %s", err)
+		return err
+	}
+
+	// Format the unformatted servers by writing persistant superblock.
 	if err = formatIosrvs(&config, false); err != nil {
 		log.Errorf("Failed to format servers: %s", err)
 		return err
@@ -153,7 +159,7 @@ func serverMain() error {
 			err)
 		return err
 	}
-	log.Debugf("DAOS server listening on %s%s", addr, extraText)
+	log.Debugf("DAOS I/O server running %s", extraText)
 
 	// Wait for I/O server to return.
 	err = iosrv.wait()

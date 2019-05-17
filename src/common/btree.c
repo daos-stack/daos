@@ -596,7 +596,7 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 		if (rc != 0)
 			return rc;
 	} else {
-		nd_off = umem_zalloc_off(btr_umm(tcx), btr_node_size(tcx));
+		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
 		if (UMOFF_IS_NULL(nd_off))
 			return -DER_NOMEM;
 	}
@@ -616,7 +616,7 @@ btr_node_free(struct btr_context *tcx, umem_off_t nd_off)
 	if (btr_ops(tcx)->to_node_free)
 		btr_ops(tcx)->to_node_free(&tcx->tc_tins, nd_off);
 	else
-		umem_free_off(btr_umm(tcx), nd_off);
+		umem_free(btr_umm(tcx), nd_off);
 }
 
 static int
@@ -627,7 +627,7 @@ btr_node_tx_add(struct btr_context *tcx, umem_off_t nd_off)
 	if (btr_ops(tcx)->to_node_tx_add) {
 		rc = btr_ops(tcx)->to_node_tx_add(&tcx->tc_tins, nd_off);
 	} else {
-		rc = umem_tx_add_off(btr_umm(tcx), nd_off, btr_node_size(tcx));
+		rc = umem_tx_add(btr_umm(tcx), nd_off, btr_node_size(tcx));
 	}
 	return rc;
 }
@@ -744,7 +744,7 @@ btr_root_free(struct btr_context *tcx)
 		if (btr_ops(tcx)->to_root_free)
 			btr_ops(tcx)->to_root_free(tins);
 		else
-			umem_free_off(btr_umm(tcx), tins->ti_root_off);
+			umem_free(btr_umm(tcx), tins->ti_root_off);
 	}
 
 	tins->ti_root_off = BTR_ROOT_NULL;
@@ -790,8 +790,8 @@ btr_root_alloc(struct btr_context *tcx)
 
 		D_ASSERT(!UMOFF_IS_NULL(tins->ti_root_off));
 	} else {
-		tins->ti_root_off = umem_zalloc_off(btr_umm(tcx),
-						    sizeof(struct btr_root));
+		tins->ti_root_off = umem_zalloc(btr_umm(tcx),
+						sizeof(struct btr_root));
 		if (UMOFF_IS_NULL(tins->ti_root_off))
 			return -DER_NOMEM;
 	}
@@ -810,8 +810,8 @@ btr_root_tx_add(struct btr_context *tcx)
 		rc = btr_ops(tcx)->to_root_tx_add(tins);
 
 	} else if (!UMOFF_IS_NULL(tins->ti_root_off)) {
-		rc = umem_tx_add_off(btr_umm(tcx), tcx->tc_tins.ti_root_off,
-				     sizeof(struct btr_root));
+		rc = umem_tx_add(btr_umm(tcx), tcx->tc_tins.ti_root_off,
+				 sizeof(struct btr_root));
 	} else {
 		rc = umem_tx_add_ptr(btr_umm(tcx), tcx->tc_tins.ti_root,
 				     sizeof(struct btr_root));
