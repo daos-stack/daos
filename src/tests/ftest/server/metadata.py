@@ -146,8 +146,8 @@ class ObjectMetadata(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_clients,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions,
+                                       self.hostlist_clients)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     @skipForTicket("DAOS-1936/DAOS-1946")
@@ -269,7 +269,7 @@ class ObjectMetadata(Test):
 
         #Server Restart
         if self.agent_sessions:
-            agent_utils.stop_agent(self.hostlist_clients, self.agent_sessions)
+            agent_utils.stop_agent(self.agent_sessions, self.hostlist_clients)
         server_utils.stop_server(hosts=self.hostlist_servers)
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_clients,

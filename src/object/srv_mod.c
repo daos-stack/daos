@@ -40,8 +40,8 @@ bool srv_enable_dtx = true;
 static int
 obj_mod_init(void)
 {
-	uint32_t	mode;
-	int rc;
+	uint32_t	mode = DIM_DTX_FULL_ENABLED;
+	int		rc;
 
 	d_getenv_int("DAOS_IO_MODE", &mode);
 	if (mode != DIM_DTX_FULL_ENABLED) {
