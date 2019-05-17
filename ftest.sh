@@ -68,7 +68,7 @@ cleanup() {
     restore_dist_files "${yaml_files[@]}"
     i=5
     while [ $i -gt 0 ]; do
-        pdsh -l ${REMOTE_ACCT:-jenkins} -R ssh -S \
+        pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
              -w "$(IFS=','; echo "${nodes[*]}")" "set -x
         if grep /mnt/daos /proc/mounts; then
             if ! sudo umount /mnt/daos; then
