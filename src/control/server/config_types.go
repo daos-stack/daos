@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -173,8 +172,8 @@ type server struct {
 	BdevSize        int       `yaml:"bdev_size"`
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
-	CliOpts       []string        // tuples (short option, value) e.g. ["-p", "10000"...]
-	storWaitGroup *sync.WaitGroup // sync primitive for storage formatting events
+	CliOpts   []string      // tuples (short option, value) e.g. ["-p", "10000"...]
+	formatted chan struct{} // closed when server is formatted
 }
 
 // newDefaultServer creates a new instance of server struct with default values.

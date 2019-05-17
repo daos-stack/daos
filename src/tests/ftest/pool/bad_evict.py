@@ -69,7 +69,7 @@ class BadEvictTest(Test):
 
     def tearDown(self):
         if self.agent_sessions:
-            agent_utils.stop_agent(self.hostlist_servers, self.agent_sessions)
+            agent_utils.stop_agent(self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_evict(self):
@@ -145,13 +145,13 @@ class BadEvictTest(Test):
             # trash the UUID value in various ways
             if excludeuuid is None:
                 saveduuid = (ctypes.c_ubyte * 16)(0)
-                for i in range(0, len(saveduuid)):
-                    saveduuid[i] = pool.uuid[i]
-                pool.uuid[0:] = [0 for i in range(0, len(pool.uuid))]
+                for item in range(0, len(saveduuid)):
+                    saveduuid[item] = pool.uuid[item]
+                pool.uuid[0:] = [0 for item in range(0, len(pool.uuid))]
             if excludeuuid == 'JUNK':
                 saveduuid = (ctypes.c_ubyte * 16)(0)
-                for i in range(0, len(saveduuid)):
-                    saveduuid[i] = pool.uuid[i]
+                for item in range(0, len(saveduuid)):
+                    saveduuid[item] = pool.uuid[item]
                 pool.uuid[4] = 244
 
             pool.evict()
@@ -171,8 +171,8 @@ class BadEvictTest(Test):
                 if savedgroup is not None:
                     pool.group = savedgroup
                 if saveduuid is not None:
-                    for i in range(0, len(saveduuid)):
-                        pool.uuid[i] = saveduuid[i]
+                    for item in range(0, len(saveduuid)):
+                        pool.uuid[item] = saveduuid[item]
                 if savedsvc is not None:
                     pool.svc = savedsvc
                 pool.destroy(1)

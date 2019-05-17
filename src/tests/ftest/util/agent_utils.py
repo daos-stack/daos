@@ -159,7 +159,7 @@ def run_agent(basepath, server_list, client_list=None):
 # pylint: enable=too-many-locals
 
 
-def stop_agent(client_list, sessions):
+def stop_agent(sessions, client_list=None):
     """
     This should kill ssh and the agent.  This is temporary; presuming the
     agent will deamonize at somepoint and can be started killed more
