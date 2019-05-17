@@ -39,7 +39,8 @@
 #include <daos/security.h>
 #include <string.h>
 #include <linux/limits.h>
-#include "../security.pb-c.h"
+
+#include "../auth.pb-c.h"
 #include "drpc_mocks.h"
 
 /*
@@ -55,32 +56,32 @@ char *getenv(const char *name)
 }
 
 /* unpacked content of response body */
-static SecurityCredential *drpc_call_resp_return_security_credential;
+static Auth__Credential *drpc_call_resp_return_auth_credential;
 char *dc_agent_sockpath;
 
 static void
-init_default_drpc_resp_security_credential(void)
+init_default_drpc_resp_auth_credential(void)
 {
-	D_ALLOC_PTR(drpc_call_resp_return_security_credential);
-	security_credential__init(drpc_call_resp_return_security_credential);
+	D_ALLOC_PTR(drpc_call_resp_return_auth_credential);
+	auth__credential__init(drpc_call_resp_return_auth_credential);
 
-	D_ALLOC_PTR(drpc_call_resp_return_security_credential->token);
-	auth_token__init(drpc_call_resp_return_security_credential->token);
+	D_ALLOC_PTR(drpc_call_resp_return_auth_credential->token);
+	auth__token__init(drpc_call_resp_return_auth_credential->token);
 }
 
 static void
 init_drpc_resp_with_sec_cred(void)
 {
-	init_default_drpc_resp_security_credential();
+	init_default_drpc_resp_auth_credential();
 	pack_cred_in_drpc_call_resp_body(
-			drpc_call_resp_return_security_credential);
+			drpc_call_resp_return_auth_credential);
 }
 
 void
-free_drpc_call_resp_security_credential()
+free_drpc_call_resp_auth_credential()
 {
-	security_credential__free_unpacked(
-			drpc_call_resp_return_security_credential, NULL);
+	auth__credential__free_unpacked(
+			drpc_call_resp_return_auth_credential, NULL);
 }
 
 /*
@@ -111,7 +112,7 @@ teardown_security_mocks(void **state)
 
 	mock_drpc_connect_teardown();
 	mock_drpc_call_teardown();
-	free_drpc_call_resp_security_credential();
+	free_drpc_call_resp_auth_credential();
 
 	return 0;
 }
@@ -287,11 +288,11 @@ test_request_credentials_fails_if_reply_token_missing(void **state)
 	daos_iov_t creds;
 
 	memset(&creds, 0, sizeof(daos_iov_t));
-	auth_token__free_unpacked(
-			drpc_call_resp_return_security_credential->token, NULL);
-	drpc_call_resp_return_security_credential->token = NULL;
+	auth__token__free_unpacked(
+			drpc_call_resp_return_auth_credential->token, NULL);
+	drpc_call_resp_return_auth_credential->token = NULL;
 	pack_cred_in_drpc_call_resp_body(
-			drpc_call_resp_return_security_credential);
+			drpc_call_resp_return_auth_credential);
 
 	assert_int_equal(dc_sec_request_creds(&creds), -DER_MISC);
 
@@ -308,12 +309,12 @@ test_request_credentials_returns_raw_bytes(void **state)
 	memset(&creds, 0, sizeof(daos_iov_t));
 
 	/*
-	 * Credential bytes == raw bytes of the packed SecurityCredential
+	 * Credential bytes == raw bytes of the packed Auth__Credential
 	 */
-	expected_len = security_credential__get_packed_size(
-			drpc_call_resp_return_security_credential);
+	expected_len = auth__credential__get_packed_size(
+			drpc_call_resp_return_auth_credential);
 	D_ALLOC(expected_data, expected_len);
-	security_credential__pack(drpc_call_resp_return_security_credential,
+	auth__credential__pack(drpc_call_resp_return_auth_credential,
 			expected_data);
 
 	assert_int_equal(dc_sec_request_creds(&creds), DER_SUCCESS);

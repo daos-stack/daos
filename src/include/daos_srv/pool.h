@@ -49,11 +49,11 @@ struct ds_pool {
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
+	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns		*sp_iv_ns;
 };
 
 struct ds_pool_create_arg {
-	struct pool_map	       *pca_map;
 	uint32_t		pca_map_version;
 	bool			pca_need_group;
 };
@@ -90,6 +90,7 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
 struct ds_pool_child {
 	d_list_t	spc_list;
 	daos_handle_t	spc_hdl;
+	struct ds_pool	*spc_pool;
 	uuid_t		spc_uuid;
 	uint32_t	spc_map_version;
 	int		spc_ref;
@@ -174,4 +175,8 @@ int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 int ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 			 uint32_t version, struct pl_obj_layout **plo);
 
+int
+ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
+int
+ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 #endif /* __DAOS_SRV_POOL_H__ */

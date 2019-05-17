@@ -50,8 +50,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		if (rc != -DER_SUCCESS) {
 			D_GOTO(err, rc = EIO);
 		}
-	} else {
-		D_ASSERT(0);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -88,7 +86,7 @@ err:
 	dfs_release(ie->ie_obj);
 }
 
-void
+bool
 dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
 {
@@ -115,11 +113,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %d",
 			       rc);
-		if (rc == -DER_NONEXIST) {
-			D_GOTO(err, rc = ENOENT);
-		} else {
-			D_GOTO(err, rc = EIO);
-		}
+		D_GOTO(err, 0);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -131,9 +125,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	dfuse_reply_entry(fs_handle, ie, false, req);
-	return;
+	return true;
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(ie);
+	return false;
 }

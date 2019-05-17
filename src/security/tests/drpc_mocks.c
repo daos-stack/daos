@@ -171,25 +171,25 @@ free_drpc_call_resp_body(void)
 }
 
 void
-pack_cred_in_drpc_call_resp_body(SecurityCredential *cred)
+pack_cred_in_drpc_call_resp_body(Auth__Credential *cred)
 {
-	size_t len = security_credential__get_packed_size(cred);
+	size_t len = auth__credential__get_packed_size(cred);
 
 	D_FREE(drpc_call_resp_return_content.body.data);
 
 	drpc_call_resp_return_content.body.len = len;
 	D_ALLOC(drpc_call_resp_return_content.body.data, len);
-	security_credential__pack(cred,
+	auth__credential__pack(cred,
 			drpc_call_resp_return_content.body.data);
 }
 
-void pack_token_in_drpc_call_resp_body(AuthToken *token)
+void pack_token_in_drpc_call_resp_body(Auth__Token *token)
 {
-	size_t len = auth_token__get_packed_size(token);
+	size_t len = auth__token__get_packed_size(token);
 
 	D_FREE(drpc_call_resp_return_content.body.data);
 
 	drpc_call_resp_return_content.body.len = len;
 	D_ALLOC(drpc_call_resp_return_content.body.data, len);
-	auth_token__pack(token, drpc_call_resp_return_content.body.data);
+	auth__token__pack(token, drpc_call_resp_return_content.body.data);
 }

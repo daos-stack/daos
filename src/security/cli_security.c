@@ -30,7 +30,7 @@
 #include <daos/agent.h>
 #include <daos/security.h>
 
-#include "security.pb-c.h"
+#include "auth.pb-c.h"
 
 /* Prototypes for static helper functions */
 static int request_credentials_via_drpc(Drpc__Response **response);
@@ -138,7 +138,7 @@ sanity_check_credential_response(Drpc__Response *response)
 	int rc = DER_SUCCESS;
 
 	/* Unpack the response body for a basic sanity check */
-	SecurityCredential *pb_cred = security_credential__unpack(NULL,
+	Auth__Credential *pb_cred = auth__credential__unpack(NULL,
 			response->body.len, response->body.data);
 	if (pb_cred == NULL) {
 		D_ERROR("Body was not a SecurityCredential\n");
@@ -150,7 +150,7 @@ sanity_check_credential_response(Drpc__Response *response)
 		rc = -DER_MISC;
 	}
 
-	security_credential__free_unpacked(pb_cred, NULL);
+	auth__credential__free_unpacked(pb_cred, NULL);
 	return rc;
 }
 

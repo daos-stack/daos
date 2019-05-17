@@ -72,13 +72,13 @@ int utest_utx_destroy(struct utest_context *utx);
  */
 void *utest_utx2root(struct utest_context *utx);
 
-/** Retrieve an mmid pointer to the root object in a context
+/** Retrieve an umoff pointer to the root object in a context
  *
  *  \param	utx[IN]	The context to query
  *
- *  \return	mmid pointer to root
+ *  \return	umoff pointer to root
  */
-umem_id_t utest_utx2rootmmid(struct utest_context *utx);
+umem_off_t utest_utx2rootoff(struct utest_context *utx);
 
 /** Initialization callback for object allocation API.  If the context
  *  is a pmem context, this will be invoked inside a transaction.  The
@@ -95,20 +95,6 @@ typedef void (*utest_init_cb)(void *ptr, size_t size, const void *cb_arg);
  *  is a pmem context, this will be done in a transaction.
  *
  *  \param	utx[IN]		The context
- *  \param	mmid[OUT]	The allocated pointer
- *  \param	size[IN]	The size to allocate
- *  \param	cb[IN]		Optional initialization callback
- *  \param	cb_arg[IN]	Optional argument to pass to initialization
- *
- *  \return 0 on success, error otherwise
- */
-int utest_alloc(struct utest_context *utx, umem_id_t *mmid, size_t size,
-		utest_init_cb cb, const void *cb_arg);
-
-/** Allocate an object and, optionally, initialize it.  If the context
- *  is a pmem context, this will be done in a transaction.
- *
- *  \param	utx[IN]		The context
  *  \param	off[OUT]	The allocated offset
  *  \param	size[IN]	The size to allocate
  *  \param	cb[IN]		Optional initialization callback
@@ -116,17 +102,8 @@ int utest_alloc(struct utest_context *utx, umem_id_t *mmid, size_t size,
  *
  *  \return 0 on success, error otherwise
  */
-int utest_alloc_off(struct utest_context *utx, umem_off_t *umoff, size_t size,
-		    utest_init_cb cb, const void *cb_arg);
-
-/** Free an object
- *
- *  \param	utx[IN]		The context
- *  \param	mmid[IN]	The allocated pointer to free
- *
- *  \return 0 on success, error otherwise
- */
-int utest_free(struct utest_context *utx, umem_id_t mmid);
+int utest_alloc(struct utest_context *utx, umem_off_t *umoff, size_t size,
+		utest_init_cb cb, const void *cb_arg);
 
 /** Free an object
  *
@@ -135,7 +112,7 @@ int utest_free(struct utest_context *utx, umem_id_t mmid);
  *
  *  \return 0 on success, error otherwise
  */
-int utest_free_off(struct utest_context *utx, umem_off_t umoff);
+int utest_free(struct utest_context *utx, umem_off_t umoff);
 
 /** Get the umem_instance for a context
  *
@@ -153,25 +130,6 @@ struct umem_instance *utest_utx2umm(struct utest_context *utx);
  */
 struct umem_attr *utest_utx2uma(struct utest_context *utx);
 
-/** Helper macro to convert an offset to an mmid
- *  \param	utx[IN]		The context
- *  \param	offset[IN]	The offset from start of pool
- *
- *  \return The mmid to the memory
- */
-#define utest_off2mmid(utx, offset)					\
-	(								\
-	{								\
-		umem_id_t	__ummid;				\
-		uint64_t	__pool_uuid;				\
-									\
-		__pool_uuid = umem_get_uuid(utest_utx2umm(utx));	\
-		__ummid.pool_uuid_lo = __pool_uuid;			\
-		__ummid.off = (offset);					\
-		__ummid;						\
-	}								\
-	)
-
 /** Helper macro to convert an offset to an direct pointer
  *  \param	utx[IN]		The context
  *  \param	offset[IN]	The offset from start of pool
@@ -179,7 +137,8 @@ struct umem_attr *utest_utx2uma(struct utest_context *utx);
  *  \return The pointer to the memory
  */
 #define utest_off2ptr(utx, offset)					\
-	umem_id2ptr(utest_utx2umm(utx), utest_off2mmid(utx, offset))
+	umem_off2ptr(utest_utx2umm(utx), offset)
+
 
 /** Start a transaction, if applicable
  *  \param	utx[IN]		The context

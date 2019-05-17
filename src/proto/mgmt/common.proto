@@ -1,5 +1,4 @@
-//
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,28 +20,29 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+syntax = "proto3";
+package mgmt;
 
-import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
-)
+message EmptyParams {}
 
-// ListScmModules lists all Storage Class Memory modules installed.
-func (c *controlService) ListScmModules(
-	empty *pb.EmptyParams, stream pb.MgmtControl_ListScmModulesServer) error {
-
-	log.Debugf("ControlService.ListScmModules dispatch")
-
-	if err := c.scm.Discover(); err != nil {
-		return err
-	}
-
-	for _, module := range c.scm.modules {
-		if err := stream.Send(module); err != nil {
-			return err
-		}
-	}
-
-	return nil
+message FilePath {
+	string path = 1;
 }
+
+enum ResponseStatus {
+	CTRL_SUCCESS = 0;
+	CTRL_IN_PROGRESS = 1;	// Not yet completed
+	CTRL_WAITING = 2;	// Blocked
+	CTRL_ERR_CONF = -1;	// Config file parsing error
+	CTRL_ERR_NVME = -2;	// NVMe subsystem error
+	CTRL_ERR_SCM = -3;	// SCM subsystem error
+	CTRL_ERR_APP = -4;	// Other application error
+	CTRL_ERR_UNKNOWN = -5;	// Unknown error
+}
+
+message ResponseState {
+	ResponseStatus status = 1;
+	string error = 2;
+	string info = 3;
+}
+

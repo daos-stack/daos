@@ -31,13 +31,13 @@ import (
 	"os/user"
 	"strconv"
 
-	pb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/auth"
 
 	"github.com/golang/protobuf/proto"
 )
 
 // HashFromToken will return a SHA512 hash of the token data
-func HashFromToken(token *pb.AuthToken) ([]byte, error) {
+func HashFromToken(token *auth.Token) ([]byte, error) {
 	// Generate our hash (not signed yet just a hash)
 	hash := sha512.New()
 
@@ -55,7 +55,7 @@ func HashFromToken(token *pb.AuthToken) ([]byte, error) {
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) {
+func AuthSysRequestFromCreds(creds *DomainInfo) (*auth.Credential, error) {
 	if creds == nil {
 		return nil, errors.New("No credentials supplied")
 	}
@@ -82,7 +82,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 	}
 
 	// Craft AuthToken
-	sys := pb.AuthSys{
+	sys := auth.Sys{
 		Stamp:       0,
 		Machinename: name,
 		Uid:         creds.creds.Uid,
@@ -96,8 +96,8 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 		fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
 		return nil, err
 	}
-	token := pb.AuthToken{
-		Flavor: pb.AuthFlavor_AUTH_SYS,
+	token := auth.Token{
+		Flavor: auth.Flavor_AUTH_SYS,
 		Data:   tokenBytes}
 
 	verifier, err := HashFromToken(&token)
@@ -106,11 +106,11 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 		return nil, err
 	}
 
-	verifierToken := pb.AuthToken{
-		Flavor: pb.AuthFlavor_AUTH_SYS,
+	verifierToken := auth.Token{
+		Flavor: auth.Flavor_AUTH_SYS,
 		Data:   verifier}
 
-	credential := pb.SecurityCredential{
+	credential := auth.Credential{
 		Token:    &token,
 		Verifier: &verifierToken}
 
@@ -119,12 +119,12 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*pb.SecurityCredential, error) 
 
 // AuthSysFromAuthToken takes an opaque AuthToken and turns it into a
 // concrete AuthSys data structure.
-func AuthSysFromAuthToken(authToken *pb.AuthToken) (*pb.AuthSys, error) {
-	if authToken.GetFlavor() != pb.AuthFlavor_AUTH_SYS {
+func AuthSysFromAuthToken(authToken *auth.Token) (*auth.Sys, error) {
+	if authToken.GetFlavor() != auth.Flavor_AUTH_SYS {
 		return nil, errors.New("Attempting to convert an invalid AuthSys Token")
 	}
 
-	sysToken := &pb.AuthSys{}
+	sysToken := &auth.Sys{}
 	err := proto.Unmarshal(authToken.GetData(), sysToken)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshaling %s: %v", authToken.GetFlavor(), err)
