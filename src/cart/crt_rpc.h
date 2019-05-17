@@ -94,6 +94,10 @@ struct crt_common_hdr {
 	uint64_t	cch_hlc;
 	/* gid and rank identify the rpc request sender */
 	d_rank_t	cch_rank;
+	/* tag to which rpc request was sent to */
+	d_rank_t	cch_tag;
+	/* Transfer id */
+	uint32_t	cch_xid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -638,16 +642,6 @@ struct crt_internal_rpc {
 
 void crt_req_destroy(struct crt_rpc_priv *rpc_priv);
 
-static inline void
-crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
-{
-	int rc;
-
-	D_ASSERT(hdr != NULL);
-	hdr->cch_opc = opc;
-	rc = crt_group_rank(0, &hdr->cch_rank);
-	D_ASSERT(rc == 0);
-}
 
 static inline bool
 crt_rpc_cb_customized(struct crt_context *crt_ctx,

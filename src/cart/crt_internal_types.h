@@ -51,6 +51,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/heap.h>
+#include <gurt/atomic.h>
 
 struct crt_hg_gdata;
 struct crt_grp_gdata;
@@ -94,6 +95,8 @@ struct crt_gdata {
 	volatile unsigned int	cg_inited:1,
 				cg_pmix_disabled:1,
 				cg_grp_inited:1; /* group initialized */
+
+	ATOMIC uint32_t		cg_xid; /* transfer id for rpcs */
 
 	/* protects crt_gdata */
 	pthread_rwlock_t	cg_rwlock;

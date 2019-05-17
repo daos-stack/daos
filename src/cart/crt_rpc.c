@@ -1357,6 +1357,27 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
+static inline void
+crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
+{
+	d_rank_t	rank;
+	uint32_t	xid;
+	int		rc;
+
+	rc = crt_group_rank(0, &rank);
+	D_ASSERT(rc == 0);
+
+	xid = atomic_fetch_add(&crt_gdata.cg_xid, 1);
+
+	rpc_priv->crp_req_hdr.cch_opc = opc;
+	rpc_priv->crp_req_hdr.cch_rank = rank;
+	rpc_priv->crp_req_hdr.cch_xid = xid;
+
+	rpc_priv->crp_reply_hdr.cch_opc = opc;
+	rpc_priv->crp_reply_hdr.cch_rank = rank;
+	rpc_priv->crp_reply_hdr.cch_xid = xid;
+}
+
 int
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 		  bool srv_flag)
@@ -1375,8 +1396,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;
 	if (!srv_flag) {
-		crt_common_hdr_init(&rpc_priv->crp_req_hdr, opc);
-		crt_common_hdr_init(&rpc_priv->crp_reply_hdr, opc);
+		crt_common_hdr_init(rpc_priv, opc);
 	}
 	rpc_priv->crp_state = RPC_STATE_INITED;
 	rpc_priv->crp_hdl_reuse = NULL;
@@ -1391,6 +1411,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	crt_rpc_inout_buff_init(rpc_priv);
 
 	rpc_priv->crp_timeout_sec = ctx->cc_timeout_sec;
+
 exit:
 	return rc;
 }

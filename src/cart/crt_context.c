@@ -680,7 +680,8 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	rc = crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (rc != 0) {
-		D_ERROR("crt_req_timeout_track(opc: %#x) failed, rc: %d.\n",
+		RPC_ERROR(rpc_priv,
+			"crt_req_timeout_track(opc: %#x) failed, rc: %d.\n",
 			rpc_priv->crp_pub.cr_opc, rc);
 		return false;
 	}
@@ -904,7 +905,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 			epi->epi_req_num++;
 			rc = CRT_REQ_TRACK_IN_INFLIGHQ;
 		} else {
-			D_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
+			RPC_ERROR(rpc_priv,
+				"crt_req_timeout_track failed, rc: %d.\n", rc);
 			/* roll back the addref above */
 			RPC_DECREF(rpc_priv);
 		}
@@ -1010,7 +1012,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_timeout_track(tmp_rpc);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc != 0)
-			D_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
+			RPC_ERROR(tmp_rpc,
+				"crt_req_timeout_track failed, rc: %d.\n", rc);
 
 		/* remove from waitq and add to in-flight queue */
 		d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);

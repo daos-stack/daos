@@ -489,6 +489,16 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
 	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_tag);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_xid);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		rc = -DER_HG;
+	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rc);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
@@ -713,6 +723,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 {
 	struct crt_rpc_priv	*rpc_priv;
 	crt_proc_op_t		 proc_op;
+	struct crt_common_hdr	*hdr;
 	int			 rc = 0;
 
 	if (proc == CRT_PROC_NULL)
@@ -730,8 +741,11 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 
 	if (proc_op != CRT_PROC_FREE) {
 		if (proc_op == CRT_PROC_ENCODE) {
-			rpc_priv->crp_req_hdr.cch_flags = rpc_priv->crp_flags;
-			rpc_priv->crp_req_hdr.cch_hlc = crt_hlc_get();
+			hdr = &rpc_priv->crp_req_hdr;
+
+			hdr->cch_flags = rpc_priv->crp_flags;
+			hdr->cch_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
+			hdr->cch_hlc = crt_hlc_get();
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
