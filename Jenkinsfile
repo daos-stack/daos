@@ -88,7 +88,8 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}",
                                    scm: [url: 'https://github.com/daos-stack/daos.git',
-                                         branch: "master"],
+                                         branch: "master",
+                                         withSubmodules: true],
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
