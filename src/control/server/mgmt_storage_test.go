@@ -62,9 +62,9 @@ func newMockStorageConfig(
 	bdevClass BdevClass, bdevDevs []string, existsRet bool) *configuration {
 
 	c := newDefaultConfiguration(
-		&mockExt{
-			nil, "", existsRet, mountRet, unmountRet, mkdirRet,
-			removeRet, []string{}})
+		newMockExt(
+			nil, existsRet, mountRet, unmountRet, mkdirRet,
+			removeRet))
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount
 	c.Servers[0].ScmClass = scmClass
@@ -374,9 +374,8 @@ func TestFormatStorage(t *testing.T) {
 		}()
 
 		if !tt.superblockExists && tt.expNvmeFormatted && tt.expScmFormatted {
-			// conditions met for storage format to succeed, expect
-			// wg.Done() to be called
-			cs.config.Servers[srvIdx].storWaitGroup.Wait()
+			// conditions met for storage format to succeed, wait
+			<-cs.config.Servers[srvIdx].formatted
 		}
 		mockWg.Wait() // wait for test goroutines to complete
 

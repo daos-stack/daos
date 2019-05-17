@@ -1069,6 +1069,25 @@ static struct daos_rpc_handler rsvc_handlers[] = {
 
 #undef X
 
+size_t
+ds_rsvc_get_md_cap(void)
+{
+	const size_t	size_default = 1 << 27 /* 128 MB */;
+	char	       *v;
+	int		n;
+
+	v = getenv("DAOS_MD_CAP"); /* in MB */
+	if (v == NULL)
+		return size_default;
+	n = atoi(v);
+	if (n < size_default >> 20) {
+		D_ERROR("metadata capacity too low; using %zu MB\n",
+			size_default >> 20);
+		return size_default;
+	}
+	return (size_t)n << 20;
+}
+
 static int
 rsvc_module_init(void)
 {

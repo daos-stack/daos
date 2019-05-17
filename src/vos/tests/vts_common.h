@@ -112,7 +112,7 @@ int
 run_discard_tests(void);
 
 int
-run_aggregate_tests(void);
+run_aggregate_tests(bool slow);
 
 int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
 

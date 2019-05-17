@@ -45,11 +45,13 @@ const (
 	msgMkdir   = "os: mkdirall %s, 0777"
 	msgRemove  = "os: removeall %s"
 	msgCmd     = "cmd: %s"
+	msgSetUID  = "C: setuid %d"
+	msgSetGID  = "C: setgid %d"
+	msgChown   = "os: chown %s %d %d"
 )
 
 // External interface provides methods to support various os operations.
 type External interface {
-	getenv(string) string
 	runCommand(string) error
 	writeToFile(string, string) error
 	createEmpty(string, int64) error
@@ -58,10 +60,13 @@ type External interface {
 	mkdir(string) error
 	remove(string) error
 	exists(string) (bool, error)
+	getAbsInstallPath(string) (string, error)
 	lookupUser(string) (*user.User, error)
 	lookupGroup(string) (*user.Group, error)
-	setUid(int64) error
-	setGid(int64) error
+	listGroups(*user.User) ([]string, error)
+	setUID(int64) error
+	setGID(int64) error
+	chown(string, int, int) error
 	getHistory() []string
 }
 
@@ -90,11 +95,6 @@ func (e *ext) runCommand(cmd string) error {
 	e.history = append(e.history, fmt.Sprintf(msgCmd, cmd))
 
 	return common.Run(cmd)
-}
-
-// getEnv wraps around os.GetEnv and implements External.getEnv().
-func (e *ext) getenv(key string) string {
-	return os.Getenv(key)
 }
 
 // writeToFile wraps around common.WriteString and writes input string to given
@@ -199,6 +199,10 @@ func (e *ext) exists(path string) (bool, error) {
 	return false, nil
 }
 
+func (e *ext) getAbsInstallPath(path string) (string, error) {
+	return common.GetAbsInstallPath(path)
+}
+
 func (e *ext) lookupUser(userName string) (*user.User, error) {
 	return user.Lookup(userName)
 }
@@ -207,16 +211,33 @@ func (e *ext) lookupGroup(groupName string) (*user.Group, error) {
 	return user.LookupGroup(groupName)
 }
 
-func (e *ext) setUid(uid int64) error {
+func (e *ext) listGroups(usr *user.User) ([]string, error) {
+	return usr.GroupIds()
+}
+
+func (e *ext) setUID(uid int64) error {
+	log.Debugf(msgSetUID, uid)
+	e.history = append(e.history, fmt.Sprintf(msgSetUID, uid))
+
 	if cerr, errno := C.setuid(C.__uid_t(uid)); cerr != 0 {
 		return errors.Errorf("C.setuid rc: %d, errno: %d", cerr, errno)
 	}
 	return nil
 }
 
-func (e *ext) setGid(gid int64) error {
+func (e *ext) setGID(gid int64) error {
+	log.Debugf(msgSetGID, gid)
+	e.history = append(e.history, fmt.Sprintf(msgSetGID, gid))
+
 	if cerr, errno := C.setgid(C.__gid_t(gid)); cerr != 0 {
 		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
 	}
 	return nil
+}
+
+func (e *ext) chown(path string, uid int, gid int) error {
+	log.Debugf(msgChown, path, uid, gid)
+	e.history = append(e.history, fmt.Sprintf(msgChown, path, uid, gid))
+
+	return os.Chown(path, uid, gid)
 }

@@ -83,8 +83,8 @@ class EightServers(TestWithServers):
 
             pool_uuid = self.pool.get_uuid_str()
             svc_list = ""
-            for i in range(createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+            for item in range(createsvc):
+                svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
             svc_list = svc_list[:-1]
 
             print ("svc_list: {}".format(svc_list))
