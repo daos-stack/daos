@@ -409,9 +409,9 @@ func (n *nvmeStorage) Update(
 			}
 
 			log.Debugf(
-				"updating firmware (%s->%s) on nvme "+
-					"controller at %s, may take several minutes!",
-				req.Startrev, ctrlr.Fwrev, pciAddr)
+				"updating firmware (current rev %s, fw image %s)"+
+					" on nvme controller at %s, may take several "+
+					"minutes!", ctrlr.Fwrev, ctrlr.Path, pciAddr)
 
 			cs, ns, err := n.nvme.Update(pciAddr, req.Path, req.Slot)
 			if err != nil {
