@@ -2306,7 +2306,7 @@ tx_discard(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
 		       offset, (void **)rec, th[t], &req);
-		daos_sync_ranks(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
 	for (t = 0; t < 3; t++) {
@@ -2475,7 +2475,7 @@ tx_commit(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
 			rx_nr, offset, (void **)rec, th[t], &req);
-		daos_sync_ranks(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
@@ -3133,7 +3133,7 @@ blob_unmap_trigger(void **state)
 			assert_memory_equal(update_buf, fetch_buf,
 					    IO_SIZE_NVME);
 		}
-		daos_sync_ranks(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
 	/* Discard the NVMe records (Discard second tx) */
@@ -3143,7 +3143,7 @@ blob_unmap_trigger(void **state)
 	rc = daos_tx_close(th[1], NULL);
 	assert_int_equal(rc, 0);
 
-	daos_sync_ranks(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* Wait for >= VEA_MIGRATE_INTVL */
 	print_message("Wait for free extents to expire (15 sec)\n");
