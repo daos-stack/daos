@@ -27,6 +27,7 @@ import (
 	"fmt"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"google.golang.org/grpc/credentials"
 )
 
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
@@ -44,17 +45,17 @@ type ResultMap map[string]ClientResult
 
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {
-	create(string) (Control, error)
+	create(string, credentials.TransportCredentials) (Control, error)
 }
 
 // controllerFactory as an implementation of ControllerFactory.
 type controllerFactory struct{}
 
 // create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string) (Control, error) {
+func (c *controllerFactory) create(address string, creds credentials.TransportCredentials) (Control, error) {
 	controller := &control{}
 
-	err := controller.connect(address)
+	err := controller.connect(address, creds)
 
 	return controller, err
 }
@@ -63,7 +64,7 @@ func (c *controllerFactory) create(address string) (Control, error) {
 // connected clients (controllers).
 type Connect interface {
 	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
+	ConnectClients(Addresses, credentials.TransportCredentials) ResultMap
 	// GetActiveConns verifies states of controllers and removes inactive
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
@@ -84,13 +85,13 @@ type connList struct {
 //
 // Returns errors if server addresses doesn't resolve but will add
 // controllers for any server addresses that are connectable.
-func (c *connList) ConnectClients(addresses Addresses) ResultMap {
+func (c *connList) ConnectClients(addresses Addresses, creds credentials.TransportCredentials) ResultMap {
 	results := make(ResultMap)
 	ch := make(chan ClientResult)
 
 	for _, address := range addresses {
 		go func(f ControllerFactory, addr string, ch chan ClientResult) {
-			c, err := f.create(addr)
+			c, err := f.create(addr, creds)
 			ch <- ClientResult{addr, c, err}
 		}(c.factory, address, ch)
 	}

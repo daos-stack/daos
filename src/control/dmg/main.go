@@ -30,12 +30,17 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
+	"google.golang.org/grpc/credentials"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 
 type cliOptions struct {
+	CertDir  string `short:"c" long:"certdir" default:".daos/certs" description:"location to search for keys"`
+	Insecure bool   `short:"i" long:"insecure" default:"true" description:"have dmg attempt
+	to connect without certificates"`
 	Hostlist string `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	// TODO: implement host file parsing
 	Hostfile string `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
@@ -48,10 +53,25 @@ type cliOptions struct {
 }
 
 var (
-	opts  = new(cliOptions)
-	conns = client.NewConnect()
+	opts                = new(cliOptions)
+	conns               = client.NewConnect()
+	rootCertName string = "daosCA.crt"
+	certName     string = "shell.crt"
+	keyName      string = "shell.key"
 )
 
+func loadCredentials() (credentials.TransportCredentials, error) {
+	if opts.Insecure {
+		fmt.Println("Using Insecure connection")
+		return nil, nil
+	}
+	caRootPath := opts.CertDir + "/" + rootCertName
+	certPath := opts.CertDir + "/" + certName
+	keyPath := opts.CertDir + "/" + keyName
+
+	creds, err := security.LoadClientCreds(caRootPath, certPath, keyPath, "")
+	return creds, err
+}
 func connectHosts() error {
 	if opts.Hostfile != "" {
 		return errors.New("hostfile option not implemented")
@@ -60,7 +80,11 @@ func connectHosts() error {
 	if len(hosts) < 1 {
 		return errors.New("no hosts to connect to")
 	}
-	fmt.Println(sprintConns(conns.ConnectClients(hosts)))
+	creds, err := loadCredentials()
+	if err != nil {
+		return err
+	}
+	fmt.Println(sprintConns(conns.ConnectClients(hosts, creds)))
 	return nil
 }
 

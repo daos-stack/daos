@@ -92,6 +92,14 @@ func serverMain() error {
 	if f != nil {
 		defer f.Close()
 	}
+	// Load up certificates
+	certs, err: = security.LoadServerCreds(config.CaCert,
+						config.Cert,
+						config.Key)
+	if err != nil {
+		log.Errorf("Failed to load certificates: %s", err)
+		return err
+	}
 
 	// Create and setup control service.
 	mgmtControlServer, err := newControlService(
@@ -113,8 +121,10 @@ func serverMain() error {
 
 	// Create new grpc server, register services and start serving.
 	var sOpts []grpc.ServerOption
-	// TODO: This will need to be extended to take certificate information for
-	// the TLS protected channel. Currently it is an "insecure" channel.
+
+	if creds != nil {
+		sOpts = append(sOpts, grpc.Creds(creds))
+	}
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)

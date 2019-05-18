@@ -28,6 +28,7 @@ import (
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 )
 
 // implement mock/stub behaviour for Control
@@ -42,7 +43,7 @@ type mockControl struct {
 	connectRet error
 }
 
-func (m *mockControl) connect(addr string) error {
+func (m *mockControl) connect(addr string, creds credentials.TransportCredentials) error {
 	if m.connectRet == nil {
 		m.address = addr
 	}
