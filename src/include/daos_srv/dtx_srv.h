@@ -118,7 +118,7 @@ int dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	      struct dtx_handle **dth);
 
 int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
-	    struct ds_cont *cont, int result);
+	    struct ds_cont_child *cont, int result);
 
 int dtx_conflict(daos_handle_t coh, struct dtx_handle *dth, uuid_t po_uuid,
 		 uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,

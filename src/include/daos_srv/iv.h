@@ -46,6 +46,8 @@ struct ds_iv_ns {
 	d_list_t	iv_entry_list;
 	/* Cart IV namespace */
 	crt_iv_namespace_t	iv_ns;
+	/* pool uuid */
+	uuid_t		iv_pool_uuid;
 };
 
 struct ds_iv_class_ops;
@@ -187,37 +189,46 @@ typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
 /**
  * Fetch data from the iv_class entry.
  *
- * \param src [IN]	data attached to the class entry.
- * \param dst [IN]	fetch buffer.
+ * \param entry [IN]	class entry.
+ * \param key [IN]	key to locate the entry.
+ * \param src [IN]	source buffer.
+ * \param dst [OUT]	destination buffer.
  * \param priv [OUT]	private buffer from IV callback.
  *
  * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_fetch_t)(struct ds_iv_entry *entry, d_sg_list_t *src,
-				 d_sg_list_t *dst, void **priv);
+typedef int (*ds_iv_ent_fetch_t)(struct ds_iv_entry *entry,
+				 struct ds_iv_key *key,
+				 d_sg_list_t *dst, d_sg_list_t *src,
+				 void **priv);
 
 /**
  * Update data to the iv_class entry.
  *
- * \param ent [IN]	data attached to the class entry.
+ * \param entry [IN]	class entry.
+ * \param key [IN]	key to locate entry.
  * \param src [IN]	source update buffer.
  * \param priv [IN]	private buffer from IV callback.
  *
  * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_update_t)(struct ds_iv_entry *entry, d_sg_list_t *dst,
+typedef int (*ds_iv_ent_update_t)(struct ds_iv_entry *entry,
+				  struct ds_iv_key *key,
 				  d_sg_list_t *src, void **priv);
 
 /**
  * Refresh the data to the iv_class entry.
  *
- * \param dst [IN]	data attached to the class entry.
+ * \param entry[IN]	class entry
+ * \param key [IN]	key to locate the entry.
  * \param src [IN]	source refresh buffer.
  * \param priv [IN]	private buffer from IV callback.
  *
  * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_refresh_t)(d_sg_list_t *dst, d_sg_list_t *src,
+typedef int (*ds_iv_ent_refresh_t)(struct ds_iv_entry *entry,
+				   struct ds_iv_key *key,
+				   d_sg_list_t *src,
 				   int ref_rc, void **priv);
 
 /**
@@ -256,6 +267,7 @@ enum iv_key {
 	IV_POOL_MAP = 1,
 	IV_REBUILD,
 	IV_OID,
+	IV_CONT_SNAP,
 };
 
 int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value);
@@ -266,12 +278,16 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		     unsigned int shortcut, unsigned int sync_mode,
 		     unsigned int sync_flags);
 
-int ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp, unsigned int *ns_id,
-		    daos_iov_t *g_ivns, struct ds_iv_ns **p_iv_ns);
+int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
+		    unsigned int *ns_id, daos_iov_t *g_ivns,
+		    struct ds_iv_ns **p_iv_ns);
 
-int ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
+int ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
 		    unsigned int master_rank, daos_iov_t *iv_ctxt,
 		    struct ds_iv_ns **p_iv_ns);
+int ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
+		    crt_group_t *grp, d_iov_t *iv_iov, unsigned int iv_ns_id,
+		    struct ds_iv_ns **iv_ns);
 
 void ds_iv_ns_destroy(void *ns);
 

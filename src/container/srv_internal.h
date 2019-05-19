@@ -31,6 +31,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
+#include <daos_srv/container.h>
 
 /* To avoid including srv_layout.h for everybody. */
 struct container_hdl;
@@ -91,9 +92,15 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 };
 
-/*
- * srv.c
+/**
+ * per-node container (memory) object
  */
+struct ds_cont {
+	struct daos_llink	sc_list;
+	uuid_t			sc_uuid;
+	uuid_t			sp_uuid;
+	struct ds_iv_ns		*sc_iv_ns;
+};
 
 /*
  * srv_container.c
@@ -103,6 +110,12 @@ int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
 int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 			  uint64_t num_oids, uint64_t *oid);
+int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
+			   struct cont_svc **svcp, struct rsvc_hint *hint);
+int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
+		const uuid_t uuid, struct cont **cont);
+void cont_svc_put_leader(struct cont_svc *svc);
+
 /*
  * srv_epoch.c
  */
@@ -126,6 +139,9 @@ int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
 
+int
+ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
+		      daos_epoch_t **snapshots, int *snap_count);
 /**
  * srv_target.c
  */
@@ -147,11 +163,18 @@ int ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);
-int ds_cont_cache_create(struct daos_lru_cache **cache);
-void ds_cont_cache_destroy(struct daos_lru_cache *cache);
+int ds_cont_child_cache_create(struct daos_lru_cache **cache);
+void ds_cont_child_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
+
+int ds_cont_lookup_create(const uuid_t uuid, void *arg,
+			  struct ds_cont **cont_p);
+struct ds_cont *ds_cont_lookup(const uuid_t uuid);
+void ds_cont_put(struct ds_cont *cont);
+int ds_cont_cache_init(void);
+void ds_cont_cache_fini(void);
 
 /**
  * oid_iv.c
@@ -161,4 +184,7 @@ int ds_oid_iv_fini(void);
 int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 		   uint64_t num_oids, d_sg_list_t *value);
 
+/* container_iv.c */
+int ds_cont_iv_init(void);
+int ds_cont_iv_fini(void);
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */
