@@ -66,7 +66,7 @@ class BadQueryTest(Test):
 
     def tearDown(self):
         if self.agent_sessions:
-            agent_utils.stop_agent(self.hostlist_servers, self.agent_sessions)
+            agent_utils.stop_agent(self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_query(self):

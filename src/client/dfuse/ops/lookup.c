@@ -113,11 +113,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %d",
 			       rc);
-		if (rc == -DER_NONEXIST) {
-			D_GOTO(err, rc = ENOENT);
-		} else {
-			D_GOTO(err, rc = EIO);
-		}
+		D_GOTO(err, 0);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);

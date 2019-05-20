@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,6 +152,25 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 	args->coh	= coh;
 	args->info	= info;
 	args->prop	= cont_prop;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
+{
+	daos_cont_aggregate_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_AGGREGATE);
+	rc = dc_task_create(dc_cont_aggregate, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
 
 	return dc_task_schedule(task, true);
 }

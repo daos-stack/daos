@@ -107,28 +107,12 @@ func formatIosrv(
 		return nil
 	}
 
-	msg := "continuing without storage format on server %d "
-	if syscall.Getuid() == 0 {
-		if config.UserName != "" {
-			log.Debugf("waiting for storage format on server %d\n", i)
-
-			// wait on format storage grpc call before creating superblock
-			srv.storWaitGroup.Wait()
-		} else {
-			log.Debugf(
-				msg+"(username not specified in server config)\n",
-				i)
-		}
-	} else {
-		log.Debugf(msg+"(%s running as non-root user)\n", i, os.Args[0])
-	}
-
 	// check scm has been mounted before proceeding to write to it
 	if err := config.checkMount(srv.ScmMount); err != nil {
 		return errors.WithMessage(
 			err,
 			fmt.Sprintf(
-				"server%d scm mount path (%s) not mounted",
+				"server %d scm mount path (%s) not mounted",
 				i, srv.ScmMount))
 	}
 

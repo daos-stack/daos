@@ -23,6 +23,7 @@
 
 '''
 import os
+import sys
 
 # Some fixes for the CMOCKA headers
 xml_header ="<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
@@ -30,6 +31,9 @@ parent_header = "<testsuites>\n"
 parent_footer = "</testsuites>\n"
 file_extensions = "*.xml"
 path = os.path.join(os.getcwd(), "test_results") + os.path.sep
+if not os.path.isdir(path):
+	print("No test_results directory found")
+	sys.exit()
 files  = [path+fn for fn in os.listdir(path)
               if any(fn.endswith(x) for x in file_extensions)]
 # This is done because some XML files are not formed correctly
