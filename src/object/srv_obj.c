@@ -1273,6 +1273,12 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	anchors.ia_akey = oei->oei_akey_anchor;
 	anchors.ia_ev = oei->oei_anchor;
 
+	/* FIXME: until distributed transaction. */
+	if (oei->oei_epoch == DAOS_EPOCH_MAX) {
+		oei->oei_epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", oei->oei_epoch);
+	}
+
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
 
@@ -1688,6 +1694,12 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_IO, "ds_obj_query_key_handler: flags = %d\n",
 		okqi->okqi_flags);
+
+	/* FIXME: until distributed transaction. */
+	if (okqi->okqi_epoch == DAOS_EPOCH_MAX) {
+		okqi->okqi_epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
+	}
 
 	rc = ds_check_container(okqi->okqi_co_hdl, okqi->okqi_co_uuid,
 				&cont_hdl, &cont);
