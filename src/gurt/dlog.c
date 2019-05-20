@@ -88,6 +88,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <sys/syscall.h>
 
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -416,9 +417,20 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			 tm->tm_hour, tm->tm_min, tm->tm_sec,
 			 (long int) tv.tv_usec / 10000, mst.uts.nodename);
 
-	if (mst.oflags & DLOG_FLV_TAG)
-		hlen += snprintf(b + hlen, sizeof(b) - hlen,
-				 "%s ", d_log_xst.tag);
+	if (mst.oflags & DLOG_FLV_TAG) {
+		if (mst.oflags & DLOG_FLV_LOGPID) {
+			static __thread pid_t tid = -1;
+
+			if (tid == -1)
+				tid = (pid_t)syscall(SYS_gettid);
+
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s/%d] ",
+					 d_log_xst.tag, tid);
+		} else {
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
+					 d_log_xst.tag);
+		}
+	}
 
 	hlen_pt1 = hlen;	/* save part 1 length */
 	if (hlen < sizeof(b)) {
@@ -602,7 +614,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	D_INIT_LIST_HEAD(&d_log_caches);
 
 	if (flags & DLOG_FLV_LOGPID)
-		snprintf(newtag, tagblen, "%s[%d]", tag, getpid());
+		snprintf(newtag, tagblen, "%s[%d", tag, getpid());
 	else
 		snprintf(newtag, tagblen, "%s", tag);
 	mst.def_mask = default_mask;
