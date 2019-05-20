@@ -41,13 +41,7 @@ class EightServers(TestWithServers):
     def setUp(self):
         super(EightServers, self).setUp()
 
-        # initialize client variables
-        self.hostlist_clients = None
-        self.hostfile_clients = None
-
         # setting client variables
-        self.hostlist_clients = self.params.get("test_clients",
-                                                '/run/hosts/')
         self.hostfile_clients = (
             write_host_file.write_host_file(self.hostlist_clients, self.workdir,
                                             None))
@@ -77,7 +71,7 @@ class EightServers(TestWithServers):
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            print("self.context:{}".format(self.context))
+            #print("self.context:{}".format(self.context))
             self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None, None, createsvc)
 

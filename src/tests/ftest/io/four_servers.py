@@ -39,14 +39,7 @@ class FourServers(TestWithServers):
     def setUp(self):
         super(FourServers, self).setUp()
 
-        # initialize client variables
-        self.hostlist_clients = None
-        self.hostfile_clients = None
-
         #set client variables
-        self.hostlist_clients = (
-            self.params.get("test_clients",
-                            '/run/hosts/'))
         self.hostfile_clients = (
             write_host_file.write_host_file(self.hostlist_clients,
                                             self.workdir, None))

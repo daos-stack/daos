@@ -1,5 +1,5 @@
 hosts:
-   test_machines:
+   test_servers:
         - boro-A
         - boro-B
         - boro-C

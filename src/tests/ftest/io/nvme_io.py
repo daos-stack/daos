@@ -49,12 +49,8 @@ class NvmeIo(TestWithServers):
         super(NvmeIo, self).setUp()
 
         # initialize variables
-        self.hostlist_clients = None
-        self.hostfile_clients = None
         self.out_queue = None
         self.pool_connect = False
-        # setting client list
-        self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """
@@ -106,9 +102,6 @@ class NvmeIo(TestWithServers):
         #Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                self.hostfile_clients = write_host_file.write_host_file(
-                    self.hostlist_clients,
-                    self.workdir)
                 #There is an issue with NVMe if Transfer size>64M, Skipped this
                 #sizes for now
                 if ior_param[2] > 67108864:

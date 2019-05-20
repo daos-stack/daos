@@ -2,12 +2,12 @@
 # required quantity is indicated by the placeholders
 
 hosts:
- test_machines:
+ test_servers:
   - boro-A
   - boro-B
   - boro-C
   - boro-D
- clients:
+ test_clients:
   - boro-E
 timeout: 28800
 server_config:

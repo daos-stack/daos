@@ -1,5 +1,5 @@
 hosts:
-    test_machines:
+    test_servers:
         - boro-A
         - boro-B
         - boro-C
@@ -13,6 +13,7 @@ hosts:
         - boro-J
         - boro-K
         - boro-L
+timeout: 2400
 server_config:
     name: daos_server
 pool:
