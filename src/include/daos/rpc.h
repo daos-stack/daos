@@ -207,23 +207,6 @@ int daos_rpc_send_wait(crt_rpc_t *rpc);
 
 #define DAOS_DEFAULT_GROUP_ID "daos_server"
 
-static inline int
-daos_group_attach(const char *group_id, crt_group_t **group)
-{
-	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
-	if (group_id == NULL)
-		group_id = DAOS_DEFAULT_GROUP_ID;
-	return crt_group_attach((char *)group_id, group);
-}
-
-static inline int
-daos_group_detach(crt_group_t *group)
-{
-	D_ASSERT(group != NULL);
-	D_DEBUG(DB_NET, "detaching from group '%s'\n", group->cg_grpid);
-	return crt_group_detach(group);
-}
-
 /* Currently, this is used on rcs in metadata RPC reply buffers. */
 static inline bool
 daos_rpc_retryable_rc(int rc)
