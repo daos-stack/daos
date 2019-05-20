@@ -1389,6 +1389,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	case CONT_EPOCH_COMMIT:
 		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
 					    false);
+	case CONT_EPOCH_AGGREGATE:
+		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:

@@ -1461,6 +1461,11 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct vos_container	*cont;
 	int			 rc;
 
+	cont = vos_hdl2cont(param->ip_hdl);
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate, type:%d, is_discard:%d\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
+		agg_param->ap_discard);
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		rc = vos_agg_obj(ih, entry, agg_param, acts);
@@ -1488,7 +1493,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	cont = vos_hdl2cont(param->ip_hdl);
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
 		cont->vc_abort_aggregation = 0;
