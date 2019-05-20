@@ -30,6 +30,7 @@
 
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
 #include <daos/security.h>
@@ -85,7 +86,7 @@ pool_free(struct d_hlink *hlink)
 
 	rsvc_client_fini(&pool->dp_client);
 	if (pool->dp_group != NULL)
-		daos_group_detach(pool->dp_group);
+		dc_mgmt_group_detach(pool->dp_group);
 
 	D_FREE(pool);
 }
@@ -475,7 +476,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	pool->dp_capas = flags;
 
 	/** attach to the server group and initialize rsvc_client */
-	rc = daos_group_attach(NULL, &pool->dp_group);
+	rc = dc_mgmt_group_attach(NULL, &pool->dp_group);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -553,7 +554,7 @@ dc_pool_connect(tse_task_t *task)
 		pool->dp_capas = args->flags;
 
 		/** attach to the server group and initialize rsvc_client */
-		rc = daos_group_attach(args->grp, &pool->dp_group);
+		rc = dc_mgmt_group_attach(args->grp, &pool->dp_group);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		rc = rsvc_client_init(&pool->dp_client, args->svc);
@@ -964,7 +965,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	/* set slave flag to avoid export it again */
 	pool->dp_slave = 1;
 
-	rc = daos_group_attach(pool_glob->dpg_group_id, &pool->dp_group);
+	rc = dc_mgmt_group_attach(pool_glob->dpg_group_id, &pool->dp_group);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	rc = rsvc_client_decode(client_buf, client_len, &pool->dp_client);
@@ -1090,7 +1091,7 @@ out:
 	crt_req_decref(rpc);
 	if (free_state) {
 		rsvc_client_fini(&state->client);
-		daos_group_detach(state->group);
+		dc_mgmt_group_detach(state->group);
 		D_FREE(state);
 	}
 	return rc;
@@ -1131,7 +1132,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
-		rc = daos_group_attach(args->grp, &state->group);
+		rc = dc_mgmt_group_attach(args->grp, &state->group);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
 		rc = rsvc_client_init(&state->client, args->svc);
@@ -1188,7 +1189,7 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(state->group);
+	dc_mgmt_group_detach(state->group);
 out_state:
 	D_FREE(state);
 out_task:
@@ -1485,7 +1486,7 @@ out:
 	crt_req_decref(rpc);
 	if (free_state) {
 		rsvc_client_fini(&state->client);
-		daos_group_detach(state->group);
+		dc_mgmt_group_detach(state->group);
 		D_FREE(state);
 	}
 	return rc;
@@ -1518,7 +1519,7 @@ dc_pool_evict(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
-		rc = daos_group_attach(args->grp, &state->group);
+		rc = dc_mgmt_group_attach(args->grp, &state->group);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
 		rc = rsvc_client_init(&state->client, args->svc);
@@ -1558,7 +1559,7 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(state->group);
+	dc_mgmt_group_detach(state->group);
 out_state:
 	D_FREE(state);
 out_task:
@@ -2088,7 +2089,7 @@ rsvc_client_state_cleanup(int stage, struct rsvc_client_state *state)
 	case CCS_CU_CLI:
 		rsvc_client_fini(&state->scs_client);
 	case CCS_CU_GRP:
-		daos_group_detach(state->scs_group);
+		dc_mgmt_group_detach(state->scs_group);
 	case CCS_CU_MEM:
 		D_FREE_PTR(state);
 	}
@@ -2109,7 +2110,7 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 			D_ERROR("Failed to allocate state\n");
 			return -DER_NOMEM;
 		}
-		rc = daos_group_attach(group, &state->scs_group);
+		rc = dc_mgmt_group_attach(group, &state->scs_group);
 		if (rc != 0) {
 			rsvc_client_state_cleanup(CCS_CU_MEM, state);
 			return rc;

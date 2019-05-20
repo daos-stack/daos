@@ -109,6 +109,12 @@ Whether to run in the singleton mode, in which the client does not need to be la
 
 Whether to enable the server-side IO dispatch, in that case the replica IO will be sent to a leader shard which will dispatch to other shards. `BOOL`. Default to true.
 
+### `DAOS_SERVER_GROUP_MAX`
+
+Maximal number of servers in the server primary group. `INTEGER`. Default to 128.
+
+This is a hack to be removed once CaRT stops requiring a size when attaching to a server group.
+
 ## Debug System (Client & Server)
 
 ### `D_LOG_FILE`
