@@ -704,14 +704,11 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (pool->sp_iv_ns == NULL) {
-		rc = ds_pool_iv_ns_update(pool, in->tci_master_rank,
-					  &in->tci_iv_ctxt,
-					  in->tci_iv_ns_id);
-		if (rc) {
-			D_ERROR("attach iv ns failed rc %d\n", rc);
-			D_GOTO(out, rc);
-		}
+	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, &in->tci_iv_ctxt,
+				  in->tci_iv_ns_id);
+	if (rc) {
+		D_ERROR("attach iv ns failed rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = pool_tgt_query(pool, &out->tco_space);
@@ -849,9 +846,10 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		}
 
 		D_DEBUG(DF_DSMS, DF_UUID
-			": changed cached map version: %u -> %u\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map_version,
-			map_version);
+			": changed cached map version: %u -> %u pool %p"
+			" map %p map_ver %u\n", DP_UUID(pool->sp_uuid),
+			pool->sp_map_version, map_version, pool, pool->sp_map,
+			pool_map_get_version(pool->sp_map));
 
 		pool->sp_map_version = map_version;
 		rc = dss_task_collective(update_child_map, pool, 0);

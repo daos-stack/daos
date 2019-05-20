@@ -630,25 +630,6 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 	return 0;
 }
 
-static size_t
-get_md_cap(void)
-{
-	const size_t	size_default = 1 << 27 /* 128 MB */;
-	char	       *v;
-	int		n;
-
-	v = getenv("DAOS_MD_CAP"); /* in MB */
-	if (v == NULL)
-		return size_default;
-	n = atoi(v);
-	if (n < size_default >> 20) {
-		D_ERROR("metadata capacity too low; using %zu MB\n",
-			size_default >> 20);
-		return size_default;
-	}
-	return (size_t)n << 20;
-}
-
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
  * a single storage node in the pool. "target_uuids" shall be an array of the
@@ -699,7 +680,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, rdb_uuid, ranks,
 				true /* create */, true /* bootstrap */,
-				get_md_cap());
+				ds_rsvc_get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -1849,8 +1830,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 */
 	D_ASSERT(svc->ps_pool != NULL);
 	if (svc->ps_pool->sp_iv_ns == NULL) {
-		rc = ds_iv_ns_create(rpc->cr_ctx, NULL,
-				     &iv_ns_id, &iv_iov,
+		rc = ds_iv_ns_create(rpc->cr_ctx, svc->ps_pool->sp_uuid,
+				     NULL, &iv_ns_id, &iv_iov,
 				     &svc->ps_pool->sp_iv_ns);
 		if (rc)
 			D_GOTO(out_svc, rc);
@@ -2756,42 +2737,8 @@ int
 ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
 		     d_iov_t *iv_iov, unsigned int iv_ns_id)
 {
-	struct ds_iv_ns	*ns;
-	int		rc;
-
-	if (pool->sp_iv_ns != NULL &&
-	    pool->sp_iv_ns->iv_master_rank != master_rank) {
-		/* If root has been changed, let's destroy the
-		 * previous IV ns
-		 */
-		ds_iv_ns_destroy(pool->sp_iv_ns);
-		pool->sp_iv_ns = NULL;
-	}
-
-	if (pool->sp_iv_ns != NULL)
-		return 0;
-
-	if (iv_iov == NULL) {
-		d_iov_t tmp;
-
-		/* master node */
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
-				     pool->sp_group, &iv_ns_id, &tmp, &ns);
-	} else {
-		/* other node */
-		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx,
-				     iv_ns_id, master_rank, iv_iov, &ns);
-	}
-
-	if (rc) {
-		D_ERROR("pool "DF_UUID" iv ns create failed %d\n",
-			 DP_UUID(pool->sp_uuid), rc);
-		return rc;
-	}
-
-	pool->sp_iv_ns = ns;
-
-	return rc;
+	return ds_iv_ns_update(pool->sp_uuid, master_rank, pool->sp_group,
+			       iv_iov, iv_ns_id, &pool->sp_iv_ns);
 }
 
 int
@@ -2963,7 +2910,8 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	case POOL_REPLICAS_ADD:
 		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, db_uuid,
 					in->pmi_targets, true /* create */,
-					false /* bootstrap */, get_md_cap());
+					false /* bootstrap */,
+					ds_rsvc_get_md_cap());
 		if (rc != 0)
 			break;
 		rc = rdb_add_replicas(db, ranks);

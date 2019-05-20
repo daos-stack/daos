@@ -32,7 +32,7 @@ class Ssh(object):
     Right now check_output() and call() function implemented.In future more
     methods can be added which will behave like subprocess methods.
     """
-    def __init__(self, address, timeout=60, debug=False):
+    def __init__(self, address, debug=False):
         """
         Initialize the remote machines and open SSH Connection.
         Args:
@@ -43,7 +43,6 @@ class Ssh(object):
             None
         """
         self.address = address
-        self.timeout = timeout
         self.debug = debug
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
@@ -57,11 +56,12 @@ class Ssh(object):
         if self.debug:
             print("SSH Connection open to {0}.".format(self.address))
 
-    def check_output(self, command):
+    def check_output(self, command, timeout=60):
         """
         Execute command on remote machine.
         Args:
             command: Command to run on remote machine.
+            timeout: Timeout for waiting to finish the command
         return:
             stdout: stdout of the return code
         Raises:
@@ -72,7 +72,7 @@ class Ssh(object):
             transport = self.client.get_transport()
             transport.set_keepalive(20)
             channel = transport.open_session()
-            channel.settimeout(self.timeout)
+            channel.settimeout(timeout)
             channel.exec_command(command)
             stdout = channel.makefile('rb').read()
             exit_status = channel.recv_exit_status()
@@ -100,11 +100,12 @@ class Ssh(object):
 
         return stdout
 
-    def call(self, command):
+    def call(self, command, timeout=60):
         """
         Execute command on remote machine.
         Args:
             command: Command to run on remote machine.
+            timeout: Timeout for waiting to finish the command
         return:
             exit_status: int value of exit status
         Raises:
@@ -114,7 +115,7 @@ class Ssh(object):
             transport = self.client.get_transport()
             transport.set_keepalive(20)
             channel = transport.open_session()
-            channel.settimeout(self.timeout)
+            channel.settimeout(timeout)
             channel.exec_command(command)
             exit_status = channel.recv_exit_status()
             channel.close()

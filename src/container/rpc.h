@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,9 @@
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_COMMIT,						\
+		0, &CQF_cont_epoch_op,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_AGGREGATE,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_LIST,						\

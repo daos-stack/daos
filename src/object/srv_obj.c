@@ -460,7 +460,7 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
  */
 static int
 ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   struct ds_cont_hdl **hdlp, struct ds_cont **contp)
+		   struct ds_cont_hdl **hdlp, struct ds_cont_child **contp)
 {
 	struct ds_cont_hdl	*cont_hdl;
 	int			 rc;
@@ -495,7 +495,8 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		DP_UUID(cont_hdl_uuid), cont_hdl);
 
 	/* load or create VOS container on demand */
-	rc = ds_cont_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid, contp);
+	rc = ds_cont_child_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid,
+				  contp);
 	if (rc)
 		D_GOTO(failed, rc);
 out:
@@ -675,8 +676,8 @@ obj_update_prefw(crt_rpc_t *req, void *arg)
 
 static int
 ds_obj_rw_local_hdlr(crt_rpc_t *rpc, uint32_t tag, struct ds_cont_hdl *cont_hdl,
-		     struct ds_cont *cont, daos_handle_t *ioh, bool update,
-		     uint32_t map_version, struct dtx_handle *dth)
+		     struct ds_cont_child *cont, daos_handle_t *ioh,
+		     bool update, uint32_t map_version, struct dtx_handle *dth)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -715,9 +716,10 @@ ds_obj_rw_local_hdlr(crt_rpc_t *rpc, uint32_t tag, struct ds_cont_hdl *cont_hdl,
 		bool size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
 
 		bulk_op = CRT_BULK_PUT;
-		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
-				     &orw->orw_dkey, orw->orw_nr,
-				     orw->orw_iods.ca_arrays, size_fetch, ioh);
+		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid,
+				     orw->orw_epoch, &orw->orw_dkey,
+				     orw->orw_nr, orw->orw_iods.ca_arrays,
+				     size_fetch, ioh);
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -797,7 +799,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	struct ds_cont_hdl		*cont_hdl = NULL;
-	struct ds_cont			*cont = NULL;
+	struct ds_cont_child		*cont = NULL;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			*dti_cos = NULL;
 	struct dtx_conflict_entry	 conflict = { 0 };
@@ -920,6 +922,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			else
 				D_GOTO(out, rc);
 		}
+	}
+
+	/* FIXME: until distributed transaction. */
+	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
+		orw->orw_epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
 	if (srv_enable_dtx && (!resend || dispatch)) {
@@ -1053,7 +1061,7 @@ out:
 
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
-			ds_cont_put(cont); /* -1 for rebuild container */
+			ds_cont_child_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
 }
@@ -1097,7 +1105,7 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	int			opc = opc_get(rpc->cr_opc);
 	struct ds_cont_hdl	*cont_hdl;
-	struct ds_cont		*cont;
+	struct ds_cont_child	*cont;
 	int			type;
 	int			rc;
 	bool			recursive = false;
@@ -1180,7 +1188,7 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 out_cont_hdl:
 
 	if (!cont_hdl->sch_cont)
-		ds_cont_put(cont); /* -1 for rebuild container */
+		ds_cont_child_put(cont); /* -1 for rebuild container */
 	ds_cont_hdl_put(cont_hdl);
 out:
 	return rc;
@@ -1414,7 +1422,8 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version,
 
 static int
 ds_obj_punch_local_hdlr(struct obj_punch_in *opi, crt_opcode_t opc,
-			struct ds_cont_hdl *cont_hdl, struct ds_cont *cont,
+			struct ds_cont_hdl *cont_hdl,
+			struct ds_cont_child *cont,
 			struct dtx_handle *dth)
 {
 	int	rc = 0;
@@ -1455,7 +1464,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 {
 	struct obj_req_disp_arg		*obj_arg = NULL;
 	struct ds_cont_hdl		*cont_hdl = NULL;
-	struct ds_cont			*cont = NULL;
+	struct ds_cont_child		*cont = NULL;
 	struct dtx_handle		*dth = NULL;
 	struct dtx_id			*dti_cos = NULL;
 	struct dtx_conflict_entry	 conflict = { 0 };
@@ -1471,6 +1480,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	opi = crt_req_get(rpc);
 	D_ASSERT(opi != NULL);
 	dispatch = opi->opi_shard_tgts.ca_arrays != NULL;
+
 	tag = dss_get_module_info()->dmi_tgt_id;
 
 	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
@@ -1535,6 +1545,12 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			rc = 0;
 		else
 			D_GOTO(out, rc);
+	}
+
+	/* FIXME: until distributed transaction. */
+	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
+		opi->opi_epoch = daos_ts2epoch();
+		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
 	if (srv_enable_dtx && (!resend || dispatch)) {
@@ -1648,7 +1664,7 @@ out:
 	obj_punch_complete(rpc, rc, map_version, &conflict);
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
-			ds_cont_put(cont); /* -1 for rebuild container */
+			ds_cont_child_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
 }
@@ -1659,7 +1675,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_query_key_in		*okqi;
 	struct obj_query_key_out	*okqo;
 	struct ds_cont_hdl		*cont_hdl = NULL;
-	struct ds_cont			*cont = NULL;
+	struct ds_cont_child		*cont = NULL;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
 	uint32_t			map_version = 0;
@@ -1695,7 +1711,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 out:
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
-			ds_cont_put(cont); /* -1 for rebuild container */
+			ds_cont_child_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
 

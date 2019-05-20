@@ -186,7 +186,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
               (time.time() - start_time))
     except Exception as error:
         print("<SERVER> Exception occurred: {0}".format(str(error)))
-        traceback.print_exception(excpn.__class__, error, sys.exc_info()[2])
+        traceback.print_exception(error.__class__, error, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
             SESSIONS[setname].send_signal(signal.SIGINT)

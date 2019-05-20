@@ -39,13 +39,18 @@ import (
 )
 
 const (
-	providerEnvKey = "CRT_PHY_ADDR_STR"
-	configOut      = ".daos_server.active.yml"
+	configOut              = ".daos_server.active.yml"
+	relConfExamplesPath    = "utils/config/examples/"
+	msgBadConfig           = "insufficient config file, see examples in "
+	msgConfigNoProvider    = "provider not specified in config"
+	msgConfigNoPath        = "no config path set"
+	msgConfigNoServers     = "no servers specified in config"
+	msgConfigServerNoIface = "fabric interface not specified in config"
 )
 
 func (c *configuration) loadConfig() error {
 	if c.Path == "" {
-		return errors.New("no config path set")
+		return errors.New(msgConfigNoPath)
 	}
 
 	bytes, err := ioutil.ReadFile(c.Path)
@@ -76,7 +81,7 @@ func (c *configuration) setPath(path string) error {
 	}
 
 	if !filepath.IsAbs(c.Path) {
-		newPath, err := common.GetAbsInstallPath(c.Path)
+		newPath, err := c.ext.getAbsInstallPath(c.Path)
 		if err != nil {
 			return err
 		}
@@ -107,11 +112,11 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 
 	if err = config.getIOParams(cliOpts); err != nil {
 		return config, errors.Wrap(
-			err, "failed to retrieve I/O server params")
+			err, "failed to retrieve I/O service params")
 	}
 
 	if len(config.Servers) == 0 {
-		return config, errors.New("missing I/O server params")
+		return config, errors.New("missing I/O service params")
 	}
 
 	return config, nil
@@ -194,7 +199,7 @@ func getNumCores(rs []string) (num int, err error) {
 	return
 }
 
-// populateCliOpts populates options string slice for single server
+// populateCliOpts populates options string slice for single I/O service
 func (c *configuration) populateCliOpts(i int) error {
 	// avoid mutating subject during iteration, instead access through
 	// config/parent object
@@ -204,7 +209,7 @@ func (c *configuration) populateCliOpts(i int) error {
 	var numCores int
 	numCores, err := getNumCores(srv.Targets)
 	if err != nil {
-		return errors.Errorf("server%d targets invalid: %s", i, err)
+		return errors.Errorf("service%d targets invalid: %s", i, err)
 	}
 
 	srv.CliOpts = append(
@@ -243,7 +248,7 @@ func (c *configuration) populateCliOpts(i int) error {
 		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
 	}
 	if c.NvmeShmID > 0 {
-		// Add shm_id so io_server can share spdk access to controllers
+		// Add shm_id so I/O service can share spdk access to controllers
 		// with mgmtControlServer process. Currently not user
 		// configurable when starting daos_server, use default.
 		srv.CliOpts = append(
@@ -266,7 +271,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		c.Port = int(opts.Port)
 	}
 	if opts.Rank != nil {
-		// global rank parameter should only apply to first server
+		// global rank parameter should only apply to first I/O service
 		c.Servers[0].Rank = opts.Rank
 	}
 
@@ -318,65 +323,51 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	return
 }
 
-// validateConfig asserts that config meets minimum requirements and
-// in the case of missing config file info attempts to detect external
-// os environment variables (returns true to skip following env creation)
-func (c *configuration) validateConfig() (bool, error) {
-	if c.ext.getenv(providerEnvKey) != "" {
-		if len(c.Servers) == 0 {
-			c.Servers = append(c.Servers, newDefaultServer())
+// validateConfig asserts that config meets minimum requirements
+func (c *configuration) validateConfig() error {
+	if c.Provider == "" {
+		return errors.New(msgConfigNoProvider)
+	}
+
+	if len(c.Servers) == 0 {
+		return errors.New(msgConfigNoServers)
+	}
+
+	for i, srv := range c.Servers {
+		if srv.FabricIface == "" {
+			return errors.Errorf(
+				msgConfigServerNoIface+" for I/O service %d", i)
 		}
-		return true, nil
 	}
 
-	// if provider or Servers are missing and we can't detect os envs,
-	// we don't have sufficient info to start io servers
-	if (c.Provider == "") || (len(c.Servers) == 0) {
-		return false, errors.Errorf(
-			"no servers specified in config file and missing os "+
-				"envvar %s", providerEnvKey)
-	}
-
-	return false, nil
+	return nil
 }
 
-// getIOParams builds lists of commandline options and environment variables
-// to pass when invoking I/O server instances.
+// getIOParams builds commandline options and environment variables to provide
+// to forked I/O service
 func (c *configuration) getIOParams(cliOpts *cliOptions) error {
-	skipEnv, err := c.validateConfig()
-	if err != nil {
-		return err
+	if err := c.validateConfig(); err != nil {
+		examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
+
+		return errors.WithMessagef(err, msgBadConfig+examplesPath)
 	}
 
-	// override config with commandline supplied options and compute io server
-	// paramaters, perform this after initial validation
+	// override config with commandline supplied options
 	c.cmdlineOverride(cliOpts)
 
 	for i := range c.Servers {
 		srv := &c.Servers[i]
 
-		if err = c.populateCliOpts(i); err != nil {
-			return err
-		}
-
-		if skipEnv {
-			// user environment variable detected for provider,
-			// assume all necessary environment already exists
-			// and clear srv config EnvVars
-			examplesPath, _ := common.GetAbsInstallPath(
-				"utils/config/examples/")
-			log.Errorf(
-				"using os env vars, specify params in config "+
-					"instead: %s", examplesPath)
-
-			srv.EnvVars = []string{}
-			continue
+		if err := c.populateCliOpts(i); err != nil {
+			return errors.WithMessagef(
+				err,
+				"populating I/O service options")
 		}
 
 		// add to existing config file EnvVars
 		srv.EnvVars = append(
 			srv.EnvVars,
-			providerEnvKey+"="+c.Provider,
+			"CRT_PHY_ADDR_STR="+c.Provider,
 			"OFI_INTERFACE="+srv.FabricIface,
 			"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort),
 			"D_LOG_MASK="+srv.LogMask,
@@ -386,15 +377,19 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 	return nil
 }
 
-// populateEnv adds envs from config options
+// populateEnv adds envs from config options to existing envs from user's shell
+// overwriting any existing values for given key
 func (c *configuration) populateEnv(i int, envs *[]string) {
-	for _, env := range c.Servers[i].EnvVars {
-		kv := strings.Split(env, "=")
+	for _, newEnv := range c.Servers[i].EnvVars {
+		key := strings.Split(newEnv, "=")[0]
 
-		if kv[1] == "" {
-			log.Debugf("empty value for env %s detected", kv[0])
-		}
-		*envs = append(*envs, env)
+		// filter out any matching keys in envs then adds new value
+		*envs = common.Filter(
+			*envs,
+			func(s string) bool {
+				return key != strings.Split(s, "=")[0]
+			})
+		*envs = append(*envs, newEnv)
 	}
 }
 

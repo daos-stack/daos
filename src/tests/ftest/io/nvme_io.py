@@ -99,7 +99,6 @@ class NvmeIo(TestWithServers):
         """
         ior_args = {}
 
-        hostlist_clients = self.params.get("clients", '/run/hosts/*')
         tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
 
@@ -107,7 +106,7 @@ class NvmeIo(TestWithServers):
         for obj_type in object_type:
             for ior_param in tests:
                 self.hostfile_clients = write_host_file.write_host_file(
-                    hostlist_clients,
+                    self.hostlist_clients,
                     self.workdir,
                     ior_param[4])
                 #There is an issue with NVMe if Transfer size>64M, Skipped this

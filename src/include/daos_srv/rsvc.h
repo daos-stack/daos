@@ -158,5 +158,6 @@ int ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		      crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t *size);
 
+size_t ds_rsvc_get_md_cap(void);
 
 #endif /* DAOS_SRV_RSVC_H */

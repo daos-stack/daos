@@ -1191,7 +1191,24 @@ next_fail:
 		if (spare_avail) {
 			/* The selected spare target is up and ready */
 			l_shard->po_target = spare_tgt->ta_comp.co_id;
-			l_shard->po_fseq = spare_tgt->ta_comp.co_fseq;
+
+			/* XXX: Use pl_obj_shard::po_fseq to record the latest
+			 *	failure sequence of the targets on the remap
+			 *	chain for the given shard (@l_shard).
+			 *
+			 *	The f_shard->rfs_fseq is the snapshot of the
+			 *	pool map version (that is incremental only)
+			 *	when related spare (or the original target)
+			 *	became down.
+			 *
+			 *	Currently, DAOS does not support the target
+			 *	re-integration. So the failure sequence for
+			 *	available spares will be the initial value
+			 *	(the oldest one). So here, we only need to
+			 *	consider those unavailable spares's failure
+			 *	sequences to find out the latest (largest).
+			 */
+			l_shard->po_fseq = f_shard->rfs_fseq;
 
 			/*
 			 * Mark the shard as 'rebuilding' so that read will

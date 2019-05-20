@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -798,76 +798,28 @@ out:
 }
 
 int
-ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			struct cont *cont, struct container_hdl *hdl,
+			crt_rpc_t *rpc)
 {
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct epoch_prop		prop;
-	daos_epoch_t			lre = hdl->ch_lre;
-	daos_epoch_t			glre;
-	daos_iov_t			key;
-	daos_iov_t			value;
-	int				rc;
+	struct cont_epoch_op_in	*in = crt_req_get(rpc);
+	daos_epoch_t		 epoch = in->cei_epoch;
+	int			 rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
+	if (epoch >= DAOS_EPOCH_MAX)
+		return -DER_INVAL;
+	else if (in->cei_epoch == 0)
+		epoch = daos_ts2epoch();
 
-	rc = read_epoch_prop(tx, cont, &prop);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	glre = prop.ep_glre;
+	rc = trigger_aggregation(tx, 0, epoch, epoch, cont, rpc->cr_ctx);
 
-	if (check_epoch_invariant(cont, &prop, hdl) != 0)
-		D_GOTO(out, rc = -DER_IO);
-
-	if (in->cei_epoch < hdl->ch_lre)
-		/*
-		 * Since we don't allow LRE to decrease, let the new LRE be the
-		 * old one.  (This is actually unnecessary; we only have to
-		 * guarantee that the new LRE has not been aggregated away.)
-		 */
-		;
-	else
-		hdl->ch_lre = in->cei_epoch;
-
-	if (hdl->ch_lre == lre)
-		D_GOTO(out_hdl, rc = 0);
-
-	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
-
-	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, hdl, sizeof(*hdl));
-	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0)
-		D_GOTO(out_hdl, rc);
-
-	rc = ec_update_and_find_lowest(tx, cont, EC_LRE, &lre /* dec */,
-				       &hdl->ch_lre /* inc */,
-				       NULL /* emptyp */, &prop.ep_glre);
-	if (rc != 0)
-		D_GOTO(out_hdl, rc);
-
-	if (check_epoch_invariant(cont, &prop, hdl) != 0)
-		D_GOTO(out_hdl, rc = -DER_IO);
-
-	/** XXX
-	 * Once we have an aggregation daemon,
-	 * we need to mask the return value, we need not
-	 * fail if aggregation bcast fails
-	 */
-	rc = trigger_aggregation(tx, glre, prop.ep_glre, prop.ep_ghce,
-				 cont, rpc->cr_ctx);
-out_hdl:
-	if (rc != 0)
-		hdl->ch_lre = lre;
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
+		epoch, rc);
 	return rc;
 }
 
@@ -1262,5 +1214,41 @@ out_eventual:
 out_mem:
 	D_FREE(snapshots);
 out:
+	return rc;
+}
+
+int
+ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
+		      daos_epoch_t **snapshots, int *snap_count)
+{
+	struct cont_svc	*svc;
+	struct rdb_tx	tx;
+	struct cont	*cont = NULL;
+	int		rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	rc = read_snap_list(&tx, cont, snapshots, snap_count);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out_put:
+	cont_svc_put_leader(svc);
+
 	return rc;
 }

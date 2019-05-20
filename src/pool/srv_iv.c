@@ -42,16 +42,18 @@ static int
 pool_iv_value_alloc_internal(d_sg_list_t *sgl)
 {
 	uint32_t	buf_size;
-	uint32_t	pool_nr;
+	uint32_t	nnodes, ndomains, ntgts;
 	int		rc;
 
 	rc = daos_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
 
-	/* XXX Let's use primary group  + 1 domain per target now. */
-	crt_group_size(NULL, &pool_nr);
-	buf_size = pool_iv_ent_size((int)pool_nr * 2 * 10);
+	crt_group_size(NULL, &nnodes);
+	/* currently with 1 domain per node, see init_pool_metadata */
+	ndomains = nnodes;
+	ntgts = nnodes * dss_tgt_nr;
+	buf_size = pool_iv_ent_size(ndomains + nnodes + ntgts);
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, buf_size);
 	if (sgl->sg_iovs[0].iov_buf == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
@@ -136,14 +138,14 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 }
 
 static int
-pool_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst, d_sg_list_t *src,
-		  void **priv)
+pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		  d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	return pool_iv_ent_copy(dst, src);
 }
 
 static int
-pool_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
+pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		   d_sg_list_t *src, void **priv)
 {
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
@@ -175,20 +177,21 @@ pool_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 				    src_iv->piv_pool_map_ver);
 	ds_pool_put(pool);
 
-	return pool_iv_ent_copy(dst, src);
+	return pool_iv_ent_copy(&entry->iv_value, src);
 }
 
 static int
-pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **priv)
+pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		    d_sg_list_t *src, int ref_rc, void **priv)
 {
-	struct pool_iv_entry	*dst_iv = dst->sg_iovs[0].iov_buf;
+	struct pool_iv_entry	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
 	struct ds_pool		*pool;
 	int			rc;
 
 	D_ASSERT(src_iv != NULL);
 	D_ASSERT(dst_iv != NULL);
-	rc = pool_iv_ent_copy(dst, src);
+	rc = pool_iv_ent_copy(&entry->iv_value, src);
 	if (rc)
 		return rc;
 

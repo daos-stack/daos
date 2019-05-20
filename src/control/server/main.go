@@ -27,15 +27,11 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/user"
-	"strconv"
-	"syscall"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-	secpb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
 	flags "github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -54,87 +50,6 @@ func parseCliOpts(opts *cliOptions) error {
 	_, err := p.Parse()
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func getUid(ext External, userName string) (*user.User, int64, error) {
-	usr, err := ext.lookupUser(userName)
-	if err != nil {
-		return nil, -1, errors.WithMessage(err, "user lookup")
-	}
-
-	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
-	if err != nil {
-		return nil, -1, errors.WithMessage(err, "parsing uid to int")
-	}
-
-	return usr, uid, nil
-}
-
-func getGid(ext External, usr *user.User, groupName string) (int64, error) {
-	_gid := usr.Gid
-
-	// attempt to assign group specified in config file
-	if group, err := ext.lookupGroup(groupName); err == nil {
-		// check user group membership
-		if ids, err := usr.GroupIds(); err == nil {
-			for _, g := range ids {
-				if group.Gid == g {
-					_gid = g
-					break
-				}
-			}
-
-			if _gid != group.Gid {
-				log.Debugf(
-					"user %s not member of group %s",
-					usr.Username, group.Name)
-			}
-		} else {
-			return -1, errors.WithMessage(
-				err, "get group membership")
-		}
-	} else {
-		log.Debugf("lookup of group specified in config: %+v", err)
-	}
-
-	gid, err := strconv.ParseInt(_gid, 10, 32)
-	if err != nil {
-		return -1, errors.WithMessage(err, "parsing gid to int")
-	}
-
-	return gid, nil
-}
-
-// drop will attempt to drop privileges by setting uid of running process to
-// that of the username specified in config file. If groupname is also
-// specified in config file then check user is a member of that group and
-// set relevant gid if so, otherwise use user.gid.
-func drop(ext External, userName string, groupName string) error {
-	log.Debugf("Running as root, downgrading to user ", userName)
-
-	if userName == "" {
-		return errors.New("no username supplied in config")
-	}
-
-	usr, uid, err := getUid(ext, userName)
-	if err != nil {
-		return errors.WithMessage(err, "get uid")
-	}
-
-	gid, err := getGid(ext, usr, groupName)
-	if err != nil {
-		return errors.WithMessage(err, "get gid")
-	}
-
-	if err := ext.setGid(gid); err != nil {
-		return errors.WithMessage(err, "setting gid")
-	}
-
-	if err := ext.setUid(uid); err != nil {
-		return errors.WithMessage(err, "setting uid")
 	}
 
 	return nil
@@ -184,42 +99,41 @@ func serverMain() error {
 	mgmtControlServer.Setup()
 	defer mgmtControlServer.Teardown()
 
-	// Create listener on management network.
+	// Create and start listener on management network.
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
-	lis, err := net.Listen("tcp", addr)
+	lis, err := net.Listen("tcp4", addr)
 	if err != nil {
 		log.Errorf("Unable to listen on management interface: %s", err)
 		return err
 	}
 	log.Debugf("DAOS control server listening on %s", addr)
 
-	// Create new grpc server, register services and start serving.
+	// Create new grpc server, register services and start serving (after
+	// dropping privileges).
 	var sOpts []grpc.ServerOption
 	// TODO: This will need to be extended to take certificate information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	secpb.RegisterAccessControlServer(grpcServer, secServer)
+	acl.RegisterAccessControlServer(grpcServer, secServer)
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Format the unformatted servers and related hardware.
-	if err = formatIosrvs(&config, false); err != nil {
-		log.Errorf("Failed to format servers: %s", err)
+	// Wait for storage to be formatted if necessary and subsequently drop
+	// current process privileges to that of normal user.
+	if err = awaitStorageFormat(&config); err != nil {
+		log.Errorf("Failed to format storage: %s", err)
 		return err
 	}
 
-	if syscall.Getuid() == 0 {
-		log.Debugf("Dropping privileges...")
-		if err := drop(
-			config.ext, config.UserName, config.GroupName); err != nil {
-
-			log.Errorf("Failed to drop privileges: %s", err)
-			// TODO: don't continue as root
-		}
+	// Format the unformatted servers by writing persistant superblock.
+	if err = formatIosrvs(&config, false); err != nil {
+		log.Errorf("Failed to format servers: %s", err)
+		return err
 	}
 
 	// Only start single io_server for now.

@@ -614,4 +614,6 @@ d_rank_t dss_self_rank(void);
 
 unsigned int dss_ctx_nr_get(void);
 
+void dss_notify_rank_set(void);
+
 #endif /* __DSS_API_H__ */
