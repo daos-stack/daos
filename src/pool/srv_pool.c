@@ -1830,8 +1830,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 */
 	D_ASSERT(svc->ps_pool != NULL);
 	if (svc->ps_pool->sp_iv_ns == NULL) {
-		rc = ds_iv_ns_create(rpc->cr_ctx, NULL,
-				     &iv_ns_id, &iv_iov,
+		rc = ds_iv_ns_create(rpc->cr_ctx, svc->ps_pool->sp_uuid,
+				     NULL, &iv_ns_id, &iv_iov,
 				     &svc->ps_pool->sp_iv_ns);
 		if (rc)
 			D_GOTO(out_svc, rc);
@@ -2737,42 +2737,8 @@ int
 ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
 		     d_iov_t *iv_iov, unsigned int iv_ns_id)
 {
-	struct ds_iv_ns	*ns;
-	int		rc;
-
-	if (pool->sp_iv_ns != NULL &&
-	    pool->sp_iv_ns->iv_master_rank != master_rank) {
-		/* If root has been changed, let's destroy the
-		 * previous IV ns
-		 */
-		ds_iv_ns_destroy(pool->sp_iv_ns);
-		pool->sp_iv_ns = NULL;
-	}
-
-	if (pool->sp_iv_ns != NULL)
-		return 0;
-
-	if (iv_iov == NULL) {
-		d_iov_t tmp;
-
-		/* master node */
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
-				     pool->sp_group, &iv_ns_id, &tmp, &ns);
-	} else {
-		/* other node */
-		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx,
-				     iv_ns_id, master_rank, iv_iov, &ns);
-	}
-
-	if (rc) {
-		D_ERROR("pool "DF_UUID" iv ns create failed %d\n",
-			 DP_UUID(pool->sp_uuid), rc);
-		return rc;
-	}
-
-	pool->sp_iv_ns = ns;
-
-	return rc;
+	return ds_iv_ns_update(pool->sp_uuid, master_rank, pool->sp_group,
+			       iv_iov, iv_ns_id, &pool->sp_iv_ns);
 }
 
 int
