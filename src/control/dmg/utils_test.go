@@ -82,7 +82,8 @@ func TestHasConnection(t *testing.T) {
 	}
 
 	for _, tt := range shelltests {
-		AssertEqual(t, hasConns(tt.results), tt.out, "bad output")
+		_, out := hasConns(tt.results)
+		AssertEqual(t, out, tt.out, "bad output")
 	}
 }
 

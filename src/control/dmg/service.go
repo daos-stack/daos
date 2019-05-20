@@ -26,8 +26,6 @@ package main
 import (
 	"fmt"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 // SvcCmd is the struct representing the top-level service subcommand.
@@ -51,8 +49,8 @@ func killRankSvc(uuid string, rank uint32) {
 
 // Execute is run when KillRankSvcCmd activates
 func (k *KillRankSvcCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.WithMessage(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		return err
 	}
 
 	killRankSvc(k.PoolUUID, k.Rank)

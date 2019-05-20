@@ -28,7 +28,6 @@ import (
 	"os"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/pkg/errors"
 )
 
 // StorCmd is the struct representing the top-level storage subcommand.
@@ -54,8 +53,8 @@ func scanStor() {
 
 // Execute is run when ScanStorCmd activates
 func (s *ScanStorCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		return err
 	}
 
 	scanStor()
@@ -87,8 +86,8 @@ func formatStor() {
 
 // Execute is run when FormatStorCmd activates
 func (s *FormatStorCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		return err
 	}
 
 	formatStor()
@@ -116,16 +115,19 @@ func updateStor(params *pb.UpdateStorageParams) {
 			"and be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	fmt.Println("")
-	cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
-	fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
-	fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
+	if getConsent() {
+		fmt.Println("")
+		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
+		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
+		fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
+	}
 }
 
 // Execute is run when UpdateStorCmd activates
 func (u *UpdateStorCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		fmt.Printf("app setup returned %s", err)
+		return err
 	}
 
 	// only populate nvme fwupdate params for the moment
