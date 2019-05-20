@@ -51,7 +51,6 @@ var (
 )
 
 func connectHosts() error {
-
 	if opts.Hostfile != "" {
 		return errors.New("hostfile option not implemented")
 	}
@@ -69,7 +68,6 @@ func main() {
 // applyCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
 func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) error {
-
 	if len(opts.Hostlist) > 0 {
 		hosts := strings.Split(opts.Hostlist, ",")
 		log.Debugf("Overriding hostlist from config file with %s", hosts)
