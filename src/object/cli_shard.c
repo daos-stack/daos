@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(object)
 
 #include <daos/container.h>
+#include <daos/mgmt.h>
 #include <daos/pool.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
@@ -315,7 +316,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (pool == NULL)
 		D_GOTO(out_obj, rc);
 
-	tgt_ep.ep_grp = pool->dp_group;
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = shard->do_target_idx;
 	tgt_ep.ep_rank = shard->do_target_rank;
 	if ((int)tgt_ep.ep_rank < 0)
@@ -468,7 +469,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out, rc = -DER_NO_HDL);
 
 	oid = shard->do_id;
-	tgt_ep.ep_grp	= pool->dp_group;
+	tgt_ep.ep_grp	= pool->dp_sys->sy_group;
 	tgt_ep.ep_tag	= shard->do_target_idx;
 	tgt_ep.ep_rank = shard->do_target_rank;
 	if ((int)tgt_ep.ep_rank < 0)
@@ -681,7 +682,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if (pool == NULL)
 		D_GOTO(out_put, rc);
 
-	tgt_ep.ep_grp = pool->dp_group;
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = obj_shard->do_target_idx;
 	tgt_ep.ep_rank = obj_shard->do_target_rank;
 	if ((int)tgt_ep.ep_rank < 0)
@@ -927,7 +928,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		D_GOTO(out, rc = -DER_NO_HDL);
 
 	oid = shard->do_id;
-	tgt_ep.ep_grp	= pool->dp_group;
+	tgt_ep.ep_grp	= pool->dp_sys->sy_group;
 	tgt_ep.ep_tag	= shard->do_target_idx;
 	tgt_ep.ep_rank = shard->do_target_rank;
 	if ((int)tgt_ep.ep_rank < 0)

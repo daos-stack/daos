@@ -43,4 +43,20 @@ int dc_pool_extend(tse_task_t *task);
 int dc_mgmt_set_params(tse_task_t *task);
 int dc_mgmt_profile(uint64_t modules, char *path, bool start);
 
+/** Client system handle */
+struct dc_mgmt_sys {
+	d_list_t		sy_link;
+	char			sy_name[DAOS_SYS_NAME_MAX + 1];
+	int			sy_ref;
+	bool			sy_server;
+	int			sy_npsrs;
+	struct dc_mgmt_psr     *sy_psrs;
+	crt_group_t	       *sy_group;
+};
+
+int dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp);
+void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
+ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
+ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
+
 #endif
