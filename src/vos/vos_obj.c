@@ -929,6 +929,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	oiter->it_iter.it_type = type;
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
