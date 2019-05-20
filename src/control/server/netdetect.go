@@ -27,8 +27,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
-	"net"
 	"os/exec"
+	"net"
 	"strings"
 )
 
@@ -47,20 +47,21 @@ func detectTopology(path string) (string, error) {
 	args := []string{"--ignore", "core", "--ignore", "cache", "--ignore", "pu"}
 	out, err := exec.Command(cmd, args...).Output()
 
-	// If execution fails from the given path,
+	// If execution fails from the given path, 
 	// look for the lstopo application and try again
 	if err != nil {
-		out, err = exec.Command("which", "lstopo").Output()
+		out, err = exec.Command("which","lstopo").Output()
 		if err != nil {
-			log.Debugf("Unable to find lstopo.  Cannot detect topology.  Error: %v", err)
+			log.Debugf("Unable to find lstopo.  Cannot detect topology." +
+				"Error: %v", err)
 			return "", err
 		}
 
 		path := strings.SplitAfter(string(out), "lstopo")
 		out, err = exec.Command(path[0], args...).Output()
 		if err != nil {
-			log.Debugf("Uable to detect device topology.  Error: %v", err)
-			return "", err
+				log.Debugf("Uable to detect device topology.  Error: %v", err)
+				return "", err
 		}
 	}
 
@@ -71,7 +72,7 @@ func detectTopology(path string) (string, error) {
 // by the input string in the system topology obtained by detectTopology()
 // The input string has the form "device0,device1,...deviceN"
 // where 'device' specifies a network device such as "eth0", "eth1", or "ib0"
-// The return string has the form:
+// The return string has the form: 
 // "dev0:logical:physical,dev1:logical:physical,...devN:logical:physical"
 // where dev is the name of the network device, logical is the NUMA Node logical ID
 // and physical is the NUMA Node physical ID
@@ -97,7 +98,7 @@ func DetectNUMANodeForDevices(netNames string) (string, error) {
 
 	devices := strings.Split(netNames, ",")
 	deviceFound := make([]bool, len(devices))
-
+	
 	for i := 0; i < numNUMANodes; i++ {
 		if !strings.Contains(fields[i], "L#") {
 			return "", errors.New("invalid topology data: L# not found")
@@ -112,11 +113,13 @@ func DetectNUMANodeForDevices(netNames string) (string, error) {
 		physicalNodeStr = strings.Split(physicalNodeStr[1], " ")
 
 		for j := 0; j < len(devices); j++ {
-			if len(devices[j]) > 0 && !deviceFound[j] {
+			if len(devices[j]) > 0  && !deviceFound[j] {
 				srchStr := "\"" + devices[j] + "\""
 				if strings.Contains(fields[i], srchStr) {
-					numaDeviceStr += devices[j] + ":" + logicalNodeStr[0] + ":" + physicalNodeStr[0] + ","
-					// Mark the device as found so we don't look for it again in the remaining NUMANodes
+					numaDeviceStr += devices[j] + ":" + logicalNodeStr[0] + ":" +
+						physicalNodeStr[0] + ","
+					// Mark the device as found so we don't look for it
+					// again in the remaining NUMANodes
 					deviceFound[j] = true
 				}
 			}
