@@ -101,10 +101,10 @@ func (s *FormatStorCmd) Execute(args []string) error {
 
 // UpdateStorCmd is the struct representing the update storage subcommand.
 type UpdateStorCmd struct {
-	NvmeModel    string `short:"nm" long:"nvme-model" description:"Update firmware of NVMe SSDs with this model name/number."`
-	NvmeStartRev string `short:"nr" long:"nvme-fw-rev" description:"Update firmware of NVMe SSDs currently running this firmware revision."`
-	NvmeFwPath   string `short:"np" long:"nvme-fw-path" description:"Update firmware of NVMe SSDs with image file at this path (path must be accessible on all servers)."`
-	NvmeFwSlot   int    `short:"ns" long:"nvme-fw-slot" description:"Update firmware of NVMe SSDs to this firmware register (default 0)"`
+	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`
+	NVMeStartRev string `short:"f" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
+	NVMeFwPath   string `short:"p" long:"nvme-fw-path" description:"Update firmware on NVMe SSDs with image file at this path (path must be accessible on all servers)." required:"1"`
+	NVMeFwSlot   int    `short:"s" default:"0" long:"nvme-fw-slot" description:"Update firmware on NVMe SSDs to this firmware register."`
 }
 
 // run NVMe and SCM storage update on all connected servers
@@ -132,8 +132,8 @@ func (u *UpdateStorCmd) Execute(args []string) error {
 	updateStor(
 		&pb.UpdateStorageParams{
 			Nvme: &pb.UpdateNvmeParams{
-				Model: u.NvmeModel, Startrev: u.NvmeStartRev,
-				Path: u.NvmeFwPath, Slot: int32(u.NvmeFwSlot),
+				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
+				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},
 		})
 
