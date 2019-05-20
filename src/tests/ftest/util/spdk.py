@@ -28,6 +28,7 @@ import threading
 import Queue
 
 from ssh_connection import Ssh
+from paramiko import SSHException
 
 SPDK_SETUP_SCRIPT = "/opt/daos/spdk/scripts/setup.sh"
 
@@ -42,21 +43,25 @@ def nvme_setup_thread(result_queue, hostname, debug=True):
         hostname: server name
         debug: print the debug message, default True
     """
-    host = Ssh(hostname, debug=debug)
-    host.connect()
-    cmd = ["sudo /usr/bin/mkdir -p /opt/daos",
-           "sudo /usr/bin/git clone https://github.com/spdk/spdk.git" \
-           " /opt/daos/spdk",
-           "sudo HUGEMEM=4096 TARGET_USER=\"{0}\" {1}"
-           .format(getpass.getuser(), SPDK_SETUP_SCRIPT),
-           "sudo /usr/bin/chmod 777 /dev/hugepages",
-           "sudo /usr/bin/chmod 666 /dev/uio*",
-           "sudo /usr/bin/chmod 666 \
-           /sys/class/uio/uio*/device/config",
-           "sudo /usr/bin/chmod 666 \
-           /sys/class/uio/uio*/device/resource*",
-           "sudo /usr/bin/rm -f /dev/hugepages/*"]
-    rccode = host.call(" && ".join(cmd))
+    try:
+        host = Ssh(hostname, debug=debug)
+        host.connect()
+        cmd = ["sudo /usr/binasd/mkdasdir -p /opt/daos",
+               "sudo /usr/bin/git clone https://github.com/spdk/spdk.git" \
+               " /opt/daos/spdk",
+               "sudo HUGEMEM=4096 TARGET_USER=\"{0}\" {1}"
+               .format(getpass.getuser(), SPDK_SETUP_SCRIPT),
+               "sudo /usr/bin/chmod 777 /dev/hugepages",
+               "sudo /usr/bin/chmod 666 /dev/uio*",
+               "sudo /usr/bin/chmod 666 \
+               /sys/class/uio/uio*/device/config",
+               "sudo /usr/bin/chmod 666 \
+               /sys/class/uio/uio*/device/resource*",
+               "sudo /usr/bin/rm -f /dev/hugepages/*"]
+        rccode = host.call(" && ".join(cmd))
+    except SSHException:
+        result_queue.put("FAIL")
+        raise
     if rccode is not 0:
         print("--- FAIL --- Failed SPDK setup command on {} with Error {}"
               .format(hostname, rccode))
@@ -72,13 +77,17 @@ def nvme_cleanup_thread(result_queue, hostname, debug=True):
         hostname: server name
         debug: print the debug message, default True
     """
-    host = Ssh(hostname, debug=debug)
-    host.connect()
-    cmd = ["sudo HUGEMEM=4096 TARGET_USER=\"{0}\" {1} reset"
-           .format(getpass.getuser(), SPDK_SETUP_SCRIPT),\
-           "sudo /usr/bin/rm -f /dev/hugepages/*",
-           "sudo /usr/bin/rm -rf /opt/daos/"]
-    rccode = host.call(" && ".join(cmd))
+    try:
+        host = Ssh(hostname, debug=debug)
+        host.connect()
+        cmd = ["sudo HUGEMEM=4096 TARGET_USER=\"{0}\" {1} reset"
+               .format(getpass.getuser(), SPDK_SETUP_SCRIPT),\
+               "sudo /usr/bin/rm -f /dev/hugepages/*",
+               "sudo /usr/bin/rm -rf /opt/daos/"]
+        rccode = host.call(" && ".join(cmd))
+    except SSHException:
+        result_queue.put("FAIL")
+        raise
     if rccode is not 0:
         print("--- FAIL --- Failed SPDK setup command on {} with Error {}"
               .format(hostname, rccode))

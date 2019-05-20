@@ -22,7 +22,8 @@
 '''
 from __future__ import print_function
 
-from paramiko import client
+import socket
+import paramiko
 
 class Ssh(object):
     """
@@ -37,21 +38,41 @@ class Ssh(object):
         Initialize the remote machines and open SSH Connection.
         Args:
             address: remote machine IP address or hostname.
-            timeout: Timeout for waiting to finish the command
             debug  : To print the command on console.
         return:
             None
         """
         self.address = address
         self.debug = debug
-        self.client = client.SSHClient()
-        self.client.set_missing_host_key_policy(client.AutoAddPolicy())
+        self.client = paramiko.client.SSHClient()
+        self.client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy())
 
     def connect(self):
         """
         Connect the client via ssh connection
         """
-        self.client.connect(self.address)
+        try:
+            self.client.connect(self.address)
+        except paramiko.BadHostKeyException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Error verifying {}'s host key: {}"
+                .format(self.address, error))
+        except paramiko.BadAuthenticationType as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Bad Authentication Type for {}: {}"
+                .format(self.address, error))
+        except paramiko.AuthenticationException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Authentication failed for {}: {}"
+                .format(self.address, error))
+        except paramiko.SSHException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Error in SSH connection to {}: {}"
+                .format(self.address, error))
+        except socket.error as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Socket error connecting to {}: {}"
+                .format(self.address, error))
 
         if self.debug:
             print("SSH Connection open to {0}.".format(self.address))
@@ -77,9 +98,14 @@ class Ssh(object):
             stdout = channel.makefile('rb').read()
             exit_status = channel.recv_exit_status()
             channel.close()
-        except:
-            print("Exception in call for command {0}".format(command))
-            raise
+        except paramiko.ChannelException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Failed to open new Channel: {}"
+                .format(error))
+        except paramiko.SSHException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Error {} for running command {} on :{}"
+                .format(error, command, self.address))
 
         if self.debug:
             stderr = channel.makefile_stderr('rb').read()
@@ -119,9 +145,14 @@ class Ssh(object):
             channel.exec_command(command)
             exit_status = channel.recv_exit_status()
             channel.close()
-        except:
-            print("Exception in call for command {0}".format(command))
-            raise
+        except paramiko.ChannelException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Failed to open new Channel: {}"
+                .format(error))
+        except paramiko.SSHException as error:
+            raise paramiko.ssh_exception.SSHException(
+                "Error {} for running command {} on :{}"
+                .format(error, command, self.address))
 
         if self.debug:
             print("[{0}] Command :{1}\nRC:{2} \n"
