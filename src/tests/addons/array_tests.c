@@ -243,7 +243,7 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 	daos_size_t new_size, i;
 	int rc;
 
-	daos_sync_ranks(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		goto out;
@@ -404,7 +404,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(rbuf);
 	D_FREE(wbuf);
 
-	daos_sync_ranks(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_size_t array_size;
 	daos_size_t expected_size;
@@ -428,7 +428,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	rc = daos_array_punch(oh, DAOS_TX_NONE, &iod, NULL);
 	assert_int_equal(rc, 0);
 
-	daos_sync_ranks(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** Verify size is still the same */
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
@@ -564,7 +564,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(rbuf);
 	D_FREE(wbuf);
 
-	daos_sync_ranks(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_size_t expected_size;
 	daos_size_t array_size = 0;
@@ -734,7 +734,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(iod.arr_rgs);
 	D_FREE(sgl.sg_iovs);
 
-	daos_sync_ranks(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_size_t array_size;
 	daos_size_t expected_size;
