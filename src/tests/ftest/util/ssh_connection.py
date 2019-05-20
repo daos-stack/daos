@@ -37,7 +37,6 @@ class Ssh(object):
         Initialize the remote machines and open SSH Connection.
         Args:
             address: remote machine IP address or hostname.
-            timeout: Timeout for waiting to finish the command
             debug  : To print the command on console.
         return:
             None
