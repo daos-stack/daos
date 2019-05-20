@@ -1,15 +1,13 @@
-Application Interface and Tiering
-=================================
+# Application Interface and Tiering
 
-DAOS Container Management
--------------------------
+## DAOS Container Management
 
 DAOS containers are the unit of data management for users.
 
 ### Container Creation/Destroy
 
 Containers can be created and destroyed through the
-daos\_cont\_create/destroy() functions exported by the DAOS API. A user
+daos_cont_create/destroy() functions exported by the DAOS API. A user
 tool called “daos” to manage containers is under development and will be
 available and documented here for DAOS v1.0.
 
@@ -17,35 +15,35 @@ available and documented here for DAOS v1.0.
 
 At creation time, a list of container properties can be specified:
 
--   DAOS\_PROP\_CO\_LABEL is a string that a user can associate with a
+-   DAOS_PROP_CO_LABEL is a string that a user can associate with a
     container. e.g. “Cat Pics” or “ResNet-50 training data”
 
--   DAOS\_PROP\_CO\_LAYOUT\_TYPE is the container type (POSIX, MPI-IO,
+-   DAOS_PROP_CO_LAYOUT_TYPE is the container type (POSIX, MPI-IO,
     HDF5, …)
 
--   DAOS\_PROP\_CO\_LAYOUT\_VER is a version of the layout that can be
+-   DAOS_PROP_CO_LAYOUT_VER is a version of the layout that can be
     used by I/O middleware and application to handle interoperability.
 
--   DAOS\_PROP\_CO\_CSUM defines whether checksums are enabled or
+-   DAOS_PROP_CO_CSUM defines whether checksums are enabled or
     disabled and the checksum type used.
 
--   DAOS\_PROP\_CO\_REDUN\_FAC is the redundancy factor that drives the
+-   DAOS_PROP_CO_REDUN_FAC is the redundancy factor that drives the
     minimal data protection required for objects stored in the
     container. e.g. RF1 means no data protection, RF3 only allows 3-way
     replication or erasure code N+2.
 
--   DAOS\_PROP\_CO\_REDUN\_LVL is the fault domain level that should be
+-   DAOS_PROP_CO_REDUN_LVL is the fault domain level that should be
     used to place data redundancy information (e.g. storage nodes, racks
     …). This information will be eventually consumed to determine object
     placement.
 
--   DAOS\_PROP\_CO\_SNAPSHOT\_MAX is the maximum number of snapshot to
+-   DAOS_PROP_CO_SNAPSHOT_MAX is the maximum number of snapshot to
     retain. When a new snapshot is taken and the threshold is reached,
     the oldest snapshot will be automatically deleted.
 
--   DAOS\_PROP\_CO\_ACL is the list of ACL for the container.
+-   DAOS_PROP_CO_ACL is the list of ACL for the container.
 
--   DAOS\_PROP\_CO\_COMPRESS and DAOS\_PROP\_CO\_ENCRYPT are reserved to
+-   DAOS_PROP_CO_COMPRESS and DAOS_PROP_CO_ENCRYPT are reserved to
     configure respectively compression and encryption. Those features
     are currently not on the roadmap.
 
@@ -57,7 +55,7 @@ eventually provided.
 ### Container Snapshot
 
 Similar to container create/destroy, a container can be snapshotted
-through the DAOS API by calling daos\_cont\_create\_snap(). Additional
+through the DAOS API by calling daos_cont_create_snap(). Additional
 functions are provided to destroy and list container snapshots.
 
 The API also provides the ability to subscribe to container snapshot
@@ -69,7 +67,7 @@ This section will be updated once the “daos” tool is available.
 ### Container User Attributes
 
 Similar to POSIX extended attributes, users can attach some metadata to
-each container through the daos\_cont\_{list/get/set}\_attr() API.
+each container through the daos_cont_{list/get/set}_attr() API.
 
 ### Container ACLs
 
@@ -77,8 +75,7 @@ Support for per-container ACLs is scheduled for DAOS v1.2. Similar to
 pool ACLs, container ACLs will implement a subset of the NFSv4 ACL
 standard. This feature will be documented here once available.
 
-Native Programming Interface
-----------------------------
+## Native Programming Interface
 
 ### Building against the DAOS library
 
@@ -91,14 +88,13 @@ Examples are available under src/tests.
 libdaos is written in C and uses Doxygen comments that are added to C
 header files.
 
-\[TODO\] Generate Doxygen document and add a link here.
+\[TODO] Generate Doxygen document and add a link here.
 
 ### Bindings to Different Languages
 
 API bindings to both Python[^1] and Go[^2] languages are available.
 
-POSIX Filesystem
-----------------
+## POSIX Filesystem
 
 A regular POSIX namespace can be encapsulated into a DAOS container.
 This capability is provided by the libdfs library that implements the
@@ -134,19 +130,17 @@ namespace with a single pool and container. To test dfuse, the following
 steps need to be done:
 
 1. Launch DAOS server(s) and create a pool as specified in the previous section. This will return a pool uuid "puuid" and service rank list "svcl"
-1.  Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs\_test
+1.  Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs_test
 1. Mount dfuse with the following command: 
 
-        \orterun -np 1 --ompi-server file:\~/uri.txt dfuse /tmp/dfs\_test -s -f -p puuid -l svcl\ -p specifies the pool uuid and -l specifies the service rank list
+        orterun -np 1 --ompi-server file:~/uri.txt dfuse /tmp/dfs_test -s -f -p puuid -l svcl -p specifies the pool uuid and -l specifies the service rank list
     (from dmg).
 3.  Other arguments to dfuse: -r: option to destroy the container
     associated with the namespace when you umount. -d: prints debug
     messages at the fuse mount terminal
-
-4.  Now /tmp/dfs\_test can be used as a POSIX file system (i.e., can run
+4.  Now /tmp/dfs_test can be used as a POSIX file system (i.e., can run
     things like IOR/mdtest on it)
-5. When done, unmount the file system: fusermount -u /tmp/dfs\_test
-5. 
+5. When done, unmount the file system: fusermount -u /tmp/dfs_test
 
 Work is underway to rewrite the dfuse daemon against the low-level
     FUSE API.
@@ -160,16 +154,14 @@ application context through libdaos and without any application changes.
 
 Support for libioil is currently planned for DAOS v1.2.
 
-Unified Namespace
------------------
+## Unified Namespace
 
 The DAOS tier can be tightly integrated with the Lustre parallel
 filesystem in which DAOS containers will be represented through the
 Lustre namespace. This capability is under development and is scheduled
 for DAOS v1.2.
 
-HPC I/O Middleware Support
---------------------------
+## HPC I/O Middleware Support
 
 Several HPC I/O middleware libraries have been ported to the native API.
 
@@ -184,9 +176,9 @@ This driver has been submitted upstream for integration.
 
 To build the MPI-IO driver:
 
--   export MPI\_LIB=""
+-   export MPI_LIB=""
 
--   download the mpich repo from above and switch to daos\_adio branch
+-   download the mpich repo from above and switch to daos_adio branch
 
 -   ./autogen.sh
 
@@ -198,7 +190,7 @@ To build the MPI-IO driver:
 
 -   make -j8; make install
 
-Switch PATH and LD\_LIBRARY\_PATH where you want to build your client
+Switch PATH and LD_LIBRARY_PATH where you want to build your client
 apps or libs that use MPI to the above installed MPICH. Note that the
 DAOS server will still need to be launched with OMPI's orterun. This is
 a unique situation where the server uses OMPI and the clients will be
@@ -210,35 +202,31 @@ and mpich library installed above (see child pages).
 To run an example:
 
 1. Launch DAOS server(s) and create a pool as specified in the previous section. This will return a pool uuid "puuid" and service rank list "svcl"
+2.   At the client side, the following environment variables need to be set:
     
-2.    At the client side, the following environment variables need to be set:\
-    export PATH=/path/to/mpich/install/bin:\$PATH\
-    export
-    LD\_LIBRARY\_PATH=/path/to/mpich/install/lib:\$LD\_LIBRARY\_PATH\
-    export MPI\_LIB=""\
-    export CRT\_ATTACH\_INFO\_PATH=/path/ (whatever was passed to
-    daos\_server -a)\
-    export DAOS\_SINGLETON\_CLI=1
-
-2.  export DAOS\_POOL=puuid; export DAOS\_SVCL=svcl\
+        export PATH=/path/to/mpich/install/bin:$PATH
+        export LD_LIBRARY_PATH=/path/to/mpich/install/lib:$LD_LIBRARY_PATH
+        export MPI_LIB=""
+        export CRT_ATTACH_INFO_PATH=/path/ (whatever was passed to daos_server -a)
+        export DAOS_SINGLETON_CLI=1
+2.  export DAOS_POOL=puuid; export DAOS_SVCL=svcl
     This is just temporary till we have a better way of passing pool
     connect info to MPI-IO and other middleware over DAOS.
-
 3.  Run the client application or test.
 
 Limitations to the current implementation include:
 
--   Incorrect MPI\_File\_set\_size and MPI\_File\_get\_size - This will
+-   Incorrect MPI_File_set_size and MPI_File_get_size - This will
     be fixed in the future when DAOS correctly supports records
     enumeration after punch or key query for max/min key and recx.
 
--   Reading Holes does not return 0, but leaves the buffer untouched\
+-   Reading Holes does not return 0, but leaves the buffer untouched
     (Not sure how to fix this - might need to wait for DAOS
-    implementation of iov\_map\_t to determine holes vs written bytes in
+    implementation of iov_map_t to determine holes vs written bytes in
     the Array extent).
 
 -   No support for MPI file atomicity, preallocate, shared file
-    pointers.\
+    pointers.
     (Those features were agreed upon as OK not to support.)
 
 ### HDF5
@@ -247,14 +235,12 @@ A prototype version of a HDF5 DAOS connector is available. Please refer
 to the DAOS VOL connector user guide[^3] for instructions on how to
 build and use it.
 
-Spark Support
--------------
+## Spark Support
 
 Spark integration with libdfs is under development and is scheduled for
 DAOS v1.0 or v1.2.
 
-Data Migration
---------------
+## Data Migration
 
 ### Migration to/from a POSIX filesystem
 

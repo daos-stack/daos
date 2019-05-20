@@ -1,11 +1,9 @@
-Hardware Requirements
-=====================
+# Hardware Requirements
 
 The purpose of this section is to describe processor, storage and
 network requirements to deploy a DAOS system.
 
-Deployment Options
-------------------
+## Deployment Options
 
 As illustrated in the figure below, a DAOS system can be deployed in two
 different ways:
@@ -28,8 +26,7 @@ well.
 
 ![](./media/image1.png)
 
-Processor Requirements
-----------------------
+## Processor Requirements
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel 64 architecture. The DAOS software and the libraries it depends
@@ -42,8 +39,7 @@ are applicable for ARM builds as well. DAOS and its dependencies will
 make the necessary adjustments automatically in their respective build
 systems for ARM platforms.
 
-Network Requirements
---------------------
+## Network Requirements
 
 The DAOS network layer relies on libfabrics and supports OFI providers
 for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray’s GNI, and the Intel
@@ -55,8 +51,7 @@ An additional out-of-band network connecting the nodes in the DAOS
 service cluster is required for DAOS administration. Management traffic
 uses IP over Fabric.
 
-Storage Requirements
---------------------
+## Storage Requirements
 
 DAOS requires each storage node to have direct access to storage-class
 memory (SCM). While DAOS is primarily tested and tuned for Optane DC
@@ -82,8 +77,7 @@ For testing purposes, SCM can be emulated with DRAM by mounting a tmpfs
 filesystem and NVMe SSDs can be also emulated with DRAM or a loopback
 file.
 
-CPU Affinity
-------------
+## CPU Affinity
 
 On recent Xeon platforms, PCIe slots have a natural affinity to one CPU.
 Although globally accessible from any of the system cores, NVMe SSDs and
@@ -104,8 +98,7 @@ from that server instance. The control plane is responsible for
 detecting the storage and network affinity and starting the I/O servers
 accordingly.
 
-Fault Domains
--------------
+## Fault Domains
 
 DAOS relies on single-ported storage massively distributed across
 different storage nodes. Each storage node is thus a single point of

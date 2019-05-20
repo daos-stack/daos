@@ -1,10 +1,8 @@
-DAOS Performance Tuning
-=======================
+# DAOS Performance Tuning
 
 This section will be expanded in a future revision.
 
-Network Performance
--------------------
+## Network Performance
 
 Similar to the Lustre Network stack, the DAOS CART layer has the ability
 to validate and benchmark network communications in the same context as
@@ -24,8 +22,7 @@ following test scenarios:
 Instructions on how to run CART selftest will be provided in the next
 revision of this document.
 
-Benchmarking DAOS
------------------
+## Benchmarking DAOS
 
 DAOS can be benchmarked with both IOR and mdtest through the following
 backends:
