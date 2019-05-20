@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ struct daos_task_args {
 		daos_cont_close_t	cont_close;
 		daos_cont_destroy_t	cont_destory;
 		daos_cont_query_t	cont_query;
+		daos_cont_aggregate_t	cont_aggregate;
 		daos_cont_rollback_t	cont_rollback;
 		daos_cont_subscribe_t	cont_subscribe;
 		daos_cont_list_attr_t	cont_list_attr;
