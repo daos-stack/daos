@@ -68,8 +68,8 @@ class IorSingleServer(Test):
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                   self.hostlist_servers,
-                                                   self.hostlist_clients)
+                                                    self.hostlist_servers,
+                                                    self.hostlist_clients)
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -86,8 +86,8 @@ class IorSingleServer(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions,
+                                       self.hostlist_clients)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_singleserver(self):
@@ -124,9 +124,9 @@ class IorSingleServer(Test):
             print ("pool_uuid: {}".format(pool_uuid))
             tmp_rank_list = []
             svc_list = ""
-            for i in range(createsvc):
-                tmp_rank_list.append(int(self.pool.svc.rl_ranks[i]))
-                svc_list += str(tmp_rank_list[i]) + ":"
+            for item in range(createsvc):
+                tmp_rank_list.append(int(self.pool.svc.rl_ranks[item]))
+                svc_list += str(tmp_rank_list[item]) + ":"
             svc_list = svc_list[:-1]
 
             ior_utils.run_ior_daos(self.hostfile_clients, ior_flags, iteration,

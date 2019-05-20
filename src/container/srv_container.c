@@ -147,7 +147,7 @@ ds_cont_svc_step_down(struct cont_svc *svc)
 	svc->cs_pool = NULL;
 }
 
-static int
+int
 cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
 		       struct rsvc_hint *hint)
 {
@@ -163,7 +163,7 @@ cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
 	return 0;
 }
 
-static void
+void
 cont_svc_put_leader(struct cont_svc *svc)
 {
 	ds_rsvc_put_leader(svc->cs_rsvc);
@@ -599,7 +599,7 @@ out:
 	return rc;
 }
 
-static int
+int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	    struct cont **cont)
 {
@@ -1389,6 +1389,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	case CONT_EPOCH_COMMIT:
 		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
 					    false);
+	case CONT_EPOCH_AGGREGATE:
+		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
@@ -1640,3 +1642,4 @@ out_pool_hdl:
 out:
 	return rc;
 }
+
