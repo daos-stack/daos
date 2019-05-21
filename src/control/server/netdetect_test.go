@@ -268,6 +268,7 @@ func TestParseTopology(t *testing.T) {
 		if err != nil {
 			log.Debugf("error was not nil... %v", err)
 		}
-		AssertEqual(t, netAdapterAffinity, tt.expected, "unexected device found")
+		AssertEqual(t, netAdapterAffinity, tt.expected,
+			"unexpected mismatch with device and topology")
 	}
 }
