@@ -168,7 +168,7 @@ void dc_obj_shard_close(struct dc_obj_shard *shard);
 struct daos_obj_shard_tgt;
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
-			daos_iod_t *iods, daos_sg_list_t *sgls,
+			daos_iod_t *iods, d_sg_list_t *sgls,
 			unsigned int *map_ver, unsigned int start_shard,
 			struct daos_obj_shard_tgt *tgts,
 			uint32_t fw_cnt, tse_task_t *task,
@@ -176,7 +176,7 @@ int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 
 int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
-		       daos_iod_t *iods, daos_sg_list_t *sgls,
+		       daos_iod_t *iods, d_sg_list_t *sgls,
 		       daos_iom_t *maps, unsigned int *map_ver,
 		       tse_task_t *task);
 
@@ -184,7 +184,7 @@ int
 dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
 		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
-		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_key_desc_t *kds, d_sg_list_t *sgl,
 		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		  daos_anchor_t *anchor, daos_anchor_t  *dkey_anchor,
 		  daos_anchor_t  *akey_anchor, unsigned int *map_ver,
@@ -251,7 +251,7 @@ obj_dkey2hash(daos_key_t *dkey)
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
-int obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl,
+int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
 

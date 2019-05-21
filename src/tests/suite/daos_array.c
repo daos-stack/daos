@@ -36,9 +36,9 @@ byte_array_simple_stack(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 buf_out[STACK_BUF_LEN];
@@ -53,16 +53,16 @@ byte_array_simple_stack(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	d_iov_set(&sg_iov, buf, sizeof(buf));
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
@@ -88,7 +88,7 @@ byte_array_simple_stack(void **state)
 	/** fetch */
 	print_message("reading data back ...\n");
 	memset(buf_out, 0, sizeof(buf_out));
-	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
+	d_iov_set(&sg_iov, buf_out, sizeof(buf_out));
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
@@ -107,9 +107,9 @@ array_simple(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		*buf;
@@ -127,16 +127,16 @@ array_simple(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, arg->size * arg->nr);
+	d_iov_set(&sg_iov, buf, arg->size * arg->nr);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
@@ -159,7 +159,7 @@ array_simple(void **state)
 	D_ALLOC(buf_out, arg->size * arg->nr);
 	assert_non_null(buf_out);
 	memset(buf_out, 0, arg->size * arg->nr);
-	daos_iov_set(&sg_iov, buf_out, arg->size * arg->nr);
+	d_iov_set(&sg_iov, buf_out, arg->size * arg->nr);
 	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
@@ -187,9 +187,9 @@ array_partial(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	daos_recx_t	 recxs[4];
@@ -210,16 +210,16 @@ array_partial(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, arg->size * NUM_RECORDS);
+	d_iov_set(&sg_iov, buf, arg->size * NUM_RECORDS);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
@@ -241,7 +241,7 @@ array_partial(void **state)
 	D_ALLOC(buf_out, arg->size * NUM_RECORDS/2);
 	assert_non_null(buf_out);
 	memset(buf_out, 0, arg->size * NUM_RECORDS/2);
-	daos_iov_set(&sg_iov, buf_out, arg->size * NUM_RECORDS/2);
+	d_iov_set(&sg_iov, buf_out, arg->size * NUM_RECORDS/2);
 	iod.iod_size	= arg->size;
 	iod.iod_nr	= 4;
 	for (i = 0; i < 4; i++) {
@@ -347,9 +347,9 @@ replicator(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 buf_out[4608];
@@ -364,16 +364,16 @@ replicator(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	d_iov_set(&sg_iov, buf, sizeof(buf));
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
@@ -404,7 +404,7 @@ replicator(void **state)
 	/** fetch */
 	print_message("reading data back ...\n");
 	memset(buf_out, 0, sizeof(buf_out));
-	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
+	d_iov_set(&sg_iov, buf_out, sizeof(buf_out));
 	recx.rx_idx     = 27136;
 	recx.rx_nr      = sizeof(buf_out);
 	iod.iod_recxs	= &recx;
@@ -423,9 +423,9 @@ read_empty(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 *buf;
@@ -442,16 +442,16 @@ read_empty(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, buf_len);
+	d_iov_set(&sg_iov, buf, buf_len);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
@@ -489,14 +489,14 @@ enumerate_key(daos_handle_t oh, int *total_nr, daos_key_t *dkey, int key_type)
 	char		*buf;
 	daos_key_desc_t  kds[ENUM_DESC_NR];
 	daos_anchor_t	 anchor;
-	daos_sg_list_t	 sgl;
-	daos_iov_t       sg_iov;
+	d_sg_list_t	 sgl;
+	d_iov_t       sg_iov;
 	uint32_t	 nr;
 	int		 key_nr;
 	int		 rc;
 
 	buf = malloc(ENUM_DESC_BUF);
-	daos_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
+	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
@@ -529,9 +529,9 @@ array_dkey_punch_enumerate(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 buf[SM_BUF_LEN];
@@ -547,13 +547,13 @@ array_dkey_punch_enumerate(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	d_iov_set(&sg_iov, buf, sizeof(buf));
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
@@ -570,7 +570,7 @@ array_dkey_punch_enumerate(void **state)
 
 		/** init dkey */
 		sprintf(dkey_str, "dkey_%d", i);
-		daos_iov_set(&dkey, dkey_str, strlen(dkey_str));
+		d_iov_set(&dkey, dkey_str, strlen(dkey_str));
 		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
 				     NULL);
 		assert_int_equal(rc, 0);
@@ -589,7 +589,7 @@ array_dkey_punch_enumerate(void **state)
 
 		/** init dkey */
 		sprintf(dkey_str, "dkey_%d", i);
-		daos_iov_set(&dkey, dkey_str, strlen(dkey_str));
+		d_iov_set(&dkey, dkey_str, strlen(dkey_str));
 		rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 1, &dkey, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -612,9 +612,9 @@ array_akey_punch_enumerate(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 buf[SM_BUF_LEN];
@@ -630,13 +630,13 @@ array_akey_punch_enumerate(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	d_iov_set(&sg_iov, buf, sizeof(buf));
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init I/O descriptor */
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
@@ -654,7 +654,7 @@ array_akey_punch_enumerate(void **state)
 		char akey_str[10];
 
 		sprintf(akey_str, "akey_%d", i);
-		daos_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+		d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
 		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
 				     NULL);
 		assert_int_equal(rc, 0);
@@ -673,7 +673,7 @@ array_akey_punch_enumerate(void **state)
 		daos_key_t akey;
 
 		sprintf(akey_str, "akey_%d", i);
-		daos_iov_set(&akey, akey_str, strlen(akey_str));
+		d_iov_set(&akey, akey_str, strlen(akey_str));
 		rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, &dkey, 1, &akey,
 					  NULL);
 		assert_int_equal(rc, 0);
@@ -690,7 +690,7 @@ array_akey_punch_enumerate(void **state)
 		char akey_str[10];
 
 		sprintf(akey_str, "akey_%d", i);
-		daos_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+		d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
 
 		iod.iod_size = DAOS_REC_ANY;
 		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod,
@@ -714,9 +714,9 @@ array_recx_punch_enumerate(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 buf[SM_BUF_LEN];
@@ -733,16 +733,16 @@ array_recx_punch_enumerate(void **state)
 	assert_int_equal(rc, 0);
 
 	/** init dkey */
-	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	d_iov_set(&sg_iov, buf, sizeof(buf));
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;

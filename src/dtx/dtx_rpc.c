@@ -317,8 +317,8 @@ dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
 }
 
 static int
-dtx_cf_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		 daos_iov_t *val_iov, struct btr_record *rec)
+dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		 d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -364,7 +364,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	D_ASSERTF(0, "We should not come here.\n");
 	return 0;
@@ -372,7 +372,7 @@ dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key, daos_iov_t *val)
+		  d_iov_t *key, d_iov_t *val)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -460,8 +460,8 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	for (i = start; i < start + replicas && rc >= 0; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
-		daos_iov_t		 kiov;
-		daos_iov_t		 riov;
+		d_iov_t		 kiov;
+		d_iov_t		 riov;
 
 		/* skip unavailable replica(s). */
 		shard = &layout->ol_shards[i];
@@ -479,8 +479,8 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		dcrb.dcrb_rank = target->ta_comp.co_rank;
 		dcrb.dcrb_tag = target->ta_comp.co_index;
 
-		daos_iov_set(&riov, &dcrb, sizeof(dcrb));
-		daos_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
+		d_iov_set(&riov, &dcrb, sizeof(dcrb));
+		d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
 		rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
 				   &kiov, &riov);
 	}
@@ -559,7 +559,7 @@ int
 dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	   int count, uint32_t version)
 {
-	struct ds_cont		*cont = NULL;
+	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
@@ -569,7 +569,7 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	int			 rc;
 	int			 rc1 = 0;
 
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -607,7 +607,7 @@ out:
 	D_ASSERT(d_list_empty(&head));
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 
 	return rc >= 0 ? rc1 : rc;
 }
@@ -616,7 +616,7 @@ int
 dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	  int count, uint32_t version)
 {
-	struct ds_cont		*cont = NULL;
+	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
@@ -626,7 +626,7 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	int			 rc;
 	int			 rc1 = 0;
 
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -647,6 +647,8 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 
 	/* Local abort firstly. */
 	rc = vos_dtx_abort(cont->sc_hdl, dti, count, false);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	if (!d_list_empty(&head))
 		rc1 = dtx_req_list_send(DTX_ABORT, &head, length, po_uuid,
@@ -665,7 +667,7 @@ out:
 	D_ASSERT(d_list_empty(&head));
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 
 	if (rc == -DER_NONEXIST)
 		rc = 0;

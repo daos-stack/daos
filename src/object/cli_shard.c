@@ -136,7 +136,7 @@ obj_shard_rw_bulk_fini(crt_rpc_t *rpc)
 struct obj_rw_args {
 	crt_rpc_t		*rpc;
 	daos_handle_t		*hdlp;
-	daos_sg_list_t		*rwaa_sgls;
+	d_sg_list_t		*rwaa_sgls;
 	struct dc_obj_shard	*dobj;
 	unsigned int		*map_ver;
 };
@@ -219,7 +219,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						     orwo->orw_sgls.ca_count);
 		} else if (rw_args->rwaa_sgls != NULL) {
 			/* for bulk transfer it needs to update sg_nr_out */
-			daos_sg_list_t	*sgls = rw_args->rwaa_sgls;
+			d_sg_list_t	*sgls = rw_args->rwaa_sgls;
 			d_iov_t		*iov;
 			uint32_t	*nrs;
 			uint32_t	 nrs_count;
@@ -280,7 +280,7 @@ out:
 }
 
 static int
-obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
+obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, d_sg_list_t *sgls,
 		       bool forward, tse_task_t *task)
 {
 	struct obj_rw_in	*orw;
@@ -301,8 +301,7 @@ obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
 	for (i = 0; i < nr; i++) {
 		if (sgls != NULL && sgls[i].sg_iovs != NULL &&
 		    sgls[i].sg_iovs[0].iov_buf != NULL) {
-			rc = crt_bulk_create(daos_task2ctx(task),
-					     daos2crt_sg(&sgls[i]),
+			rc = crt_bulk_create(daos_task2ctx(task), &sgls[i],
 					     bulk_perm, &bulks[i]);
 			if (rc < 0) {
 				int j;
@@ -346,7 +345,7 @@ obj_shard_ptr2pool(struct dc_obj_shard *shard)
 static int
 obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	     daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
-	     daos_iod_t *iods, daos_sg_list_t *sgls, unsigned int *map_ver,
+	     daos_iod_t *iods, d_sg_list_t *sgls, unsigned int *map_ver,
 	     unsigned int start_shard, struct daos_obj_shard_tgt *fw_shard_tgts,
 	     uint32_t fw_cnt, tse_task_t *task, struct dtx_id *dti,
 	     uint32_t flags)
@@ -620,7 +619,7 @@ out:
 int
 dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		    daos_sg_list_t *sgls, unsigned int *map_ver,
+		    d_sg_list_t *sgls, unsigned int *map_ver,
 		    uint32_t start_shard,
 		    struct daos_obj_shard_tgt *fw_shard_tgts, uint32_t fw_cnt,
 		    tse_task_t *task, struct dtx_id *dti, uint32_t flags)
@@ -633,7 +632,7 @@ dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 int
 dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		   daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		   daos_sg_list_t *sgls, daos_iom_t *maps,
+		   d_sg_list_t *sgls, daos_iom_t *maps,
 		   unsigned int *map_ver, tse_task_t *task)
 {
 	return obj_shard_rw(shard, DAOS_OBJ_RPC_FETCH, epoch, dkey, nr, iods,
@@ -649,7 +648,7 @@ struct obj_enum_args {
 	daos_anchor_t		*eaa_dkey_anchor;
 	daos_anchor_t		*eaa_akey_anchor;
 	struct dc_obj_shard	*eaa_obj;
-	daos_sg_list_t		*eaa_sgl;
+	d_sg_list_t		*eaa_sgl;
 	daos_recx_t		*eaa_recxs;
 	daos_epoch_range_t	*eaa_eprs;
 	daos_size_t		*eaa_size;
@@ -762,7 +761,7 @@ int
 dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
 		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
-		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_key_desc_t *kds, d_sg_list_t *sgl,
 		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		  daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
 		  daos_anchor_t *akey_anchor, unsigned int *map_ver,
@@ -831,7 +830,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		if (sgl_size >= OBJ_BULK_LIMIT) {
 			/* Create bulk */
 			rc = crt_bulk_create(daos_task2ctx(task),
-					     daos2crt_sg(sgl), CRT_BULK_RW,
+					     sgl, CRT_BULK_RW,
 					     &oei->oei_bulk);
 			if (rc < 0)
 				D_GOTO(out_req, rc);
@@ -839,7 +838,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	}
 
 	if (*nr > KDS_BULK_LIMIT) {
-		daos_sg_list_t	tmp_sgl = { 0 };
+		d_sg_list_t	tmp_sgl = { 0 };
 		d_iov_t		tmp_iov = { 0 };
 
 		tmp_iov.iov_buf_len = sizeof(*kds) * (*nr);
@@ -849,7 +848,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		tmp_sgl.sg_iovs = &tmp_iov;
 
 		rc = crt_bulk_create(daos_task2ctx(task),
-				     daos2crt_sg(&tmp_sgl), CRT_BULK_RW,
+				     &tmp_sgl, CRT_BULK_RW,
 				     &oei->oei_kds_bulk);
 		if (rc < 0)
 			D_GOTO(out_req, rc);

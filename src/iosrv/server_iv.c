@@ -246,14 +246,15 @@ iv_entry_free(struct ds_iv_entry *entry)
 }
 
 static int
-fetch_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
-	       d_sg_list_t *src, void *priv)
+fetch_iv_value(struct ds_iv_entry *entry, struct ds_iv_key *key,
+	       d_sg_list_t *dst, d_sg_list_t *src, void *priv)
 {
 	struct ds_iv_class	*class = entry->iv_class;
 	int			rc;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_fetch)
-		rc = class->iv_class_ops->ivc_ent_fetch(entry, dst, src, priv);
+		rc = class->iv_class_ops->ivc_ent_fetch(entry, key, dst, src,
+							priv);
 	else
 		rc = daos_sgl_copy_data(dst, src);
 
@@ -261,31 +262,31 @@ fetch_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
 }
 
 static int
-update_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
+update_iv_value(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		d_sg_list_t *src, void **priv)
 {
 	struct ds_iv_class	*class = entry->iv_class;
 	int			rc;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_update)
-		rc = class->iv_class_ops->ivc_ent_update(entry, dst, src, priv);
+		rc = class->iv_class_ops->ivc_ent_update(entry, key, src, priv);
 	else
-		rc = daos_sgl_copy_data(dst, src);
+		rc = daos_sgl_copy_data(&entry->iv_value, src);
 	return rc;
 }
 
 static int
-refresh_iv_value(struct ds_iv_entry *entry, d_sg_list_t *dst,
+refresh_iv_value(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *src, int ref_rc, void *priv)
 {
 	struct ds_iv_class	*class = entry->iv_class;
 	int			rc;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_refresh)
-		rc = class->iv_class_ops->ivc_ent_refresh(dst, src, ref_rc,
-							  priv);
+		rc = class->iv_class_ops->ivc_ent_refresh(entry, key, src,
+							  ref_rc, priv);
 	else
-		rc = daos_sgl_copy_data(dst, src);
+		rc = daos_sgl_copy_data(&entry->iv_value, src);
 	return rc;
 }
 
@@ -388,10 +389,16 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	D_DEBUG(DB_TRACE, "FETCH: Key [%d:%d] entry %p valid %s\n", key.rank,
 		key.class_id, entry, entry->iv_valid ? "yes" : "no");
 
-	if (!entry->iv_valid)
+	/* Forward the request to its parent if it is not root, and
+	 * let's caller decide how to deal with leader.
+	 */
+	if (!entry->iv_valid && ns->iv_master_rank != dss_self_rank())
 		return -DER_IVCB_FORWARD;
 
-	rc = fetch_iv_value(entry, iv_value, &entry->iv_value, priv);
+	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);
+	if (rc == 0)
+		entry->iv_valid = true;
+
 	return rc;
 }
 
@@ -421,11 +428,10 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	if (iv_value && iv_value->sg_iovs != NULL) {
 		if (refresh)
-			rc = refresh_iv_value(entry, &entry->iv_value, iv_value,
-				      ref_rc,
+			rc = refresh_iv_value(entry, &key, iv_value, ref_rc,
 				      priv_entry ? priv_entry->priv : NULL);
 		else
-			rc = update_iv_value(entry, &entry->iv_value, iv_value,
+			rc = update_iv_value(entry, &key, iv_value,
 				      priv_entry ? priv_entry->priv : NULL);
 		if (rc != -DER_IVCB_FORWARD && rc != 0) {
 			D_ERROR("key id %d update failed: rc = %d\n",
@@ -557,7 +563,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 
 	/* Let's deal with iv_value first */
 	if (iv_value != NULL)
-		daos_sgl_fini((daos_sg_list_t *)iv_value, false);
+		daos_sgl_fini((d_sg_list_t *)iv_value, false);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
@@ -626,8 +632,8 @@ ds_iv_ns_lookup(unsigned int ns_id, d_rank_t master_rank)
 }
 
 static int
-iv_ns_create_internal(unsigned int ns_id, d_rank_t master_rank,
-		      struct ds_iv_ns **pns)
+iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
+		      d_rank_t master_rank, struct ds_iv_ns **pns)
 {
 	struct ds_iv_ns	*ns;
 
@@ -639,6 +645,7 @@ iv_ns_create_internal(unsigned int ns_id, d_rank_t master_rank,
 	if (ns == NULL)
 		return -DER_NOMEM;
 
+	uuid_copy(ns->iv_pool_uuid, pool_uuid);
 	D_INIT_LIST_HEAD(&ns->iv_entry_list);
 	ns->iv_ns_id = ns_id;
 	ns->iv_master_rank = master_rank;
@@ -667,26 +674,33 @@ ds_iv_ns_destroy(void *ns)
  * be called on master node
  */
 int
-ds_iv_ns_create(crt_context_t ctx, crt_group_t *grp,
-		unsigned int *ns_id, daos_iov_t *g_ivns,
+ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid,
+		crt_group_t *grp, unsigned int *ns_id, d_iov_t *ivns,
 		struct ds_iv_ns **p_iv_ns)
 {
+	d_iov_t			*g_ivns;
+	d_iov_t			tmp = { 0 };
 	struct ds_iv_ns		*ns = NULL;
 	int			tree_topo;
 	int			rc;
 
 	/* Create namespace on master */
-	rc = iv_ns_create_internal(ds_iv_ns_id++, dss_self_rank(), &ns);
+	rc = iv_ns_create_internal(ds_iv_ns_id++, pool_uuid, dss_self_rank(),
+				   &ns);
 	if (rc)
 		return rc;
+
+	if (ivns == NULL)
+		g_ivns = &tmp;
+	else
+		g_ivns = ivns;
 
 	/* Let's set the topo to 32 to avoid cart IV failover,
 	 * which is not supported yet. XXX
 	 */
 	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	rc = crt_iv_namespace_create(ctx, grp, tree_topo, crt_iv_class,
-				     crt_iv_class_nr, &ns->iv_ns,
-				     (d_iov_t *)g_ivns);
+				     crt_iv_class_nr, &ns->iv_ns, g_ivns);
 	if (rc)
 		D_GOTO(free, rc);
 
@@ -700,8 +714,8 @@ free:
 }
 
 int
-ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
-		unsigned int master_rank, daos_iov_t *iv_ctxt,
+ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
+		unsigned int master_rank, d_iov_t *iv_ctxt,
 		struct ds_iv_ns **p_iv_ns)
 {
 	struct ds_iv_ns	*ns = NULL;
@@ -721,7 +735,7 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 		return 0;
 	}
 
-	rc = iv_ns_create_internal(ns_id, master_rank, &ns);
+	rc = iv_ns_create_internal(ns_id, pool_uuid, master_rank, &ns);
 	if (rc)
 		return rc;
 
@@ -738,6 +752,49 @@ free:
 	if (rc)
 		ds_iv_ns_destroy(ns);
 
+	return rc;
+}
+
+/* Update iv namespace */
+int
+ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
+		crt_group_t *grp, d_iov_t *iv_iov,
+		unsigned int iv_ns_id, struct ds_iv_ns **iv_ns)
+{
+	struct ds_iv_ns	*ns;
+	int		rc;
+
+	D_ASSERT(iv_ns != NULL);
+	if (*iv_ns != NULL &&
+	    (*iv_ns)->iv_master_rank != master_rank) {
+		/* If root has been changed, let's destroy the
+		 * previous IV ns
+		 */
+		ds_iv_ns_destroy(*iv_ns);
+		*iv_ns = NULL;
+	}
+
+	if (*iv_ns != NULL)
+		return 0;
+
+	/* Create new iv_ns */
+	if (iv_iov == NULL) {
+		/* master node */
+		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
+				     pool_uuid, grp, &iv_ns_id, NULL, &ns);
+	} else {
+		/* other node */
+		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx,
+				     pool_uuid, iv_ns_id, master_rank, iv_iov,
+				     &ns);
+	}
+
+	if (rc) {
+		D_ERROR("pool iv ns create failed %d\n", rc);
+		return rc;
+	}
+
+	*iv_ns = ns;
 	return rc;
 }
 
@@ -813,11 +870,14 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	if (cb_info->opc == IV_FETCH && cb_info->value) {
 		struct ds_iv_entry	*entry;
+		struct ds_iv_key	key;
 
 		D_ASSERT(cb_info->ns != NULL);
 		entry = iv_class_entry_lookup(cb_info->ns, cb_info->key);
 		D_ASSERT(entry != NULL);
-		ret = fetch_iv_value(entry, cb_info->value, iv_value, NULL);
+		iv_key_unpack(&key, iv_key);
+		ret = fetch_iv_value(entry, &key, cb_info->value, iv_value,
+				     NULL);
 	}
 
 	ABT_future_set(cb_info->future, &rc);

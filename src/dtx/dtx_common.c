@@ -37,14 +37,14 @@
 struct dtx_batched_commit_args {
 	d_list_t		 dbca_link;
 	struct ds_pool_child	*dbca_pool;
-	struct ds_cont		*dbca_cont;
+	struct ds_cont_child	*dbca_cont;
 	uint32_t		 dbca_shares;
 };
 
 void
 dtx_aggregate(void *arg)
 {
-	struct ds_cont		*cont = arg;
+	struct ds_cont_child	*cont = arg;
 
 	while (!cont->sc_closing) {
 		int	rc;
@@ -58,7 +58,7 @@ dtx_aggregate(void *arg)
 	}
 
 	cont->sc_dtx_aggregating = 0;
-	ds_cont_put(cont);
+	ds_cont_child_put(cont);
 }
 
 static inline void
@@ -71,7 +71,7 @@ static inline void
 dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 {
 	d_list_del(&dbca->dbca_link);
-	ds_cont_put(dbca->dbca_cont);
+	ds_cont_child_put(dbca->dbca_cont);
 	ds_pool_child_put(dbca->dbca_pool);
 	D_FREE_PTR(dbca);
 }
@@ -81,7 +81,7 @@ dtx_flush_committable(struct dss_module_info *dmi,
 		      struct dtx_batched_commit_args *dbca)
 {
 	struct ds_pool_child	*pool = dbca->dbca_pool;
-	struct ds_cont		*cont = dbca->dbca_cont;
+	struct ds_cont_child	*cont = dbca->dbca_cont;
 	int			 rc;
 
 	do {
@@ -127,7 +127,7 @@ dtx_batched_commit(void *arg)
 
 	while (1) {
 		ABT_bool			 state;
-		struct ds_cont			*cont;
+		struct ds_cont_child		*cont;
 		struct dtx_entry		*dtes = NULL;
 		struct dtx_stat			 stat = { 0 };
 		int				 rc;
@@ -173,13 +173,13 @@ dtx_batched_commit(void *arg)
 		     (stat.dtx_oldest_committed_time != 0 &&
 		      dtx_hlc_age2sec(stat.dtx_oldest_committed_time) >
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
-			ds_cont_get(cont);
+			ds_cont_child_get(cont);
 			cont->sc_dtx_aggregating = 1;
 			rc = dss_ult_create(dtx_aggregate, cont,
 				DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
-				ds_cont_put(cont);
+				ds_cont_child_put(cont);
 			}
 		}
 
@@ -298,7 +298,7 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
-	struct ds_cont *cont, int result)
+	struct ds_cont_child *cont, int result)
 {
 	int	rc = 0;
 
@@ -522,7 +522,7 @@ out:
 int
 dtx_batched_commit_register(struct ds_cont_hdl *hdl)
 {
-	struct ds_cont			*cont = hdl->sch_cont;
+	struct ds_cont_child		*cont = hdl->sch_cont;
 	struct dtx_batched_commit_args	*dbca;
 	d_list_t			*head;
 
@@ -542,7 +542,7 @@ dtx_batched_commit_register(struct ds_cont_hdl *hdl)
 	if (dbca == NULL)
 		return -DER_NOMEM;
 
-	ds_cont_get(cont);
+	ds_cont_child_get(cont);
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = ds_pool_child_get(hdl->sch_pool);
 	d_list_add_tail(&dbca->dbca_link, head);
@@ -558,7 +558,7 @@ out:
 void
 dtx_batched_commit_deregister(struct ds_cont_hdl *hdl)
 {
-	struct ds_cont			*cont = hdl->sch_cont;
+	struct ds_cont_child		*cont = hdl->sch_cont;
 	struct dtx_batched_commit_args	*dbca;
 	d_list_t			*head;
 	ABT_future			 future;
