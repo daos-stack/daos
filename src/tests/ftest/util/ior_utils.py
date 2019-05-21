@@ -162,7 +162,7 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
 
 def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
                   ior_flags, iteration, transfer_size, block_size,
-                  display_output=True):
+                  display_output=True, oclass=None, test_file="testFile"):
     """
         Running IOR over mpich
         basepath       --Daos basepath
@@ -184,18 +184,23 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
             "export MPI_LIB=''",
             "export DAOS_SVCL={}".format(svcl),
             "export DAOS_SINGLETON_CLI=1",
-            "export FI_PSM2_DISCONNECT=1"]
+            "export FI_PSM2_DISCONNECT=1",
+            "export IOR_HINT__MPI__romio_daos_obj_class={}".format(oclass)]
 
         run_cmd = (
             env_variables[0] + ";" + env_variables[1] + ";" +
             env_variables[2] + ";" + env_variables[3] + ";" +
             env_variables[4] + ";" + env_variables[5] + ";" +
-            mpichinstall + "/mpirun -np {0} --hostfile {1} "
+#            env_variables[6] + ";" +
+            mpichinstall + "/bin/mpirun -np {0} --hostfile {1} "
             "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} -i {3} "
-            "-t {4} -b {5} -o daos:testFile".format(np, hostfile, ior_flags,
+            "-t {4} -b {5} -o daos:{6}".format(np, hostfile, ior_flags,
                                                     iteration,
                                                     transfer_size,
-                                                    block_size))
+                                                    block_size, test_file))
+
+        if oclass is not None:
+            run_cmd = env_variables[6] + ";" + run_cmd
 
         if display_output:
             print ("run_cmd: {}".format(run_cmd))
