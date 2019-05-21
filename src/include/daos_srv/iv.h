@@ -279,11 +279,11 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		     unsigned int sync_flags);
 
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
-		    unsigned int *ns_id, daos_iov_t *g_ivns,
+		    unsigned int *ns_id, d_iov_t *g_ivns,
 		    struct ds_iv_ns **p_iv_ns);
 
 int ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
-		    unsigned int master_rank, daos_iov_t *iv_ctxt,
+		    unsigned int master_rank, d_iov_t *iv_ctxt,
 		    struct ds_iv_ns **p_iv_ns);
 int ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
 		    crt_group_t *grp, d_iov_t *iv_iov, unsigned int iv_ns_id,

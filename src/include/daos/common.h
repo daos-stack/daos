@@ -163,15 +163,15 @@ int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
-daos_size_t daos_sgls_packed_size(daos_sg_list_t *sgls, int nr,
+daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 
 char *daos_str_trimwhite(char *str);
-int daos_iov_copy(daos_iov_t *dst, daos_iov_t *src);
-void daos_iov_free(daos_iov_t *iov);
+int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
+void daos_iov_free(d_iov_t *iov);
 bool daos_key_match(daos_key_t *key1, daos_key_t *key2);
 
 /* The DAOS BITS is composed by uint32_t[x] */

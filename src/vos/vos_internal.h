@@ -382,7 +382,7 @@ int vos_csum_enabled(void);
 /**
  * compute checksum for a sgl using CRC64
  */
-int vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum);
+int vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum);
 /**
  * Register btree class for container table, it is called within vos_init()
  *
@@ -631,7 +631,7 @@ struct vos_rec_bundle {
 	 *	    TODO also support scatter/gather list input.
 	 * Output : parameter to return value address.
 	 */
-	daos_iov_t		*rb_iov;
+	d_iov_t		*rb_iov;
 	/**
 	 * Single value record IOV.
 	 */
@@ -655,7 +655,7 @@ struct vos_embedded_key {
 	/** The kbund of the current iterator */
 	struct vos_key_bundle	ek_kbund;
 	/** Inlined iov kbund references */
-	daos_iov_t		ek_kiov;
+	d_iov_t		ek_kiov;
 	/** Inlined buffer the kiov references*/
 	unsigned char		ek_key[EMBEDDED_KEY_MAX];
 };
@@ -685,7 +685,7 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 static inline uint64_t
 vos_krec_size(struct vos_rec_bundle *rbund)
 {
-	daos_iov_t	*key;
+	d_iov_t	*key;
 	daos_size_t	 psize;
 
 	key = rbund->rb_iov;
@@ -944,7 +944,7 @@ struct vos_iter_ops {
 			     daos_anchor_t *anchor);
 	/** copy out the record data */
 	int	(*iop_copy)(struct vos_iterator *iter,
-			    vos_iter_entry_t *it_entry, daos_iov_t *iov_out);
+			    vos_iter_entry_t *it_entry, d_iov_t *iov_out);
 	/** Delete the record that the cursor points to */
 	int	(*iop_delete)(struct vos_iterator *iter,
 			      void *args);
@@ -1001,10 +1001,10 @@ vos_hdl2oiter(daos_handle_t hdl)
  * into dbtree operations as a compound key.
  */
 static inline void
-tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
+tree_key_bundle2iov(struct vos_key_bundle *kbund, d_iov_t *iov)
 {
 	memset(kbund, 0, sizeof(*kbund));
-	daos_iov_set(iov, kbund, sizeof(*kbund));
+	d_iov_set(iov, kbund, sizeof(*kbund));
 }
 
 /**
@@ -1013,10 +1013,10 @@ tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
  * buffer umoff, checksum etc).
  */
 static inline void
-tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
+tree_rec_bundle2iov(struct vos_rec_bundle *rbund, d_iov_t *iov)
 {
 	memset(rbund, 0, sizeof(*rbund));
-	daos_iov_set(iov, rbund, sizeof(*rbund));
+	d_iov_set(iov, rbund, sizeof(*rbund));
 }
 
 enum {
@@ -1033,8 +1033,8 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
-key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
-	       daos_iov_t *val_iov, int flags);
+key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
+	       d_iov_t *val_iov, int flags);
 
 /* vos_io.c */
 uint16_t

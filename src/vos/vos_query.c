@@ -54,9 +54,9 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	daos_handle_t		 ih;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov;
-	daos_iov_t		 kbund_kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 kbund_kiov;
+	d_iov_t		 riov;
 	daos_csum_buf_t		 csum;
 	daos_epoch_range_t	 epr;
 	int			 rc = 0;
@@ -90,7 +90,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	rbund.rb_csum = &csum;
 
 	do {
-		daos_iov_set(rbund.rb_iov, NULL, 0);
+		d_iov_set(rbund.rb_iov, NULL, 0);
 		daos_csum_set(rbund.rb_csum, NULL, 0);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
@@ -192,8 +192,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	daos_csum_buf_t		 csum = {0};
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	enum vos_tree_class	 tclass;
 	int			 rc = 0;
 
