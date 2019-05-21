@@ -60,7 +60,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			"eth0:0:0"},
 		// looks for one specific adapter in a good topology
 		{"eth1",
