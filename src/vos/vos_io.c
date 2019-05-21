@@ -1092,11 +1092,11 @@ done:
  */
 uint16_t
 vos_media_select(struct vos_object *obj, daos_iod_type_t type,
-		 daos_size_t size)
+		 daos_size_t size, enum vos_io_stream ios)
 {
 	struct vea_space_info *vsi = obj->obj_cont->vc_pool->vp_vea_info;
 
-	if (vsi == NULL)
+	if (vsi == NULL || ios == VOS_IOS_GENERIC)
 		return DAOS_MEDIA_SCM;
 	else
 		return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
@@ -1120,7 +1120,8 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_media_select(ioc->ic_obj, iod->iod_type, size);
+		media = vos_media_select(ioc->ic_obj, iod->iod_type, size,
+					 VOS_IOS_GENERIC);
 
 		if (iod->iod_type == DAOS_IOD_SINGLE)
 			rc = vos_reserve_single(ioc, media, size);

@@ -1039,7 +1039,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 /* vos_io.c */
 uint16_t
 vos_media_select(struct vos_object *obj, daos_iod_type_t type,
-		 daos_size_t size);
+		 daos_size_t size, enum vos_io_stream ios);
 int
 vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
