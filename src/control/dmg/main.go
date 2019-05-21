@@ -99,7 +99,7 @@ func dmgMain() error {
 	// with expected functionality (tab expansion and utility commands)
 	// after parsing config/opts and setting up connections.
 	if err := appSetup(); err != nil {
-		return err
+		fmt.Println(err.Error()) // notify of app setup errors
 	}
 
 	shell := setupShell()
