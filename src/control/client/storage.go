@@ -36,6 +36,8 @@ import (
 
 const (
 	msgOpenStreamFail = "client.UpdateStorage() open stream failed: "
+	msgStreamRecv     = "%T recv() failed"
+	msgTypeAssert     = "type assertion failed, wanted %T got %T"
 )
 
 // scanStorage returns all discovered SCM and NVMe storage devices discovered on
@@ -149,7 +151,8 @@ func formatStorageRequest(mc Control, parms interface{}, ch chan ClientResult) {
 			break
 		}
 		if err != nil {
-			log.Errorf("%v.FormatStorage(_) = _, %v\n", mc, err)
+			err := errors.Wrapf(err, msgStreamRecv, stream)
+			log.Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}
@@ -221,8 +224,8 @@ func updateStorageRequest(
 		updateParams = v
 	default:
 		err := errors.Errorf(
-			"updateStorageRequest() failed type assertion, "+
-				"wanted UpdateStorageParams, got %T", v)
+			msgTypeAssert, pb.UpdateStorageParams{}, params)
+
 		log.Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
@@ -241,7 +244,7 @@ func updateStorageRequest(
 			break
 		}
 		if err != nil {
-			err := errors.Wrap(err, "%T recv() failed")
+			err := errors.Wrapf(err, msgStreamRecv, stream)
 			log.Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
@@ -273,8 +276,7 @@ func (c *connList) UpdateStorage(params *pb.UpdateStorageParams) (
 		storageRes, ok := res.Value.(storageResult)
 		if !ok {
 			err := fmt.Errorf(
-				"type assertion failed, wanted %+v got %+v",
-				storageResult{}, res.Value)
+				msgTypeAssert, storageResult{}, res.Value)
 
 			cCtrlrResults[res.Address] = CtrlrResults{Err: err}
 			cModuleResults[res.Address] = ModuleResults{Err: err}
@@ -290,7 +292,6 @@ func (c *connList) UpdateStorage(params *pb.UpdateStorageParams) (
 }
 
 // TODO: implement burnin in a similar way to format
-//	burninStorage(pb.BurninStorageParams) (*pb.BurninStorageResp, error)
 
 // FetchFioConfigPaths retrieves absolute file paths for fio configurations
 // residing in spdk fio_plugin directory on server.
