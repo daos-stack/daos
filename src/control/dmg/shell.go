@@ -30,6 +30,7 @@ import (
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/ishell"
+	"github.com/pkg/errors"
 )
 
 func getUpdateStorageParams(c *ishell.Context) (*pb.UpdateStorageParams, error) {
@@ -58,7 +59,7 @@ func getUpdateStorageParams(c *ishell.Context) (*pb.UpdateStorageParams, error) 
 			return nil, fmt.Errorf("%s is not a number", slotRaw)
 		}
 
-		if slot >= 0 && slot < 7 {
+		if slot < 0 || slot > 7 {
 			return nil, fmt.Errorf(
 				"%d needs to be a number between 0 and 7", slot)
 		}
@@ -72,6 +73,25 @@ func getUpdateStorageParams(c *ishell.Context) (*pb.UpdateStorageParams, error) 
 			Path:     strings.TrimSpace(path), Slot: slot,
 		},
 	}, nil
+}
+
+func getKillRankParams(c *ishell.Context) (pool string, rank int, err error) {
+	// disable the '>>>' for cleaner same line input.
+	c.ShowPrompt(false)
+	defer c.ShowPrompt(true) // revert after command.
+
+	c.Print("Pool uuid: ")
+	pool = c.ReadLine()
+
+	c.Print("Rank: ")
+	rankIn := c.ReadLine()
+
+	rank, err = strconv.Atoi(rankIn)
+	if err != nil {
+		err = errors.New("bad rank")
+	}
+
+	return
 }
 
 func setupShell() *ishell.Shell {
@@ -112,7 +132,8 @@ func setupShell() *ishell.Shell {
 		Help: "Command to retrieve supported management features on " +
 			"connected servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 			c.Printf(
 				unpackClientMap(conns.ListFeatures()),
 				"management feature")
@@ -124,7 +145,8 @@ func setupShell() *ishell.Shell {
 		Help: "Command to scan NVMe SSD controllers " +
 			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
 			scanStor()
 		},
@@ -135,7 +157,8 @@ func setupShell() *ishell.Shell {
 		Help: "Command to format NVMe SSD controllers " +
 			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
 			formatStor()
 		},
@@ -146,7 +169,8 @@ func setupShell() *ishell.Shell {
 		Help: "Command to update firmware on NVMe SSD controllers " +
 			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
 			params, err := getUpdateStorageParams(c)
 			if err != nil {
@@ -162,22 +186,12 @@ func setupShell() *ishell.Shell {
 		Help: "Command to terminate server running as specific rank " +
 			"on a DAOS pool",
 		Func: func(c *ishell.Context) {
-			// disable the '>>>' for cleaner same line input.
-			c.ShowPrompt(false)
-			defer c.ShowPrompt(true) // revert after command.
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
-			c.Print("Pool uuid: ")
-			poolUUID := c.ReadLine()
-
-			c.Print("Rank: ")
-			rankIn := c.ReadLine()
-
-			c.Println(hasConns(conns.GetActiveConns(nil)))
-
-			rank, err := strconv.Atoi(rankIn)
+			poolUUID, rank, err := getKillRankParams(c)
 			if err != nil {
-				c.Println("bad rank")
-				return
+				c.Println(err)
 			}
 
 			killRankSvc(poolUUID, uint32(rank))
