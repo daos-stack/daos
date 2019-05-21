@@ -48,7 +48,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			"ib0:0:0"},
 		// looks for one specific adapter in a good topology
 		{"eth0",
@@ -72,7 +72,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			"eth1:0:0"},
 		// looks for three adapters in a good topology
 		{"eth0,eth1,ib0",
@@ -84,7 +84,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			"eth0:0:0,eth1:0:0,ib0:0:0"},
 		// looks for three adaptors, where "ib1" isn't in the topology
 			{"eth0,eth1,ib1",
@@ -96,7 +96,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			"eth0:0:0,eth1:0:0"},
 		// Test malformed adapter list
 		{"eth0:eth1:ib0",
@@ -108,7 +108,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			""},
 		// Test malformed adapter list
 		{"eth0 eth1 ib0",
@@ -120,7 +120,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			""},
 		// look for adaptor that doesn't show up in topology
 		{"lo",
@@ -132,7 +132,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			""},
 		// Verifies that device is found on the correct NUMA node
 		{"eth0",
@@ -144,7 +144,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#1 (P#1 96GB) + Package L#1", 
+			"NUMANode L#1 (P#1 96GB) + Package L#1",
 			"eth0:1:0"},
 		// Verifies that device is found on correct NUMA node
 		{"eth0",
@@ -156,7 +156,7 @@ func TestParseTopology(t *testing.T) {
 			"\"hfi1_0\" HostBridge L#5 PCIBridge PCIBridge PCIBridge " +
 			"PCI 8086:37d2 Net L#5 \"eth0\" OpenFabrics L#6 \"i40iw1\"" +
 			"PCI 8086:37d2 Net L#7 \"eth1\" OpenFabrics L#8 \"i40iw0\"" +
-			"NUMANode L#2 (P#1 96GB) + Package L#1", 
+			"NUMANode L#2 (P#1 96GB) + Package L#1",
 			"eth0:1:1"},
 		// Verifies devices are found on correct NUMA nodes
 		{"eth0,eth1,ib0",
@@ -264,7 +264,6 @@ func TestParseTopology(t *testing.T) {
 		}
 
 	for _, tt := range tests {
-	
 		netAdapterAffinity, err := DetectNUMANodeForDevices(tt.netDevsList, tt.topology)
 		if err != nil {
 			log.Debugf("error was not nil... %v", err)
@@ -272,42 +271,3 @@ func TestParseTopology(t *testing.T) {
 		AssertEqual(t, netAdapterAffinity, tt.expected, "unexected device found")
 	}
 }
-
-/*
-func TestParseEnvVars(t *testing.T) {
-	// Obtain the default client configuration
-	config := NewConfiguration()
-
-	// Save the environment variable before we blow it away
-	original := config.ext.getenv(daosAgentDrpcSockEnv)
-
-	// Clear the environment variable.  Process them.
-	// Make sure there were none found and the default config value was preserved.
-	os.Setenv(daosAgentDrpcSockEnv, "")
-	res1 := config.ProcessEnvOverrides()
-	// Restore the environment to what it was before the test started
-	os.Setenv(daosAgentDrpcSockEnv, original)
-	AssertEqual(
-		t, res1, 0,
-		"clearing environment variable returned unexpected number of results")
-
-	AssertEqual(
-		t, config.RuntimeDir, defaultRuntimeDir,
-		"an empty environment variable failed to preserve default runtime socket path")
-
-	// Set the environment variable.  Process them.
-	// Make sure there was one found and that config value matches what we set it to.
-	os.Setenv(daosAgentDrpcSockEnv, testRuntimeDir)
-	res2 := config.ProcessEnvOverrides()
-	// Restore the environment to what it was before the test started
-	os.Setenv(daosAgentDrpcSockEnv, original)
-	AssertEqual(
-		t, res2, 1,
-		"setting environment variable returned unexpected number of results")
-
-	AssertEqual(
-		t, config.RuntimeDir, testRuntimeDir,
-		"setting environment variable failed to override default runtime socket path")
-
-}
-*/
