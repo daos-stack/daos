@@ -138,14 +138,14 @@ pool_iv_ent_copy(d_sg_list_t *dst, d_sg_list_t *src)
 }
 
 static int
-pool_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst, d_sg_list_t *src,
-		  void **priv)
+pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		  d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	return pool_iv_ent_copy(dst, src);
 }
 
 static int
-pool_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
+pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		   d_sg_list_t *src, void **priv)
 {
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
@@ -177,20 +177,21 @@ pool_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 				    src_iv->piv_pool_map_ver);
 	ds_pool_put(pool);
 
-	return pool_iv_ent_copy(dst, src);
+	return pool_iv_ent_copy(&entry->iv_value, src);
 }
 
 static int
-pool_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **priv)
+pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		    d_sg_list_t *src, int ref_rc, void **priv)
 {
-	struct pool_iv_entry	*dst_iv = dst->sg_iovs[0].iov_buf;
+	struct pool_iv_entry	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
 	struct ds_pool		*pool;
 	int			rc;
 
 	D_ASSERT(src_iv != NULL);
 	D_ASSERT(dst_iv != NULL);
-	rc = pool_iv_ent_copy(dst, src);
+	rc = pool_iv_ent_copy(&entry->iv_value, src);
 	if (rc)
 		return rc;
 
@@ -230,7 +231,7 @@ int
 pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 {
 	d_sg_list_t		sgl = { 0 };
-	daos_iov_t		iov = { 0 };
+	d_iov_t		iov = { 0 };
 	uint32_t		pool_iv_len;
 	struct ds_iv_key	key;
 	int			rc;
@@ -240,7 +241,7 @@ pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 	 */
 	if (pool_iv != NULL) {
 		pool_iv_len = pool_iv_ent_size(pool_iv->piv_pool_buf.pb_nr);
-		daos_iov_set(&iov, pool_iv, pool_iv_len);
+		d_iov_set(&iov, pool_iv, pool_iv_len);
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 0;
 		sgl.sg_iovs = &iov;
@@ -260,7 +261,7 @@ pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 	       unsigned int shortcut, unsigned int sync_mode)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	uint32_t		pool_iv_len;
 	struct ds_iv_key	key;
 	int			rc;

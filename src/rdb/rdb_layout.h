@@ -97,7 +97,7 @@ typedef uint64_t rdb_oid_t;
 #define RDB_OID_CLASS_INTEGER	(1ULL << 63)
 
 /* D-key for all a-keys */
-extern daos_iov_t rdb_dkey;
+extern d_iov_t rdb_dkey;
 
 /* pm_ver for all VOS calls taking a pm_ver argument */
 #define RDB_PM_VER 0
@@ -125,11 +125,11 @@ struct rdb_anchor {
  * Flattened together with the Raft attributes. These are defined in
  * rdb_layout.c using RDB_STRING_KEY().
  */
-extern daos_iov_t rdb_mc_uuid;		/* uuid_t */
-extern daos_iov_t rdb_mc_term;		/* int */
-extern daos_iov_t rdb_mc_vote;		/* int */
-extern daos_iov_t rdb_mc_lc;		/* rdb_lc_record */
-extern daos_iov_t rdb_mc_slc;		/* rdb_lc_record */
+extern d_iov_t rdb_mc_uuid;		/* uuid_t */
+extern d_iov_t rdb_mc_term;		/* int */
+extern d_iov_t rdb_mc_vote;		/* int */
+extern d_iov_t rdb_mc_lc;		/* rdb_lc_record */
+extern d_iov_t rdb_mc_slc;		/* rdb_lc_record */
 
 /* Log container record */
 struct rdb_lc_record {
@@ -155,12 +155,12 @@ struct rdb_lc_record {
 #define RDB_LC_OID_NEXT_INIT 2
 
 /* Attribute a-keys under RDB_LC_ATTRS */
-extern daos_iov_t rdb_lc_entry_header;	/* rdb_entry */
-extern daos_iov_t rdb_lc_entry_data;	/* uint8_t[] */
-extern daos_iov_t rdb_lc_nreplicas;	/* uint8_t */
-extern daos_iov_t rdb_lc_replicas;	/* uint32_t[] */
-extern daos_iov_t rdb_lc_oid_next;	/* rdb_oid_t (classless) */
-extern daos_iov_t rdb_lc_root;		/* rdb_oid_t */
+extern d_iov_t rdb_lc_entry_header;	/* rdb_entry */
+extern d_iov_t rdb_lc_entry_data;	/* uint8_t[] */
+extern d_iov_t rdb_lc_nreplicas;	/* uint8_t */
+extern d_iov_t rdb_lc_replicas;	/* uint32_t[] */
+extern d_iov_t rdb_lc_oid_next;	/* rdb_oid_t (classless) */
+extern d_iov_t rdb_lc_root;		/* rdb_oid_t */
 
 /* Log entry */
 struct rdb_entry {
