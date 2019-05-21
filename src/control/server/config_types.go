@@ -154,9 +154,9 @@ func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // server defines configuration options for DAOS IO Server instances
 type server struct {
 	Rank            *rank     `yaml:"rank"`
-	Targets         []string  `yaml:"targets"` // cpus to run xstreams
-	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
-	FirstCore       int       `yaml:"first_core"`
+	Targets         int       `yaml:"targets"`       // count of cpus to run xstreams
+	NrXsHelpers     int       `yaml:"nr_xs_helpers"` // offload xstreams/target
+	FirstCore       int       `yaml:"first_core"`    // first cpu target
 	FabricIface     string    `yaml:"fabric_iface"`
 	FabricIfacePort int       `yaml:"fabric_iface_port"`
 	LogMask         string    `yaml:"log_mask"`
