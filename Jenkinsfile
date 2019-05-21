@@ -280,17 +280,17 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
+                                junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
                                 failure_artifacts: 'Functional'
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/ Functional/
+                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/ Functional/
                                   mkdir Functional/
                                   ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* Functional/
-                                  mv src/tests/ftest/avocado/job-results/* \
+                                  mv src/tests/ftest/avocado/* \
                                      $(ls src/tests/ftest/*.stacktrace || true) Functional/'''
-                            junit 'Functional/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit 'Functional/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: 'Functional/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
