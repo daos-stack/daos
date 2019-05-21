@@ -360,7 +360,7 @@ static void
 rebuild_dkeys(void **state)
 {
 	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid;
+	daos_obj_id_t		oids[20];
 	struct ioreq		req;
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
@@ -368,24 +368,27 @@ rebuild_dkeys(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	print_message("Insert 20 objs %d kv record per object\n",
+		      KEY_NR);
+	for (i = 0; i < 20; i++) {
+		int j;
 
-	/** Insert 1000 records */
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      KEY_NR, DP_OID(oid));
-	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		oids[i] = dts_oid_gen(OC_RP_3G1, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 
-		sprintf(key, "dkey_0_%d", i);
-		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
+		/** Insert 1000 records */
+		for (j = 0; j < KEY_NR; j++) {
+			char	key[16];
+
+			sprintf(key, "dkey_0_%d", j);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+		}
+		ioreq_fini(&req);
 	}
-	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], -1);
 
 	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
 }
