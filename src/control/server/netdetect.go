@@ -34,15 +34,19 @@ import (
 
 const applicationPath = "/bin/lstopo"
 
-// detectTopology uses lstopo application to retrieve the network device
+// DetectTopology uses lstopo application to retrieve the network device
 // topology for all NUMA Nodes found on this system.
 // Returns a string containing a hierarchical list of NUMA Nodes and any
 // network devices connected to them.  If the lstopo application cannot be
 // found at the given location, detectTopology() will search for it and
 // try again.
+func DetectTopology(path string) (string, error) {
 
-// TODO -- pass in external interface for exec so this can be mocked
-func detectTopology(path string) (string, error) {
+	if path == "" {
+		path = applicationPath
+		log.Debugf("Empty path given .. now using default path.")
+	}
+
 	cmd, err := common.GetAbsInstallPath(path)
 	args := []string{"--ignore", "core", "--ignore", "cache", "--ignore", "pu"}
 	out, err := exec.Command(cmd, args...).Output()
@@ -77,22 +81,17 @@ func detectTopology(path string) (string, error) {
 // where dev is the name of the network device, logical is the NUMA Node
 // logical ID and physical is the NUMA Node physical ID
 // network device names that are not found in the topology are ignored.
-func DetectNUMANodeForDevices(netNames string) (string, error) {
+func DetectNUMANodeForDevices(netNames string, topology string) (string, error) {
 	var numaDeviceStr string
 
-	hwlocStr, err := detectTopology(applicationPath)
-	if err != nil {
-		return "", err
-	}
-
-	if !strings.Contains(hwlocStr, "NUMANode") {
+	if !strings.Contains(topology, "NUMANode") {
 		return numaDeviceStr, errors.New("the NUMA Node information not found")
 	}
 
-	numNUMANodes := strings.Count(hwlocStr, "NUMANode")
+	numNUMANodes := strings.Count(topology, "NUMANode")
 
 	// Separate the string into fields representing each NUMA Node
-	fields := strings.Split(hwlocStr, "NUMANode")
+	fields := strings.Split(topology, "NUMANode")
 	// Skip past the header information
 	fields = fields[1:]
 
