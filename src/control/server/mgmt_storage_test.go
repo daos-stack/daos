@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+// mockFormatStorageServer provides mocking for server side streaming,
+// implement send method and record sent format responses.
 type mockFormatStorageServer struct {
 	grpc.ServerStream
 	Results []*pb.FormatStorageResp
@@ -45,6 +47,8 @@ func (m *mockFormatStorageServer) Send(resp *pb.FormatStorageResp) error {
 	return nil
 }
 
+// mockUpdateStorageServer provides mocking for server side streaming,
+// implement send method and record sent update responses.
 type mockUpdateStorageServer struct {
 	grpc.ServerStream
 	Results []*pb.UpdateStorageResp
@@ -518,22 +522,14 @@ func TestUpdateStorage(t *testing.T) {
 		config := defaultMockConfig(t)
 		cs := mockControlService(&config)
 		cs.Setup() // init channel used for sync
-
 		mock := &mockUpdateStorageServer{}
-		mockWg := new(sync.WaitGroup)
-		mockWg.Add(1)
 
 		params := &pb.UpdateStorageParams{
 			Nvme: tt.nvmeParams,
 			Scm:  tt.scmParams,
 		}
 
-		go func() {
-			cs.UpdateStorage(params, mock)
-			mockWg.Done()
-		}()
-
-		mockWg.Wait() // wait for test goroutines to complete
+		cs.UpdateStorage(params, mock)
 
 		AssertEqual(
 			t, len(mock.Results), 1,
@@ -572,51 +568,3 @@ func TestUpdateStorage(t *testing.T) {
 		}
 	}
 }
-
-// TODO: to be used during the limitation of fw update feature
-//func TestUpdateNvmeCtrlr(t *testing.T) {
-//	cs := defaultMockControlService(t)
-//
-//	if err := cs.nvme.Setup(); err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	if err := cs.nvme.Discover(); err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	cExpect := MockControllerPB("1.0.1")
-//	//c := cs.nvme.controllers[0]
-//
-//	// after fetching controller details, simulate updated firmware
-//	// version being reported
-//	_ = &pb.UpdateNvmeParams{Path: "/foo/bar", Slot: 0}
-//
-//	//	_, err := cs.UpdateStorage(nil, &pb.UpdateStorageParams{Nvme: params})
-//	//	if err != nil {
-//	//		t.Fatal(err)
-//	//	}
-//
-//	AssertEqual(t, cs.nvme.controllers[0], cExpect, "unexpected Controller populated")
-//	//AssertEqual(t, newC, cExpect, "unexpected Controller returned")
-//}
-
-// TODO: this test should be moved to client, where the change in fwrev will be
-// verified
-//func TestUpdateNvmeCtrlrFail(t *testing.T) {
-//	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.0", false))
-//
-//	if err := s.nvme.Discover(); err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	c := s.nvme.controllers[0]
-//
-//	// after fetching controller details, simulate the same firmware
-//	// version being reported
-//	params := &pb.UpdateNvmeParams{
-//		Pciaddr: c.Pciaddr, Path: "/foo/bar", Slot: 0}
-//
-//	_, err := s.UpdateNvmeCtrlr(nil, params)
-//	ExpectError(t, err, "update failed, firmware revision unchanged", "")
-//}

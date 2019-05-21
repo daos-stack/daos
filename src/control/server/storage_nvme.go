@@ -343,8 +343,6 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 // One result with empty Pciaddr will be reported if there are preliminary
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
-//
-// TODO: take model name/number to verify we are updating expected model
 func (n *nvmeStorage) Update(
 	i int, req *pb.UpdateNvmeParams, results *([]*pb.NvmeControllerResult)) {
 
@@ -437,7 +435,7 @@ func (n *nvmeStorage) Update(
 			}
 
 			// verify controller is reporting an updated rev
-			if ctrlr.Fwrev == req.Startrev {
+			if ctrlr.Fwrev == req.Startrev || ctrlr.Fwrev == "" {
 				addCretUpdate(
 					pb.ResponseStatus_CTRL_ERR_NVME,
 					fmt.Sprintf(
@@ -447,7 +445,8 @@ func (n *nvmeStorage) Update(
 			}
 
 			log.Debugf(
-				"controller update successful (%s)\n", pciAddr)
+				"controller fwupdate successful (%s: %s->%s)\n",
+				pciAddr, req.Startrev, ctrlr.Fwrev)
 
 			addCretUpdate(pb.ResponseStatus_CTRL_SUCCESS, "")
 		}
@@ -458,7 +457,7 @@ func (n *nvmeStorage) Update(
 		return
 	}
 
-	log.Debugf("device update on NVMe controllers completed")
+	log.Debugf("device fwupdates on specified NVMe controllers completed\n")
 	return
 }
 

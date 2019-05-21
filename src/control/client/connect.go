@@ -123,7 +123,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 		c.controllers = append(c.controllers, controller)
 	}
 
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	return c.GetActiveConns(results)
 }
 

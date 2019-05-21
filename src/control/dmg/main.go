@@ -50,9 +50,8 @@ var (
 	config = client.NewConfiguration()
 )
 
+// appSetup loads config file, processes cli overrides and connects clients.
 func appSetup() error {
-	// Load the configuration file using the supplied path or the default
-	// path if none provided.
 	config, err := client.ProcessConfigFile(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
@@ -86,8 +85,9 @@ func dmgMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
+	// Parse cli args and either execute subcommand then exit or
+	// drop into shell if no subcommand is specified.
 	p := flags.NewParser(opts, flags.Default)
-	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
 
 	_, err := p.Parse()
@@ -95,8 +95,13 @@ func dmgMain() error {
 		return err
 	}
 
-	// If no subcommand is specified, interactive shell is started
+	// If no subcommand has been specified, interactive shell is started
 	// with expected functionality (tab expansion and utility commands)
+	// after parsing config/opts and setting up connections.
+	if err := appSetup(); err != nil {
+		return err
+	}
+
 	shell := setupShell()
 	shell.Println("DAOS Management Shell")
 	shell.Run()
