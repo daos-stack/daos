@@ -139,7 +139,8 @@ class MpioUtils():
             test_cmd = "mpiexec -n {} --hostfile {} python test_io_daos.py"\
                            .format(client_processes, hostfile)
         elif test_name == "hdf5" and (os.path.isfile(test_repo + "/testphdf5")
-                and os.path.isfile(test_repo + "/t_shapesame")):
+                                      and os.path.isfile(test_repo
+                                                         + "/t_shapesame")):
             test_cmd = ("echo ***Running testhdf5*** ;" +
                         " mpirun -np {} --hostfile {} ./testphdf5 ;"\
                         .format(client_processes, hostfile) +
