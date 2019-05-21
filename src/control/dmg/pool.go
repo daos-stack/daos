@@ -23,7 +23,159 @@
 
 package main
 
-// TODO: provide implementation to this placeholder
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/inhies/go-bytesize"
+	"github.com/pkg/errors"
+)
+
+const (
+	msgSizeNoNumber = "size string doesn't specify a number"
+	msgSizeBad      = "size string illegal, %s"
+	msgSizeZeroScm  = "non-zero scm size is required"
+)
 
 // PoolCmd is the struct representing the top-level pool subcommand.
-type PoolCmd struct{}
+type PoolCmd struct {
+	Create CreatePoolCmd `command:"create" alias:"c" description:"Create a DAOS pool"`
+}
+
+// CreatePoolCmd is the struct representing the command to create a DAOS pool.
+type CreatePoolCmd struct {
+	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group"`
+	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user"`
+	AclFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
+	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
+	RankList   string `short:"r" long:"ranks" description:"DAOS pool to be owned by given user"`
+	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
+	//GID uint32 `short:"g" long:"gid" description:"Pool GID"`
+	//UID uint32 `short:"u" long:"uid" description:"Pool UID"`
+	//Group string `short:"G" long:"group" description:"Pool group name"`
+	//Mode uint64 `short:"m" long:"mode" description:"Pool permissions mode"`
+}
+
+// run kill rank command with specified parameters on all connected servers
+//func killRankSvc(uuid string, rank uint32) {
+//	fmt.Printf(
+//		unpackClientMap(conns.KillRank(uuid, rank)),
+//		"Kill Rank command results")
+//}
+
+// getSize retrieves Bnumber of bytes from human readable string representation
+func getSize(sizeStr string) (bytesize.ByteSize, error) {
+	if sizeStr == "" {
+		return bytesize.New(0.00), nil
+	}
+	if common.IsAlphabetic(sizeStr) {
+		return bytesize.New(0.00), errors.New(msgSizeNoNumber)
+	}
+
+	// change any alphabetic characters to upper before ByteSize.parse()
+	sizeStr = strings.ToUpper(sizeStr)
+
+	// append "B" character if absent (required by ByteSize.parse())
+	if !strings.HasSuffix(sizeStr, "B") {
+		sizeStr += "B"
+	}
+
+	return bytesize.Parse(sizeStr)
+}
+
+// calcStorage calculates SCM & NVMe size for pool from user supplied parameters
+func calcStorage(scmSize string, nvmeSize string) (
+	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
+
+	scmBytes, err = getSize(scmSize)
+	if err != nil {
+		err = errors.WithMessagef(
+			err, "illegal scm size: %s", scmSize)
+		return
+	}
+
+	if scmBytes == 0 {
+		err = errors.New(msgSizeZeroScm)
+		return
+	}
+
+	nvmeBytes, err = getSize(nvmeSize)
+	if err != nil {
+		err = errors.WithMessagef(
+			err, "illegal nvme size: %s", nvmeSize)
+		return
+	}
+
+	ratio := 1.00
+	if nvmeBytes > 0 {
+		ratio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if ratio < 0.01 {
+		fmt.Printf(
+			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
+				"will suffer!\n")
+	}
+	fmt.Printf(
+		"Creating DAOS pool with %s SCM and %s NvMe storage "+
+			"(%.3f ratio)\n",
+		scmBytes.Format("%.0f", "", false),
+		nvmeBytes.Format("%.0f", "", false),
+		ratio)
+
+	return scmBytes, nvmeBytes, nil
+}
+
+func parseRanks(ranksStr string) (ranks []uint32, err error) {
+	for i, rankStr := range strings.Split(ranksStr, ",") {
+		rank, err := strconv.Atoi(rankStr)
+		if err != nil {
+			return ranks, errors.WithMessagef(err, "element %d", i)
+		}
+
+		ranks = append(ranks, rank)
+	}
+
+	return
+}
+
+func createPool(params *pb.CreatePoolParams) {
+	fmt.Printf(
+		unpackClientMap(conns.poolCreate(params),
+		"pool create command results")
+}
+
+// Execute is run when CreatePoolCmd subcommand is run
+func (c *CreatePoolCmd) Execute(args []string) error {
+	if err := appSetup(); err != nil {
+		return err
+	}
+
+	scmBytes, nvmeBytes, err := calcStorage(c.ScmSize, c.NVMeSize)
+	if err != nil {
+		return errors.Wrap(err, "calculating pool storage sizes")
+	}
+
+	ranks, err := parseRanks(c.RankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
+	}
+
+	err := createPool(
+		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps)
+
+	fmt.Printf(
+		"Creating DAOS pool with %s SCM and %s NvMe storage, "+
+		"rank list %q and %d pool service replicas\n",
+		scmBytes, nvmeBytes, ranks, c.NumSvcReps)
+
+	//killRankSvc(k.PoolUUID, k.Rank)
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}

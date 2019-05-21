@@ -59,11 +59,17 @@
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-ipmctl"
-  revision = "cb00fdf11001077f5451661448d44e900dfa8489"
+  revision = "a7817b402241a6b9a70628e7eb6c07d4e2345be8"
 
 # go-spdk: bindings to interact with libspdk.so to manage NVMe SSDs
 # maintained within daos-stack
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-spdk"
-  revision = "a7a7a864ea47192de3ce3d55d21e07bb502c40d8"
+  revision = "6756cd10c5c773de2b0c7aa99eb891a5bacf9e6a"
+
+# go-bytesize: BSD 3-Clause, handle conversion from human readable size
+# strings to bytes.
+[[constraint]]
+  branch = "master"
+  name = "github.com/inhies/go-bytesize"
