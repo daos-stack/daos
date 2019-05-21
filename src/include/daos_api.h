@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  *					glob->iov_buf_len.
  */
 int
-daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
+daos_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 
 /**
  * Create a local pool connection for global representation data.
@@ -130,7 +130,7 @@ daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
  *			-DER_INVAL	Invalid parameter
  */
 int
-daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
+daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 
 /**
  * Convert a local container handle to global representation data which can be
@@ -153,7 +153,7 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
  *					glob->iov_buf_len.
  */
 int
-daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
+daos_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 
 /**
  * Create a local container handle for global representation data.
@@ -170,7 +170,7 @@ daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
  *			-DER_NO_HDL	Pool handle is nonexistent
  */
 int
-daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
+daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
 
 /**
  * Query pool information. User should provide at least one of \a info and
@@ -533,6 +533,18 @@ daos_cont_alloc_oids(daos_handle_t coh, daos_size_t num_oids, uint64_t *oid,
 		     daos_event_t *ev);
 
 /**
+ * Trigger aggregation to specified epoch
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	epoch	Epoch to be aggregated to. Current time will be used
+ *			when 0 is specified.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
+
+/**
  * Rollback to a specific persistent snapshot.
  *
  * \param[in]	coh	Container handle
@@ -826,7 +838,7 @@ daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
  *			dmg uses ":" as the separator.
  *
  * \return		allocated rank list that user is responsible to free
- *			with daos_rank_list_free().
+ *			with d_rank_list_free().
  */
 d_rank_list_t *
 daos_rank_list_parse(const char *str, const char *sep);
@@ -1062,7 +1074,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, daos_obj_attr_t *oa,
  */
 int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev);
 
 /**
@@ -1113,7 +1125,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  */
 int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+		unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_event_t *ev);
 
 /**
@@ -1163,7 +1175,7 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  */
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
@@ -1215,7 +1227,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
  */
 int
 daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
