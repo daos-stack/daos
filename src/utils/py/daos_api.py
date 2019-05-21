@@ -1814,6 +1814,38 @@ class DaosContainer(object):
 
         return results
 
+    def aggregate(self, coh, epoch, cb_func=None):
+        """
+        Container Epoch Aggregation
+        Args:
+            coh - Container handler
+            epoch - Epoch to be aggregated to.
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            None
+        raise:
+            DaosApiError raised incase of API return code is nonzero
+        """
+        self.coh = coh
+        func = self.context.get_function('cont-aggregate')
+        epoch = ctypes.c_uint64(epoch)
+
+        if cb_func is None:
+            retcode = func(coh, ctypes.byref(epoch), None)
+            if retcode != 0:
+                raise DaosApiError("cont aggregate returned non-zero.RC: {0}"
+                                   .format(retcode))
+        else:
+            event = DaosEvent()
+            params = [coh, ctypes.byref(epoch), event]
+            thread = threading.Thread(target=AsyncWorker1,
+                                      args=(func,
+                                            params,
+                                            self.context,
+                                            cb_func,
+                                            self))
+            thread.start()
+
 class DaosSnapshot(object):
     """ A python object that can represent a DAOS snapshot. We do not save the
     coh in the snapshot since it is different each time the container is opened.
@@ -1966,6 +1998,7 @@ class DaosContext(object):
             'list-attr'      : self.libdaos.daos_cont_list_attr,
             'list-cont-attr' : self.libdaos.daos_cont_list_attr,
             'list-pool-attr' : self.libdaos.daos_pool_list_attr,
+            'cont-aggregate' : self.libdaos.daos_cont_aggregate,
             'list-snap'      : self.libdaos.daos_cont_list_snap,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,
