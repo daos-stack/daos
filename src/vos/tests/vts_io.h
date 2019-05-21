@@ -109,16 +109,16 @@ void			test_args_reset(struct io_test_args *args,
 int			io_test_obj_update(struct io_test_args *arg,
 					   int epoch, daos_key_t *dkey,
 					   daos_iod_t *iod,
-					   daos_sg_list_t *sgl,
+					   d_sg_list_t *sgl,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
 					  int epoch, daos_key_t *dkey,
 					  daos_iod_t *iod,
-					  daos_sg_list_t *sgl,
+					  d_sg_list_t *sgl,
 					  bool verbose);
 int			setup_io(void **state);
 int			teardown_io(void **state);
-void			set_iov(daos_iov_t *iov, char *buf, int int_flag);
+void			set_iov(d_iov_t *iov, char *buf, int int_flag);
 
 #endif
 

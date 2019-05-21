@@ -34,10 +34,10 @@
 #include <daos_types.h>
 
 /* Root KVS (RDB_KVS_GENERIC) */
-extern daos_iov_t ds_mgmt_prop_servers;		/* server KVS */
-extern daos_iov_t ds_mgmt_prop_uuids;		/* UUID KVS */
-extern daos_iov_t ds_mgmt_prop_map_version;	/* uint32_t */
-extern daos_iov_t ds_mgmt_prop_rank_next;	/* uint32_t */
+extern d_iov_t ds_mgmt_prop_servers;		/* server KVS */
+extern d_iov_t ds_mgmt_prop_uuids;		/* UUID KVS */
+extern d_iov_t ds_mgmt_prop_map_version;	/* uint32_t */
+extern d_iov_t ds_mgmt_prop_rank_next;	/* uint32_t */
 
 /*
  * Server KVS (RDB_KVS_INTEGER)
