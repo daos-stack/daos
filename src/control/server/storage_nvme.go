@@ -384,7 +384,7 @@ func (n *nvmeStorage) Update(
 				continue
 			}
 
-			if ctrlr.Model != req.Model {
+			if strings.TrimSpace(ctrlr.Model) != req.Model {
 				addCretUpdate(
 					pb.ResponseStatus_CTRL_ERR_NVME,
 					fmt.Sprintf(
@@ -395,7 +395,7 @@ func (n *nvmeStorage) Update(
 				continue
 			}
 
-			if ctrlr.Fwrev != req.Startrev {
+			if strings.TrimSpace(ctrlr.Fwrev) != req.Startrev {
 				addCretUpdate(
 					pb.ResponseStatus_CTRL_ERR_NVME,
 					fmt.Sprintf(

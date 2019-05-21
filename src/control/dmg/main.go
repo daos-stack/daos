@@ -100,6 +100,7 @@ func dmgMain() error {
 	// after parsing config/opts and setting up connections.
 	if err := appSetup(); err != nil {
 		fmt.Println(err.Error()) // notify of app setup errors
+		fmt.Println("")
 	}
 
 	shell := setupShell()
