@@ -138,13 +138,13 @@ cont_op_hdlr(int argc, char *argv[])
 
 	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
 	if (uuid_is_null(cont_uuid)) {
 		fprintf(stderr, "valid cont uuid required\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
@@ -154,7 +154,7 @@ cont_op_hdlr(int argc, char *argv[])
 	 */
 	rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RW, &pool,
 			       NULL /* info */, NULL /* ev */);
-	daos_rank_list_free(svc);
+	d_rank_list_free(svc);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		return rc;

@@ -82,14 +82,14 @@ ec_increment(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	     uint64_t epoch)
 {
 	rdb_path_t     *kvs = ec_type2kvs(cont, type);
-	daos_iov_t	key;
-	daos_iov_t	value;
+	d_iov_t	key;
+	d_iov_t	value;
 	uint64_t	c = 0;
 	uint64_t	c_new;
 	int		rc;
 
-	daos_iov_set(&key, &epoch, sizeof(epoch));
-	daos_iov_set(&value, &c, sizeof(c));
+	d_iov_set(&key, &epoch, sizeof(epoch));
+	d_iov_set(&value, &c, sizeof(c));
 	rc = rdb_tx_lookup(tx, kvs, &key, &value);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		D_GOTO(out, rc);
@@ -98,7 +98,7 @@ ec_increment(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	if (c_new < c)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	daos_iov_set(&value, &c_new, sizeof(c_new));
+	d_iov_set(&value, &c_new, sizeof(c_new));
 	rc = rdb_tx_update(tx, kvs, &key, &value);
 
 out:
@@ -114,14 +114,14 @@ ec_decrement(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	     uint64_t epoch)
 {
 	rdb_path_t     *kvs = ec_type2kvs(cont, type);
-	daos_iov_t	key;
-	daos_iov_t	value;
+	d_iov_t	key;
+	d_iov_t	value;
 	uint64_t	c = 0;
 	uint64_t	c_new;
 	int		rc;
 
-	daos_iov_set(&key, &epoch, sizeof(epoch));
-	daos_iov_set(&value, &c, sizeof(c));
+	d_iov_set(&key, &epoch, sizeof(epoch));
+	d_iov_set(&value, &c, sizeof(c));
 	rc = rdb_tx_lookup(tx, kvs, &key, &value);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		D_GOTO(out, rc);
@@ -133,7 +133,7 @@ ec_decrement(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	if (c_new == 0) {
 		rc = rdb_tx_delete(tx, kvs, &key);
 	} else {
-		daos_iov_set(&value, &c_new, sizeof(c_new));
+		d_iov_set(&value, &c_new, sizeof(c_new));
 		rc = rdb_tx_update(tx, kvs, &key, &value);
 	}
 
@@ -150,10 +150,10 @@ ec_find_lowest(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	       daos_epoch_t *epoch)
 {
 	rdb_path_t     *kvs = ec_type2kvs(cont, type);
-	daos_iov_t	key;
+	d_iov_t	key;
 	int		rc;
 
-	daos_iov_set(&key, epoch, sizeof(*epoch));
+	d_iov_set(&key, epoch, sizeof(*epoch));
 	rc = rdb_tx_fetch(tx, kvs, RDB_PROBE_FIRST, NULL /* key_in */, &key,
 			  NULL /* value */);
 	if (rc == -DER_NONEXIST)
@@ -174,7 +174,7 @@ struct ec_decrement_iter_cb_arg {
 };
 
 static int
-ec_decrement_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+ec_decrement_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		     void *varg)
 {
 	struct ec_decrement_iter_cb_arg	       *arg = varg;
@@ -320,7 +320,7 @@ static int
 read_epoch_prop(struct rdb_tx *tx, struct cont *cont,
 			struct epoch_prop *prop)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	daos_epoch_t	ghce;
 	daos_epoch_t	ghpce;
 	daos_epoch_t	glre;
@@ -328,7 +328,7 @@ read_epoch_prop(struct rdb_tx *tx, struct cont *cont,
 	int		rc;
 
 	/* GHCE */
-	daos_iov_set(&value, &ghce, sizeof(ghce));
+	d_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ghce, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup GHCE: %d\n",
@@ -337,7 +337,7 @@ read_epoch_prop(struct rdb_tx *tx, struct cont *cont,
 	}
 
 	/* GHPCE */
-	daos_iov_set(&value, &ghpce, sizeof(ghpce));
+	d_iov_set(&value, &ghpce, sizeof(ghpce));
 	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ghpce, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup GHPCE: %d\n",
@@ -374,7 +374,7 @@ struct snap_list_iter_args {
 };
 
 static int
-snap_list_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+snap_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		  void *arg)
 {
 	struct snap_list_iter_args *i_args = arg;
@@ -579,7 +579,7 @@ static int
 update_ghce(struct rdb_tx *tx, struct cont *cont, struct epoch_prop *prop)
 {
 	daos_epoch_t	ghce;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	/*
@@ -600,7 +600,7 @@ update_ghce(struct rdb_tx *tx, struct cont *cont, struct epoch_prop *prop)
 		return 0;
 	}
 
-	daos_iov_set(&value, &ghce, sizeof(ghce));
+	d_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &value);
 	if (rc != 0)
 		D_ERROR(DF_CONT": failed to update ghce: %d\n",
@@ -642,13 +642,13 @@ ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont, uuid_t c_hdl,
 	 * implemented.
 	 */
 	if (hdl->ch_capas & DAOS_COO_RW) {
-		daos_iov_t	key;
-		daos_iov_t	value;
+		d_iov_t	key;
+		d_iov_t	value;
 
 		hdl->ch_lhe = prop.ep_ghpce + 1;
 
-		daos_iov_set(&key, c_hdl, sizeof(uuid_t));
-		daos_iov_set(&value, hdl, sizeof(*hdl));
+		d_iov_set(&key, c_hdl, sizeof(uuid_t));
+		d_iov_set(&value, hdl, sizeof(*hdl));
 		rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 		if (rc != 0)
 			return rc;
@@ -725,8 +725,8 @@ ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct epoch_prop		prop;
 	daos_epoch_t			lhe = hdl->ch_lhe;
-	daos_iov_t			key;
-	daos_iov_t			value;
+	d_iov_t			key;
+	d_iov_t			value;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
@@ -765,8 +765,8 @@ ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
-	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, hdl, sizeof(*hdl));
+	d_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
+	d_iov_set(&value, hdl, sizeof(*hdl));
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0)
 		D_GOTO(out_hdl, rc);
@@ -918,8 +918,8 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t			lhe = hdl->ch_lhe;
 	daos_epoch_t			lre = hdl->ch_lre;
 	daos_epoch_t			glre = 0;
-	daos_iov_t			key;
-	daos_iov_t			value;
+	d_iov_t			key;
+	d_iov_t			value;
 	bool				slip_flag;
 	int				rc;
 
@@ -962,8 +962,8 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (!(hdl->ch_capas & DAOS_COO_NOSLIP))
 		hdl->ch_lre = hdl->ch_hce;
 
-	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, hdl, sizeof(*hdl));
+	d_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
+	d_iov_set(&value, hdl, sizeof(*hdl));
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0)
 		D_GOTO(out_hdl, rc);
@@ -985,7 +985,7 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	if (hdl->ch_hce > prop.ep_ghpce) {
 		prop.ep_ghpce = hdl->ch_hce;
-		daos_iov_set(&value, &prop.ep_ghpce, sizeof(prop.ep_ghpce));
+		d_iov_set(&value, &prop.ep_ghpce, sizeof(prop.ep_ghpce));
 		rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghpce,
 				   &value);
 		if (rc != 0) {
@@ -1006,8 +1006,8 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (snapshot) {
 		char		zero = 0;
 
-		daos_iov_set(&key, &in->cei_epoch, sizeof(in->cei_epoch));
-		daos_iov_set(&value, &zero, sizeof(zero));
+		d_iov_set(&key, &in->cei_epoch, sizeof(in->cei_epoch));
+		d_iov_set(&value, &zero, sizeof(zero));
 		rc = rdb_tx_update(tx, &cont->c_snaps, &key, &value);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": failed to create snapshot: %d\n",
@@ -1047,7 +1047,7 @@ struct snap_destroy_iter_args {
 };
 
 static int
-snap_destroy_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+snap_destroy_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		     void *arg)
 {
 	struct snap_destroy_iter_args *i_args = arg;
@@ -1073,7 +1073,7 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_epoch_op_in		*in = crt_req_get(rpc);
 	struct snap_destroy_iter_args	 iter_args;
-	daos_iov_t			 key;
+	d_iov_t			 key;
 	struct epoch_prop		 prop;
 	bool				 slip_flag;
 	int				 rc;
@@ -1082,7 +1082,7 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		rpc, in->cei_epoch);
 
-	daos_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
 	rc = rdb_tx_delete(tx, &cont->c_snaps, &key);
 	if (rc != 0) {
 		rc = 0;
@@ -1167,12 +1167,12 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (xfer_size > 0) {
 		ABT_eventual	 eventual;
 		int		*status;
-		daos_iov_t	 iov = {
+		d_iov_t	 iov = {
 			.iov_buf	= snapshots,
 			.iov_len	= xfer_size,
 			.iov_buf_len	= xfer_size
 		};
-		daos_sg_list_t	 sgl = {
+		d_sg_list_t	 sgl = {
 			.sg_nr_out = 1,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
@@ -1192,8 +1192,8 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			goto out_mem;
 		}
 
-		rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-				     CRT_BULK_RW, &bulk_desc.bd_local_hdl);
+		rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW,
+				     &bulk_desc.bd_local_hdl);
 		if (rc != 0)
 			goto out_eventual;
 		rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);

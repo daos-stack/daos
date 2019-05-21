@@ -56,6 +56,6 @@ extern char *ds_sec_server_socket_path;
  */
 #define DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS	101
 
-int ds_sec_validate_credentials(daos_iov_t *creds, Auth__Token **token);
+int ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token);
 
 #endif /* __SECURITY_SRV_INTERNAL_H__ */

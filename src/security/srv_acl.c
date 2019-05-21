@@ -56,7 +56,7 @@ sanity_check_validation_response(Drpc__Response *response)
 }
 
 static Drpc__Call *
-new_validation_request(struct drpc *ctx, daos_iov_t *creds)
+new_validation_request(struct drpc *ctx, d_iov_t *creds)
 {
 	uint8_t		*body;
 	Drpc__Call	*request;
@@ -84,7 +84,7 @@ new_validation_request(struct drpc *ctx, daos_iov_t *creds)
 }
 
 static int
-validate_credentials_via_drpc(Drpc__Response **response, daos_iov_t *creds)
+validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 {
 	struct drpc	*server_socket;
 	Drpc__Call	*request;
@@ -141,7 +141,7 @@ process_validation_response(Drpc__Response *response, Auth__Token **token)
 }
 
 int
-ds_sec_validate_credentials(daos_iov_t *creds, Auth__Token **token)
+ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 {
 	Drpc__Response	*response = NULL;
 	int		rc;

@@ -660,8 +660,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct agg_phy_ent	*phy_ent;
 	struct bio_io_context	*bio_ctxt;
 	struct bio_sglist	 bsgl;
-	daos_sg_list_t		 sgl;
-	daos_iov_t		 iov;
+	d_sg_list_t		 sgl;
+	d_iov_t		 iov;
 	bio_addr_t		 addr_dst, addr_src;
 	daos_size_t		 seg_size, copy_size, buf_max;
 	struct evt_extent	 ext = { 0 };

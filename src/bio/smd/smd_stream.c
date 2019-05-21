@@ -45,7 +45,7 @@ stab_df_hkey_size(void)
 }
 
 static void
-stab_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+stab_df_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(int));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
@@ -63,8 +63,8 @@ stab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 }
 
 static int
-stab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		  daos_iov_t *val_iov, struct btr_record *rec)
+stab_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		  d_iov_t *val_iov, struct btr_record *rec)
 {
 	umem_off_t				 nstream_off;
 	struct smd_nvme_stream_df		*nstream_df;
@@ -88,7 +88,7 @@ stab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 static int
 stab_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key_iov, daos_iov_t *val_iov)
+		  d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct smd_nvme_stream_df		*nstream_df;
 
@@ -99,7 +99,7 @@ stab_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 stab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   daos_iov_t *key_iov, daos_iov_t *val_iov)
+		   d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct smd_nvme_stream_df		*nstream_df;
 	int					 rc;
@@ -164,7 +164,7 @@ smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *bond)
 	struct smd_nvme_stream_df	nvme_stab_args;
 	struct smd_store		*store = get_smd_store();
 	struct d_uuid			ukey;
-	daos_iov_t			key, value;
+	d_iov_t			key, value;
 	int				rc	 = 0;
 
 	if (bond == NULL) {
@@ -191,8 +191,8 @@ smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *bond)
 	if (rc != 0)
 		goto failed;
 
-	daos_iov_set(&key, &bond->nsm_stream_id, sizeof(bond->nsm_stream_id));
-	daos_iov_set(&value, &nvme_stab_args, sizeof(nvme_stab_args));
+	d_iov_set(&key, &bond->nsm_stream_id, sizeof(bond->nsm_stream_id));
+	d_iov_set(&value, &nvme_stab_args, sizeof(nvme_stab_args));
 
 	rc = dbtree_update(store->sms_stream_tab, &key, &value);
 
@@ -220,7 +220,7 @@ smd_nvme_get_stream_bond(int stream_id,
 {
 	struct smd_nvme_stream_df	nvme_stab_args;
 	struct smd_store		*store = get_smd_store();
-	daos_iov_t			key, value;
+	d_iov_t			key, value;
 	int				rc	 = 0;
 
 	D_DEBUG(DB_TRACE, "looking up device id in stream table\n");
@@ -229,8 +229,8 @@ smd_nvme_get_stream_bond(int stream_id,
 		D_ERROR("Missing input parameters: %d\n", rc);
 		return rc;
 	}
-	daos_iov_set(&key, &stream_id, sizeof(stream_id));
-	daos_iov_set(&value, &nvme_stab_args,
+	d_iov_set(&key, &stream_id, sizeof(stream_id));
+	d_iov_set(&value, &nvme_stab_args,
 		     sizeof(struct smd_nvme_stream_df));
 
 	smd_lock(SMD_STAB_LOCK);
@@ -273,11 +273,11 @@ smd_nvme_list_streams(uint32_t *nr, struct smd_nvme_stream_bond *streams,
 
 	i = 0;
 	while (i < *nr) {
-		daos_iov_t	key, value;
+		d_iov_t	key, value;
 		int		stream_id;
 
-		daos_iov_set(&key, &stream_id, sizeof(stream_id));
-		daos_iov_set(&value, &streams[i],
+		d_iov_set(&key, &stream_id, sizeof(stream_id));
+		d_iov_set(&value, &streams[i],
 			     sizeof(struct smd_nvme_stream_bond));
 		rc = dbtree_iter_fetch(sti_hdl, &key, &value, anchor);
 		if (rc != 0) {
