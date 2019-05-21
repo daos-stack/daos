@@ -660,8 +660,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct agg_phy_ent	*phy_ent;
 	struct bio_io_context	*bio_ctxt;
 	struct bio_sglist	 bsgl;
-	daos_sg_list_t		 sgl;
-	daos_iov_t		 iov;
+	d_sg_list_t		 sgl;
+	d_iov_t		 iov;
 	bio_addr_t		 addr_dst, addr_src;
 	daos_size_t		 seg_size, copy_size, buf_max;
 	struct evt_extent	 ext = { 0 };
@@ -1461,6 +1461,11 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct vos_container	*cont;
 	int			 rc;
 
+	cont = vos_hdl2cont(param->ip_hdl);
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate, type:%d, is_discard:%d\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
+		agg_param->ap_discard);
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		rc = vos_agg_obj(ih, entry, agg_param, acts);
@@ -1488,7 +1493,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	cont = vos_hdl2cont(param->ip_hdl);
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
 		cont->vc_abort_aggregation = 0;

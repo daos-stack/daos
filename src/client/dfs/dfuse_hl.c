@@ -521,8 +521,8 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 {
 	dfs_obj_t *obj;
 	daos_size_t actual;
-	daos_iov_t iov;
-	daos_sg_list_t sgl;
+	d_iov_t iov;
+	d_sg_list_t sgl;
 	int rc;
 
 	FUNC_ENTER("path = %s\n", path);
@@ -533,7 +533,7 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 	/** set memory location */
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	daos_iov_set(&iov, buf, size);
+	d_iov_set(&iov, buf, size);
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_read(dfs, obj, sgl, offset, &actual);
@@ -548,8 +548,8 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 	    struct fuse_file_info *fi)
 {
 	dfs_obj_t *obj;
-	daos_iov_t iov;
-	daos_sg_list_t sgl;
+	d_iov_t iov;
+	d_sg_list_t sgl;
 	int rc;
 
 	FUNC_ENTER("path = %s\n", path);
@@ -560,7 +560,7 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 	/** set memory location */
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	daos_iov_set(&iov, (void *)buf, size);
+	d_iov_set(&iov, (void *)buf, size);
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_write(dfs, obj, sgl, offset);

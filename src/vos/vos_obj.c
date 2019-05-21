@@ -52,8 +52,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
 	daos_csum_buf_t		csum;
-	daos_iov_t		kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		riov;
 	int			rc;
 
 	rc = obj_tree_init(obj);
@@ -192,12 +192,12 @@ reset:
  */
 static int
 key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
-		      struct vos_rec_bundle *rbund, daos_iov_t *keybuf,
+		      struct vos_rec_bundle *rbund, d_iov_t *keybuf,
 		      daos_anchor_t *anchor)
 {
-	daos_iov_t		kiov;
-	daos_iov_t		kbund_kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		kbund_kiov;
+	d_iov_t		riov;
 	daos_csum_buf_t		csum;
 
 	tree_key_bundle2iov(kbund, &kiov);
@@ -207,7 +207,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
 	rbund->rb_iov	= keybuf;
 	rbund->rb_csum	= &csum;
 
-	daos_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
+	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
 	daos_csum_set(rbund->rb_csum, NULL, 0);
 
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
@@ -252,7 +252,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	struct vos_krec_df	*krec;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 keybuf;
+	d_iov_t		 keybuf;
 	int			 rc;
 
 	rc = key_iter_fetch_helper(oiter, &kbund, &rbund, &keybuf, NULL);
@@ -285,7 +285,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 
 static int
 key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	if (ent->ie_key.iov_len > iov_out->iov_buf_len)
 		return -DER_OVERFLOW;
@@ -312,8 +312,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_handle_t		 toh;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	int			 probe;
 	int			 rc;
 
@@ -392,7 +392,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	while (1) {
 		vos_iter_entry_t	entry;
 		struct vos_key_bundle	kbund;
-		daos_iov_t		kiov;
+		d_iov_t		kiov;
 		int			opc = 0;
 
 		rc = key_iter_match(oiter, &entry, &opc);
@@ -565,7 +565,7 @@ singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
 	struct vos_key_bundle	kbund;
-	daos_iov_t		kiov;
+	d_iov_t		kiov;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -698,8 +698,8 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
-	daos_iov_t		kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		riov;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -875,7 +875,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 static int
 recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-	       daos_iov_t *iov_out)
+	       d_iov_t *iov_out)
 {
 	struct bio_io_context	*bioc;
 	struct bio_iov		*biov = &it_entry->ie_biov;
@@ -1258,7 +1258,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 static int
 vos_obj_iter_copy(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-		  daos_iov_t *iov_out)
+		  d_iov_t *iov_out)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
