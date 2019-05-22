@@ -43,17 +43,17 @@ struct rdb_kvs_open_arg {
 
 /* Open key in arg->deo_parent. */
 static int
-rdb_kvs_open_path_cb(daos_iov_t *key, void *varg)
+rdb_kvs_open_path_cb(d_iov_t *key, void *varg)
 {
 	struct rdb_kvs_open_arg	       *arg = varg;
 	rdb_oid_t			parent = arg->deo_parent;
-	daos_iov_t			value;
+	d_iov_t			value;
 
 	if (key->iov_len == 0) {
 		D_ASSERTF(parent == RDB_LC_ATTRS, DF_X64"\n", parent);
 		key = &rdb_lc_root;
 	}
-	daos_iov_set(&value, &arg->deo_parent, sizeof(arg->deo_parent));
+	d_iov_set(&value, &arg->deo_parent, sizeof(arg->deo_parent));
 	return rdb_lc_lookup(arg->deo_db->d_lc, arg->deo_index, parent, key,
 			     &value);
 }
@@ -133,7 +133,7 @@ rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	/* kvs->de_path */
 	memcpy(kvs->de_buf, key, ksize);
-	daos_iov_set(&kvs->de_path, kvs->de_buf, ksize);
+	d_iov_set(&kvs->de_path, kvs->de_buf, ksize);
 
 	/* kvs->de_object */
 	rc = rdb_kvs_open_path(arg->dea_db, arg->dea_index, &kvs->de_path,

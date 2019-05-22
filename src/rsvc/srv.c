@@ -77,7 +77,7 @@ state_str(enum ds_rsvc_state state)
 
 /* Allocate and initialize a ds_rsvc object. */
 static int
-alloc_init(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	   struct ds_rsvc **svcp)
 {
 	struct ds_rsvc *svc;
@@ -249,7 +249,7 @@ rsvc_hash_fini(void)
  * \param[out]	svc	replicated service
  */
 int
-ds_rsvc_lookup(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	       struct ds_rsvc **svc)
 {
 	d_list_t       *entry;
@@ -344,7 +344,7 @@ put_leader(struct ds_rsvc *svc)
  * the replicated service is not up, hint is filled.
  */
 int
-ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		      struct ds_rsvc **svcp, struct rsvc_hint *hint)
 {
 	struct ds_rsvc *svc;
@@ -537,7 +537,7 @@ self_only(d_rank_list_t *replicas)
 }
 
 static int
-start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid, bool create,
+start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
 	struct ds_rsvc *svc;
@@ -598,7 +598,7 @@ err:
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
-ds_rsvc_start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
 {
 	uuid_t			 db_uuid_buf;
@@ -702,7 +702,7 @@ stop(struct ds_rsvc *svc, bool destroy)
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
-ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy)
+ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 {
 	struct ds_rsvc		*svc;
 	struct ds_rsvc_class	*impl;
@@ -800,7 +800,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
  * \param[out]	hint	rsvc hint
  */
 int
-ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		    struct rsvc_hint *hint)
 {
 	struct ds_rsvc *svc;
@@ -856,7 +856,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
-ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		   const uuid_t dbid, const d_rank_list_t *ranks, bool create,
 		   bool bootstrap, size_t size)
 {
@@ -966,7 +966,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * \param[in]	destroy		destroy after close
  */
 int
-ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		  const d_rank_list_t *ranks, bool destroy)
 {
 	crt_rpc_t		*rpc;

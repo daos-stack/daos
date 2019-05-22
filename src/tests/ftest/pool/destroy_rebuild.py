@@ -93,8 +93,7 @@ class DestroyRebuild(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist_servers,
-                                       self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
 

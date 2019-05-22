@@ -72,13 +72,13 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 }
 
 int
-daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+daos_pool_local2global(daos_handle_t poh, d_iov_t *glob)
 {
 	return dc_pool_local2global(poh, glob);
 }
 
 int
-daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+daos_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 {
 	return dc_pool_global2local(glob, poh);
 }

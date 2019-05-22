@@ -38,11 +38,11 @@ dtx_handler(crt_rpc_t *rpc)
 {
 	struct dtx_in		*din = crt_req_get(rpc);
 	struct dtx_out		*dout = crt_reply_get(rpc);
-	struct ds_cont		*cont = NULL;
+	struct ds_cont_child	*cont = NULL;
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			 rc;
 
-	rc = ds_cont_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
+	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID
 			" for DTX rpc %u: rc = %d\n", DP_UUID(din->di_po_uuid),
@@ -86,7 +86,7 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = %d\n", opc, rc);
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 }
 
 static int

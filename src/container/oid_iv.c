@@ -79,15 +79,16 @@ oid_iv_key_cmp(void *key1, void *key2)
 }
 
 static int
-oid_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst, d_sg_list_t *src,
-		 void **priv)
+oid_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *src, d_sg_list_t *dst, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
 }
 
 static int
-oid_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **_priv)
+oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
+		   d_sg_list_t *src, int ref_rc, void **_priv)
 {
 	struct oid_iv_priv	*priv = (struct oid_iv_priv *)_priv;
 	daos_size_t		num_oids;
@@ -102,7 +103,7 @@ oid_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **_priv)
 #endif
 	D_ASSERT(num_oids != 0);
 
-	entry = dst->sg_iovs[0].iov_buf;
+	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
 	D_ASSERT(entry != NULL);
 
 	/** if iv op failed, just release the entry lock acquired in update */
@@ -129,7 +130,7 @@ out:
 }
 
 static int
-oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
+oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		  d_sg_list_t *src, void **_priv)
 {
 	struct oid_iv_priv	*priv = (struct oid_iv_priv *)_priv;
@@ -142,7 +143,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
 
 	D_ASSERT(priv != NULL);
 
-	entry = dst->sg_iovs[0].iov_buf;
+	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
 	ABT_mutex_lock(entry->lock);
 	avail = &entry->rg;
 

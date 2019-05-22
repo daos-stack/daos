@@ -51,7 +51,7 @@ struct dtx_resync_head {
 };
 
 struct dtx_resync_args {
-	struct ds_cont		*cont;
+	struct ds_cont_child	*cont;
 	uuid_t			 po_uuid;
 	struct dtx_resync_head	 tables;
 	uint32_t		 version;
@@ -66,7 +66,7 @@ dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
 }
 
 static int
-dtx_resync_commit(uuid_t po_uuid, struct ds_cont *cont,
+dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 		  struct dtx_resync_head *drh, int count, uint32_t version)
 {
 	struct dtx_resync_entry		*dre;
@@ -108,7 +108,7 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont *cont,
 static int
 dtx_status_handle(struct dtx_resync_args *dra)
 {
-	struct ds_cont			*cont = dra->cont;
+	struct ds_cont_child		*cont = dra->cont;
 	struct pl_obj_layout		*layout = NULL;
 	struct dtx_resync_head		*drh = &dra->tables;
 	struct dtx_resync_entry		*dre;
@@ -270,12 +270,12 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	   bool block)
 {
 	ABT_future			 future;
-	struct ds_cont			*cont = NULL;
+	struct ds_cont_child		*cont = NULL;
 	struct dtx_resync_args		 dra = { 0 };
 	int				 rc = 0;
 	int				 rc1 = 0;
 
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to open container for resync DTX "
 			DF_UUID"/"DF_UUID": rc = %d\n",
@@ -346,6 +346,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	}
 
 out:
-	ds_cont_put(cont);
+	ds_cont_child_put(cont);
 	return rc;
 }
