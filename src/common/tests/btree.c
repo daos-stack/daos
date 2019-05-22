@@ -92,7 +92,7 @@ ik_hkey_size(void)
 }
 
 static void
-ik_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+ik_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	uint64_t	*ikey;
 
@@ -102,8 +102,8 @@ ik_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 }
 
 static int
-ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		  daos_iov_t *val_iov, struct btr_record *rec)
+ik_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		  d_iov_t *val_iov, struct btr_record *rec)
 {
 	umem_off_t		 irec_off;
 	struct ik_rec		*irec;
@@ -149,7 +149,7 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct ik_rec	*irec;
 	char		*val;
@@ -213,7 +213,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   daos_iov_t *key, daos_iov_t *val_iov)
+		   d_iov_t *key, d_iov_t *val_iov)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
@@ -375,7 +375,7 @@ ik_btr_close_destroy(void **state)
 }
 
 static int
-btr_rec_verify_delete(umem_off_t *rec, daos_iov_t *key)
+btr_rec_verify_delete(umem_off_t *rec, d_iov_t *key)
 {
 	struct umem_instance	*umm;
 	struct ik_rec		*irec;
@@ -437,8 +437,8 @@ ik_btr_kv_operate(void **state)
 
 	while (str != NULL && !isspace(*str) && *str != '\0') {
 		char	   *val = NULL;
-		daos_iov_t	key_iov;
-		daos_iov_t	val_iov;
+		d_iov_t	key_iov;
+		d_iov_t	val_iov;
 		uint64_t	key;
 
 		key = strtoul(str, NULL, 0);
@@ -460,12 +460,12 @@ ik_btr_kv_operate(void **state)
 			str++;
 		}
 
-		daos_iov_set(&key_iov, &key, sizeof(key));
+		d_iov_set(&key_iov, &key, sizeof(key));
 		switch (opc) {
 		default:
 			fail_msg("Invalid opcode\n");
 		case BTR_OPC_UPDATE:
-			daos_iov_set(&val_iov, val, strlen(val) + 1);
+			d_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				sprintf(outbuf,
@@ -511,7 +511,7 @@ ik_btr_kv_operate(void **state)
 		case BTR_OPC_LOOKUP:
 			D_DEBUG(DB_TEST, "Looking for "DF_U64"\n", key);
 
-			daos_iov_set(&val_iov, NULL, 0); /* get address */
+			d_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				sprintf(outbuf,
@@ -591,8 +591,8 @@ ik_btr_iterate(void **state)
 		del = 0;
 
 	for (i = d = 0;; i++) {
-		daos_iov_t	key_iov;
-		daos_iov_t	val_iov;
+		d_iov_t	key_iov;
+		d_iov_t	val_iov;
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
@@ -614,8 +614,8 @@ ik_btr_iterate(void **state)
 			}
 		}
 
-		daos_iov_set(&key_iov, NULL, 0);
-		daos_iov_set(&val_iov, NULL, 0);
+		d_iov_set(&key_iov, NULL, 0);
+		d_iov_set(&val_iov, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 		if (rc != 0) {
 			err = "fetch failure\n";

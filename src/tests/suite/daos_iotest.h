@@ -46,8 +46,8 @@ struct ioreq {
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	daos_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
-	daos_sg_list_t		sgl[IOREQ_SG_IOD_NR];
+	d_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];

@@ -79,7 +79,7 @@ oi_rec_msize(int alloc_overhead)
 }
 
 static void
-oi_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+oi_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	/* key can be either oi_hkey or oi_key (for punch and update).
 	 * We only use the hkey part as a key.
@@ -111,8 +111,8 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 }
 
 static int
-oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	     daos_iov_t *val_iov, struct btr_record *rec)
+oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	     d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_obj_df	*obj;
 	struct oi_key		*key;
@@ -148,7 +148,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		obj->vo_oi_attr |= VOS_OI_PUNCHED;
 	}
 
-	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
 	rec->rec_off = obj_off;
 
 	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
@@ -191,7 +191,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_obj_df	*obj;
 
@@ -200,13 +200,13 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		DP_UOID(obj->vo_id), rec->rec_off);
 
 	D_ASSERT(val_iov != NULL);
-	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
 	return 0;
 }
 
 static int
 oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key, daos_iov_t *val)
+		  d_iov_t *key, d_iov_t *val)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -244,8 +244,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	    daos_epoch_t epoch, uint32_t intent, struct vos_obj_df **obj_p)
 {
 	struct oi_hkey	hkey;
-	daos_iov_t	key_iov;
-	daos_iov_t	val_iov;
+	d_iov_t	key_iov;
+	d_iov_t	val_iov;
 	int		rc;
 
 	if (!cont->vc_otab_df) {
@@ -255,8 +255,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 
 	hkey.oi_oid = oid;
 	hkey.oi_epc = epoch;
-	daos_iov_set(&key_iov, &hkey, sizeof(hkey));
-	daos_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&key_iov, &hkey, sizeof(hkey));
+	d_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_GE | BTR_PROBE_MATCHED,
 			  intent, &key_iov, NULL, &val_iov);
@@ -279,8 +279,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 {
 	struct oi_hkey	*hkey;
 	struct oi_key	 key;
-	daos_iov_t	 key_iov;
-	daos_iov_t	 val_iov;
+	d_iov_t	 key_iov;
+	d_iov_t	 val_iov;
 	int		 rc;
 
 	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
@@ -298,7 +298,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	hkey->oi_oid = oid;
 	hkey->oi_epc = DAOS_EPOCH_MAX; /* max as incarnation */
 	key.oi_epc_lo = epoch;
-	daos_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&key_iov, &key, sizeof(key));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, intent, &key_iov,
 			   &val_iov);
@@ -321,8 +321,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 {
 	struct oi_hkey	*hkey;
 	struct oi_key	 key;
-	daos_iov_t	 key_iov;
-	daos_iov_t	 val_iov;
+	d_iov_t	 key_iov;
+	d_iov_t	 val_iov;
 	int		 rc = 0;
 	bool		 replay = (flags & VOS_OF_REPLAY_PC);
 
@@ -348,7 +348,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	key.oi_epc_lo = hkey->oi_epc = epoch;
 	if (!replay) /* We steal the subtree from the max epoch */
 		key.oi_epc_lo = obj->vo_earliest;
-	daos_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&key_iov, &key, sizeof(key));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PUNCH,
 			   &key_iov, &val_iov);
@@ -424,7 +424,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
-	daos_iov_t		 rec_iov;
+	d_iov_t		 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -435,7 +435,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		return -DER_INVAL;
 	}
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
 	if (rc != 0) {
 		D_ERROR("Error while fetching oid info\n");
@@ -517,7 +517,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		struct vos_obj_df *obj;
 		struct oi_hkey	   hkey;
 		int		   probe;
-		daos_iov_t	   iov;
+		d_iov_t	   iov;
 
 		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
 		if (rc != 0) {
@@ -551,7 +551,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		}
 
 		hkey.oi_oid = obj->vo_id;
-		daos_iov_set(&iov, &hkey, sizeof(hkey));
+		d_iov_set(&iov, &hkey, sizeof(hkey));
 		rc = dbtree_iter_probe(oiter->oit_hdl, probe,
 				       vos_iter_intent(iter), &iov, NULL);
 		if (rc != 0) {
@@ -615,12 +615,12 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
-	daos_iov_t		 rec_iov;
+	d_iov_t		 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
 		D_ERROR("Error while fetching oid info\n");
