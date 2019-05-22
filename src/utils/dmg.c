@@ -875,7 +875,7 @@ exclude options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
-  --rank=N	storage server rank \n\  
+  --rank=N	storage server rank \n\
   --target=RANK	target rank\n", default_group);
 	printf("\
 add options:\n\
