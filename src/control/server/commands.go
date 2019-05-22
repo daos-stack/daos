@@ -48,6 +48,7 @@ type cliOptions struct {
 	Rank        *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	Storage     StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
+	Insecure    bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
 }
 
 // StorCmd is the struct representing the top-level storage subcommand.

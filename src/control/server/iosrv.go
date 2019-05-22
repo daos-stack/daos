@@ -38,13 +38,15 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v2"
+	"google.golang.org/grpc/credentials"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -202,10 +204,25 @@ type iosrv struct {
 	sigchld chan os.Signal
 	ready   chan *srvpb.NotifyReadyReq
 	conn    *drpc.ClientConnection
+	creds   credentials.TransportCredentials
+}
+
+func loadInterServerCreds(config *configuration) (credentials.TransportCredentials, error) {
+	if config.Insecure {
+		return nil, nil
+	}
+	creds, err := security.LoadClientCreds(config.CACert, config.Cert, config.Key, "server")
+
+	return creds, err
 }
 
 func newIosrv(config *configuration, i int) (*iosrv, error) {
 	super, err := readIosrvSuper(iosrvSuperPath(config.Servers[i].ScmMount))
+	if err != nil {
+		return nil, err
+	}
+
+	creds, err := loadInterServerCreds(config)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +234,7 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 		sigchld: make(chan os.Signal, 1),
 		ready:   make(chan *srvpb.NotifyReadyReq),
 		conn:    getDrpcClientConnection(config.SocketDir),
+		creds:   creds,
 	}
 
 	return srv, nil
@@ -337,7 +355,7 @@ func (srv *iosrv) setRank(ready *srvpb.NotifyReadyReq) error {
 	}
 
 	if !srv.super.ValidRank || !srv.super.MS {
-		resp, err := mgmtJoin(srv.config.AccessPoints[0], &mgmtpb.JoinReq{
+		resp, err := mgmtJoin(srv.config.AccessPoints[0], srv.creds, &mgmtpb.JoinReq{
 			Uuid:  srv.super.UUID,
 			Rank:  uint32(r),
 			Uri:   ready.Uri,
@@ -432,12 +450,20 @@ func (srv *iosrv) writeSuper() error {
 
 // mgmtJoin sends the Join request to MS, retrying indefinitely until MS
 // responses.
-func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+func mgmtJoin(ap string, creds credentials.TransportCredentials, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	log.Debugf("join(%s, %+v)", ap, *req)
+	var opts []grpc.DialOption
 
-	conn, err := grpc.Dial(ap, grpc.WithInsecure(), grpc.WithBlock(),
-		grpc.WithBackoffMaxDelay(5*time.Second),
+	// Setup Dial Options that will always be included.
+	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(5*time.Second),
 		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
+	// Conditionally add transport credentials if we are using them.
+	if creds != nil {
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else {
+		opts = append(opts, grpc.WithInsecure())
+	}
+	conn, err := grpc.Dial(ap, opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", ap)
 	}

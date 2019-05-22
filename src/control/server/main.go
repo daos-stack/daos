@@ -30,9 +30,11 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func main() {
@@ -53,6 +55,17 @@ func parseCliOpts(opts *cliOptions) error {
 	}
 
 	return nil
+}
+
+func loadCredentials(config *configuration) (credentials.TransportCredentials, error) {
+	if config.Insecure {
+		fmt.Println("Using Insecure connection")
+		return nil, nil
+	}
+	creds, err := security.LoadServerCreds(config.CACert, config.Cert,
+		config.Key)
+
+	return creds, err
 }
 
 func serverMain() error {
@@ -88,7 +101,11 @@ func serverMain() error {
 	if f != nil {
 		defer f.Close()
 	}
-
+	creds, err := loadCredentials(&config)
+	if err != nil {
+		log.Errorf("Failed to load certificates: %s", err)
+		return err
+	}
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
@@ -111,8 +128,10 @@ func serverMain() error {
 	// Create new grpc server, register services and start serving (after
 	// dropping privileges).
 	var sOpts []grpc.ServerOption
-	// TODO: This will need to be extended to take certificate information for
-	// the TLS protected channel. Currently it is an "insecure" channel.
+
+	if creds != nil {
+		sOpts = append(sOpts, grpc.Creds(creds))
+	}
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)

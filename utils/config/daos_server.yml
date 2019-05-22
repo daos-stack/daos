@@ -37,7 +37,7 @@
 ## If not specified, DAOS will start in insecure way which means that
 ## anybody can administrate the DAOS installation and access data
 #
-#ca_cert: ./.daos/ca.crt
+#ca_cert: ./.daos/daosCA.crt
 #
 #
 ## Path to server certificate and key file
@@ -45,8 +45,8 @@
 ## Discarded if no CA certificate is passed.
 #
 ## default: ./.daos/daos_server.{crt,key}
-#cert: ./.daosa/daos_server.crt
-#key: ./.daosa/daos_server.key
+#cert: ./.daos/daos_server.crt
+#key: ./.daos/daos_server.key
 #
 #
 ## Fault domain path

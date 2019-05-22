@@ -30,9 +30,10 @@ socket_dir: /tmp/daos_sockets
 access_points:
 - localhost
 port: 10001
-ca_cert: ""
+ca_cert: ./.daos/daosCA.crt
 cert: ./.daos/daos_server.crt
 key: ./.daos/daos_server.key
+insecure: false
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []

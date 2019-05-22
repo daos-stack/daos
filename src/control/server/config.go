@@ -223,7 +223,9 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		// global rank parameter should only apply to first I/O service
 		c.Servers[0].Rank = opts.Rank
 	}
-
+	if opts.Insecure == true {
+		c.Insecure = true
+	}
 	// override each per-server config
 	for i := range c.Servers {
 		srv := &c.Servers[i]

@@ -51,9 +51,10 @@ access_points:
 - hostname2
 - hostname3
 port: 10001
-ca_cert: ./.daos/ca.crt
-cert: ./.daosa/daos_server.crt
-key: ./.daosa/daos_server.key
+ca_cert: ./.daos/daosCA.crt
+cert: ./.daos/daos_server.crt
+key: ./.daos/daos_server.key
+insecure: false
 fault_path: /vcdu0/rack1/hostname
 fault_cb: ./.daos/fd_callback
 fabric_ifaces:

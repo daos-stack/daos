@@ -32,7 +32,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -221,9 +221,10 @@ type configuration struct {
 	SocketDir      string          `yaml:"socket_dir"`
 	AccessPoints   []string        `yaml:"access_points"`
 	Port           int             `yaml:"port"`
-	CaCert         string          `yaml:"ca_cert"`
+	CACert         string          `yaml:"ca_cert"`
 	Cert           string          `yaml:"cert"`
 	Key            string          `yaml:"key"`
+	Insecure       bool            `yaml:"insecure"`
 	FaultPath      string          `yaml:"fault_path"`
 	FaultCb        string          `yaml:"fault_cb"`
 	FabricIfaces   []string        `yaml:"fabric_ifaces"`
@@ -277,8 +278,10 @@ func newDefaultConfiguration(ext External) configuration {
 		SocketDir:      "/var/run/daos_server",
 		AccessPoints:   []string{"localhost"},
 		Port:           10000,
+		CACert:         "./.daos/daosCA.crt",
 		Cert:           "./.daos/daos_server.crt",
 		Key:            "./.daos/daos_server.key",
+		Insecure:       false,
 		ScmMountPath:   "/mnt/daos",
 		Hyperthreads:   false,
 		NrHugepages:    1024,

@@ -5,9 +5,10 @@ socket_dir: /var/run/daos_server
 access_points:
 - localhost
 port: 10000
-ca_cert: ""
+ca_cert: ./.daos/daosCA.crt
 cert: ./.daos/daos_server.crt
 key: ./.daos/daos_server.key
+insecure: false
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
@@ -23,9 +24,10 @@ socket_dir: /var/run/daos_server
 access_points:
 - localhost
 port: 10000
-ca_cert: ""
+ca_cert: ./.daos/daosCA.crt
 cert: ./.daos/daos_server.crt
 key: ./.daos/daos_server.key
+insecure: false
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
@@ -45,6 +47,7 @@ port: 11111
 ca_cert: /tmp/ca.crt
 cert: /tmp/serv.crt
 key: /tmp/serv.key
+insecure: false
 fault_path: /foo.com
 fault_cb: /tmp/daos_fault_cb.sh
 fabric_ifaces:
