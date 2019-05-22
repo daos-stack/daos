@@ -74,7 +74,7 @@ cont_iv_value_alloc_internal(d_sg_list_t *sgl)
 	if (entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	daos_iov_set(&sgl->sg_iovs[0], entry, entry_size);
+	d_iov_set(&sgl->sg_iovs[0], entry, entry_size);
 out:
 	if (rc)
 		daos_sgl_fini(sgl, true);
@@ -131,8 +131,8 @@ cont_iv_ent_put(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-delete_iter_cb(daos_handle_t ih, daos_iov_t *key,
-	       daos_iov_t *val, void *arg)
+delete_iter_cb(daos_handle_t ih, d_iov_t *key,
+	       d_iov_t *val, void *arg)
 {
 	int rc;
 
@@ -205,8 +205,8 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct cont_iv_entry	*src_iv;
 	daos_handle_t		root_hdl;
 	struct cont_iv_key	*civ_key = key2priv(key);
-	daos_iov_t		key_iov;
-	daos_iov_t		val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	struct cont_iv_entry	*iv_entry = NULL;
 	daos_epoch_t		*snaps = NULL;
 	int			snap_cnt = MAX_SNAP_CNT;
@@ -215,8 +215,8 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
-	daos_iov_set(&key_iov, civ_key->cont_uuid, sizeof(uuid_t));
-	daos_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&key_iov, civ_key->cont_uuid, sizeof(uuid_t));
+	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
 	if (rc < 0) {
 		if (rc == -DER_NONEXIST && is_master(entry)) {
@@ -234,7 +234,7 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			iv_entry->snap_size = snap_cnt;
 			memcpy(iv_entry->snaps, snaps,
 			       snap_cnt * sizeof(daos_epoch_t));
-			daos_iov_set(&val_iov, iv_entry,
+			d_iov_set(&val_iov, iv_entry,
 				     cont_iv_ent_size(iv_entry->snap_size));
 			rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 			if (rc)
@@ -265,15 +265,15 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 {
 	daos_handle_t		root_hdl;
 	struct cont_iv_key	*civ_key = key2priv(key);
-	daos_iov_t		key_iov;
-	daos_iov_t		val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	int			rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
-	daos_iov_set(&key_iov, civ_key->cont_uuid, sizeof(uuid_t));
-	daos_iov_set(&val_iov, src->sg_iovs[0].iov_buf,
+	d_iov_set(&key_iov, civ_key->cont_uuid, sizeof(uuid_t));
+	d_iov_set(&val_iov, src->sg_iovs[0].iov_buf,
 		     src->sg_iovs[0].iov_len);
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	if (rc < 0)
@@ -311,7 +311,7 @@ int
 cont_iv_fetch(void *ns, struct cont_iv_entry *cont_iv)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	uint32_t		cont_iv_len;
 	struct ds_iv_key	key = { 0 };
 	struct cont_iv_key	*civ_key;
@@ -343,7 +343,7 @@ cont_iv_update(void *ns, struct cont_iv_entry *cont_iv,
 	       unsigned int shortcut, unsigned int sync_mode)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	uint32_t		cont_iv_len;
 	struct ds_iv_key	key;
 	struct cont_iv_key	*civ_key;

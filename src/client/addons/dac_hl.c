@@ -37,8 +37,8 @@
 struct io_params {
 	daos_key_t		dkey;
 	daos_iod_t		iod;
-	daos_iov_t		iov;
-	daos_sg_list_t		sgl;
+	d_iov_t		iov;
+	d_sg_list_t		sgl;
 };
 
 static int
@@ -77,10 +77,10 @@ dac_kv_put(tse_task_t *task)
 	}
 
 	/** init dkey */
-	daos_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
+	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
 	/** init iod. For now set akey = dkey */
-	daos_iov_set(&params->iod.iod_name, (void *)args->key,
+	d_iov_set(&params->iod.iod_name, (void *)args->key,
 		     strlen(args->key));
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
@@ -92,7 +92,7 @@ dac_kv_put(tse_task_t *task)
 	/** init sgl */
 	params->sgl.sg_nr = 1;
 	params->sgl.sg_iovs = &params->iov;
-	daos_iov_set(&params->sgl.sg_iovs[0], (void *)args->buf,
+	d_iov_set(&params->sgl.sg_iovs[0], (void *)args->buf,
 		     args->buf_size);
 
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
@@ -159,10 +159,10 @@ dac_kv_get(tse_task_t *task)
 	}
 
 	/** init dkey */
-	daos_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
+	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
 	/** init iod. For now set akey = dkey */
-	daos_iov_set(&params->iod.iod_name, (void *)args->key,
+	d_iov_set(&params->iod.iod_name, (void *)args->key,
 		     strlen(args->key));
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
@@ -173,7 +173,7 @@ dac_kv_get(tse_task_t *task)
 
 	/** init sgl */
 	if (buf && *buf_size) {
-		daos_iov_set(&params->iov, buf, *buf_size);
+		d_iov_set(&params->iov, buf, *buf_size);
 		params->sgl.sg_iovs = &params->iov;
 		params->sgl.sg_nr = 1;
 	}
@@ -241,7 +241,7 @@ dac_kv_remove(tse_task_t *task)
 	}
 
 	/** init dkey */
-	daos_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
+	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
 	rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, tse_task2sched(task),
 			      0, NULL, &punch_task);

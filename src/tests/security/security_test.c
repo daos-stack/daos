@@ -165,13 +165,13 @@ int
 main(int argc, char **argv)
 {
 	int			ret;
-	daos_iov_t		creds;
+	d_iov_t		creds;
 	Auth__Credential	*response = NULL;
 	Auth__Sys		*credentials = NULL;
 	Auth__Token		*validated_token = NULL;
 	Auth__Sys		*validated_credentials = NULL;
 
-	memset(&creds, 0, sizeof(daos_iov_t));
+	memset(&creds, 0, sizeof(d_iov_t));
 
 	ret = dc_sec_request_creds(&creds);
 
