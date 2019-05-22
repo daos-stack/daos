@@ -30,12 +30,16 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
+
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/credentials"
 )
 
 type cliOptions struct {
 	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Insecure bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
 	// TODO: implement host file parsing
 	HostFile   string  `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
@@ -49,6 +53,16 @@ var (
 	opts  = new(cliOptions)
 	conns = client.NewConnect()
 )
+
+func loadCredentials(config *client.Configuration) (credentials.TransportCredentials, error) {
+	if opts.Insecure {
+		fmt.Println("Using Insecure connection")
+		return nil, nil
+	}
+	creds, err := security.LoadClientCreds(config.CACert, config.Cert, config.Key, "server")
+
+	return creds, err
+}
 
 // appSetup loads config file, processes cli overrides and connects clients.
 func appSetup(broadcast bool) error {
@@ -64,6 +78,12 @@ func appSetup(broadcast bool) error {
 	if opts.HostFile != "" {
 		return errors.New("hostfile option not implemented")
 	}
+
+	creds, err := loadCredentials(&config)
+	if err != nil {
+		return err
+	}
+	conns.SetTransportCredentials(creds)
 
 	// broadcast app requests to host list by default
 	addresses := config.HostList
@@ -99,6 +119,7 @@ func dmgMain() error {
 
 	_, err := p.Parse()
 	if err != nil {
+		fmt.Println(err.Error())
 		return err
 	}
 

@@ -34,11 +34,11 @@
 # default: ./.daos/daosCA.crt
 #cacert: ./.daos/daosCA.crt
 
-# Path to client certificate and key file.
+# Path to agent certificate and key file.
 # Discarded if no CA certificate is passed.
-# default: ./.daos/client.{crt,key}
-#cert: ./.daos/admin.crt
-#key: ./.daos/admin.key
+# default: ./.daos/agent.{crt,key}
+#agent_cert: ./.daos/agent.crt
+#agent_key: ./.daos/agent.key
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent

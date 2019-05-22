@@ -32,7 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -41,7 +41,11 @@ const (
 	defaultLogFile       = "/tmp/daos_agent.log"
 	defaultConfigPath    = "etc/daos.yml"
 	defaultSystemName    = "daos_server"
+	defaultCACert        = ".daos/daosCA.crt"
+	defaultCert          = ".daos/client.crt"
+	defaultKey           = ".daos/client.key"
 	defaultPort          = 10000
+	defaultInsecure      = false
 )
 
 // External interface provides methods to support various os operations.
@@ -71,10 +75,12 @@ type Configuration struct {
 	HostList      []string `yaml:"hostlist"`
 	RuntimeDir    string   `yaml:"runtime_dir"`
 	HostFile      string   `yaml:"host_file"`
+	CACert        string   `yaml:"ca_cert"`
 	Cert          string   `yaml:"cert"`
 	Key           string   `yaml:"key"`
 	LogFile       string   `yaml:"log_file"`
 	LogFileFormat string   `yaml:"log_file_format"`
+	Insecure      bool     `yaml:"insecure"`
 	Path          string
 	Ext           External
 }
@@ -90,6 +96,10 @@ func newDefaultConfiguration(ext External) Configuration {
 		RuntimeDir:   defaultRuntimeDir,
 		LogFile:      defaultLogFile,
 		Path:         defaultConfigPath,
+		CACert:       defaultCACert,
+		Cert:         defaultCert,
+		Insecure:     defaultInsecure,
+		Key:          defaultKey,
 		Ext:          ext,
 	}
 }

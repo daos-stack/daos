@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -79,17 +80,17 @@ func (rm ResultMap) String() string {
 
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {
-	create(string) (Control, error)
+	create(string, credentials.TransportCredentials) (Control, error)
 }
 
 // controllerFactory as an implementation of ControllerFactory.
 type controllerFactory struct{}
 
 // create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string) (Control, error) {
+func (c *controllerFactory) create(address string, creds credentials.TransportCredentials) (Control, error) {
 	controller := &control{}
 
-	err := controller.connect(address)
+	err := controller.connect(address, creds)
 
 	return controller, err
 }
@@ -97,8 +98,12 @@ func (c *controllerFactory) create(address string) (Control, error) {
 // Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	ConnectClients(Addresses) ResultMap // connect addresses
-	GetActiveConns(ResultMap) ResultMap // remove inactive conns
+	// SetTransportCredentials sets the gRPC transport credentials
+	SetTransportCredentials(credentials.TransportCredentials)
+	// ConnectClients attempts to connect a list of addresses
+	ConnectClients(Addresses) ResultMap
+	// GetActiveConns verifies states and removes inactive conns
+	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
 	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
 	FormatStorage() (ClientCtrlrMap, ClientMountMap)
@@ -113,8 +118,15 @@ type Connect interface {
 // connList is an implementation of Connect and stores controllers
 // (connections to clients, one per DAOS server).
 type connList struct {
+	creds       credentials.TransportCredentials
 	factory     ControllerFactory
 	controllers []Control
+}
+
+// SetTransportCredentials sets the internal transport credentials to be passed
+// to subsequent connect calls as the gRPC dial credentials.
+func (c *connList) SetTransportCredentials(creds credentials.TransportCredentials) {
+	c.creds = creds
 }
 
 // ConnectClients populates collection of client-server controllers.
@@ -127,7 +139,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 
 	for _, address := range addresses {
 		go func(f ControllerFactory, addr string, ch chan ClientResult) {
-			c, err := f.create(addr)
+			c, err := f.create(addr, c.creds)
 			ch <- ClientResult{addr, c, err}
 		}(c.factory, address, ch)
 	}
@@ -248,6 +260,7 @@ func (c *connList) makeRequests(
 // multiple clients.
 func NewConnect() Connect {
 	return &connList{
+		creds:       nil,
 		factory:     &controllerFactory{},
 		controllers: []Control{},
 	}
