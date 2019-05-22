@@ -158,6 +158,5 @@ class RebuildWithIO(TestWithoutServers):
                 check_for_pool.cleanup_pools(self.hostlist_servers)
             finally:
                 if self.agent_sessions:
-                    agent_utils.stop_agent(self.hostlist_servers,
-                                           self.agent_sessions)
+                    agent_utils.stop_agent(self.agent_sessions)
                 server_utils.kill_server(self.hostlist_servers)

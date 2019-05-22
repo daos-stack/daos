@@ -87,7 +87,7 @@ is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
 	 * we only use one IOV.
 	 */
 	while (arg->sgl_idx < sgl->sg_nr) {
-		daos_iov_t *iovs = sgl->sg_iovs;
+		d_iov_t *iovs = sgl->sg_iovs;
 
 		if (iovs[arg->sgl_idx].iov_len + size >=
 		    iovs[arg->sgl_idx].iov_buf_len) {
@@ -120,7 +120,7 @@ static int
 fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 	 vos_iter_type_t type)
 {
-	daos_iov_t *iovs = arg->sgl->sg_iovs;
+	d_iov_t *iovs = arg->sgl->sg_iovs;
 
 	D_ASSERTF(type == VOS_ITER_OBJ, "%d\n", type);
 
@@ -151,7 +151,7 @@ static int
 fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 vos_iter_type_t type)
 {
-	daos_iov_t	*iovs = arg->sgl->sg_iovs;
+	d_iov_t	*iovs = arg->sgl->sg_iovs;
 	daos_size_t	 size;
 
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
@@ -207,7 +207,7 @@ static int
 fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 vos_iter_type_t type, vos_iter_param_t *param, unsigned int *acts)
 {
-	daos_iov_t		*iovs = arg->sgl->sg_iovs;
+	d_iov_t		*iovs = arg->sgl->sg_iovs;
 	struct obj_enum_rec	*rec;
 	daos_size_t		 data_size, iod_size;
 	daos_size_t		 size = sizeof(*rec);
@@ -274,12 +274,12 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 * NB: Punched recxs do not have any data to copy.
 	 */
 	if (inline_data && data_size > 0) {
-		daos_iov_t iov_out;
+		d_iov_t iov_out;
 
 		/* inline packing for the small recx located on SCM */
 		D_ASSERT(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM);
 
-		daos_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
+		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
 		rc = vos_iter_copy(ih, key_ent, &iov_out);
 		if (rc != 0) {
@@ -406,7 +406,7 @@ enum {
 
 /* Parse recxs in <*data, len> and append them to iod and sgl. */
 static int
-unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
+unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 	     daos_key_t *akey, daos_key_desc_t *kds, void **data,
 	     daos_size_t len, uint32_t *version)
 {
@@ -505,13 +505,13 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 
 		/* Append the data, if inline. */
 		if (sgl != NULL && rec->rec_size > 0) {
-			daos_iov_t *iov = &sgl->sg_iovs[sgl->sg_nr];
+			d_iov_t *iov = &sgl->sg_iovs[sgl->sg_nr];
 
 			if (rec->rec_flags & RECX_INLINE) {
-				daos_iov_set(iov, *data, rec->rec_size *
+				d_iov_set(iov, *data, rec->rec_size *
 							 rec->rec_recx.rx_nr);
 			} else {
-				daos_iov_set(iov, NULL, 0);
+				d_iov_set(iov, NULL, 0);
 			}
 
 			sgl->sg_nr++;
@@ -548,7 +548,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
  */
 static void
 dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
-			int *recxs_caps, daos_sg_list_t *sgls,
+			int *recxs_caps, d_sg_list_t *sgls,
 			daos_epoch_t *ephs, int iods_cap)
 {
 	int i;
@@ -580,7 +580,7 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 }
 
 static void
-clear_iod(daos_iod_t *iod, daos_sg_list_t *sgl, int *recxs_cap)
+clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
 {
 	daos_iov_free(&iod->iod_name);
 	if (iod->iod_recxs != NULL)
@@ -609,7 +609,7 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 	int i;
 
 	for (i = 0; i < io->ui_iods_len; i++) {
-		daos_sg_list_t *sgl = NULL;
+		d_sg_list_t *sgl = NULL;
 
 		if (io->ui_sgls != NULL)
 			sgl = &io->ui_sgls[i];
@@ -649,7 +649,7 @@ close_iod(struct dss_enum_unpack_io *io)
 	if (io->ui_iods[io->ui_iods_len].iod_nr > 0) {
 		io->ui_iods_len++;
 	} else {
-		daos_sg_list_t *sgl = NULL;
+		d_sg_list_t *sgl = NULL;
 
 		D_DEBUG(DB_TRACE, "iod without recxs: %d\n", io->ui_iods_len);
 		if (io->ui_sgls != NULL)
@@ -693,7 +693,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS];
 	int				recxs_caps[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			ephs[DSS_ENUM_UNPACK_MAX_IODS];
-	daos_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_key_t			akey = {0};
 	daos_epoch_range_t		*eprs = arg->eprs;
 	void				*ptr;

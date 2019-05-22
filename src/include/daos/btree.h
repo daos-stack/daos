@@ -224,7 +224,7 @@ typedef struct {
 	 * \param hkey	[OUT]	hashed key
 	 */
 	void		(*to_hkey_gen)(struct btr_instance *tins,
-				       daos_iov_t *key, void *hkey);
+				       d_iov_t *key, void *hkey);
 	/** Static callback to get size of the hashed key. */
 	int		(*to_hkey_size)(void);
 
@@ -275,7 +275,7 @@ typedef struct {
 	 *		other undefined result.
 	 */
 	int		(*to_key_cmp)(struct btr_instance *tins,
-				      struct btr_record *rec, daos_iov_t *key);
+				      struct btr_record *rec, d_iov_t *key);
 
 	/**
 	 * Required if using direct keys. (Should only be called for direct key)
@@ -288,7 +288,7 @@ typedef struct {
 	 * @param anchor	[OUT]	Anchor for the iteration
 	 */
 	void		(*to_key_encode)(struct btr_instance *tins,
-					 daos_iov_t *key,
+					 d_iov_t *key,
 					 daos_anchor_t *anchor);
 	/**
 	 * Required if using direct keys. (Should only be called for direct key)
@@ -300,7 +300,7 @@ typedef struct {
 	 * @param anchor	[IN]	Anchor of where iteration process is.
 	 */
 	void		(*to_key_decode)(struct btr_instance *tins,
-					 daos_iov_t *key,
+					 d_iov_t *key,
 					 daos_anchor_t *anchor);
 
 	/**
@@ -316,7 +316,7 @@ typedef struct {
 	 *			See \a btr_record for the details.
 	 */
 	int		(*to_rec_alloc)(struct btr_instance *tins,
-					daos_iov_t *key, daos_iov_t *val,
+					d_iov_t *key, d_iov_t *val,
 					struct btr_record *rec);
 	/**
 	 * Free the record body stored in \a rec::rec_off
@@ -344,7 +344,7 @@ typedef struct {
 	 */
 	int		(*to_rec_fetch)(struct btr_instance *tins,
 					struct btr_record *rec,
-					daos_iov_t *key, daos_iov_t *val);
+					d_iov_t *key, d_iov_t *val);
 	/**
 	 * Update value of a record, the new value should be stored in the
 	 * current rec::rec_off.
@@ -362,7 +362,7 @@ typedef struct {
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
-					 daos_iov_t *key, daos_iov_t *val);
+					 d_iov_t *key, d_iov_t *val);
 	/**
 	 * Optional:
 	 * Return key and value size of the record.
@@ -568,13 +568,13 @@ int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *info, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
-int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
-int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
+int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
+int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
+		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
 int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		   daos_iov_t *key, daos_iov_t *val);
-int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
+		   d_iov_t *key, d_iov_t *val);
+int  dbtree_delete(daos_handle_t toh, d_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
@@ -595,13 +595,13 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
 int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      uint32_t intent, daos_iov_t *key, daos_anchor_t *anchor);
+		      uint32_t intent, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent);
 int dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent);
-int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
-		      daos_iov_t *val, daos_anchor_t *anchor);
+int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
+		      d_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);
 int dbtree_iter_empty(daos_handle_t ih);
 
@@ -612,8 +612,8 @@ int dbtree_iter_empty(daos_handle_t ih);
  *   - if rc == 1, dbtree_iterate() stops and returns 0;
  *   - otherwise, dbtree_iterate() stops and returns rc.
  */
-typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
-				   daos_iov_t *val, void *arg);
+typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
+				   d_iov_t *val, void *arg);
 int dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 		   dbtree_iterate_cb_t cb, void *arg);
 

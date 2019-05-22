@@ -25,21 +25,18 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
-
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
-
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
+	"os"
+	"strings"
 )
 
 type cliOptions struct {
-	Hostlist string `short:"l" long:"hostlist" default:"localhost:10001" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	// TODO: implement host file parsing
-	Hostfile string `short:"f" long:"hostfile" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
-	// TODO: implement client side configuration file parsing
+	HostFile   string  `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
 	Storage    StorCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
 	Service    SvcCmd  `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
@@ -48,19 +45,34 @@ type cliOptions struct {
 }
 
 var (
-	opts  = new(cliOptions)
-	conns = client.NewConnect()
+	opts   = new(cliOptions)
+	conns  = client.NewConnect()
+	config = client.NewConfiguration()
 )
 
-func connectHosts() error {
-	if opts.Hostfile != "" {
+func appSetup() error {
+	// Load the configuration file using the supplied path or the default
+	// path if none provided.
+	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	if err != nil {
+		return errors.WithMessage(err, "processing config file")
+	}
+
+	if opts.HostList != "" {
+		config.HostList = strings.Split(opts.HostList, ",")
+	}
+
+	if opts.HostFile != "" {
 		return errors.New("hostfile option not implemented")
 	}
-	hosts := strings.Split(opts.Hostlist, ",")
-	if len(hosts) < 1 {
-		return errors.New("no hosts to connect to")
+
+	ok, out := hasConns(conns.ConnectClients(config.HostList))
+	if !ok {
+		return errors.New(out) // no active connections
 	}
-	fmt.Println(sprintConns(conns.ConnectClients(hosts)))
+
+	fmt.Println(out)
+
 	return nil
 }
 
@@ -83,16 +95,8 @@ func dmgMain() error {
 		return err
 	}
 
-	// TODO: implement configuration file parsing
-	if opts.ConfigPath != "" {
-		err = errors.New("config-path option not implemented")
-		log.Errorf(err.Error())
-		return err
-	}
-	err = connectHosts()
-	if err != nil {
-		log.Errorf("unable to connect to hosts: %v", err)
-		return err
+	if err := appSetup(); err != nil {
+		fmt.Println(err.Error()) // notify of app setup errors
 	}
 
 	// If no subcommand is specified, interactive shell is started

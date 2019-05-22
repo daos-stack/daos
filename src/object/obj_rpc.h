@@ -129,7 +129,7 @@ struct daos_obj_shard_tgt {
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
-	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
+	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
 	((struct daos_obj_shard_tgt) (orw_shard_tgts)	CRT_ARRAY) \
 	((uint32_t)		(orw_flags)		CRT_VAR)
@@ -142,7 +142,7 @@ struct daos_obj_shard_tgt {
 	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
 	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
-	((daos_sg_list_t)	(orw_sgls)		CRT_ARRAY)
+	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
@@ -163,7 +163,7 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((daos_anchor_t)	(oei_anchor)		CRT_VAR) \
 	((daos_anchor_t)	(oei_dkey_anchor)	CRT_VAR) \
 	((daos_anchor_t)	(oei_akey_anchor)	CRT_VAR) \
-	((daos_sg_list_t)	(oei_sgl)		CRT_VAR) \
+	((d_sg_list_t)	(oei_sgl)		CRT_VAR) \
 	((crt_bulk_t)		(oei_bulk)		CRT_VAR) \
 	((crt_bulk_t)		(oei_kds_bulk)		CRT_VAR)
 
@@ -177,7 +177,7 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((daos_anchor_t)	(oeo_dkey_anchor)	CRT_VAR) \
 	((daos_anchor_t)	(oeo_akey_anchor)	CRT_VAR) \
 	((daos_key_desc_t)	(oeo_kds)		CRT_ARRAY) \
-	((daos_sg_list_t)	(oeo_sgl)		CRT_VAR) \
+	((d_sg_list_t)	(oeo_sgl)		CRT_VAR) \
 	((daos_recx_t)		(oeo_recxs)		CRT_ARRAY) \
 	((daos_epoch_range_t)	(oeo_eprs)		CRT_ARRAY)
 
@@ -193,8 +193,8 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((uint32_t)		(opi_map_ver)		CRT_VAR) \
 	((uint32_t)		(opi_flags)		CRT_VAR) \
 	((struct dtx_id)	(opi_dti_cos)		CRT_ARRAY) \
-	((daos_iov_t)		(opi_dkeys)		CRT_ARRAY) \
-	((daos_iov_t)		(opi_akeys)		CRT_ARRAY) \
+	((d_iov_t)		(opi_dkeys)		CRT_ARRAY) \
+	((d_iov_t)		(opi_akeys)		CRT_ARRAY) \
 	((struct daos_obj_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_PUNCH	/* output fields */		 \
