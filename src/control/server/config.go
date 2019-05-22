@@ -107,6 +107,11 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
 
+	// Override certificate support if specified in cliOpts
+	if cliOpts.Insecure == true {
+		config.TransportConfig.AllowInsecure = true
+	}
+
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
@@ -223,7 +228,9 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		// global rank parameter should only apply to first I/O service
 		c.Servers[0].Rank = opts.Rank
 	}
-
+	if opts.Insecure == true {
+		c.TransportConfig.AllowInsecure = true
+	}
 	// override each per-server config
 	for i := range c.Servers {
 		srv := &c.Servers[i]
