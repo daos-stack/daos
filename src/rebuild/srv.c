@@ -868,7 +868,7 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 		       struct rebuild_global_pool_tracker *rgt,
 		       struct pool_target_id_list *tgts_failed,
 		       d_rank_list_t *svc_list, uint32_t map_ver,
-		       daos_iov_t *map_buf)
+		       d_iov_t *map_buf)
 {
 	struct rebuild_scan_in	*rsi;
 	struct rebuild_scan_out	*rso;
@@ -879,8 +879,7 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = map_buf;
-	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx,
-			     daos2crt_sg(&sgl), CRT_BULK_RW,
+	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
 			     &bulk_hdl);
 	if (rc != 0) {
 		D_ERROR("Create bulk for map buffer failed: rc %d\n", rc);
@@ -1004,7 +1003,7 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 
 	uuid_clear(rpt->rt_pool_uuid);
 	if (rpt->rt_svc_list)
-		daos_rank_list_free(rpt->rt_svc_list);
+		d_rank_list_free(rpt->rt_svc_list);
 
 	if (rpt->rt_pool != NULL)
 		ds_pool_put(rpt->rt_pool);
@@ -1066,7 +1065,7 @@ rebuild_task_destroy(struct rebuild_task *task)
 
 	d_list_del(&task->dst_list);
 	pool_target_id_list_free(&task->dst_tgts);
-	daos_rank_list_free(task->dst_svc_list);
+	d_rank_list_free(task->dst_svc_list);
 	D_FREE(task);
 }
 
@@ -1081,7 +1080,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint32_t	map_ver;
-	daos_iov_t	map_buf_iov = {0};
+	d_iov_t	map_buf_iov = {0};
 	uint64_t	leader_term;
 	int		rc;
 
@@ -1825,8 +1824,8 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct ds_pool_create_arg	pc_arg = { 0 };
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
-	daos_iov_t			iov = { 0 };
-	daos_sg_list_t			sgl;
+	d_iov_t			iov = { 0 };
+	d_sg_list_t			sgl;
 	int				rc;
 
 	/* lookup create the ds_pool first */
@@ -1855,7 +1854,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = &iov;
-	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

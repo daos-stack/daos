@@ -39,7 +39,7 @@ do {									\
 } while (0)
 
 static void
-iovok(const daos_iov_t *iov)
+iovok(const d_iov_t *iov)
 {
 	D_ASSERT((iov->iov_buf == NULL && iov->iov_buf_len == 0) ||
 		 (iov->iov_buf != NULL && iov->iov_buf_len > 0));
@@ -47,7 +47,7 @@ iovok(const daos_iov_t *iov)
 }
 
 static void
-ioveq(const daos_iov_t *iov1, const daos_iov_t *iov2)
+ioveq(const d_iov_t *iov1, const d_iov_t *iov2)
 {
 	D_ASSERTF(iov1->iov_len == iov2->iov_len, DF_U64" == "DF_U64"\n",
 		  iov1->iov_len, iov2->iov_len);
@@ -57,9 +57,9 @@ ioveq(const daos_iov_t *iov1, const daos_iov_t *iov2)
 static void
 rdbt_test_util(void)
 {
-	daos_iov_t	empty = {};
-	daos_iov_t	v1;
-	daos_iov_t	v2;
+	d_iov_t	empty = {};
+	d_iov_t	v1;
+	d_iov_t	v2;
 	char		buf1[] = "012345678901234";
 	char		buf2[32];
 	size_t		len1;
@@ -79,7 +79,7 @@ rdbt_test_util(void)
 	ioveq(&v1, &v2);
 
 	D_WARN("encode/decode non-empty iov\n");
-	daos_iov_set(&v1, buf1, strlen(buf1) + 1);
+	d_iov_set(&v1, buf1, strlen(buf1) + 1);
 	len1 = rdb_encode_iov(&v1, NULL);
 	D_ASSERTF(len1 == sizeof(uint32_t) * 2 + strlen(buf1) + 1, "%zu\n",
 		  len1);
@@ -95,12 +95,12 @@ rdbt_test_util(void)
 
 struct rdbt_test_path_arg {
 	int		n;
-	daos_iov_t     *keys;
+	d_iov_t     *keys;
 	int		nkeys;
 };
 
 static int
-rdbt_test_path_cb(daos_iov_t *key, void *varg)
+rdbt_test_path_cb(d_iov_t *key, void *varg)
 {
 	struct rdbt_test_path_arg *arg = varg;
 
@@ -115,7 +115,7 @@ RDB_STRING_KEY(rdbt_key_, foo);
 static void
 rdbt_test_path(void)
 {
-	daos_iov_t			keys[] = {
+	d_iov_t			keys[] = {
 		{.iov_buf = "a", .iov_buf_len = 2, .iov_len = 2},
 		{.iov_buf = "bPPP", .iov_buf_len = 5, .iov_len = 1},
 		{.iov_buf = "c\0\0", .iov_buf_len = 4, .iov_len = 3},
@@ -185,7 +185,7 @@ struct iterate_cb_arg {
 };
 
 static int
-iterate_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
+iterate_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
 	struct iterate_cb_arg *arg = varg;
 
@@ -201,8 +201,8 @@ static void
 rdbt_test_tx(bool update)
 {
 	rdb_path_t		path;
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	char			value_written[] = "value";
 	char			buf[32];
 	uint64_t		keys[] = {11, 22, 33};
@@ -239,15 +239,15 @@ rdbt_test_tx(bool update)
 		attr.dsa_order = 4;
 		MUST(rdb_tx_create_root(&tx, &attr));
 		/* Create a KVS 'kvs1' under the root KVS. */
-		daos_iov_set(&key, "kvs1", strlen("kvs1") + 1);
+		d_iov_set(&key, "kvs1", strlen("kvs1") + 1);
 		attr.dsa_class = RDB_KVS_INTEGER;
 		attr.dsa_order = 4;
 		MUST(rdb_tx_create_kvs(&tx, &path, &key, &attr));
 		/* Update keys in "kvs1". */
 		MUST(rdb_path_push(&path, &key));
 		for (i = 0; i < ARRAY_SIZE(keys); i++) {
-			daos_iov_set(&key, &keys[i], sizeof(keys[0]));
-			daos_iov_set(&value, value_written,
+			d_iov_set(&key, &keys[i], sizeof(keys[0]));
+			d_iov_set(&value, value_written,
 				     strlen(value_written) + 1);
 			MUST(rdb_tx_update(&tx, &path, &key, &value));
 		}
@@ -262,10 +262,10 @@ rdbt_test_tx(bool update)
 	MUST(rdb_path_init(&path));
 	/* Look up keys[0]. */
 	MUST(rdb_path_push(&path, &rdb_path_root_key));
-	daos_iov_set(&key, "kvs1", strlen("kvs1") + 1);
+	d_iov_set(&key, "kvs1", strlen("kvs1") + 1);
 	MUST(rdb_path_push(&path, &key));
-	daos_iov_set(&key, &keys[0], sizeof(keys[0]));
-	daos_iov_set(&value, buf, sizeof(buf));
+	d_iov_set(&key, &keys[0], sizeof(keys[0]));
+	d_iov_set(&value, buf, sizeof(buf));
 	value.iov_len = 0; /* no size check */
 	MUST(rdb_tx_lookup(&tx, &path, &key, &value));
 	D_ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
@@ -279,8 +279,8 @@ rdbt_test_tx(bool update)
 	MUST(rdb_tx_iterate(&tx, &path, false /* backward */, iterate_cb,
 			    &arg));
 	/* Fetch the first key. */
-	daos_iov_set(&key, &k, sizeof(k));
-	daos_iov_set(&value, NULL, 0);
+	d_iov_set(&key, &k, sizeof(k));
+	d_iov_set(&value, NULL, 0);
 	MUST(rdb_tx_fetch(&tx, &path, RDB_PROBE_FIRST, NULL, &key, &value));
 	D_ASSERTF(key.iov_len == sizeof(k), DF_U64" == %zu\n", key.iov_len,
 		  sizeof(k));
@@ -298,7 +298,7 @@ rdbt_test_tx(bool update)
 		MUST(rdb_tx_begin(rdb_db, RDB_NIL_TERM, &tx));
 		MUST(rdb_path_init(&path));
 		MUST(rdb_path_push(&path, &rdb_path_root_key));
-		daos_iov_set(&key, "kvs1", strlen("kvs1") + 1);
+		d_iov_set(&key, "kvs1", strlen("kvs1") + 1);
 		MUST(rdb_tx_destroy_kvs(&tx, &path, &key));
 		rdb_path_fini(&path);
 		MUST(rdb_tx_destroy_root(&tx));

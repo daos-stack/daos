@@ -50,7 +50,7 @@ static void read_empty_records(void **state);
 static void
 array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 {
-	daos_iov_t	ghdl = { NULL, 0, 0 };
+	d_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
 
 	if (rank == 0) {
@@ -187,9 +187,9 @@ small_io(void **state)
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 	daos_range_t	rg;
-	daos_iov_t	iov;
+	d_iov_t	iov;
 	char		buf[BUFLEN], rbuf[BUFLEN];
 	daos_size_t	array_size;
 	int		rc;
@@ -212,7 +212,7 @@ small_io(void **state)
 
 	/** set memory location */
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, buf, BUFLEN);
+	d_iov_set(&iov, buf, BUFLEN);
 	sgl.sg_iovs = &iov;
 
 	/** Write */
@@ -223,7 +223,7 @@ small_io(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(array_size, BUFLEN);
 
-	daos_iov_set(&iov, rbuf, BUFLEN);
+	d_iov_set(&iov, rbuf, BUFLEN);
 	sgl.sg_iovs = &iov;
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
@@ -315,8 +315,8 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
 	daos_range_t	rg;
-	daos_sg_list_t	sgl;
-	daos_iov_t	iov;
+	d_sg_list_t	sgl;
+	d_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	i;
 	daos_event_t	ev, *evp;
@@ -348,7 +348,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** set memory location */
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 
 	/** Write */
@@ -375,7 +375,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
@@ -469,8 +469,8 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
-	daos_sg_list_t	sgl;
-	daos_iov_t	iov;
+	d_sg_list_t	sgl;
+	d_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	len, i;
 	daos_event_t	ev, *evp;
@@ -509,7 +509,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** set memory location */
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 
 	/** Write */
@@ -536,7 +536,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
@@ -625,7 +625,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 	int		*wbuf[NUM_SEGS], *rbuf[NUM_SEGS];
 	daos_size_t	i, j, len;
 	daos_event_t	ev, *evp;
@@ -669,7 +669,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	assert_non_null(sgl.sg_iovs);
 
 	for (i = 0; i < NUM_SEGS; i++) {
-		daos_iov_set(&sgl.sg_iovs[i], wbuf[i],
+		d_iov_set(&sgl.sg_iovs[i], wbuf[i],
 			     (NUM_ELEMS/NUM_SEGS) * sizeof(int));
 	}
 
@@ -694,7 +694,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** Read */
 	for (i = 0; i < NUM_SEGS; i++) {
-		daos_iov_set(&sgl.sg_iovs[i], rbuf[i],
+		d_iov_set(&sgl.sg_iovs[i], rbuf[i],
 			     (NUM_ELEMS/NUM_SEGS) * sizeof(int));
 	}
 	if (arg->async) {
@@ -777,8 +777,8 @@ read_empty_records(void **state)
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
-	daos_sg_list_t	sgl;
-	daos_iov_t	iov;
+	d_sg_list_t	sgl;
+	d_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	i;
 	daos_event_t	ev;
@@ -809,7 +809,7 @@ read_empty_records(void **state)
 
 	/** set memory location */
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
 
 	/** set array location */
@@ -823,7 +823,7 @@ read_empty_records(void **state)
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
-	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
@@ -857,7 +857,7 @@ read_empty_records(void **state)
 		iod.arr_rgs[i].rg_idx = i * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
-	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 
@@ -889,7 +889,7 @@ strided_array(void **state)
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 	int		*buf;
 	daos_size_t	i, j, nerrors = 0;
 	int		rc;
@@ -926,7 +926,7 @@ strided_array(void **state)
 	D_ALLOC_ARRAY(sgl.sg_iovs, NUM);
 	j = 0;
 	for (i = 0 ; i < NUM; i++) {
-		daos_iov_set(&sgl.sg_iovs[i], &buf[j], sizeof(int));
+		d_iov_set(&sgl.sg_iovs[i], &buf[j], sizeof(int));
 		j += 2;
 	}
 

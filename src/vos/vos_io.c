@@ -259,8 +259,8 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov; /* iov to carry key bundle */
-	daos_iov_t		 riov; /* iov to carray record bundle */
+	d_iov_t		 kiov; /* iov to carry key bundle */
+	d_iov_t		 riov; /* iov to carray record bundle */
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
@@ -676,7 +676,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_csum_buf_t		 csum;
-	daos_iov_t		 kiov, riov;
+	d_iov_t		 kiov, riov;
 	struct bio_iov		*biov;
 	umem_off_t		 umoff;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
@@ -1390,7 +1390,7 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx)
  * Caveat: These two functions may yield, please use with caution.
  */
 static int
-vos_obj_copy(struct vos_io_context *ioc, daos_sg_list_t *sgls,
+vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	     unsigned int sgl_nr)
 {
 	int rc, err;
@@ -1409,7 +1409,7 @@ vos_obj_copy(struct vos_io_context *ioc, daos_sg_list_t *sgls,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, daos_sg_list_t *sgls)
+	       daos_iod_t *iods, d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	int rc;
@@ -1436,7 +1436,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      daos_sg_list_t *sgls)
+	      d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	bool size_fetch = (sgls == NULL);
@@ -1458,7 +1458,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		for (i = 0; i < iod_nr; i++) {
 			struct bio_sglist *bsgl = bio_iod_sgl(ioc->ic_biod, i);
-			daos_sg_list_t *sgl = &sgls[i];
+			d_sg_list_t *sgl = &sgls[i];
 
 			/* Inform caller the nonexistent of object/key */
 			if (bsgl->bs_nr_out == 0) {

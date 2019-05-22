@@ -85,13 +85,13 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 }
 
 int
-daos_array_local2global(daos_handle_t oh, daos_iov_t *glob)
+daos_array_local2global(daos_handle_t oh, d_iov_t *glob)
 {
 	return dac_array_local2global(oh, glob);
 }
 
 int
-daos_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh)
+daos_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh)
 {
 	return dac_array_global2local(coh, glob, oh);
 }
@@ -133,7 +133,7 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
 
 int
 daos_array_read(daos_handle_t oh, daos_handle_t th,
-		daos_array_iod_t *iod, daos_sg_list_t *sgl,
+		daos_array_iod_t *iod, d_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev)
 {
 	daos_array_io_t	*args;
@@ -156,7 +156,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
 
 int
 daos_array_write(daos_handle_t oh, daos_handle_t th,
-		 daos_array_iod_t *iod, daos_sg_list_t *sgl,
+		 daos_array_iod_t *iod, d_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev)
 {
 	daos_array_io_t	*args;

@@ -297,7 +297,7 @@ static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	     int verbose)
 {
-	daos_iov_t	ghdl = { NULL, 0, 0 };
+	d_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
 
 	if (rank == 0) {

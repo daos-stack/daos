@@ -48,6 +48,6 @@
  *		-DER_NOREPLY	No response from agent
  *		-DER_MISC	Invalid response from agent
  */
-int dc_sec_request_creds(daos_iov_t *creds);
+int dc_sec_request_creds(d_iov_t *creds);
 
 #endif /* __DAOS_SECURITY_H__ */
