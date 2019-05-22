@@ -1495,8 +1495,19 @@ class DaosContainer(object):
             c_value = ctypes.create_string_buffer(thedata)
         else:
             c_value = None
-        c_size = ctypes.c_size_t(size)
 
+        #if isinstance(thedata, int):
+        #    c_value = ctypes.c_int(thedata)
+        #elif thedata is not None:
+        #    c_value = ctypes.create_string_buffer(thedata)
+        #else:
+        #    c_value = None
+
+        if size == "int":
+            c_size = ctypes.sizeof(ctypes.c_int(thedata))
+        else:
+            c_size = ctypes.c_size_t(size)
+        #c_size = ctypes.sizeof(c_value)
         if dkey is None:
             c_dkey = None
         else:
