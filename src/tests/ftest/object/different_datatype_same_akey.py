@@ -99,27 +99,31 @@ class PunchTest(TestWithServers):
 
         try:
             # create an object and write some data into it
-            #thedata = "a string that I want to stuff into an object"
+            thedata = "a string that I want to stuff into an object"
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            #obj, txn = self.container.write_an_obj(thedata, len(thedata)+1,
-            #                                       dkey, akey, obj_cls=1)
+            obj, txn = self.container.write_an_obj(thedata, len(thedata)+1,
+                                                   dkey, akey, obj_cls=1)
 
             # read the data back and make sure its correct
-            #thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-            #                                      obj, txn)
-            #if thedata != thedata2.value:
-            #    print("data I wrote:" + thedata)
-            #    print("data I read back" + thedata2.value)
-            #    self.fail("Wrote data, read it back, didn't match\n")
+            thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+                                                  obj, txn)
+            if thedata != thedata2.value:
+                print("data I wrote:" + thedata)
+                print("data I read back" + thedata2.value)
+                self.fail("Wrote data, read it back, didn't match\n")
 
             # now punch this data, should fail, can't punch committed data
-            #obj.punch_dkeys(txn, [dkey])
+            obj.punch_akeys(0, dkey, [akey])
+            #print(1)
+            obj.punch_dkeys(0, [dkey])
+
+            #obj.punch(txn)
 
             # expecting punch of commit data above to fail
             #self.fail("Punch should have failed but it didn't.\n")
-            pass
+            #pass
         # expecting an exception so do nothing
         except DaosApiError as dummy_e:
             self.fail(dummy_e)
@@ -129,14 +133,19 @@ class PunchTest(TestWithServers):
             #obj.punch_dkeys(0, [dkey])
 
             # now write integer type to same akey
-            thedata3=000000000000
-            obj, txn = self.container.write_an_obj(thedata3, "int",
+            #thedata3="This is data 3"
+            thedata3 = []
+            thedata3.append("data string one")
+            thedata3.append("data string two")
+            thedata3.append("data string tre")
+            obj, txn = self.container.write_an_array_value(thedata3,
                                                    dkey, akey, obj_cls=1)
         # this one should work so error if exception occurs
         except DaosApiError as dummy_e:
             #self.fail("Punch should have worked.\n")
             print(dummy_e)
-            pass
+            self.fail()
+            #pass
 
         # there are a bunch of other cases to test here,
         #    --test punching the same updating and punching the same data in

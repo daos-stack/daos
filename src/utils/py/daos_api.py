@@ -1503,11 +1503,12 @@ class DaosContainer(object):
         #else:
         #    c_value = None
 
-        if size == "int":
-            c_size = ctypes.sizeof(ctypes.c_int(thedata))
-        else:
-            c_size = ctypes.c_size_t(size)
-        #c_size = ctypes.sizeof(c_value)
+        #if size == "int":
+        #    c_size = ctypes.sizeof(ctypes.c_int(thedata))
+        #else:
+        #    c_size = ctypes.c_size_t(size)
+        
+        c_size = ctypes.sizeof(c_value)
         if dkey is None:
             c_dkey = None
         else:
