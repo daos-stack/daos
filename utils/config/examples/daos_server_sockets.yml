@@ -50,7 +50,7 @@ servers:
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
   # service with -n <path>)
   bdev_class: nvme
-  #bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 
   # If emulating NVMe SSD with malloc devices
   # bdev_class: malloc	# map to VOS_BDEV_CLASS=MALLOC
