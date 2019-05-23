@@ -112,8 +112,8 @@ class LlnlMpi4pyHdf5(TestWithServers):
 
     def test_llnl(self):
         """
-        Test ID: DAOS-2231
-        Run LLNL test suite.
+        Jira ID: DAOS-2231
+        Test Description: Run LLNL test suite.
         Testing various I/O functions provided in llnl test suite
         such as:-
         test_collective, test_datareps, test_errhandlers,
@@ -129,8 +129,8 @@ class LlnlMpi4pyHdf5(TestWithServers):
 
     def test_mpi4py(self):
         """
-        Test ID: DAOS-2231
-        Run mpi4py io test provided in mpi4py package
+        Jira ID: DAOS-2231
+        Test Description: Run mpi4py io test provided in mpi4py package
         Testing various I/O functions provided in mpi4py test suite
         such as:-
         testReadWriteAt, testIReadIWriteAt, testReadWrite
@@ -145,10 +145,10 @@ class LlnlMpi4pyHdf5(TestWithServers):
 
     def test_hdf5(self):
         """
-        Test ID: DAOS-2252
-        Run HDF5 testphdf5 and t_shapesame provided in HDF5 package
-        Testing various I/O functions provided in HDF5 test suite
-        such as:-
+        Jira ID: DAOS-2252
+        Test Description: Run HDF5 testphdf5 and t_shapesame provided in
+        HDF5 package. Testing various I/O functions provided in HDF5 test
+        suite such as:-
         test_fapl_mpio_dup, test_split_comm_access, test_page_buffer_access,
         test_file_properties, dataset_writeInd, dataset_readInd,
         dataset_writeAll, dataset_readAll, extend_writeInd, extend_readInd,
