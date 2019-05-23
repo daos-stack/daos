@@ -205,7 +205,7 @@ func (c *configuration) populateCliOpts(i int) error {
 // options overriding those loaded from configuration file.
 //
 // Current cli opts for daos_server also specified in config:
-//   port, mount path, cores, group, rank, socket dir
+//   port, mount path, targets, group, rank, socket dir
 // Current cli opts to be passed to be stored by daos_server:
 //   modules, attach, map
 func (c *configuration) cmdlineOverride(opts *cliOptions) {
