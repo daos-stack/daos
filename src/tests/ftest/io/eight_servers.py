@@ -94,7 +94,7 @@ class EightServers(TestWithServers):
 
     def test_sequential(self):
         """
-        Test ID: DAOS-1264
+        Jira ID: DAOS-1264
         Test Description: Run IOR with 1,64 and 128 clients config
                           sequentially.
         Use Cases: Different combinations of 1/64/128 Clients and
@@ -106,7 +106,7 @@ class EightServers(TestWithServers):
 
     def test_random(self):
         """
-        Test ID: DAOS-1264
+        Jira ID: DAOS-1264
         Test Description: Run IOR with 1,64 and 128 clients config in random
                           order.
         Use Cases: Different combinations of 1/64/128 Clients and

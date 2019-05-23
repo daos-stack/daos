@@ -46,7 +46,7 @@ class FourServers(TestWithServers):
 
     def test_fourservers(self):
         """
-        Test ID: DAOS-1263
+        Jira ID: DAOS-1263
         Test Description: Test IOR with four servers.
         Use Cases: Different combinations of 1/64/128 Clients,
                    1K/4K/32K/128K/512K/1M transfer size.
