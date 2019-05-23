@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
@@ -119,6 +120,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 		c.controllers = append(c.controllers, controller)
 	}
 
+	time.Sleep(1000 * time.Millisecond)
 	return c.GetActiveConns(results)
 }
 
@@ -126,6 +128,9 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 //
 // TODO: resolve hostname and compare destination IPs for duplicates.
 func (c *connList) GetActiveConns(results ResultMap) ResultMap {
+	if results == nil {
+		results = make(ResultMap)
+	}
 	addresses := []string{}
 
 	controllers := c.controllers[:0]

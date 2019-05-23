@@ -89,7 +89,7 @@ static daos_handle_t		 sk_toh;
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 static void sk_key_encode(struct btr_instance *tins,
-			  daos_iov_t *key, daos_anchor_t *anchor)
+			  d_iov_t *key, daos_anchor_t *anchor)
 {
 	size_t copy_size = key->iov_len;
 
@@ -100,7 +100,7 @@ static void sk_key_encode(struct btr_instance *tins,
 }
 
 static void sk_key_decode(struct btr_instance *tins,
-			  daos_iov_t *key, daos_anchor_t *anchor)
+			  d_iov_t *key, daos_anchor_t *anchor)
 {
 	key->iov_buf = &anchor->da_buf[0];
 	key->iov_buf_len = strlen((char *)anchor->da_buf) + 1;
@@ -109,7 +109,7 @@ static void sk_key_decode(struct btr_instance *tins,
 
 static int
 sk_key_cmp(struct btr_instance *tins, struct btr_record *rec,
-	   daos_iov_t *key_iov)
+	   d_iov_t *key_iov)
 {
 	struct sk_rec	*srec;
 	char		*s1;
@@ -135,8 +135,8 @@ sk_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static int
-sk_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	      daos_iov_t *val_iov, struct btr_record *rec)
+sk_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	      d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct sk_rec		*srec;
 	char			*vbuf;
@@ -184,7 +184,7 @@ sk_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 sk_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     daos_iov_t *key_iov, daos_iov_t *val_iov)
+	     d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct sk_rec	*srec;
 	char		*val;
@@ -245,7 +245,7 @@ sk_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 sk_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *key, daos_iov_t *val_iov)
+	       d_iov_t *key, d_iov_t *val_iov)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct sk_rec		*srec;
@@ -400,7 +400,7 @@ sk_btr_close_destroy(void **state)
 }
 
 static int
-btr_rec_verify_delete(umem_off_t *rec, daos_iov_t *key)
+btr_rec_verify_delete(umem_off_t *rec, d_iov_t *key)
 {
 	struct umem_instance	*umm;
 	struct sk_rec		*srec;
@@ -461,8 +461,8 @@ sk_btr_kv_operate(void **state)
 	while (str != NULL && !isspace(*str) && *str != '\0') {
 		char	   *val = NULL;
 		char	   *key = str;
-		daos_iov_t  key_iov;
-		daos_iov_t  val_iov;
+		d_iov_t  key_iov;
+		d_iov_t  val_iov;
 
 		if (opc == BTR_OPC_UPDATE) {
 			val = strchr(str, SK_SEP_VAL);
@@ -482,12 +482,12 @@ sk_btr_kv_operate(void **state)
 			str++;
 		}
 
-		daos_iov_set(&key_iov, key, strlen(key) + 1);
+		d_iov_set(&key_iov, key, strlen(key) + 1);
 		switch (opc) {
 		default:
 			fail_msg("Invalid opcode\n");
 		case BTR_OPC_UPDATE:
-			daos_iov_set(&val_iov, val, strlen(val) + 1);
+			d_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(sk_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				sprintf(outbuf,
@@ -531,7 +531,7 @@ sk_btr_kv_operate(void **state)
 		case BTR_OPC_LOOKUP:
 			D_DEBUG(DB_TEST, "Looking for %s\n", key);
 
-			daos_iov_set(&val_iov, NULL, 0); /* get address */
+			d_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(sk_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				sprintf(outbuf, "Failed to lookup %s\n", key);
@@ -628,8 +628,8 @@ sk_btr_iterate(void **state)
 	anchor.da_type = DAOS_ANCHOR_TYPE_KEY;
 	for (i = d = 0;; i++) {
 		char		*key;
-		daos_iov_t	 key_iov;
-		daos_iov_t	 val_iov;
+		d_iov_t	 key_iov;
+		d_iov_t	 val_iov;
 
 		if (i == 0 || (del != 0 && d <= del)) {
 			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
@@ -650,8 +650,8 @@ sk_btr_iterate(void **state)
 			}
 		}
 
-		daos_iov_set(&key_iov, NULL, 0);
-		daos_iov_set(&val_iov, NULL, 0);
+		d_iov_set(&key_iov, NULL, 0);
+		d_iov_set(&val_iov, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, &anchor);
 
 		if (rc != 0) {
@@ -698,8 +698,8 @@ pass:
 }
 
 struct kv_node {
-	daos_iov_t key;
-	daos_iov_t val;
+	d_iov_t key;
+	d_iov_t val;
 };
 
 
@@ -725,8 +725,8 @@ sk_btr_mix_keys(struct kv_node *kv, unsigned int key_nr)
 static int
 key_cmp(const void *k1, const void *k2)
 {
-	const daos_iov_t	*key1 = k1;
-	const daos_iov_t	*key2 = k2;
+	const d_iov_t	*key1 = k1;
+	const d_iov_t	*key2 = k2;
 	const char		*s1 = key1->iov_buf;
 	const char		*s2 = key2->iov_buf;
 	uint64_t		 len;
@@ -814,11 +814,11 @@ sk_btr_check_order(struct kv_node *kv, unsigned int key_nr)
 	/* check the order */
 	i = 0;
 	for (;;) {
-		daos_iov_t	key_iov;
-		daos_iov_t	val_iov;
+		d_iov_t	key_iov;
+		d_iov_t	val_iov;
 
-		daos_iov_set(&key_iov, NULL, 0);
-		daos_iov_set(&val_iov, NULL, 0);
+		d_iov_set(&key_iov, NULL, 0);
+		d_iov_set(&val_iov, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 		if (rc != 0) {
 			err = "fetch";

@@ -169,29 +169,29 @@ int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
  * A path is a list of keys. An absolute path begins with a special key
  * (rdb_path_root_key) representing the root KVS.
  */
-typedef daos_iov_t rdb_path_t;
+typedef d_iov_t rdb_path_t;
 
 /**
  * Root key (opaque)
  *
  * A special key representing the root KVS in a path.
  */
-extern daos_iov_t rdb_path_root_key;
+extern d_iov_t rdb_path_root_key;
 
 /** Path methods */
 int rdb_path_init(rdb_path_t *path);
 void rdb_path_fini(rdb_path_t *path);
 int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
-int rdb_path_push(rdb_path_t *path, const daos_iov_t *key);
+int rdb_path_push(rdb_path_t *path, const d_iov_t *key);
 
 /**
- * Define a daos_iov_t object, named \a prefix + \a name, that represents a
+ * Define a d_iov_t object, named \a prefix + \a name, that represents a
  * constant string key. See rdb_layout.[ch] for an example of the usage of this
  * helper macro.
  */
 #define RDB_STRING_KEY(prefix, name)					\
 static char	prefix ## name ## _buf[] = #name;			\
-daos_iov_t	prefix ## name = {					\
+d_iov_t	prefix ## name = {					\
 	.iov_buf	= prefix ## name ## _buf,			\
 	.iov_buf_len	= sizeof(prefix ## name ## _buf),		\
 	.iov_len	= sizeof(prefix ## name ## _buf)		\
@@ -235,13 +235,13 @@ void rdb_tx_end(struct rdb_tx *tx);
 int rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr);
 int rdb_tx_destroy_root(struct rdb_tx *tx);
 int rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
-		      const daos_iov_t *key, const struct rdb_kvs_attr *attr);
+		      const d_iov_t *key, const struct rdb_kvs_attr *attr);
 int rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
-		       const daos_iov_t *key);
+		       const d_iov_t *key);
 int rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs,
-		  const daos_iov_t *key, const daos_iov_t *value);
+		  const d_iov_t *key, const d_iov_t *value);
 int rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs,
-		  const daos_iov_t *key);
+		  const d_iov_t *key);
 
 /** Probe operation codes */
 enum rdb_probe_opc {
@@ -260,15 +260,15 @@ enum rdb_probe_opc {
  *   - if rc == 1, rdb_tx_iterate() stops and returns 0;
  *   - otherwise, rdb_tx_iterate() stops and returns rc.
  */
-typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
-				daos_iov_t *val, void *arg);
+typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
+				d_iov_t *val, void *arg);
 
 /** TX query methods */
 int rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs,
-		  const daos_iov_t *key, daos_iov_t *value);
+		  const d_iov_t *key, d_iov_t *value);
 int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
-		 enum rdb_probe_opc opc, const daos_iov_t *key_in,
-		 daos_iov_t *key_out, daos_iov_t *value);
+		 enum rdb_probe_opc opc, const d_iov_t *key_in,
+		 d_iov_t *key_out, d_iov_t *value);
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
 

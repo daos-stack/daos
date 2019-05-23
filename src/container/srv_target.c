@@ -1352,7 +1352,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	daos_iov_set(&iov, &rg, sizeof(rg));
+	d_iov_set(&iov, &rg, sizeof(rg));
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;

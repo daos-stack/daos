@@ -26,8 +26,6 @@ package main
 import (
 	"fmt"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 // StorCmd is the struct representing the top-level storage subcommand.
@@ -52,8 +50,8 @@ func scanStor() {
 
 // Execute is run when ScanStorCmd activates
 func (s *ScanStorCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		return err
 	}
 
 	scanStor()
@@ -85,8 +83,8 @@ func formatStor() {
 
 // Execute is run when FormatStorCmd activates
 func (s *FormatStorCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		return err
 	}
 
 	formatStor()

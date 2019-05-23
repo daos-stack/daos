@@ -131,12 +131,12 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_entry_df	*dtx;
-	daos_iov_t		 rec_iov;
+	d_iov_t		 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
 		D_ERROR("Error while fetching DTX info: rc = %d\n", rc);

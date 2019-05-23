@@ -425,7 +425,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      daos_sg_list_t *sgls);
+	      d_sg_list_t *sgls);
 
 
 /**
@@ -455,7 +455,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, daos_sg_list_t *sgls);
+	       daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -709,7 +709,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
  */
 int
 vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
-	      daos_iov_t *iov_out);
+	      d_iov_t *iov_out);
 
 /**
  * Delete the current data entry of the iterator
