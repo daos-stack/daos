@@ -32,16 +32,16 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-func hasConns(results client.ResultMap) (out string) {
-	out = sprintConns(results)
+func hasConns(results client.ResultMap) (bool, string) {
+	out := sprintConns(results)
 	for _, res := range results {
 		if res.Err == nil {
-			return
+			return true, out
 		}
 	}
 
 	// notify if there have been no successful connections
-	return fmt.Sprintf("%sNo active connections!", out)
+	return false, fmt.Sprintf("%sNo active connections!", out)
 }
 
 func sprintConns(results client.ResultMap) (out string) {
