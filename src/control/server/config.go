@@ -369,9 +369,15 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			srv.EnvVars,
 			"CRT_PHY_ADDR_STR="+c.Provider,
 			"OFI_INTERFACE="+srv.FabricIface,
-			"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort),
 			"D_LOG_MASK="+srv.LogMask,
 			"D_LOG_FILE="+srv.LogFile)
+
+		// populate only if non-zero
+		if srv.FabricIfacePort != 0 {
+			srv.EnvVars = append(
+				srv.EnvVars,
+				"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort))
+		}
 	}
 
 	return nil
