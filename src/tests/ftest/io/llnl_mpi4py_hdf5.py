@@ -113,8 +113,15 @@ class LlnlMpi4pyHdf5(TestWithServers):
     def test_llnl(self):
         """
         Test ID: DAOS-2231
-        Run LLNL test provided in mpich package
+        Run LLNL test suite.
         Testing various I/O functions provided in llnl test suite
+        such as:-
+        test_collective, test_datareps, test_errhandlers,
+        test_filecontrol, test_localpointer, test_manycomms,
+        test_manyopens, test_openclose, test_openmodes,
+        test_nb_collective, test_nb_localpointer, test_nb_rdwr,
+        test_nb_readwrite, test_rdwr, test_readwrite
+
         :avocado: tags=mpio,llnlmpi4py,llnl
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
@@ -125,6 +132,12 @@ class LlnlMpi4pyHdf5(TestWithServers):
         Test ID: DAOS-2231
         Run mpi4py io test provided in mpi4py package
         Testing various I/O functions provided in mpi4py test suite
+        such as:-
+        testReadWriteAt, testIReadIWriteAt, testReadWrite
+        testIReadIWrite, testReadWriteAtAll, testIReadIWriteAtAll
+        testReadWriteAtAllBeginEnd, testReadWriteAll
+        testIReadIWriteAll, testReadWriteAllBeginEnd
+
         :avocado: tags=mpio,llnlmpi4py,mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
@@ -135,6 +148,24 @@ class LlnlMpi4pyHdf5(TestWithServers):
         Test ID: DAOS-2252
         Run HDF5 testphdf5 and t_shapesame provided in HDF5 package
         Testing various I/O functions provided in HDF5 test suite
+        such as:-
+        test_fapl_mpio_dup, test_split_comm_access, test_page_buffer_access,
+        test_file_properties, dataset_writeInd, dataset_readInd,
+        dataset_writeAll, dataset_readAll, extend_writeInd, extend_readInd,
+        extend_writeAll, extend_readAll,extend_writeInd2,none_selection_chunk,
+        zero_dim_dset, multiple_dset_write, multiple_group_write,
+        multiple_group_read, compact_dataset, collective_group_write,
+        independent_group_read, big_dataset, coll_chunk1, coll_chunk2,
+        coll_chunk3, coll_chunk4, coll_chunk5, coll_chunk6, coll_chunk7,
+        coll_chunk8, coll_chunk9, coll_chunk10, coll_irregular_cont_write,
+        coll_irregular_cont_read, coll_irregular_simple_chunk_write,
+        coll_irregular_simple_chunk_read , coll_irregular_complex_chunk_write,
+        coll_irregular_complex_chunk_read , null_dataset , io_mode_confusion,
+        rr_obj_hdr_flush_confusion, chunk_align_bug_1,lower_dim_size_comp_test,
+        link_chunk_collective_io_test, actual_io_mode_tests,
+        no_collective_cause_tests, test_plist_ed, file_image_daisy_chain_test,
+        test_dense_attr, test_partial_no_selection_coll_md_read
+
         :avocado: tags=mpio,llnlmpi4py,hdf5
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
