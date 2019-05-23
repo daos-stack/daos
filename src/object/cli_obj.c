@@ -1527,7 +1527,7 @@ struct ec_params {
 	daos_iod_t		*iods;	/* Replaces iod array in update.
 					 * NULL except head of list
 					 */
-	daos_sg_list_t		*sgls;	/* Replaces sgl array in update.
+	d_sg_list_t		*sgls;	/* Replaces sgl array in update.
 					 * NULL except head
 					 */
 	unsigned int		nr;	/* number of records in iods and sgls
@@ -1536,7 +1536,7 @@ struct ec_params {
 	daos_iod_t		niod;	/* replacement IOD for an input IOD
 					 * that includes full stripe.
 					 */
-	daos_sg_list_t		nsgl;	/* replacement SGL for an input IOD that
+	d_sg_list_t		nsgl;	/* replacement SGL for an input IOD that
 					 * includes full stripe.
 					 */
 	struct obj_ec_parity	p_segs;	/* Structure containing array of
@@ -1577,7 +1577,7 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 
 /* Initialize a param structure for an IOD--SGL pair. */
 static void
-ec_init_params(struct ec_params *params, daos_iod_t *iod, daos_sg_list_t *sgl)
+ec_init_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl)
 {
 	params->niod		= *iod;
 	params->nsgl		= *sgl;
@@ -1624,7 +1624,7 @@ ec_set_head_params(struct ec_params *head, daos_obj_update_t *args,
 
 /* Moves the SGL "cursors" to the start of a full stripe */
 static void
-ec_move_sgl_cursors(daos_sg_list_t *sgl, size_t size, unsigned int *sg_idx,
+ec_move_sgl_cursors(d_sg_list_t *sgl, size_t size, unsigned int *sg_idx,
 		 size_t *sg_off)
 {
 	if (size < sgl->sg_iovs[*sg_idx].iov_len - *sg_off) {
@@ -1670,7 +1670,7 @@ ec_allocate_parity(struct obj_ec_parity *par, unsigned int len, unsigned int p,
  */
 static int
 ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
-		daos_sg_list_t *sgl, struct daos_oclass_attr *oca,
+		d_sg_list_t *sgl, struct daos_oclass_attr *oca,
 		int recx_idx, unsigned int *sg_idx, size_t *sg_off)
 {
 	unsigned long	s_cur;
@@ -1733,7 +1733,7 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
  * input entries.
  */
 static int
-ec_update_params(struct ec_params *params, daos_iod_t *iod, daos_sg_list_t *sgl,
+ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		 unsigned int len)
 {
 	daos_recx_t	*nrecx;
@@ -1765,13 +1765,9 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, daos_sg_list_t *sgl,
 	return rc;
 }
 
-/* Call-back that recovers EC allocated memory  */
-static int
-ec_free_params_cb(tse_task_t *task, void *data)
+static void
+ec_free_params(struct ec_params *head)
 {
-	struct ec_params *head = *((struct ec_params **)data);
-	int		  rc = task->dt_result;
-
 	D_FREE(head->iods);
 	D_FREE(head->sgls);
 	while (head != NULL) {
@@ -1786,6 +1782,17 @@ ec_free_params_cb(tse_task_t *task, void *data)
 		head = current->next;
 		D_FREE(current);
 	}
+}
+
+
+/* Call-back that recovers EC allocated memory  */
+static int
+ec_free_params_cb(tse_task_t *task, void *data)
+{
+	struct ec_params *head = *((struct ec_params **)data);
+	int		  rc = task->dt_result;
+
+	ec_free_params(head);
 	return rc;
 }
 
@@ -1908,20 +1915,9 @@ ec_obj_update(tse_task_t *task, daos_obj_id_t oid, daos_oclass_attr_t *oca,
 			head->nr++;
 		}
 	}
-	if (rc != 0 && head != NULL) {
-		D_FREE(head->iods);
-		D_FREE(head->sgls);
-		while (head != NULL) {
-			current = head;
-			D_FREE(current->niod.iod_recxs);
-			D_FREE(current->nsgl.sg_iovs);
-			for (i = 0; i < current->p_segs.p_nr; i++)
-				D_FREE(current->p_segs.p_bufs[i]);
-			D_FREE(current->p_segs.p_bufs);
-			head = current->next;
-			D_FREE(current);
-		}
-	} else if (head != NULL) {
+	if (rc != 0 && head != NULL)
+		ec_free_params(head);
+	else if (head != NULL) {
 		args->iods = head->iods;
 		args->sgls = head->sgls;
 		 tse_task_register_comp_cb(task, ec_free_params_cb, &head,
@@ -1937,6 +1933,7 @@ dc_obj_update(tse_task_t *task)
 	tse_sched_t		*sched = tse_task2sched(task);
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
+	struct daos_oclass_attr *oca;
 	d_list_t		*head = NULL;
 	unsigned int		shard;
 	unsigned int		start_shard;
@@ -1969,8 +1966,7 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
-	struct daos_oclass_attr *oca =
-				daos_oclass_attr_find(obj->cob_md.omd_id);
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
 	if (oca->ca_resil == DAOS_RES_EC) {
 		rc = ec_obj_update(task, obj->cob_md.omd_id, oca, &tgt_set);
 		if (rc != 0)
