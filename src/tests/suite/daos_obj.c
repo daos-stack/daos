@@ -3497,6 +3497,10 @@ static void fetch_mixed_keys(void **state)
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
+	/** Test non nonexistent oid */
+	print_message("Fetch nonexistent OID\n");
+	nonexistent_internal(state, oid, "oid");	
+
 	/** Test non nonexistent dkey */
 	print_message("Fetch nonexistent DKEY\n");
 	nonexistent_internal(state, oid, "dkey");
@@ -3504,10 +3508,6 @@ static void fetch_mixed_keys(void **state)
 	/** Test non nonexistent akey */
 	print_message("Fetch nonexistent AKEY\n");
 	nonexistent_internal(state, oid, "akey");
-
-	/** Test non nonexistent oid */
-	print_message("Fetch nonexistent OID\n");
-	nonexistent_internal(state, oid, "oid");
 
 	print_message("DAOS_IOD_ARRAY:SCM\n");
 	fetch_mixed_keys_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
