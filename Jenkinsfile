@@ -145,8 +145,8 @@ pipeline {
                         sh label: env.STAGE_NAME,
                            script: '''rm -rf artifacts/centos7/
                                       mkdir -p artifacts/centos7/
-                              if make srpm; then
-                                  if make mockbuild; then
+                              if make -C utils/rpms srpm; then
+                                  if make -C utils/rpms mockbuild; then
                                       (cd /var/lib/mock/epel-7-x86_64/result/ &&
                                        cp -r . $OLDPWD/artifacts/centos7/)
                                       createrepo artifacts/centos7/
@@ -154,7 +154,7 @@ pipeline {
                                       rc=\${PIPESTATUS[0]}
                                       (cd /var/lib/mock/epel-7-x86_64/result/ &&
                                        cp -r . $OLDPWD/artifacts/centos7/)
-                                      cp -af _topdir/SRPMS artifacts/centos7/
+                                      cp -af utils/rpms/_topdir/SRPMS artifacts/centos7/
                                       exit \$rc
                                   fi
                               else
@@ -199,11 +199,11 @@ pipeline {
                         sh label: env.STAGE_NAME,
                            script: '''rm -rf artifacts/sles12.3/
                               mkdir -p artifacts/sles12.3/
-                              rm -rf _topdir/SRPMS
-                              if make srpm; then
-                                  rm -rf _topdir/RPMS
-                                  if make rpms; then
-                                      ln _topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
+                              rm -rf utils/rpms/_topdir/SRPMS
+                              if make -C utils/rpms srpm; then
+                                  rm -rf utils/rpms/_topdir/RPMS
+                                  if make -C utils/rpms rpms; then
+                                      ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
                                       createrepo artifacts/sles12.3/
                                   else
                                       exit \${PIPESTATUS[0]}

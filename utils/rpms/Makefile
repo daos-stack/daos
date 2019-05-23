@@ -34,11 +34,14 @@ _topdir/SOURCES/%: % | _topdir/SOURCES/
 	ln $< $@
 
 scons_local-$(VERSION).tar:
-	cd scons_local && \
-	git archive --format tar --prefix scons_local/ -o ../$@ HEAD ./
+	cd ../../scons_local &&                        \
+	git archive --format tar --prefix scons_local/ \
+	            -o $$OLDPWD/$@ HEAD ./
 
 $(NAME)-$(VERSION).tar:
-	git archive --format tar --prefix $(NAME)-$(VERSION)/ -o $@ HEAD ./
+	cd ../../ &&                                          \
+	git archive --format tar --prefix $(NAME)-$(VERSION)/ \
+	            -o $$OLDPWD/$@ HEAD ./
 
 # see https://stackoverflow.com/questions/2973445/ for why we subst
 # the "rpm" for "%" to effectively turn this into a multiple matching
