@@ -3459,8 +3459,8 @@ static void fetch_mixed_keys_internal(void **state, daos_obj_id_t oid,
 	       offset, (void **)rec, DAOS_TX_NONE, &req);
 
 	/* update the non existent akeys*/
-	snprintf(akeys[1], 30, "%s8", akey);
-	snprintf(akeys[3], 30, "%s9", akey);
+	snprintf(akeys[1], 30, "%sA", akey);
+	snprintf(akeys[3], 30, "%sB", akey);
 
 	/** Lookup */
 	lookup(dkey, MANYREC_NUMRECS, (const char **)akeys, offset, rec_size,
@@ -3497,6 +3497,10 @@ static void fetch_mixed_keys(void **state)
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 
+	/** Test non nonexistent oid */
+	print_message("Fetch nonexistent OID\n");
+	nonexistent_internal(state, oid, "oid");
+
 	/** Test non nonexistent dkey */
 	print_message("Fetch nonexistent DKEY\n");
 	nonexistent_internal(state, oid, "dkey");
@@ -3504,10 +3508,6 @@ static void fetch_mixed_keys(void **state)
 	/** Test non nonexistent akey */
 	print_message("Fetch nonexistent AKEY\n");
 	nonexistent_internal(state, oid, "akey");
-
-	/** Test non nonexistent oid */
-	print_message("Fetch nonexistent OID\n");
-	nonexistent_internal(state, oid, "oid");
 
 	print_message("DAOS_IOD_ARRAY:SCM\n");
 	fetch_mixed_keys_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
@@ -3517,7 +3517,7 @@ static void fetch_mixed_keys(void **state)
 	print_message("DAOS_IOD_ARRAY:NVME\n");
 	fetch_mixed_keys_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_ARRAY,
 				  "io_manyrec_nvme_array dkey",
-				  "io_manyrec_array akey");
+				  "io_manyrec_nvme_array akey");
 
 	print_message("DAOS_IOD_SINGLE:SCM\n");
 	fetch_mixed_keys_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_SINGLE,
