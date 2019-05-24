@@ -814,7 +814,7 @@ pipeline {
         }
         stage('Test') {
             parallel {
-                stage('Functional') {+++++++++
+                stage('Functional') {
                     agent {
                         label 'ci_vm9'
                     }
