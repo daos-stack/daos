@@ -405,3 +405,28 @@ def read_during_rebuild(
             "Rebuild completed before all the written data could be read")
     elif failed_reads:
         raise DaosTestError("Errors detected reading data during rebuild")
+
+
+def get_target_rank_list(daos_object):
+    """Get a list of target ranks from a DAOS object.
+
+    Note:
+        The DaosObj function called is not part of the public API
+
+    Args:
+        daos_object (DaosObj): the object from which to get the list of targets
+
+    Raises:
+        DaosTestError: if there is an error obtaining the target list from the
+            object
+
+    Returns:
+        list: list of targets for the specified object
+
+    """
+    try:
+        daos_object.get_layout()
+        return daos_object.tgt_rank_list
+    except DaosApiError as error:
+        raise DaosTestError(
+            "Error obtaining target list for the object: {}".format(error))

@@ -28,7 +28,7 @@ from apricot import TestWithServers
 from general_utils import get_pool, get_container, kill_server, DaosTestError
 from general_utils import get_pool_status, wait_for_rebuild, verify_rebuild
 from io_utilities import read_array_objects, read_during_rebuild
-from io_utilities import write_array_objects
+from io_utilities import write_array_objects, get_target_rank_list
 
 
 class ReadArrayTest(TestWithServers):
@@ -38,16 +38,27 @@ class ReadArrayTest(TestWithServers):
     """
 
     def test_read_array_during_rebuild(self):
-        """DAOS-691 write a dkey, fail a target, read the dkey during rebuild.
+        """Jira ID: DAOS-691
 
-        Test rebuild of a single target failure with a pool containing array
-        records.  Verify that:
-            - the records can be read during the rebuild process
-            - rebuild completes successfully when at least one pool service
-                leader exists
-            - the data is rebuilt when more targets exist than replicas
+        Test Description:
+            Configure 3 or 6 targets with 1 pool with a service leader quantity
+            of 2 or 3.  Add 1 container to the pool configured with 2 or 3
+            replicas.  Add 10 objects of 10 records each populated with an
+            array of 5 values (currently a sufficent amount of data to be read
+            fully before rebuild completes) to a specific rank.  Exclude this
+            rank and verify that rebuild is initiated.  While rebuild is
+            active, confirm that all the objects and records can be read.
+            Finally verify that rebuild completes and the pool info indicates
+            the correct number of rebuilt objects and records.  In the case of
+            3 targets with a pool configured with 3 replicas, rebuild should
+            not yield any rebuilt objects or records, but the data should still
+            be accassible.
 
-        :avocado: tags=rebuild,rebuildreadarray
+        Use Cases:
+            Basic rebuild of container objects of array values with sufficient
+            numbers of rebuild targets and no available rebuild targets.
+
+        :avocado: tags=all,medium,full_regression,rebuild,rebuildreadarray
         """
         pool_mode = self.params.get("mode", "/run/pool/*")
         pool_size = self.params.get("size", "/run/pool/*")
@@ -102,6 +113,9 @@ class ReadArrayTest(TestWithServers):
         # Log rebuild status prior to killing the server
         self.log.info("Checking pool status prior to rebuild")
         get_pool_status(self.pool, self.log)
+        self.log.info(
+            "Object Target List: %s",
+            get_target_rank_list(written_objects[0]["obj"]))
 
         # Kill the server
         self.log.info(
@@ -129,6 +143,10 @@ class ReadArrayTest(TestWithServers):
         # Confirm rebuild completes
         wait_for_rebuild(self.pool, self.log, False, 1)
         self.log.info("Rebuild completion detected")
+
+        self.log.info(
+            "Object Target List: %s",
+            get_target_rank_list(written_objects[0]["obj"]))
 
         # Confirm the number of rebuilt objects reported by the pool query
         errors = verify_rebuild(
