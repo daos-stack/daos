@@ -104,7 +104,10 @@ int
 enumerate_dkey(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 	       daos_anchor_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req);
-
+int
+enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
+	       daos_key_desc_t *kds, daos_anchor_t *anchor, void *buf,
+	       daos_size_t len, struct ioreq *req);
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
 	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
