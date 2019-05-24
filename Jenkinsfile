@@ -886,7 +886,7 @@ pipeline {
                                        power_only: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
-                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
+                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw
                                            fi
