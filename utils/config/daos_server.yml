@@ -202,21 +202,20 @@
 #
 #  rank: 0
 #
-#  # Targets (VOS) represent the number of logical CPUs to be used starting at
-#  # index specified by first_core.
+#  # Targets (VOS) represent the count of storage targets per data plane
+#  # server starting at core offset specified by first_core.
 #
-#  # Targets will be used to run XStreams can be thought of as service threads.
 #  # Immutable after reformat.
 #
 #  targets: 20
 #
-#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Count of offload/helper xstreams per target. (allowed values: 0-2)
 #  # Immutable after reformat.
 #
 #  # default: 2
 #  nr_xs_helpers: 0
 #
-#  # Index of first core for service thread.
+#  # Offset of the first core for service xstreams.
 #  # Immutable after reformat.
 #
 #  # default: 0
