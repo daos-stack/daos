@@ -240,7 +240,7 @@ rm -f core.* *_results.xml
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -s \"${TEST_TAG_ARR[@]}\"; then
+if ! ./launch.py -s "${TEST_TAG_ARR[*]}"; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
