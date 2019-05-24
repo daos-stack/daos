@@ -3,7 +3,6 @@
 cwd=$(dirname "$0")
 DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
 BTR=$DAOS_DIR/build/src/common/tests/btree
-
 VCMD=()
 if [ "$USE_VALGRIND" = "yes" ]; then
     VCMD=("valgrind" "--tool=pmemcheck")

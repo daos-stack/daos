@@ -368,7 +368,7 @@ iod_last_region(struct bio_desc *biod)
 {
 	unsigned int cnt = biod->bd_rsrvd.brd_rg_cnt;
 
-	D_ASSERT(!cnt || cnt < biod->bd_rsrvd.brd_rg_max);
+	D_ASSERT(!cnt || cnt <= biod->bd_rsrvd.brd_rg_max);
 	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
 }
 
@@ -493,12 +493,8 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 	if (biov->bi_addr.ba_type == DAOS_MEDIA_SCM) {
 		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
-		umem_id_t ummid;
 
-		ummid.pool_uuid_lo = biod->bd_ctxt->bic_pmempool_uuid;
-		ummid.off = bio_iov2off(biov);
-
-		biov->bi_buf = umem_id2ptr(umem, ummid);
+		biov->bi_buf = umem_off2ptr(umem, bio_iov2off(biov));
 		return 0;
 	}
 

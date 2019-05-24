@@ -66,66 +66,7 @@ do {								\
 static int
 error_convert(int error)
 {
-	switch (error) {
-	case 0:
-		return 0;
-	case -DER_NO_PERM:
-	case -DER_EP_RO:
-	case -DER_EP_OLD:
-		return -EPERM;
-	case -DER_NO_HDL:
-	case -DER_ENOENT:
-	case -DER_NONEXIST:
-		return -ENOENT;
-	case -DER_INVAL:
-	case -DER_NOTYPE:
-	case -DER_NOSCHEMA:
-	case -DER_NOLOCAL:
-	case -DER_KEY2BIG:
-	case -DER_REC2BIG:
-	case -DER_IO_INVAL:
-		return -EINVAL;
-	case -DER_EXIST:
-		return -EEXIST;
-	case -DER_UNREACH:
-		return -ENXIO;
-	case -DER_NOSPACE:
-		return -ENOSPC;
-	case -DER_ALREADY:
-		return -EALREADY;
-	case -DER_NOMEM:
-		return -ENOMEM;
-	case -DER_TIMEDOUT:
-		return -ETIMEDOUT;
-	case -DER_BUSY:
-	case -DER_EQ_BUSY:
-		return -EBUSY;
-	case -DER_AGAIN:
-		return -EAGAIN;
-	case -DER_PROTO:
-		return -EPROTO;
-	case -DER_IO:
-		return -EIO;
-	case -DER_CANCELED:
-		return -ECANCELED;
-	case -DER_OVERFLOW:
-		return -EOVERFLOW;
-	case -DER_BADPATH:
-	case -DER_NOTDIR:
-		return -ENOTDIR;
-	case -DER_STALE:
-		return -ESTALE;
-	case -DER_OOG:
-	case -DER_HG:
-	case -DER_UNREG:
-	case -DER_PMIX:
-	case -DER_MISC:
-	case -DER_NOTATTACH:
-	case -DER_NOREPLY:
-		return error;
-	default:
-		return error;
-	}
+	return -daos_der2errno(error);
 }
 
 static int
@@ -580,8 +521,8 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 {
 	dfs_obj_t *obj;
 	daos_size_t actual;
-	daos_iov_t iov;
-	daos_sg_list_t sgl;
+	d_iov_t iov;
+	d_sg_list_t sgl;
 	int rc;
 
 	FUNC_ENTER("path = %s\n", path);
@@ -592,7 +533,7 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 	/** set memory location */
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	daos_iov_set(&iov, buf, size);
+	d_iov_set(&iov, buf, size);
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_read(dfs, obj, sgl, offset, &actual);
@@ -607,8 +548,8 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 	    struct fuse_file_info *fi)
 {
 	dfs_obj_t *obj;
-	daos_iov_t iov;
-	daos_sg_list_t sgl;
+	d_iov_t iov;
+	d_sg_list_t sgl;
 	int rc;
 
 	FUNC_ENTER("path = %s\n", path);
@@ -619,7 +560,7 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 	/** set memory location */
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	daos_iov_set(&iov, (void *)buf, size);
+	d_iov_set(&iov, (void *)buf, size);
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_write(dfs, obj, sgl, offset);

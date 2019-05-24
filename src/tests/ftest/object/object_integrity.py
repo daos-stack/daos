@@ -34,7 +34,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 
@@ -65,8 +65,8 @@ class ObjectDataValidation(avocado.Test):
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
         basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        server_group = self.params.get("server_group",
-                                       '/server/',
+        server_group = self.params.get("name",
+                                       '/server_config/',
                                        'daos_server')
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
         self.d_log = DaosLog(self.context)
@@ -78,7 +78,7 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
+        self.agent_sessions = agent_utils.run_agent(basepath, self.hostlist)
         server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
@@ -111,7 +111,7 @@ class ObjectDataValidation(avocado.Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def reconnect(self):

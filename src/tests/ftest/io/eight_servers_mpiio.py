@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 import sys
 import json
-from avocado       import Test
+from avocado import Test
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -65,7 +65,8 @@ class EightServers(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
         print("<<{}>>".format(self.basepath))
-        self.server_group = self.params.get("name", '/server/', 'daos_server')
+        self.server_group = self.params.get("name", '/server_config/',
+                                            'daos_server')
 
         # setup the DAOS python API
         self.context = DaosContext(build_paths['PREFIX'] + '/lib/')

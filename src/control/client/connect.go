@@ -25,8 +25,15 @@ package client
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+)
+
+const (
+	msgBadType      = "type assertion failed, wanted %+v got %+v"
+	msgConnInactive = "socket connection is not active (%s)"
 )
 
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
@@ -64,12 +71,15 @@ func (c *controllerFactory) create(address string) (Control, error) {
 type Connect interface {
 	// ConnectClients attempts to connect a list of addresses
 	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states of controllers and removes inactive
+	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
+	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
+	FormatStorage() (ClientCtrlrMap, ClientMountMap)
+	UpdateStorage(*pb.UpdateStorageParams) (ClientCtrlrMap, ClientModuleMap)
+	// TODO: implement Burnin client features
+	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
-	ListStorage() (ClientNvmeMap, ClientScmMap)
-	FormatStorage() ResultMap
 	KillRank(uuid string, rank uint32) ResultMap
 }
 
@@ -105,10 +115,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 
 		controller, ok := res.Value.(Control)
 		if !ok {
-			res.Err = fmt.Errorf(
-				"type assertion failed, wanted %+v got %+v",
-				control{}, res.Value)
-
+			res.Err = fmt.Errorf(msgBadType, control{}, res.Value)
 			results[res.Address] = res
 			continue
 		}
@@ -116,6 +123,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 		c.controllers = append(c.controllers, controller)
 	}
 
+	time.Sleep(100 * time.Millisecond)
 	return c.GetActiveConns(results)
 }
 
@@ -123,6 +131,9 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 //
 // TODO: resolve hostname and compare destination IPs for duplicates.
 func (c *connList) GetActiveConns(results ResultMap) ResultMap {
+	if results == nil {
+		results = make(ResultMap)
+	}
 	addresses := []string{}
 
 	controllers := c.controllers[:0]
@@ -139,8 +150,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 			addresses = append(addresses, address)
 			controllers = append(controllers, mc)
 		} else {
-			err = fmt.Errorf(
-				"socket connection is not active (%s)", state)
+			err = fmt.Errorf(msgConnInactive, state)
 		}
 
 		results[address] = ClientResult{address, state, err}
@@ -175,18 +185,33 @@ func (c *connList) ClearConns() ResultMap {
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
 func (c *connList) makeRequests(
-	requestFn func(Control, chan ClientResult)) ResultMap {
+	params interface{},
+	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
 
+	addrs := []string{}
 	for _, mc := range c.controllers {
-		go requestFn(mc, ch)
+		addrs = append(addrs, mc.getAddress())
+		go requestFn(mc, params, ch)
 	}
 
-	for range c.controllers {
+	for {
 		res := <-ch
-		cMap[res.Address] = res
+
+		// remove received address from list
+		for i, v := range addrs {
+			if v == res.Address {
+				addrs = append(addrs[:i], addrs[i+1:]...)
+				cMap[res.Address] = res
+				break
+			}
+		}
+
+		if len(addrs) == 0 {
+			break // received responses from all connections
+		}
 	}
 
 	return cMap

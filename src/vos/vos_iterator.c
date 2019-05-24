@@ -336,7 +336,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 
 int
 vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int rc;

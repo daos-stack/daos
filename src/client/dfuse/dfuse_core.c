@@ -25,25 +25,6 @@
 #include "dfuse.h"
 #include "dfuse_da.h"
 
-bool
-dfuse_gen_cb(struct dfuse_request *request)
-{
-	struct dfuse_status_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc) {
-		DFUSE_REPLY_ERR(request, request->rc);
-		D_GOTO(out, 0);
-	}
-
-	DFUSE_REPLY_ZERO(request);
-
-out:
-
-	D_FREE(request);
-	return false;
-}
-
 /*
  * Wrapper function that is called from FUSE to send RPCs. The idea is to
  * decouple the FUSE implementation from the actual sending of RPCs. The
@@ -76,12 +57,83 @@ dfuse_fs_send(struct dfuse_request *request)
 			request->ir_ht = RHS_INODE;
 		}
 	}
-	return 0;
+	return EIO;
 err:
 	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", rc);
 
 	return rc;
 }
+
+/* Inode record hash table operations */
+
+/* Use a custom hash function for this table, as the key contains a pointer
+ * to some entries which need to be checked, therefore different pointer
+ * values will return different hash buckets, even if the data pointed to
+ * would match.  By providing a custom hash function this ensures that only
+ * invariant data is checked.
+ */
+static uint32_t
+ir_key_hash(struct d_hash_table *htable, const void *key,
+	    unsigned int ksize)
+{
+	const struct dfuse_inode_record_id *ir_id = key;
+
+	return (uint32_t)ir_id->irid_oid.hi;
+}
+
+static bool
+ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
+	   const void *key, unsigned int ksize)
+{
+	const struct dfuse_inode_record		*ir;
+	const struct dfuse_inode_record_id	*ir_id = key;
+
+	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	/* First check if the both parts of the OID match */
+	if (ir->ir_id.irid_oid.lo != ir_id->irid_oid.lo)
+		return false;
+
+	if (ir->ir_id.irid_oid.hi != ir_id->irid_oid.hi)
+		return false;
+
+	/* Then check if it's the same container (dfs struct) */
+	if (ir->ir_id.irid_dfs == ir_id->irid_dfs) {
+		return true;
+	}
+
+	/* Now check the pool name */
+	if (strncmp(ir->ir_id.irid_dfs->dffs_pool,
+		    ir_id->irid_dfs->dffs_pool,
+		    NAME_MAX) != 0) {
+		return false;
+	}
+
+	/* Now check the container name */
+	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
+		    ir_id->irid_dfs->dffs_cont,
+			NAME_MAX) != 0) {
+		return false;
+	}
+
+	/* This case means it's the same container name, but a different dfs
+	 * struct which can happen with repeated lookups of already open
+	 * containers
+	 */
+	return true;
+}
+
+static void
+ir_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct dfuse_inode_record *ir;
+
+	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	D_FREE(ir);
+}
+
+/* Inode entry hash table operations */
 
 static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
@@ -92,7 +144,7 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return *ino == ie->stat.st_ino;
+	return *ino == ie->ie_stat.st_ino;
 }
 
 static void
@@ -126,99 +178,23 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->parent);
+	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->ie_parent);
 	ie_close(fs_handle, ie);
-	D_FREE(ie);
 }
 
-d_hash_table_ops_t hops = {.hop_key_cmp = ih_key_cmp,
-			   .hop_rec_addref = ih_addref,
-			   .hop_rec_decref = ih_decref,
-			   .hop_rec_free = ih_free,
+static d_hash_table_ops_t ie_hops = {
+	.hop_key_cmp	= ih_key_cmp,
+	.hop_rec_addref	= ih_addref,
+	.hop_rec_decref	= ih_decref,
+	.hop_rec_free	= ih_free,
 };
 
-static void
-dh_init(void *arg, void *handle)
-{
-	struct dfuse_dir_handle *dh = arg;
+static d_hash_table_ops_t ir_hops = {
+	.hop_key_cmp	= ir_key_cmp,
+	.hop_key_hash   = ir_key_hash,
+	.hop_rec_free	= ir_free,
 
-	DFUSE_REQUEST_INIT(&dh->open_req, handle);
-	DFUSE_REQUEST_INIT(&dh->close_req, handle);
-}
-
-static bool
-dh_reset(void *arg)
-{
-	struct dfuse_dir_handle	*dh = arg;
-
-	dh->reply_count = 0;
-
-	/* If there has been an error on the local handle, or readdir() is not
-	 * exhausted then ensure that all resources are freed correctly
-	 */
-
-	DFUSE_REQUEST_RESET(&dh->open_req);
-	DFUSE_REQUEST_RESET(&dh->close_req);
-
-	dh->open_req.ir_ht = RHS_INODE_NUM;
-	dh->close_req.ir_ht = RHS_DIR;
-	dh->close_req.ir_dir = dh;
-
-	return true;
-}
-
-/* Create a getattr descriptor for use with descriptor allocators.
- *
- * Two das of descriptors are used here, one for getattr and a second
- * for getfattr.  The only difference is the RPC id so the datatypes are
- * the same, as are the init and release functions.
- */
-static void
-fh_init(void *arg, void *handle)
-{
-	struct dfuse_file_handle *fh = arg;
-
-	DFUSE_REQUEST_INIT(&fh->open_req, handle);
-	DFUSE_REQUEST_INIT(&fh->creat_req, handle);
-	DFUSE_REQUEST_INIT(&fh->release_req, handle);
-	fh->ie = NULL;
-}
-
-static bool
-fh_reset(void *arg)
-{
-	struct dfuse_file_handle	*fh = arg;
-
-	DFUSE_REQUEST_RESET(&fh->open_req);
-
-	fh->open_req.ir_ht = RHS_INODE_NUM;
-
-	DFUSE_REQUEST_RESET(&fh->creat_req);
-
-	fh->creat_req.ir_ht = RHS_INODE_NUM;
-
-	DFUSE_REQUEST_RESET(&fh->release_req);
-
-	fh->release_req.ir_ht = RHS_FILE;
-	fh->release_req.ir_file = fh;
-
-	if (!fh->ie) {
-		D_ALLOC_PTR(fh->ie);
-		if (!fh->ie)
-			return false;
-		atomic_fetch_add(&fh->ie->ie_ref, 1);
-	}
-
-	return true;
-}
-
-static void
-fh_release(void *arg)
-{
-	struct dfuse_file_handle *fh = arg;
-
-	D_FREE(fh->ie);
-}
+};
 
 #define COMMON_INIT(type)						\
 	static void type##_common_init(void *arg, void *handle)		\
@@ -228,7 +204,6 @@ fh_release(void *arg)
 	}
 COMMON_INIT(getattr);
 COMMON_INIT(setattr);
-COMMON_INIT(close);
 
 /* Reset and prepare for use a common descriptor */
 static bool
@@ -251,8 +226,6 @@ common_reset(void *arg)
 		req->dest = NULL;					\
 		req->ie = NULL;						\
 	}
-ENTRY_INIT(lookup);
-ENTRY_INIT(mkdir);
 ENTRY_INIT(symlink);
 
 static bool
@@ -290,128 +263,50 @@ entry_release(void *arg)
 	D_FREE(req->ie);
 }
 
-static void
-rb_page_init(void *arg, void *handle)
+int
+dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 {
-	struct dfuse_rb *rb = arg;
-
-	DFUSE_REQUEST_INIT(&rb->rb_req, handle);
-	rb->buf_size = 4096;
-	rb->fbuf.count = 1;
-	rb->fbuf.buf[0].fd = -1;
-}
-
-static void
-rb_large_init(void *arg, void *handle)
-{
-	struct dfuse_rb *rb = arg;
-
-	rb_page_init(arg, handle);
-	rb->buf_size = rb->rb_req.fsh->max_read;
-}
-
-static bool
-rb_reset(void *arg)
-{
-	struct dfuse_rb	*rb = arg;
-
-	DFUSE_REQUEST_RESET(&rb->rb_req);
-
-	rb->rb_req.ir_ht = RHS_FILE;
-
-	return true;
-}
-
-static void
-wb_init(void *arg, void *handle)
-{
-	struct dfuse_wb *wb = arg;
-
-	DFUSE_REQUEST_INIT(&wb->wb_req, handle);
-}
-
-static bool
-wb_reset(void *arg)
-{
-	struct dfuse_wb	*wb = arg;
-
-	DFUSE_REQUEST_RESET(&wb->wb_req);
-
-	wb->wb_req.ir_ht = RHS_FILE;
-
-	return true;
-}
-
-void
-dfuse_reg(struct dfuse_state *dfuse_state, struct dfuse_info *dfuse_info)
-{
-	dfuse_state->dfuse_info = dfuse_info;
-}
-
-static bool
-initialize_projection(struct dfuse_state *dfuse_state)
-{
-	struct dfuse_service_group	*group = &dfuse_state->grp;
 	struct dfuse_projection_info	*fs_handle;
 	struct fuse_args		args = {0};
-	int				ret;
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
+	struct dfuse_inode_entry	*ie = NULL;
+	int				rc;
 
-	struct dfuse_da_reg pt = {.init = dh_init,
-				  .reset = dh_reset,
-				  POOL_TYPE_INIT(dfuse_dir_handle,
-						 dh_free_list)};
+	struct dfuse_da_reg common = {.reset = common_reset,
+				      POOL_TYPE_INIT(common_req, list)};
 
-	struct dfuse_da_reg fh = {.init = fh_init,
-				  .reset = fh_reset,
-				  .release = fh_release,
-				  POOL_TYPE_INIT(dfuse_file_handle,
-						 fh_free_list)};
-
-	struct dfuse_da_reg common_t = {.reset = common_reset,
-					POOL_TYPE_INIT(common_req, list)};
-
-	struct dfuse_da_reg entry_t = {.reset = entry_reset,
-				       .release = entry_release,
-				       POOL_TYPE_INIT(entry_req, list)};
-
-	struct dfuse_da_reg rb_page = {.init = rb_page_init,
-				       .reset = rb_reset,
-				       POOL_TYPE_INIT(dfuse_rb,
-						      rb_req.ir_list)};
-
-	struct dfuse_da_reg rb_large = {.init = rb_large_init,
-					.reset = rb_reset,
-					POOL_TYPE_INIT(dfuse_rb,
-						       rb_req.ir_list)};
-
-	struct dfuse_da_reg wb = {.init = wb_init,
-				  .reset = wb_reset,
-				  POOL_TYPE_INIT(dfuse_wb, wb_req.ir_list)};
+	struct dfuse_da_reg entry = {.reset = entry_reset,
+				     .release = entry_release,
+				     POOL_TYPE_INIT(entry_req, list)};
 
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
 		return false;
 
-	DFUSE_TRA_UP(fs_handle, dfuse_state, "dfuse_projection");
+	fs_handle->dfuse_info = dfuse_info;
 
-	ret = dfuse_da_init(&fs_handle->da, fs_handle);
-	if (ret != -DER_SUCCESS)
+	rc = dfuse_da_init(&fs_handle->da, fs_handle);
+	if (rc != -DER_SUCCESS)
 		D_GOTO(err, 0);
 
-	fs_handle->dfuse_state = dfuse_state;
-
-	ret = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
 					  D_HASH_FT_EPHEMERAL,
 					  3,
-					  fs_handle, &hops,
-					  &fs_handle->inode_ht);
-	if (ret != 0)
+					  fs_handle, &ie_hops,
+					  &fs_handle->dfpi_iet);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK,
+					 3,
+					 fs_handle, &ir_hops,
+					 &fs_handle->dfpi_irt);
+	if (rc != 0)
 		D_GOTO(err, 0);
 
 	fs_handle->proj.progress_thread = 1;
 
-	fs_handle->proj.grp = group;
+	atomic_fetch_add(&fs_handle->dfpi_ino_next, 2);
 
 	args.argc = 4;
 
@@ -436,95 +331,64 @@ initialize_projection(struct dfuse_state *dfuse_state)
 	if (!args.argv[3])
 		D_GOTO(err, 0);
 
-	fuse_ops = dfuse_get_fuse_ops(fs_handle->flags);
+	fuse_ops = dfuse_get_fuse_ops();
 	if (!fuse_ops)
 		D_GOTO(err, 0);
 
-	/* Register the directory handle type
-	 *
-	 * This is done late on in the registration as the dh_int() and
-	 * dh_reset() functions require access to fs_handle.
-	 */
-	fs_handle->dh_da = dfuse_da_register(&fs_handle->da, &pt);
-	if (!fs_handle->dh_da)
-		D_GOTO(err, 0);
-
-	common_t.init = getattr_common_init;
-	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common_t);
+	common.init = getattr_common_init;
+	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common);
 	if (!fs_handle->fgh_da)
 		D_GOTO(err, 0);
 
-	common_t.init = setattr_common_init;
-	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common_t);
+	common.init = setattr_common_init;
+	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common);
 	if (!fs_handle->fsh_da)
 		D_GOTO(err, 0);
 
-	common_t.init = close_common_init;
-	fs_handle->close_da = dfuse_da_register(&fs_handle->da,
-						    &common_t);
-	if (!fs_handle->close_da)
-		D_GOTO(err, 0);
-
-	entry_t.init = lookup_entry_init;
-	fs_handle->lookup_da = dfuse_da_register(&fs_handle->da,
-						     &entry_t);
-	if (!fs_handle->lookup_da)
-		D_GOTO(err, 0);
-
-	entry_t.init = mkdir_entry_init;
-	fs_handle->mkdir_da = dfuse_da_register(&fs_handle->da, &entry_t);
-	if (!fs_handle->mkdir_da)
-		D_GOTO(err, 0);
-
-	entry_t.init = symlink_entry_init;
+	entry.init = symlink_entry_init;
 	fs_handle->symlink_da = dfuse_da_register(&fs_handle->da,
-						      &entry_t);
+						      &entry);
 	if (!fs_handle->symlink_da)
 		D_GOTO(err, 0);
 
-	fs_handle->fh_da = dfuse_da_register(&fs_handle->da, &fh);
-	if (!fs_handle->fh_da)
+	/* Create the root inode and insert into table */
+	D_ALLOC_PTR(ie);
+	if (!ie) {
 		D_GOTO(err, 0);
+	}
 
-	fs_handle->rb_da_page = dfuse_da_register(&fs_handle->da,
-						      &rb_page);
-	if (!fs_handle->rb_da_page)
+	ie->ie_dfs = dfs;
+	ie->ie_parent = 1;
+	atomic_fetch_add(&ie->ie_ref, 1);
+	ie->ie_stat.st_ino = 1;
+	dfs->dffs_root = ie->ie_stat.st_ino;
+
+	rc = d_hash_rec_insert(&fs_handle->dfpi_iet,
+			       &ie->ie_stat.st_ino,
+			       sizeof(ie->ie_stat.st_ino),
+			       &ie->ie_htl,
+			       false);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
+				rc);
 		D_GOTO(err, 0);
+	}
 
-	fs_handle->rb_da_large = dfuse_da_register(&fs_handle->da,
-						       &rb_large);
-	if (!fs_handle->rb_da_large)
-		D_GOTO(err, 0);
-
-	fs_handle->write_da = dfuse_da_register(&fs_handle->da, &wb);
-	if (!fs_handle->write_da)
-		D_GOTO(err, 0);
-
-	if (!dfuse_register_fuse(fs_handle->dfuse_state->dfuse_info,
-				fuse_ops,
-				&args,
-				NULL,
-				(fs_handle->flags & DFUSE_CNSS_MT) != 0,
-				fs_handle,
-				&fs_handle->session)) {
+	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err, 0);
 	}
 
 	D_FREE(fuse_ops);
 
-	return true;
+	return -DER_SUCCESS;
 err:
+	DFUSE_TRA_ERROR(fs_handle, "Failed");
 	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
+	D_FREE(ie);
 	D_FREE(fs_handle);
-	return false;
-}
-
-void
-dfuse_post_start(struct dfuse_state *dfuse_state)
-{
-	initialize_projection(dfuse_state);
+	return -DER_INVAL;
 }
 
 static int
@@ -539,23 +403,23 @@ ino_flush(d_list_t *rlink, void *arg)
 	/* Only evict entries that are direct children of the root, the kernel
 	 * will walk the tree for us
 	 */
-	if (ie->parent != 1)
+	if (ie->ie_parent != 1)
 		return 0;
 
 	rc = fuse_lowlevel_notify_inval_entry(fs_handle->session,
-					      ie->parent,
-					      ie->name,
-					      strlen(ie->name));
+					      ie->ie_parent,
+					      ie->ie_name,
+					      strlen(ie->ie_name));
 	if (rc != 0)
 		DFUSE_TRA_WARNING(ie,
 				  "%lu %lu '%s': %d %s",
-				  ie->parent, ie->stat.st_ino, ie->name, rc,
-				  strerror(-rc));
+				  ie->ie_parent, ie->ie_stat.st_ino,
+				  ie->ie_name, rc, strerror(-rc));
 	else
 		DFUSE_TRA_INFO(ie,
 			       "%lu %lu '%s': %d %s",
-			       ie->parent, ie->stat.st_ino, ie->name, rc,
-			       strerror(-rc));
+			       ie->ie_parent, ie->ie_stat.st_ino,
+			       ie->ie_name, rc, strerror(-rc));
 
 	/* If the FUSE connection is dead then do not traverse further, it
 	 * doesn't matter what gets returned here, as long as it's negative
@@ -566,23 +430,9 @@ ino_flush(d_list_t *rlink, void *arg)
 	return -DER_SUCCESS;
 }
 
-/* Called once per projection, before the FUSE filesystem has been torn down */
-void
-dfuse_flush_fuse(struct dfuse_projection_info *fs_handle)
-{
-	int rc;
-
-	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
-
-	rc = d_hash_table_traverse(&fs_handle->inode_ht, ino_flush,
-				   fs_handle);
-
-	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
-}
-
 /* Called once per projection, after the FUSE filesystem has been torn down */
 int
-dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
+dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 {
 	d_list_t	*rlink;
 	uint64_t	refs = 0;
@@ -590,12 +440,19 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 	int		rc;
 	int		rcp = 0;
 
+	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
+
+	rc = d_hash_table_traverse(&fs_handle->dfpi_iet, ino_flush,
+				   fs_handle);
+
+	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
+
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
 		struct dfuse_inode_entry *ie;
 		uint ref;
 
-		rlink = d_hash_rec_first(&fs_handle->inode_ht);
+		rlink = d_hash_rec_first(&fs_handle->dfpi_iet);
 
 		if (!rlink)
 			break;
@@ -607,8 +464,8 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
-		ie->parent = 0;
-		d_hash_rec_ndecref(&fs_handle->inode_ht, ref, rlink);
+		ie->ie_parent = 0;
+		d_hash_rec_ndecref(&fs_handle->dfpi_iet, ref, rlink);
 		handles++;
 	} while (rlink);
 
@@ -622,7 +479,13 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 			       refs, handles);
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->inode_ht, false);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_iet, false);
+	if (rc) {
+		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
+		rcp = EINVAL;
+	}
+
+	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_irt, true);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
@@ -654,24 +517,5 @@ dfuse_deregister_fuse(struct dfuse_projection_info *fs_handle)
 
 	dfuse_da_destroy(&fs_handle->da);
 
-	d_list_del_init(&fs_handle->link);
-
 	return rcp;
-}
-
-void
-dfuse_finish(struct dfuse_state *dfuse_state)
-{
-	DFUSE_TRA_DOWN(dfuse_state);
-	D_FREE(dfuse_state);
-}
-
-struct dfuse_state *
-dfuse_plugin_init()
-{
-	struct dfuse_state *dfuse_state;
-
-	D_ALLOC_PTR(dfuse_state);
-
-	return dfuse_state;
 }

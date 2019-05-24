@@ -31,7 +31,7 @@
 #include "obj_rpc.h"
 
 static int
-crt_proc_struct_daos_tx_id(crt_proc_t proc, struct daos_tx_id *dti)
+crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 {
 	int rc;
 
@@ -532,4 +532,31 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		D_ASSERT(0);
 	}
 	return 0;
+}
+
+void
+obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
+{
+	void *reply = crt_reply_get(rpc);
+
+	switch (opc_get(rpc->cr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE: {
+		struct obj_rw_out	*orw = reply;
+
+		daos_dti_copy(&orw->orw_dti_conflict, &dce->dce_xid);
+		orw->orw_dkey_conflict = dce->dce_dkey;
+		break;
+	}
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+		struct obj_punch_out	*opo = reply;
+
+		daos_dti_copy(&opo->opo_dti_conflict, &dce->dce_xid);
+		opo->opo_dkey_conflict = dce->dce_dkey;
+		break;
+	}
+	default:
+		D_ASSERT(0);
+	}
 }

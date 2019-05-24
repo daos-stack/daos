@@ -43,11 +43,8 @@ extern "C" {
 
 #include <daos_errno.h>
 
-/** Scatter/gather list for memory buffers */
-#define daos_sg_list_t d_sg_list_t
-
-/** free function for d_rank_list_t */
-#define daos_rank_list_free d_rank_list_free
+/** Maximum length (excluding the '\0') of a DAOS system name */
+#define DAOS_SYS_NAME_MAX 15
 
 /**
  * Generic data type definition
@@ -56,17 +53,18 @@ extern "C" {
 typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
-#define daos_iov_t		d_iov_t
+/**
+ * daos_sg_list_t/daos_iov_t/daos_rank_list_free/daos_iov_set is for keeping
+ * compatibility for upper layer.
+ */
+#define daos_sg_list_t			d_sg_list_t
+#define daos_iov_t			d_iov_t
+#define daos_rank_list_free(r)		d_rank_list_free((r))
+#define daos_iov_set(iov, buf, size)	d_iov_set((iov), (buf), (size))
+
 #define crt_proc_daos_key_t	crt_proc_d_iov_t
 #define crt_proc_daos_size_t	crt_proc_uint64_t
 #define crt_proc_daos_epoch_t	crt_proc_uint64_t
-
-static inline void
-daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
@@ -569,6 +567,15 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
+	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
+				 * cell size 1MB.
+				 */
 };
 
 /** Object class attributes */
@@ -598,14 +605,12 @@ typedef struct daos_oclass_attr {
 
 		/** Erasure coding attributes */
 		struct daos_ec_attr {
-			/** Type of EC */
-			unsigned int	 e_type;
-			/** EC group size */
-			unsigned int	 e_grp_size;
-			/**
-			 * TODO: add members to describe erasure coding
-			 * attributes
-			 */
+			/** number of data cells (k) */
+			unsigned short	 e_k;
+			/** number of parity cells (p) */
+			unsigned short	 e_p;
+			/** length of each block of data (cell) */
+			unsigned int	 e_len;
 		} ec;
 	} u;
 	/** TODO: add more attributes */
@@ -635,7 +640,7 @@ typedef struct {
 } daos_obj_attr_t;
 
 /** key type */
-typedef daos_iov_t daos_key_t;
+typedef d_iov_t daos_key_t;
 
 /**
  * Record
@@ -906,8 +911,23 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
+	/**
+	 * The user who acts as the owner of the pool.
+	 * Format: user@[domain]
+	 */
+	DAOS_PROP_PO_OWNER,
+	/**
+	 * The group that acts as the owner of the pool.
+	 * Format: group@[domain]
+	 */
+	DAOS_PROP_PO_OWNER_GROUP,
 	DAOS_PROP_PO_MAX,
 };
+
+/**
+ * Number of pool property types
+ */
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 /** DAOS space reclaim strategy */
 enum {
@@ -1040,6 +1060,22 @@ typedef struct {
 	/** property entries array */
 	struct daos_prop_entry	*dpp_entries;
 } daos_prop_t;
+
+/**
+ * DAOS Hash Table Handle Types
+ * The handle type, uses the least significant 4-bits in the 64-bits hhash key.
+ * The bit 0 is only used for D_HYTPE_PTR (pointer type), all other types MUST
+ * set bit 0 to 1.
+ */
+enum {
+	DAOS_HTYPE_EQ		= 1, /**< event queue */
+	DAOS_HTYPE_POOL		= 3, /**< pool */
+	DAOS_HTYPE_CO		= 5, /**< container */
+	DAOS_HTYPE_OBJ		= 7, /**< object */
+	DAOS_HTYPE_ARRAY	= 9, /**< array */
+	DAOS_HTYPE_TX		= 11, /**< transaction */
+	/* Must enlarge D_HTYPE_BITS to add more types */
+};
 
 #if defined(__cplusplus)
 }

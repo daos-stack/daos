@@ -58,9 +58,26 @@ rsvc_class(enum ds_rsvc_class_id id)
 	return rsvc_classes[id];
 }
 
+static char *
+state_str(enum ds_rsvc_state state)
+{
+	switch (state) {
+	case DS_RSVC_UP_EMPTY:
+		return "UP_EMPTY";
+	case DS_RSVC_UP:
+		return "UP";
+	case DS_RSVC_DRAINING:
+		return "DRAINING";
+	case DS_RSVC_DOWN:
+		return "DOWN";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 /* Allocate and initialize a ds_rsvc object. */
 static int
-alloc_init(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	   struct ds_rsvc **svcp)
 {
 	struct ds_rsvc *svc;
@@ -232,7 +249,7 @@ rsvc_hash_fini(void)
  * \param[out]	svc	replicated service
  */
 int
-ds_rsvc_lookup(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	       struct ds_rsvc **svc)
 {
 	d_list_t       *entry;
@@ -327,7 +344,7 @@ put_leader(struct ds_rsvc *svc)
  * the replicated service is not up, hint is filled.
  */
 int
-ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		      struct ds_rsvc **svcp, struct rsvc_hint *hint)
 {
 	struct ds_rsvc *svc;
@@ -358,6 +375,15 @@ ds_rsvc_put_leader(struct ds_rsvc *svc)
 	ds_rsvc_put(svc);
 }
 
+static void
+change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
+{
+	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name,
+		svc->s_term, state_str(svc->s_state), state_str(state));
+	svc->s_state = state;
+	ABT_cond_broadcast(svc->s_state_cv);
+}
+
 static int
 rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 {
@@ -378,7 +404,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
 	if (rc == DER_UNINIT) {
-		svc->s_state = DS_RSVC_UP_EMPTY;
+		change_state(svc, DS_RSVC_UP_EMPTY);
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
@@ -387,7 +413,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		goto out_mutex;
 	}
 
-	svc->s_state = DS_RSVC_UP;
+	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
 	return rc;
@@ -421,7 +447,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 		goto out_mutex;
 	}
 
-	svc->s_state = DS_RSVC_UP;
+	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
 	D_DEBUG(DB_MD, "%s: bootstrapped: %d\n", svc->s_name, rc);
@@ -442,7 +468,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 
 	if (svc->s_state == DS_RSVC_UP) {
 		/* Stop accepting new leader references. */
-		svc->s_state = DS_RSVC_DRAINING;
+		change_state(svc, DS_RSVC_DRAINING);
 
 		rsvc_class(svc->s_class)->sc_drain(svc);
 
@@ -460,8 +486,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 		rsvc_class(svc->s_class)->sc_step_down(svc);
 	}
 
-	svc->s_state = DS_RSVC_DOWN;
-	ABT_cond_broadcast(svc->s_state_cv);
+	change_state(svc, DS_RSVC_DOWN);
 	ABT_mutex_unlock(svc->s_mutex);
 	D_DEBUG(DB_MD, "%s: stepped down from "DF_U64"\n", svc->s_name, term);
 }
@@ -512,7 +537,7 @@ self_only(d_rank_list_t *replicas)
 }
 
 static int
-start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid, bool create,
+start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
 	struct ds_rsvc *svc;
@@ -573,7 +598,7 @@ err:
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
-ds_rsvc_start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
 {
 	uuid_t			 db_uuid_buf;
@@ -677,7 +702,7 @@ stop(struct ds_rsvc *svc, bool destroy)
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
-ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy)
+ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 {
 	struct ds_rsvc		*svc;
 	struct ds_rsvc_class	*impl;
@@ -775,7 +800,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
  * \param[out]	hint	rsvc hint
  */
 int
-ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		    struct rsvc_hint *hint)
 {
 	struct ds_rsvc *svc;
@@ -831,7 +856,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
-ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		   const uuid_t dbid, const d_rank_list_t *ranks, bool create,
 		   bool bootstrap, size_t size)
 {
@@ -941,7 +966,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * \param[in]	destroy		destroy after close
  */
 int
-ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		  const d_rank_list_t *ranks, bool destroy)
 {
 	crt_rpc_t		*rpc;
@@ -1043,6 +1068,25 @@ static struct daos_rpc_handler rsvc_handlers[] = {
 };
 
 #undef X
+
+size_t
+ds_rsvc_get_md_cap(void)
+{
+	const size_t	size_default = 1 << 27 /* 128 MB */;
+	char	       *v;
+	int		n;
+
+	v = getenv("DAOS_MD_CAP"); /* in MB */
+	if (v == NULL)
+		return size_default;
+	n = atoi(v);
+	if (n < size_default >> 20) {
+		D_ERROR("metadata capacity too low; using %zu MB\n",
+			size_default >> 20);
+		return size_default;
+	}
+	return (size_t)n << 20;
+}
 
 static int
 rsvc_module_init(void)

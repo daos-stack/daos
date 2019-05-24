@@ -8,8 +8,8 @@ hosts:
         partition: tp
         gateway: []
 timeout: 1000
-server:
-    server_group: daos_server
+server_config:
+    name: daos_server
 
 pool1:
     createmode:

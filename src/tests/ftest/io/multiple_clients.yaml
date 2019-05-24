@@ -8,8 +8,8 @@ hosts:
                 clients:
                     - boro-C
                     - boro-D
-server:
-    server_group: daos_server
+server_config:
+    name: daos_server
 pool:
     createmode:
         mode_RW:

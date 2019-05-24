@@ -24,59 +24,18 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static const struct dfuse_request_api api = {
-	.on_result	= dfuse_gen_cb,
-};
-
-static void
-dfuse_cb_remove(fuse_req_t req, fuse_ino_t parent, const char *name, bool dir)
+void
+dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent,
+		const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_request		*request;
-	int rc;
-	int ret = EIO;
+	int				rc;
 
-	D_ALLOC_PTR(request);
-	if (!request) {
-		D_GOTO(out_no_request, ret = ENOMEM);
+	rc = dfs_remove(parent->ie_dfs->dffs_dfs, parent->ie_obj, name, false);
+
+	if (rc == -DER_SUCCESS) {
+		DFUSE_FUSE_REPLY_ZERO(req);
+	} else {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	}
-
-	DFUSE_REQUEST_INIT(request, fs_handle);
-	DFUSE_REQUEST_RESET(request);
-
-	DFUSE_TRA_UP(request, fs_handle, dir ? "rmdir" : "unlink");
-	DFUSE_TRA_INFO(request, "parent %lu name '%s'", parent, name);
-
-	request->req = req;
-	request->ir_api = &api;
-
-	request->ir_inode_num = parent;
-	request->ir_ht = RHS_INODE_NUM;
-
-	rc = dfuse_fs_send(request);
-	if (rc != 0) {
-		D_GOTO(out_err, ret = EIO);
-	}
-
-	return;
-
-out_no_request:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
-	return;
-
-out_err:
-	DFUSE_REPLY_ERR(request, ret);
-	D_FREE(request);
-}
-
-void
-dfuse_cb_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
-{
-	dfuse_cb_remove(req, parent, name, false);
-}
-
-void
-dfuse_cb_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
-{
-	dfuse_cb_remove(req, parent, name, true);
 }

@@ -29,6 +29,7 @@ import sys
 import fnmatch
 import subprocess
 import json
+import errno
 
 def filelist(directory):
     """
@@ -42,8 +43,8 @@ def filelist(directory):
     test_pattern = "*.py"
 
     for path, _dirs, files in os.walk(directory):
-        if not (path == directory or path == os.path.join(directory,
-                                                          'util')):
+        if not (path == directory or path.startswith(os.path.join(directory,
+                                                                  'util'))):
             for test_file in files:
                 if fnmatch.fnmatch(test_file, test_pattern):
                     local_test_files.append(os.path.join(path, test_file))
@@ -88,6 +89,7 @@ def run_test(_file, use_tags=True):
     """
     Launch a given test.
     """
+    _file = os.path.relpath(_file)
     param_file = yamlforpy(_file)
     params = ' --mux-yaml ' + param_file
     test_cmd = avocado + ignore_errors + output_options
@@ -100,6 +102,18 @@ def run_test(_file, use_tags=True):
     subprocess.call(test_cmd, shell=True)
     end_time = int(time.time())
     print("Total test run-time in seconds: {}".format(end_time - start_time))
+    # move the job to a path that will be recognizable
+    try:
+        os.makedirs(os.path.join("avocado", os.path.dirname(_file)))
+    except OSError as excepn:
+        if excepn.errno != errno.EEXIST:
+            raise
+    os.rename(os.path.realpath(os.path.join("avocado", "job-results",
+                                            "latest")),
+              os.path.join("avocado", _file))
+    os.remove(os.path.join("avocado", "job-results", "latest"))
+    os.rmdir(os.path.join("avocado", "job-results"))
+
 
 if __name__ == "__main__":
 

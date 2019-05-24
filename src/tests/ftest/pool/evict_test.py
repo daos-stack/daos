@@ -25,49 +25,16 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
-import json
 
-from avocado import Test
 from avocado.utils import process
+from apricot import TestWithServers
 
-sys.path.append('./util')
-import AgentUtils
-import server_utils
-import write_host_file
-
-class EvictTest(Test):
+class EvictTest(TestWithServers):
     """
     Tests DAOS client eviction from a pool that the client is using.
 
-    :avocado: tags=pool,poolevict
+    :avocado: recursive
     """
-    # super wasteful since its doing this for every variation
-    def setUp(self):
-
-        # there is a presumption that this test lives in a specific spot
-        # in the repo
-        with open('../../../.build_vars.json') as build_file:
-            build_paths = json.load(build_file)
-        self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-
-        self.daosctl = self.basepath + '/install/bin/daosctl'
-
-        server_group = self.params.get("server_group", '/server/',
-                                       'daos_server')
-
-        self.agent_sessions = AgentUtils.run_agent(self.basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, self.basepath)
-
-    def tearDown(self):
-        if self.agent_sessions:
-            AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist)
-        os.remove(self.hostfile)
 
     def test_evict(self):
         """

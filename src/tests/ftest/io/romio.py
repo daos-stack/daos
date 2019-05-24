@@ -33,7 +33,7 @@ sys.path.append('../util')
 sys.path.append('../../../utils/py')
 sys.path.append('./../../utils/py')
 
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
@@ -63,7 +63,7 @@ class Romio(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 
         # setup the DAOS python API
@@ -82,9 +82,9 @@ class Romio(Test):
         print("Host file clients is: {}".format(self.hostfile_clients))
 
         # start servers
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist_servers,
-                                                   self.hostlist_clients)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_servers,
+                                                    self.hostlist_clients)
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -92,7 +92,7 @@ class Romio(Test):
 
     def tearDown(self):
         if self.agent_sessions:
-            AgentUtils.stop_agent(self.hostlist_clients, self.agent_sessions)
+            agent_utils.stop_agent(self.agent_sessions, self.hostlist_clients)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_romio(self):

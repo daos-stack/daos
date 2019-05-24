@@ -448,13 +448,7 @@ ut_setup(struct vea_ut_args *test_args)
 		return -1;
 	}
 
-	rc = umem_class_init(&uma, &test_args->vua_umm);
-	if (rc) {
-		fprintf(stderr, "initialize umm error %d\n", rc);
-		goto error;
-	}
-
-	root = pmemobj_root(test_args->vua_umm.umm_pool,
+	root = pmemobj_root(uma.uma_pool,
 			    sizeof(struct vea_space_df) +
 			    sizeof(struct vea_hint_df) * IO_STREAM_CNT);
 	if (OID_IS_NULL(root)) {
@@ -462,6 +456,13 @@ ut_setup(struct vea_ut_args *test_args)
 		rc = -1;
 		goto error;
 	}
+
+	rc = umem_class_init(&uma, &test_args->vua_umm);
+	if (rc) {
+		fprintf(stderr, "initialize umm error %d\n", rc);
+		goto error;
+	}
+
 
 	root_addr = pmemobj_direct(root);
 	test_args->vua_md = root_addr;

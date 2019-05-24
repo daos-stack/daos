@@ -30,7 +30,7 @@ import (
 	"context"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	pb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -52,7 +52,7 @@ type SecurityService struct {
 
 // processDrpcReponse extracts the AclResponse from the drpc Response, and
 // checks for some basic formatting errors
-func (s *SecurityService) processDrpcResponse(drpcResp *drpc.Response) (*pb.AclResponse, error) {
+func (s *SecurityService) processDrpcResponse(drpcResp *drpc.Response) (*acl.Response, error) {
 	if drpcResp == nil {
 		return nil, errors.Errorf("dRPC returned no response")
 	}
@@ -62,7 +62,7 @@ func (s *SecurityService) processDrpcResponse(drpcResp *drpc.Response) (*pb.AclR
 			drpcResp.Status.String())
 	}
 
-	resp := &pb.AclResponse{}
+	resp := &acl.Response{}
 	err := proto.Unmarshal(drpcResp.Body, resp)
 	if err != nil {
 		return nil, errors.Errorf("invalid dRPC response body: %v", err)
@@ -88,7 +88,7 @@ func (s *SecurityService) newDrpcCall(method int32, bodyMessage proto.Message) (
 
 // callDrpcMethodWithMessage opens a drpc connection, sends a message with the
 // protobuf message marshalled in the body, and closes the connection.
-func (s *SecurityService) callDrpcMethodWithMessage(method int32, body proto.Message) (*pb.AclResponse, error) {
+func (s *SecurityService) callDrpcMethodWithMessage(method int32, body proto.Message) (*acl.Response, error) {
 	drpcCall, err := s.newDrpcCall(method, body)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (s *SecurityService) callDrpcMethodWithMessage(method int32, body proto.Mes
 
 // SetPermissions sets the permissions for a given Access Control Entry, and creates
 // it if it doesn't already exist.
-func (s *SecurityService) SetPermissions(ctx context.Context, perms *pb.AclEntryPermissions) (*pb.AclResponse, error) {
+func (s *SecurityService) SetPermissions(ctx context.Context, perms *acl.EntryPermissions) (*acl.Response, error) {
 	if perms == nil {
 		return nil, errors.Errorf("requested permissions were nil")
 	}
@@ -120,7 +120,7 @@ func (s *SecurityService) SetPermissions(ctx context.Context, perms *pb.AclEntry
 }
 
 // GetPermissions fetches the current permissions for a given Access Control Entry.
-func (s *SecurityService) GetPermissions(ctx context.Context, entry *pb.AclEntry) (*pb.AclResponse, error) {
+func (s *SecurityService) GetPermissions(ctx context.Context, entry *acl.Entry) (*acl.Response, error) {
 	if entry == nil {
 		return nil, errors.Errorf("requested entry was nil")
 	}
@@ -130,7 +130,7 @@ func (s *SecurityService) GetPermissions(ctx context.Context, entry *pb.AclEntry
 
 // DestroyAclEntry destroys the given Access Control Entry. The permissions for the
 // principal on that object will be inferred from the remaining entries.
-func (s *SecurityService) DestroyAclEntry(ctx context.Context, entry *pb.AclEntry) (*pb.AclResponse, error) {
+func (s *SecurityService) DestroyAclEntry(ctx context.Context, entry *acl.Entry) (*acl.Response, error) {
 	if entry == nil {
 		return nil, errors.Errorf("requested entry was nil")
 	}

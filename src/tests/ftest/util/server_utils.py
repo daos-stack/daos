@@ -34,13 +34,93 @@ import resource
 import signal
 import fcntl
 import errno
+import yaml
 
 from avocado.utils import genio
 
 SESSIONS = {}
 
+DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
+AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
+
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
+
+def set_nvme_mode(default_value_set, bdev, enabled=False):
+    """
+    Enable/Disable NVMe Mode.
+    NVMe is enabled by default in yaml file.So disable it for CI runs.
+    Args:
+     - default_value_set: Default dictionary value.
+     - bdev : Block device name.
+     - enabled: Set True/False for enabling NVMe, disabled by default.
+    """
+    if 'bdev_class' in default_value_set['servers'][0]:
+        if (default_value_set['servers'][0]['bdev_class'] == bdev and
+                not enabled):
+            del default_value_set['servers'][0]['bdev_class']
+    if enabled:
+        default_value_set['servers'][0]['bdev_class'] = bdev
+
+def create_server_yaml(basepath):
+    """
+    This function is to create DAOS server configuration YAML file
+    based on Avocado test Yaml file.
+    Args:
+        - basepath = DAOS install basepath
+    """
+    #Read the baseline conf file data/daos_server_baseline.yml
+    try:
+        with open('{}/{}'.format(basepath,
+                                 DEFAULT_FILE), 'r') as read_file:
+            default_value_set = yaml.safe_load(read_file)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Read {}/{}".format(basepath,
+                                                         DEFAULT_FILE))
+
+    #Read the values from avocado_testcase.yaml file if test ran with Avocado.
+    new_value_set = {}
+    if "AVOCADO_TEST_DATADIR" in os.environ:
+        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
+                                split(".")[0] + ".yaml"
+
+        # Read avocado test yaml file.
+        try:
+            with open(avocado_yaml_file, 'r') as rfile:
+                filedata = rfile.read()
+            #Remove !mux for yaml load
+            new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
+        except Exception as excpn:
+            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+            traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+            raise ServerFailed("Failed to Read {}"
+                               .format('{}.tmp'.format(avocado_yaml_file)))
+
+    #Update values from avocado_testcase.yaml in DAOS yaml variables.
+    if new_value_set:
+        for key in new_value_set['server_config']:
+            if key in default_value_set['servers'][0]:
+                default_value_set['servers'][0][key] = new_value_set\
+                ['server_config'][key]
+            elif key in default_value_set:
+                default_value_set[key] = new_value_set['server_config'][key]
+
+    #Disable NVMe from baseline data/daos_server_baseline.yml
+    set_nvme_mode(default_value_set, "nvme")
+
+    #Write default_value_set dictionary in to AVOCADO_FILE
+    #This will be used to start with daos_server -o option.
+    try:
+        with open('{}/{}'.format(basepath,
+                                 AVOCADO_FILE), 'w') as write_file:
+            yaml.dump(default_value_set, write_file, default_flow_style=False)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Write {}/{}".format(basepath,
+                                                          AVOCADO_FILE))
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
@@ -51,6 +131,10 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
         servers = (
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
         server_count = len(servers)
+
+        #Create the DAOS server configuration yaml file to pass
+        #with daos_server -o <FILE_NAME>
+        create_server_yaml(basepath)
 
         # first make sure there are no existing servers running
         kill_server(servers)
@@ -67,30 +151,21 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
 
-        # before any set in env are added to env_args, add any user supplied
-        # envirables to environment first
-        if env_dict is not None:
-            for key, val in env_dict.items():
-                os.environ[key] = val
-
-        env_vars = ['CRT_.*', 'DAOS_.*', 'ABT_.*', 'D_LOG_.*',
-                    'DD_(STDERR|LOG|SUBSYS|MASK)', 'OFI_.*', 'D_FI_CONFIG']
-
         env_args = []
-        for (env_var, env_val) in os.environ.items():
-            for pat in env_vars:
-                if re.match(pat, env_var):
-                    env_args.extend(["-x", "{}={}".format(env_var, env_val)])
+        # Add any user supplied environment
+        if env_dict is not None:
+            for key, value in env_dict.items():
+                os.environ[key] = value
+                env_args.extend(["-x", "{}={}".format(key, value)])
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
         server_cmd.extend(env_args)
-        server_cmd.extend([daos_srv_bin, "-g", setname, "-c", "1",
+        server_cmd.extend([daos_srv_bin,
                            "-a", os.path.join(basepath, "install", "tmp"),
-                           "-d", os.path.join(os.sep, "var", "run", "user",
-                                              str(os.geteuid()))])
+                           "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
@@ -130,7 +205,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
               (time.time() - start_time))
     except Exception as error:
         print("<SERVER> Exception occurred: {0}".format(str(error)))
-        traceback.print_exception(excpn.__class__, error, sys.exc_info()[2])
+        traceback.print_exception(error.__class__, error, sys.exc_info()[2])
         # we need to end the session now -- exit the shell
         try:
             SESSIONS[setname].send_signal(signal.SIGINT)

@@ -52,8 +52,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
 	daos_csum_buf_t		csum;
-	daos_iov_t		kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		riov;
 	int			rc;
 
 	rc = obj_tree_init(obj);
@@ -64,7 +64,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	kbund.kb_epoch = epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_mmid	= UMMID_NULL;
+	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_ver	= pm_ver;
 	rbund.rb_csum	= &csum;
 	memset(&csum, 0, sizeof(csum));
@@ -131,41 +131,54 @@ failed:
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
-	      unsigned int akey_nr, daos_key_t *akeys)
+	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
-	struct vos_pool	  *vpool;
-	struct vos_object *obj;
-	int		   rc;
+	struct vos_container	*cont;
+	struct vos_object	*obj = NULL;
+	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epoch);
 
+	vos_dth_set(dth);
+	cont = vos_hdl2cont(coh);
+
+	rc = vos_tx_begin(cont->vc_pool);
+	if (rc != 0)
+		goto reset;
+
+	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
+	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
+	    dth->dth_dti_cos_done == 0) {
+		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
+					dth->dth_dti_cos_count);
+		dth->dth_dti_cos_done = 1;
+	}
+
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
 			  false, DAOS_INTENT_PUNCH, &obj);
-	if (rc != 0)
-		return rc;
-
-	vpool = vos_obj2pool(obj);
-
-	rc = vos_tx_begin(vpool);
-	if (rc != 0)
-		goto exit;
-
-	if (dkey) { /* key punch */
-		rc = key_punch(obj, epoch, pm_ver, dkey,
-			       akey_nr, akeys, flags);
-	} else { /* object punch */
-		rc = obj_punch(coh, obj, epoch, flags);
+	if (rc == 0) {
+		if (dkey) /* key punch */
+			rc = key_punch(obj, epoch, pm_ver, dkey,
+				       akey_nr, akeys, flags);
+		else /* object punch */
+			rc = obj_punch(coh, obj, epoch, flags);
 	}
 
-	rc = vos_tx_end(vpool, rc);
+	if (dth != NULL && rc == 0)
+		rc = vos_dtx_prepared(dth);
 
-exit:
+	rc = vos_tx_end(cont->vc_pool, rc);
+	if (obj != NULL)
+		vos_obj_release(vos_obj_cache_current(), obj);
+
+reset:
+	vos_dth_set(NULL);
 	if (rc != 0)
-		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
+		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
+			DP_UOID(oid), rc);
 
-	vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
 }
 
@@ -179,12 +192,12 @@ exit:
  */
 static int
 key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
-		      struct vos_rec_bundle *rbund, daos_iov_t *keybuf,
+		      struct vos_rec_bundle *rbund, d_iov_t *keybuf,
 		      daos_anchor_t *anchor)
 {
-	daos_iov_t		kiov;
-	daos_iov_t		kbund_kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		kbund_kiov;
+	d_iov_t		riov;
 	daos_csum_buf_t		csum;
 
 	tree_key_bundle2iov(kbund, &kiov);
@@ -194,7 +207,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
 	rbund->rb_iov	= keybuf;
 	rbund->rb_csum	= &csum;
 
-	daos_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
+	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
 	daos_csum_set(rbund->rb_csum, NULL, 0);
 
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
@@ -239,7 +252,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	struct vos_krec_df	*krec;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 keybuf;
+	d_iov_t		 keybuf;
 	int			 rc;
 
 	rc = key_iter_fetch_helper(oiter, &kbund, &rbund, &keybuf, NULL);
@@ -272,7 +285,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 
 static int
 key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	if (ent->ie_key.iov_len > iov_out->iov_buf_len)
 		return -DER_OVERFLOW;
@@ -299,8 +312,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_handle_t		 toh;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	int			 probe;
 	int			 rc;
 
@@ -379,7 +392,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	while (1) {
 		vos_iter_entry_t	entry;
 		struct vos_key_bundle	kbund;
-		daos_iov_t		kiov;
+		d_iov_t		kiov;
 		int			opc = 0;
 
 		rc = key_iter_match(oiter, &entry, &opc);
@@ -552,7 +565,7 @@ singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
 	struct vos_key_bundle	kbund;
-	daos_iov_t		kiov;
+	d_iov_t		kiov;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -685,8 +698,8 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
-	daos_iov_t		kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		riov;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -862,7 +875,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 static int
 recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-	       daos_iov_t *iov_out)
+	       d_iov_t *iov_out)
 {
 	struct bio_io_context	*bioc;
 	struct bio_iov		*biov = &it_entry->ie_biov;
@@ -1107,9 +1120,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		break;
 
 	case VOS_ITER_RECX:
-		rc = evt_open_inplace(info->ii_evt, info->ii_uma,
-				      vos_cont2hdl(info->ii_obj->obj_cont),
-				      info->ii_vea_info, &toh);
+		rc = evt_open(info->ii_evt, info->ii_uma,
+			      vos_cont2hdl(info->ii_obj->obj_cont),
+			      info->ii_vea_info, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
@@ -1245,7 +1258,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 static int
 vos_obj_iter_copy(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-		  daos_iov_t *iov_out)
+		  d_iov_t *iov_out)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
@@ -1393,6 +1406,12 @@ vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_ERROR("Setting punched flag not allowed\n");
 		return -DER_INVAL;
 	}
+
+	if (attr & VOS_OI_REMOVED) {
+		D_ERROR("Setting removed flag not allowed\n");
+		return -DER_INVAL;
+	}
+
 	D_DEBUG(DB_IO, "Set attributes "DF_UOID", epoch "DF_U64", attributes "
 		 DF_X64"\n", DP_UOID(oid), epoch, attr);
 
@@ -1407,6 +1426,12 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_ERROR("Reset of punched flag not allowed\n");
 		return -DER_INVAL;
 	}
+
+	if (attr & VOS_OI_REMOVED) {
+		D_ERROR("Reset of removed flag not allowed\n");
+		return -DER_INVAL;
+	}
+
 	D_DEBUG(DB_IO, "Clear attributes "DF_UOID", epoch "DF_U64
 		 ", attributes "DF_X64"\n", DP_UOID(oid), epoch, attr);
 
@@ -1415,7 +1440,7 @@ vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 int
 vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t *attr)
+		struct dtx_handle *dth, uint64_t *attr)
 {
 	struct vos_object *obj;
 	int		   rc = 0;
@@ -1428,8 +1453,10 @@ vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return -DER_INVAL;
 	}
 
+	vos_dth_set(dth);
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
 			  DAOS_INTENT_DEFAULT, &obj);
+	vos_dth_set(NULL);
 	if (rc != 0)
 		return rc;
 

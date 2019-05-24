@@ -24,15 +24,10 @@
 from __future__ import print_function
 
 import os
-import sys
 import json
-from avocado import Test
+from apricot import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-import AgentUtils
+import agent_utils
 import server_utils
 import write_host_file
 import ior_utils
@@ -42,6 +37,7 @@ class SegCount(Test):
     """
     Test class Description: Runs IOR with different segment counts.
 
+    :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
@@ -61,7 +57,7 @@ class SegCount(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.server_group = self.params.get("server_group", '/server/',
+        self.server_group = self.params.get("name", '/server_config/',
                                             'daos_server')
 
         # setup the DAOS python API
@@ -73,16 +69,16 @@ class SegCount(Test):
                                             self.workdir))
         print("Host file servers is: {}".format(hostfile_servers))
 
-        hostlist_clients = self.params.get("test_clients", '/run/hosts/*')
+        self.hostlist_clients = self.params.get("test_clients", '/run/hosts/*')
         self.slots = self.params.get("slots", '/run/ior/clientslots/*')
         self.hostfile_clients = (
-            write_host_file.write_host_file(hostlist_clients, self.workdir,
+            write_host_file.write_host_file(self.hostlist_clients, self.workdir,
                                             self.slots))
         print("Host file clients is: {}".format(self.hostfile_clients))
 
-        self.agent_sessions = AgentUtils.run_agent(self.basepath,
-                                                   self.hostlist_servers,
-                                                   self.hostlist_clients)
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
+                                                    self.hostlist_servers,
+                                                    self.hostlist_clients)
         server_utils.run_server(hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -95,8 +91,8 @@ class SegCount(Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist_clients,
-                                      self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions,
+                                       self.hostlist_clients)
             server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_segcount(self):
@@ -162,8 +158,8 @@ class SegCount(Test):
 
             pool_uuid = self.pool.get_uuid_str()
             svc_list = ""
-            for i in range(createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+            for item in range(createsvc):
+                svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
             svc_list = svc_list[:-1]
 
             ior_utils.run_ior(self.hostfile_clients, ior_flags, iteration,

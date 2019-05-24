@@ -38,11 +38,11 @@ dtx_handler(crt_rpc_t *rpc)
 {
 	struct dtx_in		*din = crt_req_get(rpc);
 	struct dtx_out		*dout = crt_reply_get(rpc);
-	struct ds_cont		*cont = NULL;
+	struct ds_cont_child	*cont = NULL;
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			 rc;
 
-	rc = ds_cont_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
+	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID
 			" for DTX rpc %u: rc = %d\n", DP_UUID(din->di_po_uuid),
@@ -65,7 +65,7 @@ dtx_handler(crt_rpc_t *rpc)
 			rc = -DER_PROTO;
 		else
 			/* For the remote query about DTX check, it is NOT
-			 * necessary to lookup CoS cache, so set the 'hash'
+			 * necessary to lookup CoS cache, so set the 'oid'
 			 * as zero to bypass CoS cache.
 			 */
 			rc = vos_dtx_check_committable(cont->sc_hdl, NULL,
@@ -76,17 +76,17 @@ dtx_handler(crt_rpc_t *rpc)
 		break;
 	}
 
-	if (rc < 0)
-		D_ERROR("Failed to handle DTX rpc %u: rc = %d\n", opc, rc);
-
 out:
+	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u: rc = %d\n",
+		DP_DTI(din->di_dtx_array.ca_arrays), opc, rc);
+
 	dout->do_status = rc;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = %d\n", opc, rc);
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 }
 
 static int
@@ -103,6 +103,19 @@ static int
 dtx_fini(void)
 {
 	return 0;
+}
+
+static int
+dtx_setup(void)
+{
+	int	rc;
+
+	vos_dtx_register_check_leader(ds_pool_check_leader);
+	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
+	if (rc != 0)
+		D_ERROR("Failed to create DTX batched commit ULT: %d\n", rc);
+
+	return rc;
 }
 
 #define X_SRV(a, b, c, d, e)	\
@@ -122,6 +135,7 @@ struct dss_module dtx_module =  {
 	.sm_ver		= DAOS_DTX_VERSION,
 	.sm_init	= dtx_init,
 	.sm_fini	= dtx_fini,
+	.sm_setup	= dtx_setup,
 	.sm_proto_fmt	= &dtx_proto_fmt,
 	.sm_cli_count	= 0,
 	.sm_handlers	= dtx_handlers,

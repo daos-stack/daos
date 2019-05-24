@@ -25,55 +25,23 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
-import json
-from avocado import Test
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
+from apricot import TestWithServers
 
-import AgentUtils
-import server_utils
-import write_host_file
-from daos_api import DaosPool, DaosContext, DaosApiError
+from daos_api import DaosPool, DaosApiError
 
-class SimpleCreateDeleteTest(Test):
+class SimpleCreateDeleteTest(TestWithServers):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
 
-    :avocado: tags=pool,poolcreate,simplecreate
+    :avocado: recursive
     """
-    # super wasteful since its doing this for every variation
-    def setUp(self):
-        self.agent_sessions = None
-        self.pool = None
-        self.hostlist = None
-
-        with open('../../../.build_vars.json') as filep:
-            build_paths = json.load(filep)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.hostlist = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-
-        server_group = self.params.get("server_group", '/server/',
-                                       'daos_server')
-
-        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, basepath)
-
     def tearDown(self):
         try:
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
-            if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+            super(SimpleCreateDeleteTest, self).tearDown()
 
     def test_create(self):
         """
