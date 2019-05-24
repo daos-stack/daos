@@ -846,7 +846,7 @@ pipeline {
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -908,7 +908,7 @@ pipeline {
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
