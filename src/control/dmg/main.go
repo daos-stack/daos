@@ -25,12 +25,13 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
-	"os"
-	"strings"
 )
 
 type cliOptions struct {
@@ -50,9 +51,8 @@ var (
 	config = client.NewConfiguration()
 )
 
+// appSetup loads config file, processes cli overrides and connects clients.
 func appSetup() error {
-	// Load the configuration file using the supplied path or the default
-	// path if none provided.
 	config, err := client.ProcessConfigFile(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
@@ -86,8 +86,9 @@ func dmgMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
+	// Parse cli args and either execute subcommand then exit or
+	// drop into shell if no subcommand is specified.
 	p := flags.NewParser(opts, flags.Default)
-	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
 
 	_, err := p.Parse()
@@ -95,12 +96,14 @@ func dmgMain() error {
 		return err
 	}
 
+	// If no subcommand has been specified, interactive shell is started
+	// with expected functionality (tab expansion and utility commands)
+	// after parsing config/opts and setting up connections.
 	if err := appSetup(); err != nil {
 		fmt.Println(err.Error()) // notify of app setup errors
+		fmt.Println("")
 	}
 
-	// If no subcommand is specified, interactive shell is started
-	// with expected functionality (tab expansion and utility commands)
 	shell := setupShell()
 	shell.Println("DAOS Management Shell")
 	shell.Run()

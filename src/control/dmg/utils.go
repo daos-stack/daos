@@ -77,9 +77,9 @@ func annotateState(state *pb.ResponseState) {
 	}
 }
 
-// unpackFormat takes a map of addresses to result type and prints either
+// unpackClientMap takes a map of addresses to result type and prints either
 // decoded struct or provided error.
-func unpackFormat(i interface{}) string {
+func unpackClientMap(i interface{}) string {
 	decoded := make(map[string]interface{})
 
 	switch v := i.(type) {
@@ -92,7 +92,7 @@ func unpackFormat(i interface{}) string {
 
 			decoded[addr] = res.Fm
 		}
-	case client.ClientNvmeMap:
+	case client.ClientCtrlrMap:
 		for addr, res := range v {
 			if res.Err != nil {
 				decoded[addr] = res.Err.Error()
@@ -105,7 +105,7 @@ func unpackFormat(i interface{}) string {
 				decoded[addr] = res.Responses
 			}
 		}
-	case client.ClientScmMap:
+	case client.ClientModuleMap:
 		for addr, res := range v {
 			if res.Err != nil {
 				decoded[addr] = res.Err.Error()
