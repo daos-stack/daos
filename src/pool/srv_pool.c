@@ -73,20 +73,20 @@ static int
 write_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf *buf,
 	      uint32_t version)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
 		buf->pb_target_nr, buf->pb_domain_nr);
 
 	/* Write the version. */
-	daos_iov_set(&value, &version, sizeof(version));
+	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_map_version, &value);
 	if (rc != 0)
 		return rc;
 
 	/* Write the buffer. */
-	daos_iov_set(&value, buf, pool_buf_size(buf->pb_nr));
+	d_iov_set(&value, buf, pool_buf_size(buf->pb_nr));
 	return rdb_tx_update(tx, kvs, &ds_pool_prop_map_buffer, &value);
 }
 
@@ -99,17 +99,17 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 	     uint32_t *version)
 {
 	uint32_t	ver;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	/* Read the version. */
-	daos_iov_set(&value, &ver, sizeof(ver));
+	d_iov_set(&value, &ver, sizeof(ver));
 	rc = rdb_tx_lookup(tx, kvs, &ds_pool_prop_map_version, &value);
 	if (rc != 0)
 		return rc;
 
 	/* Look up the buffer address. */
-	daos_iov_set(&value, NULL /* buf */, 0 /* size */);
+	d_iov_set(&value, NULL /* buf */, 0 /* size */);
 	rc = rdb_tx_lookup(tx, kvs, &ds_pool_prop_map_buffer, &value);
 	if (rc != 0)
 		return rc;
@@ -359,7 +359,7 @@ static int
 pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
-	daos_iov_t		 value;
+	d_iov_t		 value;
 	int			 i;
 	int			 rc = 0;
 
@@ -370,7 +370,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		entry = &prop->dpp_entries[i];
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
-			daos_iov_set(&value, entry->dpe_str,
+			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_label,
 					   &value);
@@ -378,7 +378,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_PO_OWNER:
-			daos_iov_set(&value, entry->dpe_str,
+			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner,
 					   &value);
@@ -386,7 +386,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
-			daos_iov_set(&value, entry->dpe_str,
+			d_iov_set(&value, entry->dpe_str,
 				     strlen(entry->dpe_str));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_owner_group,
 					   &value);
@@ -395,7 +395,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
-				daos_iov_set(&value, entry->dpe_val_ptr,
+				d_iov_set(&value, entry->dpe_val_ptr,
 					     pool_prop_acl_get_length(entry));
 				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
 						   &value);
@@ -404,7 +404,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			}
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
-			daos_iov_set(&value, &entry->dpe_val,
+			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_space_rb,
 					   &value);
@@ -412,7 +412,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
-			daos_iov_set(&value, &entry->dpe_val,
+			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_self_heal,
 					   &value);
@@ -420,7 +420,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				return rc;
 			break;
 		case DAOS_PROP_PO_RECLAIM:
-			daos_iov_set(&value, &entry->dpe_val,
+			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_reclaim,
 					   &value);
@@ -448,7 +448,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	uint32_t		map_version = 1;
 	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
-	daos_iov_t		value;
+	d_iov_t		value;
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	int			rc;
@@ -525,15 +525,15 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	}
 
 	/* Initialize the UID, GID, and mode properties. */
-	daos_iov_set(&value, &uid, sizeof(uid));
+	d_iov_set(&value, &uid, sizeof(uid));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_uid, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
-	daos_iov_set(&value, &gid, sizeof(gid));
+	d_iov_set(&value, &gid, sizeof(gid));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_gid, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
-	daos_iov_set(&value, &mode, sizeof(mode));
+	d_iov_set(&value, &mode, sizeof(mode));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_mode, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
@@ -542,7 +542,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
-	daos_iov_set(&value, uuids, sizeof(uuid_t) * nnodes);
+	d_iov_set(&value, uuids, sizeof(uuid_t) * nnodes);
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_map_uuids, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
@@ -553,7 +553,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 		D_GOTO(out_uuids, rc);
 
 	/* Write the handle properties. */
-	daos_iov_set(&value, &nhandles, sizeof(nhandles));
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
@@ -579,7 +579,7 @@ out_map_buf:
  * nreplicas inputs how many replicas are wanted, while ranks->rl_nr
  * outputs how many replicas are actually selected, which may be less than
  * nreplicas. If successful, callers are responsible for calling
- * daos_rank_list_free(*ranksp).
+ * d_rank_list_free(*ranksp).
  */
 static int
 select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
@@ -659,7 +659,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 {
 	d_rank_list_t	       *ranks;
 	uuid_t			rdb_uuid;
-	daos_iov_t		psid;
+	d_iov_t		psid;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -677,7 +677,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		D_GOTO(out, rc);
 
 	uuid_generate(rdb_uuid);
-	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, rdb_uuid, ranks,
 				true /* create */, true /* bootstrap */,
 				ds_rsvc_get_md_cap());
@@ -743,7 +743,7 @@ out_creation:
 		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
 				  true /* destroy */);
 out_ranks:
-	daos_rank_list_free(ranks);
+	d_rank_list_free(ranks);
 out:
 	return rc;
 }
@@ -752,12 +752,12 @@ int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
 	char		id[DAOS_UUID_STR_SIZE];
-	daos_iov_t	psid;
+	d_iov_t	psid;
 	crt_group_t    *group;
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
-	daos_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
 			       true /* destroy */);
 	if (rc != 0) {
@@ -807,7 +807,7 @@ pool_svc_create_group(struct pool_svc *svc, struct pool_map *map)
 }
 
 static int
-pool_svc_name_cb(daos_iov_t *id, char **name)
+pool_svc_name_cb(d_iov_t *id, char **name)
 {
 	char *s;
 
@@ -823,7 +823,7 @@ pool_svc_name_cb(daos_iov_t *id, char **name)
 }
 
 static int
-pool_svc_load_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+pool_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
 {
 	char   *path;
 	int	rc;
@@ -839,7 +839,7 @@ pool_svc_load_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
 }
 
 static int
-pool_svc_store_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+pool_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
 {
 	char   *path;
 	int	rc;
@@ -855,7 +855,7 @@ pool_svc_store_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
 }
 
 static int
-pool_svc_delete_uuid_cb(daos_iov_t *id)
+pool_svc_delete_uuid_cb(d_iov_t *id)
 {
 	char   *path;
 	int	rc;
@@ -876,7 +876,7 @@ pool_svc_delete_uuid_cb(daos_iov_t *id)
 }
 
 static int
-pool_svc_locate_cb(daos_iov_t *id, char **path)
+pool_svc_locate_cb(d_iov_t *id, char **path)
 {
 	char *s;
 
@@ -890,7 +890,7 @@ pool_svc_locate_cb(daos_iov_t *id, char **path)
 }
 
 static int
-pool_svc_alloc_cb(daos_iov_t *id, struct ds_rsvc **rsvc)
+pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 {
 	struct pool_svc	       *svc;
 	int			rc;
@@ -906,7 +906,7 @@ pool_svc_alloc_cb(daos_iov_t *id, struct ds_rsvc **rsvc)
 		goto err;
 	}
 
-	daos_iov_set(&svc->ps_rsvc.s_id, svc->ps_uuid, sizeof(uuid_t));
+	d_iov_set(&svc->ps_rsvc.s_id, svc->ps_uuid, sizeof(uuid_t));
 
 	uuid_copy(svc->ps_uuid, id->iov_buf);
 
@@ -1077,7 +1077,7 @@ out:
 	if (map != NULL)
 		pool_map_decref(map);
 	if (replicas)
-		daos_rank_list_free(replicas);
+		d_rank_list_free(replicas);
 	return rc;
 }
 
@@ -1137,10 +1137,10 @@ static int
 pool_svc_lookup(uuid_t uuid, struct pool_svc **svcp)
 {
 	struct ds_rsvc *rsvc;
-	daos_iov_t	id;
+	d_iov_t	id;
 	int		rc;
 
-	daos_iov_set(&id, uuid, sizeof(uuid_t));
+	d_iov_set(&id, uuid, sizeof(uuid_t));
 	rc = ds_rsvc_lookup(DS_RSVC_CLASS_POOL, &id, &rsvc);
 	if (rc != 0)
 		return rc;
@@ -1159,10 +1159,10 @@ pool_svc_lookup_leader(uuid_t uuid, struct pool_svc **svcp,
 		       struct rsvc_hint *hint)
 {
 	struct ds_rsvc *rsvc;
-	daos_iov_t	id;
+	d_iov_t	id;
 	int		rc;
 
-	daos_iov_set(&id, uuid, sizeof(uuid_t));
+	d_iov_set(&id, uuid, sizeof(uuid_t));
 	rc = ds_rsvc_lookup_leader(DS_RSVC_CLASS_POOL, &id, &rsvc, hint);
 	if (rc != 0)
 		return rc;
@@ -1199,7 +1199,7 @@ static int
 start_one(uuid_t uuid, void *arg)
 {
 	char	       *path;
-	daos_iov_t	id;
+	d_iov_t	id;
 	struct stat	st;
 	int		rc;
 
@@ -1221,7 +1221,7 @@ start_one(uuid_t uuid, void *arg)
 		return 0;
 	}
 
-	daos_iov_set(&id, uuid, sizeof(uuid_t));
+	d_iov_set(&id, uuid, sizeof(uuid_t));
 	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, NULL /* db_uuid */,
 		      false /* create */, 0 /* size */, NULL /* replicas */,
 		      NULL /* arg */);
@@ -1298,20 +1298,20 @@ static int
 pool_ugm_read(struct rdb_tx *tx, const struct pool_svc *svc,
 	      struct pool_prop_ugm *ugm)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
-	daos_iov_set(&value, &ugm->pp_uid, sizeof(ugm->pp_uid));
+	d_iov_set(&value, &ugm->pp_uid, sizeof(ugm->pp_uid));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_uid, &value);
 	if (rc != 0)
 		return rc;
 
-	daos_iov_set(&value, &ugm->pp_gid, sizeof(ugm->pp_gid));
+	d_iov_set(&value, &ugm->pp_gid, sizeof(ugm->pp_gid));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_gid, &value);
 	if (rc != 0)
 		return rc;
 
-	daos_iov_set(&value, &ugm->pp_mode, sizeof(ugm->pp_mode));
+	d_iov_set(&value, &ugm->pp_mode, sizeof(ugm->pp_mode));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_mode, &value);
 	if (rc != 0)
 		return rc;
@@ -1326,7 +1326,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	       daos_prop_t **prop_out)
 {
 	daos_prop_t	*prop;
-	daos_iov_t	 value;
+	d_iov_t	 value;
 	uint64_t	 val;
 	uint32_t	 idx = 0, nr = 0;
 	int		 rc;
@@ -1353,7 +1353,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		return -DER_NOMEM;
 	*prop_out = prop;
 	if (bits & DAOS_PO_QUERY_PROP_LABEL) {
-		daos_iov_set(&value, NULL, 0);
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_label,
 				   &value);
 		if (rc != 0)
@@ -1372,7 +1372,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SPACE_RB) {
-		daos_iov_set(&value, &val, sizeof(val));
+		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_space_rb,
 				   &value);
 		if (rc != 0)
@@ -1383,7 +1383,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SELF_HEAL) {
-		daos_iov_set(&value, &val, sizeof(val));
+		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_self_heal,
 				   &value);
 		if (rc != 0)
@@ -1394,7 +1394,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_RECLAIM) {
-		daos_iov_set(&value, &val, sizeof(val));
+		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reclaim,
 				   &value);
 		if (rc != 0)
@@ -1405,7 +1405,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_ACL) {
-		daos_iov_set(&value, NULL, 0);
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_acl,
 				   &value);
 		if (rc != 0)
@@ -1420,7 +1420,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_OWNER) {
-		daos_iov_set(&value, NULL, 0);
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner,
 				   &value);
 		if (rc != 0)
@@ -1439,7 +1439,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP) {
-		daos_iov_set(&value, NULL, 0);
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner_group,
 				   &value);
 		if (rc != 0)
@@ -1514,7 +1514,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct pool_create_out *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	daos_iov_t		value;
+	d_iov_t		value;
 	struct rdb_kvs_attr	attr;
 	daos_prop_t	       *prop_dup = NULL;
 	int			rc;
@@ -1552,7 +1552,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	ds_cont_wrlock_metadata(svc->ps_cont_svc);
 
 	/* See if the DB has already been initialized. */
-	daos_iov_set(&value, NULL /* buf */, 0 /* size */);
+	d_iov_set(&value, NULL /* buf */, 0 /* size */);
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_map_buffer,
 			   &value);
 	if (rc != -DER_NONEXIST) {
@@ -1643,7 +1643,7 @@ out:
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas,
-		   daos_iov_t *global_ns, struct daos_pool_space *ps,
+		   d_iov_t *global_ns, struct daos_pool_space *ps,
 		   crt_bulk_t map_buf_bulk)
 {
 	struct pool_tgt_connect_in     *in;
@@ -1721,8 +1721,8 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 {
 	size_t			map_buf_size;
 	daos_size_t		remote_bulk_size;
-	daos_iov_t		map_iov;
-	daos_sg_list_t		map_sgl;
+	d_iov_t		map_iov;
+	d_sg_list_t		map_sgl;
 	crt_bulk_t		bulk = CRT_BULK_NULL;
 	struct crt_bulk_desc	map_desc;
 	crt_bulk_opid_t		map_opid;
@@ -1753,13 +1753,12 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
 
-	daos_iov_set(&map_iov, map_buf, map_buf_size);
+	d_iov_set(&map_iov, map_buf, map_buf_size);
 	map_sgl.sg_nr = 1;
 	map_sgl.sg_nr_out = 0;
 	map_sgl.sg_iovs = &map_iov;
 
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&map_sgl),
-			     CRT_BULK_RO, &bulk);
+	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1805,17 +1804,18 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_buf			*map_buf;
 	uint32_t			map_version;
 	struct rdb_tx			tx;
-	daos_iov_t			key;
-	daos_iov_t			value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct pool_prop_ugm		ugm;
 	struct pool_hdl			hdl;
-	daos_iov_t			iv_iov;
+	d_iov_t			iv_iov;
 	unsigned int			iv_ns_id;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
 	daos_prop_t		       *prop;
 	struct daos_prop_entry	       *acl_entry;
+	struct pool_owner		owner;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -1852,8 +1852,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	/* Check existing pool handles. */
-	daos_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
+	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc == 0) {
 		if (hdl.ph_capas == in->pci_capas) {
@@ -1889,8 +1889,24 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	D_ASSERT(acl_entry != NULL);
 	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
 
-	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &ugm,
+	/*
+	 * TODO DAOS-2370: Switch to using pool props for owner/group once
+	 * they are set properly on pool create;
+	 */
+	rc = daos_acl_uid_to_principal(ugm.pp_uid, &owner.user);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	rc = daos_acl_gid_to_principal(ugm.pp_gid, &owner.group);
+	if (rc != 0) {
+		D_FREE(owner.user);
+		D_GOTO(out_map_version, rc);
+	}
+
+	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &owner,
 			&in->pci_cred, in->pci_capas);
+	D_FREE(owner.user);
+	D_FREE(owner.group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
@@ -1925,7 +1941,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (skip_update)
 		D_GOTO(out_pool_prop, rc = 0);
 
-	daos_iov_set(&value, &nhandles, sizeof(nhandles));
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out_pool_prop, rc);
@@ -1941,7 +1957,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			 * If there is a non-exclusive handle, then all handles
 			 * are non-exclusive.
 			 */
-			daos_iov_set(&value, &hdl, sizeof(hdl));
+			d_iov_set(&value, &hdl, sizeof(hdl));
 			rc = rdb_tx_fetch(&tx, &svc->ps_handles,
 					  RDB_PROBE_FIRST, NULL /* key_in */,
 					  NULL /* key_out */, &value);
@@ -1964,13 +1980,13 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	hdl.ph_capas = in->pci_capas;
 	nhandles++;
 
-	daos_iov_set(&value, &nhandles, sizeof(nhandles));
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out_pool_prop, rc);
 
-	daos_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
+	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0)
 		D_GOTO(out_pool_prop, rc);
@@ -2041,7 +2057,7 @@ static int
 pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		     int n_hdl_uuids, crt_context_t ctx)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	uint32_t	nhandles;
 	int		i;
 	int		rc;
@@ -2065,7 +2081,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	daos_iov_set(&value, &nhandles, sizeof(nhandles));
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2073,15 +2089,15 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	nhandles -= n_hdl_uuids;
 
 	for (i = 0; i < n_hdl_uuids; i++) {
-		daos_iov_t key;
+		d_iov_t key;
 
-		daos_iov_set(&key, hdl_uuids[i], sizeof(uuid_t));
+		d_iov_set(&key, hdl_uuids[i], sizeof(uuid_t));
 		rc = rdb_tx_delete(tx, &svc->ps_handles, &key);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
 
-	daos_iov_set(&value, &nhandles, sizeof(nhandles));
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2098,8 +2114,8 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	struct pool_disconnect_out     *pdo = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct rdb_tx			tx;
-	daos_iov_t			key;
-	daos_iov_t			value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct pool_hdl			hdl;
 	int				rc;
 
@@ -2117,8 +2133,8 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	daos_iov_set(&key, pdi->pdi_op.pi_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&key, pdi->pdi_op.pi_hdl, sizeof(uuid_t));
+	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -2196,8 +2212,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	uint32_t		map_version;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	struct pool_hdl		hdl;
 	struct pool_prop_ugm	ugm;
 	int			rc;
@@ -2227,8 +2243,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	 * pool.
 	 */
 	if (!is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
-		daos_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
-		daos_iov_set(&value, &hdl, sizeof(hdl));
+		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
@@ -2284,7 +2300,7 @@ out:
 	daos_prop_free(prop);
 }
 
-/* Callers are responsible for daos_rank_list_free(*replicasp). */
+/* Callers are responsible for d_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 			unsigned int opc,
@@ -2356,7 +2372,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 
 out_replicas:
 	if (rc) {
-		daos_rank_list_free(*replicasp);
+		d_rank_list_free(*replicasp);
 		*replicasp = NULL;
 	}
 out_map_version:
@@ -2543,7 +2559,7 @@ out:
 	pool_target_addr_list_free(&out_list);
 	pool_target_id_list_free(&target_list);
 	if (replicas != NULL)
-		daos_rank_list_free(replicas);
+		d_rank_list_free(replicas);
 }
 
 struct evict_iter_arg {
@@ -2553,7 +2569,7 @@ struct evict_iter_arg {
 };
 
 static int
-evict_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
+evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
 	struct evict_iter_arg  *arg = varg;
 
@@ -2678,13 +2694,13 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 {
 	struct pool_svc_stop_in	       *in = crt_req_get(rpc);
 	struct pool_svc_stop_out       *out = crt_reply_get(rpc);
-	daos_iov_t			id;
+	d_iov_t			id;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc);
 
-	daos_iov_set(&id, in->psi_op.pi_uuid, sizeof(uuid_t));
+	d_iov_set(&id, in->psi_op.pi_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_stop_leader(DS_RSVC_CLASS_POOL, &id, &out->pso_op.po_hint);
 
 	out->pso_op.po_rc = rc;
@@ -2881,7 +2897,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	d_rank_list_t			*ranks;
 	uuid_t				 db_uuid;
 	uuid_t				 pool_uuid;
-	daos_iov_t			 psid;
+	d_iov_t			 psid;
 	int				 rc;
 
 	D_DEBUG(DB_MD, DF_UUID": Replica Rank: %u\n", DP_UUID(in->pmi_uuid),
@@ -2904,7 +2920,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	rdb_get_uuid(db, db_uuid);
 	uuid_copy(pool_uuid, svc->ps_uuid);
 	pool_svc_put_leader(svc);
-	daos_iov_set(&psid, pool_uuid, sizeof(uuid_t));
+	d_iov_set(&psid, pool_uuid, sizeof(uuid_t));
 
 	switch (opc) {
 	case POOL_REPLICAS_ADD:

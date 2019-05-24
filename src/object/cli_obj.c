@@ -1015,7 +1015,7 @@ struct shard_update_args {
 	uint64_t		 dkey_hash;
 	unsigned int		 nr;
 	daos_iod_t		*iods;
-	daos_sg_list_t		*sgls;
+	d_sg_list_t		*sgls;
 };
 
 static int
@@ -1180,7 +1180,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 {
 	struct umem_attr	uma;
 	daos_handle_t		bth;
-	daos_iov_t		key;
+	d_iov_t		key;
 	int			idx;
 	bool			overlapped;
 	struct btr_root		broot = { 0 };
@@ -1217,7 +1217,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 		overlapped = false;
 		for (idx = 0; idx < nr; idx++) {
-			daos_iov_set(&key, &recxs[idx], sizeof(daos_recx_t));
+			d_iov_set(&key, &recxs[idx], sizeof(daos_recx_t));
 			rc = dbtree_update(bth, &key, NULL);
 			if (rc != 0) {
 				overlapped = true;
@@ -1654,7 +1654,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_handle_t th,
 		     daos_key_t *dkey, daos_key_t *akey,
 		     daos_iod_type_t type, daos_size_t *size,
 		     uint32_t *nr, daos_key_desc_t *kds,
-		     daos_sg_list_t *sgl, daos_recx_t *recxs,
+		     d_sg_list_t *sgl, daos_recx_t *recxs,
 		     daos_epoch_range_t *eprs, daos_anchor_t *anchor,
 		     daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
 		     bool incr_order, tse_task_t *task)
@@ -1679,7 +1679,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_handle_t th,
 		if (rc != -DER_INVAL)
 			goto out_task;
 		/* FIXME: until distributed transaction. */
-		epoch = daos_ts2epoch();
+		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
 		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
 	}
 	D_ASSERT(epoch);
@@ -2215,7 +2215,8 @@ dc_obj_query_key(tse_task_t *api_task)
 	if (rc) {
 		if (rc != -DER_INVAL)
 			goto out_task;
-		epoch = daos_ts2epoch();
+		/* FIXME: until distributed transaction. */
+		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
 		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
 	}
 	D_ASSERT(epoch);
