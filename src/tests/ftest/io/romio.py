@@ -83,8 +83,8 @@ class Romio(Test):
 
         # start servers
         self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                   self.hostlist_servers,
-                                                   self.hostlist_clients)
+                                                    self.hostlist_servers,
+                                                    self.hostlist_clients)
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
@@ -92,7 +92,7 @@ class Romio(Test):
 
     def tearDown(self):
         if self.agent_sessions:
-            agent_utils.stop_agent(self.hostlist_clients, self.agent_sessions)
+            agent_utils.stop_agent(self.agent_sessions, self.hostlist_clients)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_romio(self):

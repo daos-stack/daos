@@ -58,6 +58,20 @@ func MockControllerPB(fwRev string) *pb.NvmeController {
 	}
 }
 
+// NewMockControllerPB generates specific protobuf controller message
+func NewMockControllerPB(
+	pciAddr string, fwRev string, model string, serial string,
+	nss []*pb.NvmeController_Namespace) *pb.NvmeController {
+
+	return &pb.NvmeController{
+		Model:      model,
+		Serial:     serial,
+		Pciaddr:    pciAddr,
+		Fwrev:      fwRev,
+		Namespaces: nss,
+	}
+}
+
 // MockModulePB is a mock protobuf Module message used in tests for
 // multiple packages.
 func MockModulePB() *pb.ScmModule {

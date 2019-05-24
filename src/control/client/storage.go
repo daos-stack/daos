@@ -34,6 +34,12 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	msgOpenStreamFail = "client.UpdateStorage() open stream failed: "
+	msgStreamRecv     = "%T recv() failed"
+	msgTypeAssert     = "type assertion failed, wanted %T got %T"
+)
+
 // scanStorage returns all discovered SCM and NVMe storage devices discovered on
 // a remote server, in protobuf message format, by calling over gRPC channel.
 func (c *control) scanStorage() (*pb.ScanStorageResp, error) {
@@ -47,7 +53,7 @@ func (c *control) scanStorage() (*pb.ScanStorageResp, error) {
 // scanStorageRequest is to be called as a goroutine and returns result
 // containing remote server's storage device details over channel with
 // response from ScanStorage rpc.
-func scanStorageRequest(mc Control, ch chan ClientResult) {
+func scanStorageRequest(mc Control, params interface{}, ch chan ClientResult) {
 	sRes := storageResult{}
 
 	resp, err := mc.scanStorage()
@@ -63,9 +69,9 @@ func scanStorageRequest(mc Control, ch chan ClientResult) {
 		if msg == "" {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
 		}
-		sRes.nvme.Err = errors.Errorf(msg)
+		sRes.nvmeCtrlr.Err = errors.Errorf(msg)
 	} else {
-		sRes.nvme.Ctrlrs = resp.Ctrlrs
+		sRes.nvmeCtrlr.Ctrlrs = resp.Ctrlrs
 	}
 
 	sState := resp.GetScmstate()
@@ -74,9 +80,9 @@ func scanStorageRequest(mc Control, ch chan ClientResult) {
 		if msg == "" {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
 		}
-		sRes.scm.Err = errors.Errorf(msg)
+		sRes.scmModule.Err = errors.Errorf(msg)
 	} else {
-		sRes.scm.Modules = resp.Modules
+		sRes.scmModule.Modules = resp.Modules
 	}
 
 	ch <- ClientResult{mc.getAddress(), sRes, nil}
@@ -84,31 +90,30 @@ func scanStorageRequest(mc Control, ch chan ClientResult) {
 
 // ScanStorage returns details of nonvolatile storage devices attached to each
 // remote server. Data received over channel from requests running in parallel.
-func (c *connList) ScanStorage() (ClientNvmeMap, ClientScmMap) {
-	cResults := c.makeRequests(scanStorageRequest)
-	cCtrlrs := make(ClientNvmeMap) // mapping of server address to NVMe SSDs
-	cModules := make(ClientScmMap) // mapping of server address to SCM modules
+func (c *connList) ScanStorage() (ClientCtrlrMap, ClientModuleMap) {
+	cResults := c.makeRequests(nil, scanStorageRequest)
+	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
+	cModules := make(ClientModuleMap) // mapping of server address to SCM modules
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrs[res.Address] = NvmeResult{Err: res.Err}
-			cModules[res.Address] = ScmResult{Err: res.Err}
+			cCtrlrs[res.Address] = CtrlrResults{Err: res.Err}
+			cModules[res.Address] = ModuleResults{Err: res.Err}
 			continue
 		}
 
 		storageRes, ok := res.Value.(storageResult)
 		if !ok {
-			err := fmt.Errorf(
-				"type assertion failed, wanted %+v got %+v",
-				storageResult{}, res.Value)
+			err := fmt.Errorf(msgBadType, storageResult{}, res.Value)
 
-			cCtrlrs[res.Address] = NvmeResult{Err: err}
-			cModules[res.Address] = ScmResult{Err: err}
+			cCtrlrs[res.Address] = CtrlrResults{Err: err}
+			cModules[res.Address] = ModuleResults{Err: err}
 			continue
 		}
 
-		cCtrlrs[res.Address] = storageRes.nvme
-		cModules[res.Address] = storageRes.scm
+		cCtrlrs[res.Address] = storageRes.nvmeCtrlr
+		cModules[res.Address] = storageRes.scmModule
+		// TODO: return SCM region/mount info in storageRes.scmMount
 	}
 
 	return cCtrlrs, cModules
@@ -127,7 +132,7 @@ func (c *control) formatStorage(ctx context.Context) (
 // Calls control formatStorage routine which activates FormatStorage service rpc
 // and returns an open stream handle. Receive on stream and send ClientResult
 // over channel for each.
-func formatStorageRequest(mc Control, ch chan ClientResult) {
+func formatStorageRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	sRes := storageResult{}
 	// Maximum time limit for format is 2hrs to account for lengthy low
 	// level formatting of multiple devices sequentially.
@@ -146,15 +151,14 @@ func formatStorageRequest(mc Control, ch chan ClientResult) {
 			break
 		}
 		if err != nil {
-			log.Errorf(
-				"%v.FormatStorage(_) = _, %v\n",
-				mc, err)
+			err := errors.Wrapf(err, msgStreamRecv, stream)
+			log.Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}
 
-		sRes.nvme.Responses = resp.Crets
-		sRes.mount.Responses = resp.Mrets
+		sRes.nvmeCtrlr.Responses = resp.Crets
+		sRes.scmMount.Responses = resp.Mrets
 
 		ch <- ClientResult{mc.getAddress(), sRes, nil}
 	}
@@ -162,50 +166,132 @@ func formatStorageRequest(mc Control, ch chan ClientResult) {
 
 // FormatStorage prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) FormatStorage() (ClientNvmeMap, ClientMountMap) {
-	cResults := c.makeRequests(formatStorageRequest)
-	cNvmeResults := make(ClientNvmeMap) // srv address:NVMe SSDs
-	cScmResults := make(ClientMountMap) // srv address:SCM mounts
+func (c *connList) FormatStorage() (ClientCtrlrMap, ClientMountMap) {
+	cResults := c.makeRequests(nil, formatStorageRequest)
+	cCtrlrResults := make(ClientCtrlrMap) // srv address:NVMe SSDs
+	cMountResults := make(ClientMountMap) // srv address:SCM mounts
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cNvmeResults[res.Address] = NvmeResult{Err: res.Err}
-			cScmResults[res.Address] = MountResult{Err: res.Err}
+			cCtrlrResults[res.Address] = CtrlrResults{Err: res.Err}
+			cMountResults[res.Address] = MountResults{Err: res.Err}
+			continue
+		}
+
+		storageRes, ok := res.Value.(storageResult)
+		if !ok {
+			err := fmt.Errorf(msgBadType, storageResult{}, res.Value)
+
+			cCtrlrResults[res.Address] = CtrlrResults{Err: err}
+			cMountResults[res.Address] = MountResults{Err: err}
+			continue
+		}
+
+		cCtrlrResults[res.Address] = storageRes.nvmeCtrlr
+		cMountResults[res.Address] = storageRes.scmMount
+		// storageRes.scmModule ignored for update
+	}
+
+	return cCtrlrResults, cMountResults
+}
+
+// updateStorage attempts to update firmware on nonvolatile storage devices
+// on a remote server by calling over gRPC channel.
+func (c *control) updateStorage(
+	ctx context.Context, params *pb.UpdateStorageParams) (
+	pb.MgmtControl_UpdateStorageClient, error) {
+
+	return c.client.UpdateStorage(ctx, params)
+}
+
+// updateStorageRequest is to be called as a goroutine.
+//
+// Calls control updateStorage routine which activates UpdateStorage service rpc
+// and returns an open stream handle. Receive on stream and send ClientResult
+// over channel for each.
+func updateStorageRequest(
+	mc Control, params interface{}, ch chan ClientResult) {
+
+	sRes := storageResult{}
+	// Maximum time limit for update is 2hrs to account for lengthy low
+	// level updateting of multiple devices sequentially.
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
+	defer cancel()
+
+	var updateParams *pb.UpdateStorageParams
+	switch v := params.(type) {
+	case *pb.UpdateStorageParams:
+		updateParams = v
+	default:
+		err := errors.Errorf(
+			msgTypeAssert, pb.UpdateStorageParams{}, params)
+
+		log.Errorf(err.Error())
+		ch <- ClientResult{mc.getAddress(), nil, err}
+		return // type err
+	}
+
+	stream, err := mc.updateStorage(ctx, updateParams)
+	if err != nil {
+		log.Errorf(err.Error())
+		ch <- ClientResult{mc.getAddress(), nil, err}
+		return // stream err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			err := errors.Wrapf(err, msgStreamRecv, stream)
+			log.Errorf(err.Error())
+			ch <- ClientResult{mc.getAddress(), nil, err}
+			return // recv err
+		}
+
+		sRes.nvmeCtrlr.Responses = resp.Crets
+		sRes.scmModule.Responses = resp.Mrets
+
+		ch <- ClientResult{mc.getAddress(), sRes, nil}
+	}
+}
+
+// UpdateStorage prepares nonvolatile storage devices attached to each
+// remote server in the connection list for use with DAOS.
+func (c *connList) UpdateStorage(params *pb.UpdateStorageParams) (
+	ClientCtrlrMap, ClientModuleMap) {
+
+	cResults := c.makeRequests(params, updateStorageRequest)
+	cCtrlrResults := make(ClientCtrlrMap)   // srv address:NVMe SSDs
+	cModuleResults := make(ClientModuleMap) // srv address:SCM modules
+
+	for _, res := range cResults {
+		if res.Err != nil {
+			cCtrlrResults[res.Address] = CtrlrResults{Err: res.Err}
+			cModuleResults[res.Address] = ModuleResults{Err: res.Err}
 			continue
 		}
 
 		storageRes, ok := res.Value.(storageResult)
 		if !ok {
 			err := fmt.Errorf(
-				"type assertion failed, wanted %+v got %+v",
-				storageResult{}, res.Value)
+				msgTypeAssert, storageResult{}, res.Value)
 
-			cNvmeResults[res.Address] = NvmeResult{Err: err}
-			cScmResults[res.Address] = MountResult{Err: err}
+			cCtrlrResults[res.Address] = CtrlrResults{Err: err}
+			cModuleResults[res.Address] = ModuleResults{Err: err}
 			continue
 		}
 
-		cNvmeResults[res.Address] = storageRes.nvme
-		cScmResults[res.Address] = storageRes.mount
-		// storageRes.scm ignored for format
+		cCtrlrResults[res.Address] = storageRes.nvmeCtrlr
+		cModuleResults[res.Address] = storageRes.scmModule
+		// storageRes.scmMount ignored for update
 	}
 
-	return cNvmeResults, cScmResults
+	return cCtrlrResults, cModuleResults
 }
 
-// TODO: implement update and burnin in a similar way to format
-//	updateStorage(pb.UpdateStorageParams) (*pb.UpdateStorageResp, error)
-//	burninStorage(pb.BurninStorageParams) (*pb.BurninStorageResp, error)
-
-// updateStorage updates firmware of a given controller over grpc channel.
-func (c *control) UpdateStorage(params *pb.UpdateStorageParams) (
-	pb.MgmtControl_UpdateStorageClient, error) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return c.client.UpdateStorage(ctx, params)
-}
+// TODO: implement burnin in a similar way to format
 
 // FetchFioConfigPaths retrieves absolute file paths for fio configurations
 // residing in spdk fio_plugin directory on server.

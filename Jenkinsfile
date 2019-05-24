@@ -814,7 +814,7 @@ pipeline {
         }
         stage('Test') {
             parallel {
-                stage('Functional') {
+                stage('Functional') {+++++++++
                     agent {
                         label 'ci_vm9'
                     }
@@ -830,18 +830,21 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
+                                junit_files: "src/tests/ftest/avocado/*/*/*.xml, src/tests/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/
+                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/job-results/* \
+                                      mv src/tests/ftest/avocado/* \
                                          $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
                                   fi'''
                             junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
@@ -889,18 +892,21 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/job-results/*/*.xml, src/tests/ftest/*_results.xml",
+                                junit_files: "src/tests/ftest/avocado/*/*/*.xml, src/tests/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/job-results/*/html/
+                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/job-results/* \
+                                      mv src/tests/ftest/avocado/* \
                                          $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
                                   fi'''
                             junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'

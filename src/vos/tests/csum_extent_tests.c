@@ -209,9 +209,9 @@ sgl_init(d_sg_list_t *sgl, uint8_t *buf, uint32_t buf_len)
 {
 	memset(sgl, 0, sizeof((*sgl)));
 	sgl->sg_nr = 1;
-	sgl->sg_iovs = calloc(sgl->sg_nr, sizeof(daos_iov_t));
+	sgl->sg_iovs = calloc(sgl->sg_nr, sizeof(d_iov_t));
 
-	daos_iov_set(&sgl->sg_iovs[0], buf, buf_len);
+	d_iov_set(&sgl->sg_iovs[0], buf, buf_len);
 }
 
 /*
@@ -262,7 +262,7 @@ static int
 update(struct csum_test *test, const uint32_t extent_nr,
 	uint32_t epoch)
 {
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_iod_t		iod;
 
 	iod_init(&iod, extent_nr, test);
@@ -289,7 +289,7 @@ fetch(struct csum_test *test, int extent_nr,
 	uint32_t *csum_count_per_extent, uint32_t *csum_len,
 	uint32_t *csum_count_total, uint32_t epoch)
 {
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_iod_t		iod;
 
 	iod_init(&iod, extent_nr, test);
@@ -443,7 +443,7 @@ void csum_test_csum_buffer_of_0_during_fetch(void **state)
 	update(&test, 1, epoch);
 
 	/* Fetch ... */
-	daos_sg_list_t	 sgl;
+	d_sg_list_t	 sgl;
 	daos_iod_t	 iod;
 	uint32_t	 extent_nr = 1;
 

@@ -21,22 +21,61 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package security_test
+package security
 
 import (
+	"os/user"
+	"syscall"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
 
 	"github.com/golang/protobuf/proto"
 )
 
+// Mocks
+
+type mockUser struct {
+	username   string
+	groupIDs   []uint32
+	groupIDErr error
+}
+
+func (u *mockUser) Username() string {
+	return u.username
+}
+
+func (u *mockUser) GroupIDs() ([]uint32, error) {
+	return u.groupIDs, u.groupIDErr
+}
+
+type mockExt struct {
+	lookupUserIDUid        uint32
+	lookupUserIDResult     User
+	lookupUserIDErr        error
+	lookupGroupIDGid       uint32
+	lookupGroupIDResults   []*user.Group
+	lookupGroupIDCallCount uint32
+	lookupGroupIDErr       error
+}
+
+func (e *mockExt) LookupUserID(uid uint32) (User, error) {
+	e.lookupUserIDUid = uid
+	return e.lookupUserIDResult, e.lookupUserIDErr
+}
+
+func (e *mockExt) LookupGroupID(gid uint32) (*user.Group, error) {
+	e.lookupGroupIDGid = gid
+	result := e.lookupGroupIDResults[e.lookupGroupIDCallCount]
+	e.lookupGroupIDCallCount++
+	return result, e.lookupGroupIDErr
+}
+
 // Helpers for the unit tests below
 
 func expectAuthSysErrorForToken(t *testing.T, badToken *auth.Token, expectedErrorMessage string) {
-	authSys, err := security.AuthSysFromAuthToken(badToken)
+	authSys, err := AuthSysFromAuthToken(badToken)
 
 	if authSys != nil {
 		t.Error("Expected a nil AuthSys")
@@ -69,9 +108,9 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 	originalAuthSys := auth.Sys{
 		Stamp:       0,
 		Machinename: "something",
-		Uid:         50,
-		Gid:         25,
-		Gids:        []uint32{1, 2, 3},
+		User:        "niceuser",
+		Group:       "nicegroup",
+		Groups:      []string{"grp1", "grp2", "grp3"},
 		Secctx:      "nothing",
 	}
 
@@ -85,7 +124,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		Data:   marshaledToken,
 	}
 
-	authSys, err := security.AuthSysFromAuthToken(&goodToken)
+	authSys, err := AuthSysFromAuthToken(&goodToken)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got: %s", err)
@@ -99,12 +138,12 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		"Stamps don't match")
 	AssertEqual(t, authSys.GetMachinename(), originalAuthSys.GetMachinename(),
 		"Machinenames don't match")
-	AssertEqual(t, authSys.GetUid(), originalAuthSys.GetUid(),
-		"Uids don't match")
-	AssertEqual(t, authSys.GetGid(), originalAuthSys.GetGid(),
-		"Gids don't match")
-	AssertEqual(t, len(authSys.GetGids()), len(originalAuthSys.GetGids()),
-		"Gid lists aren't the same length")
+	AssertEqual(t, authSys.GetUser(), originalAuthSys.GetUser(),
+		"Owners don't match")
+	AssertEqual(t, authSys.GetGroup(), originalAuthSys.GetGroup(),
+		"Groups don't match")
+	AssertEqual(t, len(authSys.GetGroups()), len(originalAuthSys.GetGroups()),
+		"Group lists aren't the same length")
 	AssertEqual(t, authSys.GetSecctx(), originalAuthSys.GetSecctx(),
 		"Secctx don't match")
 }
@@ -112,11 +151,83 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 // AuthSysRequestFromCreds tests
 
 func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
-	result, err := security.AuthSysRequestFromCreds(nil)
+	result, err := AuthSysRequestFromCreds(&mockExt{}, nil)
 
 	if result != nil {
 		t.Error("Expected a nil request")
 	}
 
 	ExpectError(t, err, "No credentials supplied", "")
+}
+
+func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
+	ext := &mockExt{}
+	uid := uint32(15)
+	gid := uint32(2001)
+	gids := []uint32{1, 2, 3}
+	expectedUser := "myuser"
+	expectedGroup := "mygroup"
+	expectedGroupList := []string{"group1", "group2", "group3"}
+	creds := &DomainInfo{
+		creds: &syscall.Ucred{
+			Uid: uid,
+			Gid: gid,
+		},
+	}
+
+	ext.lookupUserIDResult = &mockUser{
+		username: expectedUser,
+		groupIDs: gids,
+	}
+	ext.lookupGroupIDResults = []*user.Group{
+		&user.Group{
+			Name: expectedGroup,
+		},
+	}
+
+	for _, grp := range expectedGroupList {
+		ext.lookupGroupIDResults = append(ext.lookupGroupIDResults,
+			&user.Group{
+				Name: grp,
+			})
+	}
+
+	result, err := AuthSysRequestFromCreds(ext, creds)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Credential was nil")
+	}
+
+	token := result.GetToken()
+	if token == nil {
+		t.Fatal("Token was nil")
+	}
+
+	if token.GetFlavor() != auth.Flavor_AUTH_SYS {
+		t.Fatalf("Bad auth flavor: %v", token.GetFlavor())
+	}
+
+	authsys := &auth.Sys{}
+	err = proto.Unmarshal(token.GetData(), authsys)
+	if err != nil {
+		t.Fatal("Failed to unmarshal token data")
+	}
+
+	if authsys.GetUser() != expectedUser+"@" {
+		t.Errorf("AuthSys had bad username: %v", authsys.GetUser())
+	}
+
+	if authsys.GetGroup() != expectedGroup+"@" {
+		t.Errorf("AuthSys had bad group name: %v", authsys.GetGroup())
+	}
+
+	for i, group := range authsys.GetGroups() {
+		if group != expectedGroupList[i]+"@" {
+			t.Errorf("AuthSys had bad group in list (idx %v): %v", i, group)
+		}
+	}
 }
