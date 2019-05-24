@@ -28,7 +28,6 @@
  */
 #define D_LOGFAC	DD_FAC(object)
 
-// #include <daos/object.h>
 #include <daos_task.h>
 #include <daos_types.h>
 #include "obj_rpc.h"
