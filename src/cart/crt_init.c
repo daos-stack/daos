@@ -207,6 +207,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	unsigned int	seed;
 	const char	*path;
 	bool		server;
+	bool		provider_found = false;
 	int		plugin_idx;
 	int		rc = 0;
 
@@ -303,14 +304,21 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				addr_env);
 		}
 
+		provider_found = false;
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
 				strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
 				crt_gdata.cg_na_plugin =
 					crt_na_dict[plugin_idx].nad_type;
+				provider_found = true;
 				break;
 			}
+		}
+
+		if (!provider_found) {
+			D_ERROR("Requested provider %s not found\n", addr_env);
+			D_GOTO(out, rc = -DER_NONEXIST);
 		}
 do_init:
 		/* the verbs provider only works with regular EP */
