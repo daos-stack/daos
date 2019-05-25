@@ -1,19 +1,18 @@
 #!/bin/bash
 ## Run linters across control plane code and execute Go tests
-set -x
+set -e
 
 function find_build_source()
 {
 	BASE=$PWD
-	
 	while true
 	do
-		path=`realpath ${BASE}`
+		path=$(realpath "${BASE}")
 		if [ "${path}" == "/" ]; then
 			break
 		fi
 		test -e "${path}/.build_vars.sh" && echo "${path}/.build_vars.sh" && return
-		BASE=`dirname "${path}"`
+		BASE=$(dirname "${path}")
 	done
 	echo ""
 }
@@ -31,9 +30,8 @@ function check_environment()
 	if [ -z "$CGO_CFLAGS" ]; then
 		echo "false" && return
 	fi
-
 	echo "true" && return
-} 
+}
 
 function setup_environment()
 {
@@ -43,7 +41,7 @@ function setup_environment()
 		echo "Unable to find .build_source.sh" && exit 1
 	fi
 
-	source ${build_source}
+	source "${build_source}"
 
 	LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
 	export LD_LIBRARY_PATH
