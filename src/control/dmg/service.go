@@ -43,7 +43,7 @@ type KillRankSvcCmd struct {
 // run kill rank command with specified parameters on all connected servers
 func killRankSvc(uuid string, rank uint32) {
 	fmt.Printf(
-		unpackFormat(conns.KillRank(uuid, rank)),
+		unpackClientMap(conns.KillRank(uuid, rank)),
 		"Kill Rank command results")
 }
 

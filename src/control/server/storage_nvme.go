@@ -39,8 +39,8 @@ import (
 )
 
 const (
-	spdkSetupPath      = "share/control/setup_spdk.sh"
-	spdkFioPluginDir   = "share/spdk/fio_plugin"
+	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
+	spdkFioPluginDir   = "share/daos/spdk/fio_plugin"
 	fioExecPath        = "bin/fio"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
@@ -51,21 +51,15 @@ const (
 var (
 	msgBdevAlreadyFormatted = "nvme storage has already been formatted and " +
 		"reformat not implemented"
-	msgBdevNotFound          = "controller at pci addr not found"
-	msgBdevNotInited         = "nvme storage not initialized"
-	msgBdevClassNotSupported = "operation unsupported on bdev class"
-	msgSpdkInitFail          = "SPDK env init, has setup been run?"
-	msgSpdkDiscoverFail      = "SPDK controller discovery"
+	msgBdevNotFound           = "controller at pci addr not found"
+	msgBdevNotInited          = "nvme storage not initialized"
+	msgBdevClassNotSupported  = "operation unsupported on bdev class"
+	msgSpdkInitFail           = "SPDK env init, has setup been run?"
+	msgSpdkDiscoverFail       = "SPDK controller discovery"
+	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
+	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
+	msgBdevModelMismatch      = "controller model unexpected"
 )
-
-// newNvmeStorageErrLogger is a factory creating context aware local log util
-func newNvmeStorageErrLogger(op string) func(e error) {
-	return func(e error) {
-		log.Errordf(
-			common.UtilLogDepth,
-			errors.WithMessage(e, "nvme storage "+op).Error())
-	}
-}
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
@@ -130,15 +124,6 @@ func (s *spdkSetup) reset() error {
 		srv.Run(),
 		"spdk reset failed (%s)",
 		stderr.String())
-}
-
-// NvmeStorage interface specifies basic functionality for subsystem
-type NvmeStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-	Update(string) error
 }
 
 // nvmeStorage gives access to underlying SPDK interfaces
@@ -248,20 +233,18 @@ func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
 	n.initialized = true
 }
 
-// addCret populates and adds to response NVMe ctrlr results list in addition
-// to logging any err.
-func addCret(
-	resp *pb.FormatStorageResp, op string, pciaddr string,
-	status pb.ResponseStatus, errMsg string, logDepth int) {
+// newCret creates and populates NVMe controller result and logs error
+// through addState.
+func newCret(
+	op string, pciaddr string, status pb.ResponseStatus, errMsg string,
+	logDepth int) *pb.NvmeControllerResult {
 
-	resp.Crets = append(
-		resp.Crets,
-		&pb.NvmeControllerResult{
-			Pciaddr: pciaddr,
-			State: addState(
-				status, errMsg, "", logDepth+1,
-				"nvme storage "+op),
-		})
+	return &pb.NvmeControllerResult{
+		Pciaddr: pciaddr,
+		State: addState(
+			status, errMsg, "", logDepth+1,
+			"nvme controller "+op),
+	}
 }
 
 // Format attempts to format (forcefully) NVMe devices on a given server
@@ -271,17 +254,19 @@ func addCret(
 // One result with empty Pciaddr will be reported if there are preliminary
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
-func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
+func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 	var pciAddr string
 	srv := n.config.Servers[i]
 	log.Debugf("performing device format on NVMe controllers")
 
-	// wraps around addCret to provide format specific function
+	// appends results to response to provide format specific function
 	addCretFormat := func(status pb.ResponseStatus, errMsg string) {
 		// log depth should be stack layer registering result
-		addCret(
-			resp, "format", pciAddr, status, errMsg,
-			common.UtilLogDepth+1)
+		*results = append(
+			*results,
+			newCret(
+				"format", pciAddr, status, errMsg,
+				common.UtilLogDepth+1))
 	}
 
 	if !n.initialized {
@@ -345,51 +330,135 @@ func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
 	return
 }
 
-// Update method implementation for nvmeStorage attempts to update firmware on
-// NVMe controllers attached to a given server identified by PCI addresses as
-// specified in per-server section of the config file.
+// Update attempts to update firmware on NVMe controllers attached to a
+// given server identified by PCI addresses as specified in config file.
+// Update populates resp NvmeControllerResult for each NVMe controller
+// specified in config file bdev_list param.
 //
-// Firmware will only be updated if the controller reports the current fw rev
-// to be the same as the "startRev" fn parameter. path and slot refer to the
-// fw image file location and controller fw register to update respectively.
+// Firmware will only be updated if the controller the current fw rev
+// and model match the "startRev" and "model" fn parameters respectively.
+// Path and slot params refer to the fw image file location and controller
+// firmware register to update respectively.
+//
+// One result with empty Pciaddr will be reported if there are preliminary
+// errors occurring before devices could be accessed. Otherwise a result will
+// be populated for each device in bdev_list.
 func (n *nvmeStorage) Update(
-	i int, startRev string, path string, slot int32) error {
+	i int, req *pb.UpdateNvmeParams, results *([]*pb.NvmeControllerResult)) {
 
+	var pciAddr string
 	srv := n.config.Servers[i]
+	log.Debugf("performing firmware update on NVMe controllers")
+
+	// appends results to response to provide update specific function
+	addCretUpdate := func(status pb.ResponseStatus, errMsg string) {
+		// log depth should be stack layer registering result
+		*results = append(
+			*results,
+			newCret(
+				"update", pciAddr, status, errMsg,
+				common.UtilLogDepth+1))
+	}
 
 	if !n.initialized {
-		return errors.New(msgBdevNotInited)
+		addCretUpdate(
+			pb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited)
+		return
 	}
 
 	switch srv.BdevClass {
 	case bdNVMe:
-		for _, pciAddr := range srv.BdevList {
+		for _, pciAddr = range srv.BdevList {
 			if pciAddr == "" {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_CONF,
+					msgBdevEmpty)
 				continue
 			}
 
 			ctrlr := n.getController(pciAddr)
 			if ctrlr == nil {
-				continue
-			}
-			if ctrlr.Fwrev != startRev {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					pciAddr+": "+msgBdevNotFound)
 				continue
 			}
 
-			cs, ns, err := n.nvme.Update(pciAddr, path, slot)
+			if strings.TrimSpace(ctrlr.Model) != req.Model {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(
+						pciAddr+": "+
+							msgBdevModelMismatch+
+							" want %s, have %s",
+						req.Model, ctrlr.Model))
+				continue
+			}
+
+			if strings.TrimSpace(ctrlr.Fwrev) != req.Startrev {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(
+						pciAddr+": "+
+							msgBdevFwrevStartMismatch+
+							" want %s, have %s",
+						req.Startrev, ctrlr.Fwrev))
+				continue
+			}
+
+			log.Debugf(
+				"updating firmware (current rev %s, fw image %s)"+
+					" on nvme controller at %s, may take several "+
+					"minutes!", ctrlr.Fwrev, req.Path, pciAddr)
+
+			cs, ns, err := n.nvme.Update(pciAddr, req.Path, req.Slot)
 			if err != nil {
-				// in case of a failure in the update process
-				// itself, return failure and don't continue
-				return err
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(
+						pciAddr+": %T: "+err.Error(),
+						n.nvme))
+				// TODO: verify controller responsive after
+				//       error, return fatal response to stop
+				//       further updates if not
+				continue
 			}
 			n.controllers = loadControllers(cs, ns)
+
+			ctrlr = n.getController(pciAddr)
+			if ctrlr == nil {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					pciAddr+": "+msgBdevNotFound+
+						" (after update)")
+				continue
+			}
+
+			// verify controller is reporting an updated rev
+			if ctrlr.Fwrev == req.Startrev || ctrlr.Fwrev == "" {
+				addCretUpdate(
+					pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(
+						pciAddr+": "+
+							msgBdevFwrevEndMismatch))
+				continue
+			}
+
+			log.Debugf(
+				"controller fwupdate successful (%s: %s->%s)\n",
+				pciAddr, req.Startrev, ctrlr.Fwrev)
+
+			addCretUpdate(pb.ResponseStatus_CTRL_SUCCESS, "")
 		}
 	default:
-		return errors.Errorf(
-			msgBdevClassNotSupported + string(srv.BdevClass))
+		addCretUpdate(
+			pb.ResponseStatus_CTRL_ERR_CONF,
+			string(srv.BdevClass)+": "+msgBdevClassNotSupported)
+		return
 	}
 
-	return nil
+	log.Debugf("device fwupdates on specified NVMe controllers completed\n")
+	return
 }
 
 // BurnIn method implementation for nvmeStorage

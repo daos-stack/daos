@@ -55,8 +55,10 @@ message ScanNvmeParams {}
 message FormatNvmeParams {}
 
 message UpdateNvmeParams {
-	string path = 1;	// Filesystem path containing firmware image
-	int32 slot = 2;		// Firmware slot (register) to update
+	string model = 1; // Only upgrade devices of specific model
+	string startrev = 2; // Only upgrade devices with starting revision
+	string path = 3;	// Filesystem path containing firmware image
+	int32 slot = 4;		// Firmware slot (register) to update
 }
 
 // TODO: provide facility to supply FIO config in params

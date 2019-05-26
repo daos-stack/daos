@@ -368,7 +368,7 @@ iod_last_region(struct bio_desc *biod)
 {
 	unsigned int cnt = biod->bd_rsrvd.brd_rg_cnt;
 
-	D_ASSERT(!cnt || cnt < biod->bd_rsrvd.brd_rg_max);
+	D_ASSERT(!cnt || cnt <= biod->bd_rsrvd.brd_rg_max);
 	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
 }
 
