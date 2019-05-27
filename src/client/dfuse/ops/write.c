@@ -32,8 +32,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	struct dfuse_inode_entry	*ie;
 	d_list_t			*rlink;
 	int				rc;
-	daos_iov_t			iov = {};
-	daos_sg_list_t			sgl = {};
+	d_iov_t			iov = {};
+	d_sg_list_t			sgl = {};
 
 	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -46,7 +46,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, (void *)buff, len);
+	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_write(ie->ie_dfs->dffs_dfs, ie->ie_obj, sgl, position);

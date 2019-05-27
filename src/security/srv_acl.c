@@ -56,7 +56,7 @@ sanity_check_validation_response(Drpc__Response *response)
 }
 
 static Drpc__Call *
-new_validation_request(struct drpc *ctx, daos_iov_t *creds)
+new_validation_request(struct drpc *ctx, d_iov_t *creds)
 {
 	uint8_t		*body;
 	Drpc__Call	*request;
@@ -84,7 +84,7 @@ new_validation_request(struct drpc *ctx, daos_iov_t *creds)
 }
 
 static int
-validate_credentials_via_drpc(Drpc__Response **response, daos_iov_t *creds)
+validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 {
 	struct drpc	*server_socket;
 	Drpc__Call	*request;
@@ -141,7 +141,7 @@ process_validation_response(Drpc__Response *response, Auth__Token **token)
 }
 
 int
-ds_sec_validate_credentials(daos_iov_t *creds, Auth__Token **token)
+ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 {
 	Drpc__Response	*response = NULL;
 	int		rc;
@@ -234,15 +234,17 @@ check_access_for_principal(struct daos_acl *acl,
 }
 
 static bool
-authsys_has_owner_group(struct pool_prop_ugm *ugm, Auth__Sys *authsys)
+authsys_has_owner_group(struct pool_owner *ownership, Auth__Sys *authsys)
 {
 	size_t i;
 
-	if (authsys->gid == ugm->pp_gid)
+	if (strncmp(authsys->group, ownership->group,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
 		return true;
 
-	for (i = 0; i < authsys->n_gids; i++) {
-		if (authsys->gids[i] == ugm->pp_gid)
+	for (i = 0; i < authsys->n_groups; i++) {
+		if (strncmp(authsys->groups[i], ownership->group,
+			    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
 			return true;
 	}
 
@@ -250,13 +252,15 @@ authsys_has_owner_group(struct pool_prop_ugm *ugm, Auth__Sys *authsys)
 }
 
 static int
-check_authsys_permissions(struct daos_acl *acl, struct pool_prop_ugm *ugm,
+check_authsys_permissions(struct daos_acl *acl,
+			  struct pool_owner *ownership,
 			  Auth__Sys *authsys, uint64_t capas)
 {
 	int rc = -DER_NO_PERM;
 
 	/* If this is the owner, and there's an owner entry... */
-	if (authsys->uid == ugm->pp_uid) {
+	if (strncmp(authsys->user, ownership->user,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0) {
 		rc = check_access_for_principal(acl, DAOS_ACL_OWNER,
 						capas);
 		if (rc != -DER_NONEXIST)
@@ -264,7 +268,7 @@ check_authsys_permissions(struct daos_acl *acl, struct pool_prop_ugm *ugm,
 	}
 
 	/* Check all the user's groups for owner group... */
-	if (authsys_has_owner_group(ugm, authsys))
+	if (authsys_has_owner_group(ownership, authsys))
 		rc = check_access_for_principal(acl, DAOS_ACL_OWNER_GROUP,
 						capas);
 
@@ -272,16 +276,21 @@ check_authsys_permissions(struct daos_acl *acl, struct pool_prop_ugm *ugm,
 }
 
 int
-ds_sec_check_pool_access(struct daos_acl *acl, struct pool_prop_ugm *ugm,
+ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
 			 d_iov_t *cred, uint64_t capas)
 {
 	int		rc = 0;
 	Auth__Token	*token = NULL;
 	Auth__Sys	*authsys = NULL;
 
-	if (acl == NULL || ugm == NULL || cred == NULL) {
-		D_ERROR("An input was NULL, acl=0x%p, ugm=0x%p, cred=0x%p\n",
-			acl, ugm, cred);
+	if (acl == NULL || ownership == NULL || cred == NULL) {
+		D_ERROR("NULL input, acl=0x%p, ownership=0x%p, cred=0x%p\n",
+			acl, ownership, cred);
+		return -DER_INVAL;
+	}
+
+	if (ownership->user == NULL || ownership->group == NULL) {
+		D_ERROR("Invalid ownership structure\n");
 		return -DER_INVAL;
 	}
 
@@ -304,7 +313,7 @@ ds_sec_check_pool_access(struct daos_acl *acl, struct pool_prop_ugm *ugm,
 	/*
 	 * Check ACL for permission via AUTH_SYS credentials
 	 */
-	rc = check_authsys_permissions(acl, ugm, authsys, capas);
+	rc = check_authsys_permissions(acl, ownership, authsys, capas);
 	if (rc == 0)
 		goto access_allowed;
 

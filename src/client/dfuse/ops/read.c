@@ -32,8 +32,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
-	daos_iov_t			iov = {};
-	daos_sg_list_t			sgl = {};
+	d_iov_t			iov = {};
+	d_sg_list_t			sgl = {};
 	daos_size_t read_size;
 	void *buff;
 
@@ -54,7 +54,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	sgl.sg_nr = 1;
-	daos_iov_set(&iov, (void *)buff, len);
+	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_read(inode->ie_dfs->dffs_dfs, inode->ie_obj, sgl, position,

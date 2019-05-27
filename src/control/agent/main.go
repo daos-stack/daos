@@ -125,6 +125,7 @@ func agentMain() error {
 	}
 
 	module := &SecurityModule{}
+	module.InitModule(nil)
 	drpcServer.RegisterRPCModule(module)
 
 	err = drpcServer.Start()

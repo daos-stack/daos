@@ -43,19 +43,18 @@ char *ds_sec_server_socket_path = "/fake/socket/path";
 /*
  * Test constants and defaults
  */
-static const uint32_t TEST_UID = 4;
-static const uint32_t TEST_GID = 100;
+#define TEST_USER	"myuser@"
+#define TEST_GROUP	"mygroup@"
 
 /*
  * Test helper functions
  */
 static Auth__Token *
-create_valid_auth_token(uint32_t uid, uint32_t gid, uint32_t *gid_list,
-			size_t num_gids)
+create_valid_auth_token(const char *user, const char *grp,
+			const char *grp_list[], size_t num_grps)
 {
 	Auth__Token	*token;
 	Auth__Sys	*authsys;
-	size_t		gid_list_size;
 
 	D_ALLOC_PTR(token);
 	auth__token__init(token);
@@ -63,15 +62,19 @@ create_valid_auth_token(uint32_t uid, uint32_t gid, uint32_t *gid_list,
 
 	D_ALLOC_PTR(authsys);
 	auth__sys__init(authsys);
-	authsys->uid = uid;
-	authsys->gid = gid;
+	D_STRNDUP(authsys->user, user, DAOS_ACL_MAX_PRINCIPAL_LEN);
+	D_STRNDUP(authsys->group, grp, DAOS_ACL_MAX_PRINCIPAL_LEN);
 
-	if (num_gids > 0) {
-		authsys->n_gids = num_gids;
-		gid_list_size = sizeof(uint32_t) * num_gids;
+	if (num_grps > 0) {
+		size_t i;
 
-		D_ALLOC(authsys->gids, gid_list_size);
-		memcpy(authsys->gids, gid_list, gid_list_size);
+		authsys->n_groups = num_grps;
+
+		D_ALLOC_ARRAY(authsys->groups, num_grps);
+		for (i = 0; i < num_grps; i++) {
+			D_STRNDUP(authsys->groups[i], grp_list[i],
+					DAOS_ACL_MAX_PRINCIPAL_LEN);
+		}
 	}
 
 	token->data.len = auth__sys__get_packed_size(authsys);
@@ -84,15 +87,15 @@ create_valid_auth_token(uint32_t uid, uint32_t gid, uint32_t *gid_list,
 }
 
 static void
-init_valid_cred(d_iov_t *cred, uint32_t uid, uint32_t gid, uint32_t *gid_list,
-		size_t num_gids)
+init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
+		const char *grp_list[], size_t num_grps)
 {
 	Auth__Credential	new_cred = AUTH__CREDENTIAL__INIT;
 	Auth__Token		*token;
 	uint8_t			*buf;
 	size_t			buf_len;
 
-	token = create_valid_auth_token(uid, gid, gid_list, num_gids);
+	token = create_valid_auth_token(user, grp, grp_list, num_grps);
 
 	/* Initialize the cred with token */
 	new_cred.token = token;
@@ -110,15 +113,14 @@ init_valid_cred(d_iov_t *cred, uint32_t uid, uint32_t gid, uint32_t *gid_list,
 static void
 init_default_cred(d_iov_t *cred)
 {
-	init_valid_cred(cred, TEST_UID, TEST_GID, NULL, 0);
+	init_valid_cred(cred, TEST_USER, TEST_GROUP, NULL, 0);
 }
 
 static void
-init_default_ugm(struct pool_prop_ugm *ugm)
+init_default_ownership(struct pool_owner *owner)
 {
-	ugm->pp_uid = TEST_UID;
-	ugm->pp_gid = TEST_GID;
-	ugm->pp_mode = 777;
+	owner->user = TEST_USER;
+	owner->group = TEST_GROUP;
 }
 
 /*
@@ -185,20 +187,20 @@ static void
 test_check_pool_access_null_acl(void **state)
 {
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
 	init_default_cred(&cred);
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 
-	assert_int_equal(ds_sec_check_pool_access(NULL, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(NULL, &ownership, &cred,
+						  DAOS_PC_RO),
 			 -DER_INVAL);
 
 	daos_iov_free(&cred);
 }
 
 static void
-test_check_pool_access_null_ugm(void **state)
+test_check_pool_access_null_ownership(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
@@ -207,7 +209,47 @@ test_check_pool_access_null_ugm(void **state)
 	acl = daos_acl_create(NULL, 0);
 
 	assert_int_equal(ds_sec_check_pool_access(acl, NULL, &cred,
-						      DAOS_PC_RO),
+						  DAOS_PC_RO),
+			 -DER_INVAL);
+
+	daos_acl_free(acl);
+}
+
+static void
+test_check_pool_access_bad_owner_user(void **state)
+{
+	struct daos_acl		*acl;
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	init_default_cred(&cred);
+	acl = daos_acl_create(NULL, 0);
+
+	ownership.user = NULL;
+	ownership.group = TEST_GROUP;
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
+			 -DER_INVAL);
+
+	daos_acl_free(acl);
+}
+
+static void
+test_check_pool_access_bad_owner_group(void **state)
+{
+	struct daos_acl		*acl;
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	init_default_cred(&cred);
+	acl = daos_acl_create(NULL, 0);
+
+	ownership.user = TEST_USER;
+	ownership.group = NULL;
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 -DER_INVAL);
 
 	daos_acl_free(acl);
@@ -217,13 +259,13 @@ static void
 test_check_pool_access_null_cred(void **state)
 {
 	struct daos_acl		*acl;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
 	acl = daos_acl_create(NULL, 0);
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, NULL,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, NULL,
+						  DAOS_PC_RO),
 			 -DER_INVAL);
 
 	daos_acl_free(acl);
@@ -234,17 +276,17 @@ test_check_pool_access_bad_acl(void **state)
 {
 	struct daos_acl		*bad_acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
 	init_default_cred(&cred);
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 
 	/* zeroed out - not a valid ACL */
 	D_ALLOC(bad_acl, sizeof(struct daos_acl));
 	assert_non_null(bad_acl);
 
-	assert_int_equal(ds_sec_check_pool_access(bad_acl, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(bad_acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 -DER_INVAL);
 
 	D_FREE(bad_acl);
@@ -256,17 +298,17 @@ test_check_pool_access_validate_cred_failed(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
 	init_default_cred(&cred);
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	acl = daos_acl_create(NULL, 0);
 
 	/* drpc call failure will fail validation */
 	drpc_call_return = -DER_UNKNOWN;
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 drpc_call_return);
 
 	daos_acl_free(acl);
@@ -280,10 +322,10 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 	d_iov_t			cred;
 	size_t			data_len = 8;
 	Auth__Token		token = AUTH__TOKEN__INIT;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
 	init_default_cred(&cred);
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	acl = daos_acl_create(NULL, 0);
 
 	token.flavor = auth_flavor;
@@ -295,8 +337,8 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 
 	pack_token_in_drpc_call_resp_body(&token);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 -DER_PROTO);
 
 	daos_acl_free(acl);
@@ -316,14 +358,14 @@ test_check_pool_access_empty_acl(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
 	init_default_cred(&cred);
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	acl = daos_acl_create(NULL, 0);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 -DER_NO_PERM);
 
 	daos_acl_free(acl);
@@ -359,11 +401,11 @@ static void
 expect_access_with_acl(struct daos_acl *acl, d_iov_t *cred,
 		       uint64_t requested_capas)
 {
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, cred,
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, cred,
 						      requested_capas),
 			 0);
 }
@@ -375,7 +417,7 @@ expect_owner_access_with_perms(uint64_t acl_perms, uint64_t requested_capas)
 	d_iov_t		cred;
 
 	/* Only matches owner */
-	init_valid_cred(&cred, TEST_UID, TEST_GID + 1, NULL, 0);
+	init_valid_cred(&cred, TEST_USER, "somerandomgroup@", NULL, 0);
 	acl = get_acl_with_perms(acl_perms, 0);
 
 	expect_access_with_acl(acl, &cred, requested_capas);
@@ -403,7 +445,7 @@ expect_group_access_with_perms(uint64_t acl_perms, uint64_t requested_capas)
 	d_iov_t		cred;
 
 	/* Only matches group */
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID, NULL, 0);
+	init_valid_cred(&cred, "randomuser@", TEST_GROUP, NULL, 0);
 	acl = get_acl_with_perms(0, acl_perms);
 
 	expect_access_with_acl(acl, &cred, requested_capas);
@@ -428,13 +470,15 @@ static void
 expect_list_access_with_perms(uint64_t acl_perms,
 			      uint64_t requested_capas)
 {
-	struct daos_acl	*acl;
-	d_iov_t		cred;
-	uint32_t	gids[] = { TEST_GID - 1, TEST_GID, TEST_GID + 1 };
+	struct daos_acl		*acl;
+	d_iov_t			cred;
+	static const char	*grps[] = { "badgroup@",
+					    TEST_GROUP,
+					    "worsegroup@" };
 
 	/* Only matches group */
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID + 1, gids,
-			sizeof(gids) / sizeof(uint32_t));
+	init_valid_cred(&cred, "fakeuser@", "fakegroup@", grps,
+			sizeof(grps) / sizeof(char *));
 	acl = get_acl_with_perms(0, acl_perms);
 
 	expect_access_with_acl(acl, &cred, requested_capas);
@@ -460,16 +504,16 @@ test_check_pool_access_owner_overrides_group(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	init_default_cred(&cred);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ,
 				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
 
 	/* Owner-specific entry overrides group permissions */
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      DAOS_PC_RW),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
 			 -DER_NO_PERM);
 
 	daos_acl_free(acl);
@@ -481,16 +525,16 @@ test_check_pool_access_no_match(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 
 	/* Cred is neither owner user nor owner group */
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID + 1, NULL, 0);
+	init_valid_cred(&cred, "fakeuser@", "fakegroup@", NULL, 0);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 -DER_NO_PERM);
 
 	daos_acl_free(acl);
@@ -502,15 +546,15 @@ expect_no_owner_access_with_perms(uint64_t acl_perms, uint64_t requested_capas)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	init_default_cred(&cred);
 	acl = get_acl_with_perms(acl_perms,
 				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      requested_capas),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  requested_capas),
 			 -DER_NO_PERM);
 
 	daos_acl_free(acl);
@@ -532,14 +576,14 @@ expect_no_group_access_with_perms(uint64_t acl_perms, uint64_t requested_capas)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID, NULL, 0);
+	init_default_ownership(&ownership);
+	init_valid_cred(&cred, "wronguser@", "wronggroup@", NULL, 0);
 	acl = get_acl_with_perms(0, acl_perms);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      requested_capas),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  requested_capas),
 			 -DER_NO_PERM);
 
 	daos_acl_free(acl);
@@ -561,19 +605,19 @@ expect_no_list_access_with_perms(uint64_t acl_perms, uint64_t requested_capas)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
-	uint32_t		gids[] = { TEST_GID - 1, TEST_GID };
+	struct pool_owner	ownership;
+	static const char	*grps[] = { "wronggroup@", TEST_GROUP };
 
-	/* owner group is in gid list only */
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID + 1, gids,
-			sizeof(gids) / sizeof(uint32_t));
+	/* owner group is in list only */
+	init_valid_cred(&cred, "wronguser@", "badgroup@", grps,
+			sizeof(grps) / sizeof(char *));
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				 acl_perms);
 
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      requested_capas),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  requested_capas),
 			 -DER_NO_PERM);
 
 	daos_acl_free(acl);
@@ -595,9 +639,9 @@ test_check_pool_access_no_owner_entry(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	init_default_cred(&cred);
 	acl = get_acl_with_perms(0, DAOS_ACL_PERM_READ);
 	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_OWNER, NULL), 0);
@@ -606,8 +650,8 @@ test_check_pool_access_no_owner_entry(void **state)
 	 * Cred is owner and in owner group, but there's no entry for owner,
 	 * just owner group. Should still get access.
 	 */
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
-						      DAOS_PC_RO),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
 			 0);
 
 	daos_acl_free(acl);
@@ -619,10 +663,10 @@ test_check_pool_access_no_owner_group_entry(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID, NULL, 0);
+	init_default_ownership(&ownership);
+	init_valid_cred(&cred, "fakeuser@", TEST_GROUP, NULL, 0);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_OWNER_GROUP, NULL),
 			 0);
@@ -630,7 +674,7 @@ test_check_pool_access_no_owner_group_entry(void **state)
 	/*
 	 * Cred is in owner group, but there's no entry for owner group.
 	 */
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
 						      DAOS_PC_RO),
 			 -DER_NO_PERM);
 
@@ -643,11 +687,11 @@ test_check_pool_access_no_owner_group_entry_list(void **state)
 {
 	struct daos_acl		*acl;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
-	uint32_t		gids[] = { TEST_GID };
+	struct pool_owner	ownership;
+	static const char	*grps[] = { TEST_GROUP };
 
-	init_default_ugm(&ugm);
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID + 1, gids, 1);
+	init_default_ownership(&ownership);
+	init_valid_cred(&cred, "fakeuser@", "fakegroup@", grps, 1);
 	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
 	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_OWNER_GROUP, NULL),
 			 0);
@@ -655,7 +699,7 @@ test_check_pool_access_no_owner_group_entry_list(void **state)
 	/*
 	 * Cred is in owner group, but there's no entry for owner group.
 	 */
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
 						      DAOS_PC_RO),
 			 -DER_NO_PERM);
 
@@ -671,10 +715,10 @@ expect_everyone_gets_result_with_perms(uint64_t acl_perms,
 	struct daos_acl		*acl;
 	struct daos_ace		*ace;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
+	struct pool_owner	ownership;
 
-	init_default_ugm(&ugm);
-	init_valid_cred(&cred, TEST_UID, TEST_GID, NULL, 0);
+	init_default_ownership(&ownership);
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, NULL, 0);
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	ace->dae_allow_perms = acl_perms;
@@ -684,7 +728,7 @@ expect_everyone_gets_result_with_perms(uint64_t acl_perms,
 	 * In owner and owner group... but no entries for them.
 	 * "Everyone" permissions should apply.
 	 */
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred,
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
 						  requested_capas),
 			 expected_result);
 
@@ -738,12 +782,12 @@ test_check_pool_access_fall_thru_everyone(void **state)
 	struct daos_acl		*acl;
 	struct daos_ace		*ace;
 	d_iov_t			cred;
-	struct pool_prop_ugm	ugm;
-	uint32_t		gids[] = { TEST_GID - 1 };
+	struct pool_owner	ownership;
+	static const char	*grps[] = { "anotherbadgrp@" };
 
-	init_default_ugm(&ugm);
+	init_default_ownership(&ownership);
 	/* Cred doesn't match owner or group */
-	init_valid_cred(&cred, TEST_UID + 1, TEST_GID + 1, gids, 1);
+	init_valid_cred(&cred, "baduser@", "badgrp@", grps, 1);
 	/* Owner/group entries exist with no perms */
 	acl = get_acl_with_perms(0, 0);
 
@@ -756,7 +800,8 @@ test_check_pool_access_fall_thru_everyone(void **state)
 	/*
 	 * Cred doesn't match owner/group, falls thru to everyone
 	 */
-	assert_int_equal(ds_sec_check_pool_access(acl, &ugm, &cred, DAOS_PC_RW),
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
 			 0);
 
 	daos_acl_free(acl);
@@ -775,7 +820,9 @@ main(void)
 		ACL_UTEST(test_validate_creds_null_token_ptr),
 		ACL_UTEST(test_validate_creds_empty_cred),
 		ACL_UTEST(test_check_pool_access_null_acl),
-		ACL_UTEST(test_check_pool_access_null_ugm),
+		ACL_UTEST(test_check_pool_access_null_ownership),
+		ACL_UTEST(test_check_pool_access_bad_owner_user),
+		ACL_UTEST(test_check_pool_access_bad_owner_group),
 		ACL_UTEST(test_check_pool_access_null_cred),
 		ACL_UTEST(test_check_pool_access_bad_acl),
 		ACL_UTEST(test_check_pool_access_validate_cred_failed),

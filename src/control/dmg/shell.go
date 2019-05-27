@@ -24,17 +24,83 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/ishell"
+	"github.com/pkg/errors"
 )
+
+func getUpdateStorageParams(c *ishell.Context) (*pb.UpdateStorageParams, error) {
+	// disable the '>>>' for cleaner same line input.
+	c.ShowPrompt(false)
+	defer c.ShowPrompt(true) // revert after user input.
+
+	c.Print("Please enter NVMe controller model name to be updated: ")
+	model := c.ReadLine()
+
+	c.Print("Please enter starting firmware revision, only controllers " +
+		"currently at this revision will be updated: ")
+	startRev := c.ReadLine()
+
+	c.Print("Please enter firmware image file-path: ")
+	path := c.ReadLine()
+
+	c.Print("Please enter slot you would like to update [default 0]: ")
+	slotRaw := c.ReadLine()
+
+	var slot int32
+
+	if slotRaw != "" {
+		slot, err := strconv.Atoi(slotRaw)
+		if err != nil {
+			return nil, fmt.Errorf("%s is not a number", slotRaw)
+		}
+
+		if slot < 0 || slot > 7 {
+			return nil, fmt.Errorf(
+				"%d needs to be a number between 0 and 7", slot)
+		}
+	}
+
+	// only populate nvme fwupdate params for the moment
+	return &pb.UpdateStorageParams{
+		Nvme: &pb.UpdateNvmeParams{
+			Model:    strings.TrimSpace(model),
+			Startrev: strings.TrimSpace(startRev),
+			Path:     strings.TrimSpace(path), Slot: slot,
+		},
+	}, nil
+}
+
+func getKillRankParams(c *ishell.Context) (pool string, rank int, err error) {
+	// disable the '>>>' for cleaner same line input.
+	c.ShowPrompt(false)
+	defer c.ShowPrompt(true) // revert after command.
+
+	c.Print("Pool uuid: ")
+	pool = c.ReadLine()
+
+	c.Print("Rank: ")
+	rankIn := c.ReadLine()
+
+	rank, err = strconv.Atoi(rankIn)
+	if err != nil {
+		err = errors.New("bad rank")
+	}
+
+	return
+}
 
 func setupShell() *ishell.Shell {
 	shell := ishell.New()
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "addconns",
-		Help: "Command to create connections to servers by supplying a space separated list of addresses <ipv4addr/hostname:port>",
+		Help: "Create connections to servers by supplying a space " +
+			"separated list of addresses <ipv4addr/hostname:port>",
 		Func: func(c *ishell.Context) {
 			if len(c.Args) < 1 {
 				c.Println(c.HelpText())
@@ -63,43 +129,69 @@ func setupShell() *ishell.Shell {
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "listfeatures",
-		Help: "Command to retrieve supported management features on connected servers",
+		Help: "Command to retrieve supported management features on " +
+			"connected servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
-			c.Printf(unpackFormat(conns.ListFeatures()), "management feature")
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
+			c.Printf(
+				unpackClientMap(conns.ListFeatures()),
+				"management feature")
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "liststorage",
-		Help: "Command to list locally-attached NVMe SSD controllers and SCM modules",
+		Name: "scanstorage",
+		Help: "Command to scan NVMe SSD controllers " +
+			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConns(conns.GetActiveConns(nil)))
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
 			scanStor()
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "killrank",
-		Help: "Command to terminate server running as specific rank on a DAOS pool",
+		Name: "formatstorage",
+		Help: "Command to format NVMe SSD controllers " +
+			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			// disable the '>>>' for cleaner same line input.
-			c.ShowPrompt(false)
-			defer c.ShowPrompt(true) // revert after command.
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
-			c.Print("Pool uuid: ")
-			poolUUID := c.ReadLine()
+			formatStor()
+		},
+	})
 
-			c.Print("Rank: ")
-			rankIn := c.ReadLine()
+	shell.AddCmd(&ishell.Cmd{
+		Name: "updatestorage",
+		Help: "Command to update firmware on NVMe SSD controllers " +
+			"and SCM modules on DAOS storage servers",
+		Func: func(c *ishell.Context) {
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
-			c.Println(hasConns(conns.GetActiveConns(nil)))
-
-			rank, err := strconv.Atoi(rankIn)
+			params, err := getUpdateStorageParams(c)
 			if err != nil {
-				c.Println("bad rank")
-				return
+				c.Println(err)
+			}
+
+			updateStor(params)
+		},
+	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Name: "killrank",
+		Help: "Command to terminate server running as specific rank " +
+			"on a DAOS pool",
+		Func: func(c *ishell.Context) {
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
+
+			poolUUID, rank, err := getKillRankParams(c)
+			if err != nil {
+				c.Println(err)
 			}
 
 			killRankSvc(poolUUID, uint32(rank))

@@ -414,7 +414,7 @@ btr_hkey_size(struct btr_context *tcx)
 }
 
 static void
-btr_hkey_gen(struct btr_context *tcx, daos_iov_t *key, void *hkey)
+btr_hkey_gen(struct btr_context *tcx, d_iov_t *key, void *hkey)
 {
 	if (btr_is_direct_key(tcx)) {
 		/* We store umem offset to record when bubbling up */
@@ -460,21 +460,21 @@ btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 }
 
 static void
-btr_key_encode(struct btr_context *tcx, daos_iov_t *key, daos_anchor_t *anchor)
+btr_key_encode(struct btr_context *tcx, d_iov_t *key, daos_anchor_t *anchor)
 {
 	D_ASSERT(btr_ops(tcx)->to_key_encode);
 	btr_ops(tcx)->to_key_encode(&tcx->tc_tins, key, anchor);
 }
 
 static void
-btr_key_decode(struct btr_context *tcx, daos_iov_t *key, daos_anchor_t *anchor)
+btr_key_decode(struct btr_context *tcx, d_iov_t *key, daos_anchor_t *anchor)
 {
 	D_ASSERT(btr_ops(tcx)->to_key_decode);
 	btr_ops(tcx)->to_key_decode(&tcx->tc_tins, key, anchor);
 }
 
 static int
-btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, daos_iov_t *key)
+btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key)
 {
 	if (btr_ops(tcx)->to_key_cmp)
 		return btr_ops(tcx)->to_key_cmp(&tcx->tc_tins, rec, key);
@@ -483,7 +483,7 @@ btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, daos_iov_t *key)
 }
 
 static int
-btr_rec_alloc(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val,
+btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
@@ -502,14 +502,14 @@ btr_rec_free(struct btr_context *tcx, struct btr_record *rec, void *args)
  */
 static int
 btr_rec_fetch(struct btr_context *tcx, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	return btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, key, val);
 }
 
 static int
 btr_rec_update(struct btr_context *tcx, struct btr_record *rec,
-	       daos_iov_t *key, daos_iov_t *val)
+	       d_iov_t *key, d_iov_t *val)
 {
 	if (!btr_ops(tcx)->to_rec_update)
 		return -DER_NO_PERM;
@@ -1179,7 +1179,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 
 static int
 btr_cmp(struct btr_context *tcx, umem_off_t nd_off,
-	int at, char *hkey, daos_iov_t *key)
+	int at, char *hkey, d_iov_t *key)
 {
 	struct btr_record *rec;
 	int		   cmp;
@@ -1235,7 +1235,7 @@ btr_probe_valid(dbtree_probe_opc_t opc)
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	  uint32_t intent, daos_iov_t *key, char hkey[DAOS_HKEY_MAX])
+	  uint32_t intent, d_iov_t *key, char hkey[DAOS_HKEY_MAX])
 {
 	int			 start;
 	int			 end;
@@ -1511,7 +1511,7 @@ again:
 
 static enum btr_probe_rc
 btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	      uint32_t intent, daos_iov_t *key)
+	      uint32_t intent, d_iov_t *key)
 {
 	char hkey[DAOS_HKEY_MAX];
 
@@ -1658,7 +1658,7 @@ btr_probe_prev(struct btr_context *tcx)
  */
 int
 dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-	     daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out)
+	     d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out)
 {
 	struct btr_record  *rec;
 	struct btr_context *tcx;
@@ -1697,14 +1697,14 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
  *			-ve	error code
  */
 int
-dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out)
+dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out)
 {
 	return dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, key, NULL,
 			    val_out);
 }
 
 static int
-btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
+btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 {
 	struct btr_record *rec;
 	int		   rc;
@@ -1738,7 +1738,7 @@ btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
  * create a new record, insert it into tree leaf node.
  */
 static int
-btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
+btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 {
 	struct btr_record *rec;
 	char		  *rec_str;
@@ -1790,7 +1790,7 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 static int
 btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	   uint32_t intent, daos_iov_t *key, daos_iov_t *val)
+	   uint32_t intent, d_iov_t *key, d_iov_t *val)
 {
 	int	rc;
 
@@ -1864,7 +1864,7 @@ btr_tx_end(struct btr_context *tcx, int rc)
  *			-ve	error code
  */
 int
-dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
+dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -1898,7 +1898,7 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
  */
 int
 dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-	      daos_iov_t *key, daos_iov_t *val)
+	      d_iov_t *key, d_iov_t *val)
 {
 	struct btr_context *tcx;
 	int		    rc = 0;
@@ -2609,7 +2609,7 @@ btr_tx_delete(struct btr_context *tcx, void *args)
  *				args to handle special cases(if any)
  */
 int
-dbtree_delete(daos_handle_t toh, daos_iov_t *key,
+dbtree_delete(daos_handle_t toh, d_iov_t *key,
 	      void *args)
 {
 	struct btr_context *tcx;
@@ -3156,7 +3156,7 @@ dbtree_iter_finish(daos_handle_t ih)
  */
 int
 dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
-		  daos_iov_t *key, daos_anchor_t *anchor)
+		  d_iov_t *key, daos_anchor_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
@@ -3179,7 +3179,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		if (key)
 			rc = btr_probe(tcx, opc, intent, key, NULL);
 		else {
-			daos_iov_t direct_key;
+			d_iov_t direct_key;
 
 			btr_key_decode(tcx, &direct_key, anchor);
 			rc = btr_probe(tcx, opc, intent, &direct_key, NULL);
@@ -3332,8 +3332,8 @@ dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent)
  * \param anchor [OUT]	Returned iteration anchor.
  */
 int
-dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
-		  daos_iov_t *val, daos_anchor_t *anchor)
+dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
+		  d_iov_t *val, daos_anchor_t *anchor)
 {
 	struct btr_context  *tcx;
 	struct btr_record   *rec;
@@ -3462,11 +3462,11 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 	}
 
 	for (;;) {
-		daos_iov_t	key;
-		daos_iov_t	val;
+		d_iov_t	key;
+		d_iov_t	val;
 
-		daos_iov_set(&key, NULL /* buf */, 0 /* size */);
-		daos_iov_set(&val, NULL /* buf */, 0 /* size */);
+		d_iov_set(&key, NULL /* buf */, 0 /* size */);
+		d_iov_set(&val, NULL /* buf */, 0 /* size */);
 
 		rc = dbtree_iter_fetch(ih, &key, &val, NULL /* anchor */);
 		if (rc != 0) {

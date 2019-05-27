@@ -563,7 +563,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 
 	/* Let's deal with iv_value first */
 	if (iv_value != NULL)
-		daos_sgl_fini((daos_sg_list_t *)iv_value, false);
+		daos_sgl_fini((d_sg_list_t *)iv_value, false);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
@@ -715,7 +715,7 @@ free:
 
 int
 ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
-		unsigned int master_rank, daos_iov_t *iv_ctxt,
+		unsigned int master_rank, d_iov_t *iv_ctxt,
 		struct ds_iv_ns **p_iv_ns)
 {
 	struct ds_iv_ns	*ns = NULL;
