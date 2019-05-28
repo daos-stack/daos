@@ -142,6 +142,9 @@ typedef struct {
 } daos_set_params_t;
 
 typedef struct {
+	uint32_t		mode;
+	uid_t			uid;
+	gid_t			gid;
 	const char		*grp;
 	const d_rank_list_t	*tgts;
 	const char		*dev;

@@ -26,7 +26,6 @@
 #include <daos/pool.h>
 #include <daos/task.h>
 #include <daos_mgmt.h>
-#include <daos_security.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -92,13 +91,6 @@ valid_pool_create_mode(uint32_t mode)
 	return true;
 }
 
-static bool
-daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
-{
-	return (prop != NULL) &&
-	       (daos_prop_entry_get(prop, entry_type) != NULL);
-}
-
 int
 daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 const d_rank_list_t *tgts, const char *dev,
@@ -109,10 +101,6 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 	daos_pool_create_t	*args;
 	tse_task_t		*task;
 	int			 rc;
-	char			*owner = NULL;
-	char			*owner_grp = NULL;
-	uint32_t		 entries;
-	daos_prop_t		*final_prop = NULL;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_CREATE);
 	if (!valid_pool_create_mode(mode)) {
@@ -124,82 +112,24 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		return -DER_INVAL;
 	}
 
-	entries = (pool_prop == NULL) ? 0 : pool_prop->dpp_nr;
-
-	/*
-	 * TODO: remove uid/gid input params and use euid/egid instead
-	 */
-	if (!daos_prop_has_entry(pool_prop, DAOS_PROP_PO_OWNER)) {
-		rc = daos_acl_uid_to_principal(uid, &owner);
-		if (rc) {
-			D_ERROR("Invalid uid\n");
-			return rc;
-		}
-
-		entries++;
-	}
-
-	if (!daos_prop_has_entry(pool_prop, DAOS_PROP_PO_OWNER_GROUP)) {
-		rc = daos_acl_gid_to_principal(gid, &owner_grp);
-		if (rc) {
-			D_ERROR("Invalid gid\n");
-			D_GOTO(out, rc);
-		}
-
-		entries++;
-	}
-
-	if (pool_prop == NULL || entries > pool_prop->dpp_nr) {
-		uint32_t idx = 0;
-
-		final_prop = daos_prop_alloc(entries);
-		if (pool_prop != NULL) {
-			rc = daos_prop_copy(final_prop, pool_prop);
-			if (rc)
-				D_GOTO(out, rc);
-			idx = pool_prop->dpp_nr;
-		}
-		if (owner != NULL) {
-			final_prop->dpp_entries[idx].dpe_type =
-				DAOS_PROP_PO_OWNER;
-			final_prop->dpp_entries[idx].dpe_str = owner;
-			owner = NULL;
-			idx++;
-		}
-
-		if (owner_grp != NULL) {
-			final_prop->dpp_entries[idx].dpe_type =
-				DAOS_PROP_PO_OWNER_GROUP;
-			final_prop->dpp_entries[idx].dpe_str = owner_grp;
-			owner_grp = NULL;
-			idx++;
-		}
-
-	} else {
-		final_prop = pool_prop;
-	}
-
 	rc = dc_task_create(dc_pool_create, NULL, ev, &task);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	args = dc_task_get_args(task);
+	args->mode	= mode;
+	args->uid	= uid;
+	args->gid	= gid;
 	args->grp	= grp;
 	args->tgts	= tgts;
 	args->dev	= dev;
 	args->scm_size	= scm_size;
 	args->nvme_size	= nvme_size;
-	args->prop	= final_prop;
+	args->prop	= pool_prop;
 	args->svc	= svc;
 	args->uuid	= uuid;
 
-	rc = dc_task_schedule(task, true);
-
-out:
-	daos_prop_free(final_prop);
-	D_FREE(owner);
-	D_FREE(owner_grp);
-	return rc;
+	return dc_task_schedule(task, true);
 }
 
 int
