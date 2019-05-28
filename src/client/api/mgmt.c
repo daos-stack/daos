@@ -317,3 +317,22 @@ daos_mgmt_query(char *grp, d_rank_t rank, daos_event_t *ev)
 
 	return dc_task_schedule(task, true);
 }
+
+int
+daos_mgmt_query_server(char *grp, d_rank_t rank, daos_event_t *ev)
+{
+	daos_query_server_t    *args;
+	tse_task_t	       *task;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(*args, QUERY_SERVER);
+	rc = dc_task_create(dc_mgmt_query_server, NULL, ev, &task);
+	if (rc != 0)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->grp = grp;
+	args->rank = rank;
+
+	return dc_task_schedule(task, true);
+}
