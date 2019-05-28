@@ -1810,14 +1810,14 @@ class DaosSnapshot(object):
         retcode = func(coh, ctypes.byref(epoch), None, None)
         self.epoch = epoch.value
         if retcode != 0:
-            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
-                               .format(retcode))
+             raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
+                             .format(retcode))
 
     # TODO Generalize this function to accept and return the number of
     #  snapshots and the epochs and names lists. See description of
     #  daos_cont_list_snap in src/include/daos_api.h. This must be done for
     #  DAOS-1336 Verify container snapshot info.
-    def list(self, coh):
+    def list(self, coh, epoch=None):
         """ Call daos_cont_snap_list and make sure there is a snapshot in the
         list.
         coh --ctype.u_long handle on an open container
@@ -1825,7 +1825,9 @@ class DaosSnapshot(object):
         """
         func = self.context.get_function('list-snap')
         num = ctypes.c_uint64(1)
-        epoch = ctypes.c_uint64(self.epoch)
+        if epoch == None:
+            epoch = self.epoch
+        epoch = ctypes.c_uint64(epoch)
         anchor = Anchor()
         retcode = func(coh, ctypes.byref(num), ctypes.byref(epoch), None,
                        ctypes.byref(anchor), None)
@@ -1834,14 +1836,16 @@ class DaosSnapshot(object):
                                .format(retcode))
         return epoch.value
 
-    def open(self, coh):
+    def open(self, coh, epoch=None):
         """ Get a tx handle for the snapshot and return it.
         coh --ctype.u_long handle on an open container
         returns a handle on the snapshot represented by this DaosSnapshot
         object.
         """
         func = self.context.get_function('open-snap')
-        epoch = ctypes.c_uint64(self.epoch)
+        if epoch == None:
+            epoch = self.epoch
+        epoch = ctypes.c_uint64(epoch)
         txhndl = ctypes.c_uint64(0)
         retcode = func(coh, epoch, ctypes.byref(txhndl), None)
         if retcode != 0:
@@ -1849,7 +1853,7 @@ class DaosSnapshot(object):
                                .format(retcode))
         return txhndl
 
-    def destroy(self, coh, evnt=None):
+    def destroy(self, coh, epoch=None, evnt=None):
         """ Destroy the snapshot. The "epoch range" is a struct with the lowest
         epoch and the highest epoch to destroy. We have only one epoch for this
         single snapshot object.
@@ -1858,7 +1862,9 @@ class DaosSnapshot(object):
         # need container handle coh, and the epoch range
         """
         func = self.context.get_function('destroy-snap')
-        epoch = ctypes.c_uint64(self.epoch)
+        if epoch == None:
+            epoch = self.epoch
+        epoch = ctypes.c_uint64(epoch)
         epr = EpochRange()
         epr.epr_lo = epoch
         epr.epr_hi = epoch
