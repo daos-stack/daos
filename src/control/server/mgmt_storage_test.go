@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+// mockFormatStorageServer provides mocking for server side streaming,
+// implement send method and record sent format responses.
 type mockFormatStorageServer struct {
 	grpc.ServerStream
 	Results []*pb.FormatStorageResp
@@ -45,6 +47,8 @@ func (m *mockFormatStorageServer) Send(resp *pb.FormatStorageResp) error {
 	return nil
 }
 
+// mockUpdateStorageServer provides mocking for server side streaming,
+// implement send method and record sent update responses.
 type mockUpdateStorageServer struct {
 	grpc.ServerStream
 	Results []*pb.UpdateStorageResp
@@ -357,7 +361,7 @@ func TestFormatStorage(t *testing.T) {
 			tt.bClass, tt.bDevs, tt.superblockExists)
 
 		cs := mockControlService(config)
-		cs.Setup() // init and increment WaitGroup countera
+		cs.Setup() // init channel used for sync
 
 		mock := &mockFormatStorageServer{}
 		mockWg := new(sync.WaitGroup)
@@ -420,50 +424,147 @@ func TestFormatStorage(t *testing.T) {
 	}
 }
 
-// TODO: to be used during the limitation of fw update feature
-//func TestUpdateNvmeCtrlr(t *testing.T) {
-//	cs := defaultMockControlService(t)
-//
-//	if err := cs.nvme.Setup(); err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	if err := cs.nvme.Discover(); err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	cExpect := MockControllerPB("1.0.1")
-//	//c := cs.nvme.controllers[0]
-//
-//	// after fetching controller details, simulate updated firmware
-//	// version being reported
-//	_ = &pb.UpdateNvmeParams{Path: "/foo/bar", Slot: 0}
-//
-//	//	_, err := cs.UpdateStorage(nil, &pb.UpdateStorageParams{Nvme: params})
-//	//	if err != nil {
-//	//		t.Fatal(err)
-//	//	}
-//
-//	AssertEqual(t, cs.nvme.controllers[0], cExpect, "unexpected Controller populated")
-//	//AssertEqual(t, newC, cExpect, "unexpected Controller returned")
-//}
+func TestUpdateStorage(t *testing.T) {
+	pciAddr := "0000:81:00.0" // default pciaddr for tests
 
-// TODO: this test should be moved to client, where the change in fwrev will be
-// verified
-//func TestUpdateNvmeCtrlrFail(t *testing.T) {
-//	s := mockNvmeCS(t, newMockNvmeStorage("1.0.0", "1.0.0", false))
-//
-//	if err := s.nvme.Discover(); err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	c := s.nvme.controllers[0]
-//
-//	// after fetching controller details, simulate the same firmware
-//	// version being reported
-//	params := &pb.UpdateNvmeParams{
-//		Pciaddr: c.Pciaddr, Path: "/foo/bar", Slot: 0}
-//
-//	_, err := s.UpdateNvmeCtrlr(nil, params)
-//	ExpectError(t, err, "update failed, firmware revision unchanged", "")
-//}
+	tests := []struct {
+		updateRet  error
+		bDevs      []string
+		nvmeParams *pb.UpdateNvmeParams // provided in client gRPC call
+		scmParams  *pb.UpdateScmParams
+		moduleRets []*pb.ScmModuleResult
+		ctrlrRets  []*pb.NvmeControllerResult
+		desc       string
+		errMsg     string
+	}{
+		{
+			desc:  "nvme update success",
+			bDevs: []string{pciAddr},
+			nvmeParams: &pb.UpdateNvmeParams{
+				Startrev: "1.0.0",
+				Model:    "ABC",
+			},
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: pciAddr,
+					State:   new(pb.ResponseState),
+				},
+			},
+			moduleRets: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+		},
+		{
+			desc:  "nvme update wrong model",
+			bDevs: []string{pciAddr},
+			nvmeParams: &pb.UpdateNvmeParams{
+				Startrev: "1.0.0",
+				Model:    "AB",
+			},
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: pciAddr,
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: pciAddr + ": " +
+							msgBdevModelMismatch +
+							" want AB, have ABC",
+					},
+				},
+			},
+			moduleRets: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+		},
+		{
+			desc:  "nvme update wrong starting revision",
+			bDevs: []string{pciAddr},
+			nvmeParams: &pb.UpdateNvmeParams{
+				Startrev: "2.0.0",
+				Model:    "ABC",
+			},
+			ctrlrRets: []*pb.NvmeControllerResult{
+				{
+					Pciaddr: pciAddr,
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error: pciAddr + ": " +
+							msgBdevFwrevStartMismatch +
+							" want 2.0.0, have 1.0.0",
+					},
+				},
+			},
+			moduleRets: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		config := defaultMockConfig(t)
+		cs := mockControlService(&config)
+		cs.Setup() // init channel used for sync
+		mock := &mockUpdateStorageServer{}
+
+		params := &pb.UpdateStorageParams{
+			Nvme: tt.nvmeParams,
+			Scm:  tt.scmParams,
+		}
+
+		cs.UpdateStorage(params, mock)
+
+		AssertEqual(
+			t, len(mock.Results), 1,
+			"unexpected number of responses sent, "+tt.desc)
+
+		for i, result := range mock.Results[0].Crets {
+			expected := tt.ctrlrRets[i]
+			AssertEqual(
+				t, result.State.Error,
+				expected.State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status,
+				expected.State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Pciaddr,
+				expected.Pciaddr,
+				"unexpected pciaddr, "+tt.desc)
+		}
+
+		for i, result := range mock.Results[0].Mrets {
+			expected := tt.moduleRets[i]
+			AssertEqual(
+				t, result.State.Error,
+				expected.State.Error,
+				"unexpected result error message, "+tt.desc)
+			AssertEqual(
+				t, result.State.Status,
+				expected.State.Status,
+				"unexpected response status, "+tt.desc)
+			AssertEqual(
+				t, result.Loc,
+				expected.Loc,
+				"unexpected mntpoint, "+tt.desc)
+		}
+	}
+}
