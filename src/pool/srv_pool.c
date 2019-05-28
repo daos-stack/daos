@@ -2234,8 +2234,8 @@ out:
 /* Callers are responsible for d_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
-			unsigned int opc,
-			struct pool_op_out *pto_op, bool *p_updated,
+			unsigned int opc, uint32_t *map_version_p,
+			struct rsvc_hint *hint, bool *p_updated,
 			d_rank_list_t **replicasp)
 {
 	struct pool_svc	       *svc;
@@ -2248,8 +2248,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
-	rc = pool_svc_lookup_leader(pool_uuid, &svc,
-				    pto_op == NULL ? NULL : &pto_op->po_hint);
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2307,10 +2306,10 @@ out_replicas:
 		*replicasp = NULL;
 	}
 out_map_version:
-	if (pto_op != NULL)
-		pto_op->po_map_version =
-			pool_map_get_version((map == NULL || rc != 0) ?
-					     svc->ps_pool->sp_map : map);
+	if (map_version_p != NULL)
+		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
+						      svc->ps_pool->sp_map :
+						      map);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (map)
@@ -2327,8 +2326,8 @@ out_map_version:
 	if (map_buf != NULL)
 		pool_buf_free(map_buf);
 out_svc:
-	if (pto_op != NULL)
-		ds_rsvc_set_hint(&svc->ps_rsvc, &pto_op->po_hint);
+	if (hint != NULL)
+		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
 	pool_svc_put_leader(svc);
 out:
 	if (p_updated)
@@ -2412,14 +2411,69 @@ int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE_OUT,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, NULL);
 }
 
 int
 ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_EXCLUDE,
-				       NULL, NULL, NULL);
+				       NULL, NULL, NULL, NULL);
+}
+
+/*
+ * Perform a pool map update indicated by opc. If successful, the new pool map
+ * version is reported via map_version. Upon -DER_NOTLEADER, a pool service
+ * leader hint, if available, is reported via hint (if not NULL).
+ */
+static int
+ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
+	       struct pool_target_addr_list *list,
+	       struct pool_target_addr_list *out_list,
+	       uint32_t *map_version, struct rsvc_hint *hint)
+{
+	struct pool_target_id_list	target_list = { 0 };
+	d_rank_list_t			*replicas = NULL;
+	bool				updated;
+	int				rc;
+
+	/* Convert target address list to target id list */
+	rc = pool_find_all_targets_by_addr(pool_uuid, list, &target_list,
+					   out_list);
+	if (rc)
+		D_GOTO(out, rc);
+
+	/* Update target by target id */
+	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, map_version,
+				     hint, &updated, &replicas);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (updated && opc == POOL_EXCLUDE) {
+		char	*env;
+		int	 ret;
+
+		env = getenv(REBUILD_ENV);
+		if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
+		    daos_fail_check(DAOS_REBUILD_DISABLE)) {
+			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
+		} else { /* enabled by default */
+			D_ASSERT(replicas != NULL);
+			ret = ds_rebuild_schedule(pool_uuid, *map_version,
+						  &target_list, replicas);
+			if (ret != 0) {
+				D_ERROR("rebuild fails rc %d\n", ret);
+				if (rc == 0)
+					rc = ret;
+			}
+		}
+	}
+
+out:
+	pool_target_id_list_free(&target_list);
+	if (replicas != NULL)
+		d_rank_list_free(replicas);
+	return rc;
 }
 
 void
@@ -2429,9 +2483,6 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
 	struct pool_target_addr_list	list = { 0 };
 	struct pool_target_addr_list	out_list = { 0 };
-	struct pool_target_id_list	target_list = { 0 };
-	d_rank_list_t			*replicas = NULL;
-	bool				updated;
 	int				rc;
 
 	if (in->pti_addr_list.ca_arrays == NULL ||
@@ -2441,18 +2492,11 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: ntargets=%zu\n",
 		DP_UUID(in->pti_op.pi_uuid), rpc, in->pti_addr_list.ca_count);
 
-	/* Convert target address list to target id list */
 	list.pta_number = in->pti_addr_list.ca_count;
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
-	rc = pool_find_all_targets_by_addr(in->pti_op.pi_uuid, &list,
-					   &target_list, &out_list);
-	if (rc)
-		D_GOTO(out, rc);
-
-	/* Update target by target id */
-	rc = ds_pool_update_internal(in->pti_op.pi_uuid, &target_list,
-				     opc_get(rpc->cr_opc),
-				     &out->pto_op, &updated, &replicas);
+	rc = ds_pool_update(in->pti_op.pi_uuid, opc_get(rpc->cr_opc), &list,
+			    &out_list, &out->pto_op.po_map_version,
+			    &out->pto_op.po_hint);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -2463,34 +2507,8 @@ out:
 	out->pto_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
-	rc = crt_reply_send(rpc);
-
-	if (out->pto_op.po_rc == 0 && updated &&
-	    opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
-		char	*env;
-		int	 ret;
-
-		env = getenv(REBUILD_ENV);
-		if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
-		    daos_fail_check(DAOS_REBUILD_DISABLE)) {
-			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
-		} else { /* enabled by default */
-			D_ASSERT(replicas != NULL);
-			ret = ds_rebuild_schedule(in->pti_op.pi_uuid,
-				out->pto_op.po_map_version,
-				&target_list, replicas);
-			if (ret != 0) {
-				D_ERROR("rebuild fails rc %d\n", ret);
-				if (rc == 0)
-					rc = ret;
-			}
-		}
-	}
-
+	crt_reply_send(rpc);
 	pool_target_addr_list_free(&out_list);
-	pool_target_id_list_free(&target_list);
-	if (replicas != NULL)
-		d_rank_list_free(replicas);
 }
 
 struct evict_iter_arg {

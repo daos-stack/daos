@@ -1131,9 +1131,13 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_ERROR("TX commit failed (rc = %d)\n", rc);
 			D_GOTO(err_root, rc);
 		}
+		rc = daos_tx_close(th, NULL);
+		if (rc) {
+			D_ERROR("TX close failed (rc = %d)\n", rc);
+			D_GOTO(err_root, rc);
+		}
 	}
 
-	daos_tx_close(th, NULL);
 	dfs->mounted = true;
 	*_dfs = dfs;
 
