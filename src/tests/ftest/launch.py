@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from __future__ import print_function
 
 import argparse
 import json
@@ -132,10 +133,10 @@ def get_yaml_data(yaml_file):
     """
     yaml_data = {}
     if os.path.isfile(yaml_file):
-        with open(yaml_file, "r") as file:
+        with open(yaml_file, "r") as open_file:
             try:
-                filedata = file.read()
-                yaml_data = yaml.safe_load(filedata.replace("!mux", ""))
+                file_data = open_file.read()
+                yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
             except yaml.YAMLError as error:
                 raise Exception(
                     "Error reading {}: {}".format(yaml_file, error))
@@ -253,18 +254,18 @@ def get_test_files(test_list, machine_mapping, debug):
     get_output("mkdir -p {}".format(home_tmp))
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        file = os.path.basename(base)
+        file_name = os.path.basename(base)
         if os.path.exists("{}.yaml".format(base)):
             # Read the yaml file
             display("Reading {}".format("{}.yaml".format(base)), debug)
-            with open("{}.yaml".format(base), "r") as f:
-                data = f.readlines()
+            with open("{}.yaml".format(base), "r") as yaml_file:
+                data = yaml_file.readlines()
 
             # Replace the 'boro-[A-Z]' names with the specified machine names.
             # Exclude any machine name placeholders that do not have a mapping.
-            tmp_yaml = os.path.join(home_tmp, "{}.yaml".format(file))
+            tmp_yaml = os.path.join(home_tmp, "{}.yaml".format(file_name))
             display("Creating {}".format(tmp_yaml), debug)
-            with open(tmp_yaml, "w") as f:
+            with open(tmp_yaml, "w") as yaml_file:
                 for line in data:
                     match = re.findall(r"(.*- )(boro-[A-Z])", line)
                     if len(match) > 0:
@@ -279,10 +280,10 @@ def get_test_files(test_list, machine_mapping, debug):
                             display(
                                 "  Line: {}".format(new_line.rstrip()),
                                 debug)
-                            f.write(new_line)
+                            yaml_file.write(new_line)
                     else:
                         display("  Line: {}".format(line.rstrip()), debug)
-                        f.write(line)
+                        yaml_file.write(line)
             test_file["yaml"] = tmp_yaml
 
         else:
@@ -304,12 +305,12 @@ def map_machines(machines):
 
     """
     machine_mapping = {}
-    for x, machine in enumerate(machines):
+    for index, machine in enumerate(machines):
         if len(machine) > 0:
             # Sequentially map each specified machine name to a replacement
             # key:
             #   boro-[A-Z]
-            ascii_upper_code = 65 + x
+            ascii_upper_code = 65 + index
             if ascii_upper_code <= 91:
                 alpha_name = "boro-{}".format(chr(ascii_upper_code))
                 machine_mapping[alpha_name] = machine
