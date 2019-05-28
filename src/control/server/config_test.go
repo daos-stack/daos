@@ -704,6 +704,13 @@ func TestCmdlineOverride(t *testing.T) {
 }
 
 func TestPopulateEnv(t *testing.T) {
+	noOfiPortConfig := func() configuration {
+		c := mockConfigFromFile(t, defaultMockExt(), socketsExample)
+		c.Servers[0].FabricIfacePort = 0
+
+		return c
+	}()
+
 	tests := []struct {
 		inConfig configuration
 		ioIdx    int
@@ -734,9 +741,9 @@ func TestPopulateEnv(t *testing.T) {
 				"DD_MASK=daos_default",
 				"CRT_PHY_ADDR_STR=ofi+sockets",
 				"OFI_INTERFACE=eth0",
-				"OFI_PORT=31416",
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
 			"sockets populated config (with envs)",
@@ -768,9 +775,9 @@ func TestPopulateEnv(t *testing.T) {
 				"DD_MASK=daos_default",
 				"CRT_PHY_ADDR_STR=ofi+sockets",
 				"OFI_INTERFACE=eth0",
-				"OFI_PORT=31416",
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
 			"sockets populated config (with envs) overwriting pre-existing values",
@@ -788,9 +795,9 @@ func TestPopulateEnv(t *testing.T) {
 				"DD_MASK=daos_default",
 				"CRT_PHY_ADDR_STR=ofi+psm2",
 				"OFI_INTERFACE=ib0",
-				"OFI_PORT=31416",
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
 			"psm2 populated config (with envs)",
@@ -823,12 +830,33 @@ func TestPopulateEnv(t *testing.T) {
 				"DD_MASK=daos_default",
 				"CRT_PHY_ADDR_STR=ofi+psm2",
 				"OFI_INTERFACE=ib0",
-				"OFI_PORT=31416",
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
 			"psm2 populated config (with envs) overwriting pre-existing values",
+		},
+		{
+			noOfiPortConfig,
+			0,
+			[]string{"FOO=bar"},
+			[]string{
+				"FOO=bar",
+				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
+				"CRT_TIMEOUT=30",
+				"FI_SOCKETS_MAX_CONN_RETRY=1",
+				"FI_SOCKETS_CONN_TIMEOUT=2000",
+				"DD_MASK=daos_default",
+				"CRT_PHY_ADDR_STR=ofi+sockets",
+				"OFI_INTERFACE=eth0",
+				"D_LOG_MASK=ERR",
+				"D_LOG_FILE=/tmp/server.log",
+				//"OFI_PORT=31416", // not set if not provided via config file
+			},
+			"",
+			"sockets populated config (with envs) but no fabric interface port provided",
 		},
 	}
 
