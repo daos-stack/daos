@@ -46,7 +46,7 @@ fi
 
 TEST_TAG_ARG="${1:-quick}"
 TEST_TAG_ARR=($TEST_TAG_ARG)
-TEST_TAG_DIR="/tmp/Functional_$TEST_TAG_ARG"
+TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
