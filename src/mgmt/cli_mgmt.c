@@ -210,7 +210,7 @@ query_cp(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("RPC error while killing rank: %d\n", rc);
+		D_ERROR("RPC error while querying system: %d\n", rc);
 		goto out;
 	}
 
@@ -266,6 +266,81 @@ err_rpc:
 	crt_req_decref(rpc);
 err_grp:
 	daos_group_detach(ep.ep_grp);
+err_task:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+static int
+query_server_cp(tse_task_t *task, void *data)
+{
+	crt_rpc_t			*rpc = *(crt_rpc_t **)data;
+	struct mgmt_query_server_out	*out = crt_reply_get(rpc);
+	daos_query_server_t		*args = dc_task_get_args(task);
+	struct server_entry		*servers = out->eo_servers.ca_arrays;
+	int				 i;
+	int				 rc = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("RPC error while querying server: %d\n", rc);
+		goto out;
+	}
+
+	D_PRINT("System: %s\n", args->grp);
+	D_PRINT("Server: %u\n", args->rank);
+	D_PRINT("Known map version: %u\n", out->eo_map_version);
+	D_PRINT("Known servers:\n");
+	for (i = 0; i < out->eo_servers.ca_count; i++)
+		D_PRINT("\t%u\t%s\n", servers[i].se_rank,
+			servers[i].se_flags == SWIM_MEMBER_ALIVE ? "ALIVE" :
+			(servers[i].se_flags == SWIM_MEMBER_SUSPECT ?
+			 "SUSPECT" : "DEAD"));
+
+out:
+	dc_mgmt_group_detach(rpc->cr_ep.ep_grp);
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_mgmt_query_server(tse_task_t *task)
+{
+	daos_query_server_t	*args;
+	crt_endpoint_t		 ep;
+	crt_rpc_t		*rpc;
+	crt_opcode_t		 opc;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	rc = dc_mgmt_group_attach(args->grp, &ep.ep_grp);
+	if (rc != 0) {
+		D_ERROR("failed to attach to group %s: %d\n", args->grp, rc);
+		goto err_task;
+	}
+
+	ep.ep_rank = args->rank;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_QUERY_SERVER, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create MGMT_QUERY_SERVER request: %d\n", rc);
+		goto err_grp;
+	}
+
+	rc = tse_task_register_comp_cb(task, query_server_cp, &rpc,
+				       sizeof(rpc));
+	if (rc != 0)
+		goto err_rpc;
+
+	crt_req_addref(rpc); /* for query_cp */
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+err_grp:
+	dc_mgmt_group_detach(ep.ep_grp);
 err_task:
 	tse_task_complete(task, rc);
 	return rc;

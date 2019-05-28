@@ -334,6 +334,17 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 int
 daos_mgmt_query(char *grp, d_rank_t rank, daos_event_t *ev);
 
+/**
+ * Query a server's primary group state.
+ *
+ * \param grp	[IN]	System name
+ * \param rank	[IN]	Server rank
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_query_server(char *grp, d_rank_t rank, daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif

@@ -867,6 +867,45 @@ sysquery_hdlr(int argc, char *argv[])
 }
 
 static int
+srvquery_hdlr(int argc, char *argv[])
+{
+	struct option		options[] = {
+		{"group",	required_argument,	NULL,	'G'},
+		{"rank",	required_argument,	NULL,	'r'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char	       *group = default_group;
+	d_rank_t		rank = -1;
+	int			rc;
+
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'G':
+			group = optarg;
+			break;
+		case 'r':
+			rank = atoi(optarg);
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	if (rank == -1) {
+		fprintf(stderr, "server rank required\n");
+		return 2;
+	}
+
+	rc = daos_mgmt_query_server((char *)group, rank, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to query server %u: %d\n", rank, rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
@@ -882,6 +921,7 @@ commands:\n\
   query		query pool information\n\
   layout	get object layout\n\
   sysquery	query system map\n\
+  srvquery	query server group\n\
   help		print this message and exit\n");
 	printf("\
 create options:\n\
@@ -943,6 +983,10 @@ query obj layout options: \n\
 sysquery options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --rank=INT	rank of Management Service\n", default_group);
+	printf("\
+srvquery options:\n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --rank=INT	server rank\n", default_group);
 	return 0;
 }
 
@@ -976,6 +1020,8 @@ main(int argc, char *argv[])
 		hdlr = profile_op_hdlr;
 	else if (strcmp(argv[1], "sysquery") == 0)
 		hdlr = sysquery_hdlr;
+	else if (strcmp(argv[1], "srvquery") == 0)
+		hdlr = srvquery_hdlr;
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);
 		return hdlr == NULL ? 2 : 0;

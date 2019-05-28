@@ -58,7 +58,10 @@
 		ds_mgmt_profile_hdlr, NULL),				\
 	X(MGMT_QUERY,							\
 		0, &CQF_mgmt_query,					\
-		ds_mgmt_hdlr_query, NULL)
+		ds_mgmt_hdlr_query, NULL),				\
+	X(MGMT_QUERY_SERVER,						\
+		0, &CQF_mgmt_query_server,				\
+		ds_mgmt_hdlr_query_server, NULL)
 
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
@@ -228,5 +231,15 @@ CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 	((int32_t)		(qo_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(mgmt_query, DAOS_ISEQ_MGMT_QUERY, DAOS_OSEQ_MGMT_QUERY)
+
+#define DAOS_ISEQ_MGMT_QUERY_SERVER /* input fields */
+
+#define DAOS_OSEQ_MGMT_QUERY_SERVER /* output fields */			\
+	((struct server_entry)	(eo_servers)		CRT_ARRAY)	\
+	((uint32_t)		(eo_map_version)	CRT_VAR)	\
+	((int32_t)		(eo_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_query_server, DAOS_ISEQ_MGMT_QUERY_SERVER,
+		DAOS_OSEQ_MGMT_QUERY_SERVER)
 
 #endif /* __MGMT_RPC_H__ */

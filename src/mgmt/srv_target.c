@@ -944,3 +944,49 @@ ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	out_result->tm_rc += out_source->tm_rc;
 	return 0;
 }
+
+void
+ds_mgmt_hdlr_query_server(crt_rpc_t *rpc)
+{
+	struct mgmt_query_server_out   *out = crt_reply_get(rpc);
+	crt_group_t		       *group = crt_group_lookup(NULL);
+	d_rank_list_t		       *ranks;
+	struct server_entry	       *servers = NULL;
+	int				i;
+	int				rc;
+
+	rc = crt_group_ranks_get(group, &ranks);
+	if (rc != 0) {
+		D_ERROR("failed to get ranks: %d\n", rc);
+		goto out;
+	}
+
+	D_ALLOC_ARRAY(servers, ranks->rl_nr);
+	if (servers == NULL)
+		goto out_ranks;
+
+	for (i = 0; i < ranks->rl_nr; i++) {
+		struct swim_member_state state;
+
+		rc = crt_rank_state_get(group, ranks->rl_ranks[i], &state);
+		if (rc != 0) {
+			D_ERROR("failed to get rank %u state: %d\n",
+				ranks->rl_ranks[i], rc);
+			goto out_ranks;
+		}
+
+		servers[i].se_rank = ranks->rl_ranks[i];
+		servers[i].se_flags = state.sms_status;
+	}
+
+	out->eo_servers.ca_count = ranks->rl_nr;
+	out->eo_servers.ca_arrays = servers;
+	out->eo_map_version = sys_map_version;
+
+out_ranks:
+	d_rank_list_free(ranks);
+out:
+	crt_reply_send(rpc);
+	if (servers != NULL)
+		D_FREE(servers);
+}

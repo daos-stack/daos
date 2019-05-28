@@ -79,5 +79,6 @@ int ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg);
 void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
+void ds_mgmt_hdlr_query_server(crt_rpc_t *rpc);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */
