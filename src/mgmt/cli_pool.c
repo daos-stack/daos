@@ -42,6 +42,7 @@ pool_create_cp(tse_task_t *task, void *data)
 	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
 	d_rank_list_t			*svc = arg->svc;
 	struct mgmt_pool_create_out	*pc_out;
+	struct mgmt_pool_create_in	*pc_in;
 	int				 rc = task->dt_result;
 
 	if (rc) {
@@ -72,6 +73,13 @@ pool_create_cp(tse_task_t *task, void *data)
 	       sizeof(*svc->rl_ranks) * svc->rl_nr);
 
 out:
+	/*
+	 * Need to free the pool prop input we allocated in dc_pool_create
+	 */
+	pc_in = crt_req_get(arg->rpc);
+	D_ASSERT(pc_in != NULL);
+	daos_prop_free(pc_in->pc_prop);
+
 	daos_group_detach(arg->rpc->cr_ep.ep_grp);
 	crt_req_decref(arg->rpc);
 	return rc;
@@ -85,8 +93,9 @@ daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
 }
 
 /*
- * Translates uid/gid to user and group name, and adds them to the prop passed
- * by the user. If no prop was passed in, it creates one.
+ * Translates uid/gid to user and group name, and adds them as owners to a new
+ * copy of the daos_prop_t passed in.
+ * The newly allocated prop is expected to be freed by the pool create callback.
  */
 static int
 add_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in,
@@ -95,6 +104,7 @@ add_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in,
 	char	       *owner = NULL;
 	char	       *owner_grp = NULL;
 	daos_prop_t    *final_prop = NULL;
+	uint32_t	idx = 0;
 	uint32_t	entries;
 	int		rc = 0;
 
@@ -123,18 +133,17 @@ add_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in,
 		entries++;
 	}
 
+	/* We always free this prop in the callback - so need to make a copy */
+	final_prop = daos_prop_alloc(entries);
+
+	if (prop_in != NULL) {
+		rc = daos_prop_copy(final_prop, prop_in);
+		if (rc)
+			D_GOTO(err_out, rc);
+		idx = prop_in->dpp_nr;
+	}
+
 	if (prop_in == NULL || entries > prop_in->dpp_nr) {
-		uint32_t idx = 0;
-
-		final_prop = daos_prop_alloc(entries);
-
-		if (prop_in != NULL) {
-			rc = daos_prop_copy(final_prop, prop_in);
-			if (rc)
-				D_GOTO(err_out, rc);
-			idx = prop_in->dpp_nr;
-		}
-
 		if (owner != NULL) {
 			final_prop->dpp_entries[idx].dpe_type =
 				DAOS_PROP_PO_OWNER;
@@ -151,8 +160,6 @@ add_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in,
 			idx++;
 		}
 
-	} else {
-		final_prop = prop_in;
 	}
 
 	*prop_out = final_prop;
