@@ -421,7 +421,7 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 		 * ec_object_update encoded a full stripe. Hence
 		 * the update should go to all targets.
 		 */
-			*tgt_set = 0;
+		*tgt_set = 0;
 	} else {
 		/* Called for updates with no full stripes.
 		 * Builds a bit map only if forwarding targets are
