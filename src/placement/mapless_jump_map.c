@@ -67,7 +67,7 @@ struct pl_mapless_map {
 	/** the total length of the array used for bookkeeping */
 	uint32_t        dom_used_length;
 
-	unsigned int	mmp_domain_nr;
+	unsigned int    mmp_domain_nr;
 };
 
 /**
@@ -268,9 +268,9 @@ crc(uint64_t data, uint32_t init_val)
 static void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 {
-	struct failed_shard 	*f_shard;
-	d_list_t			*tmp;
-	D_DEBUG(DB_PL,"fnew: %u",f_new->fs_shard_idx);
+	struct failed_shard     *f_shard;
+	d_list_t                        *tmp;
+	D_DEBUG(DB_PL, "fnew: %u", f_new->fs_shard_idx);
 
 	/* All failed shards are sorted by fseq in ascending order */
 	d_list_for_each_prev(tmp, remap_list) {
@@ -280,10 +280,10 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 		* target fseq should be assigned uniquely, even if all
 		* the targets of the same domain failed at same time.
 		*/
-		D_DEBUG(DB_PL,"fnew: %u, fshard: %u",f_new->fs_shard_idx,
-				f_shard->fs_shard_idx);
+		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
+			f_shard->fs_shard_idx);
 		D_ASSERTF(f_new->fs_fseq != f_shard->fs_fseq,
-		"same fseq %u!\n", f_new->fs_fseq);
+			  "same fseq %u!\n", f_new->fs_fseq);
 
 		if (f_new->fs_fseq < f_shard->fs_fseq)
 			continue;
@@ -329,11 +329,11 @@ mapless_remap_free_all(d_list_t *remap_list)
 
 static int
 mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
-	struct daos_obj_shard_md *shard_md, struct mapless_obj_placement *mop)
+			  struct daos_obj_shard_md *shard_md, struct mapless_obj_placement *mop)
 {
 	struct daos_oclass_attr *oc_attr;
-	struct pool_domain	*root;
-	daos_obj_id_t 		oid;
+	struct pool_domain      *root;
+	daos_obj_id_t           oid;
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
@@ -349,9 +349,9 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 	mop->mop_grp_size = daos_oclass_grp_size(oc_attr);
 
 	pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
-			PO_COMP_ID_ALL, &root);
+			     PO_COMP_ID_ALL, &root);
 
-	if(mop->mop_grp_size == DAOS_OBJ_REPL_MAX)
+	if (mop->mop_grp_size == DAOS_OBJ_REPL_MAX)
 		mop->mop_grp_size = mmap->mmp_domain_nr;
 
 	if (mop->mop_grp_size > mmap->mmp_domain_nr) {
@@ -362,7 +362,7 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 	}
 
 	D_ASSERT(root->do_target_nr > 0);
-	if(shard_md == NULL) {
+	if (shard_md == NULL) {
 		unsigned int grp_max = root->do_target_nr / mop->mop_grp_size;
 
 		if (grp_max == 0)
@@ -370,7 +370,7 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 
 		mop->mop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
 
-		if(mop->mop_grp_nr > grp_max)
+		if (mop->mop_grp_nr > grp_max)
 			mop->mop_grp_nr = grp_max;
 
 	} else {
@@ -378,11 +378,11 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 	}
 
 	D_ASSERT(mop->mop_grp_nr > 0);
-        D_ASSERT(mop->mop_grp_size > 0);
+	D_ASSERT(mop->mop_grp_size > 0);
 
-        D_DEBUG(DB_PL,
-                "obj="DF_OID"/ grp_size=%u grp_nr=%d\n",
-                DP_OID(oid), mop->mop_grp_size, mop->mop_grp_nr);
+	D_DEBUG(DB_PL,
+		"obj="DF_OID"/ grp_size=%u grp_nr=%d\n",
+		DP_OID(oid), mop->mop_grp_size, mop->mop_grp_nr);
 
 	return 0;
 }
@@ -394,14 +394,14 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
  */
 static bool
 mapless_remap_next_spare(struct pl_mapless_map *mmap,
-	struct mapless_obj_placement *mop, struct pool_target *target)
+			 struct mapless_obj_placement *mop, struct pool_target *target)
 {
 	D_ASSERTF(mop->mop_grp_size <= mmap->mmp_domain_nr,
-		"grp_size: %u > domain_nr: %u\n",
-		mop->mop_grp_size, mmap->mmp_domain_nr);
+		  "grp_size: %u > domain_nr: %u\n",
+		  mop->mop_grp_size, mmap->mmp_domain_nr);
 
 	if (mop->mop_grp_size == mmap->mmp_domain_nr &&
-			mop->mop_grp_size > 1)
+	    mop->mop_grp_size > 1)
 		return false;
 
 	return true;
@@ -458,18 +458,18 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, uint32_t *used_targets,
 	   int shard_num, uint32_t num_bytes)
 {
-	uint8_t		found_target = 0;
-	uint8_t		top = 0;
-	uint32_t	fail_num = 0;
-	uint32_t	selected_dom;
-	uint64_t	root_pos;
+	uint8_t         found_target = 0;
+	uint8_t         top = 0;
+	uint32_t        fail_num = 0;
+	uint32_t        selected_dom;
+	uint64_t        root_pos;
 
 	root_pos = (uint64_t)curr_dom;
 
 	do {
-		uint32_t	num_doms;
-		uint64_t	key;
-		uint64_t	curr_pos;
+		uint32_t        num_doms;
+		uint64_t        key;
+		uint64_t        curr_pos;
 
 		/* Retrieve number of nodes in this domain */
 		if (curr_dom->do_children == NULL)
@@ -485,7 +485,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 		if (curr_dom->do_children == NULL) {
 			uint32_t dom_id;
-			uint32_t	i;
+			uint32_t        i;
 
 			do {
 				/*
@@ -524,11 +524,11 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			found_target = 1;
 		} else {
 
-			int		range_set;
-			uint64_t	child_pos;
+			int             range_set;
+			uint64_t        child_pos;
 
 			child_pos = (uint64_t)(curr_dom->do_children)
-				- root_pos;
+				    - root_pos;
 			child_pos = child_pos / sizeof(struct pool_domain);
 
 			/*
@@ -538,11 +538,11 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 */
 
 			range_set = is_range_set(dom_used, child_pos, child_pos
-					+ num_doms - 1, num_bytes);
+						 + num_doms - 1, num_bytes);
 			if (range_set  && curr_dom->do_children != NULL) {
 				clear_bitmap_range(dom_used, child_pos,
-						child_pos + (num_doms - 1),
-						num_bytes);
+						   child_pos + (num_doms - 1),
+						   num_bytes);
 			}
 
 			/*
@@ -555,8 +555,8 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 								    num_doms);
 				key = crc(key, fail_num++);
 			} while (get_bit(dom_used, selected_dom + child_pos,
-						num_bytes)
-					== 1);
+					 num_bytes)
+				 == 1);
 			/* Mark this domain as used */
 			set_bit(dom_used, selected_dom + child_pos, num_bytes);
 
@@ -607,7 +607,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 	uint32_t                fail_num = 0xFFc5;
 	uint32_t                try = 0;
 	struct pool_domain      *target_selection;
-	struct pool_domain	*root;
+	struct pool_domain      *root;
 	int rc = 0;
 
 	rc = pool_map_find_domain(pmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
@@ -627,7 +627,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		num_doms = root->do_child_nr;
 
 		uint64_t child_pos = (uint64_t)(root->do_children)
-			- (uint64_t)root;
+				     - (uint64_t)root;
 		child_pos = child_pos / sizeof(struct pool_domain);
 
 		/*
@@ -636,9 +636,9 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		 * so duplicates can be chosen
 		 */
 		if (is_range_set(dom_used, child_pos, child_pos +
-			num_doms - 1, dom_bytes)) {
+				 num_doms - 1, dom_bytes)) {
 			clear_bitmap_range(dom_used, child_pos,
-					child_pos + (num_doms - 1), dom_bytes);
+					   child_pos + (num_doms - 1), dom_bytes);
 		}
 
 		/*
@@ -650,7 +650,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			selected_dom = jump_consistent_hash(key, num_doms);
 			target_selection = &(root->do_children[selected_dom]);
 		} while (get_bit(dom_used, selected_dom + child_pos,
-					dom_bytes) == 1);
+				 dom_bytes) == 1);
 
 		/* Mark this domain as used */
 		set_bit(dom_used, selected_dom + child_pos, dom_bytes);
@@ -680,12 +680,12 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			uint64_t position;
 
 			pool_map_find_target(pmap, id, target);
-			position = (uint64_t) (*target);
+			position = (uint64_t)(*target);
 
 
 			if (position >= start_pos && position < end_pos) {
 				set_bit(used_tgts, (position - start_pos)
-						/ sizeof(**target), num_bytes);
+					/ sizeof(**target), num_bytes);
 				skiped_targets++;
 			}
 		}
@@ -712,17 +712,17 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 				set_bit(used_tgts, selected_dom, num_bytes);
 
 		} while (get_bit(used_tgts, selected_dom, num_bytes) &&
-				skiped_targets < num_doms);
+			 skiped_targets < num_doms);
 
-		if(skiped_targets == num_doms)
+		if (skiped_targets == num_doms)
 			D_DEBUG(DB_PL, "Skipped all targets in domain, "
-					"no valid slections.\n");
+				"no valid slections.\n");
 
 		D_FREE(used_tgts);
 
 		/* Use the last examined target if it's not unavailable */
 		if (!pool_target_unavail(*target) ||
-		   (*target)->ta_comp.co_fseq > md->omd_ver){
+		    (*target)->ta_comp.co_fseq > md->omd_ver) {
 			return 0;
 		}
 	}
@@ -735,18 +735,18 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 /** dump remap list, for debug only */
 static void
 mapless_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
-                char *comment)
+		   char *comment)
 {
-        struct failed_shard *f_shard;
+	struct failed_shard *f_shard;
 
-        D_DEBUG(DB_PL, "remap list for "DF_OID", %s, ver %d\n",
-                DP_OID(md->omd_id), comment, md->omd_ver);
+	D_DEBUG(DB_PL, "remap list for "DF_OID", %s, ver %d\n",
+		DP_OID(md->omd_id), comment, md->omd_ver);
 
-        d_list_for_each_entry(f_shard, remap_list, fs_list) {
-                D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u rank %d\n",
-                        f_shard->fs_fseq, f_shard->fs_shard_idx,
-                        f_shard->fs_status, f_shard->fs_tgt_id);
-        }
+	d_list_for_each_entry(f_shard, remap_list, fs_list) {
+		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u rank %d\n",
+			f_shard->fs_fseq, f_shard->fs_shard_idx,
+			f_shard->fs_status, f_shard->fs_tgt_id);
+	}
 }
 
 
@@ -758,15 +758,15 @@ mapless_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 */
 static void
 obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
-		struct pl_obj_layout *layout, struct mapless_obj_placement *mop,
-		d_list_t *remap_list, uint8_t *dom_used, uint64_t key)
+		 struct pl_obj_layout *layout, struct mapless_obj_placement *mop,
+		 d_list_t *remap_list, uint8_t *dom_used, uint64_t key)
 {
 	struct failed_shard *f_shard, *f_tmp;
 	struct pl_obj_shard      *l_shard;
 	struct pool_target       *spare_tgt;
 	d_list_t                 *current;
 	bool                      spare_avail = true;
-	int 			fail_count;
+	int                     fail_count;
 
 	mapless_remap_dump(remap_list, md, "before remap:");
 	current = remap_list->next;
@@ -775,7 +775,7 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 
 	while (current != remap_list) {
 		f_shard = d_list_entry(current, struct failed_shard,
-					fs_list);
+				       fs_list);
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
 		spare_avail = mapless_remap_next_spare(mmap, mop, spare_tgt);
@@ -784,14 +784,14 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 			goto next_fail;
 
 		get_rebuild_target(mmap->mmp_map.pl_poolmap, &spare_tgt,
-		   crc(key,f_shard->fs_shard_idx * 10 + fail_count++), dom_used,
-		   layout, md, mmap->dom_used_length);
+				   crc(key, f_shard->fs_shard_idx * 10 + fail_count++), dom_used,
+				   layout, md, mmap->dom_used_length);
 
 		/* The selected spare target is down as well */
 		if (pool_target_unavail(spare_tgt)) {
-				D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
-					f_shard->fs_fseq, "same fseq %u!\n",
-					f_shard->fs_fseq);
+			D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
+				  f_shard->fs_fseq, "same fseq %u!\n",
+				  f_shard->fs_fseq);
 
 			/* If the spare target fseq > the current object pool
 			* version, the current failure shard will be handled
@@ -822,10 +822,10 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 			*/
 			if (f_shard->fs_status == PO_COMP_ST_DOWN)
 				D_ASSERTF(spare_tgt->ta_comp.co_status !=
-					PO_COMP_ST_DOWNOUT,
-					"down fseq(%u) < downout fseq(%u)\n",
-					f_shard->fs_fseq,
-					spare_tgt->ta_comp.co_fseq);
+					  PO_COMP_ST_DOWNOUT,
+					  "down fseq(%u) < downout fseq(%u)\n",
+					  f_shard->fs_fseq,
+					  spare_tgt->ta_comp.co_fseq);
 
 			f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 			f_shard->fs_status = spare_tgt->ta_comp.co_status;
@@ -839,8 +839,8 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 				current = &f_shard->fs_list;
 			} else {
 				f_tmp = d_list_entry(current,
-						struct failed_shard,
-						fs_list);
+						     struct failed_shard,
+						     fs_list);
 				if (f_shard->fs_fseq < f_tmp->fs_fseq)
 					current = &f_shard->fs_list;
 			}
@@ -873,8 +873,8 @@ next_fail:
 
 static int
 mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
-			struct pool_target **target, uint8_t *dom_used,
-			uint32_t dom_bytes)
+			   struct pool_target **target, uint8_t *dom_used,
+			   uint32_t dom_bytes)
 {
 	struct pool_target      *tgts;
 	unsigned int            tgts_nr;
@@ -884,8 +884,8 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 	int rc;
 
 	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-	daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-	daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
+		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
 
 	/* locate rank in the pool map targets */
 	tgts = pool_map_targets(mmap->mmp_map.pl_poolmap);
@@ -896,8 +896,8 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 
 	for (pos = 0; pos < tgts_nr; pos++) {
 		if (rank == tgts[pos].ta_comp.co_rank &&
-		(tgt == tgts[pos].ta_comp.co_index))
-		break;
+		    (tgt == tgts[pos].ta_comp.co_index))
+			break;
 	}
 	if (pos == tgts_nr)
 		return -DER_INVAL;
@@ -906,34 +906,34 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 
 
 	struct pool_domain *current_dom;
-	struct pool_domain * root;
+	struct pool_domain *root;
 
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
-			PO_COMP_ID_ALL, &root);
+				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
 		return -DER_NONEXIST;
 	}
 	current_dom = root;
 
-	while(current_dom->do_children != NULL) {
+	while (current_dom->do_children != NULL) {
 		struct pool_domain *temp_dom;
 		int index;
 		uint64_t child_pos;
 
 		child_pos = (current_dom->do_children) - root;
 
-		for(index = 0; index < current_dom->do_child_nr; ++index) {
+		for (index = 0; index < current_dom->do_child_nr; ++index) {
 			temp_dom = &(current_dom->do_children[index]);
 			int num_children = temp_dom->do_target_nr;
-			int last = num_children-1;
+			int last = num_children - 1;
 			struct pool_target *start = &(temp_dom->do_targets[0]);
 			struct pool_target *end = &(temp_dom->do_targets[last]);
 
-			if((start <= (*target)) && ((*target) <= end)) {
+			if ((start <= (*target)) && ((*target) <= end)) {
 				current_dom = temp_dom;
 				set_bit(dom_used, (index + child_pos),
-						dom_bytes);
+					dom_bytes);
 				break;
 			}
 		}
@@ -980,14 +980,14 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
  */
 static int
 get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
-		struct mapless_obj_placement *mop, daos_obj_id_t oid,
-		d_list_t *remap_list, struct daos_obj_md *md)
+		  struct mapless_obj_placement *mop, daos_obj_id_t oid,
+		  d_list_t *remap_list, struct daos_obj_md *md)
 {
-	struct pool_target	*target;
-	uint8_t			*dom_used;
-	uint32_t		*used_targets;
-	uint64_t		key;
-	struct pool_domain 	*root;
+	struct pool_target      *target;
+	uint8_t                 *dom_used;
+	uint32_t                *used_targets;
+	uint64_t                key;
+	struct pool_domain      *root;
 	int i, j, k, rc;
 
 	/* Set the pool map version */
@@ -1009,17 +1009,17 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 		return -DER_NOMEM;
 
 	if (daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-			daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-		    	daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK) {
+	    daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
+	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK) {
 
 		rc = mapless_obj_spec_place_get(mmap, oid, &target, dom_used,
-				mmap->dom_used_length);
+						mmap->dom_used_length);
 
 		if (rc) {
 			D_ERROR("special oid "DF_OID" failed: rc %d\n",
 				DP_OID(oid), rc);
 			return rc;
-                }
+		}
 
 		layout->ol_shards[0].po_target = target->ta_comp.co_id;
 		layout->ol_shards[0].po_shard = 0;
@@ -1031,13 +1031,14 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 				D_GOTO(out, rc);
 		}
 
-		j = 1; k = 1;
+		j = 1;
+		k = 1;
 		key = oid.lo;
 
-	 }
+	}
 
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
-			PO_COMP_ID_ALL, &root);
+				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
 		rc = -DER_NONEXIST;
@@ -1050,7 +1051,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 			uint32_t fseq;
 
 			get_target(root, &target, crc(key, k), dom_used,
-				used_targets, k, mmap->dom_used_length);
+				   used_targets, k, mmap->dom_used_length);
 
 			tgt_id = target->ta_comp.co_id;
 			fseq = target->ta_comp.co_fseq;
@@ -1070,7 +1071,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 
 	obj_remap_shards(mmap, md, layout, mop, remap_list, dom_used, key);
 out:
-	if(rc) {
+	if (rc) {
 		D_ERROR("mapless_obj_layout_fill failed, rc %d.\n", rc);
 		mapless_remap_free_all(remap_list);
 	}
@@ -1117,7 +1118,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 {
 	struct pool_domain      *root;
 	struct pl_mapless_map   *mmap;
-	struct pool_domain	*doms;
+	struct pool_domain      *doms;
 	int                     rc;
 
 	D_ALLOC_PTR(mmap);
@@ -1128,7 +1129,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	mmap->mmp_map.pl_poolmap = poolmap;
 	pool_map_print(poolmap);
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
-			PO_COMP_ID_ALL, &root);
+				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
 		rc = -DER_NONEXIST;
@@ -1136,9 +1137,9 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	}
 
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap,
-			mia->ia_mapless.domain, PO_COMP_ID_ALL, &doms);
-        if (rc <= 0) {
-                rc = (rc == 0) ? -DER_INVAL : rc;
+				  mia->ia_mapless.domain, PO_COMP_ID_ALL, &doms);
+	if (rc <= 0) {
+		rc = (rc == 0) ? -DER_INVAL : rc;
 		goto ERR;
 	}
 
@@ -1182,21 +1183,21 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		  struct daos_obj_shard_md *shard_md,
 		  struct pl_obj_layout **layout_pp)
 {
-	struct pl_mapless_map		*mmap;
-	struct pl_obj_layout		*layout;
-	struct mapless_obj_placement 	mop;
-	d_list_t			remap_list;
-	daos_obj_id_t           	oid;
-	int				rc;
+	struct pl_mapless_map           *mmap;
+	struct pl_obj_layout            *layout;
+	struct mapless_obj_placement    mop;
+	d_list_t                        remap_list;
+	daos_obj_id_t                   oid;
+	int                             rc;
 
 	mmap = pl_map2mplmap(map);
 	oid = md->omd_id;
 
 	rc = mapless_obj_placement_get(mmap, md, shard_md, &mop);
 	if (rc) {
-                D_ERROR("mapless_obj_placement_get failed, rc %d.\n", rc);
-                return rc;
-        }
+		D_ERROR("mapless_obj_placement_get failed, rc %d.\n", rc);
+		return rc;
+	}
 
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(mop.mop_grp_nr * mop.mop_grp_size, &layout);
@@ -1246,14 +1247,14 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			 uint32_t *shard_idx, unsigned int array_size,
 			 int myrank)
 {
-	struct pl_mapless_map   	*mmap;
-	struct pl_obj_layout    	*layout;
-	d_list_t		   	remap_list;
-	struct failed_shard  		*f_shard;
-	struct pl_obj_shard       	*l_shard;
-	struct mapless_obj_placement 	mop;
-	daos_obj_id_t           	oid;
-	int 				rc;
+	struct pl_mapless_map           *mmap;
+	struct pl_obj_layout            *layout;
+	d_list_t                        remap_list;
+	struct failed_shard             *f_shard;
+	struct pl_obj_shard             *l_shard;
+	struct mapless_obj_placement    mop;
+	daos_obj_id_t                   oid;
+	int                             rc;
 
 	int idx = 0;
 
@@ -1269,15 +1270,15 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	rc = mapless_obj_placement_get(mmap, md, shard_md, &mop);
 	if (rc) {
-                D_ERROR("mapless_obj_placement_get failed, rc %d.\n", rc);
-                return rc;
-        }
+		D_ERROR("mapless_obj_placement_get failed, rc %d.\n", rc);
+		return rc;
+	}
 
 	if (mop.mop_grp_size == 1) {
-                D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
-                        DP_OID(md->omd_id));
-                return 0;
-        }
+		D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
+			DP_OID(md->omd_id));
+		return 0;
+	}
 
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(mop.mop_grp_size * mop.mop_grp_nr, &layout);
@@ -1319,23 +1320,23 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					goto fill;
 
 				leader = pl_select_leader(md->omd_id,
-					l_shard->po_shard, layout->ol_nr,
-					true, pl_obj_get_shard, layout);
+							  l_shard->po_shard, layout->ol_nr,
+							  true, pl_obj_get_shard, layout);
 
 				if (leader < 0) {
 					D_WARN("Not sure whether current shard "
-						"is leader or not for obj "
-						DF_OID" , fseq:%d, status:%d, "
-						"ver:%d, shard:%d, rc = %d\n",
-						DP_OID(md->omd_id),
-						f_shard->fs_fseq,
-						f_shard->fs_status, rebuild_ver,
-						l_shard->po_shard, leader);
-						goto fill;
+					       "is leader or not for obj "
+					       DF_OID" , fseq:%d, status:%d, "
+					       "ver:%d, shard:%d, rc = %d\n",
+					       DP_OID(md->omd_id),
+					       f_shard->fs_fseq,
+					       f_shard->fs_status, rebuild_ver,
+					       l_shard->po_shard, leader);
+					goto fill;
 				}
 
 				rc = pool_map_find_target(map->pl_poolmap,
-							leader, &target);
+							  leader, &target);
 				D_ASSERT(rc == 1);
 
 				if (myrank != target->ta_comp.co_rank) {
