@@ -100,12 +100,12 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 
 	info, err := security.DomainInfoFromUnixConn(client.Conn)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to get credentials for client socket")
+		return nil, errors.WithMessage(err, "Unable to get credentials for client socket")
 	}
 
 	response, err := security.AuthSysRequestFromCreds(m.ext, info)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get AuthSys struct")
+		return nil, errors.WithMessage(err, "Failed to get AuthSys struct")
 	}
 
 	responseBytes, err := proto.Marshal(response)

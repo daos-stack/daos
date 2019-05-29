@@ -128,7 +128,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 
 	verifier, err := HashFromToken(&token)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to generate verifier")
+		return nil, errors.WithMessage(err, "Unable to generate verifier")
 	}
 
 	verifierToken := auth.Token{
