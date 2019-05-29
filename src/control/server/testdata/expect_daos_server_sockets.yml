@@ -1,8 +1,7 @@
 name: daos_server
 servers:
 - rank: null
-  targets:
-  - 0-7
+  targets: 8
   nr_xs_helpers: 2
   first_core: 0
   fabric_iface: eth0
