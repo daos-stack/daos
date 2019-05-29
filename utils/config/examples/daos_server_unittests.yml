@@ -10,7 +10,9 @@ control_log_file: /tmp/daos_control.log
 # single server instance per config file for now
 servers:
 -
-  targets: [0-0]            # map to -t 1, just count number of cpus in the range for now
+  targets: 1                # count of storage targets per each server
+  first_core: 0             # offset of the first core for service xstreams
+  nr_xs_helpers: 0          # count of offload/helper xstreams per target
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
