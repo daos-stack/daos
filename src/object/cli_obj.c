@@ -921,8 +921,11 @@ struct obj_auxi_args {
 	int				 result;
 	d_list_t			 shard_task_head;
 	tse_task_t			*obj_task;
-	struct daos_obj_shard_tgt	*fw_shard_tgts;
-	uint32_t			 fw_cnt;
+	struct daos_obj_shard_tgt	*fw_shard_tgts_inline;
+	struct daos_obj_shard_tgt	**fw_shard_tgts;
+	uint32_t			*fw_cnt;
+	uint32_t			 fw_cnt_inline;
+	uint32_t			 fw_rdg_count;
 };
 
 static inline bool
@@ -1177,8 +1180,24 @@ obj_comp_cb(tse_task_t *task, void *data)
 		task->dt_result = obj_auxi->result;
 
 	if (!obj_auxi->io_retry) {
-		D_FREE(obj_auxi->fw_shard_tgts);
-		obj_auxi->fw_cnt = 0;
+		int	i;
+
+		if (obj_auxi->fw_shard_tgts != NULL) {
+			for (i = 0; i < obj_auxi->fw_rdg_count; i++)
+				D_FREE(obj_auxi->fw_shard_tgts[i]);
+			obj_auxi->fw_rdg_count = 0;
+
+			if (obj_auxi->fw_shard_tgts !=
+			    &obj_auxi->fw_shard_tgts_inline)
+				D_FREE(obj_auxi->fw_shard_tgts);
+			obj_auxi->fw_shard_tgts = NULL;
+		}
+
+		if (obj_auxi->fw_cnt != &obj_auxi->fw_cnt_inline &&
+		    obj_auxi->fw_cnt !=  NULL)
+			D_FREE(obj_auxi->fw_cnt);
+		obj_auxi->fw_cnt = NULL;
+
 		if (head != NULL) {
 			tse_task_list_traverse(head, shard_task_remove, NULL);
 			D_ASSERT(d_list_empty(head));
@@ -1387,7 +1406,7 @@ shard_update_task(tse_task_t *task)
 		}
 	}
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE) &&
-	    args->auxi.obj_auxi->fw_shard_tgts == NULL) {
+	    args->auxi.obj_auxi->fw_shard_tgts[0] == NULL) {
 		shard_tmp = daos_fail_value_get();
 		/* to trigger retry on all other shards */
 		if (args->auxi.shard != shard_tmp) {
@@ -1414,8 +1433,8 @@ shard_update_task(tse_task_t *task)
 	rc = dc_obj_shard_update(obj_shard, args->epoch, args->dkey, args->nr,
 				 args->iods, args->sgls, &args->auxi.map_ver,
 				 args->auxi.start_shard,
-				 args->auxi.obj_auxi->fw_shard_tgts,
-				 args->auxi.obj_auxi->fw_cnt, task,
+				 args->auxi.obj_auxi->fw_shard_tgts[0],
+				 args->auxi.obj_auxi->fw_cnt[0], task,
 				 &args->dti, args->auxi.obj_auxi->flags);
 
 	obj_shard_close(obj_shard);
@@ -1511,15 +1530,49 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }
 
+struct shard_reset_target {
+	unsigned int		 srt_is_punch:1;
+	unsigned int		 srt_rdg_count;
+	unsigned int		*srt_shards;
+};
+
+struct shard_punch_args {
+	struct shard_auxi_args	 pa_auxi;
+	uuid_t			 pa_coh_uuid;
+	uuid_t			 pa_cont_uuid;
+	daos_obj_punch_t	*pa_api_args;
+	uint64_t		 pa_dkey_hash;
+	daos_epoch_t		 pa_epoch;
+	struct dtx_id		 pa_dti;
+	uint32_t		 pa_opc;
+	uint32_t		 pa_rdg_idx;
+};
+
 static int
 shard_task_reset_target(tse_task_t *shard_task, void *arg)
 {
-	struct shard_auxi_args	*shard_arg;
-	uint32_t		 shard = *(uint32_t *)arg;
+	struct shard_reset_target	*srt = arg;
+	struct shard_auxi_args		*shard;
+	int				 idx;
 
-	shard_arg = tse_task_buf_embedded(shard_task, sizeof(*shard_arg));
-	shard_arg->shard = shard;
-	shard_arg->target = obj_shard2tgtid(shard_arg->obj, shard_arg->shard);
+	if (srt->srt_is_punch) {
+		struct shard_punch_args	*punch;
+
+		punch = tse_task_buf_embedded(shard_task, sizeof(*punch));
+		shard = &punch->pa_auxi;
+		idx = punch->pa_rdg_idx;
+	} else {
+		struct shard_update_args	*update;
+
+		update = tse_task_buf_embedded(shard_task, sizeof(*update));
+		shard = &update->auxi;
+		idx = 0;
+	}
+
+	D_ASSERT(idx < srt->srt_rdg_count);
+
+	shard->shard = srt->srt_shards[idx];
+	shard->target = obj_shard2tgtid(shard->obj, shard->shard);
 
 	return 0;
 }
@@ -1594,10 +1647,14 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	start_shard = shard;
 
-	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
-		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
+	D_DEBUG(DB_IO, "update "DF_OID" dkey %llu start %u cnt %u\n",
+		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash,
+		shard, shards_cnt);
+	obj_auxi->fw_shard_tgts = &obj_auxi->fw_shard_tgts_inline;
+	obj_auxi->fw_cnt = &obj_auxi->fw_cnt_inline;
+	obj_auxi->fw_rdg_count = 1;
 	rc = obj_shards_2_fwtgts(obj, map_ver, tgt_set, &shard, &shards_cnt,
-				 &obj_auxi->fw_shard_tgts, &obj_auxi->fw_cnt);
+				 obj_auxi->fw_shard_tgts, obj_auxi->fw_cnt);
 	if (rc != 0) {
 		D_ERROR("update "DF_OID", obj_shards_2_fwtgts failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
@@ -1621,9 +1678,15 @@ dc_obj_update(tse_task_t *task)
 		obj_auxi->flags = ORF_RESEND;
 
 		/* The RPC may need to be resent to new leader. */
-		if (srv_io_dispatch)
+		if (srv_io_dispatch) {
+			struct shard_reset_target	srt;
+
+			srt.srt_is_punch = 0;
+			srt.srt_rdg_count = 1;
+			srt.srt_shards = &shard;
 			tse_task_list_traverse(head, shard_task_reset_target,
-					       &shard);
+					       &srt);
+		}
 
 		goto task_sched;
 	}
@@ -1852,17 +1915,6 @@ dc_obj_list_rec(tse_task_t *task)
 				    task);
 }
 
-struct shard_punch_args {
-	struct shard_auxi_args	 pa_auxi;
-	uuid_t			 pa_coh_uuid;
-	uuid_t			 pa_cont_uuid;
-	daos_obj_punch_t	*pa_api_args;
-	uint64_t		 pa_dkey_hash;
-	daos_epoch_t		 pa_epoch;
-	struct dtx_id		 pa_dti;
-	uint32_t		 pa_opc;
-};
-
 static int
 shard_punch_task(tse_task_t *task)
 {
@@ -1870,6 +1922,7 @@ shard_punch_task(tse_task_t *task)
 	daos_obj_punch_t		*api_args;
 	struct dc_object		*obj;
 	struct dc_obj_shard		*obj_shard;
+	uint32_t			 idx;
 	int				 rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
@@ -1889,12 +1942,13 @@ shard_punch_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->pa_dkey_hash,
 				 sizeof(args->pa_dkey_hash));
 	api_args = args->pa_api_args;
+	idx = args->pa_rdg_idx;
 	rc = dc_obj_shard_punch(obj_shard, args->pa_opc, args->pa_epoch,
 				api_args->dkey, api_args->akeys,
 				api_args->akey_nr, args->pa_coh_uuid,
 				args->pa_cont_uuid, &args->pa_auxi.map_ver,
-				args->pa_auxi.obj_auxi->fw_shard_tgts,
-				args->pa_auxi.obj_auxi->fw_cnt, task,
+				args->pa_auxi.obj_auxi->fw_shard_tgts[idx],
+				args->pa_auxi.obj_auxi->fw_cnt[idx], task,
 				&args->pa_dti, args->pa_auxi.obj_auxi->flags);
 
 	obj_shard_close(obj_shard);
@@ -1912,9 +1966,11 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	daos_handle_t		 coh;
 	uuid_t			 coh_uuid;
 	uuid_t			 cont_uuid;
-	unsigned int		 shard_first;
+	unsigned int		 shard_first_inline;
 	unsigned int		 shard_nr;
 	unsigned int		 map_ver;
+	unsigned int		 grps = 1;
+	unsigned int		 *shard_first = &shard_first_inline;
 	uint64_t		 dkey_hash = 0;
 	daos_epoch_t		 epoch;
 	int			 i = 0;
@@ -1964,26 +2020,91 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 		goto out_task;
 
 	if (opc == DAOS_OBJ_RPC_PUNCH) {
-		obj_ptr2shards(obj, &shard_first, &shard_nr);
+		int	grp_size;
+
+		obj_ptr2shards(obj, shard_first, &shard_nr);
+		if (!srv_io_dispatch || shard_nr == 1)
+			goto single_rdg;
+
+		grp_size = obj_get_grp_size(obj);
+		grps = shard_nr / grp_size;
+		D_ASSERT(grps >= 1);
+		D_ASSERT(grp_size * grps == shard_nr);
+
+		if (grps == 1)
+			goto single_rdg;
+
+		/* XXX: Punch object with multiple stripes is some complex.
+		 *	It is possible that these stripes belong to multiple
+		 *	redundancy groups. According to current DTX mechanism,
+		 *	the OBJ_PUNCH RPC needs to be sent to every leader of
+		 *	related redundancy groups by the client. But there is
+		 *	no guarantee that all related redundancy groups can
+		 *	punch related stripe successfully. So under some bad
+		 *	cases, the object may be partially punched. The issue
+		 *	will be resolved via DAOS distributed transaction in
+		 *	the future.
+		 */
+		D_ALLOC_ARRAY(shard_first, grps);
+		if (shard_first == NULL)
+			D_GOTO(out_task, rc = -DER_NOMEM);
+
+		obj_auxi->fw_rdg_count = grps;
+		D_ALLOC_ARRAY(obj_auxi->fw_shard_tgts, grps);
+		if (obj_auxi->fw_shard_tgts == NULL)
+			D_GOTO(out_task, rc = -DER_NOMEM);
+
+		D_ALLOC_ARRAY(obj_auxi->fw_cnt, grps);
+		if (obj_auxi->fw_cnt == NULL)
+			D_GOTO(out_task, rc = -DER_NOMEM);
+
+		for (i = 0; i < grps; i++) {
+			shard_first[i] = i * grp_size;
+			shard_nr = grp_size;
+			rc = obj_shards_2_fwtgts(obj, map_ver, 0UL,
+						 &shard_first[i], &shard_nr,
+						 &obj_auxi->fw_shard_tgts[i],
+						 &obj_auxi->fw_cnt[i]);
+			if (rc != 0) {
+				D_ERROR("punch "DF_OID
+					", obj_shards_2_fwtgts failed(1) %d.\n",
+					DP_OID(obj->cob_md.omd_id), rc);
+				goto out_task;
+			}
+
+			D_ASSERT(shard_nr == 1);
+		}
+
+		shard_nr = grps;
+		goto fw_prepared;
 	} else {
 		D_ASSERTF(api_args->dkey != NULL, "NULL dkey\n");
 
 		dkey_hash = obj_dkey2hash(api_args->dkey);
 		rc = obj_dkeyhash2update_grp(obj, dkey_hash, map_ver,
-					     &shard_first, &shard_nr);
+					     shard_first, &shard_nr);
 		if (rc != 0)
 			goto out_task;
 	}
-	D_DEBUG(DB_IO, "punch "DF_OID" start %u cnt %u\n",
-		DP_OID(obj->cob_md.omd_id), shard_first, shard_nr);
-	rc = obj_shards_2_fwtgts(obj, map_ver, 0UL, &shard_first, &shard_nr,
-				 &obj_auxi->fw_shard_tgts, &obj_auxi->fw_cnt);
+
+single_rdg:
+	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu start %u cnt %u\n",
+		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash,
+		*shard_first, shard_nr);
+
+	obj_auxi->fw_shard_tgts = &obj_auxi->fw_shard_tgts_inline;
+	obj_auxi->fw_cnt = &obj_auxi->fw_cnt_inline;
+	obj_auxi->fw_rdg_count = 1;
+	rc = obj_shards_2_fwtgts(obj, map_ver, 0UL, shard_first, &shard_nr,
+				 obj_auxi->fw_shard_tgts,
+				 obj_auxi->fw_cnt);
 	if (rc != 0) {
 		D_ERROR("punch "DF_OID", obj_shards_2_fwtgts failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
 		goto out_task;
 	}
 
+fw_prepared:
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = api_task;
 	head = &obj_auxi->shard_task_head;
@@ -1992,9 +2113,15 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 		obj_auxi->flags = ORF_RESEND;
 
 		/* The RPC may need to be resent to new leader. */
-		if (srv_io_dispatch)
+		if (srv_io_dispatch) {
+			struct shard_reset_target	srt;
+
+			srt.srt_is_punch = 1;
+			srt.srt_rdg_count = grps;
+			srt.srt_shards = shard_first;
 			tse_task_list_traverse(head, shard_task_reset_target,
-					       &shard_first);
+					       &srt);
+		}
 
 		goto task_sched;
 	}
@@ -2010,7 +2137,10 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 			goto out_task;
 
 		args = tse_task_buf_embedded(task, sizeof(*args));
-		shard			= shard_first + i;
+		if (shard_first != &shard_first_inline)
+			shard		= shard_first[i];
+		else
+			shard		= shard_first_inline + i;
 		args->pa_api_args	= api_args;
 		args->pa_epoch		= epoch;
 		daos_dti_gen(&args->pa_dti, !srv_io_dispatch);
@@ -2021,6 +2151,10 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 		args->pa_auxi.obj_auxi	= obj_auxi;
 		args->pa_opc		= opc;
 		args->pa_dkey_hash	= dkey_hash;
+		if (shard_first != &shard_first_inline)
+			args->pa_rdg_idx = i;
+		else
+			args->pa_rdg_idx = 0;
 		uuid_copy(args->pa_coh_uuid, coh_uuid);
 		uuid_copy(args->pa_cont_uuid, cont_uuid);
 
@@ -2035,6 +2169,9 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 	}
 
 task_sched:
+	if (shard_first != &shard_first_inline && shard_first != NULL)
+		D_FREE(shard_first);
+
 	obj_shard_task_sched(obj_auxi);
 	return rc;
 
@@ -2043,6 +2180,9 @@ out_task:
 		tse_task_complete(api_task, rc);
 	else
 		tse_task_list_traverse(head, shard_task_abort, &rc);
+
+	if (shard_first != &shard_first_inline && shard_first != NULL)
+		D_FREE(shard_first);
 
 	return rc;
 }

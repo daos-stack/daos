@@ -265,38 +265,38 @@ static const ProtobufCFieldDescriptor auth__sys__field_descriptors[6] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "uid",
+    "user",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Auth__Sys, uid),
+    offsetof(Auth__Sys, user),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "gid",
+    "group",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Auth__Sys, gid),
+    offsetof(Auth__Sys, group),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "gids",
+    "groups",
     5,
     PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Auth__Sys, n_gids),
-    offsetof(Auth__Sys, gids),
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Auth__Sys, n_groups),
+    offsetof(Auth__Sys, groups),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -314,12 +314,12 @@ static const ProtobufCFieldDescriptor auth__sys__field_descriptors[6] =
   },
 };
 static const unsigned auth__sys__field_indices_by_name[] = {
-  3,   /* field[3] = gid */
-  4,   /* field[4] = gids */
+  3,   /* field[3] = group */
+  4,   /* field[4] = groups */
   1,   /* field[1] = machinename */
   5,   /* field[5] = secctx */
   0,   /* field[0] = stamp */
-  2,   /* field[2] = uid */
+  2,   /* field[2] = user */
 };
 static const ProtobufCIntRange auth__sys__number_ranges[1 + 1] =
 {

@@ -38,6 +38,7 @@ enum ResponseStatus {
 	CTRL_ERR_SCM = -3;	// SCM subsystem error
 	CTRL_ERR_APP = -4;	// Other application error
 	CTRL_ERR_UNKNOWN = -5;	// Unknown error
+	CTRL_NO_IMPL = -6;	// No implementation
 }
 
 message ResponseState {

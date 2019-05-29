@@ -29,12 +29,23 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"strconv"
 
 	"github.com/daos-stack/daos/src/control/security/auth"
 
 	"github.com/golang/protobuf/proto"
 )
+
+// User is an interface wrapping a representation of a specific system user
+type User interface {
+	Username() string
+	GroupIDs() ([]uint32, error)
+}
+
+// UserExt is an interface that wraps system user-related external functions
+type UserExt interface {
+	LookupUserID(uid uint32) (User, error)
+	LookupGroupID(gid uint32) (*user.Group, error)
+}
 
 // HashFromToken will return a SHA512 hash of the token data
 func HashFromToken(token *auth.Token) ([]byte, error) {
@@ -52,49 +63,66 @@ func HashFromToken(token *auth.Token) ([]byte, error) {
 	return hashBytes, nil
 }
 
+func sysNameToPrincipalName(name string) string {
+	return name + "@"
+}
+
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(creds *DomainInfo) (*auth.Credential, error) {
+func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, error) {
 	if creds == nil {
 		return nil, errors.New("No credentials supplied")
 	}
 
-	uid := strconv.FormatUint(uint64(creds.creds.Uid), 10)
-	userInfo, _ := user.LookupId(uid)
-	groups, _ := userInfo.GroupIds()
+	userInfo, err := ext.LookupUserID(creds.creds.Uid)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to lookup uid %v: %v",
+			creds.creds.Uid, err)
+	}
+
+	groupInfo, err := ext.LookupGroupID(creds.creds.Gid)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to lookup gid %v: %v",
+			creds.creds.Gid, err)
+	}
+
+	groups, err := userInfo.GroupIDs()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get group IDs for user %v: %v",
+			userInfo.Username(), err)
+	}
 
 	name, err := os.Hostname()
 	if err != nil {
 		name = "unavailable"
 	}
 
-	var gids = []uint32{}
+	var groupList = []string{}
 
 	// Convert groups to gids
-	for _, gstr := range groups {
-		gid, err := strconv.Atoi(gstr)
+	for _, gid := range groups {
+		gInfo, err := ext.LookupGroupID(gid)
 		if err != nil {
 			// Skip this group
 			continue
 		}
-		gids = append(gids, uint32(gid))
+		groupList = append(groupList, sysNameToPrincipalName(gInfo.Name))
 	}
 
 	// Craft AuthToken
 	sys := auth.Sys{
 		Stamp:       0,
 		Machinename: name,
-		Uid:         creds.creds.Uid,
-		Gid:         creds.creds.Gid,
-		Gids:        gids,
+		User:        sysNameToPrincipalName(userInfo.Username()),
+		Group:       sysNameToPrincipalName(groupInfo.Name),
+		Groups:      groupList,
 		Secctx:      creds.ctx}
 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
-		return nil, err
+		return nil, fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
 	}
 	token := auth.Token{
 		Flavor: auth.Flavor_AUTH_SYS,
@@ -102,8 +130,7 @@ func AuthSysRequestFromCreds(creds *DomainInfo) (*auth.Credential, error) {
 
 	verifier, err := HashFromToken(&token)
 	if err != nil {
-		fmt.Errorf("Unable to generate verifier (%s)", err)
-		return nil, err
+		return nil, fmt.Errorf("Unable to generate verifier (%s)", err)
 	}
 
 	verifierToken := auth.Token{
