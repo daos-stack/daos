@@ -11,7 +11,8 @@ function find_build_source()
 		if [ "${path}" == "/" ]; then
 			break
 		fi
-		test -e "${path}/.build_vars.sh" && echo "${path}/.build_vars.sh" && return
+		bvp="${path}/.build_vars.sh"
+		test -e "${bvp}" && echo "${bvp}" && return
 		BASE=$(dirname "${path}")
 	done
 	echo ""
@@ -38,7 +39,7 @@ function setup_environment()
 	build_source=$(find_build_source)
 
 	if [ "${build_source}" == "" ]; then
-		echo "Unable to find .build_source.sh" && exit 1
+		echo "Unable to find .build_vars.sh" && exit 1
 	fi
 
 	source "${build_source}"
