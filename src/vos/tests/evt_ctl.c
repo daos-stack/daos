@@ -806,16 +806,19 @@ if (epoch < NUM_EPOCHS) {
 			for (offset = epoch-1; offset >= 1;
 				offset--) {
 				if (evtdata[offset][loop_count] != 0) {
-					val[count] = evtdata[offset][loop_count];
+					val[count] =
+					evtdata[offset][loop_count];
 					count++;
 			   }
 			}
 		}
 	} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
-		for (loop_count = epoch; loop_count < NUM_EXTENTS+epoch; loop_count++) {
+		for (loop_count = epoch;
+			loop_count < NUM_EXTENTS+epoch; loop_count++) {
 			for (offset = epoch; offset >= 1 ; offset--) {
 				if (evtdata[offset][loop_count] != 0) {
-					val[count] = evtdata[offset][loop_count];
+					val[count] =
+					evtdata[offset][loop_count];
 				    count++;
 				}
 			}
