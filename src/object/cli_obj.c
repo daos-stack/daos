@@ -502,6 +502,11 @@ out:
 	return rc;
 }
 
+/* The tgt_set parameter is a bit map indicating the proper subset of targets
+ * to forward the update for EC ojbects. For non-EC objects, and for EC updates
+ * that include a full-stripe update (i.e., parity has been generated), the
+ * tgt_set varible is set to zero.
+ */
 static int
 obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		    uint32_t *start_shard, uint32_t *shard_cnt,
@@ -526,15 +531,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 	}
 	lead_shard = rc;
 	if (tgt_set) {
-		for (i = 0; i < *shard_cnt; i++) {
+		for (i = 0; i < *shard_cnt; i++)
 			if (*start_shard + i != lead_shard &&
-			    tgt_set & (1UL << i)) {
+			    tgt_set & (1UL << i))
 				new_fw_cnt++;
-			}
-		}
-	} else
+	} else {
 		new_fw_cnt = *shard_cnt - 1;
-
+	}
 	if (shard_tgts != NULL && *fw_cnt != new_fw_cnt) {
 		/* fw_cnt possibly changed per progressive layout */
 		D_FREE(shard_tgts);
@@ -1563,25 +1566,10 @@ dc_obj_update(tse_task_t *task)
 
 	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
 	if (oca->ca_resil == DAOS_RES_EC) {
-		rc = ec_obj_update(task, obj->cob_md.omd_id, oca, &tgt_set);
+		rc = ec_obj_update_encode(task, obj->cob_md.omd_id, oca,
+					  &tgt_set);
 		if (rc != 0)
 			goto out_task;
-		/* If a full stripe, ec_obj_update sets tgt_set to all 1s. */
-		if (tgt_set != 0) {
-			/* tgt_set == 0 means send to all forwarding targets
-			 * from leader. If it's not zero here, it means that
-			 * ec_object_update encoded a full stripe. Hence
-			 * the update should go to all targets.
-			 */
-			tgt_set = 0;
-		} else {
-			/* Called for updates with no full stripes.
-			 * Builds a bit map only if forwarding targets are
-			 * a proper subset. Sets tgt_set to zero if all targets
-			 * are addressed.
-			 */
-			ec_init_tgt_set(args->iods, args->nr, oca, &tgt_set);
-		}
 	}
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
