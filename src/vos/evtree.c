@@ -2848,6 +2848,7 @@ int evt_overhead_get(int alloc_overhead, int tree_order,
 	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
 	ovhd->to_single_size = alloc_overhead + sizeof(struct evt_desc) +
 		sizeof(struct evt_node_entry);
+	ovhd->to_node_rec_size = sizeof(struct evt_node_entry);
 	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
 		(tree_order * sizeof(struct evt_node_entry));
 	ovhd->to_order = tree_order;

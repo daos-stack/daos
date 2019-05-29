@@ -3651,6 +3651,7 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
 	ovhd->to_single_size = ovhd->to_record_msize + btr_size;
 
+	ovhd->to_node_rec_size = btr_size;
 	ovhd->to_order = tree_order;
 	ovhd->to_node_size = alloc_overhead + sizeof(struct btr_node) +
 		btr_size * tree_order;

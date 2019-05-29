@@ -58,6 +58,8 @@
 struct daos_tree_overhead {
 	/** Static size of an allocated tree node */
 	int			to_node_size;
+	/** Per entry metadata size in a node (includes pointer and hashed key) */
+	int			to_node_rec_size;
 	/** Dynamic metadata size of an allocated record. */
 	int			to_record_msize;
 	/** Size of first insertion.  Full node allocated on second key */

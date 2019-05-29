@@ -57,12 +57,13 @@
 #define TREE_FMT(name, type, feats)		\
 "  " #name ":\n"				\
 "    node_size: %d\n"				\
+"    node_rec_size: %d\n"			\
 "    record_msize: %d\n"			\
 "    single_size: %d\n"				\
 "    order: %d\n"
 
-#define TREE_PRINT(name, type, feats)			\
-	name.to_node_size, name.to_record_msize,	\
+#define TREE_PRINT(name, type, feats)					\
+	name.to_node_size, name.to_node_rec_size, name.to_record_msize,	\
 	name.to_single_size, name.to_order,
 
 char *
