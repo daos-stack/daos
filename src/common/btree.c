@@ -34,6 +34,13 @@
 #include <daos/dtx.h>
 #include <daos_srv/vos_types.h>
 
+/** A few steps of btree node size to try before allocating a full node.  The
+ * last entry is BTR_ORDER_MAX which will force using the configured tree order
+ */
+const int btree_node_size_idx[] = {
+	1, 5, 11, 23, BTR_ORDER_MAX,
+};
+
 /**
  * Tree node types.
  * NB: a node can be both root and leaf.
@@ -122,10 +129,10 @@ struct btr_context {
 	struct btr_instance		 tc_tins;
 	/** embedded iterator */
 	struct btr_iterator		 tc_itr;
-	/** cached tree order, avoid loading from slow memory */
-	short				 tc_order;
+	/** cached configured tree order */
+	uint16_t				 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
-	short				 tc_depth;
+	uint16_t				 tc_depth;
 	/**
 	 * returned value of the probe, it should be reset after upsert
 	 * or delete because the probe path could have been changed.
@@ -301,17 +308,17 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 
 	root = tcx->tc_tins.ti_root;
 	if (root == NULL || root->tr_class == 0) { /* tree creation */
-		tcx->tc_class	= tree_class;
-		tcx->tc_feats	= tree_feats;
-		tcx->tc_order	= tree_order;
-		depth		= 0;
+		tcx->tc_class		= tree_class;
+		tcx->tc_feats		= tree_feats;
+		tcx->tc_order		= tree_order;
+		depth			= 0;
 		D_DEBUG(DB_TRACE, "Create context for a new tree\n");
 
 	} else {
-		tcx->tc_class	= root->tr_class;
-		tcx->tc_feats	= root->tr_feats;
-		tcx->tc_order	= root->tr_order;
-		depth		= root->tr_depth;
+		tcx->tc_class		= root->tr_class;
+		tcx->tc_feats		= root->tr_feats;
+		tcx->tc_order		= root->tr_order;
+		depth			= root->tr_depth;
 		D_DEBUG(DB_TRACE, "Load tree context from "DF_X64"\n",
 			root_off);
 	}
@@ -581,7 +588,8 @@ btr_rec_copy_hkey(struct btr_context *tcx, struct btr_record *dst_rec,
 static inline int
 btr_node_size(struct btr_context *tcx)
 {
-	return sizeof(struct btr_node) + tcx->tc_order * btr_rec_size(tcx);
+	return sizeof(struct btr_node) +
+		tcx->tc_tins.ti_root->tr_node_size * btr_rec_size(tcx);
 }
 
 static int
@@ -767,10 +775,15 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 
 	if (in_place)
 		memset(root, 0, sizeof(*root));
-	root->tr_class	= tcx->tc_class;
-	root->tr_feats	= tcx->tc_feats;
-	root->tr_order	= tcx->tc_order;
-	root->tr_node	= BTR_NODE_NULL;
+	root->tr_class		= tcx->tc_class;
+	root->tr_feats		= tcx->tc_feats;
+	root->tr_order		= tcx->tc_order;
+	if (tcx->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
+		root->tr_node_size	= btree_node_size_idx[0];
+	else
+		root->tr_node_size	= tcx->tc_order;
+	root->tr_node_size_idx	= 0;
+	root->tr_node		= BTR_NODE_NULL;
 
 	return 0;
 }
@@ -1161,19 +1174,99 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	return rc;
 }
 
+static inline bool
+btr_root_resize_needed(struct btr_context *tcx)
+{
+	struct btr_root	*root = tcx->tc_tins.ti_root;
+	struct btr_node *nd;
+
+	if (tcx->tc_order == root->tr_node_size)
+		return false; /* As big as it can get */
+
+	nd = btr_off2ptr(tcx, root->tr_node);
+
+	if (nd->tn_keyn != root->tr_node_size)
+		return false;
+
+	return true;
+}
+
+static int
+btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
+		bool *node_alloc)
+{
+	struct btr_root	*root = tcx->tc_tins.ti_root;
+	umem_off_t	 old_node = root->tr_node;
+	struct btr_node	*nd = btr_off2ptr(tcx, old_node);
+	daos_size_t	 old_size = btr_node_size(tcx);
+	int		 new_order;
+	umem_off_t	 nd_off;
+	int		 rc = 0;
+
+	D_ASSERT(root->tr_depth == 1);
+
+	if (btr_has_tx(tcx)) {
+		rc = btr_root_tx_add(tcx);
+		if (rc != 0) {
+			D_ERROR("Failed to add btr_root to transaction\n");
+			return rc;
+		}
+	}
+
+	root->tr_node_size_idx++;
+	new_order = MIN(btree_node_size_idx[root->tr_node_size_idx],
+			tcx->tc_order);
+
+	D_DEBUG(DB_TRACE, "Root node size increase from %d to %d\n",
+		root->tr_node_size, new_order);
+
+	root->tr_node_size = new_order;
+
+	rc = btr_node_alloc(tcx, &nd_off);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Failed to allocate new root\n");
+		return rc;
+	}
+	trace->tr_node = root->tr_node = nd_off;
+	memcpy(btr_off2ptr(tcx, nd_off), nd, old_size);
+	/* NB: Both of the following routines can fail but neither presently
+	 * returns an error code.   For now, ignore this fact.   DAOS-2577
+	 */
+	btr_node_free(tcx, old_node);
+	*node_alloc = true;
+
+	return 0;
+}
+
 static int
 btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 		    struct btr_record *rec)
 {
 	int	rc = 0;
+	bool	node_alloc = false;
 
-	if (btr_has_tx(tcx))
-		btr_node_tx_add(tcx, trace->tr_node);
+	if (btr_root_resize_needed(tcx)) {
+		rc = btr_root_resize(tcx, trace, &node_alloc);
+		if (rc != 0) {
+			D_ERROR("Failed to resize root node: %s", d_errstr(rc));
+			goto done;
+		}
+	}
+
+	if (!node_alloc && btr_has_tx(tcx)) {
+		rc = btr_node_tx_add(tcx, trace->tr_node);
+		if (rc != 0) {
+			D_ERROR("Failed to add node to txn record: %s",
+				d_errstr(rc));
+			goto done;
+		}
+	}
 
 	if (btr_node_is_full(tcx, trace->tr_node))
 		rc = btr_node_split_and_insert(tcx, trace, rec);
 	else
 		btr_node_insert_rec_only(tcx, trace, rec);
+done:
 	return rc;
 }
 
@@ -1792,7 +1885,7 @@ static int
 btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	   uint32_t intent, d_iov_t *key, d_iov_t *val)
 {
-	int	rc;
+	int	 rc;
 
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
@@ -3569,6 +3662,9 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 			" by tree class %d", special_feat, tree_class);
 		*tree_feats |= special_feat;
 	}
+
+	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
+		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
 
 	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
