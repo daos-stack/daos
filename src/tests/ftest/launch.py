@@ -61,30 +61,31 @@ def get_output(cmd):
 
     """
     try:
-        print("Running {}".format(cmd))
+        display("Running {}".format(cmd))
         return subprocess.check_output(
             cmd, stderr=subprocess.STDOUT, shell=True)
 
     except subprocess.CalledProcessError as err:
-        print("Error executing '{}':\n\t{}".format(cmd, err))
+        display("Error executing '{}':\n\t{}".format(cmd, err))
         exit(1)
 
 
 def time_command(cmd):
-    """Execute the command on this host and return its duration.
+    """Execute the command on this host and display its duration.
 
     Args:
         cmd (str): command to time
 
     Returns:
-        int: duration of the command in seconds
+        int: return code of the command
 
     """
-    print("Running {}".format(cmd))
+    display("Running {}".format(cmd))
     start_time = int(time.time())
-    subprocess.call(cmd, shell=True)
+    return_code = subprocess.call(cmd, shell=True)
     end_time = int(time.time())
-    return end_time - start_time
+    display("Total test time: {}s".format(end_time - start_time))
+    return return_code
 
 
 def get_build_environment():
@@ -138,8 +139,8 @@ def get_yaml_data(yaml_file):
                 file_data = open_file.read()
                 yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
             except yaml.YAMLError as error:
-                raise Exception(
-                    "Error reading {}: {}".format(yaml_file, error))
+                display("Error reading {}: {}".format(yaml_file, error))
+                exit(1)
     return yaml_data
 
 
@@ -333,9 +334,10 @@ def run_tests(test_files, sparse, tag_filter, prepare, rename):
             test script name
 
     Returns:
-        None
+        int: a sum of all the return codes of each 'avocado run' command
 
     """
+    return_code = 0
     avocado_logs_dir = None
     if rename:
         avocado_logs_dir = get_output(
@@ -355,7 +357,7 @@ def run_tests(test_files, sparse, tag_filter, prepare, rename):
                 display("Prepared: {}".format(test_cmd))
             else:
                 # Execute and report on the run time of the test
-                display("Total test time: {}s".format(time_command(test_cmd)))
+                return_code += time_command(test_cmd)
 
                 if rename:
                     test_name = os.path.splitext(
@@ -373,6 +375,7 @@ def run_tests(test_files, sparse, tag_filter, prepare, rename):
                         display(
                             "Error renaming {} to {}: {}".format(
                                 test_logs_dir, new_test_logs_dir, error))
+    return return_code
 
 
 def main():
@@ -478,7 +481,9 @@ def main():
     test_files = get_test_files(test_list, machine_mapping, args.debug)
 
     # Run all the tests with their yaml files
-    run_tests(test_files, args.sparse, tag_filter, args.prepare, args.rename)
+    return_code = run_tests(
+        test_files, args.sparse, tag_filter, args.prepare, args.rename)
+    exit(return_code)
 
 
 if __name__ == "__main__":
