@@ -100,17 +100,17 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 
 	info, err := security.DomainInfoFromUnixConn(client.Conn)
 	if err != nil {
-		return nil, errors.Errorf("Unable to get credentials for client socket")
+		return nil, errors.Wrap(err, "Unable to get credentials for client socket")
 	}
 
 	response, err := security.AuthSysRequestFromCreds(m.ext, info)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to get AuthSys struct")
 	}
 
 	responseBytes, err := proto.Marshal(response)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to marshal response")
 	}
 	return responseBytes, nil
 }
