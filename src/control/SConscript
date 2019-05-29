@@ -79,15 +79,22 @@ def scons():
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
-    if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
-        for subdir in ["include", "scripts", "fio_plugin"]:
-            sharedir = join("share", "spdk", subdir)
-            tpath = join(denv.subst("$PREFIX"), sharedir)
-            if not check_dir_exists(tpath):
-                denv.Command(
-                    tpath,
-                    join(denv.subst("$SPDK_PREFIX"), sharedir),
-                    Copy("$TARGET", "$SOURCE"))
+    if denv.subst("$SPDK_PREFIX") != "/usr":
+        if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
+            for subdir in ["scripts", "fio_plugin"]:
+                sharedir = join("share", "spdk", subdir)
+                tpath = join(denv.subst("$PREFIX"), sharedir)
+                if not check_dir_exists(tpath):
+                    denv.Command(
+                        tpath,
+                        join(denv.subst("$SPDK_PREFIX"), sharedir),
+                        Copy("$TARGET", "$SOURCE"))
+        tpath = join(denv.subst("$PREFIX"), "include")
+        if not check_dir_exists(tpath):
+            denv.Command(
+                tpath,
+                join(denv.subst("$SPDK_PREFIX"), "include"),
+                Copy("$TARGET", "$SOURCE"))
 
     # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
@@ -130,7 +137,7 @@ def scons():
     moduleserver = join(gosrc, "server")
     for fname in ["mgmtinit_db.json", "setup_spdk.sh"]:
         denv.Command(
-            join("$PREFIX", "share", "control", fname),
+            join("$PREFIX", "share", "daos", "control", fname),
             join(moduleserver, "init", fname),
             [
                 Delete("$TARGET"),

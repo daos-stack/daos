@@ -857,8 +857,7 @@ create options:\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
   --nvme=BYTES	target NVMe size in bytes (%s)\n\
   --svcn=N	number of pool service replicas (\"%u\")\n\
-  --target=RANKS\n\
-		pool targets like 0:1:2:3:4 (whole group)\n\
+  --target=N	pool targets on server like 0:1:2:3:4 (whole group)\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
 	       default_scm_size, default_nvme_size, default_svc_nreplicas);
 	printf("\
@@ -876,6 +875,7 @@ exclude options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
+  --rank=N	storage server rank \n\
   --target=RANK	target rank\n", default_group);
 	printf("\
 add options:\n\
