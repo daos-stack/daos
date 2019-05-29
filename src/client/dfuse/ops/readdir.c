@@ -137,6 +137,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			ie->ie_dfs = inode->ie_dfs;
 
 			strncpy(ie->ie_name, dirents[i].d_name, NAME_MAX);
+			ie->ie_name[NAME_MAX] = '\0';
 			atomic_fetch_add(&ie->ie_ref, 1);
 
 			/* As this code needs to know the stat struct, including

@@ -87,7 +87,7 @@ struct dfs_obj {
 	/** DAOS object ID of the parent of the object */
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
-	char			name[DFS_MAX_PATH];
+	char			name[DFS_MAX_PATH + 1];
 	/** Symlink value if object is a symbolic link */
 	char			*value;
 };
@@ -260,7 +260,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_sg_list_t	sgls[INODE_AKEYS + 1];
 	d_iov_t	sg_iovs[INODE_AKEYS + 1];
 	daos_iod_t	iods[INODE_AKEYS + 1];
-	char		value[DFS_MAX_PATH];
+	char		value[PATH_MAX];
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
@@ -301,7 +301,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 
 	if (fetch_sym) {
 		/** Set Akey for Symlink Value, will be empty if no symlink */
-		d_iov_set(&sg_iovs[i], value, DFS_MAX_PATH);
+		d_iov_set(&sg_iovs[i], value, PATH_MAX);
 		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
 		i++;
 	}
@@ -600,7 +600,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return -DER_INVAL;
-	if (strlen(name) > DFS_MAX_PATH - 1)
+	if (strlen(name) > DFS_MAX_PATH)
 		return -DER_INVAL;
 	return 0;
 }
@@ -1189,6 +1189,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
+	new_dir.name[DFS_MAX_PATH] = '\0';
 	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), 0,
 			&new_dir);
 	if (rc)
@@ -1245,7 +1246,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
 			struct dfs_entry child_entry;
-			char entry_name[DFS_MAX_PATH];
+			char entry_name[DFS_MAX_PATH + 1];
 			bool exists;
 
 			snprintf(entry_name, kds[i].kd_key_len + 1, "%s", ptr);
@@ -1391,6 +1392,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
 	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc);
@@ -1429,6 +1431,7 @@ dfs_lookup_loop:
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
 		strncpy(obj->name, token, DFS_MAX_PATH);
+		obj->name[DFS_MAX_PATH] = '\0';
 		obj->mode = entry.mode;
 
 		/** if entry is a file, open the array object and return */
@@ -1656,6 +1659,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		D_GOTO(err_obj, rc = -DER_NONEXIST);
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
@@ -1737,6 +1741,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return -DER_NOMEM;
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	obj->mode = mode;
 	oid_cp(&obj->parent_oid, parent->oid);
 
