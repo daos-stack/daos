@@ -245,8 +245,9 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 	if (src == NULL) {
 		addr->ba_hole = 1;
 		return 0;
-	} else
+	} else {
 		addr->ba_hole = 0;
+	}
 	rc = utest_alloc(utx, &umoff, size, init_mem, src);
 
 	if (rc != 0)
@@ -751,6 +752,87 @@ global_teardown(void **state)
 #define NUM_PARTIAL 11
 #define NUM_EXTENTS 30
 
+/* copy_exp_val_to_array
+* Input parameters : flag, evtdata, val
+* Input/Output parameters : exp_size
+*/
+static void
+copy_exp_val_to_array(int flag, int **evtdata,
+					int *val, int *exp_size)
+{
+int epoch;
+int offset;
+int loop_count;
+int count;
+
+count = *exp_size;
+
+for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
+if (epoch < NUM_EPOCHS) {
+	if (flag == EVT_ITER_VISIBLE) {
+		val[epoch] = evtdata[epoch][epoch];
+		 count++;
+	} else if (flag == EVT_ITER_COVERED) {
+		for (offset = epoch; offset >= 1; offset--) {
+			if (evtdata[offset][epoch+1] != 0) {
+				val[count] = evtdata[offset][epoch+1];
+				 count++;
+			}
+		}
+	} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
+		for (offset = epoch; offset >= 1; offset--) {
+			if (evtdata[offset][epoch] != 0) {
+				val[count] =	evtdata[offset][epoch];
+				 count++;
+			}
+		}
+	} else {
+		if ((evtdata[epoch][epoch] & 0xFF) != 0xFF) {
+			count++;
+			val[count] = evtdata[epoch][epoch];
+		}
+	}
+} else {
+	if (flag == EVT_ITER_VISIBLE) {
+		for (offset = epoch;
+		offset < NUM_EXTENTS + epoch; offset++) {
+			val[offset] = evtdata[epoch][offset];
+			 count++;
+		}
+	} else if (flag == EVT_ITER_COVERED) {
+		for (loop_count = epoch+1;
+		loop_count < NUM_EXTENTS+epoch;
+		loop_count++) {
+			for (offset = epoch-1; offset >= 1;
+				offset--) {
+				if (evtdata[offset][loop_count] != 0) {
+					val[count] = evtdata[offset][loop_count];
+					count++;
+			   }
+			}
+		}
+	} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
+		for (loop_count = epoch; loop_count < NUM_EXTENTS+epoch; loop_count++) {
+			for (offset = epoch; offset >= 1 ; offset--) {
+				if (evtdata[offset][loop_count] != 0) {
+					val[count] = evtdata[offset][loop_count];
+				    count++;
+				}
+			}
+		}
+	} else {
+		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
+			if ((evtdata[epoch][offset] & 0xFF) != 0xFF) {
+				count++;
+				val[count] = evtdata[epoch][offset];
+			}
+		}
+	}
+}
+}
+*exp_size = count;
+}
+
 /* create_expected_data:
 * Input values:  iter_flag, evt_data
 * Input/Output : expval, rev_expval
@@ -759,11 +841,9 @@ static void
 create_expected_data(int iter_flag, int **evt_data,
 					int *expval, int *rev_expval)
 {
-	int epoch;
 	int expected_size;
 	int count;
 	int loop_count;
-	int offset;
 
 	count = 0;
 	switch (iter_flag) {
@@ -772,104 +852,21 @@ create_expected_data(int iter_flag, int **evt_data,
 	break;
 	case EVT_ITER_VISIBLE:
 		print_message("EVT_ITER_VISIBLE\n");
-		for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
-		if (epoch < NUM_EPOCHS) {
-			expval[epoch] = evt_data[epoch][epoch];
-			count++;
-		} else {
-				for (offset = epoch;
-				offset < NUM_EXTENTS + epoch; offset++) {
-					expval[offset] =
-					evt_data[epoch][offset];
-					count++;
-				}
-			}
-		}
+		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
 	break;
 	case EVT_ITER_COVERED:
 		print_message("EVT_ITER_COVERED\n");
 		count = 1;
-		for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
-			if (epoch < NUM_EPOCHS) {
-				for (offset = epoch; offset >= 1;
-					offset--) {
-					if (evt_data[offset][epoch+1] != 0) {
-						expval[count] =
-						evt_data[offset][epoch+1];
-						count++;
-					}
-				}
-			} else {
-				for (loop_count = epoch+1;
-				loop_count < NUM_EXTENTS+epoch;
-				loop_count++) {
-				for (offset = epoch-1; offset >= 1;
-					offset--) {
-					if (evt_data[offset][loop_count] != 0) {
-						expval[count] =
-						evt_data[offset][loop_count];
-						count++;
-						}
-					}
-				}
-			}
-		 }
+		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
 	break;
 	case (EVT_ITER_VISIBLE | EVT_ITER_COVERED):
 		print_message("EVT_ITER_VISIBLE (COVERED)\n");
 		count = 1;
-		for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
-			if (epoch < NUM_EPOCHS) {
-				for (offset = epoch; offset >= 1; offset--) {
-					if (evt_data[offset][epoch] != 0) {
-						expval[count] =
-						evt_data[offset][epoch];
-						count++;
-					}
-				}
-			} else {
-			for (loop_count = epoch;
-				loop_count < NUM_EXTENTS+epoch;
-				loop_count++) {
-				for (offset = epoch;
-				offset >= 1 ; offset--) {
-					if (evt_data[offset][loop_count] != 0) {
-						expval[count] =
-						evt_data[offset][loop_count];
-						count++;
-						}
-					}
-				}
-			}
-		 }
+		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
 	break;
 	case (EVT_ITER_SKIP_HOLES|EVT_ITER_VISIBLE):
 		print_message("EVT_ITER_SKIP_HOLES (VISIBLE)\n");
-		for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
-			if (epoch < NUM_EPOCHS) {
-				count++;
-				if ((evt_data[epoch][epoch] & 0xFF) != 0xFF) {
-					expval[count] = evt_data[epoch][epoch];
-				} else {
-					/*skipping holes */
-					count--;
-				}
-			} else {
-				for (offset = epoch;
-					offset < NUM_EXTENTS + epoch;
-					offset++) {
-					if ((evt_data[epoch][offset] & 0xFF)
-						!= 0xFF) {
-						count++;
-						expval[count] =
-						evt_data[epoch][offset];
-					} else {
-						/*skipping holes */
-						count--;
-					}
-				}
-			}
-		}
+		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
 	break;
 	case (EVT_ITER_REVERSE | EVT_ITER_SKIP_HOLES
 			| EVT_ITER_VISIBLE):
@@ -963,7 +960,7 @@ test_evt_iter_flags(void **state)
 		(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
 	/* Insert a bunch of entries with hole*/
 	srand(time(0));
-	hole_epoch = rand() % 29;
+	hole_epoch = (rand() % 28) + 1;
 	print_message("Hole inserted %d epoch.\n", hole_epoch);
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
