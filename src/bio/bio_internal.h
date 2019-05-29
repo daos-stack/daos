@@ -65,6 +65,11 @@ struct bio_blobstore {
 	struct spdk_blob_store	*bb_bs;
 	struct bio_xs_context	*bb_ctxt;
 	int			 bb_ref;
+	/* Device owner xstream is the first xstream used to open device (for
+	 * multiple xstreams mapped to the same device). Used for faulty device
+	 * detection.
+	 */
+	int			 bb_devowner_xs_id;
 };
 
 /* Per-xstream NVMe context */
@@ -76,8 +81,10 @@ struct bio_xs_context {
 	struct spdk_io_channel	*bxc_io_channel;
 	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
-	struct spdk_bdev_desc	*bxc_desc; /* for io stat only */
-	uint64_t		 bxc_stat_age;
+	/* writable open descriptor for io stats and health info polling */
+	struct spdk_bdev_desc	*bxc_desc;
+	uint64_t		 bxc_io_stat_age;
+	uint64_t		 bxc_health_stat_age;
 };
 
 /* Per VOS instance I/O context */
