@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <uuid/uuid.h>
 #include <abt.h>
+#include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -46,6 +47,8 @@
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
+/* Period to query SPDK device health stats */
+#define DAOS_SPDK_STATS_PERIOD	(60 * (NSEC_PER_SEC / NSEC_PER_USEC)) /* Query every 60 seconds */
 
 enum {
 	BDEV_CLASS_NVME = 0,
@@ -88,6 +91,181 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 static uint64_t io_stat_period;
+static struct spdk_nvme_health_information_page health_page;
+static struct spdk_nvme_error_information_entry error_page[256];
+
+static void
+get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
+{
+	if (spdk_nvme_cpl_is_error(cpl))
+		D_ERROR("Error getting SPDK log page\n");
+}
+
+static void
+dprint_uint128_hex(uint64_t *v)
+{
+	unsigned long long lo = v[0], hi = v[1];
+	if (hi) {
+		D_PRINT("0x%llX%016llX", hi, lo);
+	} else {
+		D_PRINT("0x%llX", lo);
+	}
+}
+
+static void
+dprint_uint128_dec(uint64_t *v)
+{
+	unsigned long long lo = v[0], hi = v[1];
+	if (hi) {
+		/* can't handle large (>64-bit) decimal values */
+		dprint_uint128_hex(v);
+	} else {
+		D_PRINT("%llu", (unsigned long long)lo);
+	}
+}
+
+static void
+get_spdk_health_logs(struct bio_xs_context *ctxt,
+		     struct spdk_nvme_ctrlr *ctrlr,
+		     const struct spdk_nvme_transport_id *trid)
+{
+	const struct spdk_nvme_ctrlr_data		*cdata;
+	struct spdk_nvme_error_information_entry	*error_entry;
+	uint32_t					 i;
+	struct spdk_bdev				*bdev = NULL;
+
+	if (ctxt->bxc_desc != NULL)
+		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
+
+	cdata = spdk_nvme_ctrlr_get_data(ctrlr);
+
+	if (spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
+					     SPDK_NVME_LOG_HEALTH_INFORMATION,
+					     SPDK_NVME_GLOBAL_NS_TAG,
+					     &health_page, sizeof(health_page),
+					     0, get_spdk_log_page_completion, NULL)) {
+		D_ERROR("spdk_nvme_ctrlr_cmd_get_log_page() failed for health log\n");
+		return;
+	}
+
+	if (spdk_nvme_ctrlr_cmd_get_log_page(ctrlr, SPDK_NVME_LOG_ERROR,
+					     SPDK_NVME_GLOBAL_NS_TAG, error_page,
+					     sizeof(*error_page) * (cdata->elpe + 1),
+					     0, get_spdk_log_page_completion, NULL)) {
+		D_ERROR("spdk_nvme_ctrlr_cmd_get_log_page() failed for error page\n");
+		return;
+	}
+
+	/*
+	 * TODO Notify admin/user if any critical warnings or errors exist in
+	 * the log.
+	 */
+
+	/*
+	 * Print SPDK device error logs if any exist.
+	 * TODO Store errors in in-memory per-device health state log.
+	 */
+	D_PRINT("==========================================================\n");
+	D_PRINT("SPDK Device [%s] Error Logs: \n",
+		bdev != NULL ? spdk_bdev_get_name(bdev) : "");
+	D_PRINT("==================================\n");
+	for (i = 0; i <= cdata->elpe; i++) {
+		error_entry = &error_page[i];
+		if (i == 0 && error_entry->error_count == 0) {
+			D_PRINT("No errors found\n");
+			continue;
+		} else if (error_entry->error_count == 0) {
+			continue;
+		}
+
+		D_PRINT("Error log entry: %u\n", i);
+		D_PRINT("    Error count:         0x%"PRIx64"\n", error_entry->error_count);
+		D_PRINT("    Submission queue ID: 0x%x\n", error_entry->sqid);
+		D_PRINT("    Command ID:          0x%x\n", error_entry->cid);
+		D_PRINT("    Phase bit:           %x\n", error_entry->status.p);
+		D_PRINT("    Status code:         0x%x\n", error_entry->status.sc);
+		D_PRINT("    Status code type:    0x%x\n", error_entry->status.sct);
+		D_PRINT("    Do not retry:        %x\n", error_entry->status.dnr);
+		D_PRINT("    Error location:      0x%x\n", error_entry->error_location);
+		D_PRINT("    LBA:                 0x%"PRIx64"\n", error_entry->lba);
+		D_PRINT("    Namespace:           0x%x\n", error_entry->nsid);
+		D_PRINT("    Vendor log page:     0x%x\n", error_entry->vendor_specific);
+		D_PRINT("\n");
+	}
+
+	/*
+	 * TODO Store SMART health info in in-memory per-device health state log.
+	 */
+	D_PRINT("==========================================================\n");
+	D_PRINT("SPDK Device [%s] Health Information (xs_id: %d):\n",
+		bdev != NULL ? spdk_bdev_get_name(bdev) : "", ctxt->bxc_xs_id);
+	D_PRINT("==================================\n");
+	D_PRINT("Critical Warnings:\n");
+	D_PRINT("  Available Spare Space:  %s\n",
+		health_page.critical_warning.bits.available_spare ? "WARNING" : "OK");
+	D_PRINT("  Temperature:            %s\n",
+		health_page.critical_warning.bits.temperature ? "WARNING" : "OK");
+	D_PRINT("Health Stats:\n");
+	D_PRINT("  Current Temperature:      %u Kelvin (%d Celsius)\n",
+		health_page.temperature, (int)health_page.temperature - 273);
+	if (health_page.warning_temp_time > 0) {
+		D_PRINT("    Warning Temperature Time: %u minutes\n",
+			health_page.warning_temp_time);
+	}
+	if (health_page.critical_temp_time > 0) {
+		D_PRINT("    Critical Temperature Time: %u minutes\n",
+			health_page.critical_temp_time);
+	}
+	D_PRINT("  Power On Hours:           ");
+	dprint_uint128_dec(health_page.power_on_hours);
+	D_PRINT(" hours\n");
+	D_PRINT("  Unsafe Shutdowns:	     ");
+	dprint_uint128_dec(health_page.unsafe_shutdowns);
+	D_PRINT("\n");
+	D_PRINT("  Unrecoverable Media Errors: ");
+	dprint_uint128_dec(health_page.media_errors);
+	D_PRINT("\n");
+	D_PRINT("  Lifetime Error Log Entries: ");
+	dprint_uint128_dec(health_page.num_error_info_log_entries);
+	D_PRINT("\n");
+}
+
+static bool
+probe_spdk_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
+	 struct spdk_nvme_ctrlr_opts *opts)
+{
+	return true;
+}
+
+static void
+attach_spdk_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
+	  struct spdk_nvme_ctrlr *ctrlr,
+	  const struct spdk_nvme_ctrlr_opts *opts)
+{
+	struct bio_xs_context *ctxt = cb_ctx;
+
+	get_spdk_health_logs(ctxt, ctrlr, trid);
+	spdk_nvme_detach(ctrlr);
+}
+
+/*
+ * Query the SPDK health & error information log pages to keep device health
+ * in-memory state up-to-date and catch any potential errors early.
+ * TODO Decide on cadence for querying info, currently every 60 seconds.
+ */
+static void
+query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now)
+{
+	if (ctxt->bxc_health_stat_age + DAOS_SPDK_STATS_PERIOD >= now)
+		return;
+
+	if (spdk_nvme_probe(NULL, ctxt, probe_spdk_cb, attach_spdk_cb, NULL) != 0) {
+		D_ERROR("spdk_nvme_probe() failed\n");
+		return;
+	}
+
+	ctxt->bxc_health_stat_age = now;
+}
 
 /* Print the io stat every few seconds, for debug only */
 static void
@@ -97,10 +275,11 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 	struct spdk_bdev		*bdev;
 	struct spdk_io_channel		*channel;
 
+	/* check if IO_STAT_PERIOD environment variable is set */
 	if (io_stat_period == 0)
 		return;
 
-	if (ctxt->bxc_stat_age + io_stat_period >= now)
+	if (ctxt->bxc_io_stat_age + io_stat_period >= now)
 		return;
 
 	if (ctxt->bxc_desc != NULL) {
@@ -111,7 +290,7 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 
 		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
 
-		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
+		D_PRINT("SPDK IO STAT xs_id[%d] dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
 			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
 			"write_latency_ticks["DF_U64"]\n",
@@ -121,7 +300,7 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 			stat.write_latency_ticks);
 	}
 
-	ctxt->bxc_stat_age = now;
+	ctxt->bxc_io_stat_age = now;
 }
 
 int
@@ -340,7 +519,12 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 			poller->bnp_expire_us = now + poller->bnp_period_us;
 	}
 
-	print_io_stat(ctxt, now);
+	/* Print SPDK I/O stats for each xstream */
+	if (0)
+		print_io_stat(ctxt, now);
+	/* Only query SPDK device health info on device owner xstream */
+	if (nvme_glb.bd_init_thread == ctxt->bxc_thread)
+		query_spdk_health_stats(ctxt, now);
 
 	return count;
 }
@@ -787,6 +971,19 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 			return -DER_INVAL;
 
 		d_bdev->bb_blobstore->bb_bs = bs;
+
+		/*
+		 * Device owner xstream is set to the first xstream that opens the
+		 * device successfully. If device owner xstream ID is 0, then we can
+		 * assume it has not been set since xs 0 is the metadata management xs
+		 * and is reserved.
+		 */
+		if (d_bdev->bb_blobstore->bb_devowner_xs_id == 0) {
+			d_bdev->bb_blobstore->bb_devowner_xs_id = xs_id;
+			D_PRINT("Device owner xstream for bdev %s is set to %d\n",
+				spdk_bdev_get_name(d_bdev->bb_bdev),
+				d_bdev->bb_blobstore->bb_devowner_xs_id);
+		}
 
 		D_DEBUG(DB_MGMT, "Loaded bs, xs_id:%d, xs:%p dev:%s\n",
 			xs_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
