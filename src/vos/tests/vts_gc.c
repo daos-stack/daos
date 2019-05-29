@@ -127,7 +127,8 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		rc = vos_update_begin(coh, oid, epoch, &cred->tc_dkey, 1,
 				      &cred->tc_iod, &ioh, NULL);
 		if (rc != 0) {
-			print_error("Failed to prepare ZC update\n");
+			if (rc != -DER_INPROGRESS)
+				print_error("Failed to prepare ZC update\n");
 			return rc;
 		}
 

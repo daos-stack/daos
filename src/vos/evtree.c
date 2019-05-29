@@ -2126,6 +2126,8 @@ evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct evt_rect		 rect;
 	int			 rc;
 
+	D_ASSERT(epr != NULL || extent != NULL);
+
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;

@@ -151,6 +151,8 @@ enum {
 	VOS_IT_FOR_PURGE	= (1 << 4),
 	/** The iterator is for rebuild scan */
 	VOS_IT_FOR_REBUILD	= (1 << 5),
+	/** Iterate only show punched records in interval */
+	VOS_IT_PUNCHED		= (1 << 6),
 };
 
 /**
@@ -181,15 +183,20 @@ typedef struct {
 
 enum {
 	/** It is unknown if the extent is covered or visible */
-	VOS_RECX_FLAG_UNKNOWN = 0,
+	VOS_VIS_FLAG_UNKNOWN = 0,
 	/** The extent is not visible at at the requested epoch (epr_hi) */
-	VOS_RECX_FLAG_COVERED = (1 << 0),
+	VOS_VIS_FLAG_COVERED = (1 << 0),
 	/** The extent is not visible at at the requested epoch (epr_hi) */
-	VOS_RECX_FLAG_VISIBLE = (1 << 1),
+	VOS_VIS_FLAG_VISIBLE = (1 << 1),
 	/** The extent represents only a portion of the in-tree extent */
-	VOS_RECX_FLAG_PARTIAL = (1 << 2),
+	VOS_VIS_FLAG_PARTIAL = (1 << 2),
 	/** In sorted iterator, marks final entry */
-	VOS_RECX_FLAG_LAST    = (1 << 3),
+	VOS_VIS_FLAG_LAST    = (1 << 3),
+};
+
+struct vos_punch_info {
+	uint64_t	 pi_nr;
+	uint64_t	*pi_punches;
 };
 
 /**
@@ -207,13 +214,19 @@ typedef struct {
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
-		/** dkey or akey */
-		daos_key_t			ie_key;
+		struct {
+			/** dkey or akey */
+			daos_key_t		ie_key;
+			/** Punch information for key */
+			struct vos_punch_info	ie_key_punches;
+		};
 		struct {
 			/** The DTX identifier. */
 			struct dtx_id		ie_xid;
 			/** oid */
 			daos_unit_oid_t		ie_oid;
+			/** Punch information for object */
+			struct vos_punch_info	ie_obj_punches;
 			/* The DTX dkey hash for DTX iteration. */
 			uint64_t		ie_dtx_hash;
 			/* The DTX intent for DTX iteration. */
@@ -232,10 +245,10 @@ typedef struct {
 			daos_csum_buf_t		ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
-			/** Flags to describe the extent */
-			uint32_t		ie_recx_flags;
 		};
 	};
+	/* Flags to describe the entry */
+	uint32_t		ie_vis_flags;
 	/** Child iterator type */
 	vos_iter_type_t		ie_child_type;
 } vos_iter_entry_t;

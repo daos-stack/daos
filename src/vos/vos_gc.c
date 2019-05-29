@@ -168,9 +168,29 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 	     struct vos_gc_item *item, int *credits, bool *empty)
 {
 	struct vos_krec_df *key = umem_off2ptr(&pool->vp_umm, item->it_addr);
+	daos_handle_t	    loh;
 	int		    creds = *credits;
 	int		    rc;
 
+	if (key->kr_bmap & KREC_BF_ILOG_FREE)
+		goto drain;
+
+	rc = ilog_open(&pool->vp_umm, &key->kr_ilog, &loh);
+	if (rc != 0)
+		goto error;
+
+	rc = ilog_destroy(loh);
+	if (rc != 0)
+		goto error;
+
+	rc = umem_tx_add_ptr(&pool->vp_umm, &key->kr_bmap,
+			     sizeof(key->kr_bmap));
+	if (rc != 0)
+		goto error;
+
+	key->kr_bmap |= KREC_BF_ILOG_FREE;
+
+drain:
 	if (key->kr_bmap & KREC_BF_BTR) {
 		rc = gc_drain_btr(gc, pool, &key->kr_btr, credits, empty);
 
@@ -182,8 +202,9 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 		*empty = true;
 		return 0;
 	}
+error:
 	if (rc) {
-		D_ERROR("%s drain failed: %s\n", gc->gc_name, d_errstr(rc));
+		D_ERROR("%s drain failed: "DF_RC"\n", gc->gc_name, DP_RC(rc));
 		return rc;
 	}
 
@@ -565,7 +586,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		return 0;
 	}
 
-	rc = vos_tx_begin(pool);
+	rc = vos_tx_begin(&pool->vp_umm);
 	if (rc) {
 		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
 			DP_UUID(pool->vp_id), d_errstr(rc));
@@ -622,7 +643,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		"pool="DF_UUID", creds origin=%d, current=%d, rc=%s\n",
 		DP_UUID(pool->vp_id), *credits, creds, d_errstr(rc));
 
-	rc = vos_tx_end(pool, rc);
+	rc = vos_tx_end(&pool->vp_umm, rc);
 	if (rc == 0)
 		*credits = creds;
 

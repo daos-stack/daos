@@ -57,7 +57,7 @@
 #define UPDATE_CSUM_BUF_SIZE	(UPDATE_CSUM_SIZE * UPDATE_CSUM_MAX_COUNT +  \
 					2 * UPDATE_CSUM_SIZE)
 #define VTS_IO_OIDS		1
-#define VTS_IO_KEYS		100000
+#define VTS_IO_KEYS		200 //100000
 
 enum vts_test_flags {
 	TF_IT_ANCHOR		= (1 << 0),
@@ -83,6 +83,7 @@ struct io_test_args {
 	unsigned long		 ta_flags;
 	const char		*dkey;
 	const char		*akey;
+	void			*custom;
 	int			 ofeat;
 	int			 akey_size;
 	int			 dkey_size;

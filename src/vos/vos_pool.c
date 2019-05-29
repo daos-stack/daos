@@ -560,7 +560,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	pool_df = vos_pool_pop2df(uma->uma_pool);
 	if (uuid_compare(uuid, pool_df->pd_id)) {
-		D_ERROR("Mismatch uuid, user="DF_UUID", pool="DF_UUID"\n",
+		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		D_GOTO(failed, rc = -DER_IO);
 	}

@@ -402,10 +402,20 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, ++epoch, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	if (punch_obj) {
+		/* Object uses old punch model.  Data is visible before commit
+		 */
+		assert_int_equal(rc, 0);
 
-	/* Data record with punch DTX is readable before commit. */
-	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+		assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	} else {
+		/* Read at later timestamp than the punch should return
+		 * -DER_INPROGRESS
+		 */
+		assert_int_equal(rc, -DER_INPROGRESS);
+
+		assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	}
 
 	/* Commit the punch DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1);

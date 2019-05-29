@@ -51,6 +51,7 @@ print_usage()
 	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -X|--dtx_tests\n");
+	print_message("vos_tests -l|--incarnation-log-tests\n");
 	print_message("vos_tests -A|--all_tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
@@ -90,6 +91,7 @@ run_all_tests(int keys, bool nest_iterators)
 	failed += run_aggregate_tests(false);
 	failed += run_gc_tests();
 	failed += run_dtx_tests();
+	failed += run_ilog_tests();
 	return failed;
 }
 
@@ -114,6 +116,7 @@ main(int argc, char **argv)
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"dtx_tests",		no_argument, 0, 'X'},
 		{"garbage_collector",	no_argument, 0, 'g'},
+		{"ilog_tests",		no_argument, 0, 'l'},
 		{"help",		no_argument, 0, 'h'},
 	};
 
@@ -133,7 +136,7 @@ main(int argc, char **argv)
 	if (argc < 2) {
 		nr_failed = run_all_tests(0, false);
 	} else {
-		while ((opt = getopt_long(argc, argv, "apcdgnti:XA:h",
+		while ((opt = getopt_long(argc, argv, "apcdglnti:XA:h",
 				  long_options, &index)) != -1) {
 			switch (opt) {
 			case 'p':
@@ -161,6 +164,9 @@ main(int argc, char **argv)
 				break;
 			case 'X':
 				nr_failed += run_dtx_tests();
+				break;
+			case 'l':
+				nr_failed += run_ilog_tests();
 				break;
 			case 'A':
 				keys = atoi(optarg);
