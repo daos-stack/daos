@@ -51,6 +51,9 @@ struct pl_map_init_attr {
 			pool_comp_type_t	domain;
 			unsigned int		ring_nr;
 		} ia_ring;
+		struct pl_mapless_init_attr {
+			pool_comp_type_t	domain;
+		} ia_mapless;
 	};
 };
 

@@ -282,6 +282,7 @@ struct d_hash_table	pl_htable = {
 };
 
 #define DSR_RING_DOMAIN		PO_COMP_TP_RACK
+#define DSR_MAPLESS_DOMAIN	PO_COMP_TP_RACK
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -299,7 +300,11 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		mia->ia_ring.domain  = DSR_RING_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
+	case PL_TYPE_MAPLESS:
+		mia->ia_type 	= PL_TYPE_MAPLESS;
+		mia->ia_mapless.domain  = DSR_MAPLESS_DOMAIN;
 	}
+
 }
 
 struct pl_map *
@@ -436,7 +441,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 	}
 
 	if (!link) {
-		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
+		pl_map_attr_init(pool_map, PL_TYPE_MAPLESS, &mia);
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -451,7 +456,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 			D_GOTO(out, rc = 0);
 		}
 
-		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
+		pl_map_attr_init(pool_map, PL_TYPE_MAPLESS, &mia);
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0) {
 			d_hash_rec_decref(&pl_htable, link);
