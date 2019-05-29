@@ -1287,7 +1287,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
 			/* FIXME: until distributed transaction. */
-			*epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+			*epoch = srv_io_dispatch ? DAOS_EPOCH_MAX :
+						   daos_ts2epoch();
 			D_DEBUG(DB_IO, "set epoch "DF_U64"\n", *epoch);
 			rc = 0;
 		}
@@ -1304,7 +1305,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
 			/* FIXME: until distributed transaction. */
-			*epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+			*epoch = srv_io_dispatch ? DAOS_EPOCH_MAX :
+						   daos_ts2epoch();
 			D_DEBUG(DB_IO, "set epoch "DF_U64"\n", *epoch);
 			rc = 0;
 		}
@@ -1318,7 +1320,8 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 			if (rc != -DER_INVAL)
 				D_GOTO(out, rc);
 			/* FIXME: until distributed transaction. */
-			*epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+			*epoch = srv_io_dispatch ? DAOS_EPOCH_MAX :
+						   daos_ts2epoch();
 			D_DEBUG(DB_IO, "set epoch "DF_U64"\n", *epoch);
 			rc = 0;
 		}
@@ -2070,7 +2073,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_handle_t th,
 		if (rc != -DER_INVAL)
 			goto out_task;
 		/* FIXME: until distributed transaction. */
-		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+		epoch = srv_io_dispatch ? DAOS_EPOCH_MAX : daos_ts2epoch();
 		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
 	}
 	D_ASSERT(epoch);
@@ -2501,7 +2504,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		if (rc != -DER_INVAL)
 			goto out_task;
 		/* FIXME: until distributed transaction. */
-		epoch = DAOS_EPOCH_MAX; /* = daos_ts2epoch();*/
+		epoch = srv_io_dispatch ? DAOS_EPOCH_MAX : daos_ts2epoch();
 		D_DEBUG(DB_IO, "set epoch "DF_U64"\n", epoch);
 	}
 	D_ASSERT(epoch);
