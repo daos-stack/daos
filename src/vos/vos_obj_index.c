@@ -467,6 +467,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	info->ii_oid = obj->vo_id;
+	info->ii_punched = 0;
 	/* Limit the bounds to this object incarnation */
 	info->ii_epr.epr_lo = MAX(obj->vo_earliest, oiter->oit_epr.epr_lo);
 	info->ii_epr.epr_hi = MIN(obj->vo_latest, oiter->oit_epr.epr_hi);
@@ -669,19 +670,18 @@ static int
 oi_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_pool		*pool;
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	pool = vos_cont2pool(oiter->oit_cont);
 
-	rc = vos_tx_begin(pool);
+	rc = vos_tx_begin(vos_cont2umm(oiter->oit_cont));
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 
-	rc = vos_tx_end(pool, rc);
+	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+
 	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
 exit:

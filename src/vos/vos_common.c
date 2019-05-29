@@ -276,6 +276,11 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to register vos trees\n");
 
+	rc = vos_ilog_init();
+	if (rc)
+		D_ERROR("Failed to initialize incarnation log capability\n");
+
+
 	return rc;
 }
 

@@ -241,7 +241,7 @@ dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 		 */
 		if (req->result == 0) {
 			count++;
-			assert_int_equal(req->iod[0].iod_size, size);
+			assert_true(req->iod[0].iod_size <= size);
 			if (fetch_buf != NULL)
 				assert_memory_equal(update_buf, fetch_buf,
 						    size);
@@ -263,13 +263,13 @@ dtx_fetch_committable(void **state, bool punch)
 {
 	test_arg_t	*arg = *state;
 	char		*update_buf1;
+	char		*zero_buf;
 	char		*update_buf2;
 	const char	*dkey = dts_dtx_dkey;
 	const char	*akey = dts_dtx_akey;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	int		 rc;
-	bool		 retried = false;
 
 	if (!test_runable(arg, dts_dtx_replica_cnt))
 		return;
@@ -282,9 +282,11 @@ dtx_fetch_committable(void **state, bool punch)
 	assert_non_null(update_buf2);
 	dts_buf_render(update_buf2, dts_dtx_iosize / 2);
 
+	D_ALLOC(zero_buf, dts_dtx_iosize);
+	assert_non_null(zero_buf);
+
 	oid = dts_oid_gen(dts_dtx_class, 0, arg->myrank);
 
-again:
 	/* Synchronously commit the 1st update. */
 	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
 	arg->async = 0;
@@ -306,21 +308,10 @@ again:
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_ALWAYS);
 
 	rc = dtx_check_replicas_v2(dkey, akey, "fetch_committable_1",
-				   update_buf2, punch ? 0 : dts_dtx_iosize / 2,
-				   &req);
+				   punch ? zero_buf : update_buf2,
+				   dts_dtx_iosize / 2, &req);
 	/* At least leader will return the latest data. */
 	assert_true(rc >= 1);
-	if (rc > 1) {
-		assert_true(!retried);
-
-		/* Related DTX has been committed asychronously. If we modify
-		 * again, according to current DTX batched commit policy, the
-		 * new DTX will NOT be committed so quickly again.
-		 */
-		retried = true;
-		dts_buf_render(update_buf2, dts_dtx_iosize / 2);
-		goto again;
-	}
 
 	/* Reset fail_loc, repeat fetch from any replica. If without specifying
 	 * the replica, and if fetch from non-leader hits non-committed DTX, it
@@ -330,10 +321,11 @@ again:
 	daos_fail_loc_set(0);
 
 	rc = dtx_check_replicas_v2(dkey, akey, "fetch_committable_2",
-				   update_buf2, punch ? 0 : dts_dtx_iosize / 2,
-				   &req);
+				   punch ? zero_buf : update_buf2,
+				   dts_dtx_iosize / 2, &req);
 	assert_int_equal(rc, dts_dtx_replica_cnt);
 
+	D_FREE(zero_buf);
 	D_FREE(update_buf1);
 	D_FREE(update_buf2);
 	ioreq_fini(&req);
