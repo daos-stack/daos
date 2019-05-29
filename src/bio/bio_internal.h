@@ -63,7 +63,7 @@ struct bio_dma_buffer {
 struct bio_blobstore {
 	ABT_mutex		 bb_mutex;
 	struct spdk_blob_store	*bb_bs;
-	struct bio_xs_context	*bb_ctxt;
+	struct bio_xs_context	*bb_ctxt; /*Device owner xstream */
 	int			 bb_ref;
 };
 
@@ -76,8 +76,12 @@ struct bio_xs_context {
 	struct spdk_io_channel	*bxc_io_channel;
 	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
-	struct spdk_bdev_desc	*bxc_desc; /* for io stat only */
-	uint64_t		 bxc_stat_age;
+	/* generic read only descriptor, currently used for io stat only */
+	struct spdk_bdev_desc	*bxc_desc;
+	/* writable open descriptor for health info polling */
+	struct spdk_bdev_desc	*bxc_health_desc;
+	uint64_t		 bxc_io_stat_age;
+	uint64_t		 bxc_health_stat_age;
 };
 
 /* Per VOS instance I/O context */

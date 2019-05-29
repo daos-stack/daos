@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <uuid/uuid.h>
 #include <abt.h>
+#include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -46,6 +47,8 @@
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
+/* Period to query SPDK device health stats (1 min period) */
+#define DAOS_SPDK_STATS_PERIOD	(60 * (NSEC_PER_SEC / NSEC_PER_USEC))
 
 enum {
 	BDEV_CLASS_NVME = 0,
@@ -86,8 +89,336 @@ struct bio_nvme_data {
 	int			 bd_shm_id;
 };
 
+struct bio_bdev_passthru_req {
+	struct spdk_nvme_cmd	 bbr_cmd;
+	struct spdk_bdev	*bbr_bdev;
+	struct spdk_io_channel	*bbr_channel;
+	struct bio_xs_context	*bbr_ctxt;
+	void			*bbr_health_buf;
+	void			*bbr_error_buf;
+	void			*bbr_cdata_buf;
+	uint8_t			 bbr_elpe; /*error log page entries */
+	uint32_t		 bbr_len;
+	int			 bbr_sct;
+	int			 bbr_sc;
+};
+
 static struct bio_nvme_data nvme_glb;
 static uint64_t io_stat_period;
+
+static void
+dprint_uint128_hex(uint64_t *v)
+{
+	unsigned long long lo = v[0], hi = v[1];
+	if (hi) {
+		D_PRINT("0x%llX%016llX", hi, lo);
+	} else {
+		D_PRINT("0x%llX", lo);
+	}
+}
+
+static void
+dprint_uint128_dec(uint64_t *v)
+{
+	unsigned long long lo = v[0], hi = v[1];
+	if (hi) {
+		/* can't handle large (>64-bit) decimal values */
+		dprint_uint128_hex(v);
+	} else {
+		D_PRINT("%llu", (unsigned long long)lo);
+	}
+}
+
+static void
+get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
+				   void *cb_arg)
+{
+	struct bio_bdev_passthru_req		*pt_req = cb_arg;
+	struct spdk_nvme_ctrlr_data		*cdata = NULL;
+
+	/* Additional NVMe status information */
+	spdk_bdev_io_get_nvme_status(bdev_io, &pt_req->bbr_sct,
+				     &pt_req->bbr_sc);
+	if (pt_req->bbr_sc)
+		D_ERROR("NVMe status code/type: %d/%d\n",
+			pt_req->bbr_sc, pt_req->bbr_sct);
+
+	spdk_bdev_free_io(bdev_io);
+
+	cdata = pt_req->bbr_cdata_buf;
+	pt_req->bbr_elpe = cdata->elpe;
+
+	/*TODO Add additional relevant controller data */
+	D_PRINT("==========================================================\n");
+	D_PRINT("Controller Data\n");
+	D_PRINT("==========================================================\n");
+	D_PRINT("Vendor ID:                             %04x\n", cdata->vid);
+	D_PRINT("Subsystem Vendor ID:                   %04x\n", cdata->ssvid);
+	D_PRINT("Error log page entries supported = %d\n", cdata->elpe + 1);
+}
+
+static void
+get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
+				 void *cb_arg)
+{
+	struct bio_bdev_passthru_req			*pt_req = cb_arg;
+	struct spdk_nvme_error_information_entry	*error_entries = NULL;
+	struct spdk_nvme_error_information_entry	*error_entry = NULL;
+	uint32_t					 i;
+
+	/* Additional NVMe status information */
+	spdk_bdev_io_get_nvme_status(bdev_io, &pt_req->bbr_sct,
+				     &pt_req->bbr_sc);
+	if (pt_req->bbr_sc)
+		D_ERROR("NVMe status code/type: %d/%d\n",
+			pt_req->bbr_sc, pt_req->bbr_sct);
+
+	spdk_bdev_free_io(bdev_io);
+
+	D_PRINT("==========================================================\n");
+	D_PRINT("SPDK Device [%s] Error Logs (xs_id: %d):\n",
+		pt_req->bbr_bdev != NULL ?
+		spdk_bdev_get_name(pt_req->bbr_bdev) : "",
+		pt_req->bbr_ctxt->bxc_xs_id);
+	D_PRINT("==========================================================\n");
+
+	error_entries = pt_req->bbr_error_buf;
+
+	for (i = 0; i < pt_req->bbr_elpe; i++) {
+		error_entry = &error_entries[i];
+		if (error_entry->error_count == 0) {
+			D_PRINT("No errors found!\n");
+			return;
+		}
+		if (i != 0)
+			D_PRINT("-------------\n");
+
+		D_PRINT("Entry: %u\n", i);
+		D_PRINT("Error count:         0x%"PRIx64"\n",
+			error_entry->error_count);
+		D_PRINT("Submission queue ID: 0x%x\n", error_entry->sqid);
+		D_PRINT("Command ID:          0x%x\n", error_entry->cid);
+		D_PRINT("Phase bit:           %x\n", error_entry->status.p);
+		D_PRINT("Status code:         0x%x\n", error_entry->status.sc);
+		D_PRINT("Status code type:    0x%x\n", error_entry->status.sct);
+		D_PRINT("Do not retry:        %x\n", error_entry->status.dnr);
+		D_PRINT("Error location:      0x%x\n",
+			error_entry->error_location);
+		D_PRINT("LBA:                 0x%"PRIx64"\n", error_entry->lba);
+		D_PRINT("Namespace:           0x%x\n", error_entry->nsid);
+		D_PRINT("Vendor log page:     0x%x\n",
+			error_entry->vendor_specific);
+		D_PRINT("\n");
+	}
+}
+
+static void
+get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
+			     void *cb_arg)
+{
+	struct bio_bdev_passthru_req			*pt_req = cb_arg;
+	struct spdk_nvme_health_information_page	*health_page = NULL;
+
+	/* Additional NVMe status information */
+	spdk_bdev_io_get_nvme_status(bdev_io, &pt_req->bbr_sct,
+				     &pt_req->bbr_sc);
+	if (pt_req->bbr_sc)
+		D_ERROR("NVMe status code/type: %d/%d\n",
+			pt_req->bbr_sc, pt_req->bbr_sct);
+
+	spdk_bdev_free_io(bdev_io);
+
+	health_page = pt_req->bbr_health_buf;
+
+	/*
+	 * TODO Store SMART health info in in-memory per-device health state log.
+	 */
+	D_PRINT("==========================================================\n");
+	D_PRINT("SPDK Device [%s] Health Information (xs_id: %d):\n",
+		pt_req->bbr_bdev != NULL ?
+		spdk_bdev_get_name(pt_req->bbr_bdev) : "",
+		pt_req->bbr_ctxt->bxc_xs_id);
+	D_PRINT("==========================================================\n");
+	D_PRINT("Critical Warnings:\n");
+	D_PRINT("  Available Spare Space:     %s\n",
+		health_page->critical_warning.bits.available_spare ?
+		"WARNING" : "OK");
+	D_PRINT("  Temperature:               %s\n",
+		health_page->critical_warning.bits.temperature ?
+		"WARNING" : "OK");
+	D_PRINT("  Device Reliability:        %s\n",
+		health_page->critical_warning.bits.device_reliability ?
+		"WARNING" : "OK");
+	D_PRINT("  Read Only:                 %s\n",
+		health_page->critical_warning.bits.read_only ? "Yes" : "No");
+	D_PRINT("  Volatile Memory Backup:    %s\n",
+		health_page->critical_warning.bits.volatile_memory_backup ?
+		"WARNING" : "OK");
+	D_PRINT("  Current Temperature:       %u Kelvin (%d Celsius)\n",
+		health_page->temperature, (int)health_page->temperature - 273);
+	D_PRINT("Available Spare:             %u%%\n",
+		health_page->available_spare);
+	D_PRINT("Available Spare Threshold:   %u%%\n",
+		health_page->available_spare_threshold);
+	D_PRINT("Life Percentage Used:        %u%%\n",
+		health_page->percentage_used);
+	D_PRINT("Data Units Read:             ");
+	dprint_uint128_dec(health_page->data_units_read);
+	D_PRINT("\n");
+	D_PRINT("Data Units Written:          ");
+	dprint_uint128_dec(health_page->data_units_written);
+	D_PRINT("\n");
+	D_PRINT("Host Read Commands:          ");
+	dprint_uint128_dec(health_page->host_read_commands);
+	D_PRINT("\n");
+	D_PRINT("Host Write Commands:         ");
+	dprint_uint128_dec(health_page->host_write_commands);
+	D_PRINT("\n");
+	D_PRINT("Controller Busy Time:        ");
+	dprint_uint128_dec(health_page->controller_busy_time);
+	D_PRINT(" minutes\n");
+	D_PRINT("Power Cycles:                ");
+	dprint_uint128_dec(health_page->power_cycles);
+	D_PRINT("\n");
+	D_PRINT("Power On Hours:              ");
+	dprint_uint128_dec(health_page->power_on_hours);
+	D_PRINT(" hours\n");
+	D_PRINT("Unsafe Shutdowns:	     ");
+	dprint_uint128_dec(health_page->unsafe_shutdowns);
+	D_PRINT("\n");
+	D_PRINT("Unrecoverable Media Errors:  ");
+	dprint_uint128_dec(health_page->media_errors);
+	D_PRINT("\n");
+	D_PRINT("Lifetime Error Log Entries:  ");
+	dprint_uint128_dec(health_page->num_error_info_log_entries);
+	D_PRINT("\n");
+	D_PRINT("Warning Temperature Time:    %u minutes\n",
+		health_page->warning_temp_time);
+	D_PRINT("Critical Temperature Time:   %u minutes\n",
+		health_page->critical_temp_time);
+}
+
+/* Get the SPDK device health state log and print all useful stats */
+static void
+query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now)
+{
+	struct spdk_bdev		*bdev = NULL;
+	struct bio_bdev_passthru_req	 pt_req;
+	int				 rc;
+	uint32_t			 numd, numdl, numdu;
+	uint32_t			 health_page_sz;
+	uint32_t			 error_page_sz;
+	uint32_t			 ctrlr_page_sz;
+
+	if (ctxt == NULL)
+		return;
+
+	/*
+	 * TODO Decide on an appropriate period to query device health
+	 * stats. Currently set at 1 min.
+	 */
+	if (ctxt->bxc_health_stat_age + DAOS_SPDK_STATS_PERIOD >= now)
+		return;
+
+	ctxt->bxc_health_stat_age = now;
+
+	if (!ctxt->bxc_health_desc)
+		return;
+
+	bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_health_desc);
+	if (bdev == NULL)
+		return;
+	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
+		D_ERROR("Bdev NVMe admin passthru not supported!\n");
+	}
+
+	health_page_sz = sizeof(struct spdk_nvme_health_information_page);
+	numd = health_page_sz / sizeof(uint32_t) - 1u;
+	numdl = numd & 0xFFFFu;
+	numdu = (numd >> 16) & 0xFFFFu;
+
+	memset(&pt_req, 0, sizeof(pt_req));
+	pt_req.bbr_bdev = bdev;
+	pt_req.bbr_ctxt = ctxt;
+	pt_req.bbr_channel = spdk_bdev_get_io_channel(ctxt->bxc_health_desc);
+	if (!pt_req.bbr_channel) {
+		D_ERROR("Failed to get bdev I/O channel\n");
+		return;
+	}
+	pt_req.bbr_cmd.opc = SPDK_NVME_OPC_GET_LOG_PAGE;
+	pt_req.bbr_cmd.nsid = SPDK_NVME_GLOBAL_NS_TAG;
+	pt_req.bbr_cmd.cdw10 = numdl << 16;
+	pt_req.bbr_cmd.cdw10 |= SPDK_NVME_LOG_HEALTH_INFORMATION;
+	pt_req.bbr_cmd.cdw11 = numdu;
+	pt_req.bbr_len = health_page_sz;
+	pt_req.bbr_health_buf = spdk_dma_zmalloc(pt_req.bbr_len, 0, NULL);
+	pt_req.bbr_sct = SPDK_NVME_SCT_GENERIC;
+	pt_req.bbr_sc = SPDK_NVME_SC_SUCCESS;
+
+	/*
+	 * Submit an NVMe Admin command to get device health log page
+	 * to the bdev.
+	 */
+	rc = spdk_bdev_nvme_admin_passthru(ctxt->bxc_health_desc,
+					   pt_req.bbr_channel, &pt_req.bbr_cmd,
+					   pt_req.bbr_health_buf, pt_req.bbr_len,
+					   get_spdk_log_page_completion,
+					   &pt_req);
+	if (rc) {
+		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
+	}
+
+
+	ctrlr_page_sz = sizeof(struct spdk_nvme_ctrlr_data);
+	pt_req.bbr_cmd.opc = SPDK_NVME_OPC_IDENTIFY;
+	pt_req.bbr_cmd.nsid = 0;
+	pt_req.bbr_cmd.cdw10 = SPDK_NVME_IDENTIFY_CTRLR;
+	pt_req.bbr_len = ctrlr_page_sz;
+	pt_req.bbr_cdata_buf = spdk_dma_zmalloc(pt_req.bbr_len, 0, NULL);
+
+	/*
+	 * Submit an NVMe Admin command to get controller data
+	 * to the bdev.
+	 */
+	rc = spdk_bdev_nvme_admin_passthru(ctxt->bxc_health_desc,
+					   pt_req.bbr_channel, &pt_req.bbr_cmd,
+					   pt_req.bbr_cdata_buf, pt_req.bbr_len,
+					   get_spdk_identify_ctrlr_completion,
+					   &pt_req);
+	if (rc) {
+		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
+	}
+
+
+	error_page_sz = sizeof(struct spdk_nvme_error_information_entry);
+	numd = error_page_sz / sizeof(uint32_t) - 1u;
+	numdl = numd & 0xFFFFu;
+	numdu = (numd >> 16) & 0xFFFFu;
+	pt_req.bbr_cmd.opc = SPDK_NVME_OPC_GET_LOG_PAGE;
+	pt_req.bbr_cmd.nsid = SPDK_NVME_GLOBAL_NS_TAG;
+	pt_req.bbr_cmd.cdw10 = numdl << 16;
+	pt_req.bbr_cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
+	pt_req.bbr_len = error_page_sz * (pt_req.bbr_elpe + 1);
+	pt_req.bbr_error_buf = spdk_dma_zmalloc(pt_req.bbr_len, 0, NULL);
+
+	/*
+	 * Submit an NVMe Admin command to get device error log page
+	 * to the bdev.
+	 */
+	rc = spdk_bdev_nvme_admin_passthru(ctxt->bxc_health_desc,
+					   pt_req.bbr_channel, &pt_req.bbr_cmd,
+					   pt_req.bbr_error_buf, pt_req.bbr_len,
+					   get_spdk_err_log_page_completion,
+					   &pt_req);
+	if (rc) {
+		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
+	}
+
+	spdk_put_io_channel(pt_req.bbr_channel);
+	spdk_dma_free(pt_req.bbr_health_buf);
+	spdk_dma_free(pt_req.bbr_error_buf);
+	spdk_dma_free(pt_req.bbr_cdata_buf);
+}
 
 /* Print the io stat every few seconds, for debug only */
 static void
@@ -97,10 +428,11 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 	struct spdk_bdev		*bdev;
 	struct spdk_io_channel		*channel;
 
+	/* check if IO_STAT_PERIOD environment variable is set */
 	if (io_stat_period == 0)
 		return;
 
-	if (ctxt->bxc_stat_age + io_stat_period >= now)
+	if (ctxt->bxc_io_stat_age + io_stat_period >= now)
 		return;
 
 	if (ctxt->bxc_desc != NULL) {
@@ -121,7 +453,7 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 			stat.write_latency_ticks);
 	}
 
-	ctxt->bxc_stat_age = now;
+	ctxt->bxc_io_stat_age = now;
 }
 
 int
@@ -331,7 +663,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 
 	/* Call all registered poller one by one */
 	d_list_for_each_entry(poller, &ctxt->bxc_pollers, bnp_link) {
-		if (poller->bnp_period_us != 0 && poller->bnp_expire_us < now)
+		if (poller->bnp_period_us != 0 && poller->bnp_expire_us > now)
 			continue;
 
 		poller->bnp_fn(poller->bnp_arg);
@@ -340,7 +672,17 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 			poller->bnp_expire_us = now + poller->bnp_period_us;
 	}
 
+	/* Print SPDK I/O stats for each xstream */
 	print_io_stat(ctxt, now);
+
+	/*
+	 * Query and print the SPDK device health stats for only the device
+	 * owner xstream.
+	 */
+	if (ctxt->bxc_blobstore != NULL) {
+		if (ctxt->bxc_blobstore->bb_ctxt->bxc_xs_id == ctxt->bxc_xs_id)
+			query_spdk_health_stats(ctxt, now);
+	}
 
 	return count;
 }
@@ -708,6 +1050,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 	bool				 found = false;
 
 	D_ASSERT(ctxt->bxc_desc == NULL);
+	D_ASSERT(ctxt->bxc_health_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -767,6 +1110,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 	}
 
 	D_ASSERT(d_bdev->bb_bdev != NULL);
+	/* generic read only descriptor (currently used for IO stats) */
 	rc = spdk_bdev_open(d_bdev->bb_bdev, false, NULL, NULL,
 			    &ctxt->bxc_desc);
 	if (rc != 0) {
@@ -774,6 +1118,16 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
 		return daos_errno2der(-rc);
 	}
+
+	/* writable descriptor required to query SMART/health info */
+	rc = spdk_bdev_open(d_bdev->bb_bdev, true, NULL, NULL,
+			    &ctxt->bxc_health_desc);
+	if (rc != 0) {
+		D_ERROR("Failed to open bdev %s, %d\n",
+			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
+		return daos_errno2der(-rc);
+	}
+
 
 	if (d_bdev->bb_blobstore == NULL) {
 		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt);
@@ -831,6 +1185,11 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt->bxc_desc != NULL) {
 		spdk_bdev_close(ctxt->bxc_desc);
 		ctxt->bxc_desc = NULL;
+	}
+
+	if (ctxt->bxc_health_desc != NULL) {
+		spdk_bdev_close(ctxt->bxc_health_desc);
+		ctxt->bxc_health_desc = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
@@ -1034,3 +1393,4 @@ out:
 	*pctxt = (rc != 0) ? NULL : ctxt;
 	return rc;
 }
+
