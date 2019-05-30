@@ -49,7 +49,6 @@ print_usage()
 	print_message("%8s DAOS_OF_AKEY_UINT64, DAOS_OF_AKEY_LEXICAL\n", " ");
 	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a |--aggregate-tests\n");
-	print_message("vos_tests -X|--dtx_tests\n");
 	print_message("vos_tests -A|--all_tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
@@ -67,7 +66,6 @@ run_all_tests(int keys, bool nest_iterators)
 		failed += run_io_test(i, keys, nest_iterators);
 	failed += run_discard_tests();
 	failed += run_aggregate_tests(false);
-	failed += run_dtx_tests();
 	return failed;
 }
 
@@ -90,7 +88,6 @@ main(int argc, char **argv)
 		{"discard_tests",	no_argument, 0, 'd'},
 		{"nest_iterators",	no_argument, 0, 'n'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
-		{"dtx_tests",		no_argument, 0, 'X'},
 		{"help",		no_argument, 0, 'h'},
 	};
 
@@ -110,7 +107,7 @@ main(int argc, char **argv)
 	if (argc < 2) {
 		nr_failed = run_all_tests(0, false);
 	} else {
-		while ((opt = getopt_long(argc, argv, "apcdnti:XA:h",
+		while ((opt = getopt_long(argc, argv, "apcdnti:A:h",
 				  long_options, &index)) != -1) {
 			switch (opt) {
 			case 'p':
@@ -132,9 +129,6 @@ main(int argc, char **argv)
 				break;
 			case 'd':
 				nr_failed += run_discard_tests();
-				break;
-			case 'X':
-				nr_failed += run_dtx_tests();
 				break;
 			case 'A':
 				keys = atoi(optarg);
