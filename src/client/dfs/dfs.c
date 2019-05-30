@@ -260,7 +260,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_sg_list_t	sgls[INODE_AKEYS + 1];
 	d_iov_t	sg_iovs[INODE_AKEYS + 1];
 	daos_iod_t	iods[INODE_AKEYS + 1];
-	char		value[PATH_MAX];
+	char		*value;
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
@@ -300,6 +300,9 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	i++;
 
 	if (fetch_sym) {
+		value = malloc(PATH_MAX);
+		if (value == NULL)
+			return -DER_NOMEM;
 		/** Set Akey for Symlink Value, will be empty if no symlink */
 		d_iov_set(&sg_iovs[i], value, PATH_MAX);
 		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
@@ -325,7 +328,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	rc = daos_obj_fetch(oh, th, &dkey, akeys_nr, iods, sgls, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
-		return rc;
+		D_GOTO(out, rc);
 	}
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
@@ -334,7 +337,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		if (sym_len != 0) {
 			entry->value = strdup(value);
 			if (entry->value == NULL)
-				return -DER_NOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
@@ -343,6 +346,9 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	else
 		*exists = true;
 
+out:
+	if (fetch_sym)
+		D_FREE(value);
 	return rc;
 }
 
