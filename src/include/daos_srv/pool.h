@@ -135,8 +135,7 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
-		       unsigned int gid, unsigned int mode, int ntargets,
+int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
 		       const int *domains, daos_prop_t *prop,
