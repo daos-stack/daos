@@ -75,9 +75,23 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 		return nil, errors.New("No credentials supplied")
 	}
 
-	userInfo, _ := ext.LookupUserID(creds.creds.Uid)
-	groupInfo, _ := ext.LookupGroupID(creds.creds.Gid)
-	groups, _ := userInfo.GroupIDs()
+	userInfo, err := ext.LookupUserID(creds.creds.Uid)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to lookup uid %v: %v",
+			creds.creds.Uid, err)
+	}
+
+	groupInfo, err := ext.LookupGroupID(creds.creds.Gid)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to lookup gid %v: %v",
+			creds.creds.Gid, err)
+	}
+
+	groups, err := userInfo.GroupIDs()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get group IDs for user %v: %v",
+			userInfo.Username(), err)
+	}
 
 	name, err := os.Hostname()
 	if err != nil {
@@ -108,8 +122,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
-		return nil, err
+		return nil, fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
 	}
 	token := auth.Token{
 		Flavor: auth.Flavor_AUTH_SYS,
@@ -117,8 +130,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 
 	verifier, err := HashFromToken(&token)
 	if err != nil {
-		fmt.Errorf("Unable to generate verifier (%s)", err)
-		return nil, err
+		return nil, fmt.Errorf("Unable to generate verifier (%s)", err)
 	}
 
 	verifierToken := auth.Token{
