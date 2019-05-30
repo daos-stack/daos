@@ -66,7 +66,7 @@ func (c *controllerFactory) create(address string) (Control, error) {
 	return controller, err
 }
 
-// Connect is an interface providing functionality across multiple
+// Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
 	ConnectClients(Addresses) ResultMap // connect addresses
@@ -83,7 +83,7 @@ type Connect interface {
 }
 
 // connList is an implementation of Connect and stores controllers
-// (connections to clients, one per target server).
+// (connections to clients, one per DAOS server).
 type connList struct {
 	factory     ControllerFactory
 	controllers []Control

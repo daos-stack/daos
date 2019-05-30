@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,22 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
+type mgmtControlListFeaturesClient struct {
+	grpc.ClientStream
+	features      []*pb.Feature
+	alreadyCalled bool
+}
+
+func (m *mgmtControlListFeaturesClient) Recv() (*pb.Feature, error) {
+	if m.alreadyCalled {
+		return nil, io.EOF
+	}
+	m.alreadyCalled = true
+
+	// TODO: expand to return multiple features in stream
+	return m.features[0], nil
+}
+
 type mgmtControlFormatStorageClient struct {
 	grpc.ClientStream
 	ctrlrResults  NvmeControllerResults
@@ -40,7 +56,7 @@ type mgmtControlFormatStorageClient struct {
 	alreadyCalled bool
 }
 
-func (m mgmtControlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
+func (m *mgmtControlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
@@ -59,7 +75,7 @@ type mgmtControlUpdateStorageClient struct {
 	alreadyCalled bool
 }
 
-func (m mgmtControlUpdateStorageClient) Recv() (*pb.UpdateStorageResp, error) {
+func (m *mgmtControlUpdateStorageClient) Recv() (*pb.UpdateStorageResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
@@ -78,7 +94,7 @@ type mgmtControlBurninStorageClient struct {
 	alreadyCalled bool
 }
 
-func (m mgmtControlBurninStorageClient) Recv() (*pb.BurninStorageResp, error) {
+func (m *mgmtControlBurninStorageClient) Recv() (*pb.BurninStorageResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
@@ -88,6 +104,20 @@ func (m mgmtControlBurninStorageClient) Recv() (*pb.BurninStorageResp, error) {
 		Crets: m.ctrlrResults,
 		Mrets: m.mountResults,
 	}, nil
+}
+
+type mgmtControlFetchFioConfigPathsClient struct {
+	grpc.ClientStream
+	alreadyCalled bool
+}
+
+func (m *mgmtControlFetchFioConfigPathsClient) Recv() (*pb.FilePath, error) {
+	if m.alreadyCalled {
+		return nil, io.EOF
+	}
+	m.alreadyCalled = true
+
+	return &pb.FilePath{Path: "/tmp/fioconf.test.example"}, nil
 }
 
 type mockMgmtControlClient struct {
@@ -104,16 +134,16 @@ type mockMgmtControlClient struct {
 	killRet       error
 }
 
-func (m *mockMgmtControlClient) listAllFeatures() (FeatureMap, error) {
-	fm := make(FeatureMap)
-	for _, f := range m.features {
-		fm[f.Fname.Name] = fmt.Sprintf(
-			"category %s, %s", f.Category.Category, f.Description)
-	}
-	return fm, nil
+func (m *mockMgmtControlClient) ListFeatures(
+	ctx context.Context, req *pb.EmptyReq, o ...grpc.CallOption) (
+	pb.MgmtControl_ListFeaturesClient, error) {
+
+	return &mgmtControlListFeaturesClient{features: m.features}, nil
 }
 
-func (m *mockMgmtControlClient) scanStorage() (*pb.ScanStorageResp, error) {
+func (m *mockMgmtControlClient) ScanStorage(
+	ctx context.Context, req *pb.ScanStorageReq, o ...grpc.CallOption) (
+	*pb.ScanStorageResp, error) {
 	// return successful query results, state member messages
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
 	return &pb.ScanStorageResp{
@@ -122,19 +152,20 @@ func (m *mockMgmtControlClient) scanStorage() (*pb.ScanStorageResp, error) {
 	}, m.scanRet
 }
 
-func (m *mockMgmtControlClient) formatStorage(ctx context.Context) (
+func (m *mockMgmtControlClient) FormatStorage(
+	ctx context.Context, req *pb.FormatStorageReq, o ...grpc.CallOption) (
 	pb.MgmtControl_FormatStorageClient, error) {
 
-	return mgmtControlFormatStorageClient{
+	return &mgmtControlFormatStorageClient{
 		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
 	}, m.formatRet
 }
 
-func (m *mockMgmtControlClient) updateStorage(
-	ctx context.Context, req *pb.UpdateStorageReq) (
+func (m *mockMgmtControlClient) UpdateStorage(
+	ctx context.Context, req *pb.UpdateStorageReq, o ...grpc.CallOption) (
 	pb.MgmtControl_UpdateStorageClient, error) {
 
-	return mgmtControlUpdateStorageClient{
+	return &mgmtControlUpdateStorageClient{
 		ctrlrResults: m.ctrlrResults, moduleResults: m.moduleResults,
 	}, m.updateRet
 }
@@ -143,25 +174,44 @@ func (m *mockMgmtControlClient) BurninStorage(
 	ctx context.Context, req *pb.BurninStorageReq, o ...grpc.CallOption) (
 	pb.MgmtControl_BurninStorageClient, error) {
 
-	return mgmtControlBurninStorageClient{
-		ctrlrResults: m.ctrlrResults, moduleResults: m.moduleResults,
+	return &mgmtControlBurninStorageClient{
+		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
 	}, m.burninRet
 }
 
-func (m *mockMgmtControlClient) killRank(uuid string, rank uint32) error {
-	return m.killRet
+func (m *mockMgmtControlClient) FetchFioConfigPaths(
+	ctx context.Context, req *pb.EmptyReq, o ...grpc.CallOption) (
+	pb.MgmtControl_FetchFioConfigPathsClient, error) {
+
+	return &mgmtControlFetchFioConfigPathsClient{}, nil
+}
+
+func (m *mockMgmtControlClient) CreatePool(
+	ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (
+	*pb.CreatePoolResp, error) {
+
+	// return successful pool creation results
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.CreatePoolResp{}, nil
+}
+
+func (m *mockMgmtControlClient) KillRank(
+	ctx context.Context, req *pb.DaosRank, o ...grpc.CallOption) (
+	*pb.DaosResponse, error) {
+
+	return &pb.DaosResponse{}, m.killRet
 }
 
 func newMockMgmtControlClient(
 	features []*pb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, mountResults ScmMountResults,
-	scanRet error, formatRet error, updateRet error,
+	scanRet error, formatRet error, updateRet error, burninRet error,
 	killRet error) pb.MgmtControlClient {
 
 	return &mockMgmtControlClient{
 		features, ctrlrs, ctrlrResults, modules, moduleResults,
-		mountResults, scanRet, formatRet, updateRet, killRet,
+		mountResults, scanRet, formatRet, updateRet, burninRet, killRet,
 	}
 }
 
@@ -170,6 +220,7 @@ type mockControl struct {
 	address    string
 	connState  connectivity.State
 	connectRet error
+	client     pb.MgmtControlClient
 }
 
 func (m *mockControl) connect(addr string) error {
@@ -193,9 +244,63 @@ func (m *mockControl) getClient() pb.MgmtControlClient {
 }
 
 func newMockControl(
-	address string, state connectivity.State, connectRet error) Control {
+	address string, state connectivity.State, connectRet error,
+	client pb.MgmtControlClient) Control {
 
-	return &mockControl{address, state, connectRet}
+	return &mockControl{address, state, connectRet, client}
+}
+
+type mockControllerFactory struct {
+	state         connectivity.State
+	features      []*pb.Feature
+	ctrlrs        NvmeControllers
+	ctrlrResults  NvmeControllerResults
+	modules       ScmModules
+	moduleResults ScmModuleResults
+	mountResults  ScmMountResults
+	// to provide error injection into Control objects
+	scanRet    error
+	formatRet  error
+	updateRet  error
+	burninRet  error
+	killRet    error
+	connectRet error
+}
+
+func (m *mockControllerFactory) create(address string) (Control, error) {
+	// returns controller with mock properties specified in constructor
+	client := newMockMgmtControlClient(
+		m.features, m.ctrlrs, m.ctrlrResults,
+		m.modules, m.moduleResults, m.mountResults,
+		m.scanRet, m.formatRet, m.updateRet, m.burninRet, m.killRet)
+
+	controller := newMockControl(address, m.state, m.connectRet, client)
+
+	err := controller.connect(address)
+
+	return controller, err
+}
+
+func newMockConnect(
+	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults, modules ScmModules,
+	moduleResults ScmModuleResults, mountResults ScmMountResults,
+	scanRet error, formatRet error, updateRet error, burninRet error,
+	killRet error, connectRet error) Connect {
+
+	return &connList{
+		factory: &mockControllerFactory{
+			state, features, ctrlrs, ctrlrResults, modules,
+			moduleResults, mountResults, scanRet, formatRet,
+			updateRet, burninRet, killRet, connectRet,
+		},
+	}
+}
+
+func defaultMockConnect() Connect {
+	return newMockConnect(
+		connectivity.Ready, features, ctrlrs, ctrlrResults, modules,
+		moduleResults, mountResults, nil, nil, nil, nil, nil, nil)
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.

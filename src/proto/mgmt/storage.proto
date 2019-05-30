@@ -42,7 +42,7 @@ message ScanStorageResp {
 	// TODO: add scan for scm regions/mount
 }
 
-message FormerStorageReq {}
+message FormatStorageReq {}
 
 message FormatStorageResp {
 	repeated NvmeControllerResult crets = 1;	// One per controller format attempt

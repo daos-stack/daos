@@ -37,7 +37,7 @@ service MgmtControl {
 	// Retrieve details of nonvolatile storage devices on server
 	rpc ScanStorage(ScanStorageReq) returns (ScanStorageResp) {};
 	// Format nonvolatile storage devices for use with DAOS
-	rpc FormatStorage(FormerStorageReq) returns (stream FormatStorageResp) {};
+	rpc FormatStorage(FormatStorageReq) returns (stream FormatStorageResp) {};
 	// Update nonvolatile storage device firmware
 	rpc UpdateStorage(UpdateStorageReq) returns (stream UpdateStorageResp) {};
 	// Perform burn-in testing to verify nonvolatile storage devices
@@ -49,5 +49,5 @@ service MgmtControl {
 	// Kill a given rank associated with a given pool
 	rpc KillRank(DaosRank) returns (DaosResponse) {};
 	// List features supported on remote storage server/DAOS system
-	rpc ListAllFeatures(EmptyReq) returns (stream Feature) {};
+	rpc ListFeatures(EmptyReq) returns (stream Feature) {};
 }

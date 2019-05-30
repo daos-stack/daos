@@ -28,15 +28,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-// KillRank Will terminate server running at given rank on pool specified by
-// uuid. Request will only be issued to a single access point.
-func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+// CreatePool will create a DAOS pool using provided parameters and return uuid
+func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
 	results := make(ResultMap)
 	mc := c.controllers[0]
 
-	resp, err := mc.getClient().KillRank(
-		context.Background(),
-		&pb.DaosRank{PoolUuid: uuid, Rank: rank})
+	resp, err := mc.getClient().CreatePool(context.Background(), req)
 
 	result := ClientResult{mc.getAddress(), resp, err}
 	results[result.Address] = result

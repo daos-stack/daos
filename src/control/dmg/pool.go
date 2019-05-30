@@ -51,7 +51,7 @@ type PoolCmd struct {
 type CreatePoolCmd struct {
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group"`
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user"`
-	AclFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
 	RankList   string `short:"r" long:"ranks" description:"DAOS pool to be owned by given user"`
@@ -184,7 +184,7 @@ func (c *CreatePoolCmd) Execute(args []string) error {
 	}
 
 	err := createPool(
-		c.GroupName, c.UserName, c.AclFile,
+		c.GroupName, c.UserName, c.ACLFile,
 		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps)
 
 	// exit immediately to avoid continuation of main
