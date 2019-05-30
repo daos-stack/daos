@@ -107,7 +107,7 @@ type UpdateStorCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(params *pb.UpdateStorageParams) {
+func updateStor(req *pb.UpdateStorageReq) {
 	fmt.Println(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -117,7 +117,7 @@ func updateStor(params *pb.UpdateStorageParams) {
 
 	if getConsent() {
 		fmt.Println("")
-		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
+		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
 		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
 		fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
 	}
@@ -132,8 +132,8 @@ func (u *UpdateStorCmd) Execute(args []string) error {
 
 	// only populate nvme fwupdate params for the moment
 	updateStor(
-		&pb.UpdateStorageParams{
-			Nvme: &pb.UpdateNvmeParams{
+		&pb.UpdateStorageReq{
+			Nvme: &pb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},

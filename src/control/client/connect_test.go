@@ -316,7 +316,7 @@ func TestUpdateStorage(t *testing.T) {
 			moduleResults, mountResults, nil, nil, tt.updateRet,
 			nil, nil)
 
-		cNvmeMap, cModuleMap := cc.UpdateStorage(new(pb.UpdateStorageParams))
+		cNvmeMap, cModuleMap := cc.UpdateStorage(new(pb.UpdateStorageReq))
 
 		if tt.updateRet != nil {
 			for _, addr := range addresses {

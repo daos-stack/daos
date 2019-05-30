@@ -131,7 +131,7 @@ func (m *mockMgmtControlClient) formatStorage(ctx context.Context) (
 }
 
 func (m *mockMgmtControlClient) updateStorage(
-	ctx context.Context, params *pb.UpdateStorageReq) (
+	ctx context.Context, req *pb.UpdateStorageReq) (
 	pb.MgmtControl_UpdateStorageClient, error) {
 
 	return mgmtControlUpdateStorageClient{
@@ -140,7 +140,7 @@ func (m *mockMgmtControlClient) updateStorage(
 }
 
 func (m *mockMgmtControlClient) BurninStorage(
-	ctx context.Context, params *pb.BurninStorageReq, o ...grpc.CallOption) (
+	ctx context.Context, req *pb.BurninStorageReq, o ...grpc.CallOption) (
 	pb.MgmtControl_BurninStorageClient, error) {
 
 	return mgmtControlBurninStorageClient{

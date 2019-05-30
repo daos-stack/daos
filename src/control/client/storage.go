@@ -42,7 +42,7 @@ const (
 
 // scanStorageRequest returns all discovered SCM and NVMe storage devices
 // discovered on a remote server by calling over gRPC channel.
-func scanStorageRequest(mc Control, params interface{}, ch chan ClientResult) {
+func scanStorageRequest(mc Control, req interface{}, ch chan ClientResult) {
 	sRes := storageResult{}
 
 	resp, err := mc.client.ScanStorage(
@@ -186,7 +186,7 @@ func (c *connList) FormatStorage() (ClientCtrlrMap, ClientMountMap) {
 // and returns an open stream handle. Receive on stream and send ClientResult
 // over channel for each.
 func updateStorageRequest(
-	mc Control, params interface{}, ch chan ClientResult) {
+	mc Control, req interface{}, ch chan ClientResult) {
 
 	sRes := storageResult{}
 
@@ -195,20 +195,20 @@ func updateStorageRequest(
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	var updateParams *pb.UpdateStorageParams
-	switch v := params.(type) {
-	case *pb.UpdateStorageParams:
-		updateParams = v
+	var updateReq *pb.UpdateStorageReq
+	switch v := req.(type) {
+	case *pb.UpdateStorageReq:
+		updateReq = v
 	default:
 		err := errors.Errorf(
-			msgTypeAssert, pb.UpdateStorageParams{}, params)
+			msgTypeAssert, pb.UpdateStorageReq{}, req)
 
 		log.Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
 
-	stream, err := mc.client.UpdateStorage(ctx, updateParams)
+	stream, err := mc.client.UpdateStorage(ctx, updateReq)
 	if err != nil {
 		log.Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
@@ -236,10 +236,10 @@ func updateStorageRequest(
 
 // UpdateStorage prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) UpdateStorage(params *pb.UpdateStorageParams) (
+func (c *connList) UpdateStorage(req *pb.UpdateStorageReq) (
 	ClientCtrlrMap, ClientModuleMap) {
 
-	cResults := c.makeRequests(params, updateStorageRequest)
+	cResults := c.makeRequests(req, updateStorageRequest)
 	cCtrlrResults := make(ClientCtrlrMap)   // srv address:NVMe SSDs
 	cModuleResults := make(ClientModuleMap) // srv address:SCM modules
 
@@ -276,7 +276,7 @@ func (c *control) FetchFioConfigPaths() (paths []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := c.client.FetchFioConfigPaths(ctx, &pb.EmptyParams{})
+	stream, err := c.client.FetchFioConfigPaths(ctx, &pb.EmptyReq{})
 	if err != nil {
 		return
 	}
@@ -303,11 +303,11 @@ func (c *control) BurnInNvme(pciAddr string, configPath string) (
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	params := &pb.BurninNvmeParams{
+	req := &pb.BurninNvmeReq{
 		Fioconfig: &pb.FilePath{Path: configPath},
 	}
 	_, err = c.client.BurninStorage(
-		ctx, &pb.BurninStorageParams{Nvme: params})
+		ctx, &pb.BurninStorageReq{Nvme: req})
 	if err != nil {
 		return
 	}

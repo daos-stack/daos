@@ -163,15 +163,15 @@ func createPool(
 			maxNumSvcReps, numSvcReps)
 	}
 
-	params := *pb.CreatePoolReq{
+	req := *pb.CreatePoolReq{
 		Scmbytes: scmBytes, Nvmebytes: NVMeSize, Ranklist: ranks,
 		Numsvcreps: numSvcReps,
 	}
 
-	fmt.Printf("Creating DAOS pool: %+v\n", params)
+	fmt.Printf("Creating DAOS pool: %+v\n", req)
 
 	fmt.Printf(
-		unpackClientMap(conns.poolCreate(params)),
+		unpackClientMap(conns.poolCreate(req)),
 		"pool create command results")
 
 	return nil

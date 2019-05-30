@@ -83,7 +83,7 @@ func (c *control) listFeatures(category string) (fm FeatureMap, err error) {
 // containing supported server features over channel.
 func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
 	stream, err := mc.getClient().ListAllFeatures(
-		context.Background(), &pb.EmptyParams{})
+		context.Background(), &pb.EmptyReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return

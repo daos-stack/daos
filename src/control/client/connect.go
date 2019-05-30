@@ -74,7 +74,7 @@ type Connect interface {
 	ClearConns() ResultMap
 	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
 	FormatStorage() (ClientCtrlrMap, ClientMountMap)
-	UpdateStorage(*pb.UpdateStorageParams) (ClientCtrlrMap, ClientModuleMap)
+	UpdateStorage(*pb.UpdateStorageReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
@@ -184,7 +184,7 @@ func (c *connList) ClearConns() ResultMap {
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
 func (c *connList) makeRequests(
-	params interface{},
+	req interface{},
 	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
@@ -193,7 +193,7 @@ func (c *connList) makeRequests(
 	addrs := []string{}
 	for _, mc := range c.controllers {
 		addrs = append(addrs, mc.getAddress())
-		go requestFn(mc, params, ch)
+		go requestFn(mc, req, ch)
 	}
 
 	for {
