@@ -260,7 +260,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_sg_list_t	sgls[INODE_AKEYS + 1];
 	d_iov_t	sg_iovs[INODE_AKEYS + 1];
 	daos_iod_t	iods[INODE_AKEYS + 1];
-	char		*value;
+	char		*value = NULL;
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
@@ -335,6 +335,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		size_t sym_len = iods[INODE_AKEYS].iod_size;
 
 		if (sym_len != 0) {
+			D_ASSERT(value);
 			entry->value = strdup(value);
 			if (entry->value == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
