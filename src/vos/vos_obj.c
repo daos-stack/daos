@@ -1359,19 +1359,21 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, uint64_t attr, bool set)
 {
 	struct vos_pool		*vpool;
-	struct vos_object	*obj;
+	struct vos_object	*obj = NULL;
+	struct vos_container	*cont;
 	daos_epoch_range_t	 epr = {epoch, epoch};
 	int			 rc;
+
+	cont = vos_hdl2cont(coh);
+	vpool = vos_cont2pool(cont);
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto exit;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
 			  DAOS_INTENT_UPDATE, &obj);
 	if (rc != 0)
-		return rc;
-
-	vpool = vos_obj2pool(obj);
-	rc = vos_tx_begin(vpool);
-	if (rc != 0)
-		goto exit;
+		goto end;
 
 	rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
 			     sizeof(obj->obj_df->vo_oi_attr));

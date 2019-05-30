@@ -794,6 +794,12 @@ vos_cont2pool(struct vos_container *cont)
 	return cont->vc_pool;
 }
 
+static inline struct umem_instance *
+vos_cont2umm(struct vos_container *cont)
+{
+	return &cont->vc_pool->vp_umm;
+}
+
 static inline struct vos_pool *
 vos_obj2pool(struct vos_object *obj)
 {
@@ -1038,7 +1044,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 
 /* vos_io.c */
 uint16_t
-vos_media_select(struct vos_object *obj, daos_iod_type_t type,
+vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 		 daos_size_t size);
 int
 vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,

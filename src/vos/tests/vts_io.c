@@ -1328,6 +1328,22 @@ io_set_attribute_test(void **state)
 	int rc;
 	uint64_t attr;
 	uint64_t i, expected;
+	daos_unit_oid_t oid;
+
+	oid = gen_oid(arg->ofeat);
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, 0);
+
+	rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     VOS_OI_FAILED);
+	assert_int_equal(rc, 0);
+
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, VOS_OI_FAILED);
 
 	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
 			     NULL, &attr);
