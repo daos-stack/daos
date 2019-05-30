@@ -67,10 +67,10 @@ message ScmMountResult {
 	ResponseState state = 2;	// state of current operation
 }
 
-message ScanScmParams {}
+message ScanScmReq {}
 
-message FormatScmParams {}
+message FormatScmReq {}
 
-message UpdateScmParams {}
+message UpdateScmReq {}
 
-message BurninScmParams {}
+message BurninScmReq {}
