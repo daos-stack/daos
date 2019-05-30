@@ -120,6 +120,14 @@ enum {
 	D_FOREACH_PRIO_MASK(D_PRIO_ENUM, D_NOOP)
 };
 
+enum d_log_flag_bits {
+	/**
+	 * To be used in d_log_dbg_grp_alloc(). This bit sets grpname as the
+	 * global default debug mask.
+	 */
+	D_LOG_SET_AS_DEFAULT	= 1U,
+};
+
 #define DLOG_PRISHIFT   24		/**< to get non-debug level */
 #define DLOG_DPRISHIFT  8		/**< to get debug level */
 #define DLOG_FACMASK    0x000000ff	/**< facility mask */
@@ -236,7 +244,7 @@ int d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
 /**
  * Reset optional debug group
  *
- * \param[in]	grpname	debug mask group name
+ * \param[in] grpname	debug mask group name
  *
  * \return		0 on success, -1 on error
  */
@@ -245,12 +253,15 @@ int d_log_dbg_grp_dealloc(char *grpname);
 /**
  * Create an identifier/group name for muliple debug bits
  *
- * \param[in]	grpname		debug mask group name
  * \param[in]	dbgmask		mask of all bits in group
+ * \param[in]	grpname		debug mask group name
+ * \param[in]	flags		bit flags. e.g. D_LOG_SET_AS_DEFAULT sets
+ *				grpname as the default mask. See
+ *				\ref d_log_flag_bits for supported flags.
  *
  * \return		0 on success, -1 on error
  */
-int d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname);
+int d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags);
 
 /**
  * log a message using stdarg list without checking filtering
