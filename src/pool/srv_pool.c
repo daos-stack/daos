@@ -1470,12 +1470,14 @@ pool_map_update(crt_context_t ctx, struct pool_svc *svc,
 	int			rc;
 
 	/* If iv_ns is NULL, it means the pool is not connected,
-	 * then we do not need distribute pool map to all other
-	 * servers. NB: rebuild will redistribute the pool map
-	 * by itself anyway.
+	 * then it only update its own(leader's) pool map, instead
+	 * of distributing pool map to all other servers. offline
+	 * rebuild will redistribute the pool map by itself anyway.
 	 */
-	if (svc->ps_pool->sp_iv_ns == NULL)
-		return 0;
+	if (svc->ps_pool->sp_iv_ns == NULL) {
+		rc = ds_pool_tgt_map_update(svc->ps_pool, buf, map_version);
+		return rc;
+	}
 
 	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
 		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
