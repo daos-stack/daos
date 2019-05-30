@@ -942,7 +942,7 @@ test_evt_iter_flags(void **state)
 	data = (int **)malloc((NUM_EPOCHS+1)*sizeof(int *));
 	for (count = 0; count < NUM_EPOCHS+1; count++) {
 		data[count] = (int *)calloc(
-					(NUM_EPOCHS+NUM_EXTENTS+1),sizeof(int));
+				(NUM_EPOCHS+NUM_EXTENTS+1), sizeof(int));
 		if (data[count] == NULL) {
 			print_message("Cannot allocate Memory\n");
 			goto end;
@@ -957,7 +957,7 @@ test_evt_iter_flags(void **state)
 	if (actual_val == NULL)
 		goto finish1;
 	rev_exp_val = (int *)calloc((NUM_EPOCHS+1)*
-				(NUM_EPOCHS+NUM_EXTENTS+1),sizeof(int));
+				(NUM_EPOCHS+NUM_EXTENTS+1), sizeof(int));
 	if (rev_exp_val == NULL)
 		goto finish;
 	/* Insert a bunch of entries with hole*/
