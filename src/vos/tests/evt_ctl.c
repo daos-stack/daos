@@ -941,26 +941,25 @@ test_evt_iter_flags(void **state)
 	assert_int_equal(rc, 0);
 	data = (int **)malloc((NUM_EPOCHS+1)*sizeof(int *));
 	for (count = 0; count < NUM_EPOCHS+1; count++) {
-		data[count] = (int *)malloc(
-					(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
+		data[count] = (int *)calloc(
+					(NUM_EPOCHS+NUM_EXTENTS+1),sizeof(int));
 		if (data[count] == NULL) {
 			print_message("Cannot allocate Memory\n");
 			goto end;
 		}
 	}
-	for (count = 0; count < NUM_EPOCHS+1; count++)
-		memset(data[count], 0,	(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
 	exp_val = (int *)malloc((NUM_EPOCHS+1)*
 				(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
-	assert_non_null(exp_val);
+	if (exp_val == NULL)
+		goto finish2;
 	actual_val = (int *)malloc((NUM_EPOCHS+1)*
 				(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
-	assert_non_null(actual_val);
-	rev_exp_val = (int *)malloc((NUM_EPOCHS+1)*
-				(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
-	assert_non_null(rev_exp_val);
-	memset(rev_exp_val, 0,	(NUM_EPOCHS+1)*
-		(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
+	if (actual_val == NULL)
+		goto finish1;
+	rev_exp_val = (int *)calloc((NUM_EPOCHS+1)*
+				(NUM_EPOCHS+NUM_EXTENTS+1),sizeof(int));
+	if (rev_exp_val == NULL)
+		goto finish;
 	/* Insert a bunch of entries with hole*/
 	srand(time(0));
 	hole_epoch = (rand() % 28) + 1;
@@ -1074,11 +1073,13 @@ test_evt_iter_flags(void **state)
 			goto finish;
 	}
 finish:
-	free(data);
 	free(rev_exp_val);
-	free(exp_val);
+finish1:
 	free(actual_val);
+finish2:
+	free(exp_val);
 end:
+	free(data);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
