@@ -18,35 +18,35 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type ScanStorageParams struct {
+type ScanStorageReq struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ScanStorageParams) Reset()         { *m = ScanStorageParams{} }
-func (m *ScanStorageParams) String() string { return proto.CompactTextString(m) }
-func (*ScanStorageParams) ProtoMessage()    {}
-func (*ScanStorageParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{0}
+func (m *ScanStorageReq) Reset()         { *m = ScanStorageReq{} }
+func (m *ScanStorageReq) String() string { return proto.CompactTextString(m) }
+func (*ScanStorageReq) ProtoMessage()    {}
+func (*ScanStorageReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_336e01466b6600b5, []int{0}
 }
-func (m *ScanStorageParams) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_ScanStorageParams.Unmarshal(m, b)
+func (m *ScanStorageReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ScanStorageReq.Unmarshal(m, b)
 }
-func (m *ScanStorageParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_ScanStorageParams.Marshal(b, m, deterministic)
+func (m *ScanStorageReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ScanStorageReq.Marshal(b, m, deterministic)
 }
-func (dst *ScanStorageParams) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanStorageParams.Merge(dst, src)
+func (dst *ScanStorageReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanStorageReq.Merge(dst, src)
 }
-func (m *ScanStorageParams) XXX_Size() int {
-	return xxx_messageInfo_ScanStorageParams.Size(m)
+func (m *ScanStorageReq) XXX_Size() int {
+	return xxx_messageInfo_ScanStorageReq.Size(m)
 }
-func (m *ScanStorageParams) XXX_DiscardUnknown() {
-	xxx_messageInfo_ScanStorageParams.DiscardUnknown(m)
+func (m *ScanStorageReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScanStorageReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ScanStorageParams proto.InternalMessageInfo
+var xxx_messageInfo_ScanStorageReq proto.InternalMessageInfo
 
 // ScanStorageResp returns discovered storage devices.
 type ScanStorageResp struct {
@@ -63,7 +63,7 @@ func (m *ScanStorageResp) Reset()         { *m = ScanStorageResp{} }
 func (m *ScanStorageResp) String() string { return proto.CompactTextString(m) }
 func (*ScanStorageResp) ProtoMessage()    {}
 func (*ScanStorageResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{1}
+	return fileDescriptor_storage_336e01466b6600b5, []int{1}
 }
 func (m *ScanStorageResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanStorageResp.Unmarshal(m, b)
@@ -111,35 +111,35 @@ func (m *ScanStorageResp) GetScmstate() *ResponseState {
 	return nil
 }
 
-type FormatStorageParams struct {
+type FormerStorageReq struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *FormatStorageParams) Reset()         { *m = FormatStorageParams{} }
-func (m *FormatStorageParams) String() string { return proto.CompactTextString(m) }
-func (*FormatStorageParams) ProtoMessage()    {}
-func (*FormatStorageParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{2}
+func (m *FormerStorageReq) Reset()         { *m = FormerStorageReq{} }
+func (m *FormerStorageReq) String() string { return proto.CompactTextString(m) }
+func (*FormerStorageReq) ProtoMessage()    {}
+func (*FormerStorageReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_336e01466b6600b5, []int{2}
 }
-func (m *FormatStorageParams) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_FormatStorageParams.Unmarshal(m, b)
+func (m *FormerStorageReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_FormerStorageReq.Unmarshal(m, b)
 }
-func (m *FormatStorageParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_FormatStorageParams.Marshal(b, m, deterministic)
+func (m *FormerStorageReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_FormerStorageReq.Marshal(b, m, deterministic)
 }
-func (dst *FormatStorageParams) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FormatStorageParams.Merge(dst, src)
+func (dst *FormerStorageReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FormerStorageReq.Merge(dst, src)
 }
-func (m *FormatStorageParams) XXX_Size() int {
-	return xxx_messageInfo_FormatStorageParams.Size(m)
+func (m *FormerStorageReq) XXX_Size() int {
+	return xxx_messageInfo_FormerStorageReq.Size(m)
 }
-func (m *FormatStorageParams) XXX_DiscardUnknown() {
-	xxx_messageInfo_FormatStorageParams.DiscardUnknown(m)
+func (m *FormerStorageReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_FormerStorageReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_FormatStorageParams proto.InternalMessageInfo
+var xxx_messageInfo_FormerStorageReq proto.InternalMessageInfo
 
 type FormatStorageResp struct {
 	Crets                []*NvmeControllerResult `protobuf:"bytes,1,rep,name=crets,proto3" json:"crets,omitempty"`
@@ -153,7 +153,7 @@ func (m *FormatStorageResp) Reset()         { *m = FormatStorageResp{} }
 func (m *FormatStorageResp) String() string { return proto.CompactTextString(m) }
 func (*FormatStorageResp) ProtoMessage()    {}
 func (*FormatStorageResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{3}
+	return fileDescriptor_storage_336e01466b6600b5, []int{3}
 }
 func (m *FormatStorageResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatStorageResp.Unmarshal(m, b)
@@ -187,46 +187,46 @@ func (m *FormatStorageResp) GetMrets() []*ScmMountResult {
 	return nil
 }
 
-type UpdateStorageParams struct {
-	Nvme                 *UpdateNvmeParams `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
-	Scm                  *UpdateScmParams  `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+type UpdateStorageReq struct {
+	Nvme                 *UpdateNvmeReq `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
+	Scm                  *UpdateScmReq  `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
 }
 
-func (m *UpdateStorageParams) Reset()         { *m = UpdateStorageParams{} }
-func (m *UpdateStorageParams) String() string { return proto.CompactTextString(m) }
-func (*UpdateStorageParams) ProtoMessage()    {}
-func (*UpdateStorageParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{4}
+func (m *UpdateStorageReq) Reset()         { *m = UpdateStorageReq{} }
+func (m *UpdateStorageReq) String() string { return proto.CompactTextString(m) }
+func (*UpdateStorageReq) ProtoMessage()    {}
+func (*UpdateStorageReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_336e01466b6600b5, []int{4}
 }
-func (m *UpdateStorageParams) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_UpdateStorageParams.Unmarshal(m, b)
+func (m *UpdateStorageReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_UpdateStorageReq.Unmarshal(m, b)
 }
-func (m *UpdateStorageParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_UpdateStorageParams.Marshal(b, m, deterministic)
+func (m *UpdateStorageReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_UpdateStorageReq.Marshal(b, m, deterministic)
 }
-func (dst *UpdateStorageParams) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateStorageParams.Merge(dst, src)
+func (dst *UpdateStorageReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateStorageReq.Merge(dst, src)
 }
-func (m *UpdateStorageParams) XXX_Size() int {
-	return xxx_messageInfo_UpdateStorageParams.Size(m)
+func (m *UpdateStorageReq) XXX_Size() int {
+	return xxx_messageInfo_UpdateStorageReq.Size(m)
 }
-func (m *UpdateStorageParams) XXX_DiscardUnknown() {
-	xxx_messageInfo_UpdateStorageParams.DiscardUnknown(m)
+func (m *UpdateStorageReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateStorageReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_UpdateStorageParams proto.InternalMessageInfo
+var xxx_messageInfo_UpdateStorageReq proto.InternalMessageInfo
 
-func (m *UpdateStorageParams) GetNvme() *UpdateNvmeParams {
+func (m *UpdateStorageReq) GetNvme() *UpdateNvmeReq {
 	if m != nil {
 		return m.Nvme
 	}
 	return nil
 }
 
-func (m *UpdateStorageParams) GetScm() *UpdateScmParams {
+func (m *UpdateStorageReq) GetScm() *UpdateScmReq {
 	if m != nil {
 		return m.Scm
 	}
@@ -245,7 +245,7 @@ func (m *UpdateStorageResp) Reset()         { *m = UpdateStorageResp{} }
 func (m *UpdateStorageResp) String() string { return proto.CompactTextString(m) }
 func (*UpdateStorageResp) ProtoMessage()    {}
 func (*UpdateStorageResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{5}
+	return fileDescriptor_storage_336e01466b6600b5, []int{5}
 }
 func (m *UpdateStorageResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateStorageResp.Unmarshal(m, b)
@@ -279,46 +279,46 @@ func (m *UpdateStorageResp) GetMrets() []*ScmModuleResult {
 	return nil
 }
 
-type BurninStorageParams struct {
-	Nvme                 *BurninNvmeParams `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
-	Scm                  *BurninScmParams  `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+type BurninStorageReq struct {
+	Nvme                 *BurninNvmeReq `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
+	Scm                  *BurninScmReq  `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
 }
 
-func (m *BurninStorageParams) Reset()         { *m = BurninStorageParams{} }
-func (m *BurninStorageParams) String() string { return proto.CompactTextString(m) }
-func (*BurninStorageParams) ProtoMessage()    {}
-func (*BurninStorageParams) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{6}
+func (m *BurninStorageReq) Reset()         { *m = BurninStorageReq{} }
+func (m *BurninStorageReq) String() string { return proto.CompactTextString(m) }
+func (*BurninStorageReq) ProtoMessage()    {}
+func (*BurninStorageReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_336e01466b6600b5, []int{6}
 }
-func (m *BurninStorageParams) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_BurninStorageParams.Unmarshal(m, b)
+func (m *BurninStorageReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_BurninStorageReq.Unmarshal(m, b)
 }
-func (m *BurninStorageParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_BurninStorageParams.Marshal(b, m, deterministic)
+func (m *BurninStorageReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_BurninStorageReq.Marshal(b, m, deterministic)
 }
-func (dst *BurninStorageParams) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BurninStorageParams.Merge(dst, src)
+func (dst *BurninStorageReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BurninStorageReq.Merge(dst, src)
 }
-func (m *BurninStorageParams) XXX_Size() int {
-	return xxx_messageInfo_BurninStorageParams.Size(m)
+func (m *BurninStorageReq) XXX_Size() int {
+	return xxx_messageInfo_BurninStorageReq.Size(m)
 }
-func (m *BurninStorageParams) XXX_DiscardUnknown() {
-	xxx_messageInfo_BurninStorageParams.DiscardUnknown(m)
+func (m *BurninStorageReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_BurninStorageReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_BurninStorageParams proto.InternalMessageInfo
+var xxx_messageInfo_BurninStorageReq proto.InternalMessageInfo
 
-func (m *BurninStorageParams) GetNvme() *BurninNvmeParams {
+func (m *BurninStorageReq) GetNvme() *BurninNvmeReq {
 	if m != nil {
 		return m.Nvme
 	}
 	return nil
 }
 
-func (m *BurninStorageParams) GetScm() *BurninScmParams {
+func (m *BurninStorageReq) GetScm() *BurninScmReq {
 	if m != nil {
 		return m.Scm
 	}
@@ -327,7 +327,7 @@ func (m *BurninStorageParams) GetScm() *BurninScmParams {
 
 type BurninStorageResp struct {
 	Crets                []*NvmeControllerResult `protobuf:"bytes,1,rep,name=crets,proto3" json:"crets,omitempty"`
-	Mrets                []*ScmModuleResult      `protobuf:"bytes,2,rep,name=mrets,proto3" json:"mrets,omitempty"`
+	Mrets                []*ScmMountResult       `protobuf:"bytes,2,rep,name=mrets,proto3" json:"mrets,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -337,7 +337,7 @@ func (m *BurninStorageResp) Reset()         { *m = BurninStorageResp{} }
 func (m *BurninStorageResp) String() string { return proto.CompactTextString(m) }
 func (*BurninStorageResp) ProtoMessage()    {}
 func (*BurninStorageResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_fe5dca6e314a5dad, []int{7}
+	return fileDescriptor_storage_336e01466b6600b5, []int{7}
 }
 func (m *BurninStorageResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BurninStorageResp.Unmarshal(m, b)
@@ -364,7 +364,7 @@ func (m *BurninStorageResp) GetCrets() []*NvmeControllerResult {
 	return nil
 }
 
-func (m *BurninStorageResp) GetMrets() []*ScmModuleResult {
+func (m *BurninStorageResp) GetMrets() []*ScmMountResult {
 	if m != nil {
 		return m.Mrets
 	}
@@ -372,40 +372,40 @@ func (m *BurninStorageResp) GetMrets() []*ScmModuleResult {
 }
 
 func init() {
-	proto.RegisterType((*ScanStorageParams)(nil), "mgmt.ScanStorageParams")
+	proto.RegisterType((*ScanStorageReq)(nil), "mgmt.ScanStorageReq")
 	proto.RegisterType((*ScanStorageResp)(nil), "mgmt.ScanStorageResp")
-	proto.RegisterType((*FormatStorageParams)(nil), "mgmt.FormatStorageParams")
+	proto.RegisterType((*FormerStorageReq)(nil), "mgmt.FormerStorageReq")
 	proto.RegisterType((*FormatStorageResp)(nil), "mgmt.FormatStorageResp")
-	proto.RegisterType((*UpdateStorageParams)(nil), "mgmt.UpdateStorageParams")
+	proto.RegisterType((*UpdateStorageReq)(nil), "mgmt.UpdateStorageReq")
 	proto.RegisterType((*UpdateStorageResp)(nil), "mgmt.UpdateStorageResp")
-	proto.RegisterType((*BurninStorageParams)(nil), "mgmt.BurninStorageParams")
+	proto.RegisterType((*BurninStorageReq)(nil), "mgmt.BurninStorageReq")
 	proto.RegisterType((*BurninStorageResp)(nil), "mgmt.BurninStorageResp")
 }
 
-func init() { proto.RegisterFile("storage.proto", fileDescriptor_storage_fe5dca6e314a5dad) }
+func init() { proto.RegisterFile("storage.proto", fileDescriptor_storage_336e01466b6600b5) }
 
-var fileDescriptor_storage_fe5dca6e314a5dad = []byte{
-	// 348 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x93, 0xdf, 0x4a, 0xc3, 0x30,
-	0x14, 0xc6, 0xe9, 0xfe, 0xa9, 0x67, 0xca, 0x68, 0xea, 0xa4, 0xf4, 0x6a, 0xf4, 0xc6, 0x39, 0x65,
-	0xea, 0x7c, 0x03, 0x05, 0xef, 0x14, 0x69, 0xf1, 0x5a, 0x62, 0x16, 0x86, 0xd2, 0x93, 0xcc, 0x24,
-	0xdd, 0x63, 0xfa, 0x4c, 0x92, 0xa4, 0xd5, 0x75, 0x2a, 0x0c, 0x2f, 0xbc, 0xfd, 0xf2, 0xcb, 0xf9,
-	0xf2, 0x3b, 0xa5, 0x70, 0xa0, 0x8d, 0x54, 0x74, 0xc1, 0xa7, 0x4b, 0x25, 0x8d, 0x24, 0x1d, 0x5c,
-	0xa0, 0x49, 0xf6, 0x99, 0x44, 0x94, 0xc2, 0x67, 0x09, 0xa9, 0x90, 0x27, 0xb1, 0xc2, 0x8a, 0x4b,
-	0xc2, 0x3a, 0xd3, 0x0c, 0x7d, 0x94, 0x46, 0x10, 0xe6, 0x8c, 0x8a, 0xdc, 0x1f, 0x3c, 0x50, 0x45,
-	0x51, 0xa7, 0xef, 0x01, 0x0c, 0xd6, 0xd2, 0x8c, 0xeb, 0x25, 0x39, 0x83, 0x1e, 0x33, 0xaa, 0x50,
-	0x3a, 0x0e, 0x46, 0xed, 0x71, 0x7f, 0x76, 0x38, 0xb5, 0xa5, 0xd3, 0xfb, 0x15, 0xf2, 0x1b, 0x29,
-	0x8c, 0x92, 0x45, 0xc1, 0x55, 0x56, 0x31, 0xe4, 0x12, 0xf6, 0x6c, 0xaf, 0x36, 0xd4, 0xf0, 0xb8,
-	0x35, 0x0a, 0xc6, 0xfd, 0x59, 0xe4, 0x2f, 0xd8, 0x61, 0x52, 0x68, 0x9e, 0xdb, 0xa3, 0xec, 0x8b,
-	0x22, 0x27, 0xb0, 0x83, 0x72, 0x5e, 0x16, 0x5c, 0xc7, 0x6d, 0xd7, 0x30, 0xf0, 0x17, 0x72, 0x86,
-	0x77, 0x2e, 0xcf, 0xea, 0x73, 0x72, 0x0e, 0xbb, 0x9a, 0xa1, 0x1f, 0xde, 0xf9, 0x7d, 0xf8, 0x27,
-	0x94, 0x0e, 0x21, 0xba, 0x95, 0x0a, 0xa9, 0x69, 0x7a, 0xbe, 0x41, 0xd8, 0x88, 0x9d, 0xe8, 0x05,
-	0x74, 0x99, 0xe2, 0xa6, 0xf6, 0x4c, 0x7e, 0xf4, 0xe4, 0xba, 0x2c, 0x4c, 0xe6, 0x41, 0x32, 0x81,
-	0x2e, 0xba, 0x1b, 0xad, 0xf5, 0xcd, 0xb8, 0x77, 0x97, 0xc2, 0xd4, 0xac, 0x43, 0xd2, 0x57, 0x88,
-	0x1e, 0x97, 0x73, 0x6a, 0x78, 0xe3, 0x25, 0x64, 0x02, 0x1d, 0xbb, 0x89, 0x38, 0x70, 0x36, 0x47,
-	0x7e, 0x82, 0x07, 0x6d, 0xb3, 0xa7, 0x32, 0xc7, 0x90, 0x63, 0x68, 0x6b, 0x86, 0xd5, 0x56, 0x87,
-	0xeb, 0x68, 0xce, 0xb0, 0x22, 0x2d, 0x91, 0x2a, 0x08, 0x1b, 0x5d, 0x7f, 0xd4, 0x3b, 0x6d, 0xea,
-	0x0d, 0x37, 0x3f, 0xcb, 0xa6, 0xdf, 0x75, 0xa9, 0xc4, 0x8b, 0xd8, 0xc2, 0xcf, 0x83, 0x5b, 0xf9,
-	0x55, 0x33, 0xbf, 0xf9, 0x35, 0xba, 0xfe, 0xc1, 0xef, 0xb9, 0xe7, 0x7e, 0x9b, 0xab, 0x8f, 0x00,
-	0x00, 0x00, 0xff, 0xff, 0x1f, 0xf9, 0xa0, 0x39, 0x82, 0x03, 0x00, 0x00,
+var fileDescriptor_storage_336e01466b6600b5 = []byte{
+	// 347 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x93, 0x5d, 0x4b, 0xf3, 0x30,
+	0x14, 0xc7, 0xe9, 0xde, 0x9e, 0xc7, 0x33, 0x75, 0x6b, 0x54, 0x28, 0xbd, 0x1a, 0x45, 0x70, 0xbe,
+	0x30, 0x75, 0x7e, 0x03, 0x05, 0xef, 0xf4, 0x22, 0xc5, 0x6b, 0xa9, 0x59, 0x18, 0x42, 0x4f, 0xb2,
+	0x26, 0xe9, 0x3e, 0xa6, 0x9f, 0x49, 0x92, 0xb4, 0xae, 0x2b, 0xca, 0x40, 0xf0, 0xf6, 0x7f, 0x7e,
+	0x39, 0xff, 0xfe, 0x12, 0x0a, 0x07, 0xda, 0x48, 0x95, 0x2d, 0xf9, 0x6c, 0xa5, 0xa4, 0x91, 0xa4,
+	0x87, 0x4b, 0x34, 0xf1, 0x3e, 0x93, 0x88, 0x52, 0xf8, 0x2c, 0x26, 0x15, 0xf2, 0x2a, 0xd6, 0x58,
+	0x71, 0x71, 0x58, 0x67, 0x9a, 0xa1, 0x8f, 0x92, 0x31, 0x1c, 0xa6, 0x2c, 0x13, 0xa9, 0x1f, 0x50,
+	0x5e, 0x24, 0x1f, 0x01, 0x8c, 0xb6, 0x22, 0xbd, 0x22, 0x57, 0x30, 0x60, 0x46, 0xe5, 0x4a, 0x47,
+	0xc1, 0xa4, 0x3b, 0x1d, 0xce, 0x8f, 0x67, 0xb6, 0x71, 0xf6, 0xbc, 0x46, 0xfe, 0x20, 0x85, 0x51,
+	0x32, 0xcf, 0xb9, 0xa2, 0x15, 0x43, 0x6e, 0x61, 0xcf, 0x96, 0x6a, 0x93, 0x19, 0x1e, 0x75, 0x26,
+	0xc1, 0x74, 0x38, 0x3f, 0xf2, 0x07, 0xec, 0x32, 0x29, 0x34, 0x4f, 0xed, 0x88, 0x6e, 0x28, 0x72,
+	0x0e, 0xff, 0x50, 0x2e, 0xca, 0x9c, 0xeb, 0xa8, 0xeb, 0x1a, 0x46, 0xfe, 0x40, 0xca, 0xf0, 0xc9,
+	0xe5, 0xb4, 0x9e, 0x93, 0x6b, 0xf8, 0xaf, 0x19, 0xfa, 0xe5, 0xbd, 0x9f, 0x97, 0x7f, 0x41, 0x09,
+	0x81, 0xf1, 0xa3, 0x54, 0xc8, 0x55, 0x43, 0xb2, 0x80, 0xd0, 0x66, 0x99, 0x69, 0x5a, 0xde, 0x40,
+	0x9f, 0x29, 0x6e, 0x6a, 0xc9, 0xf8, 0x5b, 0x49, 0xae, 0xcb, 0xdc, 0x50, 0x0f, 0x92, 0x0b, 0xe8,
+	0xa3, 0x3b, 0xd1, 0x69, 0x5e, 0x8b, 0xfb, 0xe8, 0x52, 0x98, 0x9a, 0x75, 0x48, 0x92, 0xc1, 0xf8,
+	0x65, 0xb5, 0xc8, 0x0c, 0xdf, 0x7c, 0x06, 0x39, 0x83, 0x9e, 0xbd, 0x83, 0x28, 0x68, 0x7a, 0x78,
+	0xca, 0xd6, 0x52, 0x5e, 0x50, 0x07, 0x90, 0x53, 0xe8, 0x6a, 0x86, 0xd5, 0x65, 0x92, 0x26, 0x97,
+	0x32, 0xb4, 0x98, 0x1d, 0x27, 0x0a, 0xc2, 0x56, 0xc5, 0xaf, 0xac, 0x2e, 0xb7, 0xad, 0x4e, 0xda,
+	0x4f, 0xd1, 0xd6, 0xba, 0x2f, 0x95, 0x78, 0x17, 0xbb, 0xb4, 0x3c, 0xb5, 0x5b, 0xab, 0xda, 0xd6,
+	0xd0, 0x2a, 0x20, 0x6c, 0x55, 0xfc, 0xf5, 0x63, 0xbd, 0x0d, 0xdc, 0xdf, 0x71, 0xf7, 0x19, 0x00,
+	0x00, 0xff, 0xff, 0x4e, 0xc4, 0x3c, 0x56, 0x69, 0x03, 0x00, 0x00,
 }
