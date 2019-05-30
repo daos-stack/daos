@@ -27,6 +27,8 @@
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
+#include <daos_api.h>
+#include <daos_security.h>
 #include "rpc.h"
 
 struct pool_create_arg {
@@ -40,6 +42,7 @@ pool_create_cp(tse_task_t *task, void *data)
 	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
 	d_rank_list_t			*svc = arg->svc;
 	struct mgmt_pool_create_out	*pc_out;
+	struct mgmt_pool_create_in	*pc_in;
 	int				 rc = task->dt_result;
 
 	if (rc) {
@@ -70,8 +73,103 @@ pool_create_cp(tse_task_t *task, void *data)
 	       sizeof(*svc->rl_ranks) * svc->rl_nr);
 
 out:
+	/*
+	 * Need to free the pool prop input we allocated in dc_pool_create
+	 */
+	pc_in = crt_req_get(arg->rpc);
+	D_ASSERT(pc_in != NULL);
+	daos_prop_free(pc_in->pc_prop);
+
 	daos_group_detach(arg->rpc->cr_ep.ep_grp);
 	crt_req_decref(arg->rpc);
+	return rc;
+}
+
+static bool
+daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
+{
+	return (prop != NULL) &&
+	       (daos_prop_entry_get(prop, entry_type) != NULL);
+}
+
+/*
+ * Translates uid/gid to user and group name, and adds them as owners to a new
+ * copy of the daos_prop_t passed in.
+ * The newly allocated prop is expected to be freed by the pool create callback.
+ */
+static int
+add_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in,
+		    uid_t uid, gid_t gid)
+{
+	char	       *owner = NULL;
+	char	       *owner_grp = NULL;
+	daos_prop_t    *final_prop = NULL;
+	uint32_t	idx = 0;
+	uint32_t	entries;
+	int		rc = 0;
+
+	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
+
+	/*
+	 * TODO: remove uid/gid input params and use euid/egid instead
+	 */
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_PO_OWNER)) {
+		rc = daos_acl_uid_to_principal(uid, &owner);
+		if (rc) {
+			D_ERROR("Invalid uid\n");
+			D_GOTO(err_out, rc);
+		}
+
+		entries++;
+	}
+
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_PO_OWNER_GROUP)) {
+		rc = daos_acl_gid_to_principal(gid, &owner_grp);
+		if (rc) {
+			D_ERROR("Invalid gid\n");
+			D_GOTO(err_out, rc);
+		}
+
+		entries++;
+	}
+
+	/* We always free this prop in the callback - so need to make a copy */
+	final_prop = daos_prop_alloc(entries);
+
+	if (prop_in != NULL) {
+		rc = daos_prop_copy(final_prop, prop_in);
+		if (rc)
+			D_GOTO(err_out, rc);
+		idx = prop_in->dpp_nr;
+	}
+
+	if (prop_in == NULL || entries > prop_in->dpp_nr) {
+		if (owner != NULL) {
+			final_prop->dpp_entries[idx].dpe_type =
+				DAOS_PROP_PO_OWNER;
+			final_prop->dpp_entries[idx].dpe_str = owner;
+			owner = NULL; /* prop is responsible for it now */
+			idx++;
+		}
+
+		if (owner_grp != NULL) {
+			final_prop->dpp_entries[idx].dpe_type =
+				DAOS_PROP_PO_OWNER_GROUP;
+			final_prop->dpp_entries[idx].dpe_str = owner_grp;
+			owner_grp = NULL; /* prop is responsible for it now */
+			idx++;
+		}
+
+	}
+
+	*prop_out = final_prop;
+
+	return rc;
+
+err_out:
+	daos_prop_free(final_prop);
+	D_FREE(owner);
+	D_FREE(owner_grp);
 	return rc;
 }
 
@@ -85,6 +183,7 @@ dc_pool_create(tse_task_t *task)
 	struct mgmt_pool_create_in     *pc_in;
 	struct pool_create_arg		create_args;
 	int				rc = 0;
+	daos_prop_t		       *final_prop = NULL;
 
 	args = dc_task_get_args(task);
 	if (!args->uuid || args->dev == NULL || strlen(args->dev) == 0) {
@@ -93,6 +192,10 @@ dc_pool_create(tse_task_t *task)
 	}
 
 	uuid_generate(args->uuid);
+
+	rc = add_ownership_props(&final_prop, args->prop, args->uid, args->gid);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
@@ -115,15 +218,12 @@ dc_pool_create(tse_task_t *task)
 
 	/** fill in request buffer */
 	uuid_copy(pc_in->pc_pool_uuid, args->uuid);
-	pc_in->pc_mode = args->mode;
-	pc_in->pc_uid = args->uid;
-	pc_in->pc_gid = args->gid;
 	pc_in->pc_grp = (d_string_t)args->grp;
 	pc_in->pc_tgt_dev = (d_string_t)args->dev;
 	pc_in->pc_tgts = (d_rank_list_t *)args->tgts;
 	pc_in->pc_scm_size = args->scm_size;
 	pc_in->pc_nvme_size = args->nvme_size;
-	pc_in->pc_prop = args->prop;
+	pc_in->pc_prop = final_prop;
 	pc_in->pc_svc_nr = args->svc->rl_nr;
 
 	crt_req_addref(rpc_req);
@@ -146,6 +246,7 @@ out_put_req:
 out_grp:
 	daos_group_detach(svr_ep.ep_grp);
 out:
+	daos_prop_free(final_prop);
 	tse_task_complete(task, rc);
 	return rc;
 }

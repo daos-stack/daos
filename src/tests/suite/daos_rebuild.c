@@ -1318,6 +1318,30 @@ rebuild_offline(void **state)
 	rebuild_io_validate(arg, oids, OBJ_NR, false);
 }
 
+static void
+rebuild_offline_empty(void **state)
+{
+	test_arg_t	*arg = *state;
+	test_arg_t	*args[2] = { 0 };
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	args[0] = arg;
+	/* create/connect another pool */
+	rc = test_setup((void **)&args[1], SETUP_CONT_CONNECT, arg->multi_rank,
+			REBUILD_POOL_SIZE, NULL);
+	if (rc) {
+		print_message("open/connect another pool failed: rc %d\n", rc);
+		return;
+	}
+
+	rebuild_pools_ranks(args, 2, ranks_to_kill, 1);
+	test_teardown((void **)&args[1]);
+	rebuild_add_back_tgts(&arg, 1, ranks_to_kill, NULL, 1);
+}
+
 static int
 rebuild_change_leader_cb(void *arg)
 {
@@ -1835,33 +1859,35 @@ static const struct CMUnitTest rebuild_tests[] = {
 	rebuild_tgt_start_fail, NULL, test_case_teardown},
 	{"REBUILD19: rebuild send objects failed",
 	 rebuild_send_objects_fail, NULL, test_case_teardown},
-	{"REBUILD20: rebuild with master change during scan",
+	{"REBUILD20: rebuild empty pool offline",
+	rebuild_offline_empty, NULL, test_case_teardown},
+	{"REBUILD21: rebuild with master change during scan",
 	rebuild_master_change_during_scan, NULL, test_case_teardown},
-	{"REBUILD21: rebuild with master change during rebuild",
+	{"REBUILD22: rebuild with master change during rebuild",
 	rebuild_master_change_during_rebuild, NULL, test_case_teardown},
-	{"REBUILD22: rebuild no space failure",
+	{"REBUILD23: rebuild no space failure",
 	rebuild_nospace, NULL, test_case_teardown},
-	{"REBUILD23: rebuild multiple tgts",
+	{"REBUILD24: rebuild multiple tgts",
 	rebuild_multiple_tgts, NULL, test_case_teardown},
-	{"REBUILD24: disconnect pool during scan",
+	{"REBUILD25: disconnect pool during scan",
 	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
-	{"REBUILD25: disconnect pool during rebuild",
+	{"REBUILD26: disconnect pool during rebuild",
 	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD26: multi-pools rebuild concurrently",
+	{"REBUILD27: multi-pools rebuild concurrently",
 	 multi_pools_rebuild_concurrently, NULL, test_case_teardown},
-	{"REBUILD27: rebuild with master failure",
+	{"REBUILD28: rebuild with master failure",
 	 rebuild_master_failure, NULL, test_case_teardown},
-	{"REBUILD28: connect pool during scan for offline rebuild",
+	{"REBUILD29: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, NULL, test_case_teardown},
-	{"REBUILD29: connect pool during rebuild for offline rebuild",
+	{"REBUILD30: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, NULL, test_case_teardown},
-	{"REBUILD30: offline rebuild",
+	{"REBUILD31: offline rebuild",
 	rebuild_offline, NULL, test_case_teardown},
-	{"REBUILD31: rebuild with two failures",
+	{"REBUILD32: rebuild with two failures",
 	 rebuild_multiple_failures, NULL, test_case_teardown},
-	{"REBUILD32: rebuild fail all replicas before rebuild",
+	{"REBUILD33: rebuild fail all replicas before rebuild",
 	 rebuild_fail_all_replicas_before_rebuild, NULL, test_case_teardown},
-	{"REBUILD33: rebuild fail all replicas",
+	{"REBUILD34: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, NULL, test_case_teardown},
 };
 

@@ -332,12 +332,6 @@ typedef struct {
 	uint32_t			pi_ndisabled;
 	/** Latest pool map version */
 	uint32_t			pi_map_ver;
-	/** pool UID */
-	uid_t				pi_uid;
-	/** pool GID */
-	gid_t				pi_gid;
-	/** Mode */
-	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
 	/** pool info bits, see daos_pool_info_bit */
