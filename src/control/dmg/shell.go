@@ -181,6 +181,9 @@ func setupShell() *ishell.Shell {
 		},
 	})
 
+	// TODO: operations requiring access to management service will
+	//       need to connect to the first access point rather than
+	//       host list, perhaps clear then ConnectClients ap[0]
 	shell.AddCmd(&ishell.Cmd{
 		Name: "killrank",
 		Help: "Command to terminate server running as specific rank " +

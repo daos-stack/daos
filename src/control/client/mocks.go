@@ -27,10 +27,42 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+)
+
+var (
+	addresses    = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
+	features     = []*pb.Feature{common.MockFeaturePB()}
+	ctrlrs       = NvmeControllers{common.MockControllerPB("")}
+	exampleState = pb.ResponseState{
+		Status: pb.ResponseStatus_CTRL_ERR_APP,
+		Error:  "example application error",
+	}
+	ctrlrResults = NvmeControllerResults{
+		&pb.NvmeControllerResult{
+			Pciaddr: "0000:81:00.0",
+			State:   &exampleState,
+		},
+	}
+	modules       = ScmModules{common.MockModulePB()}
+	moduleResults = ScmModuleResults{
+		&pb.ScmModuleResult{
+			Loc:   &pb.ScmModule_Location{},
+			State: &exampleState,
+		},
+	}
+	mountResults = ScmMountResults{
+		&pb.ScmMountResult{
+			Mntpoint: "/mnt/daos",
+			State:    &exampleState,
+		},
+	}
+	errExample = errors.New("unknown failure")
 )
 
 type mgmtControlListFeaturesClient struct {

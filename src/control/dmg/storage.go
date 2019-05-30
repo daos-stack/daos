@@ -53,7 +53,7 @@ func scanStor() {
 
 // Execute is run when ScanStorCmd activates
 func (s *ScanStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		return err
 	}
 
@@ -86,7 +86,7 @@ func formatStor() {
 
 // Execute is run when FormatStorCmd activates
 func (s *FormatStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		return err
 	}
 
@@ -125,7 +125,7 @@ func updateStor(req *pb.UpdateStorageReq) {
 
 // Execute is run when UpdateStorCmd activates
 func (u *UpdateStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		fmt.Printf("app setup returned %s", err)
 		return err
 	}

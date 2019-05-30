@@ -19,6 +19,12 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type CreatePoolReq struct {
+	Scmbytes             uint64   `protobuf:"varint,1,opt,name=scmbytes,proto3" json:"scmbytes,omitempty"`
+	Nvmebytes            uint64   `protobuf:"varint,2,opt,name=nvmebytes,proto3" json:"nvmebytes,omitempty"`
+	Ranklist             string   `protobuf:"bytes,3,opt,name=ranklist,proto3" json:"ranklist,omitempty"`
+	Numsvcreps           uint32   `protobuf:"varint,4,opt,name=numsvcreps,proto3" json:"numsvcreps,omitempty"`
+	User                 string   `protobuf:"bytes,5,opt,name=user,proto3" json:"user,omitempty"`
+	Usergroup            string   `protobuf:"bytes,6,opt,name=usergroup,proto3" json:"usergroup,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -28,7 +34,7 @@ func (m *CreatePoolReq) Reset()         { *m = CreatePoolReq{} }
 func (m *CreatePoolReq) String() string { return proto.CompactTextString(m) }
 func (*CreatePoolReq) ProtoMessage()    {}
 func (*CreatePoolReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_5060e84c2fb17b5d, []int{0}
+	return fileDescriptor_pool_13126ca6b3990a27, []int{0}
 }
 func (m *CreatePoolReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreatePoolReq.Unmarshal(m, b)
@@ -48,18 +54,63 @@ func (m *CreatePoolReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CreatePoolReq proto.InternalMessageInfo
 
+func (m *CreatePoolReq) GetScmbytes() uint64 {
+	if m != nil {
+		return m.Scmbytes
+	}
+	return 0
+}
+
+func (m *CreatePoolReq) GetNvmebytes() uint64 {
+	if m != nil {
+		return m.Nvmebytes
+	}
+	return 0
+}
+
+func (m *CreatePoolReq) GetRanklist() string {
+	if m != nil {
+		return m.Ranklist
+	}
+	return ""
+}
+
+func (m *CreatePoolReq) GetNumsvcreps() uint32 {
+	if m != nil {
+		return m.Numsvcreps
+	}
+	return 0
+}
+
+func (m *CreatePoolReq) GetUser() string {
+	if m != nil {
+		return m.User
+	}
+	return ""
+}
+
+func (m *CreatePoolReq) GetUsergroup() string {
+	if m != nil {
+		return m.Usergroup
+	}
+	return ""
+}
+
 // CreatePoolResp returns created pool uuid and ranks.
 type CreatePoolResp struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Status               DaosRequestStatus `protobuf:"varint,1,opt,name=status,proto3,enum=mgmt.DaosRequestStatus" json:"status,omitempty"`
+	Uuid                 string            `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Ranklist             string            `protobuf:"bytes,3,opt,name=ranklist,proto3" json:"ranklist,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *CreatePoolResp) Reset()         { *m = CreatePoolResp{} }
 func (m *CreatePoolResp) String() string { return proto.CompactTextString(m) }
 func (*CreatePoolResp) ProtoMessage()    {}
 func (*CreatePoolResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_5060e84c2fb17b5d, []int{1}
+	return fileDescriptor_pool_13126ca6b3990a27, []int{1}
 }
 func (m *CreatePoolResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreatePoolResp.Unmarshal(m, b)
@@ -79,18 +130,49 @@ func (m *CreatePoolResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CreatePoolResp proto.InternalMessageInfo
 
+func (m *CreatePoolResp) GetStatus() DaosRequestStatus {
+	if m != nil {
+		return m.Status
+	}
+	return DaosRequestStatus_SUCCESS
+}
+
+func (m *CreatePoolResp) GetUuid() string {
+	if m != nil {
+		return m.Uuid
+	}
+	return ""
+}
+
+func (m *CreatePoolResp) GetRanklist() string {
+	if m != nil {
+		return m.Ranklist
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*CreatePoolReq)(nil), "mgmt.CreatePoolReq")
 	proto.RegisterType((*CreatePoolResp)(nil), "mgmt.CreatePoolResp")
 }
 
-func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_5060e84c2fb17b5d) }
+func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_13126ca6b3990a27) }
 
-var fileDescriptor_pool_5060e84c2fb17b5d = []byte{
-	// 72 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2a, 0xc8, 0xcf, 0xcf,
-	0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d, 0x51, 0xe2, 0xe7, 0xe2,
-	0x75, 0x2e, 0x4a, 0x4d, 0x2c, 0x49, 0x0d, 0xc8, 0xcf, 0xcf, 0x09, 0x4a, 0x2d, 0x54, 0x12, 0xe0,
-	0xe2, 0x43, 0x16, 0x28, 0x2e, 0x48, 0x62, 0x03, 0xab, 0x37, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff,
-	0xd0, 0x7b, 0x3b, 0xaf, 0x3d, 0x00, 0x00, 0x00,
+var fileDescriptor_pool_13126ca6b3990a27 = []byte{
+	// 229 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x90, 0xc1, 0x4a, 0xc4, 0x30,
+	0x10, 0x86, 0x89, 0xd6, 0x62, 0x07, 0x76, 0x0f, 0xb9, 0x18, 0x16, 0x91, 0xb2, 0xa7, 0x9e, 0x2a,
+	0xe8, 0x23, 0xe8, 0x03, 0x48, 0x7c, 0x82, 0xee, 0xee, 0xb0, 0x14, 0x9b, 0x26, 0xcd, 0x4c, 0x0a,
+	0x3e, 0x99, 0xaf, 0x27, 0x99, 0xca, 0x6e, 0x4f, 0x9e, 0x92, 0xf9, 0xbf, 0x0c, 0xff, 0xff, 0x07,
+	0x20, 0x78, 0x3f, 0xb4, 0x21, 0x7a, 0xf6, 0xba, 0x70, 0x67, 0xc7, 0xbb, 0x8a, 0xe2, 0xbc, 0x08,
+	0xfb, 0x1f, 0x05, 0x9b, 0xb7, 0x88, 0x1d, 0xe3, 0x87, 0xf7, 0x83, 0xc5, 0x49, 0xef, 0xe0, 0x9e,
+	0x8e, 0xee, 0xf0, 0xcd, 0x48, 0x46, 0xd5, 0xaa, 0x29, 0xec, 0x65, 0xd6, 0x8f, 0x50, 0x8d, 0xb3,
+	0xc3, 0x05, 0xde, 0x08, 0xbc, 0x0a, 0x79, 0x33, 0x76, 0xe3, 0xd7, 0xd0, 0x13, 0x9b, 0xdb, 0x5a,
+	0x35, 0x95, 0xbd, 0xcc, 0xfa, 0x09, 0x60, 0x4c, 0x8e, 0xe6, 0x63, 0xc4, 0x40, 0xa6, 0xa8, 0x55,
+	0xb3, 0xb1, 0x2b, 0x45, 0x6b, 0x28, 0x12, 0x61, 0x34, 0x77, 0xb2, 0x27, 0xf7, 0xec, 0x96, 0xcf,
+	0x73, 0xf4, 0x29, 0x98, 0x52, 0xc0, 0x55, 0xd8, 0x4f, 0xb0, 0x5d, 0x07, 0xa7, 0xa0, 0x9f, 0xa1,
+	0x24, 0xee, 0x38, 0x2d, 0xb9, 0xb7, 0x2f, 0x0f, 0x6d, 0x6e, 0xdb, 0xbe, 0x77, 0x9e, 0x2c, 0x4e,
+	0x09, 0x89, 0x3f, 0x05, 0xdb, 0xbf, 0x67, 0x62, 0x9a, 0xfa, 0x93, 0x34, 0xc9, 0xa6, 0xa9, 0x3f,
+	0xfd, 0x57, 0xe2, 0x50, 0xca, 0x9f, 0xbd, 0xfe, 0x06, 0x00, 0x00, 0xff, 0xff, 0x6a, 0x78, 0x52,
+	0x05, 0x52, 0x01, 0x00, 0x00,
 }

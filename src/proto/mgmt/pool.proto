@@ -24,13 +24,24 @@
 syntax = "proto3";
 package mgmt;
 
+import "srv.proto";
+
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS pools.
 
 message CreatePoolReq {
+	uint64 scmbytes = 1;
+	uint64 nvmebytes = 2;
+	string ranklist = 3; // colon separated integers
+	uint32 numsvcreps = 4; // desired number of pool service replicas
+	string user = 5; // formatted user e.g. "bob@"
+	string usergroup = 6; // formatted group e.g. "builders@"
 }
 
 // CreatePoolResp returns created pool uuid and ranks.
 message CreatePoolResp {
+	DaosRequestStatus status = 1;
+	string uuid = 2; // new pool's uuid
+	string ranklist = 3; // colon separated integers
 }
 

@@ -35,36 +35,6 @@ import (
 	. "google.golang.org/grpc/connectivity"
 )
 
-var (
-	addresses    = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features     = []*pb.Feature{MockFeaturePB()}
-	ctrlrs       = NvmeControllers{MockControllerPB("")}
-	exampleState = pb.ResponseState{
-		Status: pb.ResponseStatus_CTRL_ERR_APP,
-		Error:  "example application error",
-	}
-	ctrlrResults = NvmeControllerResults{
-		&pb.NvmeControllerResult{
-			Pciaddr: "0000:81:00.0",
-			State:   &exampleState,
-		},
-	}
-	modules       = ScmModules{MockModulePB()}
-	moduleResults = ScmModuleResults{
-		&pb.ScmModuleResult{
-			Loc:   &pb.ScmModule_Location{},
-			State: &exampleState,
-		},
-	}
-	mountResults = ScmMountResults{
-		&pb.ScmMountResult{
-			Mntpoint: "/mnt/daos",
-			State:    &exampleState,
-		},
-	}
-	errExample = errors.New("unknown failure")
-)
-
 func init() {
 	log.NewDefaultLogger(log.Error, "connect_test: ", os.Stderr)
 }

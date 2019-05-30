@@ -148,10 +148,11 @@ func createPool(
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
 
-	ranks, err := parseRanks(rankList)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
-	}
+	// TODO: do we want to verify format of list here or just at iosrv?
+	//	ranks, err := parseRanks(rankList)
+	//	if err != nil {
+	//		return errors.Wrap(err, "parsing rank list")
+	//	}
 
 	if aclFile != "" {
 		return errors.New("ACL file parsing not implemented")
@@ -163,15 +164,15 @@ func createPool(
 			maxNumSvcReps, numSvcReps)
 	}
 
-	req := *pb.CreatePoolReq{
-		Scmbytes: scmBytes, Nvmebytes: NVMeSize, Ranklist: ranks,
-		Numsvcreps: numSvcReps,
+	req := &pb.CreatePoolReq{
+		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
+		Ranklist: rankList, Numsvcreps: numSvcReps,
 	}
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)
 
 	fmt.Printf(
-		unpackClientMap(conns.poolCreate(req)),
+		unpackClientMap(conns.CreatePool(req)),
 		"pool create command results")
 
 	return nil
@@ -179,13 +180,17 @@ func createPool(
 
 // Execute is run when CreatePoolCmd subcommand is run
 func (c *CreatePoolCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	// broadcast == false to connect to mgmt svc access point
+	if err := appSetup(false); err != nil {
 		return err
 	}
 
-	err := createPool(
+	if err := createPool(
 		c.GroupName, c.UserName, c.ACLFile,
-		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps)
+		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps); err != nil {
+
+		return err
+	}
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)

@@ -49,7 +49,8 @@ func killRankSvc(uuid string, rank uint32) {
 
 // Execute is run when KillRankSvcCmd activates
 func (k *KillRankSvcCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	// broadcast == false to connect to mgmt svc access point
+	if err := appSetup(false); err != nil {
 		return err
 	}
 
