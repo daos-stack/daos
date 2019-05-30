@@ -25,26 +25,17 @@ package client
 
 import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
 
-// Control interface accesses gRPC client functionality.
+// Control interface provides connection handling capabilities.
 type Control interface {
 	connect(string) error
 	disconnect() error
 	connected() (connectivity.State, bool)
 	getAddress() string
-	scanStorage() (*pb.ScanStorageResp, error)
-	formatStorage(context.Context) (pb.MgmtControl_FormatStorageClient, error)
-	updateStorage(
-		context.Context, *pb.UpdateStorageParams) (
-		pb.MgmtControl_UpdateStorageClient, error)
-	// TODO: implement Burnin client features
-	//burninStorage(*pb.BurninStorageParams) (*pb.BurninStorageResp, error)
-	listAllFeatures() (FeatureMap, error)
-	killRank(uuid string, rank uint32) error
+	getClient() pb.MgmtControlClient
 }
 
 // control is an abstraction around the MgmtControlClient
@@ -77,9 +68,6 @@ func (c *control) connect(addr string) (err error) {
 // client service.
 func (c *control) disconnect() error { return c.gconn.Close() }
 
-// getAddress returns the target address of the connection.
-func (c *control) getAddress() string { return c.gconn.Target() }
-
 func checkState(state connectivity.State) bool {
 	return (state == connectivity.Idle || state == connectivity.Ready)
 }
@@ -93,3 +81,8 @@ func (c *control) connected() (state connectivity.State, ok bool) {
 	state = c.gconn.GetState()
 	return state, checkState(state)
 }
+
+// getAddress returns the target address of the connection.
+func (c *control) getAddress() string { return c.gconn.Target() }
+
+func (c *control) getClient() pb.MgmtControlClient { return c.client }

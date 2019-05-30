@@ -54,41 +54,11 @@ func (c *control) getFeature(name string) (*pb.Feature, error) {
 	return c.client.GetFeature(ctx, &pb.FeatureName{Name: name})
 }
 
-// listAllFeatures returns map of all supported management features.
-func (c *control) listAllFeatures() (fm FeatureMap, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := c.client.ListAllFeatures(ctx, &pb.EmptyParams{})
-	if err != nil {
-		return
-	}
-
-	fm = make(FeatureMap)
-	var f *pb.Feature
-	for {
-		f, err = stream.Recv()
-		if err == io.EOF {
-			err = nil
-			break
-		} else if err != nil {
-			return
-		}
-		fm[f.Fname.Name] = fmt.Sprintf(
-			"category %s, %s", f.Category.Category, f.Description)
-	}
-
-	return
-}
-
-// listFeatures returns supported management features for a given category.
-func (c *control) listFeatures(category string) (
-	fm FeatureMap, err error) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := c.client.ListFeatures(ctx, &pb.Category{Category: category})
+// listFeatures returns map of supported management features for a given
+// category.
+func (c *control) listFeatures(category string) (fm FeatureMap, err error) {
+	stream, err := c.client.ListFeatures(
+		context.Background(), &pb.Category{Category: category})
 	if err != nil {
 		return
 	}
@@ -105,14 +75,36 @@ func (c *control) listFeatures(category string) (
 		}
 		fm[f.Fname.Name] = f.Description
 	}
+
 	return
 }
 
 // listFeaturesRequest is to be called as a goroutine and returns result
 // containing supported server features over channel.
-func listFeaturesRequest(controller Control, i interface{}, ch chan ClientResult) {
-	fMap, err := controller.listAllFeatures()
-	ch <- ClientResult{controller.getAddress(), fMap, err}
+func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
+	stream, err := mc.getClient().ListAllFeatures(
+		context.Background(), &pb.EmptyParams{})
+	if err != nil {
+		ch <- ClientResult{mc.getAddress(), nil, err}
+		return
+	}
+
+	fm := make(FeatureMap)
+	var f *pb.Feature
+	for {
+		f, err = stream.Recv()
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			ch <- ClientResult{mc.getAddress(), nil, err}
+			return
+		}
+		fm[f.Fname.Name] = fmt.Sprintf(
+			"category %s, %s", f.Category.Category, f.Description)
+	}
+
+	ch <- ClientResult{mc.getAddress(), fm, nil}
 }
 
 // ListFeatures returns supported management features for each server connected.

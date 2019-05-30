@@ -40,23 +40,13 @@ const (
 	msgTypeAssert     = "type assertion failed, wanted %T got %T"
 )
 
-// scanStorage returns all discovered SCM and NVMe storage devices discovered on
-// a remote server, in protobuf message format, by calling over gRPC channel.
-func (c *control) scanStorage() (*pb.ScanStorageResp, error) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return c.client.ScanStorage(ctx, &pb.ScanStorageParams{})
-}
-
-// scanStorageRequest is to be called as a goroutine and returns result
-// containing remote server's storage device details over channel with
-// response from ScanStorage rpc.
+// scanStorageRequest returns all discovered SCM and NVMe storage devices
+// discovered on a remote server by calling over gRPC channel.
 func scanStorageRequest(mc Control, params interface{}, ch chan ClientResult) {
 	sRes := storageResult{}
 
-	resp, err := mc.scanStorage()
+	resp, err := mc.client.ScanStorage(
+		context.Background(), &pb.ScanStorageReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
 		return
@@ -119,27 +109,21 @@ func (c *connList) ScanStorage() (ClientCtrlrMap, ClientModuleMap) {
 	return cCtrlrs, cModules
 }
 
-// formatStorage attempts to format nonvolatile storage devices on a remote
-// server by calling over gRPC channel.
-func (c *control) formatStorage(ctx context.Context) (
-	pb.MgmtControl_FormatStorageClient, error) {
-
-	return c.client.FormatStorage(ctx, &pb.FormatStorageParams{})
-}
-
-// formatStorageRequest is to be called as a goroutine.
+// formatStorageRequest attempts to format nonvolatile storage devices on a
+// remote server over gRPC.
 //
 // Calls control formatStorage routine which activates FormatStorage service rpc
 // and returns an open stream handle. Receive on stream and send ClientResult
 // over channel for each.
 func formatStorageRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	sRes := storageResult{}
+
 	// Maximum time limit for format is 2hrs to account for lengthy low
 	// level formatting of multiple devices sequentially.
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	stream, err := mc.formatStorage(ctx)
+	stream, err := mc.client.FormatStorage(ctx, &pb.FormerStorageReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
@@ -195,16 +179,8 @@ func (c *connList) FormatStorage() (ClientCtrlrMap, ClientMountMap) {
 	return cCtrlrResults, cMountResults
 }
 
-// updateStorage attempts to update firmware on nonvolatile storage devices
-// on a remote server by calling over gRPC channel.
-func (c *control) updateStorage(
-	ctx context.Context, params *pb.UpdateStorageParams) (
-	pb.MgmtControl_UpdateStorageClient, error) {
-
-	return c.client.UpdateStorage(ctx, params)
-}
-
-// updateStorageRequest is to be called as a goroutine.
+// updateStorageRequest attempts to update firmware on nonvolatile storage
+// devices on a remote server by calling over gRPC channel.
 //
 // Calls control updateStorage routine which activates UpdateStorage service rpc
 // and returns an open stream handle. Receive on stream and send ClientResult
@@ -213,8 +189,9 @@ func updateStorageRequest(
 	mc Control, params interface{}, ch chan ClientResult) {
 
 	sRes := storageResult{}
-	// Maximum time limit for update is 2hrs to account for lengthy low
-	// level updateting of multiple devices sequentially.
+
+	// Maximum time limit for update is 2hrs to account for lengthy firmware
+	// updates of multiple devices sequentially.
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
@@ -231,7 +208,7 @@ func updateStorageRequest(
 		return // type err
 	}
 
-	stream, err := mc.updateStorage(ctx, updateParams)
+	stream, err := mc.client.UpdateStorage(ctx, updateParams)
 	if err != nil {
 		log.Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}

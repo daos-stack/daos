@@ -71,10 +71,26 @@ func (m mgmtControlUpdateStorageClient) Recv() (*pb.UpdateStorageResp, error) {
 	}, nil
 }
 
-// implement mock/stub behaviour for Control
-type mockControl struct {
-	address       string
-	connState     connectivity.State
+type mgmtControlBurninStorageClient struct {
+	grpc.ClientStream
+	ctrlrResults  NvmeControllerResults
+	mountResults  ScmMountResults
+	alreadyCalled bool
+}
+
+func (m mgmtControlBurninStorageClient) Recv() (*pb.BurninStorageResp, error) {
+	if m.alreadyCalled {
+		return nil, io.EOF
+	}
+	m.alreadyCalled = true
+
+	return &pb.BurninStorageResp{
+		Crets: m.ctrlrResults,
+		Mrets: m.mountResults,
+	}, nil
+}
+
+type mockMgmtControlClient struct {
 	features      []*pb.Feature
 	ctrlrs        NvmeControllers
 	ctrlrResults  NvmeControllerResults
@@ -84,8 +100,76 @@ type mockControl struct {
 	scanRet       error
 	formatRet     error
 	updateRet     error
+	burninRet     error
 	killRet       error
-	connectRet    error
+}
+
+func (m *mockMgmtControlClient) listAllFeatures() (FeatureMap, error) {
+	fm := make(FeatureMap)
+	for _, f := range m.features {
+		fm[f.Fname.Name] = fmt.Sprintf(
+			"category %s, %s", f.Category.Category, f.Description)
+	}
+	return fm, nil
+}
+
+func (m *mockMgmtControlClient) scanStorage() (*pb.ScanStorageResp, error) {
+	// return successful query results, state member messages
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.ScanStorageResp{
+		Ctrlrs:  m.ctrlrs,
+		Modules: m.modules,
+	}, m.scanRet
+}
+
+func (m *mockMgmtControlClient) formatStorage(ctx context.Context) (
+	pb.MgmtControl_FormatStorageClient, error) {
+
+	return mgmtControlFormatStorageClient{
+		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
+	}, m.formatRet
+}
+
+func (m *mockMgmtControlClient) updateStorage(
+	ctx context.Context, params *pb.UpdateStorageReq) (
+	pb.MgmtControl_UpdateStorageClient, error) {
+
+	return mgmtControlUpdateStorageClient{
+		ctrlrResults: m.ctrlrResults, moduleResults: m.moduleResults,
+	}, m.updateRet
+}
+
+func (m *mockMgmtControlClient) BurninStorage(
+	ctx context.Context, params *pb.BurninStorageReq, o ...grpc.CallOption) (
+	pb.MgmtControl_BurninStorageClient, error) {
+
+	return mgmtControlBurninStorageClient{
+		ctrlrResults: m.ctrlrResults, moduleResults: m.moduleResults,
+	}, m.burninRet
+}
+
+func (m *mockMgmtControlClient) killRank(uuid string, rank uint32) error {
+	return m.killRet
+}
+
+func newMockMgmtControlClient(
+	features []*pb.Feature, ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults, modules ScmModules,
+	moduleResults ScmModuleResults, mountResults ScmMountResults,
+	scanRet error, formatRet error, updateRet error,
+	killRet error) pb.MgmtControlClient {
+
+	return &mockMgmtControlClient{
+		features, ctrlrs, ctrlrResults, modules, moduleResults,
+		mountResults, scanRet, formatRet, updateRet, killRet,
+	}
+}
+
+// implement mock/stub behaviour for Control
+type mockControl struct {
+	address    string
+	connState  connectivity.State
+	connectRet error
 }
 
 func (m *mockControl) connect(addr string) error {
@@ -95,57 +179,23 @@ func (m *mockControl) connect(addr string) error {
 
 	return m.connectRet
 }
+
 func (m *mockControl) disconnect() error { return nil }
+
 func (m *mockControl) connected() (connectivity.State, bool) {
 	return m.connState, checkState(m.connState)
 }
+
 func (m *mockControl) getAddress() string { return m.address }
-func (m *mockControl) listAllFeatures() (FeatureMap, error) {
-	fm := make(FeatureMap)
-	for _, f := range m.features {
-		fm[f.Fname.Name] = fmt.Sprintf(
-			"category %s, %s", f.Category.Category, f.Description)
-	}
-	return fm, nil
-}
-func (m *mockControl) scanStorage() (*pb.ScanStorageResp, error) {
-	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.ScanStorageResp{
-		Ctrlrs:  m.ctrlrs,
-		Modules: m.modules,
-	}, m.scanRet
-}
-func (m *mockControl) formatStorage(ctx context.Context) (
-	pb.MgmtControl_FormatStorageClient, error) {
 
-	return mgmtControlFormatStorageClient{
-		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
-	}, m.formatRet
+func (m *mockControl) getClient() pb.MgmtControlClient {
+	return m.client
 }
-func (m *mockControl) updateStorage(
-	ctx context.Context, params *pb.UpdateStorageParams) (
-	pb.MgmtControl_UpdateStorageClient, error) {
 
-	return mgmtControlUpdateStorageClient{
-		ctrlrResults: m.ctrlrResults, moduleResults: m.moduleResults,
-	}, m.updateRet
-}
-func (m *mockControl) killRank(uuid string, rank uint32) error {
-	return m.killRet
-}
 func newMockControl(
-	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
-	modules ScmModules, moduleResults ScmModuleResults,
-	mountResults ScmMountResults, scanRet error, formatRet error,
-	updateRet error, killRet error, connectRet error) Control {
+	address string, state connectivity.State, connectRet error) Control {
 
-	return &mockControl{
-		address, state, features, ctrlrs, ctrlrResults, modules,
-		moduleResults, mountResults, scanRet, formatRet, updateRet,
-		killRet, connectRet,
-	}
+	return &mockControl{address, state, connectRet}
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.

@@ -26,9 +26,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
 )
@@ -37,6 +39,7 @@ const (
 	msgSizeNoNumber = "size string doesn't specify a number"
 	msgSizeBad      = "size string illegal, %s"
 	msgSizeZeroScm  = "non-zero scm size is required"
+	maxNumSvcReps   = 13
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
@@ -59,14 +62,7 @@ type CreatePoolCmd struct {
 	//Mode uint64 `short:"m" long:"mode" description:"Pool permissions mode"`
 }
 
-// run kill rank command with specified parameters on all connected servers
-//func killRankSvc(uuid string, rank uint32) {
-//	fmt.Printf(
-//		unpackClientMap(conns.KillRank(uuid, rank)),
-//		"Kill Rank command results")
-//}
-
-// getSize retrieves Bnumber of bytes from human readable string representation
+// getSize retrieves number of bytes from human readable string representation
 func getSize(sizeStr string) (bytesize.ByteSize, error) {
 	if sizeStr == "" {
 		return bytesize.New(0.00), nil
@@ -131,21 +127,54 @@ func calcStorage(scmSize string, nvmeSize string) (
 
 func parseRanks(ranksStr string) (ranks []uint32, err error) {
 	for i, rankStr := range strings.Split(ranksStr, ",") {
-		rank, err := strconv.Atoi(rankStr)
+		rank, err := strconv.ParseUint(rankStr, 10, 32)
 		if err != nil {
 			return ranks, errors.WithMessagef(err, "element %d", i)
 		}
 
-		ranks = append(ranks, rank)
+		ranks = append(ranks, uint32(rank))
 	}
 
 	return
 }
 
-func createPool(params *pb.CreatePoolParams) {
+// createPool with specified parameters on all connected servers
+func createPool(
+	groupName string, userName string, aclFile string, scmSize string,
+	nvmeSize string, rankList string, numSvcReps uint32) error {
+
+	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
+	if err != nil {
+		return errors.Wrap(err, "calculating pool storage sizes")
+	}
+
+	ranks, err := parseRanks(rankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
+	}
+
+	if aclFile != "" {
+		return errors.New("ACL file parsing not implemented")
+	}
+
+	if numSvcReps > maxNumSvcReps {
+		return errors.Errorf(
+			"max number of service replicas is %d, got %d",
+			maxNumSvcReps, numSvcReps)
+	}
+
+	params := *pb.CreatePoolReq{
+		Scmbytes: scmBytes, Nvmebytes: NVMeSize, Ranklist: ranks,
+		Numsvcreps: numSvcReps,
+	}
+
+	fmt.Printf("Creating DAOS pool: %+v\n", params)
+
 	fmt.Printf(
-		unpackClientMap(conns.poolCreate(params),
+		unpackClientMap(conns.poolCreate(params)),
 		"pool create command results")
+
+	return nil
 }
 
 // Execute is run when CreatePoolCmd subcommand is run
@@ -154,25 +183,9 @@ func (c *CreatePoolCmd) Execute(args []string) error {
 		return err
 	}
 
-	scmBytes, nvmeBytes, err := calcStorage(c.ScmSize, c.NVMeSize)
-	if err != nil {
-		return errors.Wrap(err, "calculating pool storage sizes")
-	}
-
-	ranks, err := parseRanks(c.RankList)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
-	}
-
 	err := createPool(
+		c.GroupName, c.UserName, c.AclFile,
 		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps)
-
-	fmt.Printf(
-		"Creating DAOS pool with %s SCM and %s NvMe storage, "+
-		"rank list %q and %d pool service replicas\n",
-		scmBytes, nvmeBytes, ranks, c.NumSvcReps)
-
-	//killRankSvc(k.PoolUUID, k.Rank)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)

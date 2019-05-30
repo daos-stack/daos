@@ -69,10 +69,8 @@ func (c *controllerFactory) create(address string) (Control, error) {
 // Connect is an interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states and removes inactive conns
-	GetActiveConns(ResultMap) ResultMap
+	ConnectClients(Addresses) ResultMap // connect addresses
+	GetActiveConns(ResultMap) ResultMap // remove inactive conns
 	ClearConns() ResultMap
 	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
 	FormatStorage() (ClientCtrlrMap, ClientMountMap)
@@ -81,6 +79,7 @@ type Connect interface {
 	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
+	CreatePool(*pb.CreatePoolReq) ResultMap
 }
 
 // connList is an implementation of Connect and stores controllers
