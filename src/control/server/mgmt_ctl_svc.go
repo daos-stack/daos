@@ -31,6 +31,9 @@ import (
 	"golang.org/x/net/context"
 )
 
+// ControlService mgmt methods forward gRPC request from management tool to
+// iosrv via dRPC channel. Usually on host identified as first access point.
+
 // callDrpcMethodWithMessage create a new drpc Call instance, open a
 // drpc connection, send a message with the protobuf message marshalled
 // in the body, and closes the connection. Returns unmarshalled response.
@@ -56,7 +59,29 @@ func (c *controlService) callDrpcMethodWithMessage(
 func (c *controlService) KillRank(
 	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResponse, error) {
 
-	log.Debugf("ControlService.KillRank dispatch")
+	log.Debugf("ControlService.KillRank dispatch\n")
 
 	return c.callDrpcMethodWithMessage(killRank, rank)
+}
+
+// CreatePool implements the method defined for the MgmtControl protobuf service.
+func (c *controlService) CreatePool(
+	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
+
+	log.Debugf("ControlService.CreatePool dispatch\n")
+	// TODO: implement lock and drpc IDs & handler in iosrv
+	// c.mutex.Lock()
+	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, join, req)
+	// c.mutex.Unlock()
+	// if err != nil {
+	//	return nil, err
+	//}
+
+	resp := &pb.CreatePoolResp{}
+	// TODO
+	// if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+	// 	return nil, errors.Wrap(err, "unmarshal CreatePool response")
+	// }
+
+	return resp, errors.New("CreatePool dRPC not implemented")
 }
