@@ -6,7 +6,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+      http://www.apache.org/licenses/LICENSE-2.0
 
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,15 +33,15 @@ from errno import ENOENT
 from avocado import fail_on
 from time import sleep
 
+
 class DaosTestError(Exception):
-    """
-    DAOS API exception class
-    """
+    """DAOS API exception class."""
 
 
 def get_file_path(bin_name, dir_path=""):
     """
-    find the binary path name in daos_m and return the list of path
+    Find the binary path name in daos_m and return the list of path.
+
     args:
         bin_name: bin file to be.
         dir_path: Directory location on top of daos_m to find the
@@ -63,17 +63,16 @@ def get_file_path(bin_name, dir_path=""):
     else:
         return file_path
 
+
 def process_host_list(hoststr):
     """
-    This utility function takes a slurm style host string and returns a list
-    of individual hosts.
+    Convert a slurm style host string into a list of individual hosts.
 
     e.g. boro-[26-27] becomes a list with entries boro-26, boro-27
 
     This works for every thing that has come up so far but I don't know what
     all slurmfinds acceptable so it might not parse everything possible.
     """
-
     # 1st split into cluster name and range of hosts
     split_loc = hoststr.index('-')
     cluster = hoststr[0:split_loc]
@@ -85,7 +84,7 @@ def process_host_list(hoststr):
 
     # more than 1 host, remove the brackets
     host_list = []
-    num_range = re.sub('\[|\]', '', num_range)
+    num_range = re.sub(r'\[|\]', '', num_range)
 
     # differentiate between ranges and single numbers
     hosts_and_ranges = num_range.split(',')
@@ -101,6 +100,7 @@ def process_host_list(hoststr):
                 host_list.append(hostname)
 
     return host_list
+
 
 def get_random_string(length, exclude=None):
     """Create a specified length string of random ascii letters and numbers.
@@ -123,6 +123,7 @@ def get_random_string(length, exclude=None):
             for _ in range(length))
     return random_string
 
+
 @fail_on(DaosApiError)
 def get_pool(context, mode, size, name, svcn=1, log=None):
     """Return a DAOS pool that has been created an connected.
@@ -132,7 +133,7 @@ def get_pool(context, mode, size, name, svcn=1, log=None):
         mode (int): the pool mode
         size (int): the size of the pool
         name (str): the name of the pool
-        svcn (int): the number of pool replica leaders
+        svcn (int): the pool service leader quantity
         log (DaosLog|None): object for logging messages
 
     Returns:
@@ -177,7 +178,7 @@ def kill_server(server_group, context, rank, pool, log=None):
     """Kill a specific server rank.
 
     Args:
-        server_group (str):
+        server_group (str): daos server group name
         context (DaosContext): the context to use to create the DaosServer
         rank (int): daos server rank to kill
         pool (DaosPool): the DaosPool from which to exclude the rank
@@ -206,7 +207,7 @@ def get_pool_status(pool, log):
 
     Returns:
         PoolInfo: the PoolInfo object returned by the pool's pool_query()
-                  function
+            function
 
     """
     pool_info = pool.pool_query()
@@ -269,20 +270,24 @@ def wait_for_rebuild(pool, log, to_start, interval):
             "has not yet started" if to_start else "in progress")
         sleep(interval)
 
+
 def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
     """Confirm the number of rebuilt objects reported by the pool query.
-     Args:
+
+    Args:
         pool (DaosPool): pool for which to determine if rebuild is complete
         log (logging): logging object used to report the pool status
         to_be_rebuilt (int): expected number of objects to be rebuilt
         object_qty (int): expected number of rebuilt records
         record_qty (int): expected total number of rebuilt records
         errors (int): expected number of rebuild errors
-     Returns:
+
+    Returns:
         list: a list of error messages for each expected value that did not
             match the actual value.  If all expected values were detected the
             list will be empty.
-     """
+
+    """
     messages = []
     expected_pool_info = {
         "rs_toberb_obj_nr": to_be_rebuilt,

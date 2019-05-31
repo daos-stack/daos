@@ -45,15 +45,8 @@ var (
 	msgScmDevEmpty          = "scm dcpm device list must contain path"
 	msgScmClassNotSupported = "operation unsupported on scm class"
 	msgIpmctlDiscoverFail   = "ipmctl module discovery"
+	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
-
-// ScmStorage interface specifies basic functionality for subsystem
-type ScmStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-}
 
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device
@@ -204,30 +197,22 @@ func (s *scmStorage) makeMount(
 	return
 }
 
-// addMret populates and adds to response SCM mount results list in addition
-// to logging any err.
-func addMret(
-	resp *pb.FormatStorageResp, op string, mntPoint string,
-	status pb.ResponseStatus, errMsg string, logDepth int) {
+// newMntRet creates and populates NVMe ctrlr result and logs error through
+// addState.
+func newMntRet(
+	op string, mntPoint string, status pb.ResponseStatus, errMsg string,
+	logDepth int) *pb.ScmMountResult {
 
-	resp.Mrets = append(
-		resp.Mrets,
-		&pb.ScmMountResult{
-			Mntpoint: mntPoint,
-			State: &pb.ResponseState{
-				Status: status,
-				Error:  errMsg,
-			},
-		})
-
-	if errMsg != "" {
-		log.Errordf(logDepth, "scm storage "+op+": "+errMsg)
+	return &pb.ScmMountResult{
+		Mntpoint: mntPoint,
+		State: addState(
+			status, errMsg, "", logDepth+1, "scm mount "+op),
 	}
 }
 
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
-func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
+func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
 	var devType, devPath, mntOpts string
 
 	srv := s.config.Servers[i]
@@ -237,9 +222,11 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 	// wraps around addMret to provide format specific function
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
 		// log depth should be stack layer registering result
-		addMret(
-			resp, "format", mntPoint, status, errMsg,
-			common.UtilLogDepth+1)
+		*results = append(
+			*results,
+			newMntRet(
+				"format", mntPoint, status, errMsg,
+				common.UtilLogDepth+1))
 	}
 
 	if !s.initialized {
@@ -328,6 +315,22 @@ func (s *scmStorage) Format(i int, resp *pb.FormatStorageResp) {
 	return
 }
 
+// Update is currently a placeholder method stubbing SCM module fw update.
+func (s *scmStorage) Update(
+	i int, req *pb.UpdateScmParams, results *([]*pb.ScmModuleResult)) {
+
+	// respond with single result indicating no implementation
+	*results = append(
+		*results,
+		&pb.ScmModuleResult{
+			Loc: &pb.ScmModule_Location{},
+			State: addState(
+				pb.ResponseStatus_CTRL_NO_IMPL,
+				msgScmUpdateNotImpl, "",
+				common.UtilLogDepth+1, "scm module update"),
+		})
+}
+
 // newScmStorage creates a new instance of ScmStorage struct.
 //
 // NvmMgmt is the implementation of ipmctl interface in go-ipmctl
@@ -336,4 +339,5 @@ func newScmStorage(config *configuration) *scmStorage {
 		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,
 	}
+
 }

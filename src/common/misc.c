@@ -997,12 +997,11 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		entries_alloc = true;
 	}
 
-	for (i = 0; i < prop_req->dpp_nr; i++) {
+	for (i = 0; i < prop_req->dpp_nr && i < prop_reply->dpp_nr; i++) {
 		entry_req = &prop_req->dpp_entries[i];
 		type = entry_req->dpe_type;
 		if (type == 0) {
-			/* this is the case that dpp_entries allocated above */
-			D_ASSERT(prop_req->dpp_nr == prop_reply->dpp_nr);
+			/* req doesn't have any entry type populated yet */
 			type = prop_reply->dpp_entries[i].dpe_type;
 			entry_req->dpe_type = type;
 		}
