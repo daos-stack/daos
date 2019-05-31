@@ -753,8 +753,8 @@ global_teardown(void **state)
 #define NUM_EXTENTS 30
 
 /* copy_exp_val_to_array
-* Input parameters : flag, evtdata, val
-* Input/Output parameters : exp_size
+* Input parameters : flag, evtdata
+* Input/Output parameters : val, exp_size
 */
 static void
 copy_exp_val_to_array(int flag, int **evtdata,
