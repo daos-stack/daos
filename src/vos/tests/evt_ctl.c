@@ -760,80 +760,87 @@ static void
 copy_exp_val_to_array(int flag, int **evtdata,
 					int *val, int *exp_size)
 {
-int epoch;
-int offset;
-int loop_count;
-int count;
+	int epoch;
+	int offset;
+	int loop_count;
+	int count;
+	int	incr = 0;
 
-count = *exp_size;
+	count = *exp_size;
 
-for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
-if (epoch < NUM_EPOCHS) {
-	if (flag == EVT_ITER_VISIBLE) {
-		val[epoch] = evtdata[epoch][epoch];
-		 count++;
-	} else if (flag == EVT_ITER_COVERED) {
-		for (offset = epoch; offset >= 1; offset--) {
-			if (evtdata[offset][epoch+1] != 0) {
-				val[count] = evtdata[offset][epoch+1];
-				 count++;
-			}
+	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
+	if (epoch < NUM_EPOCHS) {
+		switch (flag) {
+		case EVT_ITER_COVERED:
+			incr = 1;
+		break;
+		case EVT_ITER_VISIBLE | EVT_ITER_COVERED:
+			incr = 0;
+		break;
+		default:
+		break;
 		}
-	} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
-		for (offset = epoch; offset >= 1; offset--) {
-			if (evtdata[offset][epoch] != 0) {
-				val[count] =	evtdata[offset][epoch];
-				 count++;
+		if (flag == EVT_ITER_VISIBLE) {
+			val[epoch] = evtdata[epoch][epoch];
+			 count++;
+		} else if ((flag == EVT_ITER_COVERED) ||
+		(flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED))) {
+			for (offset = epoch; offset >= 1; offset--) {
+				if (evtdata[offset][epoch+incr] != 0) {
+					val[count] =
+					evtdata[offset][epoch+incr];
+					count++;
+				}
+			}
+		} else {
+			if ((evtdata[epoch][epoch] & 0xFF) != 0xFF) {
+				count++;
+				val[count] = evtdata[epoch][epoch];
 			}
 		}
 	} else {
-		if ((evtdata[epoch][epoch] & 0xFF) != 0xFF) {
-			count++;
-			val[count] = evtdata[epoch][epoch];
-		}
-	}
-} else {
-	if (flag == EVT_ITER_VISIBLE) {
-		for (offset = epoch;
-		offset < NUM_EXTENTS + epoch; offset++) {
-			val[offset] = evtdata[epoch][offset];
-			 count++;
-		}
-	} else if (flag == EVT_ITER_COVERED) {
-		for (loop_count = epoch+1;
-		loop_count < NUM_EXTENTS+epoch;
-		loop_count++) {
-			for (offset = epoch-1; offset >= 1;
-				offset--) {
-				if (evtdata[offset][loop_count] != 0) {
-					val[count] =
-					evtdata[offset][loop_count];
-					count++;
-			   }
+		if (flag == EVT_ITER_VISIBLE) {
+			for (offset = epoch;
+			offset < NUM_EXTENTS + epoch; offset++) {
+				val[offset] = evtdata[epoch][offset];
+				 count++;
 			}
-		}
-	} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
-		for (loop_count = epoch;
-			loop_count < NUM_EXTENTS+epoch; loop_count++) {
-			for (offset = epoch; offset >= 1 ; offset--) {
-				if (evtdata[offset][loop_count] != 0) {
-					val[count] =
-					evtdata[offset][loop_count];
-				    count++;
+		} else if (flag == EVT_ITER_COVERED) {
+			for (loop_count = epoch+1;
+			loop_count < NUM_EXTENTS+epoch;
+			loop_count++) {
+				for (offset = epoch-1; offset >= 1;
+					offset--) {
+					if (evtdata[offset][loop_count] != 0) {
+						val[count] =
+						evtdata[offset][loop_count];
+						count++;
+				   }
+				}
+			}
+		} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
+			for (loop_count = epoch;
+				loop_count < NUM_EXTENTS+epoch; loop_count++) {
+				for (offset = epoch; offset >= 1 ; offset--) {
+					if (evtdata[offset][loop_count] != 0) {
+						val[count] =
+						evtdata[offset][loop_count];
+						count++;
+					}
+				}
+			}
+		} else {
+			for (offset = epoch; offset < NUM_EXTENTS + epoch;
+			offset++) {
+				if ((evtdata[epoch][offset] & 0xFF) != 0xFF) {
+					count++;
+					val[count] = evtdata[epoch][offset];
 				}
 			}
 		}
-	} else {
-		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
-			if ((evtdata[epoch][offset] & 0xFF) != 0xFF) {
-				count++;
-				val[count] = evtdata[epoch][offset];
-			}
-		}
 	}
-}
-}
-*exp_size = count;
+	}
+	*exp_size = count;
 }
 
 /* create_expected_data:
@@ -939,7 +946,9 @@ test_evt_iter_flags(void **state)
 	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
-	data = (int **)malloc((NUM_EPOCHS+1)*sizeof(int *));
+	D_ALLOC_ARRAY(data, ((NUM_EPOCHS+1)*sizeof(int *)));
+	if (data == NULL)
+		goto end;
 	for (count = 0; count < NUM_EPOCHS+1; count++) {
 		data[count] = (int *)calloc(
 				(NUM_EPOCHS+NUM_EXTENTS+1), sizeof(int));
@@ -1073,13 +1082,13 @@ test_evt_iter_flags(void **state)
 			goto finish;
 	}
 finish:
-	free(rev_exp_val);
+	D_FREE(rev_exp_val);
 finish1:
-	free(actual_val);
+	D_FREE(actual_val);
 finish2:
-	free(exp_val);
+	D_FREE(exp_val);
 end:
-	free(data);
+	D_FREE(data);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
