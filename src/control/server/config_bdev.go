@@ -33,7 +33,7 @@ import (
 const (
 	confOut   = "daos_nvme.conf"
 	nvmeTempl = `[Nvme]
-{{ range $i, $e := .BdevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme{{$i}}
+{{ $host := .Hostname }}{{ range $i, $e := .BdevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
 {{ end }}    RetryCount 4
     TimeoutUsec 0
     ActionOnTimeout None
