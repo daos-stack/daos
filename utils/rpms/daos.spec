@@ -4,8 +4,8 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 Name:          daos
-Version:       0.4.0
-Release:       2%{?dist}
+Version:       0.5.0
+Release:       1%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -216,6 +216,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Wed May 29 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Version bump up to 0.5.0
+
 * Tue May 07 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Move some files around among the sub-packages
 
