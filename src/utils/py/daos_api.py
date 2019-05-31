@@ -1831,13 +1831,13 @@ class DaosContainer(object):
         epoch = ctypes.c_uint64(epoch)
 
         if cb_func is None:
-            retcode = func(coh, ctypes.byref(epoch), None)
+            retcode = func(coh, epoch, None)
             if retcode != 0:
                 raise DaosApiError("cont aggregate returned non-zero.RC: {0}"
                                    .format(retcode))
         else:
             event = DaosEvent()
-            params = [coh, ctypes.byref(epoch), event]
+            params = [coh, epoch, event]
             thread = threading.Thread(target=AsyncWorker1,
                                       args=(func,
                                             params,
