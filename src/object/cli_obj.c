@@ -502,13 +502,19 @@ out:
 	return rc;
 }
 
+/* The tgt_set parameter is a bit map indicating the proper subset of targets
+ * to forward the update for EC ojbects. For non-EC objects, and for EC updates
+ * that include a full-stripe update (i.e., parity has been generated), the
+ * tgt_set varible is set to zero.
+ */
 static int
-obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver,
+obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		    uint32_t *start_shard, uint32_t *shard_cnt,
 		    struct daos_obj_shard_tgt **fw_shard_tgts, uint32_t *fw_cnt)
 {
 	struct daos_obj_shard_tgt	*shard_tgts = *fw_shard_tgts;
 	uint32_t			 lead_shard;
+	uint32_t			 new_fw_cnt = 0;
 	uint32_t			 i, j;
 	int				 rc;
 
@@ -524,26 +530,33 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver,
 		return rc;
 	}
 	lead_shard = rc;
-
-	if (shard_tgts != NULL && *fw_cnt != *shard_cnt - 1) {
+	if (tgt_set) {
+		for (i = 0; i < *shard_cnt; i++)
+			if (*start_shard + i != lead_shard &&
+			    tgt_set & (1UL << i))
+				new_fw_cnt++;
+	} else {
+		new_fw_cnt = *shard_cnt - 1;
+	}
+	if (shard_tgts != NULL && *fw_cnt != new_fw_cnt) {
 		/* fw_cnt possibly changed per progressive layout */
 		D_FREE(shard_tgts);
 		*fw_shard_tgts = NULL;
-		*fw_cnt = 0;
 		shard_tgts = NULL;
+		*fw_cnt = 0;
 	}
 	if (shard_tgts == NULL) {
-		D_ALLOC_ARRAY(shard_tgts, *shard_cnt - 1);
+		D_ALLOC_ARRAY(shard_tgts, new_fw_cnt);
 		if (shard_tgts == NULL)
 			return -DER_NOMEM;
 		*fw_shard_tgts = shard_tgts;
-		*fw_cnt = *shard_cnt - 1;
+		*fw_cnt = new_fw_cnt;
 	}
 	for (i = 0, j = 0; i < *shard_cnt; i++) {
 		uint32_t	shard;
 
 		shard = *start_shard + i;
-		if (shard == lead_shard)
+		if (shard == lead_shard || (tgt_set && !(tgt_set & 1UL << i)))
 			continue;
 
 		rc = obj_shard_tgts_query(obj, map_ver, shard,
@@ -1001,6 +1014,7 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
+	uint32_t		 start_shard;
 };
 
 struct obj_list_arg {
@@ -1418,6 +1432,7 @@ shard_update_task(tse_task_t *task)
 				 sizeof(args->dkey_hash));
 	rc = dc_obj_shard_update(obj_shard, args->epoch, args->dkey, args->nr,
 				 args->iods, args->sgls, &args->auxi.map_ver,
+				 args->auxi.start_shard,
 				 args->auxi.obj_auxi->fw_shard_tgts[0],
 				 args->auxi.obj_auxi->fw_cnt[0], task,
 				 &args->dti, args->auxi.obj_auxi->flags);
@@ -1569,12 +1584,15 @@ dc_obj_update(tse_task_t *task)
 	tse_sched_t		*sched = tse_task2sched(task);
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
+	struct daos_oclass_attr *oca;
 	d_list_t		*head = NULL;
 	unsigned int		shard;
+	unsigned int		start_shard;
 	unsigned int		shards_cnt;
 	unsigned int		map_ver;
 	uint64_t		dkey_hash;
 	daos_epoch_t		epoch;
+	uint64_t		tgt_set = 0;
 	int			i;
 	int			rc;
 
@@ -1599,6 +1617,14 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
+	if (oca->ca_resil == DAOS_RES_EC) {
+		rc = ec_obj_update_encode(task, obj->cob_md.omd_id, oca,
+					  &tgt_set);
+		if (rc != 0)
+			goto out_task;
+	}
+
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
 	obj_auxi->opc = DAOS_OBJ_RPC_UPDATE;
 	shard_task_list_init(obj_auxi);
@@ -1619,6 +1645,7 @@ dc_obj_update(tse_task_t *task)
 				     &shards_cnt);
 	if (rc != 0)
 		goto out_task;
+	start_shard = shard;
 
 	D_DEBUG(DB_IO, "update "DF_OID" dkey %llu start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash,
@@ -1626,7 +1653,7 @@ dc_obj_update(tse_task_t *task)
 	obj_auxi->fw_shard_tgts = &obj_auxi->fw_shard_tgts_inline;
 	obj_auxi->fw_cnt = &obj_auxi->fw_cnt_inline;
 	obj_auxi->fw_rdg_count = 1;
-	rc = obj_shards_2_fwtgts(obj, map_ver, &shard, &shards_cnt,
+	rc = obj_shards_2_fwtgts(obj, map_ver, tgt_set, &shard, &shards_cnt,
 				 obj_auxi->fw_shard_tgts, obj_auxi->fw_cnt);
 	if (rc != 0) {
 		D_ERROR("update "DF_OID", obj_shards_2_fwtgts failed %d.\n",
@@ -1685,6 +1712,7 @@ dc_obj_update(tse_task_t *task)
 		shard_arg->sgls			= args->sgls;
 		shard_arg->auxi.map_ver		= map_ver;
 		shard_arg->auxi.shard		= shard;
+		shard_arg->auxi.start_shard	= start_shard;
 		shard_arg->auxi.target		= obj_shard2tgtid(obj, shard);
 		shard_arg->auxi.obj		= obj;
 		shard_arg->auxi.obj_auxi	= obj_auxi;
@@ -2033,8 +2061,8 @@ obj_punch_internal(tse_task_t *api_task, enum obj_rpc_opc opc,
 		for (i = 0; i < grps; i++) {
 			shard_first[i] = i * grp_size;
 			shard_nr = grp_size;
-			rc = obj_shards_2_fwtgts(obj, map_ver, &shard_first[i],
-						 &shard_nr,
+			rc = obj_shards_2_fwtgts(obj, map_ver, 0UL,
+						 &shard_first[i], &shard_nr,
 						 &obj_auxi->fw_shard_tgts[i],
 						 &obj_auxi->fw_cnt[i]);
 			if (rc != 0) {
@@ -2067,7 +2095,7 @@ single_rdg:
 	obj_auxi->fw_shard_tgts = &obj_auxi->fw_shard_tgts_inline;
 	obj_auxi->fw_cnt = &obj_auxi->fw_cnt_inline;
 	obj_auxi->fw_rdg_count = 1;
-	rc = obj_shards_2_fwtgts(obj, map_ver, shard_first, &shard_nr,
+	rc = obj_shards_2_fwtgts(obj, map_ver, 0UL, shard_first, &shard_nr,
 				 obj_auxi->fw_shard_tgts,
 				 obj_auxi->fw_cnt);
 	if (rc != 0) {
