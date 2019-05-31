@@ -198,20 +198,6 @@ echo_init(int server, bool tier2)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	/* Put the protocol name into a char * to avoid compiler warnings about
-	 * const use
-	 */
-	D_STRNDUP(name, "TEST", 10);
-	assert(name);
-
-	D_ALLOC_PTR(cpf);
-	assert(cpf);
-	D_ALLOC_ARRAY(cpf->cpf_prf, 5);
-	assert(cpf->cpf_prf);
-	cpf->cpf_name = name;
-	cpf->cpf_base = ECHO_PROTO_BASE;
-	cpf->cpf_count = 5;
-
 	rc = sem_init(&gecho.token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
@@ -257,6 +243,21 @@ echo_init(int server, bool tier2)
 			assert(rc == 0);
 		}
 	}
+
+	/* Put the protocol name into a char * to avoid compiler warnings about
+	 * const use
+	 */
+
+	D_STRNDUP(name, "TEST", 10);
+	assert(name);
+	D_ALLOC_PTR(cpf);
+	assert(cpf);
+	D_ALLOC_ARRAY(cpf->cpf_prf, 5);
+	assert(cpf->cpf_prf);
+	cpf->cpf_name = name;
+	cpf->cpf_base = ECHO_PROTO_BASE;
+	cpf->cpf_count = 5;
+
 
 	/* Only register the prf_handler on the server side, as the client
 	 * cannot receive RPCs.

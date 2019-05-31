@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2016-2018 Intel Corporation
+# Copyright (C) 2016-2019 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -61,6 +61,8 @@ set TR_USE_VALGRIND in cart_echo_test.yml to callgrind
 import os
 import time
 import commontestsuite
+import cart_logparse
+import cart_logtest
 
 class TestEcho(commontestsuite.CommonTestSuite):
     """ Execute process set tests """
@@ -82,6 +84,14 @@ class TestEcho(commontestsuite.CommonTestSuite):
                             ofi_interface, self.ofi_share_addr,
                             self.ofi_ctx_num)
 
+    def _log_check(self):
+        """Check log files for consistency """
+
+        cl = cart_logparse.LogIter(self.get_cart_long_log_name())
+        c_log_test = cart_logtest.LogTest(cl)
+        strict_test = False
+        c_log_test.check_log_file(strict_test)
+
     def tearDown(self):
         """tear down the test"""
         self.logger.info("tearDown begin")
@@ -102,6 +112,8 @@ class TestEcho(commontestsuite.CommonTestSuite):
 
         if procrtn:
             self.fail("Failed, return code %d" % procrtn)
+
+        self._log_check()
 
     def test_echo_two_nodes(self):
         """Simple process set test two node"""
@@ -151,3 +163,5 @@ class TestEcho(commontestsuite.CommonTestSuite):
         if cli_rtn or srv_rtn:
             self.fail("Failed, return codes client %d " % cli_rtn + \
                        "server %d" % srv_rtn)
+
+        self._log_check()

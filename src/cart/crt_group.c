@@ -2310,7 +2310,7 @@ out:
 		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 	if (tmp_uri != NULL)
-		free(tmp_uri);
+		D_FREE(tmp_uri);
 }
 
 int
