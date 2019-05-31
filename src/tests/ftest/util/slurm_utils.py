@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 
 from __future__ import print_function
 import os
@@ -32,8 +32,28 @@ import pyslurm
 
 _lock = threading.Lock()
 
+
 class SlurmFailed(Exception):
     """ Thrown when something goes wrong with slurm """
+
+
+def cancel_jobs(job_id):
+    """
+    :param job_id: slurm job id
+    :type job_id: int
+    :return: status
+    :rtype: bool
+    """
+    try:
+        cmd_line = "scancel {}".format(job_id)
+        proc = subprocess.Popen(cmd_line, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, shell=True)
+        proc.communicate()
+        return True
+    except(OSError, ValueError) as e:
+        print("<IorRunFailed> Exception occurred: {0}".format(str(e)))
+        raise SlurmFailed("Slurm: scancel failed to kill job {}".format(job_id))
+
 
 def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
     """
@@ -49,28 +69,27 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
     returns   --the full path of the script
     """
 
-    if name is None or output is None or nodecount is None or cmds is None:
+    if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
 
     unique = random.randint(1, 100000)
 
     if not os.path.exists(path):
         os.makedirs(path)
-    scriptfile = path + '/jobscript' + str(unique) + ".sh"
-
+    scriptfile = path + '/jobscript' + "_" + str(unique) + ".sh"        
     with open(scriptfile, 'w') as script_file:
-
         # identify what be used to run this script
         script_file.write("#!/bin/bash\n#\n")
 
         # write the mandatory parameters
         script_file.write("#SBATCH --job-name={}\n".format(name))
-        script_file.write("#SBATCH --output={}\n".format(output))
         script_file.write("#SBATCH --nodes={}\n".format(nodecount))
         script_file.write("#SBATCH --distribution=cyclic\n")
-
+        if output is not None:
+            output = output + "_" + str(unique) + "_%j_%t"
+            script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
-            for key, value in sbatch:
+            for key, value in sbatch.iteritems():
                 script_file.write("#SBATCH --{}={}\n".format(key, value))
         script_file.write("\n")
 
@@ -78,12 +97,13 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("echo \"nodes: \" $SLURM_JOB_NODELIST \n")
         script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
         script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
-
-        for cmd in cmds:
-            script_file.write("srun " + cmd)
+        for cmd in list(cmds):
+            script_file.write(
+                "srun -l --mpi=pmi2 " + cmd)
             script_file.write("\n")
 
     return scriptfile
+
 
 def run_slurm_cmd(cmd, name):
 
@@ -101,17 +121,19 @@ def run_slurm_cmd(cmd, name):
     jobid = pyslurm.job().submit_batch_job(daos_test_job)
     return jobid
 
-def run_slurm_script(script):
+
+def run_slurm_script(script, logfile=None):
 
     """
         For running scripts, for example those created with write_slurm_script
         function above.
 
-        script --a script file suitable to be run by slurm
-
+        script(str) -- script file suitable to by run by slurm
+        logfile(str) -- add -o param and generate logfile
         returns --the job ID, which is used as a handle for other functions
     """
-
+    if logfile is not None:
+        script = " -o " + logfile + " " + script
     cmd = "sbatch " + script
     output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
     print(output)
@@ -152,10 +174,11 @@ def register_for_job_results(handle, test, maxwait=3600):
         returns  --None
 
     """
-    params = {"handle":handle, "maxwait":maxwait, "test_obj":test}
+    params = {"handle": handle, "maxwait": maxwait, "test_obj": test}
     athread = threading.Thread(target=watch_job,
                                kwargs=params)
     athread.start()
+
 
 def watch_job(handle, maxwait, test_obj):
     """
@@ -175,7 +198,8 @@ def watch_job(handle, maxwait, test_obj):
         if state == "PENDING" or state == "RUNNING":
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
-                print("reached maxwait")
+                print("Job {} has timedout after {} secs".format(handle,
+                                                                 maxwait))
                 break
             else:
                 wait_time += 5
@@ -183,7 +207,8 @@ def watch_job(handle, maxwait, test_obj):
         else:
             break
 
-    print("FINAL STATE: slurm job {} completed with : {}".format(handle, state))
-    params = {"handle":handle, "state":state}
+    print("FINAL STATE: slurm job {} completed with : {} at {}\n".format(
+        handle, state, time.ctime()))
+    params = {"handle": handle, "state": state}
     with _lock:
         test_obj.job_done(params)

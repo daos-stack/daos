@@ -1,146 +1,180 @@
 hosts:
    test_machines:
-        daos_servers:
+        test_servers:
             - boro-A
-        # either compute or partition can be used, not both
-        #compute:
-        #    - boro-A
-        partition: tp
-        gateway: []
-timeout: 1000
+            - boro-B
+        test_clients:
+            - boro-C
+            - boro-D
+            - boro-E
+            - boro-F
+            - boro-G
+            - boro-H
+timeout: 7200
 server_config:
     name: daos_server
-
+#slurm partition names
+partition:
+        client: daos_client
+        server: daos_server
+# pool_params - attributes of the pools to create; Currently only create one
+# pool
 pool1:
     createmode:
-        mode_RW:
-             mode: 146
+        mode_RW: 146
     createset:
         setname: daos_server
     createsize:
-        size: 10000000000
+        size: 100000000000
     createsvc:
         svcn: 1
-
+# test_params - Defines the type of test to run and how long it runs
+#               It also defines how many pools and jobs to create
+#               name:                The name of the Avocado testcase
+#               test_timeout:        The overall timeout in secs; soak12 will be
+#                                    changed to 43200 once it is stable
+#               test_iteration:      values 1 or -1; -1 is used to cause the
+#                                    IOR -T x to end cmd.  i = 100000000
+#                                    (does not seem to work)
+#               nodesperjob:         slurm -N param; -1 indicates all nodes
+#                                    in -partition
+#               poollist:            defines pools to create for jobs
+#               joblist:             defines workload per slurm scripts
+# smoke testcase params
+smoke:
+    name: smoke
+    test_timeout: 1800
+    test_iteration: 1
+    nodesperjob: -1
+    pool: pool1
+    joblist:
+      - jobsmoke
+# 1 hours testcase params
+soak1:
+    name: soak1
+    test_timeout: 3600
+    test_iteration: 1
+    nodesperjob: 1
+    pool: pool1
+    joblist:
+      - job1
+      - job16
+      - job24
+# job_params  - defines the job specifications for each cmdline listed
+#               name:                The name of the Avocado testcase
+#               test_timeout:        The cmdline timeout; passed to slurm
+#               tasks:               slurm --ntaskspernode param
+#               blocksize:           IOR blocksize; need to consider poolsize
+#                                    and total ntasks (nodes * ntaskspernode)
+#                                    This param will be determined in the
+#                                    test later.
+#               jobspec:             list of cmdline specifications to run
+# smoke job params; all nodes on client partition are used and one taskpernode
+jobsmoke:
+    name: smoke
+    time: 10
+    tasks: 1
+    blocksize: '10G'
+    jobspec:
+      - ior3
+      - ior1
+      - ior2
+# task = 1
 job1:
-    name: soak_job_1
-    nodes: 1
-    process_per_node: 1
-    time: 10:00
-    mem: 100
-    jobspec: ior1
-
+    name: job1
+    time: 10
+    tasks: 1
+    blocksize: '4G'
+    jobspec:
+        - ior1
+        - ior2
+        - ior3
+# task = 16
+job16:
+    name: job16
+    time: 20
+    tasks: 16
+    blocksize: '1G'
+    jobspec:
+        - ior1
+        - ior2
+        - ior3
+# tasks 32 is failing - DAOS-2518
+# task = 24
+job24:
+    name: job24
+    time: 30
+    tasks: 20
+    blocksize: '128m'
+    jobspec:
+        - ior1
+        - ior2
+        - ior3
+# TBD test case for DMG
 job2:
-    name: soak_job_2
-    nodes: 2
-    process_per_node: 2
-    time: 10:00
-    mem: 100
-    jobspec: ior2
-
-job3:
-    name: soak_job_3
-    nodes: 1
-    process_per_node: 1
-    time: 10:00
-    mem: 100
-    jobspec: dmg1
-
+    name: pool_job_3
+    time: 600
+    partition: client
+    jobspec:
+        - dmg1
+# IOR params -a DAOS and -a MPIIO
+# 
 ior1:
-    iteration:
-        iter: 1
+    iormode:
+        a: "DAOS"
     iorflags:
         F: "-v -W -w -r -R"
     transfersize:
-        t: '1m'
-    recordsize:
-        recordsize_8b:
-            r: '8b'
-    stripesize:
-        stripesize_1m:
-            s: '1m'
-    stripecount:
-        c: 1024
-    asyncio:
-        a: 16
+        t: '4m'
     objectclass:
         o: "LARGE"
 ior2:
-    iteration:
-        iter: 1
+    iormode:
+        a: "DAOS"
     iorflags:
         F: "-v -W -w -r -R"
     transfersize:
-        t: '1m'
-    recordsize:
-        recordsize_1k:
-            r: '1k'
-    stripesize:
-        stripesize_1m:
-            s: '1m'
-    stripecount:
-        c: 1024
-    asyncio:
-        a: 16
+        t: '2m'
     objectclass:
         o: "LARGE"
 ior3:
-    iteration:
-        iter: 1
+    iormode:
+        a: "DAOS"
     iorflags:
         F: "-v -W -w -r -R"
     transfersize:
         t: '1m'
-    recordsize:
-        recordsize_4k:
-            r: '4k'
-    stripesize:
-        stripesize_1m:
-            s: '1m'
-    stripecount:
-        c: 1024
-    asyncio:
-        a: 16
     objectclass:
         o: "LARGE"
+# IOR MPIIO cmdlines  - TBD
 ior4:
-    iteration:
-        iter: 1
+    iormode:
+        a: "MPIIO"
     iorflags:
         F: "-v -W -w -r -R"
     transfersize:
-        t: '1m'
-    recordsize:
-        recordsize_4k:
-            r: '4k'
-    stripesize:
-        stripesize_8m:
-            s: '8m'
-    stripecount:
-        c: 1024
-    asyncio:
-        a: 16
+        t: '4k'
     objectclass:
-        o: "LARGE"
+        o: "TINY"
 ior5:
-    iteration:
-        iter: 1
+    iormode:
+        a: "MPIIO"
     iorflags:
         F: "-v -W -w -r -R"
     transfersize:
-        t: '1m'
-    recordsize:
-        recordsize_8b:
-            r: '8b'
-    stripesize:
-        stripesize_8m:
-            s: '8m'
-    stripecount:
-        c: 1024
-    asyncio:
-        a: 16
+        t: '8k'
+    objectclass:
+        o: "SMALL"
+ior6:
+    iormode:
+        a: "MPIIO"
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '4m'
     objectclass:
         o: "LARGE"
+# dmg cmdline params - TBD
 dmg1:
     commands:
         - cmd: "create"
