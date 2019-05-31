@@ -102,24 +102,24 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
 static inline uint8_t
-isset_range(uint8_t *bitmap, uint8_t start, uint8_t end)
+isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
 	int index;
 
-	for(index = start; index <= end; ++index)
-		if(isclr(bitmap,index))
+	for (index = start; index <= end; ++index)
+		if (isclr(bitmap, index))
 			return 0;
 
 	return 1;
 }
 
 static inline void
-clrbit_range(uint8_t *bitmap, uint8_t start, uint8_t end)
+clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
 	int index;
 
-	for(index = start; index <= end; ++index)
-		clrbit(bitmap,index);
+	for (index = start; index <= end; ++index)
+		clrbit(bitmap, index);
 }
 
 static inline unsigned int

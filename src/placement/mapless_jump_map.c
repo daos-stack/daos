@@ -53,7 +53,7 @@ struct failed_shard {
 /**
  * Contains information related to object layout size.
  */
-struct mapless_obj_placement {
+struct mpls_obj_placement {
 	unsigned int	mop_grp_size;
 	unsigned int	mop_grp_nr;
 };
@@ -175,6 +175,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 	struct failed_shard	*f_shard;
 
 	d_list_t		*tmp;
+
 	D_DEBUG(DB_PL, "fnew: %u", f_new->fs_shard_idx);
 
 	/* All failed shards are sorted by fseq in ascending order */
@@ -233,9 +234,9 @@ mapless_remap_free_all(d_list_t *remap_list)
 }
 
 static int
-mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
+mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md,
-		struct mapless_obj_placement *mop)
+		struct mpls_obj_placement *mop)
 {
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
@@ -300,7 +301,7 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
  */
 static bool
 mapless_remap_next_spare(struct pl_mapless_map *mmap,
-		struct mapless_obj_placement *mop, struct pool_target *target)
+		struct mpls_obj_placement *mop, struct pool_target *target)
 {
 	D_ASSERTF(mop->mop_grp_size <= mmap->mmp_domain_nr,
 		  "grp_size: %u > domain_nr: %u\n",
@@ -586,8 +587,8 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 
 
 			if (position >= start_pos && position < end_pos) {
-				setbit(used_tgts,((position - start_pos)
-                                        / sizeof(**target)));
+				setbit(used_tgts, ((position - start_pos)
+				/ sizeof(**target)));
 				skiped_targets++;
 			}
 		}
@@ -613,7 +614,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			if (pool_target_unavail(*target))
 				setbit(used_tgts, selected_dom);
 
-		} while ((isset(used_tgts,selected_dom)) &&
+		} while ((isset(used_tgts, selected_dom)) &&
 			 skiped_targets < num_doms);
 
 		if (skiped_targets == num_doms)
@@ -678,7 +679,7 @@ mapless_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 */
 static void
 obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
-		 struct pl_obj_layout *layout, struct mapless_obj_placement *mop,
+		 struct pl_obj_layout *layout, struct mpls_obj_placement *mop,
 		 d_list_t *remap_list, uint8_t *dom_used, uint64_t key)
 {
 	struct failed_shard	*f_shard, *f_tmp;
@@ -694,6 +695,7 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 	fail_count = 0;
 
 	while (current != remap_list) {
+		uint64_t rebuild_key;
 		f_shard = d_list_entry(current, struct failed_shard,
 				       fs_list);
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
@@ -703,9 +705,10 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		if (!spare_avail)
 			goto next_fail;
 
+		rebuild_key = (f_shard->fs_shard_idx * 10) + fail_count++;
 		get_rebuild_target(mmap->mmp_map.pl_poolmap, &spare_tgt,
-				   crc(key, f_shard->fs_shard_idx * 10 + fail_count++), dom_used,
-				   layout, md, mmap->dom_used_length);
+				crc(key, rebuild_key), dom_used, layout,
+				md, mmap->dom_used_length);
 
 		/* The selected spare target is down as well */
 		if (pool_target_unavail(spare_tgt)) {
@@ -852,7 +855,7 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 
 			if ((start <= (*target)) && ((*target) <= end)) {
 				current_dom = temp_dom;
-				setbit(dom_used,(index + child_pos));
+				setbit(dom_used, (index + child_pos));
 				break;
 			}
 		}
@@ -899,7 +902,7 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
  */
 static int
 get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
-		  struct mapless_obj_placement *mop, daos_obj_id_t oid,
+		  struct mpls_obj_placement *mop, daos_obj_id_t oid,
 		  d_list_t *remap_list, struct daos_obj_md *md)
 {
 	struct pool_target      *target;
@@ -1056,7 +1059,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	}
 
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap,
-				  mia->ia_mapless.domain, PO_COMP_ID_ALL, &doms);
+				mia->ia_mapless.domain, PO_COMP_ID_ALL, &doms);
 	if (rc <= 0) {
 		rc = (rc == 0) ? -DER_INVAL : rc;
 		goto ERR;
@@ -1104,7 +1107,7 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 {
 	struct pl_mapless_map           *mmap;
 	struct pl_obj_layout            *layout;
-	struct mapless_obj_placement    mop;
+	struct mpls_obj_placement    mop;
 	d_list_t                        remap_list;
 	daos_obj_id_t                   oid;
 	int                             rc;
@@ -1112,9 +1115,9 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	mmap = pl_map2mplmap(map);
 	oid = md->omd_id;
 
-	rc = mapless_obj_placement_get(mmap, md, shard_md, &mop);
+	rc = mpls_obj_placement_get(mmap, md, shard_md, &mop);
 	if (rc) {
-		D_ERROR("mapless_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("mpls_obj_placement_get failed, rc %d.\n", rc);
 		return rc;
 	}
 
@@ -1173,7 +1176,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	d_list_t                        remap_list;
 	struct failed_shard             *f_shard;
 	struct pl_obj_shard             *l_shard;
-	struct mapless_obj_placement    mop;
+	struct mpls_obj_placement    mop;
 	daos_obj_id_t                   oid;
 	int                             rc;
 
@@ -1189,9 +1192,9 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	mmap = pl_map2mplmap(map);
 	oid = md->omd_id;
 
-	rc = mapless_obj_placement_get(mmap, md, shard_md, &mop);
+	rc = mpls_obj_placement_get(mmap, md, shard_md, &mop);
 	if (rc) {
-		D_ERROR("mapless_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("mpls_obj_placement_get failed, rc %d.\n", rc);
 		return rc;
 	}
 
