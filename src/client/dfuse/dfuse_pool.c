@@ -65,6 +65,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 	strncpy(dfs->dffs_pool, name, NAME_MAX);
+	dfs->dffs_pool[NAME_MAX] = '\0';
 
 	{
 		struct fuse_entry_param	entry = {0};
@@ -102,6 +103,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
