@@ -696,6 +696,7 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 
 	while (current != remap_list) {
 		uint64_t rebuild_key;
+
 		f_shard = d_list_entry(current, struct failed_shard,
 				       fs_list);
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
