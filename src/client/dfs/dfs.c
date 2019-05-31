@@ -35,6 +35,7 @@
 #include "daos_api.h"
 #include "daos_addons.h"
 #include "daos_fs.h"
+#include "daos_security.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"
@@ -87,7 +88,7 @@ struct dfs_obj {
 	/** DAOS object ID of the parent of the object */
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
-	char			name[DFS_MAX_PATH];
+	char			name[DFS_MAX_PATH + 1];
 	/** Symlink value if object is a symbolic link */
 	char			*value;
 };
@@ -260,7 +261,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_sg_list_t	sgls[INODE_AKEYS + 1];
 	d_iov_t	sg_iovs[INODE_AKEYS + 1];
 	daos_iod_t	iods[INODE_AKEYS + 1];
-	char		value[DFS_MAX_PATH];
+	char		*value = NULL;
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
@@ -300,8 +301,11 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	i++;
 
 	if (fetch_sym) {
+		value = malloc(PATH_MAX);
+		if (value == NULL)
+			return -DER_NOMEM;
 		/** Set Akey for Symlink Value, will be empty if no symlink */
-		d_iov_set(&sg_iovs[i], value, DFS_MAX_PATH);
+		d_iov_set(&sg_iovs[i], value, PATH_MAX);
 		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
 		i++;
 	}
@@ -325,16 +329,17 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	rc = daos_obj_fetch(oh, th, &dkey, akeys_nr, iods, sgls, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
-		return rc;
+		D_GOTO(out, rc);
 	}
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
 		size_t sym_len = iods[INODE_AKEYS].iod_size;
 
 		if (sym_len != 0) {
+			D_ASSERT(value);
 			entry->value = strdup(value);
 			if (entry->value == NULL)
-				return -DER_NOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
@@ -343,6 +348,9 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	else
 		*exists = true;
 
+out:
+	if (fetch_sym)
+		D_FREE(value);
 	return rc;
 }
 
@@ -600,7 +608,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return -DER_INVAL;
-	if (strlen(name) > DFS_MAX_PATH - 1)
+	if (strlen(name) > DFS_MAX_PATH)
 		return -DER_INVAL;
 	return 0;
 }
@@ -954,6 +962,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs_t			*dfs;
 	daos_handle_t		th;
 	daos_pool_info_t	pool_info;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*prop_entry;
 	struct dfs_entry	entry = {0};
 	bool			sb_exists;
 	int			amode, obj_mode;
@@ -977,27 +987,49 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		return rc;
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
+	/* Fetch ownership props with the query */
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate pool prop for query\n");
+		rc = -DER_NOMEM;
 		D_GOTO(err_dfs, rc);
 	}
 
-	dfs->uid = pool_info.pi_uid;
-	dfs->gid = pool_info.pi_gid;
+	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
+		D_GOTO(err_prop, rc);
+	}
+
+	/* Convert the owner information to uid/gid */
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_uid(prop_entry->dpe_str, &dfs->uid);
+	if (rc != 0) {
+		D_ERROR("Unable to convert owner to uid\n");
+		D_GOTO(err_prop, rc);
+	}
+
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_gid(prop_entry->dpe_str, &dfs->gid);
+	if (rc != 0) {
+		D_ERROR("Unable to convert owner-group to gid\n");
+		D_GOTO(err_prop, rc);
+	}
 
 	/** if mount RW, create TX */
 	if (amode == O_RDWR) {
 		rc = daos_tx_open(coh, &th, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() Failed (%d)\n", rc);
-			D_GOTO(err_dfs, rc);
+			D_GOTO(err_prop, rc);
 		}
 	} else if (amode == O_RDONLY) {
 		th = DAOS_TX_NONE;
 	} else {
 		D_ERROR("Invalid dfs_mount access mode\n");
-		D_GOTO(err_dfs, rc = -DER_INVAL);
+		D_GOTO(err_prop, rc = -DER_INVAL);
 	}
 
 	dfs->oid.hi = 0;
@@ -1128,6 +1160,8 @@ err_tx:
 		daos_tx_abort(th, NULL);
 		daos_tx_close(th, NULL);
 	}
+err_prop:
+	daos_prop_free(prop);
 err_dfs:
 	D_FREE(dfs);
 	return rc;
@@ -1189,6 +1223,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
+	new_dir.name[DFS_MAX_PATH] = '\0';
 	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), 0,
 			&new_dir);
 	if (rc)
@@ -1245,7 +1280,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
 			struct dfs_entry child_entry;
-			char entry_name[DFS_MAX_PATH];
+			char entry_name[DFS_MAX_PATH + 1];
 			bool exists;
 
 			snprintf(entry_name, kds[i].kd_key_len + 1, "%s", ptr);
@@ -1391,6 +1426,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
 	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc);
@@ -1429,6 +1465,7 @@ dfs_lookup_loop:
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
 		strncpy(obj->name, token, DFS_MAX_PATH);
+		obj->name[DFS_MAX_PATH] = '\0';
 		obj->mode = entry.mode;
 
 		/** if entry is a file, open the array object and return */
@@ -1656,6 +1693,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		D_GOTO(err_obj, rc = -DER_NONEXIST);
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
@@ -1737,6 +1775,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return -DER_NOMEM;
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	obj->mode = mode;
 	oid_cp(&obj->parent_oid, parent->oid);
 

@@ -150,8 +150,8 @@ struct obj_tls {
 };
 
 struct obj_ec_parity {
-       int             nr;
-       unsigned char   **p_bufs;
+	unsigned char	**p_bufs;
+	unsigned int	  p_nr;
 };
 
 static inline struct obj_tls *
@@ -169,7 +169,8 @@ struct daos_obj_shard_tgt;
 int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, d_sg_list_t *sgls,
-			unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
+			unsigned int *map_ver, unsigned int start_shard,
+			struct daos_obj_shard_tgt *tgts,
 			uint32_t fw_cnt, tse_task_t *task,
 			struct dtx_id *dti, uint32_t flags);
 
@@ -253,5 +254,7 @@ struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
-
+int
+ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
+		     daos_oclass_attr_t *oca, uint64_t *tgt_set);
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
