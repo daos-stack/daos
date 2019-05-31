@@ -265,8 +265,7 @@ out:
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
-		    uint32_t map_version, uint32_t uid, uint32_t gid,
-		    uint32_t mode, uint32_t leader_rank,
+		    uint32_t map_version, uint32_t leader_rank,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t *tgts, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
@@ -318,9 +317,6 @@ out_unlock:
 		info->pi_ntargets	= map_buf->pb_target_nr;
 		info->pi_nnodes		= map_buf->pb_node_nr;
 		info->pi_map_ver	= map_version;
-		info->pi_uid		= uid;
-		info->pi_gid		= gid;
-		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
 		if (info->pi_bits & DPI_SPACE)
 			info->pi_space		= *ps;
@@ -409,7 +405,6 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_uid, pco->pco_gid, pco->pco_mode,
 				 pco->pco_op.po_hint.sh_rank,
 				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, NULL, NULL, true);
@@ -1279,7 +1274,6 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
-				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
 				 arg->dqa_tgts, arg->dqa_info,

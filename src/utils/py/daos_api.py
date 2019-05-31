@@ -1831,13 +1831,13 @@ class DaosContainer(object):
         epoch = ctypes.c_uint64(epoch)
 
         if cb_func is None:
-            retcode = func(coh, ctypes.byref(epoch), None)
+            retcode = func(coh, epoch, None)
             if retcode != 0:
                 raise DaosApiError("cont aggregate returned non-zero.RC: {0}"
                                    .format(retcode))
         else:
             event = DaosEvent()
-            params = [coh, ctypes.byref(epoch), event]
+            params = [coh, epoch, event]
             thread = threading.Thread(target=AsyncWorker1,
                                       args=(func,
                                             params,
@@ -1953,7 +1953,7 @@ class DaosContext(object):
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.4.0",
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.5.0",
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
