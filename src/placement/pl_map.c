@@ -301,8 +301,8 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		mia->ia_ring.ring_nr = 1;
 		break;
 	case PL_TYPE_MAPLESS:
-		mia->ia_type 	= PL_TYPE_MAPLESS;
-		mia->ia_mapless.domain  = DSR_MAPLESS_DOMAIN;
+		mia->ia_type		= PL_TYPE_MAPLESS;
+		mia->ia_mapless.domain	= DSR_MAPLESS_DOMAIN;
 	}
 
 }

@@ -10,7 +10,8 @@ def scons():
     denv = env.Clone()
 
     # Common placement code
-    common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c', 'mapless_jump_map.c'])
+    common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
+    	'mapless_jump_map.c'])
 
     # generate server module
     srv = daos_build.library(denv, 'placement', common_tgts)

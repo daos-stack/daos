@@ -50,6 +50,9 @@ struct failed_shard {
 	uint8_t         fs_status;
 };
 
+/**
+ * Contains information related to object layout size.
+ */
 struct mapless_obj_placement {
 	unsigned int	mop_grp_size;
 	unsigned int	mop_grp_nr;
@@ -66,108 +69,9 @@ struct pl_mapless_map {
 	struct pl_map   mmp_map;
 	/** the total length of the array used for bookkeeping */
 	uint32_t        dom_used_length;
-
+	/* Total size of domain type specified during map creation*/
 	unsigned int    mmp_domain_nr;
 };
-
-/**
- * This function sets a specific bit in the bitmap
- * It expects the bitmap to be zero indexed from left
- * to right.
- */
-static inline void
-set_bit(uint8_t *bitmap, uint64_t bit, uint32_t num_bytes)
-{
-	assert(bit >= 0);
-	assert(bit < 8*num_bytes);
-
-	uint64_t offset = bit / 8;
-	uint8_t position = bit % 8;
-
-	bitmap[offset] |= (0x80 >> position);
-}
-
-/** Returns the bit at a specific position in the bitmap */
-static inline uint8_t
-get_bit(uint8_t *bitmap, uint64_t bit, uint32_t num_bytes)
-{
-	assert(bit < 8*num_bytes);
-	assert(bit >= 0);
-
-	uint64_t offset = bit / 8;
-	uint8_t position = bit % 8;
-
-	return ((bitmap[offset] & (0x80 >> position)) != 0);
-}
-
-/**
- * Returns true or false depending on whether all bits given in a range
- * are set or not, the range is inclusive. This is used to in the bookkeeping
- * to determine if all children in a domain have been used.
- *
- * \return	returns 0 if the entire range does not contain set bits and
- *		returns 1 if all bits are set
- */
-static inline uint8_t
-is_range_set(uint8_t *bitmap, uint64_t start, uint64_t end, uint32_t num_bytes)
-{
-	assert(start >= 0);
-	assert(end < 8*num_bytes);
-
-	uint8_t mask = 0xFF >> (start % 8);
-
-	if (end >> 3 == start >> 3) {
-		mask &= (0xFF << (8-((end%8)+1)));
-		return (bitmap[(start >> 3)] & mask) == mask;
-	}
-
-	if ((bitmap[(start >> 3)] & mask) != mask)
-		return 0;
-
-	mask = (0xFF << (8-((end%8)+1)));
-	if ((bitmap[(end >> 3)] & mask) != mask)
-		return 0;
-
-	if ((end >> 3) > ((start >> 3) + 1)) {
-		int i;
-
-		for (i = (start >> 3) + 1; i < (end >> 3); ++i)
-			if (bitmap[i] != 0xFF)
-				return 0;
-	}
-
-	return 1;
-}
-
-/**
- * This function clears a continuous range of bits in the bitmap.
- * The range if from start to end inclusive.
- */
-static inline void
-clear_bitmap_range(uint8_t *bitmap, uint64_t start, uint64_t end,
-		uint32_t num_bytes)
-{
-
-	assert(start >= 0);
-	assert(end < 8*num_bytes);
-
-	uint8_t mask = (0xFF >> (start % 8));
-
-	mask = ~mask;
-	if (end >> 3 == start >> 3) {
-		mask |= (0xFF >> ((end%8)+1));
-		bitmap[(start >> 3)] &= mask;
-		return;
-	}
-
-	bitmap[(start >> 3)] &= mask;
-
-	mask = (0xFF >> ((end % 8) + 1));
-	bitmap[(end >> 3)] &= mask;
-
-	if (end >> 3 > (start >> 3) + 1)
-		memset(&(bitmap[(start>>3)+1]), 0, (end>>3) - ((start>>3)+1));
-}
 
 /**
  * This function returns the number of non-leaf domains in the pool map
@@ -268,8 +172,9 @@ crc(uint64_t data, uint32_t init_val)
 static void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 {
-	struct failed_shard     *f_shard;
-	d_list_t                        *tmp;
+	struct failed_shard	*f_shard;
+
+	d_list_t		*tmp;
 	D_DEBUG(DB_PL, "fnew: %u", f_new->fs_shard_idx);
 
 	/* All failed shards are sorted by fseq in ascending order */
@@ -329,7 +234,8 @@ mapless_remap_free_all(d_list_t *remap_list)
 
 static int
 mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
-			  struct daos_obj_shard_md *shard_md, struct mapless_obj_placement *mop)
+		struct daos_obj_shard_md *shard_md,
+		struct mapless_obj_placement *mop)
 {
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
@@ -394,7 +300,7 @@ mapless_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
  */
 static bool
 mapless_remap_next_spare(struct pl_mapless_map *mmap,
-			 struct mapless_obj_placement *mop, struct pool_target *target)
+		struct mapless_obj_placement *mop, struct pool_target *target)
 {
 	D_ASSERTF(mop->mop_grp_size <= mmap->mmp_domain_nr,
 		  "grp_size: %u > domain_nr: %u\n",
@@ -537,12 +443,11 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * so duplicates can be chosen
 			 */
 
-			range_set = is_range_set(dom_used, child_pos, child_pos
-						 + num_doms - 1, num_bytes);
+			range_set = isset_range(dom_used, child_pos, child_pos
+						 + num_doms - 1);
 			if (range_set  && curr_dom->do_children != NULL) {
-				clear_bitmap_range(dom_used, child_pos,
-						   child_pos + (num_doms - 1),
-						   num_bytes);
+				clrbit_range(dom_used, child_pos,
+						child_pos + (num_doms - 1));
 			}
 
 			/*
@@ -554,11 +459,9 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				selected_dom = jump_consistent_hash(key,
 								    num_doms);
 				key = crc(key, fail_num++);
-			} while (get_bit(dom_used, selected_dom + child_pos,
-					 num_bytes)
-				 == 1);
+			} while (isset(dom_used, selected_dom + child_pos));
 			/* Mark this domain as used */
-			set_bit(dom_used, selected_dom + child_pos, num_bytes);
+			setbit(dom_used, (selected_dom + child_pos));
 
 			top++;
 			curr_dom = &(curr_dom->do_children[selected_dom]);
@@ -635,10 +538,10 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		 * still have shards to place mark all nodes as unused
 		 * so duplicates can be chosen
 		 */
-		if (is_range_set(dom_used, child_pos, child_pos +
-				 num_doms - 1, dom_bytes)) {
-			clear_bitmap_range(dom_used, child_pos,
-					   child_pos + (num_doms - 1), dom_bytes);
+		if (isset_range(dom_used, child_pos, child_pos +
+				 num_doms - 1)) {
+			clrbit_range(dom_used, child_pos,
+				(child_pos + (num_doms - 1)));
 		}
 
 		/*
@@ -649,11 +552,10 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			key = crc(key, fail_num++);
 			selected_dom = jump_consistent_hash(key, num_doms);
 			target_selection = &(root->do_children[selected_dom]);
-		} while (get_bit(dom_used, selected_dom + child_pos,
-				 dom_bytes) == 1);
+		} while (isset(dom_used, (selected_dom + child_pos)));
 
 		/* Mark this domain as used */
-		set_bit(dom_used, selected_dom + child_pos, dom_bytes);
+		setbit(dom_used, (selected_dom + child_pos));
 
 		/* To find rebuild target we examine all targets */
 		num_doms = target_selection->do_target_nr;
@@ -684,8 +586,8 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 
 
 			if (position >= start_pos && position < end_pos) {
-				set_bit(used_tgts, (position - start_pos)
-					/ sizeof(**target), num_bytes);
+				setbit(used_tgts,((position - start_pos)
+                                        / sizeof(**target)));
 				skiped_targets++;
 			}
 		}
@@ -705,13 +607,13 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			 * keep track of what targets have been tried
 			 * in case all targets in domain have failed
 			 */
-			if (get_bit(used_tgts, selected_dom, num_bytes) == 0)
+			if (isclr(used_tgts, selected_dom))
 				skiped_targets++;
 
 			if (pool_target_unavail(*target))
-				set_bit(used_tgts, selected_dom, num_bytes);
+				setbit(used_tgts, selected_dom);
 
-		} while (get_bit(used_tgts, selected_dom, num_bytes) &&
+		} while ((isset(used_tgts,selected_dom)) &&
 			 skiped_targets < num_doms);
 
 		if (skiped_targets == num_doms)
@@ -731,6 +633,24 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 	D_ASSERT(0);
 	return DER_INVAL;
 }
+
+void
+mapless_obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
+{
+	int i;
+
+	D_DEBUG(DB_PL, "dump layout for "DF_OID", ver %d\n",
+		DP_OID(oid), layout->ol_ver);
+
+	for (i = 0; i < layout->ol_nr; i++)
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s\n",
+			i, layout->ol_shards[i].po_shard,
+			layout->ol_shards[i].po_target,
+			layout->ol_shards[i].po_fseq,
+			layout->ol_shards[i].po_rebuilding ?
+			"rebuilding" : "healthy");
+}
+
 
 /** dump remap list, for debug only */
 static void
@@ -761,12 +681,12 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct mapless_obj_placement *mop,
 		 d_list_t *remap_list, uint8_t *dom_used, uint64_t key)
 {
-	struct failed_shard *f_shard, *f_tmp;
-	struct pl_obj_shard      *l_shard;
-	struct pool_target       *spare_tgt;
-	d_list_t                 *current;
-	bool                      spare_avail = true;
-	int                     fail_count;
+	struct failed_shard	*f_shard, *f_tmp;
+	struct pl_obj_shard	*l_shard;
+	struct pool_target	*spare_tgt;
+	d_list_t		*current;
+	bool			spare_avail = true;
+	int			fail_count;
 
 	mapless_remap_dump(remap_list, md, "before remap:");
 	current = remap_list->next;
@@ -932,8 +852,7 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 
 			if ((start <= (*target)) && ((*target) <= end)) {
 				current_dom = temp_dom;
-				set_bit(dom_used, (index + child_pos),
-					dom_bytes);
+				setbit(dom_used,(index + child_pos));
 				break;
 			}
 		}
@@ -1127,7 +1046,7 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 
 	pool_map_addref(poolmap);
 	mmap->mmp_map.pl_poolmap = poolmap;
-	pool_map_print(poolmap);
+
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
@@ -1217,6 +1136,8 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	*layout_pp = layout;
+	mapless_obj_layout_dump(oid, layout);
+
 	mapless_remap_free_all(&remap_list);
 	return DER_SUCCESS;
 }
@@ -1320,8 +1241,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					goto fill;
 
 				leader = pl_select_leader(md->omd_id,
-							  l_shard->po_shard, layout->ol_nr,
-							  true, pl_obj_get_shard, layout);
+					l_shard->po_shard, layout->ol_nr,
+					true, pl_obj_get_shard, layout);
 
 				if (leader < 0) {
 					D_WARN("Not sure whether current shard "
