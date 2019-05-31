@@ -529,7 +529,7 @@ class DaosPool(object):
 
     def get_attr(self, attr_names, poh=None, cb_func=None):
         """
-        Retrieve a list of user-defined container attribute values.
+        Retrieve a list of user-defined pool attribute values.
         Args:
             attr_names:         list of attributes to retrieve
             poh [Optional]:     Pool Handle if you really want to override it
@@ -577,7 +577,7 @@ class DaosPool(object):
         results = {}
         i = 0
         for attr in attr_names:
-            results[attr] = buff[i]
+            results[attr] = buff[i][:sizes[i]]
             i += 1
 
         return results
@@ -1809,7 +1809,7 @@ class DaosContainer(object):
         results = {}
         i = 0
         for attr in attr_names:
-            results[attr] = buff[i]
+            results[attr] = buff[i][:sizes[i]]
             i += 1
 
         return results
