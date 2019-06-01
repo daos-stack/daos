@@ -51,7 +51,9 @@ const (
 var (
 	msgBdevAlreadyFormatted = "nvme storage has already been formatted and " +
 		"reformat not implemented"
-	msgBdevNotFound           = "controller at pci addr not found"
+	msgBdevNotFound = "controller at pci addr not found, check device exists " +
+		"and can be discovered, you may need to run `sudo daos_server " +
+		"storage prep-nvme` to setup SPDK to access SSDs"
 	msgBdevNotInited          = "nvme storage not initialized"
 	msgBdevClassNotSupported  = "operation unsupported on bdev class"
 	msgSpdkInitFail           = "SPDK env init, has setup been run?"
@@ -267,12 +269,6 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 			newCret(
 				"format", pciAddr, status, errMsg,
 				common.UtilLogDepth+1))
-	}
-
-	if !n.initialized {
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited)
-		return
 	}
 
 	if n.formatted {
