@@ -168,7 +168,7 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	      daos_epoch_t epoch, uint64_t dkey_hash,
 	      struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
 	      int dti_cos_count, uint32_t pm_ver, uint32_t intent,
-	      struct dtx_handle **dthp)
+	      bool is_leader, struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
 
@@ -188,6 +188,7 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_count;
 	dth->dth_conflict = conflict;
+	dth->dth_leader = is_leader ? 1 : 0;
 	dth->dth_ent = UMOFF_NULL;
 	dth->dth_obj = UMOFF_NULL;
 
@@ -202,20 +203,6 @@ vts_dtx_end(struct dtx_handle *dth)
 	if (dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
 	D_FREE_PTR(dth);
-}
-
-static int
-vts_check_leader_true(uuid_t pool_uuid, daos_unit_oid_t *oid,
-		      uint32_t version, struct pl_obj_layout **plo)
-{
-	return 1;
-}
-
-static int
-vts_check_leader_false(uuid_t pool_uuid, daos_unit_oid_t *oid,
-		       uint32_t version, struct pl_obj_layout **plo)
-{
-	return 0;
 }
 
 static void
@@ -293,17 +280,16 @@ dtx_5(void **state)
 	char				 update_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
 
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
 			    &epoch, false);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -351,17 +337,15 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
 			    &epoch, ext);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -400,7 +384,7 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_PUNCH, &dth);
+			   DAOS_INTENT_PUNCH, true, &dth);
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
@@ -490,9 +474,6 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf1,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
@@ -505,9 +486,10 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, update_buf2, UPDATE_BUF_SIZE);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -536,7 +518,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_PUNCH, &dth);
+			   DAOS_INTENT_PUNCH, true, &dth);
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
@@ -616,17 +598,15 @@ dtx_14(void **state)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
 			    &epoch, false);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -693,9 +673,6 @@ dtx_15(void **state)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf1,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
@@ -708,9 +685,10 @@ dtx_15(void **state)
 	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, update_buf2, UPDATE_BUF_SIZE);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, ++epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -776,9 +754,6 @@ dtx_16(void **state)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
@@ -786,7 +761,7 @@ dtx_16(void **state)
 
 	rc = vts_dtx_begin(&xid, &args->oid, args->ctx.tc_co_hdl, epoch,
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl, dth, true);
@@ -795,8 +770,7 @@ dtx_16(void **state)
 	/* The DTX is 'prepared'. */
 	vts_dtx_end(dth);
 
-	/* Assume I am not the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_false);
+	daos_fail_loc_set(DAOS_VOS_NON_LEADER | DAOS_FAIL_ALWAYS);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -807,8 +781,7 @@ dtx_16(void **state)
 	/* The former DTX is not committed, so need to retry with leader. */
 	assert_int_equal(rc, -DER_INPROGRESS);
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
+	daos_fail_loc_reset();
 
 	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
@@ -887,8 +860,6 @@ dtx_17(void **state)
 	int				 i;
 
 	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	for (i = 0; i < 10; i++) {
 		struct dtx_handle		*dth = NULL;
 		struct dtx_conflict_entry	 conflict = { 0 };
@@ -906,7 +877,7 @@ dtx_17(void **state)
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
 				   epoch[i], dkey_hash, &conflict, NULL, 0, 1,
-				   DAOS_INTENT_UPDATE, &dth);
+				   DAOS_INTENT_UPDATE, true, &dth);
 		assert_int_equal(rc, 0);
 
 		rc = io_test_obj_update(args, epoch[i], &dkey, &iod, &sgl,
@@ -981,8 +952,6 @@ dtx_18(void **state)
 	int				 i;
 
 	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	for (i = 0; i < 10; i++) {
 		struct dtx_handle		*dth = NULL;
 		struct dtx_conflict_entry	 conflict = { 0 };
@@ -996,7 +965,7 @@ dtx_18(void **state)
 
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
 				   epoch, dkey_hash, &conflict, NULL, 0, 1,
-				   DAOS_INTENT_UPDATE, &dth);
+				   DAOS_INTENT_UPDATE, true, &dth);
 		assert_int_equal(rc, 0);
 
 		rc = io_test_obj_update(args, epoch, &dkey, &iod, &sgl,
@@ -1079,9 +1048,6 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 
 	assert_true(commit_count + abort_count == 5);
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	akey_buf[0] = malloc(UPDATE_AKEY_SIZE);
 	assert_true(akey_buf[0] != NULL);
 
@@ -1093,9 +1059,10 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 			    update_buf[0], UPDATE_BUF_SIZE, UPDATE_REC_SIZE,
 			    &dkey_hash, &epoch[0], false);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
@@ -1141,7 +1108,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
 				   epoch[i], dkey_hash, &conflict, NULL, 0,
 				   1 /* init version */, DAOS_INTENT_UPDATE,
-				   &dth);
+				   true, &dth);
 		assert_int_equal(rc, 0);
 
 		rc = io_test_obj_update(args, epoch[i], &dkey, &iod[i], &sgl[i],
@@ -1336,9 +1303,6 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 	int				 rc;
 	int				 i;
 
-	/* Assume I am the leader. */
-	vos_dtx_register_check_leader(vts_check_leader_true);
-
 	akey_buf[0] = malloc(UPDATE_AKEY_SIZE);
 	assert_true(akey_buf[0] != NULL);
 
@@ -1350,9 +1314,10 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 			    update_buf[0], UPDATE_BUF_SIZE, UPDATE_REC_SIZE,
 			    &dkey_hash, &epoch[0], false);
 
+	/* Assume I am the leader. */
 	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_UPDATE, &dth);
+			   DAOS_INTENT_UPDATE, true, &dth);
 	assert_int_equal(rc, 0);
 
 	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
@@ -1398,7 +1363,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
 				   epoch[i], dkey_hash, &conflict, NULL, 0,
 				   1 /* init version */, DAOS_INTENT_UPDATE,
-				   &dth);
+				   true, &dth);
 		assert_int_equal(rc, 0);
 
 		rc = io_test_obj_update(args, epoch[i], &dkey, &iod[i], &sgl[i],
@@ -1417,7 +1382,7 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 
 	rc = vts_dtx_begin(&xid[3], &args->oid, args->ctx.tc_co_hdl, epoch[3],
 			   dkey_hash, &conflict, NULL, 0, 1 /* init version */,
-			   DAOS_INTENT_PUNCH, &dth);
+			   DAOS_INTENT_PUNCH, true, &dth);
 	assert_int_equal(rc, 0);
 
 	/* Punch the object or dkey. */
