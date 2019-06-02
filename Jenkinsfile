@@ -121,9 +121,11 @@ pipeline {
             }
         }
         stage('Build') {
-            // abort other builds if/when one fails to avoid wasting time
-            // and resources
-            failFast true
+            /* Don't use failFast here as whilst it avoids using extra resources
+             * and gives faster results for PRs it's also on for master where we
+	     * do want complete results in the case of partial failure
+	     */
+            //failFast true
             parallel {
                 stage('Build RPM on CentOS 7') {
                     agent {
@@ -839,7 +841,8 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
                                            # JENKINS-52781 tar function is breaking symlinks
 					   rm -rf test_results
 					   mkdir test_results
@@ -849,7 +852,7 @@ pipeline {
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
                                            NODE=${NODELIST%%,*}
-                                           ssh -i ci_key jenkins@$NODE "set -x
+                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
                                                if grep /mnt/daos\\  /proc/mounts; then
@@ -928,25 +931,95 @@ pipeline {
                                        node_count: 9,
                                        snapshot: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=regression,vm
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
-                                failure_artifacts: 'Functional'
+                                junit_files: "src/tests/ftest/avocado/*/*/*.xml, src/tests/ftest/*_results.xml",
+                                failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/ Functional/
-                                  mkdir Functional/
-                                  ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* Functional/
-                                  mv src/tests/ftest/avocado/* \
-                                     $(ls src/tests/ftest/*.stacktrace || true) Functional/'''
-                            junit 'Functional/*/*/results.xml, src/tests/ftest/*_results.xml'
-                            archiveArtifacts artifacts: 'Functional/**'
+                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
+                                      mv src/tests/ftest/avocado/* \
+                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                        }
+                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
+                        success {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                        }
+                        failure {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                        }
+                        */
+                    }
+                }
+                stage('Functional_Hardware') {
+                    agent {
+                        label 'ci_nvme9'
+                    }
+                    steps {
+                        // First snapshot provision the VM at beginning of list
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       snapshot: true
+                        // Then just reboot the physical nodes
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 9,
+                                       power_only: true
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
+                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
+                                           if [ -z "$test_tag" ]; then
+                                               test_tag=pr,hw
+                                           fi
+                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           ./ftest.sh "$test_tag" $tnodes''',
+                                junit_files: "src/tests/ftest/avocado/*/*/*.xml, src/tests/ftest/*_results.xml",
+                                failure_artifacts: env.STAGE_NAME
+                    }
+                    post {
+                        always {
+                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
+                                      mv src/tests/ftest/avocado/* \
+                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {

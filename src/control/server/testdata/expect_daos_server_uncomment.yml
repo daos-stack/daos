@@ -1,8 +1,7 @@
 name: daos
 servers:
 - rank: 0
-  targets:
-  - 1-20
+  targets: 20
   nr_xs_helpers: 0
   first_core: 1
   fabric_iface: qib0
@@ -22,10 +21,9 @@ servers:
   bdev_size: 0
   cliopts: []
 - rank: 1
-  targets:
-  - 21-40
+  targets: 20
   nr_xs_helpers: 1
-  first_core: 21
+  first_core: 22
   fabric_iface: qib0
   fabric_iface_port: 20000
   log_mask: WARN

@@ -313,71 +313,6 @@ func TestProvidedConfigs(t *testing.T) {
 	}
 }
 
-func TestGetNumCores(t *testing.T) {
-	tests := []struct {
-		cpus   []string
-		cores  int
-		errMsg string
-	}{
-		{nil, 0, ""},
-		{[]string{}, 0, ""},
-		{[]string{"1-8"}, 8, ""},
-		{[]string{"0-7", "20-26"}, 15, ""},
-		{[]string{"0-1"}, 2, ""},
-		{[]string{"0"}, 1, ""},
-		{[]string{"1", "5"}, 2, ""},
-		{[]string{"0-i"}, 15, "strconv.Atoi: parsing \"i\": invalid syntax"},
-		{[]string{"blah"}, 15, "strconv.Atoi: parsing \"blah\": invalid syntax"},
-		{[]string{"0-8-8"}, 8, "unsupported range format 0-8-8, need <int>-<int> e.g. 1-10"},
-		{[]string{"8-8"}, 8, "unsupported range format 8-8, need <int>-<int> e.g. 1-10"},
-		{[]string{"8-1"}, 8, "unsupported range format 8-1, need <int>-<int> e.g. 1-10"},
-		{[]string{"0-0"}, 0, "unsupported range format 0-0, need <int>-<int> e.g. 1-10"},
-	}
-
-	for _, tt := range tests {
-		num, err := getNumCores(tt.cpus)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.cpus)
-			continue
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		AssertEqual(t, num, tt.cores, "unexpected number of cores calculated")
-	}
-}
-
-func TestSetNumCores(t *testing.T) {
-	tests := []struct {
-		num    int
-		cpus   []string
-		errMsg string
-	}{
-		{8, []string{"0-7"}, ""},
-		{10, []string{"0-9"}, ""},
-		{1, []string{"0"}, ""},
-		{2, []string{"0-1"}, ""},
-		{0, []string{"0-0"}, "invalid number of cpus (cores) specified: 0"},
-	}
-
-	for _, tt := range tests {
-		cpus, err := setNumCores(tt.num)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.num)
-			continue
-		}
-
-		AssertEqual(t, cpus, tt.cpus, "failed to convert number to range")
-
-		num, err := getNumCores(cpus)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		AssertEqual(t, num, tt.num, "failed to convert to expected number")
-	}
-}
-
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
@@ -416,7 +351,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -441,7 +376,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/foo/bar",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -466,7 +401,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "testing123",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -491,7 +426,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -516,7 +451,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -541,7 +476,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -572,7 +507,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
@@ -603,7 +538,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-y", "/another/different/file",
 					"-r", "1",
 					"-d", "/tmp/Jeremy",
@@ -629,7 +564,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -657,7 +592,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},

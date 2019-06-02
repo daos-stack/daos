@@ -24,10 +24,8 @@
 package security
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/security/auth"
+	"github.com/pkg/errors"
 
 	uuid "github.com/satori/go.uuid"
 )
@@ -77,7 +75,7 @@ func (s *ContextMap) AddToken(requestor string, token *auth.Token) (*uuid.UUID, 
 	key, err := uuid.NewV4()
 
 	if err != nil {
-		return nil, fmt.Errorf("Unable to generate UUIDv4 UUID: %s", err)
+		return nil, errors.Wrap(err, "Unable to generate UUIDv4 UUID")
 	}
 	s.ctxmap[key] = NewContext(requestor, token)
 	return &key, nil

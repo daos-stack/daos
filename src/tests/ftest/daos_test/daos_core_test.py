@@ -76,7 +76,7 @@ class DaosCoreTest(TestWithServers):
 
         Use Cases: core tests for daos_test
 
-        :avocado: tags=daos_test,multiserver,vm,regression
+        :avocado: tags=pr,hw,unittest,medium,daos_test
         """
 
         subtest = self.params.get("daos_test", '/run/daos_tests/Tests/*')

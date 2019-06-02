@@ -62,7 +62,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 	strncpy(dfs->dffs_cont, name, NAME_MAX);
-	strncpy(dfs->dffs_pool, parent->ie_dfs->dffs_pool, NAME_MAX);
+	dfs->dffs_cont[NAME_MAX] = '\0';
+	strncpy(dfs->dffs_pool, parent->ie_dfs->dffs_pool, NAME_MAX - 1);
+	dfs->dffs_pool[NAME_MAX] = '\0';
 
 	if (create) {
 		rc = daos_cont_create(parent->ie_dfs->dffs_poh, co_uuid,
@@ -129,6 +131,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 
 	rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
 	if (rc != -DER_SUCCESS) {
