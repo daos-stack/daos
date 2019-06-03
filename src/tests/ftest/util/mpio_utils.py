@@ -117,17 +117,16 @@ class MpioUtils():
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
-        env_variables = ["export PATH={}/bin:$PATH".format(self.mpichinstall),
-                         "export LD_LIBRARY_PATH={}/lib:$LD_LIBRARY_PATH"\
+        env_variables = {"PATH": "{}/bin:$PATH".format(self.mpichinstall),
+                         "LD_LIBRARY_PATH": "{}/lib:$LD_LIBRARY_PATH"\
                              .format(self.mpichinstall),
-                         "export CRT_ATTACH_INFO_PATH={}/install/tmp/"\
+                         "CRT_ATTACH_INFO_PATH": "{}/install/tmp/"\
                              .format(basepath),
-                         "export MPI_LIB=''", "export DAOS_SINGLETON_CLI=1",
-                         "export MPIO_USER_PATH=daos:",
-                         "export DAOS_POOL={}".format(pool_uuid),
-                         "export DAOS_SVCL={}".format(0),
-                         "export HDF5_PARAPREFIX=daos:"]
-
+                         "MPI_LIB": '',
+                         "MPIO_USER_PATH": "daos:",
+                         "DAOS_POOL": "{}".format(pool_uuid),
+                         "DAOS_SVCL": "{}".format(0),
+                         "HDF5_PARAPREFIX": "daos:"}
         # setting attributes
         cd_cmd = 'cd ' + test_repo
         # running 8 client processes
@@ -150,12 +149,11 @@ class MpioUtils():
         else:
             raise MpioFailed("Wrong test name or test repo location specified")
 
-        run_cmd = cd_cmd + ";" + env_variables[0] + ";" + env_variables[1] \
-                  + ";" + env_variables[2] + ";" + env_variables[3] + ";" \
-                  + env_variables[4] + ";" + env_variables[5] + ";" \
-                  + env_variables[6] + ";" + env_variables[7] + ";" \
-                  + env_variables[8] + ";" + test_cmd
-
+        # final run command
+        run_cmd = ";".join([cd_cmd, ";".join(["export {}={}".format(key, val)
+                                              for key, val in
+                                              env_variables.items()]),
+                            test_cmd])
         print ("run command: {}".format(run_cmd))
 
         try:

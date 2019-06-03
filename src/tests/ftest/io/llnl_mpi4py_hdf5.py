@@ -42,11 +42,9 @@ class LlnlMpi4pyHdf5(TestWithServers):
         super(LlnlMpi4pyHdf5, self).setUp()
         # initialising variables
         self.mpio = None
-        self.hostlist_clients = None
         self.hostfile_clients = None
 
         # setting client variables
-        self.hostlist_clients = self.params.get("test_clients", '/run/hosts/')
         self.hostfile_clients = write_host_file.write_host_file(
             self.hostlist_clients, self.workdir, None)
         try:
@@ -122,7 +120,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
         test_nb_collective, test_nb_localpointer, test_nb_rdwr,
         test_nb_readwrite, test_rdwr, test_readwrite
 
-        :avocado: tags=mpio,llnlmpi4py,llnl
+        :avocado: tags=mpio,llnlmpi4pyhdf5,llnl
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
@@ -138,7 +136,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
         testReadWriteAtAllBeginEnd, testReadWriteAll
         testIReadIWriteAll, testReadWriteAllBeginEnd
 
-        :avocado: tags=mpio,llnlmpi4py,mpi4py
+        :avocado: tags=mpio,llnlmpi4pyhdf5,mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
         self.run_test(test_repo, "mpi4py")
@@ -166,7 +164,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
         no_collective_cause_tests, test_plist_ed, file_image_daisy_chain_test,
         test_dense_attr, test_partial_no_selection_coll_md_read
 
-        :avocado: tags=mpio,llnlmpi4py,hdf5
+        :avocado: tags=mpio,llnlmpi4pyhdf5,hdf5
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
         self.run_test(test_repo, "hdf5")
