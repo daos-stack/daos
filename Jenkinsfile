@@ -144,9 +144,9 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        catchError(buildResult: 'SUCCESS',
+                        catchError(buildResult: SUCCESS,
                                    message: 'RPM build failed, but allowing job to continue',
-                                   stageResult: 'FAILURE') {
+                                   stageResult: FAILURE) {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
                                           mkdir -p artifacts/centos7/
@@ -202,9 +202,9 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        catchError(buildResult: 'SUCCESS',
+                        catchError(buildResult: SUCCESS,
                                    message: 'RPM build failed, but allowing job to continue',
-                                   stageResult: 'FAILURE') {
+                                   stageResult: FAILURE) {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/sles12.3/
                                   mkdir -p artifacts/sles12.3/
