@@ -174,14 +174,17 @@ pipeline {
                             archiveArtifacts artifacts: 'artifacts/centos7/**'
                         }
                         success {
+                            println "${env.STAGE_NAME}: SUCCESS"
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
                         }
                         unstable {
+                            println "${env.STAGE_NAME}: UNSTABLE"
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "UNSTABLE"
                         }
                         failure {
+                            println "${env.STAGE_NAME}: FAILURE"
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "FAILURE", ignore_failure: true
                         }
@@ -217,8 +220,9 @@ pipeline {
                                           ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
                                           createrepo artifacts/sles12.3/
                                       else
+                                          rc=\${PIPESTATUS[0]}
                                           echo "No artifacts since the job failed" > artifacts/sles12.3/README
-                                          exit \${PIPESTATUS[0]}
+                                          exit \$rc
                                       fi
                                   else
                                       rc=\${PIPESTATUS[0]}
@@ -232,14 +236,17 @@ pipeline {
                             archiveArtifacts artifacts: 'artifacts/sles12.3/**'
                         }
                         success {
+                            println "${env.STAGE_NAME}: SUCCESS"
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
                         }
                         unstable {
+                            println "${env.STAGE_NAME}: UNSTABLE"
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "UNSTABLE"
                         }
                         failure {
+                            println "${env.STAGE_NAME}: FAILED"
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "FAILURE", ignore_failure: true
                         }
