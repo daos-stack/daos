@@ -163,6 +163,7 @@ pipeline {
                                           exit \$rc
                                       fi
                                   else
+                                      echo "No artifacts since the job failed" > artifacts/centos7/README
                                       exit \${PIPESTATUS[0]}
                                   fi'''
                         }
@@ -215,9 +216,11 @@ pipeline {
                                           ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
                                           createrepo artifacts/sles12.3/
                                       else
+                                          echo "No artifacts since the job failed" > artifacts/sles12.3/README
                                           exit \${PIPESTATUS[0]}
                                       fi
                                   else
+                                      echo "No artifacts since the job failed" > artifacts/sles12.3/README
                                       exit \${PIPESTATUS[0]}
                                   fi'''
                         }
