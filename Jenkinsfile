@@ -163,8 +163,9 @@ pipeline {
                                           exit \$rc
                                       fi
                                   else
+                                      rc=\${PIPESTATUS[0]}
                                       echo "No artifacts since the job failed" > artifacts/centos7/README
-                                      exit \${PIPESTATUS[0]}
+                                      exit \$rc
                                   fi'''
                         }
                     }
@@ -220,8 +221,9 @@ pipeline {
                                           exit \${PIPESTATUS[0]}
                                       fi
                                   else
+                                      rc=\${PIPESTATUS[0]}
                                       echo "No artifacts since the job failed" > artifacts/sles12.3/README
-                                      exit \${PIPESTATUS[0]}
+                                      exit \$rc
                                   fi'''
                         }
                     }
@@ -243,221 +245,6 @@ pipeline {
                         }
                     }
 
-                }
-            }
-        }
-        stage('Unit Test') {
-            parallel {
-                stage('run_test.sh') {
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true
-                        runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
-                                           # JENKINS-52781 tar function is breaking symlinks
-					   rm -rf test_results
-					   mkdir test_results
-                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
-                                           . ./.build_vars.sh
-                                           DAOS_BASE=${SL_PREFIX%/install*}
-                                           NODE=${NODELIST%%,*}
-                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                               set -e
-                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
-                                                   if [ ! -d /mnt/daos ]; then
-                                                       sudo mkdir -p /mnt/daos
-                                                   fi
-                                               fi
-                                               trap 'set +e; set -x; sudo umount /mnt/daos' EXIT
-                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-                                               sudo mkdir -p $DAOS_BASE
-                                               trap 'set +e; set -x
-                                                     cd
-                                                     sudo umount /mnt/daos
-                                                     sudo umount \"$DAOS_BASE\" || {
-                                                         echo "Failed to unmount $DAOS_BASE"
-                                                         ps axf
-                                                     }' EXIT
-                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-					       # set CMOCKA envs here
-					       export CMOCKA_MESSAGE_OUTPUT="xml"
-					       export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
-                                               cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh
-                                               rm -rf run_test.sh/
-                                               mkdir run_test.sh/
-                                               [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
-                                               # servers can sometimes take a while to stop when the test is done
-                                               x=0
-                                               while [ \"\\\$x\" -lt \"10\" ] &&
-                                                     pgrep '(orterun|daos_server|daos_io_server)'; do
-                                                   sleep 1
-                                                   let x=\\\$x+1
-                                               done"''',
-                              junit_files: 'test_results/*.xml'
-                    }
-                    post {
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                        always {
-				sh 'python utils/fix_cmocka_xml.py'
-				junit 'test_results/*.xml'
-				archiveArtifacts artifacts: 'run_test.sh/**'
-                        }
-                    }
-                }
-            }
-        }
-        stage('Test') {
-            parallel {
-                stage('Functional') {
-                    agent {
-                        label 'ci_vm9'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 9,
-                                       snapshot: true
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
-                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
-                                               test_tag=regression,vm
-                                           fi
-                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml, src/tests/ftest/*_results.xml",
-                                failure_artifacts: env.STAGE_NAME
-                    }
-                    post {
-                        always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
-                                  if [ -n "$STAGE_NAME" ]; then
-                                      rm -rf "$STAGE_NAME/"
-                                      mkdir "$STAGE_NAME/"
-                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/* \
-                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
-                                  else
-                                      echo "The STAGE_NAME environment variable is missing!"
-                                      false
-                                  fi'''
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                        }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                    }
-                }
-                stage('Functional_Hardware') {
-                    agent {
-                        label 'ci_nvme9'
-                    }
-                    steps {
-                        // First snapshot provision the VM at beginning of list
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true
-                        // Then just reboot the physical nodes
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 9,
-                                       power_only: true
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
-                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw
-                                           fi
-                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml, src/tests/ftest/*_results.xml",
-                                failure_artifacts: env.STAGE_NAME
-                    }
-                    post {
-                        always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
-                                  if [ -n "$STAGE_NAME" ]; then
-                                      rm -rf "$STAGE_NAME/"
-                                      mkdir "$STAGE_NAME/"
-                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/* \
-                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
-                                  else
-                                      echo "The STAGE_NAME environment variable is missing!"
-                                      false
-                                  fi'''
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                        }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                    }
                 }
             }
         }
