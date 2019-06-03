@@ -38,15 +38,6 @@
 #include <daos_srv/vos_types.h>
 
 /**
- * Register the function for checking whether the replica is leader or not.
- *
- * \param checker	[IN]	The specified function for checking leader.
- */
-void
-vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
-			      uint32_t, struct pl_obj_layout **));
-
-/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.

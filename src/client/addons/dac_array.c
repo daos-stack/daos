@@ -1030,7 +1030,7 @@ dac_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	daos_csum_buf_t	null_csum;
-	struct io_params *head, *current;
+	struct io_params *head, *current = NULL;
 	daos_size_t	num_ios;
 	int		rc;
 
@@ -1107,6 +1107,7 @@ dac_array_io(daos_handle_t array_oh, daos_handle_t th,
 			tse_task_register_comp_cb(task, free_io_params_cb,
 						  &head, sizeof(head));
 		} else {
+			D_ASSERT(current);
 			current->next = params;
 			current = params;
 		}
