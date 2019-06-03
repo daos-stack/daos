@@ -1019,7 +1019,7 @@ mapless_jump_map_destroy(struct pl_map *map)
 
 	mmap = pl_map2mplmap(map);
 
-	if(mmap->mmp_map.pl_poolmap)
+	if (mmap->mmp_map.pl_poolmap)
 		pool_map_decref(mmap->mmp_map.pl_poolmap);
 
 	D_FREE(mmap);
