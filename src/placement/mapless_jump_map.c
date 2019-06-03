@@ -677,7 +677,7 @@ mapless_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 * @layout if the remap succeed, otherwise, corresponding shard id
 * and target id in @layout will be cleared as -1.
 */
-static void
+static int
 obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct mpls_obj_placement *mop,
 		 d_list_t *remap_list, uint8_t *dom_used, uint64_t key)
@@ -793,6 +793,7 @@ next_fail:
 	}
 
 	mapless_remap_dump(remap_list, md, "after remap:");
+	return 0;
 }
 
 static int
@@ -992,7 +993,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 		j = 0;
 	}
 
-	obj_remap_shards(mmap, md, layout, mop, remap_list, dom_used, key);
+	rc = obj_remap_shards(mmap, md, layout, mop, remap_list, dom_used, key);
 out:
 	if (rc) {
 		D_ERROR("mapless_obj_layout_fill failed, rc %d.\n", rc);
@@ -1018,7 +1019,8 @@ mapless_jump_map_destroy(struct pl_map *map)
 
 	mmap = pl_map2mplmap(map);
 
-	pool_map_decref(mmap->mmp_map.pl_poolmap);
+	if(mmap->mmp_map.pl_poolmap)
+		pool_map_decref(mmap->mmp_map.pl_poolmap);
 
 	D_FREE(mmap);
 }
