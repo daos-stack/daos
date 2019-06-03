@@ -177,7 +177,7 @@ pipeline {
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -228,7 +228,7 @@ pipeline {
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
 
