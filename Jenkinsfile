@@ -234,6 +234,8 @@ pipeline {
                     post {
                         always {
                             archiveArtifacts artifacts: 'artifacts/sles12.3/**'
+                            echo "Post-Build result: ${currentBuild.result}"
+                            echo "Post-Build currentResult: ${currentBuild.currentResult}"
                         }
                         success {
                             println "${env.STAGE_NAME}: SUCCESS"
