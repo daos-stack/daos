@@ -589,17 +589,10 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 {
 	struct btr_node		*nd;
 	umem_off_t		 nd_off;
-	int			 rc;
 
-	if (btr_ops(tcx)->to_node_alloc) {
-		rc = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins, &nd_off);
-		if (rc != 0)
-			return rc;
-	} else {
-		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
-		if (UMOFF_IS_NULL(nd_off))
-			return -DER_NOMEM;
-	}
+	nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+	if (UMOFF_IS_NULL(nd_off))
+		return -DER_NOMEM;
 
 	D_DEBUG(DB_TRACE, "Allocate new node "DF_X64"\n", nd_off);
 	nd = btr_off2ptr(tcx, nd_off);
@@ -609,27 +602,22 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 	return 0;
 }
 
-static void
+static int
 btr_node_free(struct btr_context *tcx, umem_off_t nd_off)
 {
+	int	rc;
 	D_DEBUG(DB_TRACE, "Free node "DF_X64"\n", nd_off);
-	if (btr_ops(tcx)->to_node_free)
-		btr_ops(tcx)->to_node_free(&tcx->tc_tins, nd_off);
-	else
-		umem_free(btr_umm(tcx), nd_off);
+	rc = umem_free(btr_umm(tcx), nd_off);
+	if (rc != 0)
+		D_ERROR("Failed to free node: %s\n", strerror(errno));
+
+	return rc;
 }
 
 static int
 btr_node_tx_add(struct btr_context *tcx, umem_off_t nd_off)
 {
-	int	rc;
-
-	if (btr_ops(tcx)->to_node_tx_add) {
-		rc = btr_ops(tcx)->to_node_tx_add(&tcx->tc_tins, nd_off);
-	} else {
-		rc = umem_tx_add(btr_umm(tcx), nd_off, btr_node_size(tcx));
-	}
-	return rc;
+	return umem_tx_add(btr_umm(tcx), nd_off, btr_node_size(tcx));
 }
 
 /* helper functions */
@@ -723,16 +711,17 @@ btr_root_empty(struct btr_context *tcx)
 	return root == NULL || UMOFF_IS_NULL(root->tr_node);
 }
 
-static void
+static int
 btr_root_free(struct btr_context *tcx)
 {
-	struct btr_instance *tins = &tcx->tc_tins;
+	struct btr_instance	*tins = &tcx->tc_tins;
+	int			 rc = 0;
 
 	if (UMOFF_IS_NULL(tins->ti_root_off)) {
 		struct btr_root *root = tins->ti_root;
 
 		if (root == NULL)
-			return;
+			return 0;
 
 		D_DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
 		if (btr_has_tx(tcx))
@@ -741,14 +730,18 @@ btr_root_free(struct btr_context *tcx)
 		memset(root, 0, sizeof(*root));
 	} else {
 		D_DEBUG(DB_TRACE, "Destroy tree root\n");
-		if (btr_ops(tcx)->to_root_free)
-			btr_ops(tcx)->to_root_free(tins);
-		else
-			umem_free(btr_umm(tcx), tins->ti_root_off);
+		rc = umem_free(btr_umm(tcx), tins->ti_root_off);
+		if (rc != 0) {
+			D_ERROR("Failed to free tree root: %s\n",
+				strerror(errno));
+			return rc;
+		}
 	}
 
 	tins->ti_root_off = BTR_ROOT_NULL;
 	tins->ti_root = NULL;
+
+	return 0;
 }
 
 static int
@@ -780,21 +773,11 @@ btr_root_alloc(struct btr_context *tcx)
 {
 	struct btr_instance	*tins = &tcx->tc_tins;
 	struct btr_root		*root;
-	int			 rc;
 
-	if (btr_ops(tcx)->to_root_alloc) {
-		rc = btr_ops(tcx)->to_root_alloc(tins, tcx->tc_feats,
-						 tcx->tc_order);
-		if (rc != 0)
-			return rc;
-
-		D_ASSERT(!UMOFF_IS_NULL(tins->ti_root_off));
-	} else {
-		tins->ti_root_off = umem_zalloc(btr_umm(tcx),
-						sizeof(struct btr_root));
-		if (UMOFF_IS_NULL(tins->ti_root_off))
-			return -DER_NOMEM;
-	}
+	tins->ti_root_off = umem_zalloc(btr_umm(tcx),
+					sizeof(struct btr_root));
+	if (UMOFF_IS_NULL(tins->ti_root_off))
+		return -DER_NOMEM;
 
 	root = btr_off2ptr(tcx, tins->ti_root_off);
 	return btr_root_init(tcx, root, false);
@@ -806,10 +789,7 @@ btr_root_tx_add(struct btr_context *tcx)
 	struct btr_instance	*tins = &tcx->tc_tins;
 	int			 rc = 0;
 
-	if (btr_ops(tcx)->to_root_tx_add) {
-		rc = btr_ops(tcx)->to_root_tx_add(tins);
-
-	} else if (!UMOFF_IS_NULL(tins->ti_root_off)) {
+	if (!UMOFF_IS_NULL(tins->ti_root_off)) {
 		rc = umem_tx_add(btr_umm(tcx), tcx->tc_tins.ti_root_off,
 				 sizeof(struct btr_root));
 	} else {
