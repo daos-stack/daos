@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os/user"
 	"strconv"
 
@@ -45,8 +46,14 @@ func getUID(ext External, userName string) (*user.User, int64, error) {
 	return usr, uid, nil
 }
 
-func getGID(ext External, usr *user.User, groupName string) (int64, error) {
+// getGID returns group name and id, either of the supplied group if user
+// belonga to group or of usr otherwise.
+func getGID(
+	ext External, usr *user.User, groupName string) (
+	grpName string, gid int64, err error) {
+
 	_gid := usr.Gid
+	grpName = usr.Username
 
 	if groupName != "" {
 		// attempt to assign group specified in config file
@@ -56,6 +63,7 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 				for _, g := range ids {
 					if group.Gid == g {
 						_gid = g
+						grpName = groupName
 						break
 					}
 				}
@@ -66,7 +74,7 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 						usr.Username, group.Name)
 				}
 			} else {
-				return -1, errors.WithMessage(
+				return "", -1, errors.WithMessage(
 					err, "get group membership")
 			}
 		} else {
@@ -74,18 +82,20 @@ func getGID(ext External, usr *user.User, groupName string) (int64, error) {
 		}
 	}
 
-	gid, err := strconv.ParseInt(_gid, 10, 32)
+	gid, err = strconv.ParseInt(_gid, 10, 32)
 	if err != nil {
-		return -1, errors.WithMessage(err, "parsing gid to int")
+		return "", -1, errors.WithMessage(err, "parsing gid to int")
 	}
 
-	return gid, nil
+	return grpName, gid, nil
 }
 
-func chownScmMount(config *configuration, uid int64, gid int64) error {
+// chownDirs changes ownership of required directories using config creds.
+func chownDirs(config *configuration, user string, group string) error {
 	for i, srv := range config.Servers {
-		// chown ScmMount (uid/gid are 32bit)
-		err := config.ext.chown(srv.ScmMount, int(uid), int(gid))
+		err := config.ext.runCommand(
+			fmt.Sprintf(
+				"chown -R %s:%s %s", user, group, srv.ScmMount))
 		if err != nil {
 			return errors.WithMessagef(
 				err,
@@ -93,11 +103,18 @@ func chownScmMount(config *configuration, uid int64, gid int64) error {
 					" on I/O server %d", i)
 		}
 	}
+
+	err := config.ext.runCommand(
+		fmt.Sprintf("chown -R %s:%s %s", user, group, config.SocketDir))
+	if err != nil {
+		return errors.WithMessage(err, "changing socket dir ownership")
+	}
+
 	return nil
 }
 
-// drop will attempt to drop privileges by setting uid of running process to
-// that of the username specified in config file. If groupname is also
+// dropPrivileges will attempt to drop privileges by setting uid of running
+// process to that of the username specified in config file. If groupname is
 // specified in config file then check user is a member of that group and
 // set relevant gid if so, otherwise use user.gid.
 func dropPrivileges(config *configuration) error {
@@ -112,13 +129,13 @@ func dropPrivileges(config *configuration) error {
 		return errors.WithMessage(err, "get uid")
 	}
 
-	gid, err := getGID(config.ext, usr, config.GroupName)
+	grpName, gid, err := getGID(config.ext, usr, config.GroupName)
 	if err != nil {
 		return errors.WithMessage(err, "get gid")
 	}
 
-	if err := chownScmMount(config, uid, gid); err != nil {
-		return err
+	if err := chownDirs(config, usr.Username, grpName); err != nil {
+		return errors.WithMessage(err, "changing directory ownership")
 	}
 
 	if err := config.ext.setGID(gid); err != nil {
@@ -128,8 +145,6 @@ func dropPrivileges(config *configuration) error {
 	if err := config.ext.setUID(uid); err != nil {
 		return errors.WithMessage(err, "setting uid")
 	}
-
-	// TODO: chown sock path?
 
 	return nil
 }

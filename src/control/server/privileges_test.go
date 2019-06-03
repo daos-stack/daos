@@ -103,7 +103,7 @@ func TestDropPrivileges(t *testing.T) {
 		config.UserName = tt.username
 		config.GroupName = tt.groupname
 
-		// TODO: verify chown gets called
+		// TODO: verify chownRecursive gets called and if err
 		err := dropPrivileges(&config)
 		if err != nil {
 			if tt.errMsg != "" {

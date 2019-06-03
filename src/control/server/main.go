@@ -93,7 +93,7 @@ func serverMain() error {
 	mgmtCtlSvc, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
-		log.Errorf("Failed to init ControlService: %s", err)
+		log.Errorf("Failed to init ControlService: %+v", err)
 		return err
 	}
 	mgmtCtlSvc.Setup()
@@ -103,13 +103,12 @@ func serverMain() error {
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
 	lis, err := net.Listen("tcp4", addr)
 	if err != nil {
-		log.Errorf("Unable to listen on management interface: %s", err)
+		log.Errorf("Unable to listen on management interface: %+v", err)
 		return err
 	}
 	log.Debugf("DAOS control server listening on %s", addr)
 
-	// Create new grpc server, register services and start serving (after
-	// dropping privileges).
+	// Create new grpc server, register services and start serving.
 	var sOpts []grpc.ServerOption
 	// TODO: This will need to be extended to take certificate information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
@@ -126,13 +125,13 @@ func serverMain() error {
 	// Wait for storage to be formatted if necessary and subsequently drop
 	// current process privileges to that of normal user.
 	if err = awaitStorageFormat(&config); err != nil {
-		log.Errorf("Failed to format storage: %s", err)
+		log.Errorf("Failed to format storage: %+v", err)
 		return err
 	}
 
 	// Format the unformatted servers by writing persistant superblock.
 	if err = formatIosrvs(&config, false); err != nil {
-		log.Errorf("Failed to format servers: %s", err)
+		log.Errorf("Failed to format servers: %+v", err)
 		return err
 	}
 
@@ -140,15 +139,15 @@ func serverMain() error {
 	// TODO: Extend to start two io_servers per host.
 	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
-		log.Errorf("Failed to load server: %s", err)
+		log.Errorf("Failed to load server: %+v", err)
 		return err
 	}
 	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
-		log.Errorf("Failed to set up dRPC: %s", err)
+		log.Errorf("Failed to set up dRPC: %+v", err)
 		return err
 	}
 	if err = iosrv.start(); err != nil {
-		log.Errorf("Failed to start server: %s", err)
+		log.Errorf("Failed to start server: %+v", err)
 		return err
 	}
 
@@ -164,7 +163,7 @@ func serverMain() error {
 	// Wait for I/O server to return.
 	err = iosrv.wait()
 	if err != nil {
-		log.Errorf("DAOS I/O server exited with error: %s", err)
+		log.Errorf("DAOS I/O server exited with error: %+v", err)
 	}
 
 	return err

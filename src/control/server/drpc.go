@@ -46,17 +46,26 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
 func drpcSetup(sockDir string, iosrv *iosrv) error {
+	var msg string
+
 	// Create our socket directory if it doesn't exist
 	_, err := os.Stat(sockDir)
-	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
-	} else if err != nil && os.IsNotExist(err) {
-		err = os.MkdirAll(sockDir, 0755)
-		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
+	if err != nil {
+		if os.IsPermission(err) {
+			msg = "user does not have permission to access " +
+				sockDir
+		} else if os.IsNotExist(err) {
+			err = os.MkdirAll(sockDir, 0755)
+			if err != nil {
+				msg = "unable to create socket directory " +
+					sockDir
+			}
+		} else {
+			msg = "unrecognised error during os.Stat " + sockDir
+		}
+
+		if msg != "" {
+			return errors.Wrap(err, msg)
 		}
 	}
 
