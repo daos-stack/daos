@@ -88,20 +88,26 @@ struct btr_node {
 
 enum {
 	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 4096
+	BTR_ORDER_MAX			= 255
 };
 
 /**
  * Tree root descriptor, it consits of tree attributes and reference to the
  * actual root node.
  *
- * NB: could be PM data structure.
+ * NB: Can be stored in pmem
  */
 struct btr_root {
-	/** btree order */
-	uint16_t			tr_order;
+	/** For dynamic tree ordering, the root node temporarily has less
+	 * entries than the order
+	 */
+	uint8_t				tr_node_size;
+	/** Internal index to select the node size */
+	uint8_t				tr_node_size_idx;
+	/** configured btree order */
+	uint8_t				tr_order;
 	/** depth of the tree */
-	uint16_t			tr_depth;
+	uint8_t				tr_depth;
 	/**
 	 * ID to find a registered tree class, which provides customized
 	 * funtions etc.
@@ -452,6 +458,10 @@ enum btr_feats {
 	 * to_key_cmp callback
 	 */
 	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	/** Root is dynamically sized up to tree order.  This bit is set for a
+	 *  tree class
+	 */
+	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
 };
 
 /**

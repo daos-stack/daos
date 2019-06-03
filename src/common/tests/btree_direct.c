@@ -1037,7 +1037,7 @@ static int
 run_btree_direct_open_create_test(void)
 {
 	static const struct CMUnitTest btree_direct_open_create_test[] = {
-		{ "EVT001: btree_direct_open_create test", sk_btr_open_create,
+		{ "BTD001: btree_direct_open_create test", sk_btr_open_create,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -1050,7 +1050,7 @@ static int
 run_btree_direct_close_destroy_test(void)
 {
 	static const struct CMUnitTest btree_direct_close_destroy_test[] = {
-		{ "EVT002: btree_direct_close_destroy test",
+		{ "BTD002: btree_direct_close_destroy test",
 		sk_btr_close_destroy, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -1063,7 +1063,7 @@ static int
 run_btree_direct_query_test(void)
 {
 	static const struct CMUnitTest btree_direct_query_test[] = {
-		{ "EVT003: btree_direct_query test", sk_btr_query,
+		{ "BTD003: btree_direct_query test", sk_btr_query,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -1076,7 +1076,7 @@ static int
 run_btree_direct_iter_test(void)
 {
 	static const struct CMUnitTest btree_direct_iterate_test[] = {
-		{ "EVT004: btree_direct_iterate test", sk_btr_iterate,
+		{ "BTD004: btree_direct_iterate test", sk_btr_iterate,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -1089,7 +1089,7 @@ static int
 run_btree_direct_batch_oper_test(void)
 {
 	static const struct CMUnitTest btree_direct_batch_oper_test[] = {
-		{ "EVT005: btree_direct_batch_oper test", sk_btr_batch_oper,
+		{ "BTD005: btree_direct_batch_oper test", sk_btr_batch_oper,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -1102,7 +1102,7 @@ static int
 run_btree_direct_perf_test(void)
 {
 	static const struct CMUnitTest btree_direct_perf_test[] = {
-		{ "EVT006: btree_direct_perf test", sk_btr_perf, NULL, NULL},
+		{ "BTD006: btree_direct_perf test", sk_btr_perf, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
 
@@ -1114,7 +1114,7 @@ static int
 run_btree_direct_kv_operate_test(void)
 {
 	static const struct CMUnitTest btree_direct_kv_operate_test[] = {
-		{ "EVT007: btree_direct_kv_operate test",
+		{ "BTD007: btree_direct_kv_operate test",
 			sk_btr_kv_operate, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
