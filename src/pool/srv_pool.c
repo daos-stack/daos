@@ -2957,6 +2957,7 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 		D_GOTO(out, rc = leader);
 	}
 
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
 	rc = pool_map_find_target(pool->sp_map, leader, &target);
 	if (rc < 0)
 		goto out;
