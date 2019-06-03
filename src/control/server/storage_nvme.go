@@ -46,9 +46,7 @@ const (
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciWhiteListEnv    = "_PCI_WHITELIST"
-)
 
-var (
 	msgBdevAlreadyFormatted = "nvme storage has already been formatted and " +
 		"reformat not implemented"
 	msgBdevNotFound = "controller at pci addr not found, check device exists " +
@@ -61,6 +59,7 @@ var (
 	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
+	msgBdevNoDevs             = "no controllers specified"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -319,6 +318,20 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 			pb.ResponseStatus_CTRL_ERR_CONF,
 			string(srv.BdevClass)+": "+msgBdevClassNotSupported)
 		return
+	}
+
+	// add info to result if no controllers have been formatted
+	if len(*results) == 0 && len(srv.BdevList) == 0 {
+		*results = append(
+			*results,
+			&pb.NvmeControllerResult{
+				Pciaddr: "",
+				State: addState(
+					pb.ResponseStatus_CTRL_SUCCESS,
+					"", "no controllers specified",
+					common.UtilLogDepth,
+					"nvme controller format"),
+			})
 	}
 
 	log.Debugf("device format on NVMe controllers completed")
