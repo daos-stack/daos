@@ -32,21 +32,21 @@ import (
 )
 
 func TestGetFeature(t *testing.T) {
-	s := &controlService{}
+	cs := defaultMockControlService(t)
 
 	mockFeature := MockFeaturePB()
 	fMap := make(FeatureMap)
 	fMap[mockFeature.Fname.Name] = mockFeature
-	s.supportedFeatures = fMap
+	cs.supportedFeatures = fMap
 
-	feature, err := s.GetFeature(nil, mockFeature.Fname)
+	feature, err := cs.GetFeature(nil, mockFeature.Fname)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	AssertEqual(t, feature, mockFeature, "")
 
-	feature, err = s.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
+	feature, err = cs.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
 	if err == nil {
 		t.Fatal(err)
 	}

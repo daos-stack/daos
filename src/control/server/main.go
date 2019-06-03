@@ -27,17 +27,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
-	"runtime"
-	"syscall"
 
-	flags "github.com/jessevdk/go-flags"
-	"google.golang.org/grpc"
-
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-	secpb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/acl"
+	flags "github.com/jessevdk/go-flags"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -46,13 +41,7 @@ func main() {
 	}
 }
 
-func serverMain() error {
-	runtime.GOMAXPROCS(1)
-
-	// Bootstrap default logger before config options get set.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
-
-	opts := new(cliOptions)
+func parseCliOpts(opts *cliOptions) error {
 	p := flags.NewParser(opts, flags.Default)
 	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
@@ -63,47 +52,44 @@ func serverMain() error {
 		return err
 	}
 
-	// Parse configuration file and load values.
-	config, err := loadConfigOpts(opts)
-	if err != nil {
-		log.Errorf("Failed to load config options: %s", err)
+	return nil
+}
+
+func serverMain() error {
+	// Bootstrap default logger before config options get set.
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
+	opts := new(cliOptions)
+	if err := parseCliOpts(opts); err != nil {
 		return err
 	}
 
-	// Set log level mask for default logger from config.
-	switch config.ControlLogMask {
-	case cLogDebug:
-		log.Debugf("Switching control log level to DEBUG")
-		log.SetLevel(log.Debug)
-	case cLogError:
-		log.Debugf("Switching control log level to ERROR")
-		log.SetLevel(log.Error)
+	host, err := os.Hostname()
+	if err != nil {
+		log.Errorf("Failed to get hostname: %+v", err)
+		return err
 	}
 
-	// Set log file for default logger if specified in config.
-	if config.ControlLogFile != "" {
-		f, err := common.AppendFile(config.ControlLogFile)
-		if err != nil {
-			log.Errorf("Failure creating log file: %s", err)
-			return err
-		}
-		defer f.Close()
-
-		log.Debugf(
-			"%s logging to file %s",
-			os.Args[0], config.ControlLogFile)
-
-		log.SetOutput(f)
-	} else {
-		// if no logfile specified, output from multiple hosts
-		// may get aggregated, prefix entries with hostname
-		log.NewDefaultLogger(
-			log.Debug, config.Servers[0].Hostname+" ", os.Stderr)
+	// Parse configuration file and load values.
+	config, err := loadConfigOpts(opts, host)
+	if err != nil {
+		log.Errorf("Failed to load config options: %+v", err)
+		return err
 	}
 
 	// Backup active config.
 	saveActiveConfig(&config)
 
+	f, err := config.setLogging(host)
+	if err != nil {
+		log.Errorf("Failed to configure logging: %+v", err)
+		return err
+	}
+	if f != nil {
+		defer f.Close()
+	}
+
+	// Create and setup control service.
 	mgmtControlServer, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
@@ -113,45 +99,40 @@ func serverMain() error {
 	mgmtControlServer.Setup()
 	defer mgmtControlServer.Teardown()
 
-	// Create a new server register our service and listen for connections.
+	// Create and start listener on management network.
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
-	lis, err := net.Listen("tcp", addr)
+	lis, err := net.Listen("tcp4", addr)
 	if err != nil {
 		log.Errorf("Unable to listen on management interface: %s", err)
 		return err
 	}
+	log.Debugf("DAOS control server listening on %s", addr)
 
+	// Create new grpc server, register services and start serving (after
+	// dropping privileges).
+	var sOpts []grpc.ServerOption
 	// TODO: This will need to be extended to take certificate information for
 	// the TLS protected channel. Currently it is an "insecure" channel.
-	var sOpts []grpc.ServerOption
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
-
-	// Set up security-related gRPC servers
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	secpb.RegisterAccessControlServer(grpcServer, secServer)
+	acl.RegisterAccessControlServer(grpcServer, secServer)
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Format the unformatted servers.
-	if err = formatIosrvs(&config, false); err != nil {
-		log.Errorf("Failed to format servers: %s", err)
+	// Wait for storage to be formatted if necessary and subsequently drop
+	// current process privileges to that of normal user.
+	if err = awaitStorageFormat(&config); err != nil {
+		log.Errorf("Failed to format storage: %s", err)
 		return err
 	}
 
-	// Create a channel to retrieve signals.
-	sigchan := make(chan os.Signal, 2)
-	signal.Notify(sigchan,
-		syscall.SIGTERM,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGHUP)
-
-	// Process configurations parameters for Nvme.
-	if err = config.parseNvme(); err != nil {
-		log.Errorf("NVMe config could not be processed: %s", err)
+	// Format the unformatted servers by writing persistant superblock.
+	if err = formatIosrvs(&config, false); err != nil {
+		log.Errorf("Failed to format servers: %s", err)
 		return err
 	}
 
@@ -178,7 +159,7 @@ func serverMain() error {
 			err)
 		return err
 	}
-	log.Debugf("DAOS server listening on %s%s", addr, extraText)
+	log.Debugf("DAOS I/O server running %s", extraText)
 
 	// Wait for I/O server to return.
 	err = iosrv.wait()

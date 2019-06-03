@@ -1,0 +1,23 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines:
+    - boro-A
+    - boro-B
+server_config:
+   name: daos_server
+tests:
+   setnames:
+      validsetname:
+        setname: daos_server
+      badsetname:
+        setname: complete_rubbish
+   sizes:
+      size1gb:
+        size: 1073741824
+   connectperms:
+      permro:
+        perms: -r
+   modes:
+      modeall:
+        mode: 511

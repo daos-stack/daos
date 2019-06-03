@@ -45,8 +45,8 @@
 
 #define MODID_MASK	0xff
 #define MODID_OFFSET	24
-#define MOD_ID_BITS	8
-#define opc_get_mod_id(opcode)	((opcode >> 24) & MODID_MASK)
+#define MOD_ID_BITS	7
+#define opc_get_mod_id(opcode)	((opcode >> MODID_OFFSET) & MODID_MASK)
 #define opc_get(opcode)		(opcode & OPCODE_MASK)
 
 #define DAOS_RPC_OPCODE(opc, mod_id, rpc_ver)			\
@@ -66,7 +66,7 @@ enum daos_module_id {
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_DTX_MODULE		= 10, /** DTX */
-	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
+	DAOS_MAX_MODULE		= 64, /** Size of uint64_t see dmg profile */
 };
 
 enum daos_rpc_flags {
@@ -106,11 +106,8 @@ enum daos_rpc_type {
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
 #define DAOS_TGT0_OFFSET		(1)
-/** Number of cart context created for each target */
-#define DAOS_CTX_NR_PER_TGT		(2)
 /** The cart context index of target index */
-#define DAOS_IO_CTX_ID(tgt_idx)				\
-	((tgt_idx) * DAOS_CTX_NR_PER_TGT + DAOS_TGT0_OFFSET)
+#define DAOS_IO_CTX_ID(tgt_idx)		((tgt_idx) + DAOS_TGT0_OFFSET)
 
 /**
  * Get the target tag (context ID) for specific request type and target index.
@@ -204,36 +201,18 @@ daos_rpc_unregister(struct crt_proto_format *proto_fmt)
 	return 0;
 }
 
-static inline d_sg_list_t *
-daos2crt_sg(daos_sg_list_t *sgl)
-{
-	/** XXX better integration with CaRT required */
-	D_CASSERT(sizeof(daos_sg_list_t) == sizeof(d_sg_list_t));
-	D_CASSERT(offsetof(daos_sg_list_t, sg_nr) ==
-		  offsetof(d_sg_list_t, sg_nr));
-	D_CASSERT(offsetof(daos_sg_list_t, sg_iovs) ==
-		  offsetof(d_sg_list_t, sg_iovs));
-	D_CASSERT(sizeof(daos_iov_t) == sizeof(d_iov_t));
-	D_CASSERT(offsetof(daos_iov_t, iov_buf) ==
-		  offsetof(d_iov_t, iov_buf));
-	D_CASSERT(offsetof(daos_iov_t, iov_buf_len) ==
-		  offsetof(d_iov_t, iov_buf_len));
-	D_CASSERT(offsetof(daos_iov_t, iov_len) ==
-		  offsetof(d_iov_t, iov_len));
-	return (d_sg_list_t *)sgl;
-}
-
 int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
+int daos_rpc_send_wait(crt_rpc_t *rpc);
 
 #define DAOS_DEFAULT_GROUP_ID "daos_server"
 
 static inline int
 daos_group_attach(const char *group_id, crt_group_t **group)
 {
-	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	if (group_id == NULL)
 		group_id = DAOS_DEFAULT_GROUP_ID;
+	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	return crt_group_attach((char *)group_id, group);
 }
 

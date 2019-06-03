@@ -77,6 +77,8 @@ hwloc_topology_t	dss_topo;
 int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
+/** start offset index of the first core for service XS */
+int			dss_core_offset;
 
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
@@ -86,6 +88,17 @@ static const char      *sys_map_path;
 
 /** Self rank */
 static d_rank_t		self_rank = -1;
+
+d_rank_t
+dss_self_rank(void)
+{
+	d_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL /* grp */, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	return rank;
+}
 
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
@@ -222,7 +235,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	return nr_default;
 }
 
-static void
+static int
 dss_topo_init()
 {
 	hwloc_topology_init(&dss_topo);
@@ -231,15 +244,104 @@ dss_topo_init()
 	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+
+	if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+			"should within range [0, %d]", dss_core_offset,
+			dss_core_nr - 1);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+static ABT_mutex	rank_mutex;
+static ABT_cond		rank_cv;
+static bool		rank_set;
+
+void
+dss_notify_rank_set(void)
+{
+	ABT_mutex_lock(rank_mutex);
+	rank_set = true;
+	ABT_cond_broadcast(rank_cv);
+	ABT_mutex_unlock(rank_mutex);
 }
 
 static int
-server_init()
+abt_max_num_xstreams(void)
+{
+	char   *env;
+
+	env = getenv("ABT_MAX_NUM_XSTREAMS");
+	if (env == NULL)
+		env = getenv("ABT_ENV_MAX_NUM_XSTREAMS");
+	if (env != NULL)
+		return atoi(env);
+	return 0;
+}
+
+static int
+set_abt_max_num_xstreams(int n)
+{
+	char   *name = "ABT_MAX_NUM_XSTREAMS";
+	char   *value;
+	int	rc;
+
+	D_ASSERTF(n > 0, "%d\n", n);
+	D_ASPRINTF(value, "%d", n);
+	if (value == NULL)
+		return -DER_NOMEM;
+	D_INFO("Setting %s to %s\n", name, value);
+	rc = setenv(name, value, 1 /* overwrite */);
+	D_FREE(value);
+	if (rc != 0)
+		return daos_errno2der(errno);
+	return 0;
+}
+
+static int
+abt_init(int argc, char *argv[])
+{
+	int	nrequested = abt_max_num_xstreams();
+	int	nrequired = 1 /* primary xstream */ + DSS_XS_NR_TOTAL;
+	int	rc;
+
+	/*
+	 * Set ABT_MAX_NUM_XSTREAMS to the larger of nrequested and nrequired.
+	 * If we don't do this, Argobots may use a default or requested value
+	 * less than nrequired. We may then hit Argobots assertion failures
+	 * because xstream_data.xd_mutex's internal queue has fewer slots than
+	 * some xstreams' rank numbers need.
+	 */
+	rc = set_abt_max_num_xstreams(max(nrequested, nrequired));
+	if (rc != 0)
+		return daos_errno2der(errno);
+
+	/* Now, initialize Argobots. */
+	rc = ABT_init(argc, argv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to init ABT: %d\n", rc);
+		return dss_abterr2der(rc);
+	}
+
+	return 0;
+}
+
+static void
+abt_fini(void)
+{
+	ABT_finalize();
+}
+
+static int
+server_init(int argc, char *argv[])
 {
 	int		rc;
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
+	bool		pmixless = false;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -250,17 +352,26 @@ server_init()
 		D_GOTO(exit_debug_init, rc);
 
 	/** initialize server topology data */
-	dss_topo_init();
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
+
+	rc = abt_init(argc, argv);
+	if (rc != 0)
+		goto exit_debug_init;
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc)
-		D_GOTO(exit_debug_init, rc);
+		goto exit_abt_init;
 
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	if (sys_map_path != NULL)
+	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
+	if (getenv("PMIX_RANK") == NULL)
+		pmixless = true;
+	if (sys_map_path != NULL || pmixless)
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
 	rc = crt_init_opt(server_group_id, flags,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
@@ -284,33 +395,7 @@ server_init()
 	}
 	D_INFO("Network successfully initialized\n");
 
-	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	if (sys_map_path != NULL)
-		D_ASSERTF(rank == self_rank, "%u == %u\n", rank, self_rank);
-	rc = crt_group_size(NULL, &size);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-
-	/* rank 0 save attach info for singleton client if needed */
-	if (save_attach_info && rank == 0) {
-		if (attach_info_path != NULL) {
-			rc = crt_group_config_path_set(attach_info_path);
-			if (rc != 0) {
-				D_ERROR("crt_group_config_path_set(path %s) "
-					"failed, rc: %d.\n", attach_info_path,
-					rc);
-				D_GOTO(exit_mod_init, rc);
-			}
-		}
-		rc = crt_group_config_save(NULL, true);
-		if (rc)
-			D_GOTO(exit_mod_init, rc);
-		D_INFO("server group attach info saved\n");
-	}
-
-	rc = ds_iv_init();
-	if (rc)
-		D_GOTO(exit_crt_init, rc);
+	ds_iv_init();
 
 	/* load modules */
 	rc = modules_load(&dss_mod_facs);
@@ -348,10 +433,53 @@ server_init()
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
+	rc = ABT_mutex_create(&rank_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto exit_daos_fini;
+	}
+	rc = ABT_cond_create(&rank_cv);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto exit_rank_mutex;
+	}
+
 	rc = drpc_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize dRPC: %d\n", rc);
-		goto exit_daos_fini;
+		goto exit_rank_cv;
+	}
+
+	if (pmixless) {
+		D_INFO("Waiting for rank to be set\n");
+		ABT_mutex_lock(rank_mutex);
+		while (!rank_set)
+			ABT_cond_wait(rank_cv, rank_mutex);
+		ABT_mutex_unlock(rank_mutex);
+	}
+
+	rc = crt_group_rank(NULL, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	if (sys_map_path != NULL)
+		D_ASSERTF(rank == self_rank, "%u == %u\n", rank, self_rank);
+	rc = crt_group_size(NULL, &size);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+
+	/* rank 0 save attach info for singleton client if needed */
+	if (save_attach_info && rank == 0) {
+		if (attach_info_path != NULL) {
+			rc = crt_group_config_path_set(attach_info_path);
+			if (rc != 0) {
+				D_ERROR("crt_group_config_path_set(path %s) "
+					"failed, rc: %d.\n", attach_info_path,
+					rc);
+				goto exit_drpc_fini;
+			}
+		}
+		rc = crt_group_config_save(NULL, true);
+		if (rc)
+			goto exit_drpc_fini;
+		D_INFO("server group attach info saved\n");
 	}
 
 	rc = dss_module_setup_all();
@@ -360,13 +488,19 @@ server_init()
 	D_INFO("Modules successfully set up\n");
 
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target xstream set(s).\n",
-		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr);
+		"(out of %u) with %u target xstream set(s), %d helper XS "
+		"per target, firstcore %d.\n",
+		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
+		dss_tgt_offload_xs_nr, dss_core_offset);
 
 	return 0;
 
 exit_drpc_fini:
 	drpc_fini();
+exit_rank_cv:
+	ABT_cond_free(&rank_cv);
+exit_rank_mutex:
+	ABT_mutex_free(&rank_mutex);
 exit_daos_fini:
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
@@ -381,6 +515,8 @@ exit_crt_init:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
+exit_abt_init:
+	abt_fini();
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -392,6 +528,8 @@ server_fini(bool force)
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
 	drpc_fini();
+	ABT_cond_free(&rank_cv);
+	ABT_mutex_free(&rank_mutex);
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
 	else
@@ -401,6 +539,7 @@ server_fini(bool force)
 	ds_iv_fini();
 	crt_finalize();
 	dss_module_fini(force);
+	abt_fini();
 	daos_debug_fini();
 }
 
@@ -415,7 +554,13 @@ Options:\n\
   --modules=modules, -m modules\n\
       List of server modules to load (default \"%s\")\n\
   --cores=ncores, -c ncores\n\
-      Number of targets to use (default all)\n\
+      Number of targets to use (deprecated, please use -t instead)\n\
+  --targets=ntgts, -t ntargets\n\
+      Number of targets to use (use all cores by default)\n\
+  --xshelpernr=nhelpers, -x helpers\n\
+      Number of helper XS -per vos target (default 1)\n\
+  --firstcore=firstcore, -f firstcore\n\
+      index of first core for service thread (default 0)\n\
   --group=group, -g group\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
@@ -442,17 +587,20 @@ static int
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
-		{ "modules",		required_argument,	NULL,	'm' },
-		{ "cores",		required_argument,	NULL,	'c' },
-		{ "group",		required_argument,	NULL,	'g' },
-		{ "storage",		required_argument,	NULL,	's' },
-		{ "socket_dir",		required_argument,	NULL,	'd' },
-		{ "nvme",		required_argument,	NULL,	'n' },
-		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "attach_info",	required_argument,	NULL,	'a' },
-		{ "map",		required_argument,	NULL,	'y' },
-		{ "rank",		required_argument,	NULL,	'r' },
+		{ "cores",		required_argument,	NULL,	'c' },
+		{ "socket_dir",		required_argument,	NULL,	'd' },
+		{ "firstcore",		required_argument,	NULL,	'f' },
+		{ "group",		required_argument,	NULL,	'g' },
 		{ "help",		no_argument,		NULL,	'h' },
+		{ "shm_id",		required_argument,	NULL,	'i' },
+		{ "modules",		required_argument,	NULL,	'm' },
+		{ "nvme",		required_argument,	NULL,	'n' },
+		{ "rank",		required_argument,	NULL,	'r' },
+		{ "targets",		required_argument,	NULL,	't' },
+		{ "storage",		required_argument,	NULL,	's' },
+		{ "xshelpernr",		required_argument,	NULL,	'x' },
+		{ "map",		required_argument,	NULL,	'y' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -460,8 +608,11 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:s:d:n:i:a:y:r:h",
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:r:t:s:x:y:",
 			opts, NULL)) != -1) {
+		unsigned int	 nr;
+		char		*end;
+
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -471,10 +622,10 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", optarg);
 			break;
-		case 'c': {
-			unsigned int	 nr;
-			char		*end;
-
+		case 'c':
+			printf("\"-c\" option is deprecated, please use \"-t\" "
+			       "instead.\n");
+		case 't':
 			nr = strtoul(optarg, &end, 10);
 			if (end == optarg || nr == ULONG_MAX) {
 				rc = -DER_INVAL;
@@ -482,8 +633,36 @@ parse(int argc, char **argv)
 			}
 			nr_threads = nr;
 			break;
-		}
+		case 'x':
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			if (nr > 2) {
+				printf("invalid xshelpernr %u, should within "
+				       "[0, 2], user default value %u instead",
+				       nr, dss_tgt_offload_xs_nr);
+				break;
+			}
+			dss_tgt_offload_xs_nr = nr;
+			break;
+		case 'f':
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			dss_core_offset = nr;
+			break;
 		case 'g':
+			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
+			    DAOS_SYS_NAME_MAX) {
+				printf("group name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
+				rc = -DER_INVAL;
+				break;
+			}
 			server_group_id = optarg;
 			break;
 		case 's':
@@ -650,13 +829,8 @@ main(int argc, char **argv)
 	daos_register_sighand(SIGSEGV, print_backtrace);
 	daos_register_sighand(SIGABRT, print_backtrace);
 
-	rc = ABT_init(argc, argv);
-	if (rc != 0) {
-		D_ERROR("failed to init ABT: %d\n", rc);
-		exit(EXIT_FAILURE);
-	}
 	/** server initialization */
-	rc = server_init();
+	rc = server_init(argc, argv);
 	if (rc)
 		exit(EXIT_FAILURE);
 
@@ -688,6 +862,5 @@ main(int argc, char **argv)
 	/** shutdown */
 	server_fini(true);
 
-	ABT_finalize();
 	exit(EXIT_SUCCESS);
 }

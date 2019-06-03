@@ -7,14 +7,15 @@
 
 set -e
 
-rootdir="$(readlink -f "$(dirname "$0")")"/..
+rootdir="$(readlink -f "$(dirname "$0")")"/../..
 scriptpath="$rootdir/spdk/scripts/setup.sh"
 
 if [[ $1 == reset ]]; then
 	"$scriptpath" reset
 else
 	# avoid shadowing by prefixing input envars
-	NRHUGE="$_NRHUGE" TARGET_USER="$_TARGET_USER" "$scriptpath"
+	PCI_WHITELIST="$_PCI_WHITELIST" NRHUGE="$_NRHUGE" \
+	TARGET_USER="$_TARGET_USER" "$scriptpath"
 
 	chmod 777 /dev/hugepages
 	chmod 666 /dev/uio*

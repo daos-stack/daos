@@ -38,7 +38,7 @@
 #include "dtx_internal.h"
 
 static int
-crt_proc_struct_daos_tx_id(crt_proc_t proc, struct daos_tx_id *dti)
+crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 {
 	int rc;
 
@@ -105,7 +105,7 @@ struct dtx_req_rec {
 	uint32_t			 drr_tag; /* The VOS ID */
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
-	struct daos_tx_id		*drr_dti; /* The DTX array */
+	struct dtx_id			*drr_dti; /* The DTX array */
 };
 
 struct dtx_cf_rec_bundle {
@@ -121,7 +121,7 @@ struct dtx_cf_rec_bundle {
 	/* Pointer to the length of above global list. */
 	int				*dcrb_length;
 	/* Current DTX to be classified. */
-	struct daos_tx_id		*dcrb_dti;
+	struct dtx_id			*dcrb_dti;
 	/* The number of DTXs to be classified that will be used as
 	 * the dtx_req_rec::drr_dti array size when allocating it.
 	 */
@@ -317,8 +317,8 @@ dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
 }
 
 static int
-dtx_cf_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		 daos_iov_t *val_iov, struct btr_record *rec)
+dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		 d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -343,7 +343,7 @@ dtx_cf_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	d_list_add_tail(&drr->drr_link, dcrb->dcrb_head);
 	++(*dcrb->dcrb_length);
 
-	rec->rec_mmid = umem_ptr2id(&tins->ti_umm, drr);
+	rec->rec_off = umem_ptr2off(&tins->ti_umm, drr);
 	return 0;
 }
 
@@ -354,7 +354,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	drr = (struct dtx_req_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_list_del(&drr->drr_link);
 	D_FREE(drr->drr_dti);
 	D_FREE_PTR(drr);
@@ -364,7 +364,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	D_ASSERTF(0, "We should not come here.\n");
 	return 0;
@@ -372,12 +372,12 @@ dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key, daos_iov_t *val)
+		  d_iov_t *key, d_iov_t *val)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
 
-	drr = (struct dtx_req_rec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	dcrb = (struct dtx_cf_rec_bundle *)val->iov_buf;
 	drr->drr_dti[drr->drr_count++] = *dcrb->dcrb_dti;
 
@@ -422,7 +422,7 @@ dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 static int
 dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		     uuid_t co_uuid, daos_handle_t tree, d_list_t *head,
-		     int *length, daos_unit_oid_t *oid, struct daos_tx_id *dti,
+		     int *length, daos_unit_oid_t *oid, struct dtx_id *dti,
 		     int count, uint32_t version)
 {
 	struct pl_obj_layout		*layout = NULL;
@@ -460,8 +460,8 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	for (i = start; i < start + replicas && rc >= 0; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
-		daos_iov_t		 kiov;
-		daos_iov_t		 riov;
+		d_iov_t		 kiov;
+		d_iov_t		 riov;
 
 		/* skip unavailable replica(s). */
 		shard = &layout->ol_shards[i];
@@ -479,8 +479,8 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		dcrb.dcrb_rank = target->ta_comp.co_rank;
 		dcrb.dcrb_tag = target->ta_comp.co_index;
 
-		daos_iov_set(&riov, &dcrb, sizeof(dcrb));
-		daos_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
+		d_iov_set(&riov, &dcrb, sizeof(dcrb));
+		d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
 		rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
 				   &kiov, &riov);
 	}
@@ -493,10 +493,10 @@ out:
 
 static int
 dtx_dti_classify(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t tree,
-		 struct daos_tx_entry *dtes, int count, uint32_t version,
-		 d_list_t *head, struct daos_tx_id **dtis)
+		 struct dtx_entry *dtes, int count, uint32_t version,
+		 d_list_t *head, struct dtx_id **dtis)
 {
-	struct daos_tx_id	*dti = NULL;
+	struct dtx_id		*dti = NULL;
 	struct ds_pool		*pool;
 	struct pl_map		*map = NULL;
 	int			 length = 0;
@@ -556,11 +556,11 @@ out:
  * replicas when dtx_resync() is triggered next time
  */
 int
-dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct daos_tx_entry *dtes,
+dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	   int count, uint32_t version)
 {
-	struct ds_cont		*cont = NULL;
-	struct daos_tx_id	*dti = NULL;
+	struct ds_cont_child	*cont = NULL;
+	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
@@ -569,7 +569,7 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct daos_tx_entry *dtes,
 	int			 rc;
 	int			 rc1 = 0;
 
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -595,6 +595,9 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct daos_tx_entry *dtes,
 		rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
 
 out:
+	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d\n",
+		DP_DTI(&dtes[0].dte_xid), count, rc, rc1);
+
 	if (dti != NULL)
 		D_FREE(dti);
 
@@ -604,30 +607,26 @@ out:
 	D_ASSERT(d_list_empty(&head));
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 
 	return rc >= 0 ? rc1 : rc;
 }
 
 int
-dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct daos_tx_entry *dtes,
+dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	  int count, uint32_t version)
 {
-	struct ds_cont		*cont = NULL;
-	struct daos_tx_id	*dti = NULL;
+	struct ds_cont_child	*cont = NULL;
+	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
 	d_list_t		 head;
 	int			 length;
 	int			 rc;
+	int			 rc1 = 0;
 
-	/* Currently we only support to abort DTX one by one,
-	 * not aggregated abort as commit does.
-	 */
-	D_ASSERT(count == 1);
-
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -652,10 +651,13 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct daos_tx_entry *dtes,
 		D_GOTO(out, rc);
 
 	if (!d_list_empty(&head))
-		rc = dtx_req_list_send(DTX_ABORT, &head, length, po_uuid,
-				       co_uuid);
+		rc1 = dtx_req_list_send(DTX_ABORT, &head, length, po_uuid,
+					co_uuid);
 
 out:
+	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d\n",
+		DP_DTI(&dtes[0].dte_xid), count, rc, rc1);
+
 	if (dti != NULL)
 		D_FREE(dti);
 
@@ -665,13 +667,19 @@ out:
 	D_ASSERT(d_list_empty(&head));
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 
-	return rc == -DER_NONEXIST ? 0 : rc;
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+
+	if (rc < 0)
+		return rc;
+
+	return rc1 == -DER_NONEXIST ? 0 : rc1;
 }
 
 int
-dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct daos_tx_entry *dte,
+dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	  struct pl_obj_layout *layout)
 {
 	struct ds_pool		*pool;

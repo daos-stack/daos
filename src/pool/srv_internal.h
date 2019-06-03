@@ -58,15 +58,18 @@ struct pool_iv_entry {
 	struct pool_buf	piv_pool_buf;
 };
 
+struct pool_iv_refresh_ult_arg {
+	uint32_t	iua_pool_version;
+	uuid_t		iua_pool_uuid;
+	ABT_eventual	iua_eventual;
+};
+
 /*
  * srv_pool.c
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
-int ds_pool_svc_start(uuid_t uuid, bool create, uuid_t db_uuid, size_t size,
-		      d_rank_list_t *replicas);
 int ds_pool_svc_start_all(void);
-int ds_pool_svc_stop(uuid_t uuid, bool destroy);
 int ds_pool_svc_stop_all(void);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
@@ -99,22 +102,6 @@ void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
 void ds_pool_child_purge(struct pool_tls *tls);
-
-/*
- * srv_rdb.c
- */
-
-int ds_pool_rdb_dist_start(const uuid_t dbid, const uuid_t pool_uuid,
-			   const d_rank_list_t *ranks, bool create,
-			   bool bootstrap, size_t size);
-int ds_pool_rdb_dist_stop(const uuid_t pool_uuid, const d_rank_list_t *ranks,
-			  bool destroy);
-void ds_pool_rdb_start_handler(crt_rpc_t *rpc);
-int ds_pool_rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				 void *priv);
-void ds_pool_rdb_stop_handler(crt_rpc_t *rpc);
-int ds_pool_rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				 void *priv);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 
 /*
@@ -135,5 +122,5 @@ int ds_pool_iv_fini(void);
 int pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 		   unsigned int shortcut, unsigned int sync_mode);
 int pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv);
-
+void ds_pool_iv_refresh_ult(void *arg);
 #endif /* __POOL_SRV_INTERNAL_H__ */

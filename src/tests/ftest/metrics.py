@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,10 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
-import time
-import traceback
 import sys
 import fnmatch
 import subprocess
@@ -40,21 +39,21 @@ def filelist(directory):
     random directory trees of tests.
     """
 
-    test_files = []
+    local_test_files = []
     test_pattern = "*.py"
 
-    for path, dirs, files in os.walk(directory):
+    for path, _dirs, files in os.walk(directory):
         if not (path == directory or path == os.path.join(directory, 'util')):
-            for f in files:
-                if fnmatch.fnmatch(f, test_pattern):
-                    test_files.append(os.path.join(path,f))
-    return test_files;
+            for test_file in files:
+                if fnmatch.fnmatch(test_file, test_pattern):
+                    local_test_files.append(os.path.join(path, test_file))
+    return local_test_files
 
 def yamlforpy(path):
     """
     Create the name of the yaml file for a given test file.
     """
-    (base, ext) = os.path.splitext(path)
+    (base, _ext) = os.path.splitext(path)
     return base + ".yaml"
 
 if __name__ == "__main__":
@@ -67,26 +66,27 @@ if __name__ == "__main__":
 
     tests = 0
     variants = 0
-    print "working ",
+    print("working ")
     for _file in test_files:
         cmd1 = "avocado list {}".format(_file)
         output = subprocess.check_output(cmd1, shell=True)
         tests += len(output.splitlines())
         yamlfile = yamlforpy(_file)
-        cmd2 = "avocado variants -m {} --summary 0 --variants 1".format(yamlfile)
+        cmd2 = (
+            "avocado variants -m {} --summary 0 --variants 1".format(yamlfile))
         output = subprocess.check_output(cmd2, shell=True)
         variants += len(output.splitlines())
-        print ".",
+        print(".")
         sys.stdout.flush()
 
-    print
     print("existing avocado tests> {}".format(tests))
     print("existing avocado variants> {}".format(variants))
 
     options = {'server': 'https://jira.hpdd.intel.com'}
     jira = JIRA(options)
 
-    issues = jira.search_issues('project=DAOS AND component=test AND assignee=daos-triage')
+    issues = jira.search_issues('project=DAOS AND component=test AND '
+                                'assignee=daos-triage')
     print("test stories in backlog> {}".format(issues.total))
 
     q = """project=DAOS AND component=test AND project=DAOS AND

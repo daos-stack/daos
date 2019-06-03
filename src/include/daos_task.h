@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ typedef enum {
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
+	DAOS_OPC_CONT_AGGREGATE,
 	DAOS_OPC_CONT_ROLLBACK,
 	DAOS_OPC_CONT_SUBSCRIBE,
 	DAOS_OPC_CONT_LIST_ATTR,
@@ -119,6 +120,7 @@ typedef enum {
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
+	DAOS_OPC_KV_LIST,
 	DAOS_OPC_OBJ_FETCH_MULTI,
 	DAOS_OPC_OBJ_UPDATE_MULTI,
 
@@ -273,6 +275,11 @@ typedef struct {
 typedef struct {
 	daos_handle_t		coh;
 	daos_epoch_t		epoch;
+} daos_cont_aggregate_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_epoch_t		epoch;
 } daos_cont_rollback_t;
 
 typedef struct {
@@ -415,7 +422,7 @@ typedef struct {
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
-	daos_sg_list_t		*sgls;
+	d_sg_list_t		*sgls;
 	daos_iom_t		*maps;
 } daos_obj_fetch_t;
 
@@ -425,7 +432,7 @@ typedef struct {
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
-	daos_sg_list_t		*sgls;
+	d_sg_list_t		*sgls;
 } daos_obj_update_t;
 
 typedef struct {
@@ -433,7 +440,7 @@ typedef struct {
 	daos_handle_t		th;
 	uint32_t		*nr;
 	daos_key_desc_t		*kds;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_anchor_t		*anchor;
 } daos_obj_list_dkey_t;
 
@@ -443,7 +450,7 @@ typedef struct {
 	daos_key_t		*dkey;
 	uint32_t		*nr;
 	daos_key_desc_t		*kds;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_anchor_t		*anchor;
 } daos_obj_list_akey_t;
 
@@ -477,7 +484,7 @@ typedef struct {
 					 */
 	daos_key_desc_t		*kds;
 	daos_epoch_range_t	*eprs;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_anchor_t		*anchor;
 	daos_anchor_t		*dkey_anchor;
 	daos_anchor_t		*akey_anchor;
@@ -512,7 +519,7 @@ typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
 	daos_array_iod_t	*iod;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_csum_buf_t		*csums;
 } daos_array_io_t;
 
@@ -554,6 +561,15 @@ typedef struct {
 	daos_handle_t		th;
 	const char		*key;
 } daos_kv_remove_t;
+
+typedef struct {
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	uint32_t		*nr;
+	daos_key_desc_t		*kds;
+	d_sg_list_t		*sgl;
+	daos_anchor_t		*anchor;
+} daos_kv_list_t;
 
 typedef struct {
 	daos_handle_t		oh;

@@ -109,7 +109,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh);
+					      &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
@@ -139,7 +139,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc);
+			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL);
 		else
 			rc = vos_fetch_end(ioh, rc);
 	}
@@ -181,7 +181,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 {
 	struct dts_io_credit *cred;
 	daos_iod_t	     *iod;
-	daos_sg_list_t	     *sgl;
+	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
 	int		      vsize = ts_ctx.tsc_cred_vsize;
 	int		      rc = 0;
@@ -203,12 +203,12 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 
 	/* setup dkey */
 	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-	daos_iov_set(&cred->tc_dkey, cred->tc_dbuf,
+	d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
 			strlen(cred->tc_dbuf));
 
 	/* setup I/O descriptor */
 	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
-	daos_iov_set(&iod->iod_name, cred->tc_abuf,
+	d_iov_set(&iod->iod_name, cred->tc_abuf,
 			strlen(cred->tc_abuf));
 	iod->iod_size = vsize;
 	recx->rx_nr  = 1;
@@ -232,7 +232,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 		memset(cred->tc_vbuf, 0, vsize);
 	}
 
-	daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
+	d_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
 	sgl->sg_iovs = &cred->tc_val;
 	sgl->sg_nr = 1;
 
@@ -306,7 +306,7 @@ objects_update(d_rank_t rank)
 		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
 
-		if (ts_mode == TS_MODE_DAOS) {
+		if (ts_mode == TS_MODE_DAOS || ts_mode == TS_MODE_ECHO) {
 			rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
 					   DAOS_OO_RW, &ts_ohs[i], NULL);
 			if (rc) {
@@ -650,6 +650,7 @@ ts_rebuild_wait()
 
 	while (1) {
 		memset(&pinfo, 0, sizeof(pinfo));
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
 		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
 		if (rst->rs_done || rc != 0) {
 			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
@@ -740,6 +741,8 @@ ts_class_name(void)
 		return "ECHO R4S (network only, 4-replica)";
 	case DAOS_OC_TINY_RW:
 		return "DAOS TINY (full stack, non-replica)";
+	case DAOS_OC_LARGE_RW:
+		return "DAOS LARGE (full stack, non-replica)";
 	case DAOS_OC_R2S_RW:
 		return "DAOS R2S (full stack, 2 replica)";
 	case DAOS_OC_R3S_RW:
@@ -794,7 +797,7 @@ The options are as follows:\n\
 	and 64. The utility runs in synchronous mode if credits is set to 0.\n\
 	This option is ignored for mode 'vos'.\n\
 \n\
--c TINY|R2S|R3S|R4S\n\
+-c TINY|LARGE|R2S|R3S|R4S\n\
 	Object class for DAOS full stack test.\n\
 \n\
 -o number\n\
@@ -1013,7 +1016,7 @@ main(int argc, char **argv)
 					ts_class = DAOS_OC_RAW;
 			} else { /* no RAW for other modes */
 				if (ts_class == DAOS_OC_RAW)
-					ts_class = DAOS_OC_TINY_RW;
+					ts_class = DAOS_OC_LARGE_RW;
 			}
 			break;
 		case 'C':
@@ -1028,6 +1031,8 @@ main(int argc, char **argv)
 				ts_class = DAOS_OC_R2S_RW;
 			} else if (!strcasecmp(optarg, "TINY")) {
 				ts_class = DAOS_OC_TINY_RW;
+			} else if (!strcasecmp(optarg, "LARGE")) {
+				ts_class = DAOS_OC_LARGE_RW;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();

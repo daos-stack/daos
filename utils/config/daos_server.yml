@@ -166,7 +166,29 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
-##
+## Format override when true will continue to format and start data plane
+## without waiting for client API storage format call (which formats
+## NVMe and SCM storage devices.
+#
+## default: true
+#format_override: false
+#
+#
+## Username used to lookup user uid/gid to drop privileges to if started
+## as root. After control plane start-up and configuration, before starting
+## data plane, process ownership will be dropped to those of supplied user.
+#
+#user_name: daosuser
+#
+#
+## Group name used to lookup group gid to drop privileges to when user_name
+## is root. If user is a member of group, this group gid is set for the running
+## process. If group look up fails or user is not member, use uid return from
+## user lookup.
+#
+#group_name: daosgroup
+#
+#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will
@@ -180,11 +202,24 @@
 #
 #  rank: 0
 #
-#  # Logical CPU assignments as identified in /proc/cpuinfo
-#  # e.g. [0-24] for CPU 0 to 24.
+#  # Targets (VOS) represent the count of storage targets per data plane
+#  # server starting at core offset specified by first_core.
+#
 #  # Immutable after reformat.
 #
-#  cpus: [0-20]
+#  targets: 20
+#
+#  # Count of offload/helper xstreams per target. (allowed values: 0-2)
+#  # Immutable after reformat.
+#
+#  # default: 2
+#  nr_xs_helpers: 0
+#
+#  # Offset of the first core for service xstreams.
+#  # Immutable after reformat.
+#
+#  # default: 0
+#  first_core: 1
 #
 #  # Use specific OFI interfaces.
 #  # Specify the fabric network interface that will be used by this server.
@@ -202,16 +237,15 @@
 #  # default: ERR
 #  log_mask: WARN
 #
-#  # Force specific path for DAOS debug logs.
+#  # Force specific path for DAOS debug logs (D_LOG_FILE).
 #
 #  # default: /tmp/daos.log
 #  log_file: /tmp/daos_server1.log
 #
-#  # Pass specific environment variables to the DAOS server
+#  # Pass specific environment variables to the DAOS server.
 #  # Empty by default.
 #
 #  env_vars:
-#      - ABT_MAX_NUM_XSTREAMS=100
 #      - CRT_TIMEOUT=30
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used
@@ -221,23 +255,37 @@
 #
 #  scm_mount: /mnt/daos/1
 #
+#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
+#  # modules configured in interleaved mode (AppDirect regions) or emulated
+#  # tmpfs in RAM.
+#  # Options are:
+#  # - "dcpm" for real SCM (preferred option), scm_size ignored
+#  # - "ram" to emulate SCM with memory, scm_list ignored
+#  # Immutable after reformat.
+#
+#  # default: dcpm
+#  scm_class: ram
+#
+#  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+#  # The size of ram is specified by scm_size in GB units.
+#  scm_size: 16
+#
 #  # Backend block device type. Force a SPDK driver to be used by this server
 #  # instance.
 #  # Options are:
-#  # - "nvme" for NVMe SSDs (preferred option)
-#  # - "malloc" to emulate a NVMe SSD with memory
-#  # - "file" to emulate a NVMe SSD with a regular file
-#  # - "kdev" to use a kernel block device
+#  # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
+#  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
+#  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
+#  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
 #  # default: nvme
 #  bdev_class: nvme
 #
 #  # Backend block device configuration to be used by this server instance.
-#  # Immutable after reformat.
 #  # When bdev_class is set to nvme, bdev_list is the list of unique NVMe IDs
 #  # that should be different across different server instance.
-#  # Colons replaced by dots in PCI identifiers.
+#  # Immutable after reformat.
 #  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 #-
 #  # Rank to be assigned as identifier for server.
@@ -246,11 +294,25 @@
 #
 #  rank: 1
 #
-#  # Logical CPU assignments as identified in /proc/cpuinfo
-#  # e.g. [0-24] for CPU 0 to 24.
+#  # Targets (VOS) represent the number of logical CPUs to be used starting at
+#  # index specified by first_core.
+#
+#  # Targets will be used to run XStreams can be thought of as service threads.
 #  # Immutable after reformat.
 #
-#  cpus: [21-40]
+#  targets: 20
+#
+#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Immutable after reformat.
+#
+#  # default: 2
+#  nr_xs_helpers: 1
+#
+#  # Index of first core for service thread.
+#  # Immutable after reformat.
+#
+#  # default: 0
+#  first_core: 22
 #
 #  # Use specific OFI interfaces.
 #  # Specify the fabric network interface that will be used by this server.
@@ -277,7 +339,6 @@
 #  # Empty by default.
 #
 #  env_vars:
-#      - ABT_MAX_NUM_XSTREAMS=200
 #      - CRT_TIMEOUT=100
 #
 #  # Define a pre-configured mountpoint for storage class memory to be used
@@ -286,13 +347,28 @@
 #
 #  scm_mount: /mnt/daos/2
 #
+#  # Backend SCM device type. Either use DCPM (datacentre persistent memory)
+#  # modules configured in interleaved mode (AppDirect regions) or emulated
+#  # tmpfs in RAM.
+#  # Options are:
+#  # - "dcpm" for real SCM (preferred option), scm_size is ignored
+#  # - "ram" to emulate SCM with memory, scm_list is ignored
+#  # Immutable after reformat.
+#
+#  # default: dcpm
+#  scm_class: dcpm
+#
+#  # When scm_class is set to dcpm, scm_list is the list of device paths for
+#  # AppDirect pmem namespaces (currently only one per server supported).
+#  scm_list: [/dev/pmem0]
+#
 #  # Backend block device type. Force a SPDK driver to be used by this server
 #  # instance.
 #  # Options are:
-#  # - "nvme" for NVMe SSDs (preferred option)
-#  # - "malloc" to emulate a NVMe SSD with memory
-#  # - "file" to emulate a NVMe SSD with a regular file
-#  # - "kdev" to use a kernel block device
+#  # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
+#  # - "malloc" to emulate a NVMe SSD with memory, bdev_list ignored
+#  # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
+#  # - "kdev" to use a kernel block device, bdev_{size,number} ignored
 #  # Immutable after reformat.
 #
 #  # When bdev_class is set to malloc, bdev_number is the number of devices

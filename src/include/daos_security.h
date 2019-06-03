@@ -35,9 +35,20 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 
-#define	DAOS_ACL_VERSION		1
+/**
+ * Version of the ACL structure format
+ */
+#define	DAOS_ACL_VERSION		(1)
+
+/**
+ * Maximum length of the user@domain principal string, not including null
+ * terminator.
+ */
+#define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+#define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
  * Header for the Access Control List, followed by the table of variable-length
@@ -153,7 +164,7 @@ daos_acl_create(struct daos_ace *aces[], uint16_t num_aces);
  *		allocated
  */
 struct daos_acl *
-daos_acl_copy(struct daos_acl *acl);
+daos_acl_dup(struct daos_acl *acl);
 
 /**
  * Free a DAOS Access Control List.
@@ -162,6 +173,18 @@ daos_acl_copy(struct daos_acl *acl);
  */
 void
 daos_acl_free(struct daos_acl *acl);
+
+/**
+ * Get the total size of the DAOS Access Control List in bytes.
+ * This includes the size of the header as well as the ACE list.
+ *
+ * \param[in]	acl	ACL to get the size of
+ *
+ * \return	Size of ACL in bytes
+ *		-DER_INVAL		Invalid input
+ */
+ssize_t
+daos_acl_get_size(struct daos_acl *acl);
 
 /**
  * Get the next Access Control Entry in the Access Control List, for iterating
@@ -247,6 +270,19 @@ void
 daos_acl_dump(struct daos_acl *acl);
 
 /**
+ * Parse and sanity check the entire Access Control List for valid values and
+ * internal consistency.
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_validate(struct daos_acl *acl);
+
+/**
  * Allocate a new Access Control Entry with an appropriately aligned principal
  * name, if applicable.
  *
@@ -277,8 +313,8 @@ daos_ace_free(struct daos_ace *ace);
  *
  * \param[in]	ace	ACE to get the size of
  *
- * \return	Success		Size of ACE in bytes
- *		-DER_INVAL	Invalid input
+ * \return	Size of ACE in bytes
+ *		-DER_INVAL		Invalid input
  */
 ssize_t
 daos_ace_get_size(struct daos_ace *ace);
@@ -290,7 +326,96 @@ daos_ace_get_size(struct daos_ace *ace);
  * \param	tabs	Number of tabs to indent at top level
  */
 void
-daos_ace_dump(struct daos_ace *ace, uint tabs);
+daos_ace_dump(struct daos_ace *ace, uint32_t tabs);
+
+/**
+ * Sanity check the Access Control Entry structure for valid values and internal
+ * consistency.
+ *
+ * \param	ace	Access Control Entry to be checked
+ *
+ * \return	True if the ACE is valid, false otherwise
+ */
+bool
+daos_ace_is_valid(struct daos_ace *ace);
+
+/**
+ * Sanity check that the principal is a properly-formatted name string for use
+ * in an Access Control List.
+ *
+ * The check is not very strict. It verifies that the name is in the
+ * name@[domain] format, but does not make assumptions about legal characters
+ * in the name or verify that the principal actually exists
+ *
+ * \param	name	Principal name to be validated
+ *
+ * \return	true if the name is properly formatted
+ *		false otherwise
+ */
+bool
+daos_acl_principal_is_valid(const char *name);
+
+/**
+ * Convert a local uid to a properly-formatted principal name for use with the
+ * Access Control List API.
+ *
+ * \param[in]	uid	UID to convert
+ * \param[out]	name	Newly allocated null-terminated string containing the
+ *			formatted principal name
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_uid_to_principal(uid_t uid, char **name);
+
+/**
+ * Convert a local gid to a properly-formatted principal name for use with the
+ * Access Control List API.
+ *
+ * \param[in]	gid	GID to convert
+ * \param[out]	name	Newly allocated null-terminated string containing the
+ *			formatted principal name
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	GID not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_gid_to_principal(gid_t gid, char **name);
+
+/**
+ * Convert the name of a user principal from an Access Control List to its
+ * corresponding local UID.
+ *
+ * \param[in]	principal	Principal name
+ * \param[out]	uid		UID of the principal
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	User not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_principal_to_uid(const char *principal, uid_t *uid);
+
+/**
+ * Convert the name of a group principal from an Access Control List to its
+ * corresponding local GID.
+ *
+ * \param[in]	principal	Principal name
+ * \param[out]	gid		GID of the principal
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	Group not found
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_principal_to_gid(const char *principal, gid_t *gid);
 
 #if defined(__cplusplus)
 }

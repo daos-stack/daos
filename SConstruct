@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
+                 '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wframe-larger-than=4096']
@@ -15,7 +16,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-DAOS_VERSION = "0.4.0"
+DAOS_VERSION = "0.5.0"
 
 def is_platform_arm():
     """Detect if platform is ARM"""

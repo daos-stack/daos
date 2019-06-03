@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ struct daos_task_args {
 		daos_cont_close_t	cont_close;
 		daos_cont_destroy_t	cont_destory;
 		daos_cont_query_t	cont_query;
+		daos_cont_aggregate_t	cont_aggregate;
 		daos_cont_rollback_t	cont_rollback;
 		daos_cont_subscribe_t	cont_subscribe;
 		daos_cont_list_attr_t	cont_list_attr;
@@ -88,9 +89,10 @@ struct daos_task_args {
 		daos_array_io_t		array_io;
 		daos_array_get_size_t	array_get_size;
 		daos_array_set_size_t	array_set_size;
-		daos_kv_get_t		obj_get;
-		daos_kv_put_t		obj_put;
-		daos_kv_remove_t	obj_remove;
+		daos_kv_get_t		kv_get;
+		daos_kv_put_t		kv_put;
+		daos_kv_remove_t	kv_remove;
+		daos_kv_list_t		kv_list;
 		daos_obj_multi_io_t	obj_fetch_multi;
 		daos_obj_multi_io_t	obj_update_multi;
 	}		 ta_u;

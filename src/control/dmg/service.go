@@ -26,8 +26,6 @@ package main
 import (
 	"fmt"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 // SvcCmd is the struct representing the top-level service subcommand.
@@ -44,19 +42,15 @@ type KillRankSvcCmd struct {
 
 // run kill rank command with specified parameters on all connected servers
 func killRankSvc(uuid string, rank uint32) {
-	errors := conns.KillRank(uuid, rank)
-
-	if len(errors) == 0 {
-		fmt.Println("Kill Rank succeeding on all active connections!")
-	} else {
-		fmt.Printf(unpackFormat(errors), "Kill Rank command failures")
-	}
+	fmt.Printf(
+		unpackClientMap(conns.KillRank(uuid, rank)),
+		"Kill Rank command results")
 }
 
 // Execute is run when KillRankSvcCmd activates
 func (k *KillRankSvcCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.WithMessage(err, "unable to connect to hosts")
+	if err := appSetup(); err != nil {
+		return err
 	}
 
 	killRankSvc(k.PoolUUID, k.Rank)

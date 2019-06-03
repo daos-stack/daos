@@ -800,7 +800,7 @@ evt_tcx_trace(struct evt_context *tcx, int level)
 }
 
 static void
-evt_tcx_set_trace(struct evt_context *tcx, int level, uint64_t nd_off, int at)
+evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at)
 {
 	struct evt_trace *trace;
 
@@ -827,7 +827,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
 /**
  * Create a evtree context for create or open
  *
- * \param root_mmid	[IN]	Optional, root memory ID for open
+ * \param root_off	[IN]	Optional, root memory offset for open
  * \param root		[IN]	Optional, root address for inplace open
  * \param feats		[IN]	Optional, feature bits for create
  * \param order		[IN]	Optional, tree order for create
@@ -837,7 +837,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param tcx_pp	[OUT]	The returned tree context
  */
 static int
-evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
+evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 	       uint64_t feats, unsigned int order, struct umem_attr *uma,
 	       daos_handle_t coh, void *info, struct evt_context **tcx_pp)
 {
@@ -851,6 +851,7 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	tcx->tc_magic = EVT_HDL_ALIVE;
+	tcx->tc_root_off = UMOFF_NULL;
 
 	/* XXX choose ops based on feature bits */
 	tcx->tc_ops = evt_policies[0];
@@ -860,25 +861,24 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
 	}
-	tcx->tc_pmempool_uuid = umem_get_uuid(&tcx->tc_umm);
 	tcx->tc_blks_info = info;
 
-	if (!TMMID_IS_NULL(root_mmid)) { /* non-inplace tree open */
-		tcx->tc_root_mmid = root_mmid;
+	if (!UMOFF_IS_NULL(root_off)) { /* non-inplace tree open */
+		tcx->tc_root_off = root_off;
 		if (root == NULL)
-			root = umem_id2ptr_typed(&tcx->tc_umm, root_mmid);
+			root = umem_off2ptr(&tcx->tc_umm, root_off);
 	}
 	tcx->tc_root = root;
 	tcx->tc_coh = coh;
 
-	if (root == NULL || root->tr_feats == 0) { /* tree creation */
+	if (root == NULL || feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
 		tcx->tc_order	= order;
 		depth		= 0;
 		V_TRACE(DB_TRACE, "Create context for a new tree\n");
 
 	} else {
-		if (tcx->tc_pmempool_uuid != root->tr_pool_uuid) {
+		if (root->tr_pool_uuid != umem_get_uuid(&tcx->tc_umm)) {
 			D_ERROR("Mixing pools in same evtree not allowed\n");
 			rc = -DER_INVAL;
 			goto failed;
@@ -888,8 +888,8 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 		tcx->tc_order	= root->tr_order;
 		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
-		V_TRACE(DB_TRACE, "Load tree context from "TMMID_PF"\n",
-			TMMID_P(root_mmid));
+		V_TRACE(DB_TRACE, "Load tree context from "DF_U64"\n",
+			root_off);
 	}
 
 	/* Initialize the embedded iterator entry array.  This is a minor
@@ -916,7 +916,7 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 	if (!tcx->tc_root || tcx->tc_root->tr_feats == 0)
 		return -DER_INVAL;
 
-	rc = evt_tcx_create(tcx->tc_root_mmid, tcx->tc_root, -1, -1, &uma,
+	rc = evt_tcx_create(tcx->tc_root_off, tcx->tc_root, -1, -1, &uma,
 			    tcx->tc_coh, tcx->tc_blks_info, tcx_pp);
 	return rc;
 }
@@ -931,11 +931,7 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 		return 0;
 
 	if (addr->ba_type == DAOS_MEDIA_SCM) {
-		umem_id_t mmid;
-
-		mmid.pool_uuid_lo = tcx->tc_pmempool_uuid;
-		mmid.off = addr->ba_off;
-		rc = umem_free(evt_umm(tcx), mmid);
+		rc = umem_free(evt_umm(tcx), addr->ba_off);
 	} else {
 		struct vea_space_info *vsi = tcx->tc_blks_info;
 		uint64_t blk_off;
@@ -949,8 +945,29 @@ evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
 
 		rc = vea_free(vsi, blk_off, blk_cnt);
 		if (rc)
-			D_ERROR("Error on block free. %d\n", rc);
+			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
+				blk_off, blk_cnt, rc);
 	}
+
+	return rc;
+}
+
+static int
+evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
+{
+	struct evt_desc	*desc;
+	int		 rc;
+
+	if (UMOFF_IS_NULL(ne->ne_child))
+		return 0;
+
+	desc = evt_off2desc(tcx, ne->ne_child);
+	vos_dtx_deregister_record(evt_umm(tcx), desc->dc_dtx,
+				  ne->ne_child, DTX_RT_EVT);
+	rc = evt_desc_free(tcx, desc,
+			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+	if (rc == 0)
+		rc = umem_free(evt_umm(tcx), ne->ne_child);
 
 	return rc;
 }
@@ -969,35 +986,8 @@ evt_node_unset(struct evt_context *tcx, struct evt_node *nd, unsigned int bits)
 	nd->tn_flags &= ~bits;
 }
 
-static inline bool
-evt_node_is_set(struct evt_context *tcx, struct evt_node *node,
-		unsigned int bits)
-{
-	return node->tn_flags & bits;
-}
-
-static inline bool
-evt_node_is_leaf(struct evt_context *tcx, struct evt_node *node)
-{
-	return evt_node_is_set(tcx, node, EVT_NODE_LEAF);
-}
-
-static inline bool
-evt_node_is_root(struct evt_context *tcx, struct evt_node *node)
-{
-	return evt_node_is_set(tcx, node, EVT_NODE_ROOT);
-}
-
-/** Return the rectangle at the offset of @at */
-struct evt_node_entry *
-evt_node_entry_at(struct evt_context *tcx, struct evt_node *node,
-		  unsigned int at)
-{
-	return &node->tn_rec[at];
-}
-
 /** Return the address of child umem offset at the offset of @at */
-static uint64_t
+static umem_off_t
 evt_node_child_at(struct evt_context *tcx, struct evt_node *node,
 		  unsigned int at)
 {
@@ -1005,18 +995,6 @@ evt_node_child_at(struct evt_context *tcx, struct evt_node *node,
 
 	D_ASSERT(!evt_node_is_leaf(tcx, node));
 	return ne->ne_child;
-}
-
-/** Return the data pointer at the offset of @at */
-static struct evt_desc *
-evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
-		 unsigned int at)
-{
-	struct evt_node_entry	*ne = evt_node_entry_at(tcx, node, at);
-
-	D_ASSERT(evt_node_is_leaf(tcx, node));
-
-	return evt_off2desc(tcx, ne->ne_child);
 }
 
 /** Return the rectangle at the offset of @at */
@@ -1078,23 +1056,23 @@ evt_node_size(struct evt_context *tcx)
 
 /** Allocate a evtree node */
 static int
-evt_node_alloc(struct evt_context *tcx, unsigned int flags, uint64_t *nd_off)
+evt_node_alloc(struct evt_context *tcx, unsigned int flags,
+	       umem_off_t *nd_off_p)
 {
 	struct evt_node		*nd;
-	TMMID(struct evt_node)	 nd_mmid;
+	umem_off_t		 nd_off;
 
-	nd_mmid = umem_zalloc_typed(evt_umm(tcx), struct evt_node,
-				    evt_node_size(tcx));
-	if (TMMID_IS_NULL(nd_mmid))
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx));
+	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOMEM;
 
-	V_TRACE(DB_TRACE, "Allocate new node "TMMID_PF" %d bytes\n",
-		TMMID_P(nd_mmid), evt_node_size(tcx));
-	nd = evt_tmmid2ptr(tcx, nd_mmid);
+	V_TRACE(DB_TRACE, "Allocate new node "DF_U64" %d bytes\n",
+		nd_off, evt_node_size(tcx));
+	nd = evt_off2ptr(tcx, nd_off);
 	nd->tn_flags = flags;
 	nd->tn_magic = EVT_NODE_MAGIC;
 
-	*nd_off = nd_mmid.oid.off;
+	*nd_off_p = nd_off;
 	return 0;
 }
 
@@ -1108,9 +1086,9 @@ evt_node_tx_add(struct evt_context *tcx, struct evt_node *nd)
 }
 
 static int
-evt_node_free(struct evt_context *tcx, uint64_t nd_off)
+evt_node_free(struct evt_context *tcx, umem_off_t nd_off)
 {
-	return umem_free(evt_umm(tcx), evt_off2mmid(tcx, nd_off));
+	return umem_free(evt_umm(tcx), nd_off);
 }
 
 /**
@@ -1118,11 +1096,10 @@ evt_node_free(struct evt_context *tcx, uint64_t nd_off)
  * data extents.
  */
 static int
-evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
+evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level)
 {
 	struct evt_node_entry	*ne;
 	struct evt_node		*nd;
-	struct evt_rect		*rect;
 	bool			 leaf;
 	int			 i;
 	int			 rc = 0;
@@ -1135,22 +1112,13 @@ evt_node_destroy(struct evt_context *tcx, uint64_t nd_off, int level)
 
 	for (i = 0; i < nd->tn_nr; i++) {
 		ne = evt_node_entry_at(tcx, nd, i);
-		rect = evt_node_rect_at(tcx, nd, i);
-		if (leaf) {
+		if (leaf)
 			/* NB: This will be replaced with a callback */
-			rc = evt_desc_free(tcx, evt_off2desc(tcx, ne->ne_child),
-					   tcx->tc_inob * evt_rect_width(rect));
-			if (rc != 0)
-				return rc;
-			rc = umem_free(evt_umm(tcx),
-				       evt_off2mmid(tcx, ne->ne_child));
-			if (rc != 0)
-				return rc;
-		} else {
+			rc = evt_node_entry_free(tcx, ne);
+		else
 			rc = evt_node_destroy(tcx, ne->ne_child, level + 1);
-			if (rc != 0)
-				return rc;
-		}
+		if (rc != 0)
+			return rc;
 	}
 	return evt_node_free(tcx, nd_off);
 }
@@ -1160,6 +1128,14 @@ static struct evt_rect *
 evt_node_mbr_get(struct evt_context *tcx, struct evt_node *node)
 {
 	return &node->tn_mbr;
+}
+
+int
+evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
+			   uint32_t intent)
+{
+	return vos_dtx_check_availability(evt_umm(tcx), tcx->tc_coh, entry,
+					  UMOFF_NULL, intent, DTX_RT_EVT);
 }
 
 /** (Re)compute MBR for a tree node */
@@ -1211,7 +1187,7 @@ evt_node_split(struct evt_context *tcx, bool leaf,
  * Entry insertion is a customized method of tree policy.
  */
 static int
-evt_node_insert(struct evt_context *tcx, struct evt_node *nd, uint64_t in_off,
+evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 		const struct evt_entry_in *ent, bool *mbr_changed)
 {
 	int		 rc;
@@ -1284,26 +1260,27 @@ evt_root_empty(struct evt_context *tcx)
 {
 	struct evt_root *root = tcx->tc_root;
 
-	return root == NULL || root->tr_node == 0;
+	return root == NULL || UMOFF_IS_NULL(root->tr_node);
 }
 
 /** Add the tree root to the transaction */
 static int
 evt_root_tx_add(struct evt_context *tcx)
 {
-	struct umem_instance *umm = evt_umm(tcx);
-	int		      rc;
+	struct umem_instance	*umm = evt_umm(tcx);
+	void			*root;
 
 	if (!evt_has_tx(tcx))
 		return 0;
 
-	if (!TMMID_IS_NULL(tcx->tc_root_mmid)) {
-		rc = umem_tx_add_mmid_typed(umm, tcx->tc_root_mmid);
+	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
+		root = evt_off2ptr(tcx, tcx->tc_root_off);
 	} else {
 		D_ASSERT(tcx->tc_root != NULL);
-		rc = umem_tx_add_ptr(umm, tcx->tc_root, sizeof(*tcx->tc_root));
+		root = tcx->tc_root;
 	}
-	return rc;
+
+	return umem_tx_add_ptr(umm, root, sizeof(*tcx->tc_root));
 }
 
 /** Initialize the tree root */
@@ -1321,31 +1298,19 @@ evt_root_init(struct evt_context *tcx)
 
 	root->tr_feats = tcx->tc_feats;
 	root->tr_order = tcx->tc_order;
-	root->tr_node  = 0;
-	root->tr_pool_uuid = tcx->tc_pmempool_uuid;
+	root->tr_node  = UMOFF_NULL;
+	root->tr_pool_uuid = umem_get_uuid(&tcx->tc_umm);
 
 	return 0;
-}
-
-/** Allocate a root node for a new tree. */
-static int
-evt_root_alloc(struct evt_context *tcx)
-{
-	tcx->tc_root_mmid = umem_znew_typed(evt_umm(tcx), struct evt_root);
-	if (TMMID_IS_NULL(tcx->tc_root_mmid))
-		return -DER_NOMEM;
-
-	tcx->tc_root = evt_tmmid2ptr(tcx, tcx->tc_root_mmid);
-	return evt_root_init(tcx);
 }
 
 static int
 evt_root_free(struct evt_context *tcx)
 {
 	int	rc;
-	if (!TMMID_IS_NULL(tcx->tc_root_mmid)) {
-		rc = umem_free_typed(evt_umm(tcx), tcx->tc_root_mmid);
-		tcx->tc_root_mmid = EVT_ROOT_NULL;
+	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
+		rc = umem_free(evt_umm(tcx), tcx->tc_root_off);
+		tcx->tc_root_off = EVT_ROOT_NULL;
 	} else {
 		rc = evt_root_tx_add(tcx);
 		if (rc != 0)
@@ -1362,16 +1327,18 @@ out:
  * tree depth to one.
  */
 static int
-evt_root_activate(struct evt_context *tcx, uint32_t inob)
+evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
 	struct evt_root		*root;
-	uint64_t		 nd_off;
+	umem_off_t		 nd_off;
 	int			 rc;
 
 	root = tcx->tc_root;
+	uint32_t inob = ent->ei_inob;
+	const daos_csum_buf_t *csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
-	D_ASSERT(root->tr_node == 0);
+	D_ASSERT(UMOFF_IS_NULL(root->tr_node));
 
 	/* root node is also a leaf node */
 	rc = evt_node_alloc(tcx, EVT_NODE_ROOT | EVT_NODE_LEAF, &nd_off);
@@ -1386,6 +1353,16 @@ evt_root_activate(struct evt_context *tcx, uint32_t inob)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
+	if (daos_csum_isvalid(csum)) {
+		/**
+		 * csum len, type, and chunksize will be a configuration stored
+		 * in the container meta data. for now trust the entity checksum
+		 * to have correct values.
+		 */
+		tcx->tc_root->tr_csum_len		= csum->cs_len;
+		tcx->tc_root->tr_csum_type		= csum->cs_type;
+		tcx->tc_root->tr_csum_chunk_size	= csum->cs_chunksize;
+	}
 
 	evt_tcx_set_dep(tcx, root->tr_depth);
 	evt_tcx_set_trace(tcx, 0, nd_off, 0);
@@ -1407,11 +1384,11 @@ evt_root_deactivate(struct evt_context *tcx)
 		return rc;
 
 	root->tr_depth = 0;
-	rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, root->tr_node));
+	rc = umem_free(evt_umm(tcx), root->tr_node);
 	if (rc != 0)
 		return rc;
 
-	root->tr_node = 0;
+	root->tr_node = UMOFF_NULL;
 	evt_tcx_set_dep(tcx, 0);
 	return 0;
 }
@@ -1420,11 +1397,11 @@ evt_root_deactivate(struct evt_context *tcx)
 static int
 evt_root_destroy(struct evt_context *tcx)
 {
-	uint64_t	node;
+	umem_off_t	node;
 	int		rc;
 
 	node = tcx->tc_root->tr_node;
-	if (node != 0) {
+	if (!UMOFF_IS_NULL(node)) {
 		/* destroy the root node and all descendants */
 		rc = evt_node_destroy(tcx, node, 0);
 		if (rc != 0)
@@ -1460,7 +1437,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 {
 	struct evt_rect		*mbr	  = NULL;
 	struct evt_node		*nd_tmp = NULL;
-	uint64_t		 nm_save = 0;
+	umem_off_t		 nm_save = UMOFF_NULL;
 	struct evt_entry_in	 entry	  = *ent_new;
 	int			 rc	  = 0;
 	int			 level	  = tcx->tc_depth - 1;
@@ -1471,8 +1448,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		struct evt_trace	*trace;
 		struct evt_node		*nd_cur;
 		struct evt_node		*nd_new;
-		uint64_t		 nm_cur;
-		uint64_t		 nm_new;
+		umem_off_t		 nm_cur;
+		umem_off_t		 nm_new;
 		bool			 leaf;
 
 		trace	= &tcx->tc_trace[level];
@@ -1614,7 +1591,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 static int
 evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
-	uint64_t		nd_off;
+	umem_off_t		nd_off;
 	int			level;
 	int			i;
 
@@ -1629,8 +1606,8 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 		struct evt_node		*nd;
 		struct evt_node		*nd_dst;
 		struct evt_node		*nd_cur;
-		uint64_t		 nm_cur;
-		uint64_t		 nm_dst;
+		umem_off_t		 nm_cur;
+		umem_off_t		 nm_dst;
 		int			 tr_at;
 
 		nd = evt_off2node(tcx, nd_off);
@@ -1641,13 +1618,13 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 		}
 
 		tr_at = -1;
-		nm_dst = 0;
+		nm_dst = UMOFF_NULL;
 		nd_dst = NULL;
 
 		for (i = 0; i < nd->tn_nr; i++) {
 			nm_cur = evt_node_child_at(tcx, nd, i);
 			nd_cur = evt_off2node(tcx, nm_cur);
-			if (nm_dst == 0) {
+			if (UMOFF_IS_NULL(nm_dst)) {
 				nm_dst = nm_cur;
 				nd_dst = nd_cur;
 			} else {
@@ -1743,7 +1720,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		return rc;
 
 	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx, entry->ei_inob);
+		rc = evt_root_activate(tcx, entry);
 		if (rc != 0)
 			goto out;
 	} else if (tcx->tc_inob == 0 && entry->ei_inob != 0) {
@@ -1816,6 +1793,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
+	entry->en_dtx = desc->dc_dtx;
 	evt_entry_csum_fill(tcx, desc, entry);
 
 	if (offset != 0) {
@@ -1835,7 +1813,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		   const struct evt_rect *rect,
 		   struct evt_entry_array *ent_array)
 {
-	uint64_t	nd_off;
+	umem_off_t	nd_off;
 	int		level;
 	int		at;
 	int		i;
@@ -1871,6 +1849,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		for (i = at; i < node->tn_nr; i++, ne++) {
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
+			struct evt_desc		*desc;
 			int			 time_overlap;
 			int			 range_overlap;
 
@@ -1920,6 +1899,13 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			}
 			V_TRACE(DB_TRACE, "Found overlapped leaf rect\n");
 
+			desc = evt_node_desc_at(tcx, node, i);
+			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
+							intent);
+			/* Skip the unavailable record. */
+			if (rc == ALB_UNAVAILABLE)
+				continue;
+
 			/* early check */
 			switch (find_opc) {
 			default:
@@ -1927,6 +1913,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			case EVT_FIND_OVERWRITE:
 				if (time_overlap != RT_OVERLAP_SAME)
 					continue; /* not same epoch, skip */
+
+				/* If the availability is unknown, go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
+
 				/* NB: This is temporary to allow full overwrite
 				 * in same epoch to avoid breaking rebuild.
 				 * Without some sequence number and client
@@ -1953,8 +1944,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					continue;
 				if (time_overlap != RT_OVERLAP_SAME)
 					continue;
+
+				/* If the availability is unknown, go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
+
 				break;
 			case EVT_FIND_FIRST:
+				/* If the availability is unknown, go out. */
+				if (rc < 0)
+					D_GOTO(out, rc);
 			case EVT_FIND_ALL:
 				break;
 			}
@@ -2054,11 +2053,11 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 
 /** move the probing trace forward */
 bool
-evt_move_trace(struct evt_context *tcx, uint32_t intent)
+evt_move_trace(struct evt_context *tcx)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*nd;
-	uint64_t		 nd_off;
+	umem_off_t		 nd_off;
 
 	if (evt_root_empty(tcx))
 		return false;
@@ -2086,7 +2085,7 @@ evt_move_trace(struct evt_context *tcx, uint32_t intent)
 
 	/* move to the first/last entry in the subtree */
 	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
-		uint64_t	tmp;
+		umem_off_t	tmp;
 
 		tmp = evt_node_child_at(tcx, nd, trace->tr_at);
 		nd = evt_off2node(tcx, tmp);
@@ -2101,33 +2100,12 @@ evt_move_trace(struct evt_context *tcx, uint32_t intent)
 }
 
 /**
- * Open a tree by memory ID @root_mmid.
- * Please check API comment in evtree.h for the details.
- */
-int
-evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
-	 daos_handle_t *toh)
-{
-	struct evt_context *tcx;
-	int		    rc;
-
-	rc = evt_tcx_create(root_mmid, NULL, -1, -1, uma, DAOS_HDL_INVAL,
-			    NULL, &tcx);
-	if (rc != 0)
-		return rc;
-
-	*toh = evt_tcx2hdl(tcx); /* take refcount for open */
-	evt_tcx_decref(tcx); /* -1 for create */
-	return 0;
-}
-
-/**
  * Open a inplace tree by root address @root.
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		 daos_handle_t coh, void *info, daos_handle_t *toh)
+evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
+	 void *info, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -2164,67 +2142,23 @@ evt_close(daos_handle_t toh)
 }
 
 /**
- * Create a new tree and open it.
- * Please check API comment in evtree.h for the details.
- */
-int
-evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
-	   TMMID(struct evt_root) *root_mmid_p, daos_handle_t *toh)
-{
-	struct evt_context *tcx;
-	int		    rc;
-
-	if (!(feats & EVT_FEAT_SORT_SOFF)) {
-		V_TRACE(DB_TRACE, "Unknown feature bits "DF_X64"\n", feats);
-		return -DER_INVAL;
-	}
-
-	if (order < EVT_ORDER_MIN || order > EVT_ORDER_MAX) {
-		V_TRACE(DB_TRACE, "Invalid tree order %d\n", order);
-		return -DER_INVAL;
-	}
-
-	rc = evt_tcx_create(EVT_ROOT_NULL, NULL, feats, order, uma,
-			    DAOS_HDL_INVAL, NULL, &tcx);
-	if (rc != 0)
-		return rc;
-
-	rc = evt_tx_begin(tcx);
-	if (rc != 0)
-		goto err;
-
-	rc = evt_root_alloc(tcx);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	*root_mmid_p = tcx->tc_root_mmid;
-	*toh = evt_tcx2hdl(tcx); /* take refcount for open */
-out:
-	rc = evt_tx_end(tcx, rc);
-
-err:
-	evt_tcx_decref(tcx); /* -1 for tcx_create */
-	return rc;
-}
-
-/**
  * Create a new tree inplace of \a root, return the open handle.
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_create_inplace(uint64_t feats, unsigned int order, struct umem_attr *uma,
-		   struct evt_root *root, daos_handle_t coh, daos_handle_t *toh)
+evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
+	   struct evt_root *root, daos_handle_t coh, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
 
 	if (!(feats & EVT_FEAT_SORT_SOFF)) {
-		V_TRACE(DB_TRACE, "Unknown feature bits "DF_X64"\n", feats);
+		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
 
 	if (order < EVT_ORDER_MIN || order > EVT_ORDER_MAX) {
-		V_TRACE(DB_TRACE, "Invalid tree order %d\n", order);
+		D_ERROR("Invalid tree order %d\n", order);
 		return -DER_INVAL;
 	}
 
@@ -2284,7 +2218,7 @@ evt_destroy(daos_handle_t toh)
 
 /** Output tree node status */
 static void
-evt_node_debug(struct evt_context *tcx, uint64_t nd_off,
+evt_node_debug(struct evt_context *tcx, umem_off_t nd_off,
 	       int cur_level, int debug_level)
 {
 	struct evt_node *nd;
@@ -2320,7 +2254,7 @@ evt_node_debug(struct evt_context *tcx, uint64_t nd_off,
 	}
 
 	for (i = 0; i < nd->tn_nr; i++) {
-		uint64_t	child_off;
+		umem_off_t	child_off;
 
 		child_off = evt_node_child_at(tcx, nd, i);
 		evt_node_debug(tcx, child_off, cur_level + 1, debug_level);
@@ -2373,12 +2307,14 @@ evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *rt1,
 
 static int
 evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		uint64_t in_off, const struct evt_entry_in *ent)
+		umem_off_t in_off, const struct evt_entry_in *ent)
 {
 	struct evt_node_entry	*ne = NULL;
+	struct evt_desc		*desc = NULL;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
+	bool			 reuse = false;
 
 	D_ASSERT(!evt_node_is_full(tcx, nd));
 
@@ -2393,30 +2329,58 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (rc < 0)
 			continue;
 
-		nr = nd->tn_nr - i;
-		memmove(ne + 1, ne, nr * sizeof(*ne));
+		if (!leaf) {
+			nr = nd->tn_nr - i;
+			memmove(ne + 1, ne, nr * sizeof(*ne));
+			break;
+		}
+
+		desc = evt_off2desc(tcx, ne->ne_child);
+		rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
+						DAOS_INTENT_CHECK);
+		if (rc != ALB_UNAVAILABLE) {
+			nr = nd->tn_nr - i;
+			memmove(ne + 1, ne, nr * sizeof(*ne));
+		} else {
+			/* We do not know whether the former @desc has checksum
+			 * buffer or not, and do not know whether such buffer
+			 * is large enough or not even if it had. So we have to
+			 * free the former @desc and re-allocate it properly.
+			 */
+			rc = evt_node_entry_free(tcx, ne);
+			if (rc != 0)
+				return rc;
+
+			reuse = true;
+		}
+
 		break;
 	}
 
 	if (i == nd->tn_nr) { /* attach at the end */
-		ne = evt_node_entry_at(tcx, nd, nd->tn_nr);
+		/* Check whether the previous one is an aborted one. */
+		if (i != 0 && leaf) {
+			ne = evt_node_entry_at(tcx, nd, i - 1);
+			desc = evt_off2desc(tcx, ne->ne_child);
+			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
+							DAOS_INTENT_CHECK);
+			if (rc == ALB_UNAVAILABLE) {
+				rc = evt_node_entry_free(tcx, ne);
+				if (rc != 0)
+					return rc;
+
+				reuse = true;
+			}
+		}
+
+		if (!reuse)
+			ne = evt_node_entry_at(tcx, nd, nd->tn_nr);
 	}
 
 	ne->ne_rect = ent->ei_rect;
 	if (leaf) {
-		TMMID(struct evt_desc)	 desc_mmid;
-		struct evt_desc		*desc;
+		umem_off_t	desc_off;
 
-		/**
-		 * csum len, type, and chunksize will be a configuration stored
-		 * in the container meta data. for now trust the entity checksum
-		 * to have correct values.
-		 */
-		const daos_csum_buf_t *csum = &ent->ei_csum;
-
-		tcx->tc_root->tr_csum_len		= csum->cs_len;
-		tcx->tc_root->tr_csum_type		= csum->cs_type;
-		tcx->tc_root->tr_csum_chunk_size	= csum->cs_chunksize;
 		uint32_t csum_buf_size =
 			evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
 
@@ -2427,12 +2391,20 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		size_t allocation_size = sizeof(struct evt_desc) +
 					 csum_buf_size;
 
-		desc_mmid = umem_zalloc_typed(evt_umm(tcx), struct evt_desc,
-					     allocation_size);
-		if (TMMID_IS_NULL(desc_mmid))
+		desc_off = umem_zalloc(evt_umm(tcx), allocation_size);
+		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOMEM;
-		ne->ne_child = desc_mmid.oid.off;
-		desc = evt_tmmid2ptr(tcx, desc_mmid);
+		ne->ne_child = desc_off;
+		desc = evt_off2ptr(tcx, desc_off);
+		rc = vos_dtx_register_record(evt_umm(tcx), desc_off,
+					     DTX_RT_EVT, 0);
+		if (rc != 0)
+			/* It is unnecessary to free the PMEM that will be
+			 * dropped automatically when the PMDK transaction
+			 * is aborted.
+			 */
+			return rc;
+
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
 		evt_desc_csum_fill(tcx, desc, ent);
@@ -2441,7 +2413,9 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		ne->ne_child = in_off;
 	}
 
-	nd->tn_nr++;
+	if (!reuse)
+		nd->tn_nr++;
+
 	return 0;
 }
 
@@ -2607,8 +2581,8 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 	struct evt_trace	*trace;
 	struct evt_node		*node;
 	struct evt_node_entry	*ne;
-	uint64_t		 nm_cur;
-	uint64_t		 old_cur = 0;
+	umem_off_t		 nm_cur;
+	umem_off_t		 old_cur = UMOFF_NULL;
 	bool			 leaf;
 	int			 level	= tcx->tc_depth - 1;
 	int			 rc;
@@ -2630,7 +2604,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 
 		ne = evt_node_entry_at(tcx, node, trace->tr_at);
 
-		if (old_cur)
+		if (!UMOFF_IS_NULL(old_cur))
 			D_ASSERT(old_cur == ne->ne_child);
 		if (leaf) {
 			struct evt_rect	*rect;
@@ -2645,8 +2619,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 				desc = evt_off2desc(tcx, ne->ne_child);
 				rc = evt_desc_free(tcx, desc, width);
 			} else {
-				rc = umem_free(evt_umm(tcx),
-					       evt_off2mmid(tcx, ne->ne_child));
+				rc = umem_free(evt_umm(tcx), ne->ne_child);
 			}
 			if (rc != 0)
 				return rc;
@@ -2660,7 +2633,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 			}
 
 			old_cur = nm_cur;
-			rc = umem_free(evt_umm(tcx), evt_off2mmid(tcx, nm_cur));
+			rc = umem_free(evt_umm(tcx), nm_cur);
 			if (rc != 0)
 				return rc;
 			level--;
@@ -2675,7 +2648,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 		}
 
 		/* If it's not a leaf, it will already have been deleted */
-		ne->ne_child = 0;
+		ne->ne_child = UMOFF_NULL;
 
 		/* Ok, remove the rect at the current trace */
 		count = node->tn_nr - trace->tr_at - 1;
@@ -2873,6 +2846,8 @@ int evt_overhead_get(int alloc_overhead, int tree_order,
 	}
 
 	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
+	ovhd->to_single_size = alloc_overhead + sizeof(struct evt_desc) +
+		sizeof(struct evt_node_entry);
 	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
 		(tree_order * sizeof(struct evt_node_entry));
 	ovhd->to_order = tree_order;

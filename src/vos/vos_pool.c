@@ -250,6 +250,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		goto close;
 	}
 
+	pool_df = vos_pool_pop2df(ph);
+
 	/* If the file is fallocated seperately we need the fallocated size
 	 * for setting in the root object.
 	 */
@@ -271,9 +273,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (rc != 0)
 		goto close;
 
-	pool_df = vos_pool_pop2df(ph);
-
-	rc = pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
+	rc = umem_tx_add_ptr(&umem, pool_df, sizeof(*pool_df));
 	if (rc != 0)
 		goto end;
 	memset(pool_df, 0, sizeof(*pool_df));
@@ -581,8 +581,8 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	struct vos_pool		*pool;
 	struct vos_pool_df	*pool_df;
 	daos_size_t		 scm_used;
-	struct vea_attr		 attr;
-	struct vea_stat		 stat;
+	struct vea_attr		*attr;
+	struct vea_stat		*stat;
 	int			 rc;
 
 	pool = vos_hdl2pool(poh);
@@ -592,6 +592,8 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	pool_df = vos_pool_ptr2df(pool);
 
 	D_ASSERT(pinfo != NULL);
+	attr = &pinfo->pif_vea_attr;
+	stat = &pinfo->pif_vea_stat;
 	pinfo->pif_scm_sz = pool_df->pd_scm_sz;
 	pinfo->pif_nvme_sz = pool_df->pd_nvme_sz;
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
@@ -620,20 +622,21 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	/* NVMe isn't configured for this VOS */
 	if (pool->vp_vea_info == NULL) {
 		pinfo->pif_nvme_free = 0;
+		memset(attr, 0, sizeof(*attr));
 		return 0;
 	}
 
 	/* query NVMe free space */
-	rc = vea_query(pool->vp_vea_info, &attr, &stat);
+	rc = vea_query(pool->vp_vea_info, attr, stat);
 	if (rc) {
 		D_ERROR("Failed to get NVMe usage. rc:%d\n", rc);
 		return rc;
 	}
-	D_ASSERT(attr.va_blk_sz != 0);
-	pinfo->pif_nvme_free = attr.va_blk_sz * stat.vs_free_persistent;
+	D_ASSERT(attr->va_blk_sz != 0);
+	pinfo->pif_nvme_free = attr->va_blk_sz * stat->vs_free_persistent;
 	D_ASSERTF(pinfo->pif_nvme_free <= pinfo->pif_nvme_sz,
 		  "nvme_free:"DF_U64", nvme_sz:"DF_U64", blk_sz:%u\n",
-		  pinfo->pif_nvme_free, pinfo->pif_nvme_sz, attr.va_blk_sz);
+		  pinfo->pif_nvme_free, pinfo->pif_nvme_sz, attr->va_blk_sz);
 
 	return 0;
 }

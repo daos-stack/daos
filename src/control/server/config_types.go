@@ -1,3 +1,4 @@
+//
 // (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,17 +26,12 @@ package main
 import (
 	"fmt"
 	"math"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
-
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -45,16 +41,13 @@ const (
 	cLogDebug ControlLogLevel = "DEBUG"
 	cLogError ControlLogLevel = "ERROR"
 
-	bdNvme   BdClass = "nvme"
-	bdMalloc BdClass = "malloc"
-	bdKdev   BdClass = "kdev"
-	bdFile   BdClass = "file"
+	scmDCPM ScmClass = "dcpm"
+	scmRAM  ScmClass = "ram"
 
-	// todo: implement Provider discriminated union
-	// todo: implement LogMask discriminated union
+	// TODO: implement Provider discriminated union
+	// TODO: implement LogMask discriminated union
 )
 
-// rank represents a rank of an I/O server or a nil rank.
 type rank uint32
 
 func (r rank) String() string {
@@ -87,7 +80,7 @@ func (r *rank) UnmarshalFlag(value string) error {
 
 func checkRank(r rank) error {
 	if r == nilRank {
-		return fmt.Errorf("rank %d out of range [0, %d]", r, maxRank)
+		return errors.Errorf("rank %d out of range [0, %d]", r, maxRank)
 	}
 	return nil
 }
@@ -106,122 +99,120 @@ func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error
 	case cLogDebug, cLogError:
 		*c = logLevel
 	default:
-		return fmt.Errorf(
+		return errors.Errorf(
 			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
 			logLevel)
 	}
 	return nil
 }
 
-// BdClass enum specifing block device type for storage
-type BdClass string
+// ScmClass enum specifing device type for Storage Class Memory
+type ScmClass string
 
-// UnmarshalYAML implements yaml.Unmarshaler on BdClass struct
-func (b *BdClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
+// UnmarshalYAML implements yaml.Unmarshaler on ScmClass type
+func (s *ScmClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var class string
 	if err := unmarshal(&class); err != nil {
 		return err
 	}
-	bdevClass := BdClass(class)
+
+	scmClass := ScmClass(class)
+	switch scmClass {
+	case scmDCPM, scmRAM:
+		*s = scmClass
+	default:
+		return errors.Errorf(
+			"scm_class value %v not supported in config (dcpm/ram)",
+			scmClass)
+	}
+	return nil
+}
+
+// BdevClass enum specifing block device type for storage
+type BdevClass string
+
+// UnmarshalYAML implements yaml.Unmarshaler on BdevClass type
+func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var class string
+	if err := unmarshal(&class); err != nil {
+		return err
+	}
+	bdevClass := BdevClass(class)
 	switch bdevClass {
-	case bdNvme, bdMalloc, bdKdev, bdFile:
+	case bdNVMe, bdMalloc, bdKdev, bdFile:
 		*b = bdevClass
 	default:
-		return fmt.Errorf(
+		return errors.Errorf(
 			"bdev_class value %v not supported in config (nvme/malloc/kdev/file)",
 			bdevClass)
 	}
 	return nil
 }
 
-// todo: implement UnMarshal for LogMask discriminated union
+// TODO: implement UnMarshal for LogMask discriminated union
 
-// server defines configuration options for DAOS IO Server instances
+// server defines configuration options for DAOS IO Server instances.
+// See utils/config/daos_server.yml for parameter descriptions.
 type server struct {
-	Rank            *rank    `yaml:"rank"`
-	Cpus            []string `yaml:"cpus"`
-	FabricIface     string   `yaml:"fabric_iface"`
-	FabricIfacePort int      `yaml:"fabric_iface_port"`
-	LogMask         string   `yaml:"log_mask"`
-	LogFile         string   `yaml:"log_file"`
-	EnvVars         []string `yaml:"env_vars"`
-	ScmMount        string   `yaml:"scm_mount"`
-	BdevClass       BdClass  `yaml:"bdev_class"`
-	BdevList        []string `yaml:"bdev_list"`
-	BdevNumber      int      `yaml:"bdev_number"`
-	BdevSize        int      `yaml:"bdev_size"`
+	Rank            *rank     `yaml:"rank"`
+	Targets         int       `yaml:"targets"`
+	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
+	FirstCore       int       `yaml:"first_core"`
+	FabricIface     string    `yaml:"fabric_iface"`
+	FabricIfacePort int       `yaml:"fabric_iface_port"`
+	LogMask         string    `yaml:"log_mask"`
+	LogFile         string    `yaml:"log_file"`
+	EnvVars         []string  `yaml:"env_vars"`
+	ScmMount        string    `yaml:"scm_mount"`
+	ScmClass        ScmClass  `yaml:"scm_class"`
+	ScmList         []string  `yaml:"scm_list"`
+	ScmSize         int       `yaml:"scm_size"`
+	BdevClass       BdevClass `yaml:"bdev_class"`
+	BdevList        []string  `yaml:"bdev_list"`
+	BdevNumber      int       `yaml:"bdev_number"`
+	BdevSize        int       `yaml:"bdev_size"`
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
-	CliOpts  []string // tuples (short option, value) e.g. ["-p", "10000"...]
+	CliOpts   []string      // tuples (short option, value) e.g. ["-p", "10000"...]
 	Hostname string   // used when generating templates
+	formatted chan struct{} // closed when server is formatted
 }
 
-// newDefaultServer creates a new instance of server struct
-// populated with defaults.
+// newDefaultServer creates a new instance of server struct with default values.
 func newDefaultServer() server {
 	// TODO: fix by only ever creating server in one place
 	host, _ := os.Hostname()
 
 	return server{
-		BdevClass: bdNvme,
+		ScmClass:    scmDCPM,
+		BdevClass:   bdNVMe,
 		Hostname:  host,
+		NrXsHelpers: 2,
 	}
 }
 
-// External interface provides methods to support various os operations.
-type External interface {
-	getenv(string) string
-	runCommand(string) error
-	writeToFile(string, string) error
-	createEmpty(string, int64) error
-}
-
-type ext struct{}
-
-// runCommand executes command in subshell (to allow redirection) and returns
-// error result.
-func (e *ext) runCommand(cmd string) error {
-	return exec.Command("sh", "-c", cmd).Run()
-}
-
-// getEnv wraps around os.GetEnv and implements External.getEnv().
-func (e *ext) getenv(key string) string {
-	return os.Getenv(key)
-}
-
-// writeToFile wraps around common.WriteString and writes input
-// string to given file pathk.
-func (e *ext) writeToFile(in string, outPath string) error {
-	return common.WriteString(outPath, in)
-}
-
-// createEmpty creates a file (if it doesn't exist) of specified size in bytes
-// at the given path.
-// If Fallocate not supported by kernel or backing fs, fall back to Truncate.
-func (e *ext) createEmpty(path string, size int64) (err error) {
-	if !filepath.IsAbs(path) {
-		return fmt.Errorf("please specify absolute path (%s)", path)
+// UnmarshalYAML implements yaml.Unmarshaler on server struct enabling defaults
+// to be applied to each nested server.
+//
+// Type alias used to prevent recursive calls to UnmarshalYAML.
+func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type serverAlias server
+	srv := &serverAlias{
+		ScmClass:    scmDCPM,
+		BdevClass:   bdNVMe,
+		NrXsHelpers: 2,
 	}
-	if _, err = os.Stat(path); !os.IsNotExist(err) {
-		return
+
+	if err := unmarshal(&srv); err != nil {
+		return err
 	}
-	file, err := common.TruncFile(path)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	err = syscall.Fallocate(int(file.Fd()), 0, 0, size)
-	if err != nil {
-		e, ok := err.(syscall.Errno)
-		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
-			log.Debugf(
-				"Warning: Fallocate not supported, attempting Truncate: ", e)
-			err = file.Truncate(size)
-		}
-	}
-	return
+
+	*s = server(*srv)
+	return nil
 }
 
+// configuration describes options for DAOS control plane.
+// See utils/config/daos_server.yml for parameter descriptions.
 type configuration struct {
 	SystemName     string          `yaml:"name"`
 	Servers        []server        `yaml:"servers"`
@@ -242,12 +233,14 @@ type configuration struct {
 	NrHugepages    int             `yaml:"nr_hugepages"`
 	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
 	ControlLogFile string          `yaml:"control_log_file"`
+	UserName       string          `yaml:"user_name"`
+	GroupName      string          `yaml:"group_name"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
 	SystemMap string
 	Path      string
-	ext       External
+	ext       External // interface to os utilities
 	// Shared memory segment ID to enable SPDK multiprocess mode,
 	// SPDK application processes can then access the same shared
 	// memory and therefore NVMe controllers.
@@ -257,7 +250,7 @@ type configuration struct {
 
 // todo: implement UnMarshal for Provider discriminated union
 
-// parse decodes YAML representation of configure struct and checks for Group
+// parse decodes YAML representation of configuration
 func (c *configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }

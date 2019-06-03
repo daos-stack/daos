@@ -1,0 +1,42 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+ test_machines:
+  - boro-A
+  - boro-B
+  - boro-C
+  - boro-D
+  - boro-E
+  - boro-F
+timeout: 1200
+server_config:
+ name: daos_server
+testparams:
+ ranks: !mux
+  rank1:
+   rank: 5
+  rank4:
+   rank: 4
+  rank3:
+   rank: 3
+ createmode:
+  mode: 511
+ createsize:
+  size: 1073741824
+ numobjects: !mux
+  zero:
+   objcount: 0
+  one:
+   objcount: 1
+  fifty:
+   objcount: 20
+ numrecords: !mux
+  one:
+   reccount: 1
+  fifty:
+   reccount: 10
+ datasize: !mux
+  small:
+   size: 32
+  large:
+   size: 250

@@ -28,6 +28,40 @@
 
 #include <daos/common.h>
 #include <daos_api.h>
+#include <daos_security.h>
+#include <cart/api.h>
+
+static int
+crt_proc_prop_daos_acl(crt_proc_t proc, struct daos_prop_entry *entry)
+{
+	int		rc;
+	struct daos_acl	*acl;
+	d_iov_t		iov;
+	crt_proc_op_t	proc_op;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return rc;
+
+	if (entry->dpe_val_ptr == NULL) {
+		memset(&iov, 0, sizeof(iov));
+	} else {
+		acl = (struct daos_acl *)entry->dpe_val_ptr;
+		d_iov_set(&iov, entry->dpe_val_ptr,
+			daos_acl_get_size(acl));
+	}
+
+	rc = crt_proc_d_iov_t(proc, &iov);
+	if (rc != 0)
+		return rc;
+
+	if (proc_op == CRT_PROC_DECODE)
+		entry->dpe_val_ptr = iov.iov_buf;
+	else if (proc_op == CRT_PROC_FREE)
+		entry->dpe_val_ptr = NULL;
+
+	return rc;
+}
 
 static int
 crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
@@ -45,8 +79,13 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 		if (rc)
 			break;
 		if (entry->dpe_type == DAOS_PROP_PO_LABEL ||
-		    entry->dpe_type == DAOS_PROP_CO_LABEL)
+		    entry->dpe_type == DAOS_PROP_CO_LABEL ||
+		    entry->dpe_type == DAOS_PROP_PO_OWNER ||
+		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP)
 			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
+		else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
+			 entry->dpe_type == DAOS_PROP_CO_ACL)
+			rc = crt_proc_prop_daos_acl(proc, entry);
 		else
 			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
 		if (rc)

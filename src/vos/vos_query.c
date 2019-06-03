@@ -54,9 +54,9 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	daos_handle_t		 ih;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov;
-	daos_iov_t		 kbund_kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 kbund_kiov;
+	d_iov_t		 riov;
 	daos_csum_buf_t		 csum;
 	daos_epoch_range_t	 epr;
 	int			 rc = 0;
@@ -90,7 +90,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	rbund.rb_csum = &csum;
 
 	do {
-		daos_iov_set(rbund.rb_iov, NULL, 0);
+		d_iov_set(rbund.rb_iov, NULL, 0);
 		daos_csum_set(rbund.rb_csum, NULL, 0);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
@@ -108,9 +108,11 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 			break;
 
 		if (query->qt_flags & DAOS_GET_MAX)
-			rc = dbtree_iter_prev(ih);
+			rc = dbtree_iter_prev_with_intent(ih,
+						DAOS_INTENT_DEFAULT);
 		else
-			rc = dbtree_iter_next(ih);
+			rc = dbtree_iter_next_with_intent(ih,
+						DAOS_INTENT_DEFAULT);
 	} while (rc == 0);
 out:
 	fini_rc = dbtree_iter_finish(ih);
@@ -136,8 +138,8 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 	recx->rx_idx = 0;
 	recx->rx_nr = 0;
 
-	rc = evt_open_inplace(query->qt_recx_root, query->qt_uma,
-			      query->qt_coh, query->qt_vea_info, &toh);
+	rc = evt_open(query->qt_recx_root, query->qt_uma, query->qt_coh,
+		      query->qt_vea_info, &toh);
 	if (rc != 0)
 		return rc;
 
@@ -190,8 +192,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	daos_csum_buf_t		 csum = {0};
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	enum vos_tree_class	 tclass;
 	int			 rc = 0;
 
@@ -208,8 +210,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	if (to_open->tr_class == 0)
 		return -DER_NONEXIST;
 
-	rc = dbtree_open_inplace(to_open, query->qt_uma, toh);
-
+	rc = dbtree_open_inplace_ex(to_open, query->qt_uma,
+				    query->qt_coh, NULL, toh);
 	if (rc != 0)
 		return rc;
 
@@ -225,7 +227,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	kbund.kb_epoch	= query->qt_epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_mmid	= UMMID_NULL;
+	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_csum = &csum;
 	rbund.rb_tclass = tclass;
 
@@ -237,8 +239,10 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 
 	if (tree_type == DAOS_GET_DKEY)
 		query->qt_akey_root = &rbund.rb_krec->kr_btr;
+	else if ((rbund.rb_krec->kr_bmap & KREC_BF_EVT) == 0)
+		return -DER_NONEXIST;
 	else
-		query->qt_recx_root = &rbund.rb_krec->kr_evt[0];
+		query->qt_recx_root = &rbund.rb_krec->kr_evt;
 
 	return 0;
 }

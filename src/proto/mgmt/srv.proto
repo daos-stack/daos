@@ -43,3 +43,23 @@ enum DaosRequestStatus {
 message DaosResponse {
 	DaosRequestStatus status = 1;
 }
+
+message SetRankReq {
+	uint32 rank = 1;
+}
+
+// SetRankResp is identical to DaosResponse.
+
+message CreateMsReq {
+	bool bootstrap = 1;
+	// Server UUID of this MS replica.
+	string uuid = 2;
+	// Server management address of this MS replica.
+	string addr = 3;
+}
+
+// CreateMsResp is identical to DaosResponse.
+
+// StartMsReq is nil.
+
+// StartMsResp is identical to DaosResponse.

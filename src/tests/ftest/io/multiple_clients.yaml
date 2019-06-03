@@ -1,0 +1,52 @@
+hosts:
+   test_machines:
+        test_servers:
+            - boro-A
+            - boro-B
+        test_clients:
+            two_clientnodes:
+                clients:
+                    - boro-C
+                    - boro-D
+server_config:
+    name: daos_server
+pool:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 50000000000
+    createsvc:
+        svcn: 1
+ior:
+    clientslots: !mux
+        slots_8:
+            slots: 8
+        slots_16:
+            slots: 16
+    iteration:
+        iter: 3
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize: !mux
+        recordsize_8b:
+            r: '8b'
+        recordsize_1k:
+            r: '1k'
+        recordsize_4k:
+            r: '4k'
+    stripesize: !mux
+        stripesize_1m:
+            s: '1m'
+        stripesize_8m:
+            s: '8m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"

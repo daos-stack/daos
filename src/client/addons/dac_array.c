@@ -62,8 +62,8 @@ struct md_params {
 	uint64_t		dkey_val;
 	char			*akey_str;
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
-	daos_iov_t		sg_iov;
+	d_sg_list_t		sgl;
+	d_iov_t		sg_iov;
 	uint64_t		md_vals[3];
 };
 
@@ -72,7 +72,7 @@ struct io_params {
 	uint64_t		dkey_val;
 	char			akey_str;
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	bool			user_sgl_used;
 	daos_size_t		cell_size;
 	tse_task_t		*task;
@@ -136,7 +136,7 @@ array_hdl2ptr(daos_handle_t oh)
 static void
 array_hdl_link(struct dac_array *array)
 {
-	daos_hhash_link_insert(&array->hlink, D_HTYPE_ARRAY);
+	daos_hhash_link_insert(&array->hlink, DAOS_HTYPE_ARRAY);
 }
 
 static void
@@ -287,7 +287,7 @@ swap_array_glob(struct dac_array_glob *array_glob)
 }
 
 static int
-dac_array_l2g(daos_handle_t oh, daos_iov_t *glob)
+dac_array_l2g(daos_handle_t oh, d_iov_t *glob)
 {
 	struct dac_array	*array;
 	struct dac_array_glob	*array_glob;
@@ -342,7 +342,7 @@ out:
 }
 
 int
-dac_array_local2global(daos_handle_t oh, daos_iov_t *glob)
+dac_array_local2global(daos_handle_t oh, d_iov_t *glob)
 {
 	int rc = 0;
 
@@ -387,12 +387,6 @@ dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
 			DP_UUID(array_glob->cont_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (uuid_compare(coh_uuid, array_glob->coh_uuid) != 0) {
-		D_ERROR("Container handle mismatch, in coh: "DF_UUID", "
-			"in array_glob:" DF_UUID"\n", DP_UUID(coh_uuid),
-			DP_UUID(array_glob->coh_uuid));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	/** create an array open handle */
 	array = array_alloc();
@@ -424,19 +418,19 @@ out:
 }
 
 int
-dac_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh)
+dac_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh)
 {
 	struct dac_array_glob	*array_glob;
 	int			 rc = 0;
 
 	if (oh == NULL) {
-		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
+		D_ERROR("Invalid parameter, NULL coh.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
 	    glob.iov_len != dac_array_glob_buf_size()) {
-		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+		D_ERROR("Invalid parameter of glob, iov_buf %p, "
 			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
@@ -471,17 +465,17 @@ set_md_params(struct md_params *params)
 {
 	/** write metadata to DKEY 0 */
 	params->dkey_val = 0;
-	daos_iov_set(&params->dkey, &params->dkey_val, sizeof(uint64_t));
+	d_iov_set(&params->dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/** set SGL */
-	daos_iov_set(&params->sg_iov, params->md_vals, sizeof(params->md_vals));
+	d_iov_set(&params->sg_iov, params->md_vals, sizeof(params->md_vals));
 	params->sgl.sg_nr	= 1;
 	params->sgl.sg_nr_out	= 0;
 	params->sgl.sg_iovs	= &params->sg_iov;
 
 	/** set IOD */
 	params->akey_str = ARRAY_MD_KEY;
-	daos_iov_set(&params->iod.iod_name, (void *)params->akey_str,
+	d_iov_set(&params->iod.iod_name, (void *)params->akey_str,
 		     strlen(params->akey_str));
 	daos_csum_set(&params->iod.iod_kcsum, NULL, 0);
 	params->iod.iod_nr	= 1;
@@ -900,7 +894,7 @@ err_ptask:
 }
 
 static bool
-io_extent_same(daos_array_iod_t *iod, daos_sg_list_t *sgl,
+io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl,
 	       daos_size_t cell_size)
 {
 	daos_size_t rgs_len;
@@ -963,9 +957,9 @@ compute_dkey(struct dac_array *array, daos_off_t array_idx,
 }
 
 static int
-create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
+create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 	   daos_size_t num_records, daos_off_t *sgl_off, daos_size_t *sgl_i,
-	   daos_sg_list_t *sgl)
+	   d_sg_list_t *sgl)
 {
 	daos_size_t	k;
 	daos_size_t	rem_records;
@@ -986,8 +980,8 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 		D_ASSERT(user_sgl->sg_nr > cur_i);
 
 		sgl->sg_nr++;
-		sgl->sg_iovs = (daos_iov_t *)realloc
-			(sgl->sg_iovs, sizeof(daos_iov_t) * sgl->sg_nr);
+		sgl->sg_iovs = (d_iov_t *)realloc
+			(sgl->sg_iovs, sizeof(d_iov_t) * sgl->sg_nr);
 		if (sgl->sg_iovs == NULL) {
 			D_ERROR("Failed memory allocation\n");
 			return -DER_NOMEM;
@@ -1023,7 +1017,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 
 static int
 dac_array_io(daos_handle_t array_oh, daos_handle_t th,
-	     daos_array_iod_t *rg_iod, daos_sg_list_t *user_sgl,
+	     daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
 	     daos_opc_t op_type, tse_task_t *task)
 {
 	struct dac_array *array = NULL;
@@ -1036,7 +1030,7 @@ dac_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	daos_csum_buf_t	null_csum;
-	struct io_params *head, *current;
+	struct io_params *head, *current = NULL;
 	daos_size_t	num_ios;
 	int		rc;
 
@@ -1079,7 +1073,7 @@ dac_array_io(daos_handle_t array_oh, daos_handle_t th,
 	 */
 	while (u < rg_iod->arr_nr) {
 		daos_iod_t	*iod;
-		daos_sg_list_t	*sgl;
+		d_sg_list_t	*sgl;
 		daos_key_t	*dkey;
 		daos_size_t	dkey_records;
 		tse_task_t	*io_task = NULL;
@@ -1113,6 +1107,7 @@ dac_array_io(daos_handle_t array_oh, daos_handle_t th,
 			tse_task_register_comp_cb(task, free_io_params_cb,
 						  &head, sizeof(head));
 		} else {
+			D_ASSERT(current);
 			current->next = params;
 			current = params;
 		}
@@ -1136,10 +1131,10 @@ dac_array_io(daos_handle_t array_oh, daos_handle_t th,
 			params->dkey_val);
 		D_DEBUG(DB_IO, "idx = %d\t num_records = %zu\t record_i = %d\n",
 			(int)array_idx, num_records, (int)record_i);
-		daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
+		d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 		/* set descriptor for KV object */
-		daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+		d_iov_set(&iod->iod_name, &params->akey_str, 1);
 		iod->iod_kcsum = null_csum;
 		iod->iod_nr = 0;
 		iod->iod_csums = NULL;
@@ -1431,9 +1426,9 @@ dac_array_get_size(tse_task_t *task)
 	*args->size = 0;
 
 	kqp->akey_str	= '0';
-	daos_iov_set(&kqp->akey, &kqp->akey_str, 1);
+	d_iov_set(&kqp->akey, &kqp->akey_str, 1);
 	kqp->dkey_val	= 0;
-	daos_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
+	d_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
 	kqp->ptask	= task;
 	kqp->size	= args->size;
 	kqp->array	= array;
@@ -1490,8 +1485,8 @@ struct set_size_props {
 	char		buf[ENUM_DESC_BUF];
 	daos_key_desc_t kds[ENUM_DESC_NR];
 	char		*val;
-	daos_iov_t	iov;
-	daos_sg_list_t  sgl;
+	d_iov_t	iov;
+	d_sg_list_t  sgl;
 	uint32_t	nr;
 	daos_anchor_t	anchor;
 	bool		update_dkey;
@@ -1536,7 +1531,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	params->dkey_val = dkey_val;
 	dkey = &params->dkey;
-	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
+	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/** Punch this entire dkey */
 	D_DEBUG(DB_IO, "Punching Key %zu\n", dkey_val);
@@ -1566,7 +1561,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 		akey = &params->iod.iod_name;
 		params->akey_str = '0';
-		daos_iov_set(akey, &params->akey_str, 1);
+		d_iov_set(akey, &params->akey_str, 1);
 		p_args->akey_nr = 1;
 		p_args->akeys = akey;
 	}
@@ -1599,7 +1594,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 {
 	daos_obj_update_t	*io_arg;
 	daos_iod_t		*iod;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	daos_csum_buf_t		null_csum;
 	struct io_params	*params = NULL;
@@ -1623,10 +1618,10 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	params->user_sgl_used = false;
 	params->dkey_val = dkey_val;
 	dkey = &params->dkey;
-	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
+	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/* set descriptor for KV object */
-	daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_str, 1);
 	iod->iod_kcsum = null_csum;
 	iod->iod_nr = 1;
 	iod->iod_csums = NULL;
@@ -1680,7 +1675,7 @@ check_record_cb(tse_task_t *task, void *data)
 	daos_obj_update_t	*io_arg;
 	tse_task_t		*io_task = NULL;
 	daos_iod_t		*iod;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	char			*val;
 	int			rc = task->dt_result;
@@ -1701,7 +1696,7 @@ check_record_cb(tse_task_t *task, void *data)
 	D_ALLOC(val, params->cell_size);
 	sgl->sg_nr = 1;
 	D_ALLOC_PTR(sgl->sg_iovs);
-	daos_iov_set(&sgl->sg_iovs[0], val, params->cell_size);
+	d_iov_set(&sgl->sg_iovs[0], val, params->cell_size);
 
 	D_DEBUG(DB_IO, "update record (%zu, %zu), iod_size %zu.\n",
 		iod->iod_recxs[0].rx_idx, iod->iod_recxs[0].rx_nr,
@@ -1759,7 +1754,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 {
 	daos_obj_fetch_t	*io_arg;
 	daos_iod_t		*iod;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	daos_csum_buf_t		null_csum;
 	struct io_params	*params = NULL;
@@ -1780,10 +1775,10 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	params->dkey_val = dkey_val;
 	params->task = task;
 	dkey = &params->dkey;
-	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
+	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/* set descriptor for KV object */
-	daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_str, 1);
 	daos_csum_set(&null_csum, NULL, 0);
 	iod->iod_kcsum = null_csum;
 	iod->iod_nr = 1;
@@ -1838,7 +1833,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 {
 	daos_obj_update_t	*io_arg;
 	daos_iod_t		*iod;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	daos_csum_buf_t		null_csum;
 	struct io_params	*params = NULL;
@@ -1861,16 +1856,16 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	params->next = NULL;
 	params->user_sgl_used = false;
 	params->dkey_val = props->dkey_val;
-	daos_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
+	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/** set memory location */
 	D_ALLOC(props->val, props->cell_size);
 	sgl->sg_nr = 1;
 	D_ALLOC_PTR(sgl->sg_iovs);
-	daos_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
+	d_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
 
 	/* set descriptor for KV object */
-	daos_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_str, 1);
 	iod->iod_kcsum = null_csum;
 	iod->iod_nr = 1;
 	iod->iod_csums = NULL;
@@ -1978,7 +1973,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
 		args->sgl->sg_nr = 1;
-		daos_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
+		d_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
 		rc = tse_task_reinit(task);
 		if (rc) {
@@ -2068,7 +2063,7 @@ dac_array_set_size(tse_task_t *task)
 	memset(&set_size_props->anchor, 0, sizeof(set_size_props->anchor));
 	set_size_props->sgl.sg_nr = 1;
 	set_size_props->sgl.sg_iovs = &set_size_props->iov;
-	daos_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf,
+	d_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf,
 		     ENUM_DESC_BUF);
 
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),

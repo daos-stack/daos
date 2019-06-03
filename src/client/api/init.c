@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
+#include <daos/agent.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
@@ -66,6 +67,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_close, sizeof(daos_cont_close_t)},
 	{dc_cont_destroy, sizeof(daos_cont_destroy_t)},
 	{dc_cont_query, sizeof(daos_cont_query_t)},
+	{dc_cont_aggregate, sizeof(daos_cont_aggregate_t)},
 	{dc_cont_rollback, sizeof(daos_cont_rollback_t)},
 	{dc_cont_subscribe, sizeof(daos_cont_subscribe_t)},
 	{dc_cont_list_attr, sizeof(daos_cont_list_attr_t)},
@@ -105,6 +107,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dac_kv_get, sizeof(daos_kv_get_t)},
 	{dac_kv_put, sizeof(daos_kv_put_t)},
 	{dac_kv_remove, sizeof(daos_kv_remove_t)},
+	{dac_kv_list, sizeof(daos_kv_list_t)},
 	{dac_obj_fetch_multi, sizeof(daos_obj_multi_io_t)},
 	{dac_obj_update_multi, sizeof(daos_obj_multi_io_t)},
 };
@@ -164,9 +167,15 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+	/** set up agent */
+	rc = dc_agent_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
+out_obj:
 	dc_obj_fini();
 out_co:
 	dc_cont_fini();
@@ -207,6 +216,7 @@ daos_fini(void)
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
+	dc_agent_fini();
 
 	daos_hhash_fini();
 	daos_debug_fini();

@@ -113,11 +113,46 @@ int
 daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	       daos_event_t *ev);
 
+/**
+ * List/enumerate all keys in an object.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[in,out]
+ *		nr	[in]: number of key descriptors in \a kds. [out]: number
+ *			of returned key descriptors.
+ * \param[in,out]
+ *		kds	[in]: preallocated array of \nr key descriptors. [out]:
+ *			size of each individual key.
+ * \param[in]	sgl	Scatter/gather list to store the dkey list.
+ *			All keys are written contiguously, with actual
+ *			boundaries that can be calculated using \a kds.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
+	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
+	     daos_event_t *ev);
+
 typedef struct {
 	daos_key_t	*ioa_dkey;
 	unsigned int	ioa_nr;
 	daos_iod_t	*ioa_iods;
-	daos_sg_list_t	*ioa_sgls;
+	d_sg_list_t	*ioa_sgls;
 	daos_iom_t	*ioa_maps;
 } daos_dkey_io_t;
 
@@ -286,7 +321,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *					glob->iov_buf_len.
  */
 int
-daos_array_local2global(daos_handle_t oh, daos_iov_t *glob);
+daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
 
 /**
  * Create a local array open handle for global representation data. This handle
@@ -304,7 +339,7 @@ daos_array_local2global(daos_handle_t oh, daos_iov_t *glob);
  *			-DER_NO_HDL	Container handle is nonexistent
  */
 int
-daos_array_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *oh);
+daos_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh);
 
 /**
  * Close an opened array object.
@@ -348,7 +383,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  */
 int
 daos_array_read(daos_handle_t oh, daos_handle_t th,
-		daos_array_iod_t *iod, daos_sg_list_t *sgl,
+		daos_array_iod_t *iod, d_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev);
 
 /**
@@ -377,7 +412,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
  */
 int
 daos_array_write(daos_handle_t oh, daos_handle_t th,
-		 daos_array_iod_t *iod, daos_sg_list_t *sgl,
+		 daos_array_iod_t *iod, d_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev);
 
 /**

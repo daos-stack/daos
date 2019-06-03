@@ -35,6 +35,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/placement.h>
+#include <daos_srv/vos_types.h>
 
 /*
  * Pool object
@@ -48,11 +49,11 @@ struct ds_pool {
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
+	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns		*sp_iv_ns;
 };
 
 struct ds_pool_create_arg {
-	struct pool_map	       *pca_map;
 	uint32_t		pca_map_version;
 	bool			pca_need_group;
 };
@@ -89,6 +90,7 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
 struct ds_pool_child {
 	d_list_t	spc_list;
 	daos_handle_t	spc_hdl;
+	struct ds_pool	*spc_pool;
 	uuid_t		spc_uuid;
 	uint32_t	spc_map_version;
 	int		spc_ref;
@@ -109,6 +111,7 @@ struct pool_prop_ugm {
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
+struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
 void ds_pool_child_put(struct ds_pool_child *child);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
@@ -132,8 +135,7 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
-		       unsigned int gid, unsigned int mode, int ntargets,
+int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
 		       const int *domains, daos_prop_t *prop,
@@ -154,9 +156,10 @@ int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
  */
 int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
-typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid,
-			     daos_epoch_t eph, void *arg);
-int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
+typedef int (*ds_iter_cb_t)(uuid_t cont_uuid, vos_iter_entry_t *ent,
+			     void *arg);
+int ds_pool_iter(uuid_t pool_uuid, ds_iter_cb_t callback, void *arg,
+		 uint32_t version, uint32_t intent);
 
 struct cont_svc;
 struct rsvc_hint;
@@ -171,4 +174,8 @@ int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 int ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 			 uint32_t version, struct pl_obj_layout **plo);
 
+int
+ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
+int
+ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 #endif /* __DAOS_SRV_POOL_H__ */

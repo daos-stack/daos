@@ -24,23 +24,11 @@
 package client
 
 import (
-	"fmt"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
-
-var errConnect = fmt.Errorf("no client connection was found, please connect")
-
-// ScmModules is an alias for protobuf ScmModule message slice representing
-// a number of SCM modules installed on a storage node.
-type ScmModules []*pb.ScmModule
-
-// NvmeControllers is an alias for protobuf NvmeController message slice
-// representing a number of NVMe SSD controllers installed on a storage node.
-type NvmeControllers []*pb.NvmeController
 
 // Control interface accesses gRPC client functionality.
 type Control interface {
@@ -48,9 +36,14 @@ type Control interface {
 	disconnect() error
 	connected() (connectivity.State, bool)
 	getAddress() string
+	scanStorage() (*pb.ScanStorageResp, error)
+	formatStorage(context.Context) (pb.MgmtControl_FormatStorageClient, error)
+	updateStorage(
+		context.Context, *pb.UpdateStorageParams) (
+		pb.MgmtControl_UpdateStorageClient, error)
+	// TODO: implement Burnin client features
+	//burninStorage(*pb.BurninStorageParams) (*pb.BurninStorageResp, error)
 	listAllFeatures() (FeatureMap, error)
-	listScmModules() (ScmModules, error)
-	listNvmeCtrlrs() (NvmeControllers, error)
 	killRank(uuid string, rank uint32) error
 }
 
@@ -60,14 +53,6 @@ type Control interface {
 type control struct {
 	client pb.MgmtControlClient
 	gconn  *grpc.ClientConn
-}
-
-func newControl(address string) (Control, error) {
-	c := &control{}
-	if err := c.connect(address); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 // connect provides an easy interface to connect to Mgmt DAOS server.

@@ -28,13 +28,20 @@ package main
 import "C"
 
 import (
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 const (
 	mgmtModuleID = C.DRPC_MODULE_MGMT
 	killRank     = C.DRPC_METHOD_MGMT_KILL_RANK
+	setRank      = C.DRPC_METHOD_MGMT_SET_RANK
+	createMS     = C.DRPC_METHOD_MGMT_CREATE_MS
+	startMS      = C.DRPC_METHOD_MGMT_START_MS
+	join         = C.DRPC_METHOD_MGMT_JOIN
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
@@ -68,8 +75,7 @@ type srvModule struct {
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case notifyReady:
-		mod.handleNotifyReady()
-		return nil, nil
+		return nil, mod.handleNotifyReady(req)
 	default:
 		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
@@ -81,6 +87,13 @@ func (mod *srvModule) ID() int32 {
 	return srvModuleID
 }
 
-func (mod *srvModule) handleNotifyReady() {
-	mod.iosrv.ready <- struct{}{}
+func (mod *srvModule) handleNotifyReady(reqb []byte) error {
+	req := &srvpb.NotifyReadyReq{}
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return errors.Wrap(err, "unmarshal NotifyReady request")
+	}
+
+	mod.iosrv.ready <- req
+
+	return nil
 }

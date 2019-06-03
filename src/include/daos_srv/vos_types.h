@@ -26,6 +26,8 @@
 
 #include <daos_types.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/vea.h>
+#include <daos/dtx.h>
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -51,6 +53,10 @@ typedef struct {
 	daos_size_t		pif_scm_free;
 	/** Current NVMe free space in bytes */
 	daos_size_t		pif_nvme_free;
+	/** NVMe block allocator attributes */
+	struct vea_attr		pif_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		pif_vea_stat;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -92,6 +98,8 @@ typedef enum {
 	VOS_ITER_SINGLE,
 	/** iterate record extents and epoch validities of these extents */
 	VOS_ITER_RECX,
+	/** iterate VOS active-DTX table */
+	VOS_ITER_DTX,
 } vos_iter_type_t;
 
 /** epoch logic expression for the single value iterator */
@@ -173,17 +181,31 @@ enum {
  * Returned entry of a VOS iterator
  */
 typedef struct {
-	/** Returned epoch. It is ignored for container iteration. */
-	daos_epoch_t		ie_epoch;
-	/** Returned earliest update epoch for a key */
-	daos_epoch_t		ie_earliest;
+	union {
+		/** Returned epoch. It is ignored for container iteration. */
+		daos_epoch_t			ie_epoch;
+		/** Return the DTX identifier. */
+		struct dtx_id			ie_xid;
+	};
+	union {
+		/** Returned earliest update epoch for a key */
+		daos_epoch_t			ie_earliest;
+		/** Return the DTX handled time for DTX iteration. */
+		uint64_t			ie_dtx_sec;
+	};
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
 		/** dkey or akey */
 		daos_key_t			ie_key;
-		/** oid */
-		daos_unit_oid_t			ie_oid;
+		struct {
+			/** oid */
+			daos_unit_oid_t		ie_oid;
+			/* The DTX dkey hash for DTX iteration. */
+			uint64_t		ie_dtx_hash;
+			/* The DTX intent for DTX iteration. */
+			uint32_t		ie_dtx_intent;
+		};
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -201,6 +223,8 @@ typedef struct {
 			uint32_t		ie_recx_flags;
 		};
 	};
+	/** Child iterator type */
+	vos_iter_type_t		ie_child_type;
 } vos_iter_entry_t;
 
 /**

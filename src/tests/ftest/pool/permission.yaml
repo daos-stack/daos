@@ -1,0 +1,37 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+# createmode mentioned below is in "Decimal form"
+# Decimal Form    Octal Form
+# 511             777
+# 292             444
+# 146             222
+# 73              111
+hosts:
+    test_machines:
+        - boro-A
+        - boro-B
+timeout: 300
+server_config:
+    name: daos_server
+
+createtests:
+    createmode: !mux
+        mode_RO:
+            mode: 73
+        mode_RW:
+            mode: 146
+        mode_EX:
+            mode: 292
+        mode_ALL:
+            mode: 511
+    createset:
+        setname: daos_server
+    createsize:
+        size: 1000000000
+    permissions: !mux
+        perm_RO:
+            perm: 0
+        perm_RW:
+            perm: 1
+        perm_EX:
+            perm: 2

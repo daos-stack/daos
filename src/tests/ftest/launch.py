@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,14 +21,15 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
 
 import os
 import time
-import traceback
 import sys
 import fnmatch
 import subprocess
 import json
+import errno
 
 def filelist(directory):
     """
@@ -38,22 +39,22 @@ def filelist(directory):
     random directory trees of tests.
     """
 
-    test_files = []
+    local_test_files = []
     test_pattern = "*.py"
 
-    for path, dirs, files in os.walk(directory):
-        if not (path == directory or path == os.path.join(directory, 'util')):
-            for f in files:
-                if fnmatch.fnmatch(f, test_pattern):
-                    test_files.append(os.path.join(path,f))
-    return test_files;
-
+    for path, _dirs, files in os.walk(directory):
+        if not (path == directory or path.startswith(os.path.join(directory,
+                                                                  'util'))):
+            for test_file in files:
+                if fnmatch.fnmatch(test_file, test_pattern):
+                    local_test_files.append(os.path.join(path, test_file))
+    return local_test_files
 
 def yamlforpy(path):
     """
     Create the name of the yaml file for a given test file.
     """
-    (base, ext) = os.path.splitext(path)
+    (base, _ext) = os.path.splitext(path)
     return base + ".yaml"
 
 def printhelp():
@@ -78,10 +79,41 @@ def printhelp():
     print("\tpoolinfo --run all pool info retrieval related tests")
     print("\tquick --run tests that complete quickly, with minimal resources ")
     print("\n")
-    print("You can also specify the sparse flag -s to limit output to pass/fail.")
+    print("You can also specify the sparse flag -s to limit output to "
+          "pass/fail.")
     print("Example command: launch.py -s pool")
     print("\n")
     exit()
+
+def run_test(_file, use_tags=True):
+    """
+    Launch a given test.
+    """
+    _file = os.path.relpath(_file)
+    param_file = yamlforpy(_file)
+    params = ' --mux-yaml ' + param_file
+    test_cmd = avocado + ignore_errors + output_options
+    if use_tags:
+        test_cmd += category
+    test_cmd += params + ' -- ' + _file
+
+    start_time = int(time.time())
+    print("Running: " + test_cmd + "\n\n")
+    subprocess.call(test_cmd, shell=True)
+    end_time = int(time.time())
+    print("Total test run-time in seconds: {}".format(end_time - start_time))
+    # move the job to a path that will be recognizable
+    try:
+        os.makedirs(os.path.join("avocado", os.path.dirname(_file)))
+    except OSError as excepn:
+        if excepn.errno != errno.EEXIST:
+            raise
+    os.rename(os.path.realpath(os.path.join("avocado", "job-results",
+                                            "latest")),
+              os.path.join("avocado", _file))
+    os.remove(os.path.join("avocado", "job-results", "latest"))
+    os.rmdir(os.path.join("avocado", "job-results"))
+
 
 if __name__ == "__main__":
 
@@ -122,7 +154,7 @@ if __name__ == "__main__":
 
     # build a list of test classes
     test_files = filelist(test_directory)
-    if len(test_files) == 0:
+    if not test_files:
         printhelp()
 
     avocado = ' avocado run'
@@ -136,20 +168,6 @@ if __name__ == "__main__":
         category = ' --filter-by-tags=' + test_request
     else:
         category = ''
-
-    def run_test(_file, use_tags=True):
-        param_file = yamlforpy(_file)
-        params = ' --mux-yaml ' + param_file
-        test_cmd = avocado + ignore_errors + output_options
-        if use_tags:
-            test_cmd += category
-        test_cmd += params + ' -- ' + _file
-
-        start_time = int(time.time())
-        print("Running: " + test_cmd + "\n\n")
-        subprocess.call(test_cmd, shell=True)
-        end_time = int(time.time())
-        print("Total test run-time in seconds: {}".format(end_time - start_time))
 
     # run only provided tagged tests.
     for _file in test_files:

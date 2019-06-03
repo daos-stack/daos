@@ -47,8 +47,8 @@
 #include <daos_types.h>
 
 /* Root KVS (RDB_KVS_GENERIC) */
-extern daos_iov_t ds_cont_prop_conts;		/* container KVS */
-extern daos_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
+extern d_iov_t ds_cont_prop_conts;		/* container KVS */
+extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
 
 /*
  * Container KVS (RDB_KVS_GENERIC)
@@ -72,22 +72,22 @@ extern daos_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
  * User-defined attributes (RDB_KVS_GENERIC) -
  * To store container attributes of upper layers.
  */
-extern daos_iov_t ds_cont_prop_ghce;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_ghpce;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_max_oid;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_label;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_layout_type;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_layout_ver;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_csum;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_redun_fac;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_redun_lvl;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_snapshot_max;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_compress;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_encrypt;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_lres;		/* LRE KVS */
-extern daos_iov_t ds_cont_prop_lhes;		/* LHE KVS */
-extern daos_iov_t ds_cont_prop_snapshots;	/* snapshot KVS */
-extern daos_iov_t ds_cont_attr_user;		/* User attributes KVS */
+extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
+extern d_iov_t ds_cont_prop_ghpce;		/* uint64_t */
+extern d_iov_t ds_cont_prop_max_oid;		/* uint64_t */
+extern d_iov_t ds_cont_prop_label;		/* uint64_t */
+extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */
+extern d_iov_t ds_cont_prop_layout_ver;	/* uint64_t */
+extern d_iov_t ds_cont_prop_csum;		/* uint64_t */
+extern d_iov_t ds_cont_prop_redun_fac;	/* uint64_t */
+extern d_iov_t ds_cont_prop_redun_lvl;	/* uint64_t */
+extern d_iov_t ds_cont_prop_snapshot_max;	/* uint64_t */
+extern d_iov_t ds_cont_prop_compress;	/* uint64_t */
+extern d_iov_t ds_cont_prop_encrypt;		/* uint64_t */
+extern d_iov_t ds_cont_prop_lres;		/* LRE KVS */
+extern d_iov_t ds_cont_prop_lhes;		/* LHE KVS */
+extern d_iov_t ds_cont_prop_snapshots;	/* snapshot KVS */
+extern d_iov_t ds_cont_attr_user;		/* User attributes KVS */
 
 /*
  * Container handle KVS (RDB_KVS_GENERIC)

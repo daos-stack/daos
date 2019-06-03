@@ -43,11 +43,8 @@ extern "C" {
 
 #include <daos_errno.h>
 
-/** Scatter/gather list for memory buffers */
-#define daos_sg_list_t d_sg_list_t
-
-/** free function for d_rank_list_t */
-#define daos_rank_list_free d_rank_list_free
+/** Maximum length (excluding the '\0') of a DAOS system name */
+#define DAOS_SYS_NAME_MAX 15
 
 /**
  * Generic data type definition
@@ -56,17 +53,18 @@ extern "C" {
 typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
-#define daos_iov_t		d_iov_t
+/**
+ * daos_sg_list_t/daos_iov_t/daos_rank_list_free/daos_iov_set is for keeping
+ * compatibility for upper layer.
+ */
+#define daos_sg_list_t			d_sg_list_t
+#define daos_iov_t			d_iov_t
+#define daos_rank_list_free(r)		d_rank_list_free((r))
+#define daos_iov_set(iov, buf, size)	d_iov_set((iov), (buf), (size))
+
 #define crt_proc_daos_key_t	crt_proc_d_iov_t
 #define crt_proc_daos_size_t	crt_proc_uint64_t
 #define crt_proc_daos_epoch_t	crt_proc_uint64_t
-
-static inline void
-daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
@@ -103,7 +101,7 @@ static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
 }
 
 static inline bool
-daos_csum_isvalid(daos_csum_buf_t *csum)
+daos_csum_isvalid(const daos_csum_buf_t *csum)
 {
 	return csum != NULL &&
 	       csum->cs_len > 0 &&
@@ -306,6 +304,21 @@ struct daos_rebuild_status {
 };
 
 /**
+ * Pool info query bits.
+ * The basic pool info like fields from pi_uuid to pi_leader will always be
+ * queried for each daos_pool_query() calling. But the pi_space and
+ * pi_rebuild_st are optional based on pi_mask's value.
+ */
+enum daos_pool_info_bit {
+	/** true to query pool space usage */
+	DPI_SPACE		= 1ULL << 0,
+	/** true to query rebuild status */
+	DPI_REBUILD_STATUS	= 1ULL << 1,
+	/** query all above optional info */
+	DPI_ALL			= -1,
+};
+
+/**
  * Storage pool
  */
 typedef struct {
@@ -319,14 +332,10 @@ typedef struct {
 	uint32_t			pi_ndisabled;
 	/** Latest pool map version */
 	uint32_t			pi_map_ver;
-	/** pool UID */
-	uid_t				pi_uid;
-	/** pool GID */
-	gid_t				pi_gid;
-	/** Mode */
-	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
+	/** pool info bits, see daos_pool_info_bit */
+	uint64_t			pi_bits;
 	/** Space usage */
 	struct daos_pool_space		pi_space;
 	/** rebuild status */
@@ -552,6 +561,15 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
+	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
+				 * cell size 32KB.
+				 */
+	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
+				 * cell size 1MB.
+				 */
 };
 
 /** Object class attributes */
@@ -581,14 +599,12 @@ typedef struct daos_oclass_attr {
 
 		/** Erasure coding attributes */
 		struct daos_ec_attr {
-			/** Type of EC */
-			unsigned int	 e_type;
-			/** EC group size */
-			unsigned int	 e_grp_size;
-			/**
-			 * TODO: add members to describe erasure coding
-			 * attributes
-			 */
+			/** number of data cells (k) */
+			unsigned short	 e_k;
+			/** number of parity cells (p) */
+			unsigned short	 e_p;
+			/** length of each block of data (cell) */
+			unsigned int	 e_len;
 		} ec;
 	} u;
 	/** TODO: add more attributes */
@@ -618,7 +634,7 @@ typedef struct {
 } daos_obj_attr_t;
 
 /** key type */
-typedef daos_iov_t daos_key_t;
+typedef d_iov_t daos_key_t;
 
 /**
  * Record
@@ -675,11 +691,13 @@ typedef struct {
 	/*
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
-	 * records where the record is updated atomically. Note than an akey can
-	 * have both type of values, but to access both would require a separate
-	 * iod for each. If \a iod_type == DAOS_IOD_SINGLE, then iod_nr has to
-	 * be 1, and \a iod_size would be the size of the single atomic
-	 * value. The idx is ignored and the rx_nr is also required to be 1.
+	 * records where the record is updated atomically. Note that an akey can
+	 * only support one type of value which is set on the first update. If
+	 * user attempts to mix types in the same akey, the behavior is
+	 * undefined, even after the object, key, or value is punched. If
+	 * \a iod_type == DAOS_IOD_SINGLE, then iod_nr has to be 1, and
+	 * \a iod_size would be the size of the single atomic value. The idx is
+	 * ignored and the rx_nr is also required to be 1.
 	 */
 	daos_iod_type_t		iod_type;
 	/** Size of the single value or the record size of the array */
@@ -887,8 +905,23 @@ enum daos_pool_prop_type {
 	 * snapshot creation
 	 */
 	DAOS_PROP_PO_RECLAIM,
+	/**
+	 * The user who acts as the owner of the pool.
+	 * Format: user@[domain]
+	 */
+	DAOS_PROP_PO_OWNER,
+	/**
+	 * The group that acts as the owner of the pool.
+	 * Format: group@[domain]
+	 */
+	DAOS_PROP_PO_OWNER_GROUP,
 	DAOS_PROP_PO_MAX,
 };
+
+/**
+ * Number of pool property types
+ */
+#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
 
 /** DAOS space reclaim strategy */
 enum {
@@ -1021,6 +1054,22 @@ typedef struct {
 	/** property entries array */
 	struct daos_prop_entry	*dpp_entries;
 } daos_prop_t;
+
+/**
+ * DAOS Hash Table Handle Types
+ * The handle type, uses the least significant 4-bits in the 64-bits hhash key.
+ * The bit 0 is only used for D_HYTPE_PTR (pointer type), all other types MUST
+ * set bit 0 to 1.
+ */
+enum {
+	DAOS_HTYPE_EQ		= 1, /**< event queue */
+	DAOS_HTYPE_POOL		= 3, /**< pool */
+	DAOS_HTYPE_CO		= 5, /**< container */
+	DAOS_HTYPE_OBJ		= 7, /**< object */
+	DAOS_HTYPE_ARRAY	= 9, /**< array */
+	DAOS_HTYPE_TX		= 11, /**< transaction */
+	/* Must enlarge D_HTYPE_BITS to add more types */
+};
 
 #if defined(__cplusplus)
 }

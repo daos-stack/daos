@@ -27,35 +27,37 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pkg/errors"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	List ListStorCmd `command:"list" alias:"l" description:"List locally-attached SCM and NVMe storage"`
+	Scan   ScanStorCmd   `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Update UpdateStorCmd `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
 }
 
-// ListStorCmd is the struct representing the list storage subcommand.
-type ListStorCmd struct{}
+// ScanStorCmd is the struct representing the scan storage subcommand.
+type ScanStorCmd struct{}
 
 // run NVMe and SCM storage query on all connected servers
-func listStor() {
-	cCtrlrs, cModules := conns.ListStorage()
+func scanStor() {
+	cCtrlrs, cModules := conns.ScanStorage()
 
 	fmt.Printf(
-		unpackFormat(cCtrlrs),
+		unpackClientMap(cCtrlrs),
 		"NVMe SSD controller and constituent namespace")
 
-	fmt.Printf(unpackFormat(cModules), "SCM module")
+	fmt.Printf(unpackClientMap(cModules), "SCM module")
 }
 
-// Execute is run when ListStorCmd activates
-func (s *ListStorCmd) Execute(args []string) error {
-	if err := connectHosts(); err != nil {
-		return errors.Wrap(err, "unable to connect to hosts")
+// Execute is run when ScanStorCmd activates
+func (s *ScanStorCmd) Execute(args []string) error {
+	if err := appSetup(); err != nil {
+		return err
 	}
 
-	listStor()
+	scanStor()
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
@@ -63,36 +65,87 @@ func (s *ListStorCmd) Execute(args []string) error {
 	return nil
 }
 
-// todo: implement shell commands for features other than discovery on
-// multiple nodes
+// FormatStorCmd is the struct representing the format storage subcommand.
+type FormatStorCmd struct{}
 
-//func getUpdateParams(c *ishell.Context) (*pb.UpdateNvmeParams, error) {
-//	// disable the '>>>' for cleaner same line input.
-//	c.ShowPrompt(false)
-//	defer c.ShowPrompt(true) // revert after user input.
-//
-//	c.Print("Please enter firmware image file-path: ")
-//	path := c.ReadLine()
-//
-//	c.Print("Please enter slot you would like to update [default 0]: ")
-//	slotRaw := c.ReadLine()
-//
-//	var slot int32
-//
-//	if slotRaw != "" {
-//		slot, err := strconv.Atoi(slotRaw)
-//		if err != nil {
-//			return nil, fmt.Errorf("%s is not a number", slotRaw)
-//		}
-//
-//		if slot >= 0 && slot < 7 {
-//			return nil, fmt.Errorf("%d needs to be a number between 0 and 7", slot)
-//		}
-//	}
-//
-//	return &pb.UpdateNvmeParams{
-//		Ctrlr: nil, Path: strings.TrimSpace(path), Slot: slot}, nil
-//}
+// run NVMe and SCM storage format on all connected servers
+func formatStor() {
+	fmt.Println(
+		"This is a destructive operation and storage devices " +
+			"specified in the server config file will be erased.\n" +
+			"Please be patient as it may take several minutes.\n" +
+			"Are you sure you want to continue? (yes/no)")
+
+	if getConsent() {
+		fmt.Println("")
+		cCtrlrResults, cMountResults := conns.FormatStorage()
+		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage format result")
+		fmt.Printf(unpackClientMap(cMountResults), "SCM storage format result")
+	}
+}
+
+// Execute is run when FormatStorCmd activates
+func (s *FormatStorCmd) Execute(args []string) error {
+	if err := appSetup(); err != nil {
+		return err
+	}
+
+	formatStor()
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
+// UpdateStorCmd is the struct representing the update storage subcommand.
+type UpdateStorCmd struct {
+	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`
+	NVMeStartRev string `short:"f" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
+	NVMeFwPath   string `short:"p" long:"nvme-fw-path" description:"Update firmware on NVMe SSDs with image file at this path (path must be accessible on all servers)." required:"1"`
+	NVMeFwSlot   int    `short:"s" default:"0" long:"nvme-fw-slot" description:"Update firmware on NVMe SSDs to this firmware register."`
+}
+
+// run NVMe and SCM storage update on all connected servers
+func updateStor(params *pb.UpdateStorageParams) {
+	fmt.Println(
+		"This could be a destructive operation and storage devices " +
+			"specified in the server config file will have firmware " +
+			"updated. Please check this is a supported upgrade path " +
+			"and be patient as it may take several minutes.\n" +
+			"Are you sure you want to continue? (yes/no)")
+
+	if getConsent() {
+		fmt.Println("")
+		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
+		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
+		fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
+	}
+}
+
+// Execute is run when UpdateStorCmd activates
+func (u *UpdateStorCmd) Execute(args []string) error {
+	if err := appSetup(); err != nil {
+		fmt.Printf("app setup returned %s", err)
+		return err
+	}
+
+	// only populate nvme fwupdate params for the moment
+	updateStor(
+		&pb.UpdateStorageParams{
+			Nvme: &pb.UpdateNvmeParams{
+				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
+				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
+			},
+		})
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
+// TODO: implement burn-in subcommand
 
 //func getFioConfig(c *ishell.Context) (configPath string, err error) {
 //	// fetch existing configuration files
