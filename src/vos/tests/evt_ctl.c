@@ -950,23 +950,22 @@ test_evt_iter_flags(void **state)
 	if (data == NULL)
 		goto end;
 	for (count = 0; count < NUM_EPOCHS+1; count++) {
-		data[count] = (int *)calloc(
-				(NUM_EPOCHS+NUM_EXTENTS+1), sizeof(int));
+		D_ALLOC_ARRAY(data[count], (NUM_EPOCHS+NUM_EXTENTS+1));
 		if (data[count] == NULL) {
 			print_message("Cannot allocate Memory\n");
 			goto end;
 		}
 	}
-	exp_val = (int *)malloc((NUM_EPOCHS+1)*
-				(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
+	D_ALLOC_ARRAY(exp_val, (NUM_EPOCHS+1)*
+				(NUM_EPOCHS+NUM_EXTENTS+1));
 	if (exp_val == NULL)
 		goto finish2;
-	actual_val = (int *)malloc((NUM_EPOCHS+1)*
-				(NUM_EPOCHS+NUM_EXTENTS+1)*sizeof(int));
+	D_ALLOC_ARRAY(actual_val, (NUM_EPOCHS+1)*
+				(NUM_EPOCHS+NUM_EXTENTS+1));
 	if (actual_val == NULL)
 		goto finish1;
-	rev_exp_val = (int *)calloc((NUM_EPOCHS+1)*
-				(NUM_EPOCHS+NUM_EXTENTS+1), sizeof(int));
+	D_ALLOC_ARRAY(rev_exp_val, (NUM_EPOCHS+1)*
+				(NUM_EPOCHS+NUM_EXTENTS+1));
 	if (rev_exp_val == NULL)
 		goto finish;
 	/* Insert a bunch of entries with hole*/
