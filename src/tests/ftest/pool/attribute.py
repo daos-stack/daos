@@ -28,7 +28,6 @@ import traceback
 import threading
 import string
 import random
-import logging
 from apricot import TestWithServers
 
 from general_utils import DaosTestError
@@ -82,7 +81,6 @@ class PoolAttributeTest(TestWithServers):
     def setUp(self):
         super(PoolAttributeTest, self).setUp()
 
-        self.logger = logging.getLogger("PoolAttributeLogger")
         self.large_data_set = {}
 
         createmode = self.params.get("mode",
@@ -132,7 +130,6 @@ class PoolAttributeTest(TestWithServers):
         """
         self.create_data_set()
         attr_dict = self.large_data_set
-        self.logger.debug("PARAMS (attr_dict <type 'dict'>) => %s", attr_dict)
 
         try:
             self.pool.set_attr(data=attr_dict)

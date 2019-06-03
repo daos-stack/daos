@@ -28,7 +28,6 @@ import traceback
 import threading
 import string
 import random
-import logging
 from apricot import TestWithServers
 
 from general_utils import DaosTestError
@@ -81,7 +80,6 @@ class ContainerAttributeTest(TestWithServers):
     def setUp(self):
         super(ContainerAttributeTest, self).setUp()
 
-        self.logger = logging.getLogger("ConAttributeLogger")
         self.large_data_set = {}
 
         self.pool = DaosPool(self.context)
@@ -125,7 +123,6 @@ class ContainerAttributeTest(TestWithServers):
         """
         self.create_data_set()
         attr_dict = self.large_data_set
-        self.logger.debug("PARAMS (attr_dict <type 'dict'>) => %s", attr_dict)
 
         try:
             self.container.set_attr(data=attr_dict)
