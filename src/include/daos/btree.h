@@ -88,20 +88,26 @@ struct btr_node {
 
 enum {
 	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 4096
+	BTR_ORDER_MAX			= 255
 };
 
 /**
  * Tree root descriptor, it consits of tree attributes and reference to the
  * actual root node.
  *
- * NB: could be PM data structure.
+ * NB: Can be stored in pmem
  */
 struct btr_root {
-	/** btree order */
-	uint16_t			tr_order;
+	/** For dynamic tree ordering, the root node temporarily has less
+	 * entries than the order
+	 */
+	uint8_t				tr_node_size;
+	/** Internal index to select the node size */
+	uint8_t				tr_node_size_idx;
+	/** configured btree order */
+	uint8_t				tr_order;
 	/** depth of the tree */
-	uint16_t			tr_depth;
+	uint8_t				tr_depth;
 	/**
 	 * ID to find a registered tree class, which provides customized
 	 * funtions etc.
@@ -392,85 +398,6 @@ typedef struct {
 					 char *buf, int buf_len);
 	/**
 	 * Optional:
-	 * Allocate an empty tree. Upper layer can have customized
-	 * implementation to manange internal tree node and record cache etc.
-	 *
-	 * Absent:
-	 * The common code will allocate the root and initialise the empty tree.
-	 *
-	 * \param tins	[IN/OUT]
-	 *			Input  : Tree instance which includes memory
-	 *				 class and customized tree operations.
-	 *			output : root umem offset
-	 * \param feats	[IN]	Feature bits of this true.
-	 * \param order	[IN]	Order of the tree.
-	 */
-	int		(*to_root_alloc)(struct btr_instance *tins,
-					 uint64_t feats, unsigned int order);
-	/**
-	 * Optional:
-	 * Free the empty tree, and internal caches.
-	 *
-	 * Absent:
-	 * The common code will free the root.
-	 *
-	 * \param tins	[IN]	Tree instance to be destroyed.
-	 */
-	void		(*to_root_free)(struct btr_instance *tins);
-	/**
-	 * Optional:
-	 * Add tree root to current transaction.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root umem,
-	 *			offset root address and memory class etc.
-	 */
-	int		(*to_root_tx_add)(struct btr_instance *tins);
-	/**
-	 * Optional:
-	 * Allocate tree node from internal cache.
-	 *
-	 * Absent:
-	 * The common code will allocate the tree node.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root umem
-	 *			offset and memory class etc.
-	 * \param nd_off_p [OUT]
-	 *			Returned umem offset of the new node.
-	 *
-	 * Absent:
-	 * The common code will allocate a new tree node.
-	 */
-	int		(*to_node_alloc)(struct btr_instance *tins,
-					 umem_off_t *nd_off_p);
-	/**
-	 * Optional:
-	 * Release the tree node for the internal cache.
-	 *
-	 * Absent:
-	 * The common code will free the tree node.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root umem
-	 *			offset and memory class etc.
-	 * \param nd_off [IN]
-	 *			Node umem offset to be freed.
-	 *
-	 * Absent:
-	 * The common code will free the tree node.
-	 */
-	void		(*to_node_free)(struct btr_instance *tins,
-					umem_off_t nd_off);
-	/**
-	 * Optional: add \a nd_off to the current transaction.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root umem
-	 *			offset and memory class etc.
-	 * \param nd_off [IN]
-	 *			Node umem offset to be added to transaction.
-	 */
-	int		(*to_node_tx_add)(struct btr_instance *tins,
-					  umem_off_t nd_off);
-	/**
-	 * Optional:
 	 * Check whether the given record is available to outside or not.
 	 *
 	 * \param tins	[IN]	Tree instance which contains the root umem
@@ -531,6 +458,10 @@ enum btr_feats {
 	 * to_key_cmp callback
 	 */
 	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	/** Root is dynamically sized up to tree order.  This bit is set for a
+	 *  tree class
+	 */
+	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
 };
 
 /**

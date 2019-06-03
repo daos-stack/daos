@@ -149,72 +149,15 @@ func hash(s string) int {
 	return int(h.Sum32() & 0x7FFFFFFF)
 }
 
-// setNumCores takes number of cores and converts to list of ranges
-func setNumCores(num int) (rs []string, err error) {
-	if num < 1 {
-		return rs, errors.Errorf(
-			"invalid number of cpus (cores) specified: %d", num)
-	}
-	if num == 1 {
-		return append(rs, "0"), err
-	}
-	return append(rs, "0-"+strconv.Itoa(num-1)), err
-}
-
-// getNumCores takes list of ranges specified by strings and returns number of
-// contiguous cores represented
-func getNumCores(rs []string) (num int, err error) {
-	// check list is nil or empty as in that case we want to pass 0 to maintain
-	// functional parity if core/cpu count is unspecified on cli and config
-	if (rs == nil) || (len(rs) == 0) {
-		return
-	}
-	var lower, upper int
-	for _, s := range rs {
-		limits := strings.Split(s, "-")
-		if len(limits) == 1 {
-			if _, err = strconv.Atoi(limits[0]); err != nil {
-				return
-			}
-			num++
-			continue
-		}
-		if len(limits) == 2 {
-			lower, err = strconv.Atoi(limits[0])
-			if err != nil {
-				return
-			}
-			upper, err = strconv.Atoi(limits[1])
-			if err != nil {
-				return
-			}
-			if upper > lower {
-				num += (upper - lower) + 1
-				continue
-			}
-		}
-		return num, errors.Errorf(
-			"unsupported range format %s, need <int>-<int> e.g. 1-10", s)
-	}
-	return
-}
-
 // populateCliOpts populates options string slice for single I/O service
 func (c *configuration) populateCliOpts(i int) error {
 	// avoid mutating subject during iteration, instead access through
 	// config/parent object
 	srv := &c.Servers[i]
 
-	// calculate number of cores to use from supplied target ranges
-	var numCores int
-	numCores, err := getNumCores(srv.Targets)
-	if err != nil {
-		return errors.Errorf("service%d targets invalid: %s", i, err)
-	}
-
 	srv.CliOpts = append(
 		srv.CliOpts,
-		"-t", strconv.Itoa(numCores),
+		"-t", strconv.Itoa(srv.Targets),
 		"-g", c.SystemName,
 		"-s", srv.ScmMount)
 
@@ -262,7 +205,7 @@ func (c *configuration) populateCliOpts(i int) error {
 // options overriding those loaded from configuration file.
 //
 // Current cli opts for daos_server also specified in config:
-//   port, mount path, cores, group, rank, socket dir
+//   port, mount path, targets, group, rank, socket dir
 // Current cli opts to be passed to be stored by daos_server:
 //   modules, attach, map
 func (c *configuration) cmdlineOverride(opts *cliOptions) {
@@ -289,12 +232,12 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		}
 		if opts.Cores > 0 {
 			fmt.Println("-c option deprecated, please use -t instead")
-			srv.Targets, _ = setNumCores(int(opts.Cores))
+			srv.Targets = int(opts.Cores)
 		}
 		// Targets should override Cores if specified in cmdline or
 		// config file.
 		if opts.Targets > 0 {
-			srv.Targets, _ = setNumCores(int(opts.Targets))
+			srv.Targets = int(opts.Targets)
 		}
 		if opts.NrXsHelpers != nil {
 			srv.NrXsHelpers = int(*opts.NrXsHelpers)
@@ -369,9 +312,15 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			srv.EnvVars,
 			"CRT_PHY_ADDR_STR="+c.Provider,
 			"OFI_INTERFACE="+srv.FabricIface,
-			"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort),
 			"D_LOG_MASK="+srv.LogMask,
 			"D_LOG_FILE="+srv.LogFile)
+
+		// populate only if non-zero
+		if srv.FabricIfacePort != 0 {
+			srv.EnvVars = append(
+				srv.EnvVars,
+				"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort))
+		}
 	}
 
 	return nil
