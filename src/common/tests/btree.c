@@ -830,7 +830,7 @@ static int
 run_btree_open_create_test(void)
 {
 	static const struct CMUnitTest btree_open_create_test[] = {
-		{ "EVT001: btree_open_create test", ik_btr_open_create,
+		{ "BTR001: btree_open_create test", ik_btr_open_create,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -843,7 +843,7 @@ static int
 run_btree_close_destroy_test(void)
 {
 	static const struct CMUnitTest btree_close_destroy_test[] = {
-		{ "EVT002: btree_close_destroy test", ik_btr_close_destroy,
+		{ "BTR002: btree_close_destroy test", ik_btr_close_destroy,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -856,7 +856,7 @@ static int
 run_btree_query_test(void)
 {
 	static const struct CMUnitTest btree_query_test[] = {
-		{ "EVT003: btree_query test", ik_btr_query,
+		{ "BTR003: btree_query test", ik_btr_query,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -869,7 +869,7 @@ static int
 run_btree_iter_test(void)
 {
 	static const struct CMUnitTest btree_iterate_test[] = {
-		{ "EVT004: btree_iterate test", ik_btr_iterate,
+		{ "BTR004: btree_iterate test", ik_btr_iterate,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -882,7 +882,7 @@ static int
 run_btree_batch_oper_test(void)
 {
 	static const struct CMUnitTest btree_batch_oper_test[] = {
-		{ "EVT005: btree_batch_oper test", ik_btr_batch_oper,
+		{ "BTR005: btree_batch_oper test", ik_btr_batch_oper,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -895,7 +895,7 @@ static int
 run_btree_perf_test(void)
 {
 	static const struct CMUnitTest btree_perf_test[] = {
-		{ "EVT006: btree_perf test", ik_btr_perf, NULL, NULL},
+		{ "BTR006: btree_perf test", ik_btr_perf, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
 
@@ -907,7 +907,7 @@ static int
 run_btree_kv_operate_test(void)
 {
 	static const struct CMUnitTest btree_kv_operate_test[] = {
-		{ "EVT007: btree_kv_operate test",
+		{ "BTR007: btree_kv_operate test",
 			ik_btr_kv_operate, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -924,6 +924,7 @@ static struct option btr_ops[] = {
 	{ "close",	no_argument,		NULL,	'c'	},
 	{ "update",	required_argument,	NULL,	'u'	},
 	{ "find",	required_argument,	NULL,	'f'	},
+	{ "dyn_tree",	no_argument,		NULL,	't'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "del_retain", required_argument,	NULL,	'r'	},
 	{ "query",	no_argument,		NULL,	'q'	},
@@ -939,6 +940,7 @@ main(int argc, char **argv)
 	struct timeval	tv;
 	int		rc = 0;
 	int		opt;
+	int		dynamic_flag = 0;
 
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);
@@ -950,13 +952,10 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_class_register(IK_TREE_CLASS, BTR_FEAT_UINT_KEY, &ik_ops);
-	D_ASSERT(rc == 0);
-
 	optind = 0;
 
 	/* Check for -m option first */
-	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
+	while ((opt = getopt_long(argc, argv, "tmC:Docqu:d:r:f:i:b:p:", btr_ops,
 				  NULL)) != -1) {
 		if (opt == 'm') {
 			D_PRINT("Using pmem\n");
@@ -965,7 +964,16 @@ main(int argc, char **argv)
 			D_ASSERT(rc == 0);
 			break;
 		}
+		if (opt == 't') {
+			D_PRINT("Using dynamic tree order\n");
+			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+		}
 	}
+
+
+	rc = dbtree_class_register(IK_TREE_CLASS,
+				   dynamic_flag | BTR_FEAT_UINT_KEY, &ik_ops);
+	D_ASSERT(rc == 0);
 
 	if (ik_utx == NULL) {
 		D_PRINT("Using vmem\n");
@@ -979,7 +987,7 @@ main(int argc, char **argv)
 	/* start over */
 	optind = 0;
 
-	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
+	while ((opt = getopt_long(argc, argv, "tmC:Docqu:d:r:f:i:b:p:", btr_ops,
 				  NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
@@ -1031,6 +1039,7 @@ main(int argc, char **argv)
 		default:
 			D_PRINT("Unsupported command %c\n", opt);
 		case 'm':
+		case 't':
 			/* handled previously */
 			rc = 0;
 			break;
