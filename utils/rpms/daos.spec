@@ -86,6 +86,10 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+%if (0%{?suse_version} >= 1315)
+Requires: libpsm_infinipath1
+%endif
+
 
 %description tests
 This is the package needed to run the DAOS test suite
@@ -218,6 +222,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %changelog
 * Wed May 29 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Version bump up to 0.5.0
+- Add Requires: libpsm_infinipath1 for SLES 12.3
 
 * Tue May 07 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Move some files around among the sub-packages
