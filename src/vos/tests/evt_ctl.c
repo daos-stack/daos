@@ -946,7 +946,7 @@ test_evt_iter_flags(void **state)
 	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
-	D_ALLOC_ARRAY(data, ((NUM_EPOCHS+1)*sizeof(int *)));
+	D_ALLOC_ARRAY(data, (NUM_EPOCHS+1));
 	if (data == NULL)
 		goto end;
 	for (count = 0; count < NUM_EPOCHS+1; count++) {
