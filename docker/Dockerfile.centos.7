@@ -67,11 +67,13 @@ RUN yum -y install                                                 \
 # external deps build/repos
 # sadly this doesn't work
 #RUN yum-config-manager --save --setopt=*_job_daos-stack_job_${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_.gpgcheck=0
-RUN if ! $USE_RPMS; then exit 0; fi;                                                                                                                    \
-yum -y install hwloc-devel;                                                                                                                             \
-for ext in openpa libfabric mercury pmix ompi; do                                                                                                       \
-    yum-config-manager --add-repo=https://build.hpdd.intel.com/job/daos-stack/job/${ext}/job/master/lastSuccessfulBuild/artifact/artifacts/;            \
-    echo "gpgcheck = False" >> /etc/yum.repos.d/build.hpdd.intel.com_job_daos-stack_job_${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_.repo; \
+ARG JENKINS_URL=""
+
+RUN if ! $USE_RPMS; then exit 0; fi;                                                                                                         \
+yum -y install hwloc-devel;                                                                                                                  \
+for ext in openpa libfabric mercury pmix ompi; do                                                                                            \
+    yum-config-manager --add-repo=${JENKINS_URL}job/daos-stack/job/${ext}/job/master/lastSuccessfulBuild/artifact/artifacts/centos7/;        \
+    echo "gpgcheck = False" >> $(ls /etc/yum.repos.d/*_job_daos-stack_job_${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_centos7_.repo); \
 done
 
 RUN yum -y copr enable jhli/ipmctl

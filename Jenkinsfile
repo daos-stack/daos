@@ -252,7 +252,9 @@ pipeline {
               label 'docker_runner'
               additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                   '$BUILDARGS --build-arg USE_RPMS=true ' +
-                                  get_deps_build_vars()
+                                  get_deps_build_vars() +
+                                  ' --build-arg JENKINS_URL=' + env.JENKINS_URL
+
             }
           } // agent
           steps {
