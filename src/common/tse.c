@@ -328,7 +328,9 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	if (dtp->dtp_completed)
 		return;
 
-	D_ASSERT(dtp->dtp_running);
+	if (!dtp->dtp_running)
+		return;
+
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 1;

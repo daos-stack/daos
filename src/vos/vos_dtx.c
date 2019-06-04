@@ -793,9 +793,6 @@ struct vos_dtx_share {
 	umem_off_t		vds_record;
 };
 
-static int (*vos_dtx_check_leader)(uuid_t, daos_unit_oid_t *,
-				   uint32_t, struct pl_obj_layout **) = NULL;
-
 static bool
 vos_dtx_is_normal_entry(struct umem_instance *umm, umem_off_t entry)
 {
@@ -832,7 +829,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	dtx->te_epoch = dth->dth_epoch;
 	dtx->te_ver = dth->dth_ver;
 	dtx->te_state = DTX_ST_INIT;
-	dtx->te_flags = 0;
+	dtx->te_flags = dth->dth_leader ? DTX_EF_LEADER : 0;
 	dtx->te_intent = dth->dth_intent;
 	dtx->te_sec = crt_hlc_get();
 	dtx->te_records = rec_umoff;
@@ -1234,18 +1231,15 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 
 		if (intent == DAOS_INTENT_DEFAULT ||
 		    intent == DAOS_INTENT_REBUILD) {
-			rc = vos_dtx_check_leader(cont->vc_pool->vp_id,
-						  &dtx->te_oid,
-						  dtx->te_ver, NULL);
-			if (rc < 0)
-				return rc;
-
-			if (rc == 0) {
+			if (!(dtx->te_flags & DTX_EF_LEADER) ||
+			    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER)) {
 				/* Inavailable for rebuild case. */
 				if (intent == DAOS_INTENT_REBUILD)
 					return hidden ? ALB_AVAILABLE_CLEAN :
 						ALB_UNAVAILABLE;
 
+				D_DEBUG(DB_TRACE, "Let's ask leader "DF_DTI
+					"\n", DP_DTI(&dtx->te_xid));
 				/* Non-leader and non-rebuild case,
 				 * return -DER_INPROGRESS, then the
 				 * caller will retry the RPC with
@@ -1529,13 +1523,6 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	}
 
 	return rc;
-}
-
-void
-vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
-			      uint32_t, struct pl_obj_layout **))
-{
-	vos_dtx_check_leader = checker;
 }
 
 int

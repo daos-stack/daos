@@ -685,7 +685,8 @@ vos_obj_tab_register()
 	D_DEBUG(DB_DF, "Registering class for OI table Class: %d\n",
 		VOS_BTR_OBJ_TABLE);
 
-	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &oi_btr_ops);
+	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, BTR_FEAT_DYNAMIC_ROOT,
+				   &oi_btr_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;

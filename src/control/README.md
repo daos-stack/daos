@@ -89,7 +89,7 @@ cd ${DAOS_REPO}/src/control
 ./run_go_tests.sh
 ```
 
-To run go-spdk tests:
+To run the go-spdk tests:
 
 ```base
 cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk

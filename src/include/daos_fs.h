@@ -39,7 +39,7 @@ extern "C" {
 
 #include <dirent.h>
 
-#define DFS_MAX_PATH 128
+#define DFS_MAX_PATH NAME_MAX
 #define DFS_MAX_FSIZE (~0ULL)
 
 typedef struct dfs_obj dfs_obj_t;
