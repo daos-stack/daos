@@ -51,7 +51,7 @@ class SimpleCreateDeleteTest(TestWithoutServers):
         Test basic container create/destroy/open/close/query.  Nothing fancy
         just making sure they work at a rudimentary level
 
-        :avocado: tags=container,containercreate,containerdestroy,basecont
+        :avocado: tags=all,container,pr,medium,basecont
         """
 
         pool = None

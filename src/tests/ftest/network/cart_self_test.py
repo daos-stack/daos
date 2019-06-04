@@ -106,7 +106,7 @@ class CartSelfTest(TestWithoutServers):
         """
         Run a few CaRT self-test scenarios
 
-        :avocado: tags=network,small,quick,cartselftest
+        :avocado: tags=all,smoke,pr,unittest,tiny,cartselftest
         """
         base_cmd = [self.orterun,
                     "-np", "1",

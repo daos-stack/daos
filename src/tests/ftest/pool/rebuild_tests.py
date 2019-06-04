@@ -86,7 +86,7 @@ class RebuildTests(TestWithoutServers):
           -- single pool rebuild, single client, various reord/object
              counts
 
-        :avocado: tags=pool,rebuild,rebuildsimple
+        :avocado: tags=all,pool,rebuild,pr,medium,rebuildsimple
         """
         try:
 
@@ -198,7 +198,7 @@ class RebuildTests(TestWithoutServers):
         Use Cases:
           -- multipool rebuild, single client, various object and record counds
 
-        :avocado: tags=pool,rebuild,rebuildmulti
+        :avocado: tags=all,pool,rebuild,full_regression,medium,rebuildmulti
         """
         try:
             # initialize python pool object then create the underlying

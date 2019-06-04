@@ -56,7 +56,7 @@ class RebuildWithIO(TestWithoutServers):
           -- single pool, single client performing continous read/write/verify
              sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=pool,rebuild,rebuildwithio
+        :avocado: tags=all,pool,rebuild,pr,medium,rebuildwithio
         """
 
         # the rebuild tests need to redo this stuff each time so not in setup

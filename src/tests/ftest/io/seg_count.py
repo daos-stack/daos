@@ -103,7 +103,7 @@ class SegCount(Test):
         Use Cases: Different combinations of 32/64/128 Clients, 8b/1k/4k
                    record size, 1k/4k/1m/8m transfersize and stripesize
                    and 16 async io.
-        :avocado: tags=ior,eightservers,ior_segcount,performance
+        :avocado: tags=all,mpiio,large,ior_segcount
         """
 
         # parameters used in pool create

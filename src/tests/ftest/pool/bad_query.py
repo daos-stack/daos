@@ -73,7 +73,7 @@ class BadQueryTest(Test):
         """
         Pass bad parameters to pool query
 
-        :avocado: tags=pool,poolquery,badparam,badquery
+        :avocado: tags=all,pool,full_regression,tiny,badquery
         """
         # parameters used in pool create/connect
         connectmode = self.params.get("mode", '/run/querytests/connectmode/')

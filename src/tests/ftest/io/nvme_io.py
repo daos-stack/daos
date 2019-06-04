@@ -119,7 +119,7 @@ class NvmeIo(avocado.Test):
         sizes.IOR will be run for all Object type supported. Purpose is to
         verify pool size (SCM and NVMe) for IOR file.
         This test is running multiple IOR on same server start instance.
-        :avocado: tags=nvme,nvme_io,large
+        :avocado: tags=all,daosio,full_regression,hw,nvme_io
         """
         ior_args = {}
 

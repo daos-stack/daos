@@ -40,7 +40,7 @@ class EvictTest(TestWithServers):
         """
         Test evicting a client to a pool.
 
-        :avocado: tags=pool,poolevict,quick
+        :avocado: tags=all,pool,pr,small,poolevict
         """
         size = self.params.get("size", '/run/tests/sizes/size1gb/*')
         setid = self.params.get("setname", '/run/tests/setnames/validsetname/*')
@@ -72,7 +72,7 @@ class EvictTest(TestWithServers):
         """
         Test connecting to a pool.
 
-        :avocado: tags=pool,poolevict
+        :avocado: tags=all,pool,full_regression,small,poolevict
         """
         # test parameters are in the EvictTest.yaml
         setid = self.params.get("setname", '/run/tests/setnames/validsetname/*')

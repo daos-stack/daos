@@ -44,7 +44,7 @@ class ServerLaunch(Test):
     def test_launch(self):
         """
         Test launching a DAOS server.
-        :avocado: tags=server
+        :avocado: tags=all,wireup,full_regression,tiny,launchserver
         """
         hostfile = self.params.get("hostfile1", '/files/', "/tmp/hostfile1")
         urifile = self.params.get("urifile", '/files/', "/tmp/urifile")

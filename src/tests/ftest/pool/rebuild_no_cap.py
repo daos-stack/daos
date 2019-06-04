@@ -76,7 +76,7 @@ class RebuildNoCap(TestWithServers):
 
     def test_rebuild_no_capacity(self):
         """
-        :avocado: tags=pool,rebuild,nocap
+        :avocado: tags=all,pool,rebuild,pr,medium,nocap
         """
         try:
             print("\nsetup complete, starting test\n")

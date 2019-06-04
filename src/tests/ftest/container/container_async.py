@@ -73,7 +73,7 @@ class ContainerAsync(TestWithServers):
         """
         Test container create for asynchronous mode.
 
-        :avocado: tags=container,containerasync,createasync
+        :avocado: tags=all,small,full_regression,container,containerasync,createasync
         """
 
         global GLOB_SIGNAL
@@ -134,7 +134,7 @@ class ContainerAsync(TestWithServers):
         """
         Test container destroy for asynchronous mode.
 
-        :avocado: tags=container,containerasync,contdestroyasync
+        :avocado: tags=all,small,full_regression,container,containerasync,contdestroyasync
         """
 
         global GLOB_SIGNAL
@@ -197,7 +197,7 @@ class ContainerAsync(TestWithServers):
         """
         Test container open for asynchronous mode.
 
-        :avocado: tags=container,containerasync,openasync
+        :avocado: tags=all,small,full_regression,container,containerasync,openasync
         """
 
         global GLOB_SIGNAL
@@ -265,7 +265,7 @@ class ContainerAsync(TestWithServers):
         """
         Test container close for asynchronous mode.
 
-        :avocado: tags=container,containerasync,closeasync
+        :avocado: tags=all,small,full_regression,container,containerasync,closeasync
         """
 
         global GLOB_SIGNAL
@@ -337,7 +337,7 @@ class ContainerAsync(TestWithServers):
         """
         Test container query for asynchronous mode.
 
-        :avocado: tags=container,containerasync,queryasync
+        :avocado: tags=all,small,full_regression,container,containerasync,queryasync
         """
 
         global GLOB_SIGNAL

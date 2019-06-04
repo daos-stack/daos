@@ -51,7 +51,7 @@ class FullPoolContainerCreate(TestWithServers):
 
     def test_no_space_cont_create(self):
         """
-        :avocado: tags=pool,cont,fullpoolcontcreate,small,vm
+        :avocado: tags=all,container,tiny,full_regression,fullpoolcontcreate
         """
         # full storage rc
         err = "-1007"

@@ -77,7 +77,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing a single  pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,smoke,pr,small,createone
         """
 
         # Accumulate a list of pass/fail indicators representing
@@ -147,7 +147,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,smoke,pr,small,createtwo
         """
 
         # Accumulate a list of pass/fail indicators representing
@@ -232,7 +232,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,pr,small,createthree
         """
 
         # Accumulate a list of pass/fail indicators representing what is

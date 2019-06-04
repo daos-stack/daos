@@ -99,7 +99,7 @@ class DestroyRebuild(Test):
 
     def test_destroy_while_rebuilding(self):
         """
-        :avocado: tags=pool,pooldestroy,rebuild,desreb
+        :avocado: tags=all,pool,pr,medium,desreb
         """
         try:
             print("\nsetup complete, starting test\n")

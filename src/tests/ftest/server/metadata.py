@@ -155,7 +155,7 @@ class ObjectMetadata(Test):
         """
         Test ID: DAOS-1512
         Test Description: Test to verify no IO happens after metadata is full.
-        :avocado: tags=metadata,metadata_fill,nvme,small
+        :avocado: tags=all,metadata,pr,small,metadatafill
         """
         self.pool.connect(2)
         container = DaosContainer(self.context)

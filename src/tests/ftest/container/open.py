@@ -84,7 +84,7 @@ class OpenContainerTest(TestWithServers):
         """
         Test basic container bad create.
 
-        :avocado: tags=container,containeropen
+        :avocado: tags=all,container,tiny,full_regression,containeropen
         """
         container_uuid = None
         expected_for_param = []

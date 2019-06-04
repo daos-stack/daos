@@ -65,7 +65,7 @@ class PoolSvc(TestWithServers):
         """
         Test svc arg during pool create.
 
-        :avocado: tags=pool,svc
+        :avocado: tags=all,pool,pr,medium,svc
         """
 
         # parameters used in pool create

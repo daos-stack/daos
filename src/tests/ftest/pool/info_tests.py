@@ -75,7 +75,7 @@ class InfoTests(Test):
         """
         Test querying a pool created on a single server.
 
-        :avocado: tags=pool,poolquery,infotest
+        :avocado: tags=all,pool,smoke,pr,tiny,infotest
         """
         # create pool
         mode = self.params.get("mode", '/run/testparams/modes/*', "0731")

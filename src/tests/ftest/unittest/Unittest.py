@@ -56,34 +56,34 @@ class UnitTest(Test):
     def test_smd_ut(self):
         """
         Test smd unittest.
-        :avocado: tags=unittest,nvme,smd_ut
+        :avocado: tags=all,unittest,pr,tiny,hw,smd_ut
         """
         self.unittest_runner("smd_ut")
 
     def test_vea_ut(self):
         """
         Test vea unittest.
-        :avocado: tags=unittest,nvme,vea_ut
+        :avocado: tags=all,unittest,pr,tiny,hw,vea_ut
         """
         self.unittest_runner("vea_ut")
 
     def test_pl_map(self):
         """
         Test pl_map unittest.
-        :avocado: tags=unittest,pl_map
+        :avocado: tags=all,unittest,pr,tiny,hw,pl_map
         """
         self.unittest_runner("pl_map")
 
     def test_eq_tests(self):
         """
         Test eq_tests unittest.
-        :avocado: tags=unittest,eq_tests
+        :avocado: tags=all,unittest,pr,tiny,hw,eq_tests
         """
         self.unittest_runner("eq_tests")
 
     def test_vos_tests(self):
         """
         Test eq_tests unittest.
-        :avocado: tags=unittest,vos_tests
+        :avocado: tags=all,unittest,pr,tiny,hw,vos_tests
         """
         self.unittest_runner("vos_tests")

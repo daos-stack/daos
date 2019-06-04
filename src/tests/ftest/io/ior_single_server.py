@@ -94,7 +94,7 @@ class IorSingleServer(Test):
         """
         Test IOR with Single Server config.
 
-        :avocado: tags=ior,singleserver
+        :avocado: tags=all,daosio,large,singleserver
         """
 
         # parameters used in pool create

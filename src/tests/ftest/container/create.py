@@ -43,7 +43,7 @@ class CreateContainerTest(TestWithServers):
 
         Test Description: valid and invalid container creation and close.
 
-        :avocado: tags=regression,cont,contcreate
+        :avocado: tags=all,container,tiny,smoke,full_regression,containercreate
         """
 
         pool = None

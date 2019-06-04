@@ -84,7 +84,7 @@ class DestroyTests(Test):
         Test destroying a pool created on a single server, nobody is using
         the pool, force is not needed.
 
-        :avocado: tags=pool,pooldestroy,quick
+        :avocado: tags=all,pool,pr,medium,pooldestroy
         """
         self.hostlist_servers = self.params.get("test_machines1", '/run/hosts/')
         hostfile_servers = write_host_file.write_host_file(
@@ -146,7 +146,7 @@ class DestroyTests(Test):
         """
         Test destroying a pool uuid that doesn't exist.
 
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=all,pool,full_regression,medium,pooldestroynoexist
         """
         self.hostlist_servers = self.params.get("test_machines1", '/run/hosts/')
         hostfile_servers = write_host_file.write_host_file(
@@ -194,7 +194,7 @@ class DestroyTests(Test):
         """
         Test destroying a pool valid pool but use the wrong server group.
 
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=all,pool,full_regression,medium,pooldestroywrongsrv
         """
 
         self.hostlist_servers = self.params.get("test_machines1", '/run/hosts/')
@@ -266,7 +266,7 @@ class DestroyTests(Test):
         the pool, force is not needed.  This is accomplished by switching
         hostfile_serverss.
 
-        :avocado: tags=pool,pooldestroy,multiserver
+        :avocado: tags=all,pool,pr,medium,pooldestroymultiserver
         """
         self.hostlist_servers = self.params.get("test_machines2", '/run/hosts/')
         hostfile_servers = write_host_file.write_host_file(
@@ -340,7 +340,7 @@ class DestroyTests(Test):
         Test destroying a pool created on server group A by passing
         in server group B, should fail.
 
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=all,pool,full_regression,pooldestroy
         """
         setid2 = self.basepath + self.params.get("setname",
                                                  '/run/setnames/othersetname/')
@@ -428,7 +428,7 @@ class DestroyTests(Test):
         Test destroying a pool that has a connected client with force == false.
         Should fail.
 
-        :avocado: tags=pool,pooldestroy,x
+        :avocado: tags=all,pool,pr,medium,forcedestroy
         """
         host = self.hostlist_servers[0]
         try:
@@ -488,7 +488,7 @@ class DestroyTests(Test):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=pool,pooldestroy,destroyredo
+        :avocado: tags=all,pool,pr,medium,destroyredo
         """
 
         try:
@@ -553,7 +553,7 @@ class DestroyTests(Test):
         """
         Test destroy on a large (relative) number of servers.
 
-        :avocado: tags=pool,pooldestroy,destroybig
+        :avocado: tags=all,pool,full_regression,medium,destroybig
         """
         try:
             # write out a hostfile_servers and start the servers with it
@@ -606,7 +606,7 @@ class DestroyTests(Test):
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=pool,pooldestroy,destroydata
+        :avocado: tags=all,pool,pr,medium,destroydata
         """
         try:
             # write out a hostfile_servers and start the servers with it
@@ -673,7 +673,7 @@ class DestroyTests(Test):
         """
         Performn destroy asynchronously, successful and failed.
 
-        :avocado: tags=pool,pooldestroy,destroyasync
+        :avocado: tags=all,pool,full_regression,medium,destroyasync
         """
 
         global GLOB_SIGNAL

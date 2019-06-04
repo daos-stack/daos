@@ -160,7 +160,7 @@ class LlnlMpi4py(Test):
         Test ID: DAOS-2231
         Run LLNL test provided in mpich package
         Testing various I/O functions provided in llnl test suite
-        :avocado: tags=mpio,llnlmpi4py,llnl
+        :avocado: tags=all,mpiio,smoke,pr,small,llnlmpi4py
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
@@ -170,7 +170,7 @@ class LlnlMpi4py(Test):
         Test ID: DAOS-2231
         Run LLNL test provided in mpich package
         Testing various I/O functions provided in llnl test suite
-        :avocado: tags=mpio,llnlmpi4py,mpi4py
+        :avocado: tags=all,mpiio,pr,small,llnlmpi4py,mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
         self.run_test(test_repo, "mpi4py")

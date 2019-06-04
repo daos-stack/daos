@@ -164,7 +164,7 @@ class EightServers(Test):
         Use Cases: Different combinations of 32/64/128 Clients, 8b/1k/4k
                    record size, 1k/4k/1m/8m transfersize and stripesize
                    and 16 async io.
-        :avocado: tags=ior,eightservers,ior_sequential
+        :avocado: tags=all,daosio,large,ior_sequential
         """
         ior_flags = self.params.get("F", '/run/ior/iorflags/sequential/')
         self.executable(ior_flags)
@@ -177,7 +177,7 @@ class EightServers(Test):
         Use Cases: Different combinations of 32/64/128 Clients, 8b/1k/4k
                    record size, 1k/4k/1m/8m transfersize and stripesize
                    and 16 async io.
-        :avocado: tags=ior,eightservers,ior_random
+        :avocado: tags=all,daosio,large,ior_random
         """
         ior_flags = self.params.get("F", '/run/ior/iorflags/random/')
         self.executable(ior_flags)

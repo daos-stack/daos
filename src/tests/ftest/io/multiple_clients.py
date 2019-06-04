@@ -99,7 +99,7 @@ class MultipleClients(Test):
         Test Description: Test IOR with 16 and 32 clients config.
         Use Cases: Different combinations of 16/32 Clients, 8b/1k/4k
                    record size, 1m/8m stripesize and 16 async io.
-        :avocado: tags=ior,twoservers,multipleclients
+        :avocado: tags=all,daosio,full_regression,medium,multipleclients
         """
 
         # parameters used in pool create

@@ -151,7 +151,7 @@ class EightServers(Test):
         Use Cases: Different combinations of 1/64/128 Clients,
                    1K/4K/32K/128K/512K/1M transfersize and block size of 32M
                    for 1K transfer size and 128M for rest.
-        :avocado: tags=ior,mpiio,eightservers,ior_ssf
+        :avocado: tags=ior_ssf
         """
         ior_flags = self.params.get("F", '/run/ior/iorflags/ssf/')
         self.executable(ior_flags)
@@ -163,7 +163,7 @@ class EightServers(Test):
         Use Cases: Different combinations of 1/64/128 Clients,
                    1K/4K/32K/128K/512K/1M transfersize and block size of 32M
                    for 1K transfer size and 128M for rest.
-        :avocado: tags=ior,mpiio,eightservers,ior_fpp
+        :avocado: tags=ior_fpp
         """
         ior_flags = self.params.get("F", '/run/ior/iorflags/fpp/')
         self.executable(ior_flags)

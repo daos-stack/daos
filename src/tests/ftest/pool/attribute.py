@@ -148,7 +148,7 @@ class PoolAttributeTest(Test):
 
         Test description: Test basic pool attribute tests (sync).
 
-        :avocado: tags=regression,pool,pool_attr,attribute,sync_poolattribute
+        :avocado: tags=all,pool,pr,tiny,sync_poolattribute
         """
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
@@ -201,7 +201,7 @@ class PoolAttributeTest(Test):
 
         Test description: Test basic pool attribute tests (async).
 
-        :avocado: tags=regression,pool,pool_attr,attribute,async_poolattribute
+        :avocado: tags=all,pool,full_regression,tiny,async_poolattribute
         """
         global GLOB_SIGNAL
         global GLOB_RC

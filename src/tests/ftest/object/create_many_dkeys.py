@@ -132,7 +132,7 @@ class CreateManyDkeys(Test):
         Test Description: Test many of dkeys in same object.
         Use Cases: 1. large key counts
                    2. space reclaimation after destroy
-        :avocado: tags=object,vm,many_dkeys
+        :avocado: tags=all,full,small,object,many_dkeys
 
         """
 

@@ -42,7 +42,7 @@ class ConnectTest(TestWithServers):
         """
         Test connecting to a pool.
 
-        :avocado: tags=pool,poolconnect,quick
+        :avocado: tags=all,pool,smoke,pr,small,poolconnect
         """
 
         # Accumulate a list of pass/fail indicators representing what is

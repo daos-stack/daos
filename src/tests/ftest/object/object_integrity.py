@@ -139,7 +139,7 @@ class ObjectDataValidation(avocado.Test):
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=single_object,data_verification,medium,vm
+        :avocado: tags=all,object,full_regression,small,single_object,
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -197,7 +197,7 @@ class ObjectDataValidation(avocado.Test):
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify Array data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=array_object,data_verification,array,medium,vm
+        :avocado: tags=all,object,full_regression,small,array_object
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0
