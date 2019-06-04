@@ -113,7 +113,7 @@ struct daos_obj_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
 	uint32_t		st_tgt_idx;	/* target xstream index */
-	uint32_t		st_pad;		/* padding */
+	uint32_t		st_tgt_id;	/* target id */
 };
 
 /* common for update/fetch */
