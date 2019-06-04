@@ -142,12 +142,19 @@ func serverMain() error {
 			return err
 		}
 
-		if err := dropPrivileges(&config); err != nil {
+		if err := changeFileOwnership(&config); err != nil {
 			log.Errorf(
 				"Failed to drop privileges:\n%+v\nrunning as root "+
 					"is dangerous and is not advised!", err)
 		} else {
-			// respawn as normal user if running as root
+			// Make NVMe storage accessible to new user.
+			err = mgmtCtlSvc.nvme.spdk.prep(1024, config.UserName, "")
+			if err != nil {
+				log.Errorf("Failed to prep nvme storage: %+v", err)
+				return err
+			}
+
+			// Respawn process owned by new user.
 			var argString string
 			for _, arg := range os.Args {
 				argString += arg + " "

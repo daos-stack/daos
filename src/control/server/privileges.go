@@ -126,7 +126,7 @@ func chownAll(config *configuration, user string, group string) error {
 // process to that of the username specified in config file. If groupname is
 // specified in config file then check user is a member of that group and
 // set relevant gid if so, otherwise use user.gid.
-func dropPrivileges(config *configuration) error {
+func changeFileOwnership(config *configuration) error {
 	if config.UserName == "" {
 		return errors.New("no username supplied in config")
 	}
@@ -134,11 +134,13 @@ func dropPrivileges(config *configuration) error {
 	log.Debugf(
 		"running as root, changing file ownership to user %s", config.UserName)
 
+	// TODO: getUID can be simplified to only return 2 values
 	usr, _, err := getUID(config.ext, config.UserName)
 	if err != nil {
 		return errors.WithMessage(err, "get uid")
 	}
 
+	// TODO: getGID can be simplified to only return 2 values
 	grpName, _, err := getGID(config.ext, usr, config.GroupName)
 	if err != nil {
 		return errors.WithMessage(err, "get gid")
@@ -147,14 +149,6 @@ func dropPrivileges(config *configuration) error {
 	if err := chownAll(config, usr.Username, grpName); err != nil {
 		return err
 	}
-
-	//	if err := config.ext.setGID(gid); err != nil {
-	//		return errors.WithMessage(err, "setting gid")
-	//	}
-	//
-	//	if err := config.ext.setUID(uid); err != nil {
-	//		return errors.WithMessage(err, "setting uid")
-	//	}
 
 	return nil
 }
