@@ -1185,6 +1185,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	int idx = 0;
 
+	D_DEBUG(DB_PL,"Finding Rebuild\n");
+
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
 		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
@@ -1221,6 +1223,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
 		goto out;
 	}
+
+	mapless_obj_layout_dump(oid,layout);
 
 	d_list_for_each_entry(f_shard, &remap_list, fs_list) {
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
