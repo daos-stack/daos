@@ -159,32 +159,6 @@ struct cmd_args_s {
 typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 
 static void
-cmd_args_init(struct cmd_args_s *ap)
-{
-	if (ap == NULL)
-		return;
-	ap->p_op = -1;
-	ap->c_op = -1;
-	ap->group = default_group;
-	uuid_clear(ap->pool_uuid);
-	uuid_clear(ap->cont_uuid);
-	ap->mdsrv_str = NULL;
-	ap->mdsrv = NULL;
-	ap->attrname_str = NULL;
-	ap->value_str = NULL;
-	ap->path_str = NULL;
-	ap->type_str = NULL;
-	ap->oclass_str = NULL;
-	ap->chunk_size = 0;
-	ap->snapname_str = NULL;
-	ap->epc = 0;
-	ap->epcrange_str = NULL;
-	ap->epcrange_begin = 0;
-	ap->epcrange_end = 0;
-}
-
-
-static void
 cmd_args_print(struct cmd_args_s *ap)
 {
 	if (ap == NULL)
@@ -274,69 +248,28 @@ tobytes(const char *str)
 	return size;
 }
 
-/* acopy_str()
- * Allocate dest string and copy source contents.
- * Return NULL if not possible. Caller ensures src is not NULL.
- */
-static char *
-acopy_str(const char *src)
-{
-	char	*dst = NULL;
-
-	assert(src != NULL);
-
-	/* TODO: put a reasonable max on strlen(src) */
-	D_ALLOC_ARRAY(dst, strlen(src) + 1);
-	if (dst != NULL)
-		strcpy(dst, src);
-
-	return dst;
-}
 
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
-	const char	*sep = "-";
-	char		*s, *s_saved;
-	char		*end_s;
-	char		*p;
+	int		rc;
+	long long int	parsed_begin = 0;
+	long long int	parsed_end = 0;
 
-	s = s_saved = strdup(ap->epcrange_str);
-	if (s == NULL) {
-		fprintf(stderr, "strdup() failed\n");
-		goto out;
+	rc = sscanf(ap->epcrange_str, "%lld-%lld",
+			&parsed_begin, &parsed_end);
+	if ((rc != 2) || (parsed_begin < 0) || (parsed_end < 0)) {
+		D_GOTO(out_invalid_format, -1);
 	}
 
-	/* Get the first integer in the epoch range
-	 * Detect negative number and error out.
-	 */
-	if (s[0] == '-') {
-		fprintf(stderr, "epoch range %s cannot contain "
-			"a negative epoch number\n", ap->epcrange_str);
-		goto out_invalid_format;
-	}
-	s = strtok_r(s, sep, &p);
-	if (s == NULL)
-		goto out_invalid_format;
-	ap->epcrange_begin = strtoull(s, &end_s, 10);
-
-	/* Get the second integer in the epoch range */
-	s = NULL;
-	s = strtok_r(s, sep, &p);
-	if (s == NULL)
-		goto out_invalid_format;
-	ap->epcrange_end = strtoull(s, &end_s, 10);
-
-	free(s_saved);
+	ap->epcrange_begin = parsed_begin;
+	ap->epcrange_end = parsed_end;
 
 	return 0;
 
 out_invalid_format:
-	fprintf(stderr, "epcrange=%s must be in A%sB form\n",
-		ap->epcrange_str, sep);
-	free(s_saved);
-
-out:
+	fprintf(stderr, "epcrange=%s must be in A-B form\n",
+		ap->epcrange_str);
 	return -1;
 }
 
@@ -365,8 +298,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
-
-	cmd_args_init(ap);
+	ap->p_op = -1;
+	ap->c_op = -1;
+	ap->group = default_group;
 
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
@@ -392,19 +326,23 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		fflush(stderr);
 		return RC_PRINT_HELP;
 	}
-	cmdname = acopy_str(argv[2]);
+	cmdname = strdup(argv[2]);
 
+	/* Parse command options. Use goto on any errors here
+	 * since some options may result in resource allocation.
+	 */
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
-			ap->group = acopy_str(optarg);
+			ap->group = strdup(optarg);
 			break;
 		case 'p':
 			if (uuid_parse(optarg, ap->pool_uuid) != 0) {
 				fprintf(stderr,
 					"failed to parse pool UUID: %s\n",
 					optarg);
-				return RC_NO_HELP;
+				rc = RC_NO_HELP;
+				D_GOTO(out_free, rc);
 			}
 			break;
 		case 'c':
@@ -412,28 +350,29 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				fprintf(stderr,
 					"failed to parse cont UUID: %s\n",
 					optarg);
-				return RC_NO_HELP;
+				rc = RC_NO_HELP;
+				D_GOTO(out_free, rc);
 			}
 			break;
 		case 'm':
-			ap->mdsrv_str = acopy_str(optarg);
+			ap->mdsrv_str = strdup(optarg);
 			ap->mdsrv = daos_rank_list_parse(ap->mdsrv_str, ",");
 			break;
 
 		case 'a':
-			ap->attrname_str = acopy_str(optarg);
+			ap->attrname_str = strdup(optarg);
 			break;
 		case 'v':
-			ap->value_str = acopy_str(optarg);
+			ap->value_str = strdup(optarg);
 			break;
 		case 'd':
-			ap->path_str = acopy_str(optarg);
+			ap->path_str = strdup(optarg);
 			break;
 		case 't':
-			ap->type_str = acopy_str(optarg);
+			ap->type_str = strdup(optarg);
 			break;
 		case 'o':
-			ap->oclass_str = acopy_str(optarg);
+			ap->oclass_str = strdup(optarg);
 			break;
 		case 'z':
 			ap->chunk_size = tobytes(optarg);
@@ -441,11 +380,12 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			    (ap->chunk_size == ULLONG_MAX && errno != 0)) {
 				fprintf(stderr, "failed to parse chunk_size:"
 					"%s\n", optarg);
-				return RC_NO_HELP;
+				rc = RC_NO_HELP;
+				D_GOTO(out_free, rc);
 			}
 			break;
 		case 's':
-			ap->snapname_str = acopy_str(optarg);
+			ap->snapname_str = strdup(optarg);
 			break;
 		case 'e':
 			ap->epc = strtoull(optarg, NULL, 10);
@@ -453,20 +393,23 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			    (ap->epc == ULLONG_MAX && errno != 0)) {
 				fprintf(stderr, "failed to parse epc: %s\n",
 					optarg);
-				return RC_NO_HELP;
+				rc = RC_NO_HELP;
+				D_GOTO(out_free, rc);
 			}
 			break;
 		case 'r':
-			ap->epcrange_str = acopy_str(optarg);
+			ap->epcrange_str = strdup(optarg);
 			rc = epoch_range_parse(ap);
 			if (rc != 0) {
 				fprintf(stderr, "failed to parse epcrange\n");
-				return RC_NO_HELP;
+				rc = RC_NO_HELP;
+				D_GOTO(out_free, rc);
 			}
 			break;
 		default:
 			printf("unknown option : %d\n", rc);
-			return RC_PRINT_HELP;
+			rc = RC_PRINT_HELP;
+			D_GOTO(out_free, rc);
 		}
 	}
 
@@ -481,7 +424,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	     ap->p_op == POOL_LIST_ATTRS)) {
 		fprintf(stderr,
 			"pool %s not yet implemented\n", cmdname);
-		return RC_NO_HELP;
+		rc = RC_NO_HELP;
+		D_GOTO(out_free, rc);
 	}
 
 	if (ap->c_op != -1 &&
@@ -500,33 +444,37 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
-		return RC_NO_HELP;
+		rc = RC_NO_HELP;
+		D_GOTO(out_free, rc);
 	}
 
 	/* Check the pool UUID (required) */
 	if (uuid_is_null(ap->pool_uuid)) {
 		fprintf(stderr, "pool UUID required\n");
 		fflush(stderr);
-		return RC_PRINT_HELP;
+		rc = RC_PRINT_HELP;
+		D_GOTO(out_free, rc);
 	}
 
 	/* Check the pool service ranks.(required) */
 	if (ap->mdsrv_str == NULL) {
 		fprintf(stderr, "--svc must be specified\n");
 		fflush(stderr);
-		return RC_PRINT_HELP;
+		rc = RC_PRINT_HELP;
+		D_GOTO(out_free, rc);
 	}
 
 	if (ap->mdsrv == NULL) {
 		fprintf(stderr, "failed to parse --svc=%s\n", ap->mdsrv_str);
-		return RC_NO_HELP;
+		rc = RC_NO_HELP;
+		D_GOTO(out_free, rc);
 	}
 
 	if (ap->mdsrv->rl_nr == 0) {
 		fprintf(stderr, "--svc must not be empty\n");
 		fflush(stderr);
 		rc = RC_PRINT_HELP;
-		goto bad_opt_free_mdsrv;
+		D_GOTO(out_free, rc);
 	}
 
 	/* TODO: decide if for container operations the code should
@@ -536,7 +484,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	 */
 	return 0;
 
-bad_opt_free_mdsrv:
+out_free:
 	daos_rank_list_free(ap->mdsrv);
 	return rc;
 }
@@ -566,14 +514,14 @@ pool_op_hdlr(struct cmd_args_s *ap)
 				       NULL /* info */, NULL /* ev */);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to pool: %d\n", rc);
-			goto bad_pool_connect;
+			D_GOTO(out, rc);
 		}
 
 		pinfo.pi_bits = DPI_ALL;
 		rc = daos_pool_query(pool, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
-			goto bad_pool_query;
+			D_GOTO(out_disconnect, rc);
 		}
 		D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
 			DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
@@ -618,17 +566,17 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	 * op == POOL_LIST_ATTRS
 	 */
 
-bad_pool_query:
+out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	if (op == POOL_QUERY) {
 		rc2 = daos_pool_disconnect(pool, NULL);
-		if (rc2 != 0) {
+		if (rc2 != 0)
 			fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
-		}
+
 		if (rc == 0)
 			rc = rc2;
 	}
-bad_pool_connect:
+out:
 	return rc;
 }
 
@@ -652,7 +600,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "valid cont uuid required\n");
 		fflush(stderr);
 		rc = RC_PRINT_HELP;
-		goto bad_opt_free_mdsrv;
+		D_GOTO(out_free_mdsrv, rc);
 	}
 
 	/*
@@ -664,7 +612,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool: %d\n", rc);
-		goto bad_pool_connect;
+		D_GOTO(out_free_mdsrv, rc);
 	}
 
 	if (op == CONT_CREATE) {
@@ -672,39 +620,19 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = daos_cont_create(pool, ap->cont_uuid, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to create container: %d\n", rc);
-			goto bad_cont_create;
+			D_GOTO(out_disconnect, rc);
 		}
 		fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
 			DP_UUID(ap->cont_uuid));
 	}
 
-	if (op != CONT_DESTROY) {
+	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		rc = daos_cont_open(pool, ap->cont_uuid, DAOS_COO_RW, &coh,
 				    &cont_info, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "cont open failed: %d\n", rc);
-			goto bad_cont_open;
+			D_GOTO(out_disconnect, rc);
 		}
-	}
-
-
-	if (op != CONT_DESTROY) {
-		rc = daos_cont_close(coh, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to close container: %d\n", rc);
-			goto bad_cont_close;
-		}
-	}
-
-	if (op == CONT_DESTROY) {
-		rc = daos_cont_destroy(pool, ap->cont_uuid, 1, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to destroy container: %d\n",
-				rc);
-			goto bad_cont_destroy;
-		}
-		fprintf(stdout, "Successfully destroyed container "DF_UUIDF"\n",
-			DP_UUID(ap->cont_uuid));
 	}
 
 	/* TODO implement the following:
@@ -723,19 +651,35 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 * op == CONT_ROLLBACK
 	 */
 
-bad_cont_destroy:
-bad_cont_close:
-bad_cont_open:
-bad_cont_create:
+	if (op != CONT_CREATE && op != CONT_DESTROY) {
+		rc = daos_cont_close(coh, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to close container: %d\n", rc);
+			D_GOTO(out_disconnect, rc);
+		}
+	}
+
+	if (op == CONT_DESTROY) {
+		rc = daos_cont_destroy(pool, ap->cont_uuid, 1, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to destroy container: %d\n",
+				rc);
+			D_GOTO(out_disconnect, rc);
+		}
+		fprintf(stdout, "Successfully destroyed container "DF_UUIDF"\n",
+			DP_UUID(ap->cont_uuid));
+	}
+
+out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(pool, NULL);
-	if (rc2 != 0) {
+	if (rc2 != 0)
 		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
-	}
+
 	if (rc == 0)
 		rc = rc2;
-bad_pool_connect:
-bad_opt_free_mdsrv:
+
+out_free_mdsrv:  /* free mdsrv allocated in common_op_parse_hdlr() */
 	daos_rank_list_free(ap->mdsrv);
 	return rc;
 }
@@ -809,16 +753,15 @@ main(int argc, char *argv[])
 {
 	int			rc = 0;
 	command_hdlr_t		hdlr = NULL;
-	struct cmd_args_s	dargs;
+	struct cmd_args_s	dargs = {0};
 
 	/* argv[1] is RESOURCE or "help";
 	 * argv[2] if provided is a resource-specific command
 	 */
 	if (argc <= 2 || strcmp(argv[1], "help") == 0)
 		hdlr = help_hdlr;
-	else if (strcmp(argv[1], "container") == 0)
-		hdlr = cont_op_hdlr;
-	else if (strcmp(argv[1], "cont") == 0)
+	else if ((strcmp(argv[1], "container") == 0) ||
+		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "pool") == 0)
 		hdlr = pool_op_hdlr;
@@ -857,9 +800,9 @@ main(int argc, char *argv[])
 
 	daos_fini();
 
-	if (rc < 0) {
+	if (rc < 0)
 		return 1;
-	} else if (rc > 0) {
+	else if (rc > 0) {
 		printf("rc: %d\n", rc);
 		dargs.ostream = stderr;
 		help_hdlr(&dargs);
