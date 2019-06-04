@@ -861,11 +861,9 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 			struct dc_obj_shard *obj_shard;
 			struct pool_target *tgt;
 
-			obj_shard = &obj->cob_shards->do_shards[k];
-			if (obj_shard->do_target_id == -1) {
-				k++;
+			obj_shard = &obj->cob_shards->do_shards[k++];
+			if (obj_shard->do_target_id == -1)
 				continue;
-			}
 
 			rc = dc_cont_tgt_idx2ptr(obj->cob_coh,
 						 obj_shard->do_target_id, &tgt);
