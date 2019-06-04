@@ -234,12 +234,12 @@ dc_obj_list_dkey_task_create(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 		return rc;
 
 	args = dc_task_get_args(*task);
-	args->oh	= oh;
-	args->th	= th;
-	args->nr	= nr;
-	args->kds	= kds;
-	args->sgl	= sgl;
-	args->anchor	= anchor;
+	args->oh		= oh;
+	args->th		= th;
+	args->nr		= nr;
+	args->kds		= kds;
+	args->sgl		= sgl;
+	args->dkey_anchor	= anchor;
 
 	return 0;
 }
@@ -260,13 +260,13 @@ dc_obj_list_akey_task_create(daos_handle_t oh, daos_handle_t th,
 		return rc;
 
 	args = dc_task_get_args(*task);
-	args->oh	= oh;
-	args->th	= th;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->kds	= kds;
-	args->sgl	= sgl;
-	args->anchor	= anchor;
+	args->oh		= oh;
+	args->th		= th;
+	args->dkey		= dkey;
+	args->nr		= nr;
+	args->kds		= kds;
+	args->sgl		= sgl;
+	args->akey_anchor	= anchor;
 
 	return 0;
 }

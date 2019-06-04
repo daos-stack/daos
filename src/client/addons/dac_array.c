@@ -1969,7 +1969,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		continue;
 	}
 
-	if (!daos_anchor_is_eof(args->anchor)) {
+	if (!daos_anchor_is_eof(args->dkey_anchor)) {
 		props->nr = ENUM_DESC_NR;
 		memset(props->buf, 0, ENUM_DESC_BUF);
 		args->sgl->sg_nr = 1;
@@ -2077,7 +2077,7 @@ dac_array_set_size(tse_task_t *task)
 	enum_args->nr		= &set_size_props->nr;
 	enum_args->kds		= set_size_props->kds;
 	enum_args->sgl		= &set_size_props->sgl;
-	enum_args->anchor	= &set_size_props->anchor;
+	enum_args->dkey_anchor	= &set_size_props->anchor;
 
 	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0,
 				   adjust_array_size_cb, &set_size_props,

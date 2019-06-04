@@ -273,10 +273,11 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		uint32_t fw_cnt, tse_task_t *task)
 {
 	struct shard_rw_args	*args = shard_args;
+	daos_obj_rw_t		*api_args = args->api_args;
 	struct dc_pool		*pool;
-	daos_key_t		*dkey = args->dkey;
-	unsigned int		 nr = args->nr;
-	d_sg_list_t		*sgls = args->sgls;
+	daos_key_t		*dkey = api_args->dkey;
+	unsigned int		 nr = api_args->nr;
+	d_sg_list_t		*sgls = api_args->sgls;
 	crt_rpc_t		*req = NULL;
 	struct obj_rw_in	*orw;
 	struct rw_cb_args	 rw_args;
@@ -357,7 +358,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
 	orw->orw_iods.ca_count = nr;
-	orw->orw_iods.ca_arrays = args->iods;
+	orw->orw_iods.ca_arrays = api_args->iods;
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
@@ -649,15 +650,14 @@ out:
 #define KDS_BULK_LIMIT	128
 
 int
-dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
-		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_iod_type_t type, daos_size_t *size, uint32_t *nr,
-		  daos_key_desc_t *kds, d_sg_list_t *sgl,
-		  daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		  daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
-		  daos_anchor_t *akey_anchor, unsigned int *map_ver,
-		  tse_task_t *task)
+dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
+		  void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+		  uint32_t fw_cnt, tse_task_t *task)
 {
+	struct shard_list_args *args = shard_args;
+	daos_obj_list_t	       *obj_args = args->la_api_args;
+	daos_key_desc_t	       *kds = obj_args->kds;
+	d_sg_list_t	       *sgl = obj_args->sgl;
 	crt_endpoint_t		tgt_ep;
 	struct dc_pool	       *pool = NULL;
 	crt_rpc_t	       *req;
@@ -696,25 +696,25 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	oei = crt_req_get(req);
 	D_ASSERT(oei != NULL);
 
-	if (dkey != NULL)
-		oei->oei_dkey = *dkey;
-	if (akey != NULL)
-		oei->oei_akey = *akey;
+	if (obj_args->dkey != NULL)
+		oei->oei_dkey = *obj_args->dkey;
+	if (obj_args->akey != NULL)
+		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
-	oei->oei_map_ver	= *map_ver;
-	oei->oei_epoch		= epoch;
-	oei->oei_nr		= *nr;
-	oei->oei_rec_type	= type;
+	oei->oei_map_ver	= args->la_auxi.map_ver;
+	oei->oei_epoch		= args->la_epoch;
+	oei->oei_nr		= *obj_args->nr;
+	oei->oei_rec_type	= obj_args->type;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
 
-	if (anchor != NULL)
-		enum_anchor_copy(&oei->oei_anchor, anchor);
-	if (dkey_anchor != NULL)
-		enum_anchor_copy(&oei->oei_dkey_anchor, dkey_anchor);
-	if (akey_anchor != NULL)
-		enum_anchor_copy(&oei->oei_akey_anchor, akey_anchor);
+	if (obj_args->anchor != NULL)
+		enum_anchor_copy(&oei->oei_anchor, obj_args->anchor);
+	if (obj_args->dkey_anchor != NULL)
+		enum_anchor_copy(&oei->oei_dkey_anchor, obj_args->dkey_anchor);
+	if (obj_args->akey_anchor != NULL)
+		enum_anchor_copy(&oei->oei_akey_anchor, obj_args->akey_anchor);
 
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
@@ -729,11 +729,11 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		}
 	}
 
-	if (*nr > KDS_BULK_LIMIT) {
+	if (*obj_args->nr > KDS_BULK_LIMIT) {
 		d_sg_list_t	tmp_sgl = { 0 };
 		d_iov_t		tmp_iov = { 0 };
 
-		tmp_iov.iov_buf_len = sizeof(*kds) * (*nr);
+		tmp_iov.iov_buf_len = sizeof(*kds) * (*obj_args->nr);
 		tmp_iov.iov_buf = kds;
 		tmp_sgl.sg_nr_out = 1;
 		tmp_sgl.sg_nr = 1;
@@ -749,17 +749,17 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	crt_req_addref(req);
 	enum_args.rpc = req;
 	enum_args.hdlp = (daos_handle_t *)pool;
-	enum_args.eaa_nr = nr;
+	enum_args.eaa_nr = obj_args->nr;
 	enum_args.eaa_kds = kds;
-	enum_args.eaa_anchor = anchor;
-	enum_args.eaa_dkey_anchor = dkey_anchor;
-	enum_args.eaa_akey_anchor = akey_anchor;
+	enum_args.eaa_anchor = obj_args->anchor;
+	enum_args.eaa_dkey_anchor = obj_args->dkey_anchor;
+	enum_args.eaa_akey_anchor = obj_args->akey_anchor;
 	enum_args.eaa_obj = obj_shard;
-	enum_args.eaa_size = size;
+	enum_args.eaa_size = obj_args->size;
 	enum_args.eaa_sgl = sgl;
-	enum_args.eaa_map_ver = map_ver;
-	enum_args.eaa_recxs = recxs;
-	enum_args.eaa_eprs = eprs;
+	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
+	enum_args.eaa_recxs = obj_args->recxs;
+	enum_args.eaa_eprs = obj_args->eprs;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
