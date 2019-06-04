@@ -102,7 +102,7 @@ class MpioUtils():
         except (IOError, OSError, paramiko.SSHException, socket.error) as excep:
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
                              .format(str(excep)))
-
+    # pylint: disable=R0913
     def run_llnl_mpi4py_hdf5(self, basepath, hostfile, pool_uuid, test_repo,
                              test_name, client_processes):
         """

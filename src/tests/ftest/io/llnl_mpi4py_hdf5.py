@@ -24,8 +24,6 @@
 
 from __future__    import print_function
 import os
-import sys
-import json
 from apricot import TestWithServers
 
 import write_host_file
@@ -100,6 +98,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
                              "ERROR"]
 
             for line in searchfile:
+                # pylint: disable=C0200
                 for i in range(len(error_message)):
                     if error_message[i] in line:
                         self.fail("Test Failed with error_message: {}"
