@@ -26,7 +26,6 @@ package mgmt;
 
 import "common.proto";
 import "storage.proto";
-import "pool.proto";
 import "features.proto";
 import "srv.proto";
 
@@ -44,8 +43,6 @@ service MgmtControl {
 	rpc BurninStorage(BurninStorageReq) returns (stream BurninStorageResp) {};
 	// Fetch FIO configuration file specifying burn-in jobs/workloads
 	rpc FetchFioConfigPaths(EmptyReq) returns (stream FilePath) {};
-	// Create a DAOS pool allocated across a number of ranks
-	rpc CreatePool(CreatePoolReq) returns (CreatePoolResp) {};
 	// Kill a given rank associated with a given pool
 	rpc KillRank(DaosRank) returns (DaosResponse) {};
 	// List features supported on remote storage server/DAOS system

@@ -31,7 +31,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
 )
 
@@ -54,12 +53,9 @@ type CreatePoolCmd struct {
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
-	RankList   string `short:"r" long:"ranks" description:"DAOS pool to be owned by given user"`
+	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
-	//GID uint32 `short:"g" long:"gid" description:"Pool GID"`
-	//UID uint32 `short:"u" long:"uid" description:"Pool UID"`
-	//Group string `short:"G" long:"group" description:"Pool group name"`
-	//Mode uint64 `short:"m" long:"mode" description:"Pool permissions mode"`
+	ProcGroup  string `short:"G" long:"proc-group" default:"daos_server" description:"Pool process group name"`
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -148,11 +144,10 @@ func createPool(
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
 
-	// TODO: do we want to verify format of list here or just at iosrv?
-	//	ranks, err := parseRanks(rankList)
-	//	if err != nil {
-	//		return errors.Wrap(err, "parsing rank list")
-	//	}
+	ranks, err := parseRanks(rankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
+	}
 
 	if aclFile != "" {
 		return errors.New("ACL file parsing not implemented")
@@ -166,7 +161,7 @@ func createPool(
 
 	req := &pb.CreatePoolReq{
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
-		Ranklist: rankList, Numsvcreps: numSvcReps,
+		Ranks: ranks, Numsvcreps: numSvcReps,
 	}
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)

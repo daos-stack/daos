@@ -63,25 +63,3 @@ func (c *controlService) KillRank(
 
 	return c.callDrpcMethodWithMessage(killRank, rank)
 }
-
-// CreatePool implements the method defined for the MgmtControl protobuf service.
-func (c *controlService) CreatePool(
-	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
-
-	log.Debugf("ControlService.CreatePool dispatch\n")
-	// TODO: implement lock and drpc IDs & handler in iosrv
-	// c.mutex.Lock()
-	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, join, req)
-	// c.mutex.Unlock()
-	// if err != nil {
-	//	return nil, err
-	//}
-
-	resp := &pb.CreatePoolResp{}
-	// TODO
-	// if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-	// 	return nil, errors.Wrap(err, "unmarshal CreatePool response")
-	// }
-
-	return resp, errors.New("CreatePool dRPC not implemented")
-}

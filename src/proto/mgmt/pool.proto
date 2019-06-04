@@ -32,10 +32,11 @@ import "srv.proto";
 message CreatePoolReq {
 	uint64 scmbytes = 1;
 	uint64 nvmebytes = 2;
-	string ranklist = 3; // colon separated integers
+	repeated uint32 ranks = 3; // colon separated integers
 	uint32 numsvcreps = 4; // desired number of pool service replicas
 	string user = 5; // formatted user e.g. "bob@"
 	string usergroup = 6; // formatted group e.g. "builders@"
+	string procgroup = 7; // DAOS process group identifier
 }
 
 // CreatePoolResp returns created pool uuid and ranks.
