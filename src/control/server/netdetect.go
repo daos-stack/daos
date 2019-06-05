@@ -41,19 +41,19 @@ import (
 
 const hwlocLibrary = "libhwloc.so"
 
-// ExtractAffinityForNetworkDevices returns the ioDevices, cpuset and nodeset
-// that intersect with the devices specified by the netNames.  The netNames
-// string must be in the format specified by DetectNetworkDevices() while
-// the ioDevices string must be in the format specified by
-// GetAffinityForIONodes().
-func ExtractAffinityForNetworkDevices(netNames string, ioDevices string) (string) {
+// extractAffinityForNamedDevices returns the ioDevices, cpuset and nodeset
+// that intersect with the devices specified by the devices.  The devices
+// string must be in the format "name0,name1, ... nameN" while
+// the ioDevices string must be in the format specified by:
+// "device0:cpuset:nodeset;device1:cpuset:nodeset; ... deviceN:cpuset:nodeset"
+func extractAffinityForNamedDevices(devices string, ioDevices string) (string) {
 	var networkDeviceSubset string
 
-	if netNames == "" || ioDevices == "" {
+	if devices == "" || ioDevices == "" {
 		return networkDeviceSubset
 	}
 
-	netNameList := strings.Split(netNames, ",")
+	netNameList := strings.Split(devices, ",")
 	allDevices := strings.Split(ioDevices, ";")
 	lenNetNameList := len(netNameList)
 	lenAllDevices := len(allDevices)
@@ -69,10 +69,10 @@ func ExtractAffinityForNetworkDevices(netNames string, ioDevices string) (string
 	return strings.TrimSuffix(networkDeviceSubset, ";")
 }
 
-// DetectNetworkDevices examines the network interfaces
-// and returns a string identifying them by name and has the form:
+// detectNetworkDevices examines the local network interfaces and
+// returns a string identifying them by name with the form:
 // "device0,device1, ... deviceN"
-func DetectNetworkDevices() (string, error) {
+func detectNetworkDevices() (string, error) {
 	var netNames string
 	networkInterfaces, err := net.Interfaces()
 
@@ -88,14 +88,14 @@ func DetectNetworkDevices() (string, error) {
 	return strings.TrimSuffix(netNames, ","), nil
 }
 
-// GetAffinityForNetworkDevices searches the local system topology for each
+// getAffinityForNetworkDevices searches the local system topology for each
 // network device and returns a string that names each device and the
 // corresponding cpuset and nodeset.  The cpuset describes those cpus with
 // the highest spatial locality to the device and are used by the hwloc API
 // to bind a thread to processing units that are closely connected.
 // Use hwloc_bitmap_sscanf() to convert the cpuset and nodeset strings back
 // into hwloc_bitmap_t when ready to bind with the hwloc API.
-func GetAffinityForNetworkDevices() (string, error) {
+func getAffinityForNetworkDevices() (string, error) {
 	var affinity string
 	var ioDevices *C.char
 
@@ -120,50 +120,12 @@ func GetAffinityForNetworkDevices() (string, error) {
 	status = C.NetDetectCleanup()
 
 	// Query the system to determine the names of the network devices
-	netDevsList, err := DetectNetworkDevices()
+	netDevsList, err := detectNetworkDevices()
 	if err != nil {
 		return affinity, err
 	}
-
 	// Extract the data that pertains to the network devices found
-	// because the ioDevices string has a superset of the data we want
-	affinity = ExtractAffinityForNetworkDevices(netDevsList, temp)
-	return affinity, nil
-}
+	affinity = extractAffinityForNamedDevices(netDevsList, temp)
 
-// GetAffinityForDevice searches the local system topology for the
-// device specified and returns a string that names that device and the
-// corresponding cpuset and nodeset.  The cpuset describes those cpus with
-// the highest spatial locality to the device and are used by the hwloc API
-// to bind a thread to processing units that are closely connected.
-// Use hwloc_bitmap_sscanf() to convert the cpuset and nodeset strings back
-// into hwloc_bitmap_t when ready to bind with the hwloc API.
-func GetAffinityForDevice(device string) (string, error) {
-	var affinity string
-	var ioDevices *C.char
-
-	// Dynamically load the hwloc library, map the exported functions
-	// and initialize the library to get it ready for use.
-	status := C.NetDetectInitialize(C.CString(hwlocLibrary))
-	if (status != C.NETDETECT_SUCCESS) {
-		return affinity, errors.New("Unable to load and initialize hwloc " +
-			"library.  Non fatal error.")
-	}
-
-	// Walk the topology to retrieve a list of IO devices and their cpusets
-	// and nodesets
-	ioDevices = C.NetDetectGetAffinityForIONodes()
-
-	// Store the results as a GO string and free the underlying C string
-	// allocated by NetDetectGetAffinityForIONodes()
-	temp := C.GoString(ioDevices)
-	C.free(unsafe.Pointer(ioDevices))
-
-	// We're done with the libary, so clean up.
-	status = C.NetDetectCleanup()
-
-	// Extract the data that pertains to the network devices found
-	// because the ioDevices string has a superset of the data we want
-	affinity = ExtractAffinityForNetworkDevices(device, temp)
 	return affinity, nil
 }
