@@ -265,7 +265,7 @@ again:
 			} else if (entry->iv_class->iv_class_id ==
 							IV_CONT_CAPA) {
 				/* Can not find the handle on leader */
-				rc = -DER_NO_PERM;
+				rc = -DER_NONEXIST;
 			}
 		}
 		D_DEBUG(DB_MGMT, "lookup cont: rc %d\n", rc);
