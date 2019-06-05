@@ -100,7 +100,7 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 // and nvme controllers.
 func (c *controlService) FormatStorage(
 	req *pb.FormatStorageReq,
-	stream pb.MgmtControl_FormatStorageServer) error {
+	stream pb.MgmtCtl_FormatStorageServer) error {
 
 	resp := new(pb.FormatStorageResp)
 
@@ -125,7 +125,7 @@ func (c *controlService) FormatStorage(
 // and nvme controllers.
 func (c *controlService) UpdateStorage(
 	req *pb.UpdateStorageReq,
-	stream pb.MgmtControl_UpdateStorageServer) error {
+	stream pb.MgmtCtl_UpdateStorageServer) error {
 
 	resp := new(pb.UpdateStorageResp)
 
@@ -149,7 +149,7 @@ func (c *controlService) UpdateStorage(
 // and nvme controllers.
 func (c *controlService) BurninStorage(
 	req *pb.BurninStorageReq,
-	stream pb.MgmtControl_BurninStorageServer) error {
+	stream pb.MgmtCtl_BurninStorageServer) error {
 
 	return errors.New("BurninStorage not implemented")
 	//	for i := range c.config.Servers {
@@ -166,7 +166,7 @@ func (c *controlService) BurninStorage(
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
 func (c *controlService) FetchFioConfigPaths(
-	empty *pb.EmptyReq, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
+	empty *pb.EmptyReq, stream pb.MgmtCtl_FetchFioConfigPathsServer) error {
 
 	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
@@ -191,7 +191,7 @@ func (c *controlService) FetchFioConfigPaths(
 //// BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 //// in a stream to the gRPC consumer.
 //func (c *controlService) BurnInNvme(
-//	req *pb.BurnInNvmeReq, stream pb.MgmtControl_BurnInNvmeServer) error {
+//	req *pb.BurnInNvmeReq, stream pb.MgmtCtl_BurnInNvmeServer) error {
 //	// retrieve command components
 //	cmdName, args, env, err := c.nvme.BurnIn(
 //		req.GetPciaddr(),

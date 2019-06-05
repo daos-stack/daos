@@ -29,10 +29,9 @@ import "storage.proto";
 import "features.proto";
 import "srv.proto";
 
-// This is the main service definition for communications involving the
-// gRPC management server. In order to add RPCs associated with new
-// service add them in the ManagementService definition below.
-service MgmtControl {
+// Service definitions for communications between gRPC management server and
+// client regarding tasks related to DAOS storage server hardware.
+service MgmtCtl {
 	// Retrieve details of nonvolatile storage devices on server
 	rpc ScanStorage(ScanStorageReq) returns (ScanStorageResp) {};
 	// Format nonvolatile storage devices for use with DAOS

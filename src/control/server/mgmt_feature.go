@@ -44,7 +44,7 @@ func (s *controlService) GetFeature(
 
 // ListFeatures lists all features supported by the management server.
 func (s *controlService) ListFeatures(
-	empty *pb.EmptyReq, stream pb.MgmtControl_ListFeaturesServer) error {
+	empty *pb.EmptyReq, stream pb.MgmtCtl_ListFeaturesServer) error {
 	for _, feature := range s.supportedFeatures {
 		if err := stream.Send(feature); err != nil {
 			return err

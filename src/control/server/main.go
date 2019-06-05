@@ -90,14 +90,14 @@ func serverMain() error {
 	}
 
 	// Create and setup control service.
-	mgmtControlServer, err := newControlService(
+	mgmtCtlSvc, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		log.Errorf("Failed to init ControlService: %s", err)
 		return err
 	}
-	mgmtControlServer.Setup()
-	defer mgmtControlServer.Teardown()
+	mgmtCtlSvc.Setup()
+	defer mgmtCtlSvc.Teardown()
 
 	// Create and start listener on management network.
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
@@ -115,7 +115,7 @@ func serverMain() error {
 	// the TLS protected channel. Currently it is an "insecure" channel.
 	grpcServer := grpc.NewServer(sOpts...)
 
-	mgmtpb.RegisterMgmtControlServer(grpcServer, mgmtControlServer)
+	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 	acl.RegisterAccessControlServer(grpcServer, secServer)
