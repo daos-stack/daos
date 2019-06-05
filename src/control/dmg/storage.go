@@ -75,8 +75,7 @@ func formatStor(force bool) {
 	fmt.Println(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
-			"Please be patient as it may take several minutes.\n" +
-			"Are you sure you want to continue? (yes/no)")
+			"Please be patient as it may take several minutes.\n")
 
 	if force || getConsent() {
 		fmt.Println("")
@@ -115,8 +114,7 @@ func updateStor(req *pb.UpdateStorageReq, force bool) {
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
 			"updated. Please check this is a supported upgrade path " +
-			"and be patient as it may take several minutes.\n" +
-			"Are you sure you want to continue? (yes/no)")
+			"and be patient as it may take several minutes.\n")
 
 	if force || getConsent() {
 		fmt.Println("")

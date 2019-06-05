@@ -173,6 +173,8 @@ func unpackClientMap(i interface{}) string {
 func getConsent() bool {
 	var response string
 
+	fmt.Println("Are you sure you want to continue? (yes/no)")
+
 	_, err := fmt.Scanln(&response)
 	if err != nil {
 		fmt.Printf("Error reading input: %s\n", err)
