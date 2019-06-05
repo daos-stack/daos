@@ -32,42 +32,6 @@ import sys
 class IorFailed(Exception):
     """Raise if Ior failed"""
 
-def build_ior(basepath):
-    from git import Repo
-    """ Pulls the DAOS branch of IOR and builds it """
-
-    home = os.path.expanduser("~")
-    repo = os.path.abspath(home + "/ior-hpc")
-
-    # check if there is pre-existing ior repo.
-    if os.path.isdir(repo):
-        shutil.rmtree(repo)
-
-    with open(os.path.join(basepath, ".build_vars.json")) as afile:
-        build_paths = json.load(afile)
-    daos_dir = build_paths['PREFIX']
-
-    try:
-        # pulling daos branch of IOR
-        Repo.clone_from("https://github.com/daos-stack/ior-hpc.git", repo,
-                        branch='daos')
-
-        cd_cmd = 'cd ' + repo
-        bootstrap_cmd = cd_cmd + ' && ./bootstrap '
-        configure_cmd = (
-            cd_cmd +
-            ' && ./configure --prefix={0} --with-daos={0}'.format(daos_dir))
-        make_cmd = cd_cmd + ' &&  make install'
-
-        # building ior
-        subprocess.check_call(bootstrap_cmd, shell=True)
-        subprocess.check_call(configure_cmd, shell=True)
-        subprocess.check_call(make_cmd, shell=True)
-
-    except subprocess.CalledProcessError as error:
-        print("<IorBuildFailed> Exception occurred: {0}".format(str(error)))
-        raise IorFailed("IOR Build process Failed")
-
 def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
                 svc_list, record_size, stripe_size, stripe_count, async_io,
                 object_class, basepath, hostfile, proc_per_node=1, seg_count=1,
