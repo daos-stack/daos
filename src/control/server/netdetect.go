@@ -46,7 +46,7 @@ const hwlocLibrary = "libhwloc.so"
 // the ioDevices string must be in the format specified by:
 // "device0:cpuset:nodeset;device1:cpuset:nodeset; ... deviceN:cpuset:nodeset"
 func netdetectExtractAffinityForNamedDevices(devices string,
-	ioDevices string) (string) {
+	ioDevices string) string {
 	var networkDeviceSubset string
 
 	if devices == "" || ioDevices == "" {
@@ -62,7 +62,7 @@ func netdetectExtractAffinityForNamedDevices(devices string,
 		for j := 0; j < lenAllDevices; j++ {
 			if strings.Contains(allDevices[j], netNameList[i]) {
 				networkDeviceSubset += allDevices[j] + ";"
-				break;
+				break
 			}
 		}
 	}
@@ -89,7 +89,7 @@ func netdetectNetworkDevices() (string, error) {
 }
 
 // netdetectErrorToString converts NETDETECT error codes to string messages
-func netdetectErrorToString(errorcode C.int)(string) {
+func netdetectErrorToString(errorcode C.int) string {
 	switch errorcode {
 	case C.NETDETECT_SUCCESS:
 		return "NETDETECT SUCCESS"
@@ -104,9 +104,7 @@ func netdetectErrorToString(errorcode C.int)(string) {
 	default:
 		return "NETDETECT UNKNOWN ERROR CODE"
 	}
-	return "NETDETECT UNKNOWN ERROR CODE"
 }
-
 
 // netdetectGetAffinityForNetworkDevices searches the local system topology
 // for each network device and returns a string that names each device and the
@@ -122,8 +120,8 @@ func netdetectGetAffinityForNetworkDevices() (string, error) {
 	// Dynamically load the hwloc library, map the exported functions
 	// and initialize the library to get it ready for use.
 	status := C.netdetectInitialize(C.CString(hwlocLibrary))
-	if (status != C.NETDETECT_SUCCESS) {
-		log.Debugf("There was an error loading the hwloc library: %v\n" +
+	if status != C.NETDETECT_SUCCESS {
+		log.Debugf("There was an error loading the hwloc library: %v\n"+
 			"This is a non-fatal error", netdetectErrorToString(C.int(status)))
 		return affinity, nil
 	}
