@@ -34,19 +34,19 @@ import "unsafe"
 
 import (
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
 	"net"
 	"strings"
 )
 
 const hwlocLibrary = "libhwloc.so"
 
-// extractAffinityForNamedDevices returns the ioDevices, cpuset and nodeset
-// that intersect with the devices specified by the devices.  The devices
-// string must be in the format "name0,name1, ... nameN" while
+// netdetectExtractAffinityForNamedDevices returns the ioDevices, cpuset and
+// nodeset that intersect with the devices specified by the devices.  The
+// devices string must be in the format "name0,name1, ... nameN" while
 // the ioDevices string must be in the format specified by:
 // "device0:cpuset:nodeset;device1:cpuset:nodeset; ... deviceN:cpuset:nodeset"
-func extractAffinityForNamedDevices(devices string, ioDevices string) (string) {
+func netdetectExtractAffinityForNamedDevices(devices string,
+	ioDevices string) (string) {
 	var networkDeviceSubset string
 
 	if devices == "" || ioDevices == "" {
@@ -69,15 +69,15 @@ func extractAffinityForNamedDevices(devices string, ioDevices string) (string) {
 	return strings.TrimSuffix(networkDeviceSubset, ";")
 }
 
-// detectNetworkDevices examines the local network interfaces and
+// netdetectNetworkDevices examines the local network interfaces and
 // returns a string identifying them by name with the form:
 // "device0,device1, ... deviceN"
-func detectNetworkDevices() (string, error) {
+func netdetectNetworkDevices() (string, error) {
 	var netNames string
 	networkInterfaces, err := net.Interfaces()
 
 	if err != nil {
-		log.Debugf("Error while detecting network interfaces: %s", err)
+		log.Debugf("Error while detecting network interfaces: %v", err)
 		return netNames, err
 	}
 
@@ -88,44 +88,65 @@ func detectNetworkDevices() (string, error) {
 	return strings.TrimSuffix(netNames, ","), nil
 }
 
-// getAffinityForNetworkDevices searches the local system topology for each
-// network device and returns a string that names each device and the
+// netdetectErrorToString converts NETDETECT error codes to string messages
+func netdetectErrorToString(errorcode C.int)(string) {
+	switch errorcode {
+	case C.NETDETECT_SUCCESS:
+		return "NETDETECT SUCCESS"
+	case C.NETDETECT_FAILURE:
+		return "NETDETECT FAILURE"
+	case C.NETDETECT_ERROR_DLOPEN:
+		return "NETDETECT ERROR ON DLOPEN"
+	case C.NETDETECT_ERROR_DLSYM:
+		return "NETDETECT ERROR ON DLSYM"
+	case C.NETDETECT_ERROR_FUNCTION_MISSING:
+		return "NETDETECT ERROR FUNCTION MISSING"
+	default:
+		return "NETDETECT UNKNOWN ERROR CODE"
+	}
+	return "NETDETECT UNKNOWN ERROR CODE"
+}
+
+
+// netdetectGetAffinityForNetworkDevices searches the local system topology
+// for each network device and returns a string that names each device and the
 // corresponding cpuset and nodeset.  The cpuset describes those cpus with
 // the highest spatial locality to the device and are used by the hwloc API
 // to bind a thread to processing units that are closely connected.
 // Use hwloc_bitmap_sscanf() to convert the cpuset and nodeset strings back
 // into hwloc_bitmap_t when ready to bind with the hwloc API.
-func getAffinityForNetworkDevices() (string, error) {
+func netdetectGetAffinityForNetworkDevices() (string, error) {
 	var affinity string
 	var ioDevices *C.char
 
 	// Dynamically load the hwloc library, map the exported functions
 	// and initialize the library to get it ready for use.
-	status := C.NetDetectInitialize(C.CString(hwlocLibrary))
+	status := C.netdetectInitialize(C.CString(hwlocLibrary))
 	if (status != C.NETDETECT_SUCCESS) {
-		return affinity, errors.New("Unable to load and initialize hwloc " +
-			"library.  Non fatal error.")
+		log.Debugf("There was an error loading the hwloc library: %v\n" +
+			"This is a non-fatal error", netdetectErrorToString(C.int(status)))
+		return affinity, nil
 	}
 
 	// Walk the topology to retrieve a list of IO devices and their cpusets
 	// and nodesets
-	ioDevices = C.NetDetectGetAffinityForIONodes()
+	ioDevices = C.netdetectGetAffinityForIONodes()
 
 	// Store the results as a GO string and free the underlying C string
-	// allocated by NetDetectGetAffinityForIONodes()
+	// allocated by netdetectGetAffinityForIONodes()
 	temp := C.GoString(ioDevices)
 	C.free(unsafe.Pointer(ioDevices))
 
 	// We're done with the libary, so clean up.
-	status = C.NetDetectCleanup()
+	status = C.netdetectCleanup()
 
 	// Query the system to determine the names of the network devices
-	netDevsList, err := detectNetworkDevices()
+	netDevsList, err := netdetectNetworkDevices()
 	if err != nil {
 		return affinity, err
 	}
 	// Extract the data that pertains to the network devices found
-	affinity = extractAffinityForNamedDevices(netDevsList, temp)
+	affinity = netdetectExtractAffinityForNamedDevices(netDevsList, temp)
 
 	return affinity, nil
 }

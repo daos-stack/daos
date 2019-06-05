@@ -30,8 +30,8 @@ extern const int NETDETECT_ERROR_DLOPEN;
 extern const int NETDETECT_ERROR_DLSYM;
 extern const int NETDETECT_ERROR_FUNCTION_MISSING;
 
-int NetDetectInitialize(char *);
-int NetDetectCleanup(void);
-char * NetDetectGetAffinityForIONodes(void);
+int netdetectInitialize(char *);
+int netdetectCleanup(void);
+char * netdetectGetAffinityForIONodes(void);
 #endif
 

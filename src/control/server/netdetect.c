@@ -44,12 +44,14 @@ const char * get_obj_by_depth = "hwloc_get_obj_by_depth";
 const char * topology_destroy = "hwloc_topology_destroy";
 const char * bitmap_asprintf = "hwloc_bitmap_asprintf";
 
+// Function pointers for the API functions we require
 int (* netdetect_topology_init)(hwloc_topology_t *) = NULL;
 int (* netdetect_topology_set_flags)(hwloc_topology_t, unsigned long) = NULL;
 int (* netdetect_topology_load)(hwloc_topology_t) = NULL;
 int (* netdetect_get_type_depth)(hwloc_topology_t, hwloc_obj_type_t) = NULL;
 unsigned (* netdetect_get_nbobjs_by_depth)(hwloc_topology_t, unsigned) = NULL;
-hwloc_obj_t (* netdetect_get_obj_by_depth)(hwloc_topology_t, unsigned, unsigned) = NULL;
+hwloc_obj_t (* netdetect_get_obj_by_depth)(hwloc_topology_t, unsigned,
+    unsigned) = NULL;
 void (* netdetect_topology_destroy)(hwloc_topology_t) = NULL;
 int (* netdetect_bitmap_asprintf)(char **, hwloc_const_bitmap_t) = NULL;
 
@@ -69,9 +71,9 @@ int loadLib(char *lib) {
     return NETDETECT_SUCCESS;
 }
 
-// NetDetectInitialize loads the hwloc library specified, maps the necessary
+// netdetectInitialize loads the hwloc library specified, maps the necessary
 // functions, and uses them to initialize the library so that it may be used.
-int NetDetectInitialize(char * lib) {
+int netdetectInitialize(char * lib) {
     int status = NETDETECT_FAILURE;
     char *error = NULL;
 
@@ -91,8 +93,8 @@ int NetDetectInitialize(char * lib) {
         dlsym(handle, get_type_depth);
     netdetect_get_nbobjs_by_depth = (unsigned (*)(hwloc_topology_t, unsigned))
         dlsym(handle, get_nbobjs_by_depth);
-    netdetect_get_obj_by_depth = (hwloc_obj_t (*)(hwloc_topology_t, unsigned, unsigned))
-        dlsym(handle, get_obj_by_depth);
+    netdetect_get_obj_by_depth = (hwloc_obj_t (*)(hwloc_topology_t, unsigned,
+        unsigned)) dlsym(handle, get_obj_by_depth);
     netdetect_topology_destroy = (void (*)(hwloc_topology_t))
         dlsym(handle, topology_destroy);
     netdetect_bitmap_asprintf = (int (*)(char **, hwloc_const_bitmap_t))
@@ -119,7 +121,8 @@ int NetDetectInitialize(char * lib) {
     if (status != 0)
         return NETDETECT_FAILURE;
 
-    status = netdetect_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
+    status = netdetect_topology_set_flags(topology,
+        HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
     if (status != 0)
         return NETDETECT_FAILURE;
 
@@ -130,8 +133,8 @@ int NetDetectInitialize(char * lib) {
     return NETDETECT_SUCCESS;
 }
 
-// NetDetectCleanup closes the handle to the library and closes the topology.
-int NetDetectCleanup(void) {
+// netdetectCleanup closes the handle to the library and closes the topology.
+int netdetectCleanup(void) {
     if (handle) {
         netdetect_topology_destroy(topology);
         dlclose(handle);
@@ -140,12 +143,12 @@ int NetDetectCleanup(void) {
     return NETDETECT_SUCCESS;
 }
 
-// NetDetectGetAffinityForIONodes walks through the hwloc topology to
+// netdetectGetAffinityForIONodes walks through the hwloc topology to
 // find the IO device nodes (HWLOC_OBJ_OS_DEVICE type).  It builds a list that
 // contains the device name and corresponding cpuset and nodeset for each
 // device found.  This list may be trimmed to extract cpuset/nodeset affinity
 // for devices of interest.
-char * NetDetectGetAffinityForIONodes(void) {
+char * netdetectGetAffinityForIONodes(void) {
     char * affinity;
     char * cpuset;
     char * nodeset;
