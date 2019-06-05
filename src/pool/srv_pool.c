@@ -1093,7 +1093,6 @@ static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_locate	= pool_svc_locate_cb,
 	.sc_alloc	= pool_svc_alloc_cb,
 	.sc_free	= pool_svc_free_cb,
-	.sc_bootstrap	= NULL,
 	.sc_step_up	= pool_svc_step_up_cb,
 	.sc_step_down	= pool_svc_step_down_cb,
 	.sc_drain	= pool_svc_drain_cb
@@ -2842,64 +2841,32 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 {
 	struct pool_membership_in	*in = crt_req_get(rpc);
 	struct pool_membership_out	*out = crt_reply_get(rpc);
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	struct pool_svc			*svc;
-	struct rdb			*db;
 	d_rank_list_t			*ranks;
-	uuid_t				 db_uuid;
-	uuid_t				 pool_uuid;
-	d_iov_t			 psid;
+	d_iov_t				 id;
 	int				 rc;
-
-	D_DEBUG(DB_MD, DF_UUID": Replica Rank: %u\n", DP_UUID(in->pmi_uuid),
-				 in->pmi_targets->rl_ranks[0]);
 
 	rc = daos_rank_list_dup(&ranks, in->pmi_targets);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
+	d_iov_set(&id, in->pmi_uuid, sizeof(uuid_t));
 
-	/*
-	 * Do this locally and release immediately; otherwise if we try to
-	 * remove the leader replica, the call never returns since the service
-	 * won't stop until all references have been released
-	 */
-	rc = pool_svc_lookup_leader(in->pmi_uuid, &svc, &out->pmo_hint);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	/* TODO: Use rdb_get() to track references? */
-	db = svc->ps_rsvc.s_db;
-	rdb_get_uuid(db, db_uuid);
-	uuid_copy(pool_uuid, svc->ps_uuid);
-	pool_svc_put_leader(svc);
-	d_iov_set(&psid, pool_uuid, sizeof(uuid_t));
-
-	switch (opc) {
+	switch (opc_get(rpc->cr_opc)) {
 	case POOL_REPLICAS_ADD:
-		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, db_uuid,
-					in->pmi_targets, true /* create */,
-					false /* bootstrap */,
-					ds_rsvc_get_md_cap());
-		if (rc != 0)
-			break;
-		rc = rdb_add_replicas(db, ranks);
+		rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
+					  ds_rsvc_get_md_cap(), &out->pmo_hint);
 		break;
 
 	case POOL_REPLICAS_REMOVE:
-		rc = rdb_remove_replicas(db, ranks);
-		if (rc != 0)
-			break;
-		/* ignore return code */
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, in->pmi_targets,
-				  true /*destroy*/);
+		rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
+					     &out->pmo_hint);
 		break;
 
 	default:
 		D_ASSERT(0);
 	}
 
-	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pmo_hint);
-out:
 	out->pmo_failed = ranks;
+out:
 	out->pmo_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -2957,6 +2924,7 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 		D_GOTO(out, rc = leader);
 	}
 
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
 	rc = pool_map_find_target(pool->sp_map, leader, &target);
 	if (rc < 0)
 		goto out;
