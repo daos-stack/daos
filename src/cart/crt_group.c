@@ -615,9 +615,6 @@ crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
 		li->li_tag_addr[i] = NULL;
 	}
 
-	d_hash_rec_delete(&li->li_grp_priv->gp_uri_lookup_cache,
-			&li->li_rank, sizeof(d_rank_t));
-
 out:
 	D_MUTEX_UNLOCK(&li->li_mutex);
 	return rc;
