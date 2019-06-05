@@ -26,10 +26,11 @@
 #include <dlfcn.h>
 #include <hwloc.h>
 
-const int SUCCESS = 0;
-const int FAILURE = -1;
-const int ERROR_DLOPEN = -2;
-const int ERROR_DLSYM = -3;
+const int NETDETECT_SUCCESS = 0;
+const int NETDETECT_FAILURE = -1;
+const int NETDETECT_ERROR_DLOPEN = -2;
+const int NETDETECT_ERROR_DLSYM = -3;
+const int NETDETECT_ERROR_FUNCTION_MISSING = -4;
 
 void * handle = NULL;
 hwloc_topology_t topology;
@@ -52,26 +53,31 @@ hwloc_obj_t (* netdetect_get_obj_by_depth)(hwloc_topology_t, unsigned, unsigned)
 void (* netdetect_topology_destroy)(hwloc_topology_t) = NULL;
 int (* netdetect_bitmap_asprintf)(char **, hwloc_const_bitmap_t) = NULL;
 
-
+// loadLib loads the library specified and initializes a handle for later use
 int loadLib(char *lib) {
     char *error = NULL;
+
+    if (handle)
+        return NETDETECT_SUCCESS;
 
     handle = dlopen(lib, RTLD_NOW);
     if (!handle) {
         error = dlerror();
         fprintf(stderr, "%s\n", error);
-        return ERROR_DLOPEN;
+        return NETDETECT_ERROR_DLOPEN;
     }
-    return SUCCESS;
+    return NETDETECT_SUCCESS;
 }
 
-int InitializeTopologyLib(char * lib) {
-    int status = FAILURE;
+// NetDetectInitialize loads the hwloc library specified, maps the necessary
+// functions, and uses them to initialize the library so that it may be used.
+int NetDetectInitialize(char * lib) {
+    int status = NETDETECT_FAILURE;
     char *error = NULL;
 
     status = loadLib(lib);
-    if (status != SUCCESS) {
-        fprintf(stdout, "Error on load lib ...\n");
+    if (status != NETDETECT_SUCCESS) {
+        fprintf(stderr, "Error on load lib ...\n");
         return status;
     }
 
@@ -95,7 +101,7 @@ int InitializeTopologyLib(char * lib) {
     error = dlerror();
     if (error) {
         fprintf(stderr, "%s\n", error);
-        return ERROR_DLSYM;
+        return NETDETECT_ERROR_DLSYM;
     }
 
     if (netdetect_topology_init == NULL ||
@@ -106,25 +112,40 @@ int InitializeTopologyLib(char * lib) {
         netdetect_get_obj_by_depth == NULL ||
         netdetect_topology_destroy == NULL ||
         netdetect_bitmap_asprintf == NULL) {
-            fprintf(stderr, "One of the functions was null...\n");
-            fflush(stderr);
-            return ERROR_DLSYM;
+            return NETDETECT_ERROR_FUNCTION_MISSING;
     }
 
-    fprintf(stdout, "hwloc mapped successfully.\n");
-    fflush(stdout);
-    return status;
+    status = netdetect_topology_init(&topology);
+    if (status != 0)
+        return NETDETECT_FAILURE;
+
+    status = netdetect_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
+    if (status != 0)
+        return NETDETECT_FAILURE;
+
+    status = netdetect_topology_load(topology);
+    if (status != 0)
+        return NETDETECT_FAILURE;
+
+    return NETDETECT_SUCCESS;
 }
 
-int cleanup() {
+// NetDetectCleanup closes the handle to the library and closes the topology.
+int NetDetectCleanup(void) {
     if (handle) {
-
+        netdetect_topology_destroy(topology);
         dlclose(handle);
         handle = NULL;
     }
+    return NETDETECT_SUCCESS;
 }
 
-char * GetAffinityForIONodes(void) {
+// NetDetectGetAffinityForIONodes walks through the hwloc topology to
+// find the IO device nodes (HWLOC_OBJ_OS_DEVICE type).  It builds a list that
+// contains the device name and corresponding cpuset and nodeset for each
+// device found.  This list may be trimmed to extract cpuset/nodeset affinity
+// for devices of interest.
+char * NetDetectGetAffinityForIONodes(void) {
     char * affinity;
     char * cpuset;
     char * nodeset;
@@ -135,34 +156,42 @@ char * GetAffinityForIONodes(void) {
     hwloc_obj_t nodeIO;
     hwloc_obj_t nodeAncestor;
 
-    netdetect_topology_init(&topology);
-    netdetect_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
-    netdetect_topology_load(topology);
+    if (!handle)
+        return affinity;
 
     depth = netdetect_get_type_depth(topology, HWLOC_OBJ_OS_DEVICE);
-    printf("Depth of OS device is %d\n", depth);
-
     numObj = netdetect_get_nbobjs_by_depth(topology, depth);
-    printf("There are %d objects at depth %d\n", numObj, depth);
+    if (numObj <= 0)
+        return affinity;
 
     affinity = (char *)malloc(sizeof(char));
-    affinity[0] = '\0';
+    if (affinity)
+        affinity[0] = '\0';
+    else
+        return affinity;
+
     for (i = 0; i < numObj; i++) {
         nodeIO = netdetect_get_obj_by_depth(topology, depth, i);
         nodeAncestor = hwloc_get_non_io_ancestor_obj(topology, nodeIO);
-        netdetect_bitmap_asprintf(&cpuset, nodeAncestor->cpuset);
-        netdetect_bitmap_asprintf(&nodeset, nodeAncestor->nodeset);
-        fprintf(stdout, "Name: %s:%s:%s\n", nodeIO->name, cpuset, nodeset);
-        asprintf(&tmp, "%s%s:%s:%s;", affinity, nodeIO->name, cpuset, nodeset);
-        affinity = (char *)realloc(affinity, strlen(tmp) + 1);
-        affinity[0] = '\0';
-        strcat(affinity, tmp);
-        free(tmp);
-        free(cpuset);
-        free(nodeset);
+        if (nodeIO && nodeAncestor) {
+            netdetect_bitmap_asprintf(&cpuset, nodeAncestor->cpuset);
+            netdetect_bitmap_asprintf(&nodeset, nodeAncestor->nodeset);
+            if (nodeIO->name && cpuset && nodeset) {
+                asprintf(&tmp, "%s%s:%s:%s;", affinity, nodeIO->name,
+                    cpuset, nodeset);
+                affinity = (char *)realloc(affinity, strlen(tmp) + 1);
+                if (affinity) {
+                    affinity[0] = '\0'; // prep buffer for strcat
+                    strcat(affinity, tmp);
+                }
+                free(tmp);
+                free(cpuset);
+                free(nodeset);
+                tmp = NULL;
+                cpuset = NULL;
+                nodeset = NULL;
+            }
+        }
     }
-
-    netdetect_topology_destroy(topology);
-    cleanup();
     return affinity;
 }
