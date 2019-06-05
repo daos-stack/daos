@@ -99,14 +99,14 @@ uint64_t get_dom_cnt(struct pool_domain *dom)
  * for the given key. This algorithm hashes a minimal (1/n) number
  * of keys to a new bucket when extending the number of buckets.
  *
- * \param[in]   key             A unique key representing the object that
- *                              will be placed in the bucket.
- * \param[in]   num_buckets     The total number of buckets the hashing
- *                              algorithm can choose from.
+ * \param[in]   key		A unique key representing the object that
+ *				will be placed in the bucket.
+ * \param[in]   num_buckets	The total number of buckets the hashing
+ *				algorithm can choose from.
  *
- * \return                      Returns an index ranging from 0 to
- *                              num_buckets representing the bucket
- *                              the given key hashes to.
+ * \return			Returns an index ranging from 0 to
+ *				num_buckets representing the bucket
+ *				the given key hashes to.
  */
 static inline uint32_t
 jump_consistent_hash(uint64_t key, uint32_t num_buckets)
@@ -127,11 +127,11 @@ jump_consistent_hash(uint64_t key, uint32_t num_buckets)
  * Assembly instruction for fast 4-byte CRC computation on Intel X86
  * Copied from BSD-licensed Data Plane Development Kit (DPDK) rte_hash_crc.h
  *
- * \param[in] data              Primary input to hash function
- * \param[in] init_value        Acts like a seed to the CRC, useful to get
- *                              different results with the same data
+ * \param[in] data		Primary input to hash function
+ * \param[in] init_value	Acts like a seed to the CRC, useful to get
+ *				different results with the same data
  *
- * \return 			32 bit hash
+ * \return			32 bit hash
  */
 static inline uint32_t
 crc32c_sse42_u32(uint32_t data, uint32_t init_val)
@@ -209,8 +209,8 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
  * \param[in] remap_list	List for the failed shard to be added onto.
  * \param[in] shard_idx		The shard number of the failed shard.
  * \paramp[in] tgt		The failed target that will be added to the
- * 				remap list.
- * */
+ *				remap list.
+ */
 static int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt)
@@ -254,14 +254,14 @@ mapless_remap_free_all(d_list_t *remap_list)
  * layout creation.
  *
  * \param[in] mmap	The placement map for Mapless Placement, used for
- * 			retrieving domain requirements for layout.
+ *			retrieving domain requirements for layout.
  * \param[in] md	Object metadata used for retrieve information
- * 			about the object class.
+ *			about the object class.
  * \param[in] shard_md	Shard metadata used for determining the group number
  * \param[out] mop	Stores layout requirements for use later in placement.
  *
- * \return 		Return code, 0 for success and an error code if the
- * 			layout requirements could not be determined / satisfied.
+ * \return		Return code, 0 for success and an error code if the
+ *			layout requirements could not be determined / satisfied.
  */
 static int
 mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
@@ -271,7 +271,7 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
-	int 			rc;
+	int			rc;
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
@@ -335,7 +335,7 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
  * that satisfies the layout requirements. This will return false if
  * there are no available domains of type mmp_domain_nr left.
  *
- * \param[in] mmap 	The currently used placement map.
+ * \param[in] mmap	The currently used placement map.
  * \param[in] mop	Struct containing layout group size and number.
  * \param[in] target	The target for a failed shard.
  *
@@ -519,23 +519,23 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
  * object shard layout. This function is called for every shard that needs a
  * placement location.
  *
- * \param[in]   pmap            The pool map associated with this placement
- * 				map. This is used to directly access the
- * 				targets in the pool.
+ * \param[in]   pmap		The pool map associated with this placement
+ *				map. This is used to directly access the
+ *				targets in the pool.
  * \param[out]  target		Holds the value of the chosen spare target.
  *				for the shard being rebuilt.
- * \param[in]   key             A unique key generated using the object ID.
- *                              This is the same key used during initial
- *                              placement.
- *                              This is used in jump consistent hash.
- * \param[in]   dom_used        This is a contiguous array that contains
- *                              information on whether or not an internal node
- *                              (non-target) in a domain has been used.
+ * \param[in]   key		A unique key generated using the object ID.
+ *				This is the same key used during initial
+ *				placement.
+ *				This is used in jump consistent hash.
+ * \param[in]   dom_used	This is a contiguous array that contains
+ *				information on whether or not an internal node
+ *				(non-target) in a domain has been used.
  * \param[in]	layout		This is the current layout for the object.
  *				This is needed for guaranteeing that we don't
  *				reuse a target already in the layout.
  * \param[in]	md		Object metadata used used to compare object
- * 				version with fail sequence.
+ *				version with fail sequence.
  *
  * \return			Returns an error code if an error occurred,
  *				otherwise 0.
@@ -924,13 +924,13 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
  * \param[in] mmap		The placement map used for this placement.
  * \param[in] mop		The layout group size and count.
  * \param[in] md		Object metadata.
- * \param[out] layout 		This will contain the layout for the object
+ * \param[out] layout		This will contain the layout for the object
  * \param[out] remap_list	This will contain the targets that need to
- * 				be rebuilt and in the case of rebuild, may be
- * 				returned during the rebuild process.
+ *				be rebuilt and in the case of rebuild, may be
+ *				returned during the rebuild process.
  *
- * \return 			An error code determining if the function
- * 				succeeded (0) or failed.
+ * \return			An error code determining if the function
+ *				succeeded (0) or failed.
  */
 static int
 get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
@@ -1201,11 +1201,11 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param[in]   array_size      The max size of the passed in arrays to store
  *                              info about the shards that need to be rebuilt.
  * \param[in]	myrank		The rank of the server. Only servers who are
- * 				the leader for a particular failed shard will
- * 				initiate a rebuild for it.
+ *				the leader for a particular failed shard will
+ *				initiate a rebuild for it.
  *
- * \return                      The number of shards that need to be rebuilt on
- *                              another target, Or 0 if none need to be rebuilt.
+ * \return			The number of shards that need to be rebuilt on
+ *				another target, Or 0 if none need to be rebuilt.
  */
 static int
 mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
@@ -1225,7 +1225,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	int idx = 0;
 
-	D_DEBUG(DB_PL,"Finding Rebuild\n");
+	D_DEBUG(DB_PL, "Finding Rebuild\n");
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
@@ -1264,7 +1264,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		goto out;
 	}
 
-	mapless_obj_layout_dump(oid,layout);
+	mapless_obj_layout_dump(oid, layout);
 
 	d_list_for_each_entry(f_shard, &remap_list, fs_list) {
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
