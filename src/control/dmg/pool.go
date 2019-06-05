@@ -137,8 +137,9 @@ func parseRanks(ranksStr string) (ranks []uint32, err error) {
 
 // createPool with specified parameters on all connected servers
 func createPool(
-	groupName string, userName string, aclFile string, scmSize string,
-	nvmeSize string, rankList string, numSvcReps uint32) error {
+	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
+	groupName string, userName string, procGroup string,
+	aclFile string) error {
 
 	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
 	if err != nil {
@@ -163,6 +164,8 @@ func createPool(
 	req := &pb.CreatePoolReq{
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
 		Ranks: ranks, Numsvcreps: numSvcReps,
+		// TODO: format and populate user/group
+		Procgroup: procGroup,
 	}
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)
@@ -174,7 +177,7 @@ func createPool(
 	return nil
 }
 
-// Execute is run when CreatePoolCmd subcommand is run
+// Execute is run when CreatePoolCmd subcommand is activated
 func (c *CreatePoolCmd) Execute(args []string) error {
 	// broadcast == false to connect to mgmt svc access point
 	if err := appSetup(false); err != nil {
@@ -182,8 +185,8 @@ func (c *CreatePoolCmd) Execute(args []string) error {
 	}
 
 	if err := createPool(
-		c.GroupName, c.UserName, c.ACLFile,
-		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps); err != nil {
+		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
+		c.GroupName, c.UserName, c.ProcGroup, c.ACLFile); err != nil {
 
 		return err
 	}

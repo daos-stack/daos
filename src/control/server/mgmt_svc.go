@@ -181,7 +181,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 func (svc *mgmtSvc) CreatePool(
 	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
 
-	log.Debugf("ControlService.CreatePool dispatch\n")
+	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
 	// TODO: implement lock and drpc IDs & handler in iosrv
 	// svc.mutex.Lock()
 	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, poolCreate, req)
