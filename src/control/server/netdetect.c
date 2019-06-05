@@ -188,12 +188,9 @@ char * netdetectGetAffinityForIONodes(void) {
                     strcat(affinity, tmp);
                 }
                 free(tmp);
-                free(cpuset);
-                free(nodeset);
-                tmp = NULL;
-                cpuset = NULL;
-                nodeset = NULL;
             }
+            free(cpuset);
+            free(nodeset);
         }
     }
     return affinity;
