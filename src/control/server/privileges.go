@@ -27,10 +27,13 @@ import (
 	"fmt"
 	"os/user"
 	"strconv"
+	"strings"
 
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 )
+
+const msgNotExist = "No such file or directory"
 
 func getUID(ext External, userName string) (*user.User, int64, error) {
 	usr, err := ext.lookupUser(userName)
@@ -40,7 +43,7 @@ func getUID(ext External, userName string) (*user.User, int64, error) {
 
 	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
 	if err != nil {
-		return nil, -1, errors.WithMessage(err, "parsing uid to int")
+		return nil, -1, errors.Wrap(err, "parsing uid to int")
 	}
 
 	return usr, uid, nil
@@ -84,30 +87,36 @@ func getGID(
 
 	gid, err = strconv.ParseInt(_gid, 10, 32)
 	if err != nil {
-		return "", -1, errors.WithMessage(err, "parsing gid to int")
+		return "", -1, errors.Wrap(err, "parsing gid to int")
 	}
 
 	return grpName, gid, nil
 }
 
-// chownDirs changes ownership of required directories using config creds.
-func chownDirs(config *configuration, user string, group string) error {
-	for i, srv := range config.Servers {
-		err := config.ext.runCommand(
-			fmt.Sprintf(
-				"chown -R %s:%s %s", user, group, srv.ScmMount))
-		if err != nil {
-			return errors.WithMessagef(
-				err,
-				"changing scm mount ownership"+
-					" on I/O server %d", i)
-		}
+// chownAll changes ownership of required directories (recursive) and
+// files using user/group derived from config file parameters.
+func chownAll(config *configuration, user string, group string) error {
+	paths := []string{
+		config.SocketDir,
 	}
 
-	err := config.ext.runCommand(
-		fmt.Sprintf("chown -R %s:%s %s", user, group, config.SocketDir))
-	if err != nil {
-		return errors.WithMessage(err, "changing socket dir ownership")
+	for _, srv := range config.Servers {
+		paths = append(paths, srv.ScmMount, srv.LogFile)
+	}
+
+	// add last because we don't want to fail to write before chown proc
+	paths = append(paths, config.ControlLogFile)
+
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+
+		err := config.ext.runCommand(
+			fmt.Sprintf("chown -R %s:%s %s", user, group, path))
+		if err != nil && !strings.Contains(err.Error(), msgNotExist) {
+			return err
+		}
 	}
 
 	return nil
@@ -134,8 +143,8 @@ func dropPrivileges(config *configuration) error {
 		return errors.WithMessage(err, "get gid")
 	}
 
-	if err := chownDirs(config, usr.Username, grpName); err != nil {
-		return errors.WithMessage(err, "changing directory ownership")
+	if err := chownAll(config, usr.Username, grpName); err != nil {
+		return err
 	}
 
 	if err := config.ext.setGID(gid); err != nil {

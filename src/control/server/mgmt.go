@@ -112,7 +112,7 @@ func awaitStorageFormat(config *configuration) error {
 
 		if err := dropPrivileges(config); err != nil {
 			log.Errorf(
-				"Failed to drop privileges: %s, running as root "+
+				"Failed to drop privileges:\n%+v\nrunning as root "+
 					"is dangerous and is not advised!", err)
 		}
 
