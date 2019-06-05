@@ -78,7 +78,7 @@ func formatStor(force bool) {
 			"Please be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	if getConsent(force) {
+	if getConsent(!force) {
 		fmt.Println("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
 		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage format result")
@@ -118,7 +118,7 @@ func updateStor(params *pb.UpdateStorageParams, force bool) {
 			"and be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	if getConsent(force) {
+	if getConsent(!force) {
 		fmt.Println("")
 		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
 		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
