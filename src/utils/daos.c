@@ -136,20 +136,20 @@ pool_op_parse(const char *str)
 struct cmd_args_s {
 	enum pool_op	p_op;		/* pool sub-command */
 	enum cont_op	c_op;		/* container sub-command */
-	const char	*group;		/* --group */
+	char		*group;		/* --group */
 	uuid_t		pool_uuid;	/* --pool */
 	uuid_t		cont_uuid;	/* --cont */
-	const char	*mdsrv_str;	/* --svc */
+	char		*mdsrv_str;	/* --svc */
 	d_rank_list_t	*mdsrv;
-	const char	*attrname_str;	/* --attr attribute name */
-	const char	*value_str;	/* --value attribute value */
-	const char	*path_str;	/* --path container in namespace */
-	const char	*type_str;	/* --type container type */
-	const char	*oclass_str;	/* --oclass object class */
+	char		*attrname_str;	/* --attr attribute name */
+	char		*value_str;	/* --value attribute value */
+	char		*path_str;	/* --path container in namespace */
+	char		*type_str;	/* --type container type */
+	char		*oclass_str;	/* --oclass object class */
 	daos_size_t	chunk_size;	/* --chunk_size object chunk size */
-	const char	*snapname_str;	/* --snap container snapshot name */
+	char		*snapname_str;	/* --snap container snapshot name */
 	daos_epoch_t	epc;		/* --epc container epoch */
-	const char	*epcrange_str;	/* --epcrange container epochs range */
+	char		*epcrange_str;	/* --epcrange container epochs range */
 	daos_epoch_t	epcrange_begin;
 	daos_epoch_t	epcrange_end;
 	FILE		*ostream;	/* help_hdlr(), where to print */
@@ -258,9 +258,8 @@ epoch_range_parse(struct cmd_args_s *ap)
 
 	rc = sscanf(ap->epcrange_str, "%lld-%lld",
 			&parsed_begin, &parsed_end);
-	if ((rc != 2) || (parsed_begin < 0) || (parsed_end < 0)) {
+	if ((rc != 2) || (parsed_begin < 0) || (parsed_end < 0))
 		D_GOTO(out_invalid_format, -1);
-	}
 
 	ap->epcrange_begin = parsed_begin;
 	ap->epcrange_end = parsed_end;
@@ -300,7 +299,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	assert(ap != NULL);
 	ap->p_op = -1;
 	ap->c_op = -1;
-	ap->group = default_group;
+	D_STRNDUP(ap->group, default_group, strlen(default_group));
+	if (ap->group == NULL)
+		return RC_NO_HELP;
 
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
@@ -308,7 +309,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		if (ap->c_op == -1) {
 			fprintf(stderr, "invalid container command: %s\n",
 				argv[2]);
-			fflush(stderr);
 			return RC_PRINT_HELP;
 		}
 	} else if (strcmp(argv[1], "pool") == 0) {
@@ -316,17 +316,17 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		if (ap->p_op == -1) {
 			fprintf(stderr, "invalid pool command: %s\n",
 				argv[2]);
-			fflush(stderr);
 			return RC_PRINT_HELP;
 		}
 	} else {
 		/* main() may catch error. Keep this code just in case. */
 		fprintf(stderr, "resource (%s): must be "
 				 "pool or container\n", argv[1]);
-		fflush(stderr);
 		return RC_PRINT_HELP;
 	}
-	cmdname = strdup(argv[2]);
+	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
+	if (cmdname == NULL)
+		return RC_NO_HELP;
 
 	/* Parse command options. Use goto on any errors here
 	 * since some options may result in resource allocation.
@@ -334,15 +334,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
-			ap->group = strdup(optarg);
+			D_STRNDUP(ap->group, optarg, strlen(optarg));
+			if (ap->group == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'p':
 			if (uuid_parse(optarg, ap->pool_uuid) != 0) {
 				fprintf(stderr,
 					"failed to parse pool UUID: %s\n",
 					optarg);
-				rc = RC_NO_HELP;
-				D_GOTO(out_free, rc);
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
 		case 'c':
@@ -350,29 +351,40 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				fprintf(stderr,
 					"failed to parse cont UUID: %s\n",
 					optarg);
-				rc = RC_NO_HELP;
-				D_GOTO(out_free, rc);
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
 		case 'm':
-			ap->mdsrv_str = strdup(optarg);
+			D_STRNDUP(ap->mdsrv_str, optarg, strlen(optarg));
+			if (ap->mdsrv_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			ap->mdsrv = daos_rank_list_parse(ap->mdsrv_str, ",");
 			break;
 
 		case 'a':
-			ap->attrname_str = strdup(optarg);
+			D_STRNDUP(ap->attrname_str, optarg, strlen(optarg));
+			if (ap->attrname_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'v':
-			ap->value_str = strdup(optarg);
+			D_STRNDUP(ap->value_str, optarg, strlen(optarg));
+			if (ap->value_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'd':
-			ap->path_str = strdup(optarg);
+			D_STRNDUP(ap->path_str, optarg, strlen(optarg));
+			if (ap->path_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
-			ap->type_str = strdup(optarg);
+			D_STRNDUP(ap->type_str, optarg, strlen(optarg));
+			if (ap->type_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'o':
-			ap->oclass_str = strdup(optarg);
+			D_STRNDUP(ap->oclass_str, optarg, strlen(optarg));
+			if (ap->oclass_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'z':
 			ap->chunk_size = tobytes(optarg);
@@ -380,12 +392,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			    (ap->chunk_size == ULLONG_MAX && errno != 0)) {
 				fprintf(stderr, "failed to parse chunk_size:"
 					"%s\n", optarg);
-				rc = RC_NO_HELP;
-				D_GOTO(out_free, rc);
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
 		case 's':
-			ap->snapname_str = strdup(optarg);
+			D_STRNDUP(ap->snapname_str, optarg, strlen(optarg));
+			if (ap->snapname_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'e':
 			ap->epc = strtoull(optarg, NULL, 10);
@@ -393,23 +406,22 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			    (ap->epc == ULLONG_MAX && errno != 0)) {
 				fprintf(stderr, "failed to parse epc: %s\n",
 					optarg);
-				rc = RC_NO_HELP;
-				D_GOTO(out_free, rc);
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
 		case 'r':
-			ap->epcrange_str = strdup(optarg);
+			D_STRNDUP(ap->epcrange_str, optarg, strlen(optarg));
+			if (ap->epcrange_str == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			rc = epoch_range_parse(ap);
 			if (rc != 0) {
 				fprintf(stderr, "failed to parse epcrange\n");
-				rc = RC_NO_HELP;
-				D_GOTO(out_free, rc);
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			break;
 		default:
-			printf("unknown option : %d\n", rc);
-			rc = RC_PRINT_HELP;
-			D_GOTO(out_free, rc);
+			fprintf(stderr, "unknown option : %d\n", rc);
+			D_GOTO(out_free, rc = RC_PRINT_HELP);
 		}
 	}
 
@@ -424,8 +436,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	     ap->p_op == POOL_LIST_ATTRS)) {
 		fprintf(stderr,
 			"pool %s not yet implemented\n", cmdname);
-		rc = RC_NO_HELP;
-		D_GOTO(out_free, rc);
+		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
 	if (ap->c_op != -1 &&
@@ -444,37 +455,29 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
-		rc = RC_NO_HELP;
-		D_GOTO(out_free, rc);
+		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
 	/* Check the pool UUID (required) */
 	if (uuid_is_null(ap->pool_uuid)) {
 		fprintf(stderr, "pool UUID required\n");
-		fflush(stderr);
-		rc = RC_PRINT_HELP;
-		D_GOTO(out_free, rc);
+		D_GOTO(out_free, rc = RC_PRINT_HELP);
 	}
 
 	/* Check the pool service ranks.(required) */
 	if (ap->mdsrv_str == NULL) {
 		fprintf(stderr, "--svc must be specified\n");
-		fflush(stderr);
-		rc = RC_PRINT_HELP;
-		D_GOTO(out_free, rc);
+		D_GOTO(out_free, rc = RC_PRINT_HELP);
 	}
 
 	if (ap->mdsrv == NULL) {
 		fprintf(stderr, "failed to parse --svc=%s\n", ap->mdsrv_str);
-		rc = RC_NO_HELP;
-		D_GOTO(out_free, rc);
+		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
 	if (ap->mdsrv->rl_nr == 0) {
 		fprintf(stderr, "--svc must not be empty\n");
-		fflush(stderr);
-		rc = RC_PRINT_HELP;
-		D_GOTO(out_free, rc);
+		D_GOTO(out_free, rc = RC_PRINT_HELP);
 	}
 
 	/* TODO: decide if for container operations the code should
@@ -486,6 +489,25 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 out_free:
 	daos_rank_list_free(ap->mdsrv);
+	if (ap->group != NULL)
+		D_FREE(ap->group);
+	if (ap->mdsrv_str != NULL)
+		D_FREE(ap->mdsrv_str);
+	if (ap->attrname_str != NULL)
+		D_FREE(ap->attrname_str);
+	if (ap->value_str != NULL)
+		D_FREE(ap->value_str);
+	if (ap->path_str != NULL)
+		D_FREE(ap->path_str);
+	if (ap->type_str != NULL)
+		D_FREE(ap->type_str);
+	if (ap->oclass_str != NULL)
+		D_FREE(ap->oclass_str);
+	if (ap->snapname_str != NULL)
+		D_FREE(ap->snapname_str);
+	if (ap->epcrange_str != NULL)
+		D_FREE(ap->epcrange_str);
+	D_FREE(cmdname);
 	return rc;
 }
 
@@ -598,9 +620,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 
 	if (uuid_is_null(ap->cont_uuid)) {
 		fprintf(stderr, "valid cont uuid required\n");
-		fflush(stderr);
-		rc = RC_PRINT_HELP;
-		D_GOTO(out_free_mdsrv, rc);
+		D_GOTO(out_free_mdsrv, rc = RC_PRINT_HELP);
 	}
 
 	/*
@@ -693,58 +713,58 @@ help_hdlr(struct cmd_args_s *ap)
 
 	stream = (ap->ostream != NULL) ? ap->ostream : stdout;
 
-	fprintf(stream, "\
-usage: daos RESOURCE COMMAND [OPTIONS]\n\
-resources:\n\
-	  pool             pool\n\
-	  container (cont) container\n\
-	  help             print this message and exit\n");
+	fprintf(stream,
+"usage: daos RESOURCE COMMAND [OPTIONS]\n"
+"resources:\n"
+"	  pool             pool\n"
+"	  container (cont) container\n"
+"	  help             print this message and exit\n");
 
-	fprintf(stream, "\n\
-pool commands:\n\
-	  list-containers  list all containers in pool\n\
-	  list-cont\n\
-	  query            query a pool\n\
-	  stat             get pool statistics\n\
-	  list-attrs       list pool user-defined attributes\n\
-	  get-attr         get pool user-defined attribute\n");
+	fprintf(stream, "\n"
+"pool commands:\n"
+"	  list-containers  list all containers in pool\n"
+"	  list-cont\n"
+"	  query            query a pool\n"
+"	  stat             get pool statistics\n"
+"	  list-attrs       list pool user-defined attributes\n"
+"	  get-attr         get pool user-defined attribute\n");
 
-	fprintf(stream, "\
-pool options:\n\
-	--pool=UUID        pool UUID \n\
-	--group=STR        pool server process group (\"%s\")\n\
-	--svc=RANKS        pool service replicas like 1,2,3\n\
-	--attr=NAME        pool attribute name to get\n",
+	fprintf(stream,
+"pool options:\n"
+"	--pool=UUID        pool UUID \n"
+"	--group=STR        pool server process group (\"%s\")\n"
+"	--svc=RANKS        pool service replicas like 1,2,3\n"
+"	--attr=NAME        pool attribute name to get\n",
 	default_group);
 
-	fprintf(stream, "\n\
-container (cont) commands:\n\
-	  create           create a container\n\
-	  destroy          destroy a container\n\
-	  list-objects     list all objects in container\n\
-	  list-obj\n\
-	  query            query a container\n\
-	  stat             get container statistics\n\
-	  list-attrs       list container user-defined attributes\n\
-	  del-attr         delete container user-defined attribute\n\
-	  get-attr         get container user-defined attribute\n\
-	  set-attr         set container user-defined attribute\n\
-	  create-snap      create container snapshot (optional name)\n\
-			   at most recent committed epoch\n\
-	  list-snaps       list container snapshots taken\n\
-	  destroy-snap     destroy container snapshots\n\
-			   by name, epoch or range\n\
-	  rollback         roll back container to specified snapshot\n");
+	fprintf(stream, "\n"
+"container (cont) commands:\n"
+"	  create           create a container\n"
+"	  destroy          destroy a container\n"
+"	  list-objects     list all objects in container\n"
+"	  list-obj\n"
+"	  query            query a container\n"
+"	  stat             get container statistics\n"
+"	  list-attrs       list container user-defined attributes\n"
+"	  del-attr         delete container user-defined attribute\n"
+"	  get-attr         get container user-defined attribute\n"
+"	  set-attr         set container user-defined attribute\n"
+"	  create-snap      create container snapshot (optional name)\n"
+"			   at most recent committed epoch\n"
+"	  list-snaps       list container snapshots taken\n"
+"	  destroy-snap     destroy container snapshots\n"
+"			   by name, epoch or range\n"
+"	  rollback         roll back container to specified snapshot\n");
 
-	fprintf(stream, "\
-container (cont) options:\n\
-	  <pool options>   (--pool, --group, --svc)\n\
-	--cont=UUID        container UUID\n\
-	--attr=NAME        container attribute name to set, get, del\n\
-	--value=VALUESTR   container attribute value to set\n\
-	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n\
-	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n\
-	--eprange=B-E      container epoch range (destroy-snap)\n");
+	fprintf(stream,
+"container (cont) options:\n"
+"	  <pool options>   (--pool, --group, --svc)\n"
+"	--cont=UUID        container UUID\n"
+"	--attr=NAME        container attribute name to set, get, del\n"
+"	--value=VALUESTR   container attribute value to set\n"
+"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
+"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
+"	--eprange=B-E      container epoch range (destroy-snap)\n");
 	return 0;
 }
 
