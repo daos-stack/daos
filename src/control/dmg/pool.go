@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
 )
 

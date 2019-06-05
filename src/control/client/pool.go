@@ -31,9 +31,9 @@ import (
 // CreatePool will create a DAOS pool using provided parameters and return uuid
 func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
 	results := make(ResultMap)
-	mc := c.controllers[0]
+	mc := c.controllers[0] // connect to first AP only for now
 
-	resp, err := mc.getClient().CreatePool(context.Background(), req)
+	resp, err := mc.getSvcClient().CreatePool(context.Background(), req)
 
 	result := ClientResult{mc.getAddress(), resp, err}
 	results[result.Address] = result

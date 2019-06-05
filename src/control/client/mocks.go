@@ -218,15 +218,6 @@ func (m *mockMgmtControlClient) FetchFioConfigPaths(
 	return &mgmtControlFetchFioConfigPathsClient{}, nil
 }
 
-func (m *mockMgmtControlClient) CreatePool(
-	ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (
-	*pb.CreatePoolResp, error) {
-
-	// return successful pool creation results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.CreatePoolResp{}, nil
-}
-
 func (m *mockMgmtControlClient) KillRank(
 	ctx context.Context, req *pb.DaosRank, o ...grpc.CallOption) (
 	*pb.DaosResponse, error) {
@@ -247,12 +238,35 @@ func newMockMgmtControlClient(
 	}
 }
 
+type mockMgmtSvcClient struct{}
+
+func (m *mockMgmtSvcClient) CreatePool(
+	ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (
+	*pb.CreatePoolResp, error) {
+
+	// return successful pool creation results
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.CreatePoolResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) Join(
+	ctx context.Context, req *pb.JoinReq, o ...grpc.CallOption) (
+	*pb.JoinResp, error) {
+
+	return &pb.JoinResp{}, nil
+}
+
+func newMockMgmtSvcClient() pb.MgmtSvcClient {
+	return &mockMgmtSvcClient{}
+}
+
 // implement mock/stub behaviour for Control
 type mockControl struct {
 	address    string
 	connState  connectivity.State
 	connectRet error
-	client     pb.MgmtControlClient
+	ctlClient  pb.MgmtControlClient
+	svcClient  pb.MgmtSvcClient
 }
 
 func (m *mockControl) connect(addr string) error {
@@ -271,15 +285,19 @@ func (m *mockControl) connected() (connectivity.State, bool) {
 
 func (m *mockControl) getAddress() string { return m.address }
 
-func (m *mockControl) getClient() pb.MgmtControlClient {
-	return m.client
+func (m *mockControl) getCtlClient() pb.MgmtControlClient {
+	return m.ctlClient
+}
+
+func (m *mockControl) getSvcClient() pb.MgmtSvcClient {
+	return m.svcClient
 }
 
 func newMockControl(
 	address string, state connectivity.State, connectRet error,
-	client pb.MgmtControlClient) Control {
+	cClient pb.MgmtControlClient, sClient pb.MgmtSvcClient) Control {
 
-	return &mockControl{address, state, connectRet, client}
+	return &mockControl{address, state, connectRet, cClient, sClient}
 }
 
 type mockControllerFactory struct {
@@ -301,12 +319,15 @@ type mockControllerFactory struct {
 
 func (m *mockControllerFactory) create(address string) (Control, error) {
 	// returns controller with mock properties specified in constructor
-	client := newMockMgmtControlClient(
+	cClient := newMockMgmtControlClient(
 		m.features, m.ctrlrs, m.ctrlrResults,
 		m.modules, m.moduleResults, m.mountResults,
 		m.scanRet, m.formatRet, m.updateRet, m.burninRet, m.killRet)
 
-	controller := newMockControl(address, m.state, m.connectRet, client)
+	sClient := newMockMgmtSvcClient()
+
+	controller := newMockControl(
+		address, m.state, m.connectRet, cClient, sClient)
 
 	err := controller.connect(address)
 

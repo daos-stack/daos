@@ -45,7 +45,7 @@ const (
 func scanStorageRequest(mc Control, req interface{}, ch chan ClientResult) {
 	sRes := storageResult{}
 
-	resp, err := mc.getClient().ScanStorage(
+	resp, err := mc.getCtlClient().ScanStorage(
 		context.Background(), &pb.ScanStorageReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
@@ -123,7 +123,7 @@ func formatStorageRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	stream, err := mc.getClient().FormatStorage(ctx, &pb.FormatStorageReq{})
+	stream, err := mc.getCtlClient().FormatStorage(ctx, &pb.FormatStorageReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
@@ -208,7 +208,7 @@ func updateStorageRequest(
 		return // type err
 	}
 
-	stream, err := mc.getClient().UpdateStorage(ctx, updateReq)
+	stream, err := mc.getCtlClient().UpdateStorage(ctx, updateReq)
 	if err != nil {
 		log.Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
@@ -276,7 +276,7 @@ func (c *control) FetchFioConfigPaths() (paths []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := c.getClient().FetchFioConfigPaths(ctx, &pb.EmptyReq{})
+	stream, err := c.getCtlClient().FetchFioConfigPaths(ctx, &pb.EmptyReq{})
 	if err != nil {
 		return
 	}
@@ -306,7 +306,7 @@ func (c *control) BurnInNvme(pciAddr string, configPath string) (
 	req := &pb.BurninNvmeReq{
 		Fioconfig: &pb.FilePath{Path: configPath},
 	}
-	_, err = c.getClient().BurninStorage(
+	_, err = c.getCtlClient().BurninStorage(
 		ctx, &pb.BurninStorageReq{Nvme: req})
 	if err != nil {
 		return

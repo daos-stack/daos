@@ -34,7 +34,7 @@ func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	results := make(ResultMap)
 	mc := c.controllers[0]
 
-	resp, err := mc.getClient().KillRank(
+	resp, err := mc.getCtlClient().KillRank(
 		context.Background(),
 		&pb.DaosRank{PoolUuid: uuid, Rank: rank})
 

@@ -52,7 +52,7 @@ func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := mc.getClient().ListFeatures(ctx, &pb.EmptyReq{})
+	stream, err := mc.getCtlClient().ListFeatures(ctx, &pb.EmptyReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return
