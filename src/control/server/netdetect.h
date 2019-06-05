@@ -24,12 +24,14 @@
 #ifndef _NETDETECT_H
 #define _NETDETECT_H
 
-extern const int SUCCESS;
-extern const int FAILURE;
-extern const int ERROR_DLOPEN;
-extern const int ERROR_DLSYM;
+extern const int NETDETECT_SUCCESS;
+extern const int NETDETECT_FAILURE;
+extern const int NETDETECT_ERROR_DLOPEN;
+extern const int NETDETECT_ERROR_DLSYM;
+extern const int NETDETECT_ERROR_FUNCTION_MISSING;
 
-int InitializeTopologyLib(char *);
-char * GetAffinityForIONodes(void);
+int NetDetectInitialize(char *);
+int NetDetectCleanup(void);
+char * NetDetectGetAffinityForIONodes(void);
 #endif
 
