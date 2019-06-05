@@ -154,12 +154,8 @@ func unpackClientMap(i interface{}) string {
 }
 
 // getConsent scans stdin for yes/no
-func getConsent(interactive bool) bool {
+func getConsent() bool {
 	var response string
-
-	if !interactive {
-		return true
-	}
 
 	_, err := fmt.Scanln(&response)
 	if err != nil {
@@ -171,7 +167,7 @@ func getConsent(interactive bool) bool {
 		return false
 	} else if response != "yes" {
 		fmt.Println("Please type yes or no and then press enter:")
-		return getConsent(true)
+		return getConsent()
 	}
 
 	return true
