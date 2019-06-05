@@ -236,7 +236,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
  * Free all elements in the remap list
  *
  * \param[in] The remap list to be freed.
- * */
+ */
 static void
 mapless_remap_free_all(d_list_t *remap_list)
 {
