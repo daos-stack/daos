@@ -102,12 +102,10 @@ struct btr_root {
 	 * entries than the order
 	 */
 	uint8_t				tr_node_size;
-	/** Internal index to select the node size */
-	uint8_t				tr_node_size_idx;
 	/** configured btree order */
 	uint8_t				tr_order;
 	/** depth of the tree */
-	uint8_t				tr_depth;
+	uint16_t			tr_depth;
 	/**
 	 * ID to find a registered tree class, which provides customized
 	 * funtions etc.

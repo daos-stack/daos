@@ -54,16 +54,27 @@
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
+#define MAX_TREE_ORDER_INC	7
+
+struct daos_node_overhead {
+	/** Node size in bytes for tree with only */
+	int	no_size;
+	/** Order of node */
+	int	no_order;
+};
+
 /** Overheads for a tree */
 struct daos_tree_overhead {
-	/** Static size of an allocated tree node */
-	int			to_node_size;
+	/** Overhead for full size tree node */
+	struct daos_node_overhead	to_node_overhead;
+	/** Overhead for dynamic tree nodes */
+	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
+	/** Number of dynamic tree node sizes */
+	int				to_dyn_count;
+	/** Inline metadata size for each record */
+	int				to_node_rec_msize;
 	/** Dynamic metadata size of an allocated record. */
-	int			to_record_msize;
-	/** Size of first insertion.  Full node allocated on second key */
-	int			to_single_size;
-	/** Tree order */
-	int			to_order;
+	int				to_record_msize;
 };
 
 /*
