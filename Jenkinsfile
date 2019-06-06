@@ -123,6 +123,7 @@ pipeline {
                     }
                     steps {
                         checkPatch user: GITHUB_USER_USR,
+                                   branch: "dont-post-on-no-errors",
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]"
                     }
