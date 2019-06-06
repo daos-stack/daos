@@ -31,6 +31,8 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+# just a line to make checkpatch post about this file
+
 class CreateContainerTest(TestWithServers):
     """
     Tests DAOS container create.
