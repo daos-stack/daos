@@ -1,25 +1,25 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+(C) Copyright 2018-2019 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+The Government's rights to use, modify, reproduce, release, perform, display,
+or disclose this software are subject to the terms of the Apache License as
+provided in Contract No. B609815.
+Any reproduction of computer software, computer software documentation, or
+portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
 
@@ -31,7 +31,6 @@ import json
 
 class IorFailed(Exception):
     """Raise if Ior failed"""
-
 
 def build_ior(basepath):
     from git import Repo
@@ -70,39 +69,29 @@ def build_ior(basepath):
         raise IorFailed("IOR Build process Failed")
 
 
-def get_ior_cmd(ior_flags=None,
-                iteration=1,
-                block_size=None,
-                transfer_size=None,
-                pool_uuid="`uuidgen`",
-                svc_list=None,
-                object_class=None,
-                cont_uuid="`uuidgen`",
-                seg_count=1,
-                chunk_size=1048576,
-                display_output=True,
-                logfile=None,
-                duration=0,
-                mode="DAOS"):
-    """ Running Ior tests
+def get_ior_cmd(ior_flags=None, iteration=1, block_size=None,
+                transfer_size=None, pool_uuid="`uuidgen`",
+                svc_list=None, object_class=None, cont_uuid="`uuidgen`",
+                seg_count=1, chunk_size=1048576, display_output=True,
+                logfile=None, duration=0, mode="DAOS"):
+    """ Create Ior command line.
 
-        Function Arguments
-        ior_flags      --all ior specific flags
-        iteration      --number of iterations for ior run
-        block_size     --contiguous bytes to write per task
-        transfer_size  --size of transfer in bytes
-        pool_uuid      --Daos Pool UUID
-        svc_list       --Daos Pool SVCL
-        object_class   --object class
-        basepath       --Daos basepath
-        cont_uuid       -- Container UUID
-        seg_count      --segment count
-        chunk_size      --chunk size
-        display_output --print IOR output on console.
-        duration        --max time in minutes executing repeated test
-        type            --"DAOS" or "MPIIO"
+    Function Arguments
+    ior_flags      --all ior specific flags
+    iteration      --number of iterations for ior run
+    block_size     --contiguous bytes to write per task
+    transfer_size  --size of transfer in bytes
+    pool_uuid      --Daos Pool UUID
+    svc_list       --Daos Pool SVCL
+    object_class   --object class
+    basepath       --Daos basepath
+    cont_uuid       -- Container UUID
+    seg_count      --segment count
+    chunk_size      --chunk size
+    display_output --print IOR output on console.
+    duration        --max time in minutes executing repeated test
+    type            --"DAOS" or "MPIIO"
     """
- 
     if mode == "DAOS":
         ior_cmd = " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {} " \
                   "--daos.svcl {} --daos.cont {} --daos.chunk_size {} " \
@@ -121,12 +110,9 @@ def get_ior_cmd(ior_flags=None,
                  "DAOS_SINGLETON_CLI": 1,
                  "FI_PSM2_DISCONNECT": 1}
         env = ";".join(["export {}={}".format(key, value)
-         for key, value in env_d.iteritems()])
-        ior_cmd = " ior {} -a MPIIO -i {} -t {} -b {}".format(
-                                                            ior_flags,
-                                                            iteration,
-                                                            transfer_size,
-                                                            block_size)
+                        for key, value in env_d.iteritems()])
+        ior_cmd = env + " ior {} -a MPIIO -i {} -t {} -b {}".format(
+            ior_flags, iteration, transfer_size, block_size)
     else:
         raise IorFailed("Failed to create a valid cmdline")
     if logfile is not None:

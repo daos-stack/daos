@@ -92,10 +92,7 @@ class Soak(TestWithServers):
             self.fail("Pool.create failed.\n")
 
         pool_uuid = pool_cxt.get_uuid_str()
-        svc_list = ""
-        for i in range(createsvc):
-            svc_list += str(int(pool_cxt.svc.rl_ranks[i])) + ":"
-        svc_list = svc_list[:-1]
+        svc_list = ":".join([str(int(pool_cxt.svc.rl_ranks[i])) for i in range(createsvc)])
 
         self.pool_attr = [pool_cxt, pool_uuid, svc_list, createsize]
         return self.pool_attr
@@ -354,7 +351,7 @@ class Soak(TestWithServers):
     def test_soak_1(self):
         """Run 1 hour soak.
 
-        Test ID: DAOS-2192
+        Test ID: DAOS-2256
         Test Description: This will create a slurm batch job that runs
         various jobs defined in the soak yaml
         This test will run for 12 hours.

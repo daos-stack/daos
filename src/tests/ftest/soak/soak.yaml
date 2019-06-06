@@ -1,15 +1,12 @@
 hosts:
    test_machines:
         test_servers:
-            - boro-A
-            - boro-B
+            - boro-4
+            - boro-5
         test_clients:
-            - boro-C
-            - boro-D
-            - boro-E
-            - boro-F
-            - boro-G
-            - boro-H
+            - boro-4
+            - boro-5
+
 timeout: 7200
 server_config:
     name: daos_server
@@ -123,7 +120,7 @@ ior1:
     iormode:
         a: "DAOS"
     iorflags:
-        F: "-v -W -w -r -R"
+        F: "-v -w -W -r -R"
     transfersize:
         t: '4m'
     objectclass:
@@ -132,7 +129,7 @@ ior2:
     iormode:
         a: "DAOS"
     iorflags:
-        F: "-v -W -w -r -R"
+        F: "-v -w -W -r -R"
     transfersize:
         t: '2m'
     objectclass:
@@ -141,7 +138,7 @@ ior3:
     iormode:
         a: "DAOS"
     iorflags:
-        F: "-v -W -w -r -R"
+        F: "-v -w -W -r -R"
     transfersize:
         t: '1m'
     objectclass:
@@ -151,7 +148,7 @@ ior4:
     iormode:
         a: "MPIIO"
     iorflags:
-        F: "-v -W -w -r -R"
+        F: "-v -w -W -r -R"
     transfersize:
         t: '4k'
     objectclass:
@@ -160,7 +157,7 @@ ior5:
     iormode:
         a: "MPIIO"
     iorflags:
-        F: "-v -W -w -r -R"
+        F: "-v -w -W -r -R"
     transfersize:
         t: '8k'
     objectclass:
@@ -169,7 +166,7 @@ ior6:
     iormode:
         a: "MPIIO"
     iorflags:
-        F: "-v -W -w -r -R"
+        F: "-v -w -W -r -R"
     transfersize:
         t: '4m'
     objectclass:
