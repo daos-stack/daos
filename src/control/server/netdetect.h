@@ -1,4 +1,4 @@
-//
+/*
 // (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 // provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
-//
+*/
 
 #ifndef _NETDETECT_H
 #define _NETDETECT_H
@@ -30,8 +30,8 @@ extern const int NETDETECT_ERROR_DLOPEN;
 extern const int NETDETECT_ERROR_DLSYM;
 extern const int NETDETECT_ERROR_FUNCTION_MISSING;
 
-int netdetectInitialize(char *);
-int netdetectCleanup(void);
-char * netdetectGetAffinityForIONodes(void);
+int netdetect_initialize(char *);
+int netdetect_cleanup(void);
+char *netdetect_get_affinity_for_ionodes(void);
 #endif
 
