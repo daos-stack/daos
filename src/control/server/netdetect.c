@@ -1,24 +1,24 @@
 /*
-// (C) Copyright 2019 Intel Corporation.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+* (C) Copyright 2019 Intel Corporation.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*
+* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+* The Government's rights to use, modify, reproduce, release, perform, display,
+* or disclose this software are subject to the terms of the Apache License as
+* provided in Contract No. 8F-30005.
+* Any reproduction of computer software, computer software documentation, or
+* portions thereof marked with this legend must also reproduce the markings.
 */
 
 #include <stdio.h>
@@ -95,27 +95,50 @@ int netdetect_initialize(char *lib)
 	netdetect_topology_init =
 		(int (*)(hwloc_topology_t *))
 		dlsym(handle, topology_init);
+	if (!netdetect_topology_init)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_topology_set_flags =
 		(int (*)(hwloc_topology_t, unsigned long))
 		dlsym(handle, topology_set_flags);
+	if (!netdetect_topology_set_flags)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_topology_load =
 		(int (*)(hwloc_topology_t))
 		dlsym(handle, topology_load);
+	if (!netdetect_topology_load)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_get_type_depth =
 		(int (*)(hwloc_topology_t, hwloc_obj_type_t))
 		dlsym(handle, get_type_depth);
+	if (!netdetect_get_type_depth)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_get_nbobjs_by_depth =
 		(unsigned (*)(hwloc_topology_t, unsigned))
 		dlsym(handle, get_nbobjs_by_depth);
+	if (!netdetect_get_nbobjs_by_depth)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_get_obj_by_depth =
 		(hwloc_obj_t (*)(hwloc_topology_t, unsigned,
 		unsigned)) dlsym(handle, get_obj_by_depth);
+	if (!netdetect_get_obj_by_depth)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_topology_destroy =
 		(void (*)(hwloc_topology_t))
 		dlsym(handle, topology_destroy);
+	if (!netdetect_topology_destroy)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
+
 	netdetect_bitmap_asprintf =
 		(int (*)(char **, hwloc_const_bitmap_t))
 		dlsym(handle, bitmap_asprintf);
+	if (!netdetect_bitmap_asprintf)
+		return NETDETECT_ERROR_FUNCTION_MISSING;
 
 	error = dlerror();
 	if (error) {
@@ -123,28 +146,14 @@ int netdetect_initialize(char *lib)
 		return NETDETECT_ERROR_DLSYM;
 	}
 
-	if (netdetect_topology_init == NULL ||
-		netdetect_topology_set_flags == NULL ||
-		netdetect_topology_load == NULL ||
-		netdetect_get_type_depth == NULL ||
-		netdetect_get_nbobjs_by_depth == NULL ||
-		netdetect_get_obj_by_depth == NULL ||
-		netdetect_topology_destroy == NULL ||
-		netdetect_bitmap_asprintf == NULL) {
-			return NETDETECT_ERROR_FUNCTION_MISSING;
-	}
-
-	status = netdetect_topology_init(&topology);
-	if (status != 0)
+	if (netdetect_topology_init(&topology))
 		return NETDETECT_FAILURE;
 
-	status = netdetect_topology_set_flags(topology,
-		HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
-	if (status != 0)
+	if (netdetect_topology_set_flags(topology,
+		HWLOC_TOPOLOGY_FLAG_IO_DEVICES))
 		return NETDETECT_FAILURE;
 
-	status = netdetect_topology_load(topology);
-	if (status != 0)
+	if (netdetect_topology_load(topology))
 		return NETDETECT_FAILURE;
 
 	return NETDETECT_SUCCESS;
