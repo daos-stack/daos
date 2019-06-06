@@ -160,7 +160,7 @@ func setupShell() *ishell.Shell {
 			_, out := hasConns(conns.GetActiveConns(nil))
 			c.Println(out)
 
-			formatStor()
+			formatStor(false)
 		},
 	})
 
@@ -177,7 +177,7 @@ func setupShell() *ishell.Shell {
 				c.Println(err)
 			}
 
-			updateStor(req)
+			updateStor(params, false)
 		},
 	})
 
