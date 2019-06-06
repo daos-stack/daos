@@ -152,7 +152,7 @@ struct crt_plugin_gdata {
 	uint32_t		cpg_inited:1, /* all initialized */
 				/* pmix handler registered*/
 				cpg_pmix_errhdlr_inited:1;
-	pthread_rwlock_t	cpg_prog_rwlock;
+	pthread_rwlock_t	cpg_prog_rwlock[CRT_SRV_CONTEXT_NUM];
 	pthread_rwlock_t	cpg_timeout_rwlock;
 	pthread_rwlock_t	cpg_event_rwlock;
 	pthread_rwlock_t	cpg_eviction_rwlock;

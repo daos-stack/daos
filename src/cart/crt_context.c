@@ -1172,13 +1172,17 @@ crt_exec_progress_cb(struct crt_context *ctx)
 		return;
 	}
 
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	/* avoid lock and list traverse overhead if no progress cb */
+	if (d_list_empty(&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]))
+		return;
+
+	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
 			      cpcp_link) {
 		/* check for and execute progress callbacks here */
 		cb_priv->cpcp_func(ctx, cb_priv->cpcp_args);
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 }
 
 int
@@ -1321,10 +1325,10 @@ crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
 	cb_priv->cpcp_func = cb;
 	cb_priv->cpcp_args = arg;
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 	d_list_add_tail(&cb_priv->cpcp_link,
 			&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 out:
 	return rc;
 }
@@ -1340,7 +1344,7 @@ crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 	d_list_for_each_entry_safe(cb_priv, tmp,
 				   &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
 				   cpcp_link) {
@@ -1351,7 +1355,7 @@ crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
 		}
 	}
 out_unlock:
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock);
+	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 out:
 	return rc;
 }
