@@ -102,6 +102,28 @@ struct ds_cont {
 	struct ds_iv_ns		*sc_iv_ns;
 };
 
+/* Container IV structure */
+struct cont_iv_snapshot {
+	int snap_cnt;
+	uint64_t snaps[0];
+};
+
+struct cont_iv_capa {
+	uint64_t	capas;
+};
+
+struct cont_iv_entry {
+	uuid_t	cont_uuid;
+	union {
+		struct cont_iv_snapshot iv_snap;
+		struct cont_iv_capa	iv_capa;
+	};
+};
+
+struct cont_iv_key {
+	uuid_t	cont_uuid;
+};
+
 /*
  * srv_container.c
  */
@@ -151,9 +173,6 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 void ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv);
-void ds_cont_tgt_open_handler(crt_rpc_t *rpc);
-int ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				void *priv);
 void ds_cont_tgt_close_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
@@ -179,6 +198,8 @@ void ds_cont_put(struct ds_cont *cont);
 int ds_cont_cache_init(void);
 void ds_cont_cache_fini(void);
 
+int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		     uuid_t cont_uuid, uint64_t capas);
 /**
  * oid_iv.c
  */
@@ -190,4 +211,6 @@ int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 /* container_iv.c */
 int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
+int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+			      uint64_t capas);
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

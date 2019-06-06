@@ -113,26 +113,28 @@ struct daos_obj_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
 	uint32_t		st_tgt_idx;	/* target xstream index */
-	uint32_t		st_pad;		/* padding */
+	uint32_t		st_tgt_id;	/* target id */
 };
 
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
 	((struct dtx_id)	(orw_dti)		CRT_VAR) \
 	((daos_unit_oid_t)	(orw_oid)		CRT_VAR) \
+	((uuid_t)		(orw_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
 	((uint64_t)		(orw_epoch)		CRT_VAR) \
 	((uint64_t)		(orw_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
 	((uint32_t)		(orw_nr)		CRT_VAR) \
+	((uint32_t)		(orw_start_shard)	CRT_VAR) \
+	((uint32_t)		(orw_flags)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
-	((struct daos_obj_shard_tgt) (orw_shard_tgts)	CRT_ARRAY) \
-	((uint32_t)		(orw_flags)		CRT_VAR)
+	((struct daos_obj_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
@@ -151,6 +153,7 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 /* object Enumerate in/out */
 #define DAOS_ISEQ_OBJ_KEY_ENUM	/* input fields */		 \
 	((daos_unit_oid_t)	(oei_oid)		CRT_VAR) \
+	((uuid_t)		(oei_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(oei_co_hdl)		CRT_VAR) \
 	((uuid_t)		(oei_co_uuid)		CRT_VAR) \
 	((uint64_t)		(oei_epoch)		CRT_VAR) \
@@ -185,6 +188,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
 #define DAOS_ISEQ_OBJ_PUNCH	/* input fields */		 \
 	((struct dtx_id)	(opi_dti)		CRT_VAR) \
+	((uuid_t)		(opi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(opi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(opi_oid)		CRT_VAR) \
@@ -207,6 +211,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
 #define DAOS_ISEQ_OBJ_QUERY_KEY	/* input fields */		 \
 	((uuid_t)		(okqi_co_hdl)		CRT_VAR) \
+	((uuid_t)		(okqi_pool_uuid)	CRT_VAR) \
 	((uuid_t)		(okqi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(okqi_oid)		CRT_VAR) \
 	((uint64_t)		(okqi_epoch)		CRT_VAR) \

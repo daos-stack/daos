@@ -54,12 +54,11 @@ typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
 /**
- * daos_sg_list_t/daos_iov_t/daos_rank_list_free/daos_iov_set is for keeping
- * compatibility for upper layer.
+ * daos_sg_list_t/daos_iov_t/daos_iov_set is for keeping compatibility for
+ * upper layer.
  */
 #define daos_sg_list_t			d_sg_list_t
 #define daos_iov_t			d_iov_t
-#define daos_rank_list_free(r)		d_rank_list_free((r))
 #define daos_iov_set(iov, buf, size)	d_iov_set((iov), (buf), (size))
 
 #define crt_proc_daos_key_t	crt_proc_d_iov_t
@@ -332,12 +331,6 @@ typedef struct {
 	uint32_t			pi_ndisabled;
 	/** Latest pool map version */
 	uint32_t			pi_map_ver;
-	/** pool UID */
-	uid_t				pi_uid;
-	/** pool GID */
-	gid_t				pi_gid;
-	/** Mode */
-	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
 	/** pool info bits, see daos_pool_info_bit */

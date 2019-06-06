@@ -636,20 +636,6 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
-	case DTX_ST_INIT:
-		/* XXX: The INIT DTX in SCM must be for an in-updating
-		 *	object/key that was waiting for the bulk transfer.
-		 *
-		 *	Currently, we do NOT support server re-integration,
-		 *	then we will ignore the case of client resending
-		 *	RPC to the restarted server. So we can handle the
-		 *	DTX_ST_INIT case the same as DTX_ST_PREPARED.
-		 *
-		 *	We need to check whether the RPC's time-stamp is
-		 *	older than the server re-integration time or not
-		 *	in the furture.
-		 */
-		return 0;
 	case DTX_ST_COMMITTED:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
