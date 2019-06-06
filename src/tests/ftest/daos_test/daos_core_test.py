@@ -79,6 +79,46 @@ class DaosCoreTest(TestWithServers):
         :avocado: tags=pr,hw,unittest,medium,daos_test
         """
 
+        a0 = 1
+        a1 = 1
+        a2 = 1
+        a3 = 1
+        a4 = 1
+        a5 = 1
+        a6 = 1
+        a7 = 1
+        a8 = 1
+        a9 = 1
+        b0 = 1
+        b1 = 1
+        b2 = 1
+        b3 = 1
+        b4 = 1
+        b5 = 1
+        b6 = 1
+        b7 = 1
+        b8 = 1
+        b9 = 1
+        c0 = 1
+        c1 = 1
+        c2 = 1
+        c3 = 1
+        c4 = 1
+        c5 = 1
+        c6 = 1
+        c7 = 1
+        c8 = 1
+        c9 = 1
+        d0 = 1
+        d1 = 1
+        d2 = 1
+        d3 = 1
+        d4 = 1
+        d5 = 1
+        d6 = 1
+        d7 = 1
+        d8 = 1
+        d9 = 1
         subtest = self.params.get("daos_test", '/run/daos_tests/Tests/*')
         num_clients = self.params.get("num_clients",
                                       '/run/daos_tests/num_clients/*')
