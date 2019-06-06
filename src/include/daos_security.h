@@ -326,7 +326,7 @@ daos_ace_get_size(struct daos_ace *ace);
  * \param	tabs	Number of tabs to indent at top level
  */
 void
-daos_ace_dump(struct daos_ace *ace, uint tabs);
+daos_ace_dump(struct daos_ace *ace, uint32_t tabs);
 
 /**
  * Sanity check the Access Control Entry structure for valid values and internal

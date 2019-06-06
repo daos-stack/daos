@@ -13,7 +13,6 @@ servers:
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
-  - DD_MASK=daos_default
   scm_mount: /mnt/daos
   scm_class: ram
   scm_list: []

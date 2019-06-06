@@ -371,7 +371,8 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 
 
 static int
-crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *st)
+crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc,
+				   struct daos_obj_shard_tgt *st)
 {
 	int rc;
 
@@ -384,7 +385,7 @@ crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *s
 	rc = crt_proc_uint32_t(proc, &st->st_tgt_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &st->st_pad);
+	rc = crt_proc_uint32_t(proc, &st->st_tgt_id);
 	if (rc != 0)
 		return -DER_HG;
 

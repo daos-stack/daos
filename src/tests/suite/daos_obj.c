@@ -1665,7 +1665,10 @@ punch_simple(void **state)
 	daos_obj_id_t	 oid;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	punch_simple_internal(state, oid);
 
+	/* DAOS_OC_LARGE_RW with some special handling for obj punch */
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	punch_simple_internal(state, oid);
 }
 
