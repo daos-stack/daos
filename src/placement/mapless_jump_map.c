@@ -288,7 +288,7 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 			     PO_COMP_ID_ALL, &root);
-	D_ASSERT(rc == 0);
+	D_ASSERT(rc == 1);
 
 	/**
 	 * If replication max use all available domains as specified
