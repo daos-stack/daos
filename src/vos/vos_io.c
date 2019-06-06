@@ -1186,14 +1186,14 @@ vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
 static void
 update_cancel(struct vos_io_context *ioc)
 {
+	struct umem_instance *umem = vos_cont2umm(vos_hdl2cont(ioc->ic_coh));
+
 	/* Cancel SCM reservations or free persistent allocations */
 	if (ioc->ic_actv_at != 0) {
 		D_ASSERT(ioc->ic_actv != NULL);
-		umem_cancel(vos_obj2umm(ioc->ic_obj), ioc->ic_actv,
-			    ioc->ic_actv_at);
+		umem_cancel(umem, ioc->ic_actv, ioc->ic_actv_at);
 		ioc->ic_actv_at = 0;
 	} else if (ioc->ic_umoffs_cnt != 0) {
-		struct umem_instance *umem = vos_obj2umm(ioc->ic_obj);
 		int i, rc;
 
 		rc = umem_tx_begin(umem, vos_txd_get());
