@@ -1665,7 +1665,10 @@ punch_simple(void **state)
 	daos_obj_id_t	 oid;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	punch_simple_internal(state, oid);
 
+	/* DAOS_OC_LARGE_RW with some special handling for obj punch */
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	punch_simple_internal(state, oid);
 }
 
@@ -3530,6 +3533,41 @@ static void fetch_mixed_keys(void **state)
 				  "io_manyrec_nvme_single akey");
 }
 
+static void
+io_capa_iv_fetch(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	d_rank_t	leader;
+
+	/* needs at lest 2 targets */
+	if (!test_runable(arg, 2))
+		skip();
+
+	test_get_leader(arg, &leader);
+	D_ASSERT(leader > 0);
+	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, leader - 1);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+				 DAOS_FORCE_CAPA_FETCH | DAOS_FAIL_ONCE,
+				 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+				     0, 0, NULL);
+
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -3604,6 +3642,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
 	{ "IO37: Fetch existing and nonexistent akeys in single fetch call",
 	  fetch_mixed_keys, async_disable, test_case_teardown},
+	{ "IO38: force capablity IV fetch",
+	  io_capa_iv_fetch, async_disable, test_case_teardown},
 };
 
 int

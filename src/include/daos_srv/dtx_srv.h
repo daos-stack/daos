@@ -100,12 +100,10 @@ struct dtx_stat {
  * DAOS two-phase commit transaction status.
  */
 enum dtx_status {
-	/**  Initialized, but local modification has not completed. */
-	DTX_ST_INIT		= 1,
 	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 2,
+	DTX_ST_PREPARED		= 1,
 	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 3,
+	DTX_ST_COMMITTED	= 2,
 };
 
 int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,

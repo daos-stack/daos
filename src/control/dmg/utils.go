@@ -80,6 +80,7 @@ func annotateState(state *pb.ResponseState) {
 // unpackClientMap takes a map of addresses to result type and prints either
 // decoded struct or provided error.
 func unpackClientMap(i interface{}) string {
+	var answer interface{}
 	decoded := make(map[string]interface{})
 
 	switch v := i.(type) {
@@ -94,42 +95,57 @@ func unpackClientMap(i interface{}) string {
 		}
 	case client.ClientCtrlrMap:
 		for addr, res := range v {
-			if res.Err != nil {
-				decoded[addr] = res.Err.Error()
-			} else if len(res.Ctrlrs) > 0 {
-				decoded[addr] = res.Ctrlrs
-			} else {
-				for i := range res.Responses {
-					annotateState(res.Responses[i].State)
+			if res.Err == nil {
+				if len(res.Ctrlrs) > 0 {
+					answer = res.Ctrlrs
+				} else if len(res.Responses) == 0 {
+					answer = "unexpected error: no responses"
+				} else {
+					for i := range res.Responses {
+						annotateState(res.Responses[i].State)
+					}
+					answer = res.Responses
 				}
-				decoded[addr] = res.Responses
+			} else {
+				answer = res.Err.Error()
 			}
+			decoded[addr] = answer
 		}
 	case client.ClientModuleMap:
 		for addr, res := range v {
-			if res.Err != nil {
-				decoded[addr] = res.Err.Error()
-			} else if len(res.Modules) > 0 {
-				decoded[addr] = res.Modules
-			} else {
-				for i := range res.Responses {
-					annotateState(res.Responses[i].State)
+			if res.Err == nil {
+				if len(res.Modules) > 0 {
+					answer = res.Modules
+				} else if len(res.Responses) == 0 {
+					answer = "unexpected error: no responses"
+				} else {
+					for i := range res.Responses {
+						annotateState(res.Responses[i].State)
+					}
+					answer = res.Responses
 				}
-				decoded[addr] = res.Responses
+			} else {
+				answer = res.Err.Error()
 			}
+			decoded[addr] = answer
 		}
 	case client.ClientMountMap:
 		for addr, res := range v {
-			if res.Err != nil {
-				decoded[addr] = res.Err.Error()
-			} else if len(res.Mounts) > 0 {
-				decoded[addr] = res.Mounts
-			} else {
-				for i := range res.Responses {
-					annotateState(res.Responses[i].State)
+			if res.Err == nil {
+				if len(res.Mounts) > 0 {
+					answer = res.Mounts
+				} else if len(res.Responses) == 0 {
+					answer = "unexpected error: no responses"
+				} else {
+					for i := range res.Responses {
+						annotateState(res.Responses[i].State)
+					}
+					answer = res.Responses
 				}
-				decoded[addr] = res.Responses
+			} else {
+				answer = res.Err.Error()
 			}
+			decoded[addr] = answer
 		}
 	case client.ResultMap:
 		for addr, res := range v {

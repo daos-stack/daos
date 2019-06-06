@@ -1677,7 +1677,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	struct daos_obj_layout *layout;
 	struct daos_obj_shard *shard;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 6) || arg->pool.svc.rl_nr < 3)
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
@@ -1772,9 +1772,9 @@ rebuild_fail_all_replicas(void **state)
 static void
 multi_pools_rebuild_concurrently(void **state)
 {
-#define POOL_NUM		6
-#define CONT_PER_POOL		4
-#define OBJ_PER_CONT		256
+#define POOL_NUM		4
+#define CONT_PER_POOL		2
+#define OBJ_PER_CONT		8
 	test_arg_t		*arg = *state;
 	test_arg_t		*args[POOL_NUM * CONT_PER_POOL];
 	daos_obj_id_t		oids[OBJ_PER_CONT];

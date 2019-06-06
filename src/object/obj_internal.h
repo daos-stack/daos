@@ -39,6 +39,8 @@
 #include <daos_srv/daos_server.h>
 #include <daos_types.h>
 
+#include "obj_rpc.h"
+
 /**
  * This environment is mostly for performance evaluation.
  */
@@ -160,25 +162,68 @@ obj_tls_get()
 	return dss_module_key_get(dss_tls_get(), &obj_module_key);
 }
 
+typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+			     void *shard_args,
+			     struct daos_obj_shard_tgt *fw_shard_tgts,
+			     uint32_t fw_cnt, tse_task_t *task);
+
+/* shard update/punch auxiliary args, must be the first field of
+ * shard_rw_args and shard_punch_args.
+ */
+struct shard_auxi_args {
+	struct dc_object	*obj;
+	struct obj_auxi_args	*obj_auxi;
+	shard_io_cb_t		 shard_io_cb;
+	uint32_t		 shard;
+	uint32_t		 target;
+	uint32_t		 map_ver;
+	uint16_t		 flags;
+	/* group index within the req_tgts->ort_shard_tgts */
+	uint16_t		 grp_idx;
+	/* only for EC, the start shard of the EC stripe */
+	uint32_t		 start_shard;
+};
+
+struct shard_rw_args {
+	struct shard_auxi_args	 auxi;
+	daos_epoch_t		 epoch;
+	struct dtx_id		 dti;
+	daos_key_t		*dkey;
+	uint64_t		 dkey_hash;
+	uint32_t		 nr;
+	daos_iod_t		*iods;
+	d_sg_list_t		*sgls;
+	crt_bulk_t		*bulks;
+	daos_iom_t		*maps; /* only for fetch */
+};
+
+struct shard_punch_args {
+	struct shard_auxi_args	 pa_auxi;
+	uuid_t			 pa_coh_uuid;
+	uuid_t			 pa_cont_uuid;
+	daos_obj_punch_t	*pa_api_args;
+	uint64_t		 pa_dkey_hash;
+	daos_epoch_t		 pa_epoch;
+	struct dtx_id		 pa_dti;
+	uint32_t		 pa_opc;
+};
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
 
-struct daos_obj_shard_tgt;
-int dc_obj_shard_update(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			daos_key_t *dkey, unsigned int nr,
-			daos_iod_t *iods, d_sg_list_t *sgls,
-			unsigned int *map_ver, unsigned int start_shard,
-			struct daos_obj_shard_tgt *tgts,
-			uint32_t fw_cnt, tse_task_t *task,
-			struct dtx_id *dti, uint32_t flags);
+int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+		    void *shard_args, struct daos_obj_shard_tgt *fw_shard_tgts,
+		    uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_fetch(struct dc_obj_shard *shard, daos_epoch_t epoch,
-		       daos_key_t *dkey, unsigned int nr,
-		       daos_iod_t *iods, d_sg_list_t *sgls,
-		       daos_iom_t *maps, unsigned int *map_ver,
-		       tse_task_t *task);
+int
+ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
+		     daos_oclass_attr_t *oca, uint64_t *tgt_set);
+
+int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+		       void *shard_args,
+		       struct daos_obj_shard_tgt *fw_shard_tgts,
+		       uint32_t fw_cnt, tse_task_t *task);
 
 int
 dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
@@ -189,14 +234,6 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		  daos_anchor_t *anchor, daos_anchor_t  *dkey_anchor,
 		  daos_anchor_t  *akey_anchor, unsigned int *map_ver,
 		  tse_task_t *task);
-
-int dc_obj_shard_punch(struct dc_obj_shard *shard, uint32_t opc,
-		       daos_epoch_t epoch, daos_key_t *dkey,
-		       daos_key_t *akeys, unsigned int akey_nr,
-		       const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       unsigned int *map_ver, struct daos_obj_shard_tgt *tgts,
-		       uint32_t fw_cnt, tse_task_t *task,
-		       struct dtx_id *dti, uint32_t flags);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
@@ -254,7 +291,5 @@ struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
-int
-ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
-		     daos_oclass_attr_t *oca, uint64_t *tgt_set);
+
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
