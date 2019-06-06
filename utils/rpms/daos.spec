@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.5.0
-Release:       1%{?dist}
+Release:       2%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -192,6 +192,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/dmg
+%{_bindir}/daos
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
@@ -220,6 +221,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Fri May 31 2019 Ken Cain <kenneth.c.cain@intel.com>
+- Add new daos utility binary
+
 * Wed May 29 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Version bump up to 0.5.0
 - Add Requires: libpsm_infinipath1 for SLES 12.3
