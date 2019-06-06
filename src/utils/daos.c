@@ -731,7 +731,7 @@ help_hdlr(struct cmd_args_s *ap)
 
 	fprintf(stream,
 "pool options:\n"
-"	--pool=UUID        pool UUID \n"
+"	--pool=UUID        pool UUID\n"
 "	--group=STR        pool server process group (\"%s\")\n"
 "	--svc=RANKS        pool service replicas like 1,2,3\n"
 "	--attr=NAME        pool attribute name to get\n",
