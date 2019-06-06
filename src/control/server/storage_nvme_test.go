@@ -320,7 +320,6 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 
 func TestFormatNvme(t *testing.T) {
 	tests := []struct {
-		inited       bool
 		formatted    bool
 		devFormatRet error
 		pciAddrs     []string
@@ -328,31 +327,21 @@ func TestFormatNvme(t *testing.T) {
 		desc         string
 	}{
 		{
-			true,
 			false,
-			nil,
-			[]string{},
-			[]*pb.NvmeControllerResult{},
-			"no devices",
-		},
-		{
-			false,
-			true,
 			nil,
 			[]string{},
 			[]*pb.NvmeControllerResult{
 				{
 					Pciaddr: "",
 					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
-						Error:  msgBdevNotInited,
+						Status: pb.ResponseStatus_CTRL_SUCCESS,
+						Info:   msgBdevNoDevs,
 					},
 				},
 			},
-			"not initialized",
+			"no devices",
 		},
 		{
-			true,
 			true,
 			nil,
 			[]string{},
@@ -368,7 +357,6 @@ func TestFormatNvme(t *testing.T) {
 			"already formatted",
 		},
 		{
-			true,
 			false,
 			nil,
 			[]string{""},
@@ -384,7 +372,6 @@ func TestFormatNvme(t *testing.T) {
 			"empty device string",
 		},
 		{
-			true,
 			false,
 			nil,
 			[]string{"0000:81:00.0"},
@@ -397,7 +384,6 @@ func TestFormatNvme(t *testing.T) {
 			"single device",
 		},
 		{
-			true,
 			false,
 			nil,
 			[]string{"0000:83:00.0"},
@@ -413,7 +399,6 @@ func TestFormatNvme(t *testing.T) {
 			"single device not discovered",
 		},
 		{
-			true,
 			false,
 			nil,
 			[]string{"0000:81:00.0", "0000:83:00.0"},
@@ -433,7 +418,6 @@ func TestFormatNvme(t *testing.T) {
 			"first device found, second not discovered",
 		},
 		{
-			true,
 			false,
 			nil,
 			[]string{"0000:83:00.0", "0000:81:00.0"},
@@ -453,7 +437,6 @@ func TestFormatNvme(t *testing.T) {
 			"first not discovered, second found",
 		},
 		{
-			true,
 			false,
 			errors.New("example format failure"),
 			[]string{"0000:83:00.0", "0000:81:00.0"},
@@ -500,10 +483,8 @@ func TestFormatNvme(t *testing.T) {
 
 		results := []*pb.NvmeControllerResult{}
 
-		if tt.inited {
-			// not concerned with response
-			sn.Discover(new(pb.ScanStorageResp))
-		}
+		// not concerned with response
+		sn.Discover(new(pb.ScanStorageResp))
 
 		sn.Format(srvIdx, &results)
 
@@ -524,7 +505,9 @@ func TestFormatNvme(t *testing.T) {
 				"unexpected pciaddr, "+tt.desc)
 
 			if result.State.Status == pb.ResponseStatus_CTRL_SUCCESS {
-				successPciaddrs = append(successPciaddrs, result.Pciaddr)
+				if result.State.Info != msgBdevNoDevs {
+					successPciaddrs = append(successPciaddrs, result.Pciaddr)
+				}
 			}
 		}
 
@@ -533,15 +516,13 @@ func TestFormatNvme(t *testing.T) {
 			"unexpected list of pci addresses in format calls, "+tt.desc)
 		AssertEqual(t, sn.formatted, true, "expect formatted state, "+tt.desc)
 
-		if tt.inited {
-			AssertEqual(
-				t, sn.controllers[0], pbC,
-				"unexpected list of discovered controllers, "+tt.desc)
-		}
+		AssertEqual(
+			t, sn.controllers[0], pbC,
+			"unexpected list of discovered controllers, "+tt.desc)
 	}
 }
 
-func TestUpdateNvmeStorage(t *testing.T) {
+func TestUpdateNvme(t *testing.T) {
 	pciAddr := "0000:81:00.0" // default pciaddr for tests
 	model := "ABC"            // only update if ctrlr model name matches
 	serial := "123ABC"
@@ -568,19 +549,6 @@ func TestUpdateNvmeStorage(t *testing.T) {
 		{
 			inited: true,
 			desc:   "no devices",
-		},
-		{
-			inited: false,
-			expResults: []*pb.NvmeControllerResult{
-				{
-					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
-						Error:  msgBdevNotInited,
-					},
-				},
-			},
-			desc: "not initialized",
 		},
 		{
 			inited:   true,
@@ -856,7 +824,7 @@ func TestUpdateNvmeStorage(t *testing.T) {
 // TestBurnInNvme verifies a corner case because BurnIn does not call out
 // to SPDK via bindings.
 // In this case the real NvmeStorage is used as opposed to a mockNvmeStorage.
-func TestBurnInNvmeStorage(t *testing.T) {
+func TestBurnInNvme(t *testing.T) {
 	tests := []struct {
 		inited bool
 		errMsg string
