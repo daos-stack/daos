@@ -724,8 +724,8 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	int i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, *coh, *oid, 1, true, DAOS_INTENT_DEFAULT,
-				  &objs[i]);
+		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, 1, true,
+				  DAOS_INTENT_DEFAULT, &objs[i]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -794,8 +794,8 @@ io_obj_cache_test(void **state)
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_hold(occ, l_coh, oids[1], 1, true, DAOS_INTENT_DEFAULT,
-			  &objs[16]);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], 1, true,
+			  DAOS_INTENT_DEFAULT, &objs[16]);
 	assert_int_equal(rc, 0);
 	vos_obj_release(occ, objs[16]);
 
@@ -1323,6 +1323,22 @@ io_set_attribute_test(void **state)
 	int rc;
 	uint64_t attr;
 	uint64_t i, expected;
+	daos_unit_oid_t oid;
+
+	oid = gen_oid(arg->ofeat);
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, 0);
+
+	rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     VOS_OI_FAILED);
+	assert_int_equal(rc, 0);
+
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, VOS_OI_FAILED);
 
 	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
 			     NULL, &attr);

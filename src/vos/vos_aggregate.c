@@ -591,7 +591,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 	int			 rc;
 
 	memset(addr, 0, sizeof(*addr));
-	media = vos_media_select(obj, DAOS_IOD_ARRAY, size);
+	media = vos_media_select(obj->obj_cont, DAOS_IOD_ARRAY, size);
 
 	if (media == DAOS_MEDIA_SCM) {
 		struct pobj_action	*scm_ext;
@@ -950,7 +950,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Publish NVMe reservations */
-	rc = vos_publish_blocks(obj, &io->ic_nvme_exts, true,
+	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
 				VOS_IOS_AGGREGATION);
 	if (rc) {
 		D_ERROR("Publish NVMe extents error: %d\n", rc);
@@ -980,8 +980,8 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 			io->ic_scm_cnt = 0;
 		}
 		if (!d_list_empty(&io->ic_nvme_exts))
-			vos_publish_blocks(obj, &io->ic_nvme_exts, false,
-					   VOS_IOS_AGGREGATION);
+			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
+					   false, VOS_IOS_AGGREGATION);
 	}
 
 	/* Reset io context */

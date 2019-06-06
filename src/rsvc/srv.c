@@ -705,21 +705,15 @@ int
 ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 {
 	struct ds_rsvc		*svc;
-	struct ds_rsvc_class	*impl;
-	d_list_t		*entry;
 	int			 rc;
 
-	impl = rsvc_class(class);
-	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
-	if (entry == NULL)
+	rc = ds_rsvc_lookup(class, id, &svc);
+	if (rc != 0)
 		return -DER_ALREADY;
-	svc = rsvc_obj(entry);
-
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
-
 	rc = stop(svc, destroy);
 	if (!rc && destroy)
-		rc = impl->sc_delete_uuid(id);
+		rc = rsvc_class(class)->sc_delete_uuid(id);
 	return rc;
 }
 
@@ -815,6 +809,62 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
 
 	return stop(svc, false /* destroy */);
+}
+
+int
+ds_rsvc_add_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
+		     d_rank_list_t *ranks, size_t size, struct rsvc_hint *hint)
+{
+	struct ds_rsvc	*svc;
+	int		 rc;
+
+	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
+	if (rc != 0)
+		goto out;
+	rc = ds_rsvc_dist_start(class, id, svc->s_db_uuid, ranks,
+				true /* create */, false /* bootstrap */, size);
+
+	/* TODO: Attempt to add replicas that were successfully started */
+	if (rc != 0)
+		goto out_stop;
+	rc = rdb_add_replicas(svc->s_db, ranks);
+	/* Clean up failed ranks */
+	if (ranks->rl_nr == 0)
+		goto out_leader;
+out_stop:
+	ds_rsvc_dist_stop(class, id, ranks, true /* destroy */);
+out_leader:
+	ds_rsvc_set_hint(svc, hint);
+	put_leader(svc);
+out:
+	return rc;
+}
+
+int
+ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
+			d_rank_list_t *ranks, struct rsvc_hint *hint)
+{
+	struct ds_rsvc	*svc;
+	d_rank_list_t	*stop_ranks;
+	int		 rc;
+
+	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
+	if (rc != 0)
+		goto out;
+	rc = daos_rank_list_dup(&stop_ranks, ranks);
+	if (rc != 0)
+		goto out_leader;
+	rc = rdb_remove_replicas(svc->s_db, ranks);
+
+	/* filter out failed ranks */
+	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
+	ds_rsvc_dist_stop(class, id, stop_ranks, true /* destroy */);
+	daos_rank_list_free(stop_ranks);
+out_leader:
+	ds_rsvc_set_hint(svc, hint);
+	put_leader(svc);
+out:
+	return rc;
 }
 
 /*************************** Distributed Operations ***************************/

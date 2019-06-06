@@ -40,8 +40,48 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def arch=""
+def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+
+def rpm_test_pre = '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                      nodelist=(${NODELIST//,/ })
+                      scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml jenkins@${nodelist[0]}:/tmp
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex
+                      repo_file_base=\"*_job_\${JOB_NAME%%/*}_job_\"
+                      for repo in openpa libfabric pmix   \
+                                  ompi mercury spdk isa-l \
+                                  fio dpdk protobuf-c     \
+                                  fuse pmdk argobots raft \
+                                  cart@daos_devel; do     \
+                          if [[ \\\$repo = *@* ]]; then
+                              branch=\"\\\${repo#*@}\"
+                              repo=\"\\\${repo%@*}\"
+                          else
+                              branch=\"master\"
+                          fi\n'''
+
+def rpm_test_daos_test = '''me=\\\$(whoami)
+                            for dir in server agent; do
+                                sudo mkdir /var/run/daos_\\\$dir
+                                sudo chmod 0755 /var/run/daos_\\\$dir
+                                sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
+                            done
+                            sudo mkdir -p /mnt/daos
+                            sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
+                            sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
+                            cat /usr/etc/daos_server.yml
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1  daos_server -c 1 -a /tmp -o /usr/etc/daos_server.yml
+                            trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
+                            line=\"\"
+                            while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
+                                read line <&\\\${COPROC[0]}
+                                echo \"Server stdout: \\\$line\"
+                            done
+                            echo \"Server started!\"
+                            daos_agent &
+                            AGENT_PID=\\\$!
+                            trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
+                            orterun -np 1 -x OFI_INTERFACE=eth0 -x CRT_ATTACH_INFO_PATH=/tmp -x DAOS_SINGLETON_CLI=1 daos_test -m'''
 
 pipeline {
     agent { label 'lightweight' }
@@ -231,7 +271,6 @@ pipeline {
                                        result: "FAILURE"
                         }
                     }
-
                 }
                 stage('Build on CentOS 7') {
                     agent {
@@ -1041,6 +1080,60 @@ pipeline {
                                          status: 'ERROR'
                         }
                         */
+                    }
+                }
+                stage('Test CentOS 7 RPMs') {
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       distro: 'el7.6',
+                                       node_count: 1,
+                                       snapshot: true
+                        runTest script: "${rpm_test_pre}" +
+                                    '''     sudo yum-config-manager --add-repo=\${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/centos7/
+                                            sudo bash -c \\\"echo \\\\\\"gpgcheck = False\\\\\\" >> /etc/yum.repos.d/\\\${repo_file_base}\\\${repo}_job_\\\${branch}_lastSuccessfulBuild_artifact_artifacts_centos7_.repo\\\"
+
+                                        done
+                                        sudo yum-config-manager --add-repo=\${BUILD_URL}artifact/artifacts/centos7/
+                                        sudo bash -c \\\"echo \\\\\\"gpgcheck = False\\\\\\" >> /etc/yum.repos.d/\\\${repo_file_base}daos_job_\${JOB_BASE_NAME}_\${BUILD_ID}_artifact_artifacts_centos7_.repo\\\"
+                                        # work around openmpi -> ompi
+                                        sudo yum -y erase metabench mdtest simul IOR
+                                        sudo yum -y install daos-client
+                                        sudo yum -y history rollback last-1
+                                        sudo yum -y install daos-server
+                                        sudo yum -y install daos-tests\n''' +
+                                        "${rpm_test_daos_test}" + '"',
+                                junit_files: null,
+                                failure_artifacts: env.STAGE_NAME
+                    }
+                }
+                stage('Test SLES12.3 RPMs') {
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       distro: 'sles12sp3',
+                                       node_count: 1,
+                                       snapshot: true
+                        runTest script: "${rpm_test_pre}" +
+                                     '''    sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/sles12.3/ \\\$repo
+                                        done
+                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/python-pathlib/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ python-pathlib
+                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${BUILD_URL}artifact/artifacts/sles12.3/ daos
+                                        sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
+                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
+                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
+                                        sudo zypper --non-interactive --gpg-auto-import-keys ref
+                                        sudo zypper --non-interactive rm openmpi libfabric1
+                                        sudo zypper --non-interactive in daos-client
+                                        sudo zypper --non-interactive in daos-server
+                                        sudo zypper --non-interactive in daos-tests\n''' +
+                                        "${rpm_test_daos_test}" + '"',
+                                junit_files: null,
+                                failure_artifacts: env.STAGE_NAME
                     }
                 }
             }

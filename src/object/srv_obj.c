@@ -458,17 +458,16 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
  * will be returned to \a contp.
  */
 static int
-ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+ds_check_container(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   struct ds_cont_hdl **hdlp, struct ds_cont_child **contp)
 {
 	struct ds_cont_hdl	*cont_hdl;
 	int			 rc;
 
-	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
-	if (cont_hdl == NULL) {
-		D_DEBUG(DB_TRACE, "can not find "DF_UUID" hdl\n",
-			 DP_UUID(cont_hdl_uuid));
-		D_GOTO(failed, rc = -DER_NO_HDL);
+	rc = cont_iv_capa_fetch(pool_uuid, cont_hdl_uuid, cont_uuid, &cont_hdl);
+	if (rc == -DER_NONEXIST) {
+		rc = -DER_NO_PERM;
+		D_GOTO(out, rc);
 	}
 
 	if (cont_hdl->sch_cont != NULL) { /* a regular container */
@@ -823,8 +822,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE);
 	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_PREP);
 
-	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
-				&cont_hdl, &cont);
+	rc = ds_check_container(orw->orw_pool_uuid, orw->orw_co_hdl,
+				orw->orw_co_uuid, &cont_hdl, &cont);
 	if (rc)
 		goto out;
 
@@ -1109,8 +1108,8 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	int			rc;
 	bool			recursive = false;
 
-	rc = ds_check_container(oei->oei_co_hdl, oei->oei_co_uuid,
-				&cont_hdl, &cont);
+	rc = ds_check_container(oei->oei_pool_uuid, oei->oei_co_hdl,
+				oei->oei_co_uuid, &cont_hdl, &cont);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1488,8 +1487,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	tag = dss_get_module_info()->dmi_tgt_id;
 
-	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
-				&cont_hdl, &cont);
+	rc = ds_check_container(opi->opi_pool_uuid, opi->opi_co_hdl,
+				opi->opi_co_uuid, &cont_hdl, &cont);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1700,8 +1699,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
 	}
 
-	rc = ds_check_container(okqi->okqi_co_hdl, okqi->okqi_co_uuid,
-				&cont_hdl, &cont);
+	rc = ds_check_container(okqi->okqi_pool_uuid, okqi->okqi_co_hdl,
+				okqi->okqi_co_uuid, &cont_hdl, &cont);
 	if (rc)
 		D_GOTO(out, rc);
 
