@@ -279,11 +279,13 @@ const ProtobufCMessageDescriptor mgmt__join_resp__descriptor =
   (ProtobufCMessageInit) mgmt__join_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[1] =
+static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[2] =
 {
   { "Join", &mgmt__join_req__descriptor, &mgmt__join_resp__descriptor },
+  { "CreatePool", &mgmt__create_pool_req__descriptor, &mgmt__create_pool_resp__descriptor },
 };
 const unsigned mgmt__mgmt_svc__method_indices_by_name[] = {
+  1,        /* CreatePool */
   0         /* Join */
 };
 const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
@@ -293,7 +295,7 @@ const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
   "MgmtSvc",
   "Mgmt__MgmtSvc",
   "mgmt",
-  1,
+  2,
   mgmt__mgmt_svc__method_descriptors,
   mgmt__mgmt_svc__method_indices_by_name
 };
@@ -304,6 +306,14 @@ void mgmt__mgmt_svc__join(ProtobufCService *service,
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
   service->invoke(service, 0, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+}
+void mgmt__mgmt_svc__create_pool(ProtobufCService *service,
+                                 const Mgmt__CreatePoolReq *input,
+                                 Mgmt__CreatePoolResp_Closure closure,
+                                 void *closure_data)
+{
+  assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
+  service->invoke(service, 1, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
                            Mgmt__MgmtSvc_ServiceDestroy destroy)

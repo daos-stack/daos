@@ -182,19 +182,18 @@ func (svc *mgmtSvc) CreatePool(
 	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
 
 	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
-	// TODO: implement lock and drpc IDs & handler in iosrv
-	// svc.mutex.Lock()
-	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, poolCreate, req)
-	// svc.mutex.Unlock()
-	// if err != nil {
-	//	return nil, err
-	//}
+	// TODO: implement lock and drpc IDs & handler in iosr
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, createPool, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
 
 	resp := &pb.CreatePoolResp{}
-	// TODO
-	// if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-	// 	return nil, errors.Wrap(err, "unmarshal CreatePool response")
-	// }
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal CreatePool response")
+	}
 
-	return resp, errors.New("CreatePool dRPC not implemented")
+	return resp, nil
 }

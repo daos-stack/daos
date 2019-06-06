@@ -42,6 +42,7 @@ const (
 	createMS     = C.DRPC_METHOD_MGMT_CREATE_MS
 	startMS      = C.DRPC_METHOD_MGMT_START_MS
 	join         = C.DRPC_METHOD_MGMT_JOIN
+	createPool   = C.DRPC_METHOD_MGMT_CREATE_POOL
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
