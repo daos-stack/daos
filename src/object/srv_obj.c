@@ -820,7 +820,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont_child		*cont = NULL;
-	struct dtx_handle		*dth = NULL;
+	struct dtx_handle		dth = { 0 };
 	struct dtx_conflict_entry	 conflict = { 0 };
 	uint32_t			 map_ver = 0;
 	int				 rc;
@@ -870,7 +870,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = obj_local_rw(rpc, cont_hdl, cont, dth);
+	rc = obj_local_rw(rpc, cont_hdl, cont, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": rw_local (update) failed %d.\n",
 			DP_UOID(orw->orw_oid), rc);
@@ -900,7 +900,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	}
 
 out:
-	rc = dtx_end(dth, cont_hdl, cont, rc);
+	rc = dtx_end(&dth, cont_hdl, cont, rc);
 	ds_obj_rw_reply(rpc, rc, map_ver, &conflict);
 
 	if (cont_hdl)
@@ -942,7 +942,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont_child		*cont = NULL;
-	struct dtx_handle		*dth = NULL;
+	struct dtx_handle		dth = { 0 };
 	struct dtx_conflict_entry	 conflict = { 0 };
 	struct obj_tls			*tls = obj_tls_get();
 	struct ds_obj_exec_arg		exec_arg = { 0 };
@@ -982,7 +982,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_shard_tgts.ca_arrays == NULL) {
 		/* No resend case for single replica yet XXX */
 		D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_LOCAL);
-		rc = obj_local_rw(rpc, cont_hdl, cont, dth);
+		rc = obj_local_rw(rpc, cont_hdl, cont, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": rw_local (update) failed %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -1041,11 +1041,11 @@ again:
 	exec_arg.flags = flags;
 	/* Execute the operation on all targets */
 	rc = dtx_exec_ops(orw->orw_shard_tgts.ca_arrays,
-			  orw->orw_shard_tgts.ca_count, dth,
+			  orw->orw_shard_tgts.ca_count, &dth,
 			  ds_obj_tgt_update, &exec_arg);
 out:
 	/* Stop the distribute transaction */
-	rc = dtx_end(dth, cont_hdl, cont, rc);
+	rc = dtx_end(&dth, cont_hdl, cont, rc);
 	if (rc == -DER_AGAIN) {
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
@@ -1414,7 +1414,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 {
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont_child		*cont = NULL;
-	struct dtx_handle		*dth = NULL;
+	struct dtx_handle		dth = { 0 };
 	struct dtx_conflict_entry	 conflict = { 0 };
 	struct obj_punch_in		*opi;
 	uint32_t			 map_version = 0;
@@ -1450,7 +1450,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	}
 
 	/* local RPC handler */
-	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), cont_hdl, cont, dth);
+	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), cont_hdl, cont, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": obj_local_punch failed %d.\n",
 			DP_UOID(opi->opi_oid), rc);
@@ -1482,7 +1482,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	}
 out:
 	/* Stop the local transaction */
-	rc = dtx_end(dth, cont_hdl, cont, rc);
+	rc = dtx_end(&dth, cont_hdl, cont, rc);
 	obj_punch_complete(rpc, rc, map_version, &conflict);
 	if (cont_hdl)
 		ds_cont_hdl_put(cont_hdl);
@@ -1524,7 +1524,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 {
 	struct ds_cont_hdl		*cont_hdl = NULL;
 	struct ds_cont_child		*cont = NULL;
-	struct dtx_handle		*dth = NULL;
+	struct dtx_handle		dth = { 0 };
 	struct dtx_conflict_entry	 conflict = { 0 };
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
@@ -1550,7 +1550,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_shard_tgts.ca_arrays == NULL) {
 		/* local RPC handler */
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), cont_hdl, cont,
-				     dth);
+				     NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": obj_local_punch failed %d.\n",
 				DP_UOID(opi->opi_oid), rc);
@@ -1604,11 +1604,11 @@ again:
 	exec_arg.flags = flags;
 	/* Execute the operation on all shards */
 	rc = dtx_exec_ops(opi->opi_shard_tgts.ca_arrays,
-			  opi->opi_shard_tgts.ca_count, dth, ds_obj_tgt_punch,
+			  opi->opi_shard_tgts.ca_count, &dth, ds_obj_tgt_punch,
 			  &exec_arg);
 out:
 	/* Stop the distribute transaction */
-	rc = dtx_end(dth, cont_hdl, cont, rc);
+	rc = dtx_end(&dth, cont_hdl, cont, rc);
 	if (rc == -DER_AGAIN) {
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);

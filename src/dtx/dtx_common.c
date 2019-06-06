@@ -225,10 +225,8 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	  daos_epoch_t epoch, uint64_t dkey_hash,
 	  struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
 	  int dti_cos_count, uint32_t pm_ver, uint32_t intent, bool leader,
-	  struct dtx_handle **dthp)
+	  struct dtx_handle *dth)
 {
-	struct dtx_handle	*dth;
-
 	if (leader) {
 		/* XXX: For leader case, we need to find out the potential
 		 *	conflict DTXs in the CoS cache, and append them to
@@ -259,14 +257,6 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		}
 	}
 
-	D_ALLOC_PTR(dth);
-	if (dth == NULL) {
-		if (leader && dti_cos != NULL)
-			D_FREE(dti_cos);
-
-		return -DER_NOMEM;
-	}
-
 	dth->dth_xid = *dti;
 	dth->dth_oid = *oid;
 	dth->dth_coh = coh;
@@ -285,7 +275,6 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_ent = UMOFF_NULL;
 	dth->dth_obj = UMOFF_NULL;
 
-	*dthp = dth;
 	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s, %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
@@ -405,7 +394,6 @@ out_free:
 
 	if (dth->dth_leader && dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
-	D_FREE_PTR(dth);
 out:
 	return result > 0 ? 0 : result;
 }

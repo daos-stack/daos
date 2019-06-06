@@ -140,7 +140,7 @@ int dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	      daos_epoch_t epoch, uint64_t dkey_hash,
 	      struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
 	      int dti_cos_count, uint32_t pm_ver, uint32_t intent, bool leader,
-	      struct dtx_handle **dth);
+	      struct dtx_handle *dth);
 
 int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	    struct ds_cont_child *cont, int result);
