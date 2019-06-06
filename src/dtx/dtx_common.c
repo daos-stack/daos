@@ -663,7 +663,8 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 	case DTX_ST_COMMITTED:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
-		if (time(NULL) - dti->dti_sec > DTX_AGG_THRESHOLD_AGE_LOWER) {
+		if (dtx_hlc_age2sec(dti->dti_hlc) >
+		    DTX_AGG_THRESHOLD_AGE_LOWER) {
 			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
 				DF_DTI" is resent or not.\n", DP_DTI(dti));
 			return -DER_TIMEDOUT;
