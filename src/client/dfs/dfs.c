@@ -1572,13 +1572,13 @@ dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks)
 
 int
 dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
-	struct dirent *dirs)
+	    struct dirent *dirs)
 {
-	daos_key_desc_t *kds;
-	char *enum_buf;
-	uint32_t number, key_nr, i;
-	d_sg_list_t sgl;
-	int rc;
+	daos_key_desc_t	*kds;
+	char		*enum_buf;
+	uint32_t	number, key_nr, i;
+	d_sg_list_t	sgl;
+	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
@@ -1608,8 +1608,8 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	key_nr = 0;
 	number = *nr;
 	while (!daos_anchor_is_eof(anchor)) {
-		d_iov_t iov;
-		char *ptr;
+		d_iov_t	iov;
+		char	*ptr;
 
 		memset(enum_buf, 0, (*nr) * DFS_MAX_PATH);
 
@@ -1641,6 +1641,85 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 out:
 	D_FREE(enum_buf);
 	D_FREE(kds);
+	return rc;
+}
+
+int
+dfs_readdir_size(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
+		 uint32_t *nr, size_t size, dfs_readdir_cb_t op, void *udata)
+{
+	daos_key_desc_t	*kds;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	uint32_t	num, keys_nr;
+	char		*enum_buf;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -DER_INVAL;
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return -DER_NOTDIR;
+	if (size == 0 || *nr == 0)
+		return 0;
+	if (anchor == NULL)
+		return -DER_INVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
+	num = *nr;
+	D_ALLOC_ARRAY(kds, num);
+	if (kds == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC_ARRAY(enum_buf, size);
+	if (enum_buf == NULL) {
+		D_FREE(kds);
+		return -DER_NOMEM;
+	}
+
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, size);
+	sgl.sg_iovs = &iov;
+	keys_nr = 0;
+
+	while (!daos_anchor_is_eof(anchor)) {
+		char		*ptr;
+		uint32_t	i;
+
+		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &num, kds,
+					&sgl, anchor, NULL);
+		if (rc)
+			D_GOTO(out, rc);
+
+		if (num == 0)
+			continue; /* loop should break for EOF */
+
+		for (ptr = enum_buf, i = 0; i < num; i++) {
+			char name[DFS_MAX_PATH];
+
+			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
+			rc = op(dfs, obj, name, udata);
+			if (rc)
+				D_GOTO(out, rc);
+			ptr += kds[i].kd_key_len;
+			size -= kds[i].kd_key_len;
+			keys_nr++;
+		}
+		num = *nr - keys_nr;
+		if (size == 0 || num == 0)
+			break;
+		d_iov_set(&iov, ptr, size);
+	}
+
+	*nr = keys_nr;
+out:
+	D_FREE(kds);
+	D_FREE(enum_buf);
 	return rc;
 }
 

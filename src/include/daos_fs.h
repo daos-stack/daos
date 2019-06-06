@@ -254,6 +254,35 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, struct dirent *dirs);
 
 /**
+ * User callback defined for dfs_readdir_size.
+ */
+typedef int (*dfs_readdir_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
+				void *_udata);
+
+/**
+ * Same as dfs_readdir, but this also adds a buffer size limitation when
+ * enumerating. On every entry, it issues a user defined callback.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in]	size	Max buffer size to be used internally before breaking.
+ * \param[in]	op	Function callback to be issued on every entry.
+ * \param[in]	udata	Pointer to user data to be passed to op.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_readdir_size(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
+		 uint32_t *nr, size_t size, dfs_readdir_cb_t op, void *udata);
+
+/**
  * Create a directory.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
