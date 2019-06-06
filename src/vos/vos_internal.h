@@ -794,12 +794,6 @@ vos_cont2pool(struct vos_container *cont)
 	return cont->vc_pool;
 }
 
-static inline struct umem_instance *
-vos_cont2umm(struct vos_container *cont)
-{
-	return &cont->vc_pool->vp_umm;
-}
-
 static inline struct vos_pool *
 vos_obj2pool(struct vos_object *obj)
 {
@@ -1047,7 +1041,7 @@ uint16_t
 vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 		 daos_size_t size);
 int
-vos_publish_blocks(struct vos_object *obj, d_list_t *blk_list, bool publish,
+vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
 
 /* Update the timestamp in a key or object.  The latest and earliest must be

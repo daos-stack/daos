@@ -828,7 +828,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	dtx->te_dkey_hash = dth->dth_dkey_hash;
 	dtx->te_epoch = dth->dth_epoch;
 	dtx->te_ver = dth->dth_ver;
-	dtx->te_state = DTX_ST_INIT;
+	dtx->te_state = DTX_ST_PREPARED;
 	dtx->te_flags = dth->dth_leader ? DTX_EF_LEADER : 0;
 	dtx->te_intent = dth->dth_intent;
 	dtx->te_sec = crt_hlc_get();
@@ -979,8 +979,7 @@ vos_dtx_share_obj(struct umem_instance *umm, struct dtx_handle *dth,
 
 	sh_dtx = umem_off2ptr(umm, obj->vo_dtx);
 	D_ASSERT(dtx != sh_dtx);
-	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED ||
-		  sh_dtx->te_state == DTX_ST_INIT,
+	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED,
 		  "Invalid shared obj DTX state: %u\n",
 		  sh_dtx->te_state);
 
@@ -1032,8 +1031,7 @@ vos_dtx_share_key(struct umem_instance *umm, struct dtx_handle *dth,
 
 	sh_dtx = umem_off2ptr(umm, key->kr_dtx);
 	D_ASSERT(dtx != sh_dtx);
-	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED ||
-		  sh_dtx->te_state == DTX_ST_INIT,
+	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED,
 		  "Invalid shared key DTX state: %u\n",
 		  sh_dtx->te_state);
 
@@ -1259,20 +1257,13 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			return dtx_inprogress(dtx, 3);
 		}
 
-		/* Fall through. */
-	}
-	case DTX_ST_INIT:
 		if (dtx->te_intent != DAOS_INTENT_UPDATE) {
 			D_ERROR("Unexpected DTX intent %u\n", dtx->te_intent);
 			return -DER_INVAL;
 		}
 
-		if ((intent == DAOS_INTENT_DEFAULT ||
-		     intent == DAOS_INTENT_REBUILD) &&
-		    dtx->te_state == DTX_ST_INIT)
-			return hidden ? ALB_AVAILABLE_CLEAN : ALB_UNAVAILABLE;
-
 		return vos_dtx_check_shares(dth, dtx, record, intent, type);
+	}
 	default:
 		D_ERROR("Unexpected DTX state %u\n", dtx->te_state);
 		return -DER_INVAL;
