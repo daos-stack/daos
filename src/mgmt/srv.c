@@ -36,10 +36,13 @@
 #include <daos/drpc_modules.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rsvc.h>
+#include <daos_api.h>
 
 #include "mgmt.pb-c.h"
 #include "srv.pb-c.h"
 #include "srv_internal.h"
+
+const int max_svc_nreplicas = 13;
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
@@ -301,6 +304,106 @@ out:
 }
 
 static void
+process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
+{
+	Mgmt__CreatePoolReq	*pb_req = NULL;
+	d_rank_list_t		*targets = NULL;
+	d_rank_t		ranks[max_svc_nreplicas];
+	d_rank_list_t		svc = {};
+	d_rank_list_t		*svc_p = &svc;
+	uuid_t			pool_uuid;
+	int			buflen = 16;
+	int			len;
+	int			i;
+	int			rc = 0;
+	char			id[DAOS_UUID_STR_SIZE];
+	char			buf[buflen];
+	char			*svc_str = buf;
+	char			*extra = NULL;
+
+	memset(ranks, 0, sizeof(ranks));
+	svc_p->rl_ranks = ranks;
+
+	/* response status is populated with SUCCESS on init */
+	mgmt__create_pool_resp__init(resp);
+
+	/* Unpack the daos request from the drpc call body */
+	pb_req = mgmt__create_pool_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (pb_req == NULL) {
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("Failed to extract request\n");
+
+		return;
+	}
+
+	/* parse targets rank list */
+	if (strlen(pb_req->ranks) != 0) {
+		targets = daos_rank_list_parse(pb_req->ranks, ",");
+		if (targets == NULL) {
+			D_ERROR("failed to parse target ranks\n");
+			D_GOTO(out, rc = -DER_UNKNOWN);
+		}
+		D_DEBUG(DB_MGMT, "ranks in: %s\n", pb_req->ranks);
+	}
+
+	uuid_generate(pool_uuid);
+	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
+
+	/* ranks to allocate targets (in) & svc for pool replicas (out) */
+	rc = ds_mgmt_create_pool(pool_uuid, pb_req->sys, "pmem",
+			targets, pb_req->scmbytes, pb_req->nvmebytes,
+			NULL /* props */, pb_req->numsvcreps, &svc_p);
+	if (targets != NULL)
+	     d_rank_list_free(targets);
+	if (rc != 0) {
+		D_ERROR("failed to create pool: %d\n", rc);
+		goto out;
+	}
+
+	uuid_unparse_lower(pool_uuid, id);
+
+	if (svc_p->rl_nr == 0) {
+		D_ERROR("no pool svc replicas returned");
+		D_GOTO(out, rc = -DER_UNKNOWN);
+	}
+
+	/* Populate the pool service replica ranks string. */
+	snprintf(buf, buflen, "%u", svc_p->rl_ranks[0]);
+
+	for (i = 1; i < svc_p->rl_nr; i++) {
+		if ((len = snprintf(svc_str, buflen, "%s,%u", svc_str,
+				svc_p->rl_ranks[i])) >= buflen) {
+
+			buflen *= 2;
+
+			extra = malloc(buflen * sizeof(char));
+			if (extra) {
+				snprintf(extra, buflen, "%s,%u", svc_str,
+						svc_p->rl_ranks[i]);
+				free(svc_str);
+				svc_str = extra;
+			} else {
+				D_ERROR("failed to allocate buffer");
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+		}
+	}
+
+	D_DEBUG(DB_MGMT, "%d service replicas: %s\n", svc_p->rl_nr, svc_str);
+	resp->uuid = id;
+	resp->svcreps = svc_str;
+
+out:
+	mgmt__create_pool_req__free_unpacked(pb_req, NULL);
+	if (rc != 0)
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (extra)
+		free(extra);
+}
+
+static void
 pack_daos_response(Mgmt__DaosResponse *daos_resp, Drpc__Response *drpc_resp)
 {
 	uint8_t	*body;
@@ -331,6 +434,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__DaosResponse	*daos_resp = NULL;
 	Mgmt__JoinResp		*join_resp;
 	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
+	Mgmt__CreatePoolResp	*create_pool_resp;
 	uint8_t			*body;
 	size_t			len;
 
@@ -405,6 +509,27 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 		D_FREE(join_resp);
+		break;
+	case DRPC_METHOD_MGMT_CREATE_POOL:
+		D_ALLOC_PTR(create_pool_resp);
+		if (create_pool_resp == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate daos response ref\n");
+			break;
+		}
+		process_create_pool_request(drpc_req, create_pool_resp);
+		len = mgmt__create_pool_resp__get_packed_size(create_pool_resp);
+		D_ALLOC(body, len);
+		if (body == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate drpc response body\n");
+			D_FREE(create_pool_resp);
+			break;
+		}
+		mgmt__create_pool_resp__pack(create_pool_resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+		D_FREE(create_pool_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
