@@ -62,14 +62,15 @@ class Snapshot(TestWithServers):
         createsetid = self.params.get("setname",
                                       '/run/poolparams/createset/')
         createsize = self.params.get("size", '/run/poolparams/createsize/')
-        self.log.info("==In setUp, self.context=", self.context)
+        self.log.info("==In setUp, self.context= %s", self.context)
 
         try:
 
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid, createsize, createsetid, None)
+            self.pool.create(createmode, createuid, creategid,
+                             createsize, createsetid, None)
 
             # need a connection to create container
             self.pool.connect(1 << 1)
@@ -107,7 +108,7 @@ class Snapshot(TestWithServers):
         except DaosApiError as excep:
             self.log.info(excep)
             self.log.info(traceback.format_exc())
-            self.fail("##Snapshot negative test failed on cleanUp.")
+            self.fail("##Snapshot test failed on cleanUp.")
         finally:
             # cleanup the pool
             self.pool.disconnect()
@@ -212,12 +213,10 @@ class Snapshot(TestWithServers):
         try:
             snapshot = DaosSnapshot(self.context)
             snapshot.create(coh, epoch)
-        except:
+        except Exception:
             self.log.info("Negative test, expected error:")
             status = 1
         return status
-
-
 
     def test_snapshot_negativecases(self):
         """
@@ -237,34 +236,24 @@ class Snapshot(TestWithServers):
 
         #(1)Create an object, write some data into it, and take a snapshot
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
-        akey = self.params.get("akey", '/run/snapshot/*')
-        dkey = self.params.get("dkey", '/run/snapshot/*')
-        if akey is None:
-            akey = "akey"
-        if dkey is None:
-            dkey = "dkey"
-        size = random.randint(1, 100) + 1
+        akey = self.params.get("akey", '/run/snapshot/*', default="akey")
+        dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
                                       for i in xrange(n)])
         thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  "<<<---" + rand_str(size)
-        datasize = len(thedata) + 1
+                  "<<<---" + rand_str(random.randint(1, 100) + 1)
         try:
-            obj, epoch = self.container.write_an_obj(thedata,
-                                                     datasize,
-                                                     dkey,
-                                                     akey,
-                                                     obj_cls=obj_cls)
+            obj, epoch = self.container.write_an_obj(
+                thedata, len(thedata)+1, dkey, akey, obj_cls=obj_cls)
         except DaosApiError as error:
             self.fail(
                 "##(1)Test failed during the initial object write: %s"
                 , str(error))
         obj.close()
         ##Take a snapshot of the container
-        self.log.info("==(1)Container epoch=  %s", epoch)
         snapshot = self.take_snapshot(self.container, epoch)
-        self.log.info(
-            "==snapshot.epoch= %s", snapshot.epoch)
+        self.log.info("==(1)Container epoch= %s", epoch)
+        self.log.info("     snapshot.epoch= %s", snapshot.epoch)
 
         #(2)Verify the snapshot is working properly.
         try:
@@ -272,60 +261,50 @@ class Snapshot(TestWithServers):
             snap_handle = snapshot.open(
                 self.container.coh, snapshot.epoch)
             thedata2 = self.container.read_an_obj(
-                datasize, dkey, akey, obj, snap_handle.value)
+                len(thedata)+1, dkey, akey, obj, snap_handle.value)
         except Exception as error:
             self.fail(
                 "##(2)Error when retrieving the snapshot data: %s"
                 , str(error))
-        self.log.info("==(2)snapshot_list[ind]=%s"
-                      , snapshot)
-        self.log.info("==snapshot.epoch=  %s"
-                      , snapshot.epoch)
-        self.log.info("==written thedata size= %s"
-                      , len(thedata)+1)
+        self.log.info("==(2)snapshot_list[ind]=%s", snapshot)
+        self.log.info("==snapshot.epoch=  %s", snapshot.epoch)
         self.log.info("==written thedata=%s", thedata)
         self.log.info("==thedata2.value= %s", thedata2.value)
         if thedata2.value != thedata:
             raise Exception("##(2)The data in the snapshot is not the "
                             "same as the original data")
-        self.log.info("==The snapshot data matches the data originally "
+        self.log.info("==Snapshot data matches the data originally "
                       "written.")
 
         #(3)Test snapshot with an invalid container handler
         self.log.info("==(3)Snapshot with an invalid container handler.")
-        coh = self.container
-        status = self.invalid_snapshot_test(coh, epoch)
-        if status == 1:
+        if self.invalid_snapshot_test(self.container, epoch):
             self.log.info("==>Negative test 1, expecting failed on taking "
-                          "snapshot with an invalid container.coh: %s", coh)
+                          "snapshot with an invalid container.coh: %s"
+                          , self.container)
         else:
             self.fail(
                 "##(3)Negative test 1 passing, expecting failed on"
                 " taking snapshot with an invalid container.coh: %s"
-                , coh)
+                , self.container)
 
         #(4)Test snapshot with a NULL container handler
         self.log.info("==(4)Snapshot with a NULL container handler.")
-        coh = None
-        status = self.invalid_snapshot_test(coh, epoch)
-        if status == 1:
+        if self.invalid_snapshot_test(None, epoch):
             self.log.info("==>Negative test 2, expecting failed on taking "
                           "snapshot on a NULL container.coh.")
         else:
-            self.fail("##(4)Negative test 2 passing, expecting failed on taking "
-                      "snapshot on a NULL container.coh.")
+            self.fail("##(4)Negative test 2 passing, expecting failed on "
+                      "taking snapshot with a NULL container.coh.")
 
         #(5)Test snapshot with an invalid epoch
         self.log.info("==(5)Snapshot with a NULL epoch.")
-        status = self.invalid_snapshot_test(self.container.coh, None)
-        if status == 1:
+        if self.invalid_snapshot_test(self.container.coh, None):
             self.log.info("==>Negative test 3, expecting failed on taking "
                           "snapshot with a NULL epoch.")
         else:
-            self.fail("##(5)Negative test 3 passing, expecting failed on taking "
-                      "snapshot with a NULL epoch.")
-        self.log.info("==>DAOS container snapshot-create Negative tests passed")
-
+            self.fail("##(5)Negative test 3 passing, expecting failed on "
+                      "taking snapshot with a NULL epoch.")
 
 
     def test_snapshot_info(self):
@@ -360,12 +339,8 @@ class Snapshot(TestWithServers):
         snapshot_index = 1
         snapshot_loop = 10
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
-        akey = self.params.get("akey", '/run/snapshot/*')
-        dkey = self.params.get("dkey", '/run/snapshot/*')
-        if akey is None:
-            akey = "akey"
-        if dkey is None:
-            dkey = "dkey"
+        akey = self.params.get("akey", '/run/snapshot/*', default="akey")
+        dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
                                       for i in xrange(n)])
         #
@@ -407,10 +382,9 @@ class Snapshot(TestWithServers):
 
             #(2)Make changes to the data object. The write_an_obj function does
             #   a commit when the update is complete
-            num_of_write_obj = 100
+            more_transactions = 100
             self.log.info("==(2)Committing %d additional transactions to "
-                          "the same KV.", num_of_write_obj)
-            more_transactions = num_of_write_obj
+                          "the same KV.", more_transactions)
             while more_transactions:
                 size = random.randint(1, 250) + 1
                 new_data = rand_str(size)
@@ -481,7 +455,8 @@ class Snapshot(TestWithServers):
             datasize = len(test_data[ind]) + 1
             try:
                 obj.open()
-                snap_handle = snapshot.open(self.container.coh, current_ss.epoch)
+                snap_handle = snapshot.open(
+                    self.container.coh, current_ss.epoch)
             except Exception as error:
                 self.fail(
                     "##Error when retrieving the snapshot data: %s"
