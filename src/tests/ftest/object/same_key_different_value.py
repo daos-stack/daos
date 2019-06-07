@@ -28,13 +28,12 @@ import time
 import traceback
 from apricot import TestWithServers
 
-
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
 class SameKeyDifferentValue(TestWithServers):
     """
-    Test Description: Test to verify different values
-    passed to same key.
+    Test Description: Test to verify different type of values
+    passed to same akey and dkey.
     :avocado: recursive
     """
     def setUp(self):
@@ -45,7 +44,6 @@ class SameKeyDifferentValue(TestWithServers):
             createmode = self.params.get("mode", '/run/pool/createmode/')
             createsetid = self.params.get("setname", '/run/pool/createset/')
             createsize = self.params.get("size", '/run/pool/createsize/')
-
             createuid = os.geteuid()
             creategid = os.getegid()
 
@@ -95,15 +93,15 @@ class SameKeyDifferentValue(TestWithServers):
     def test_samekey_differentvalue(self):
         """
         Jira ID: DAOS-2218
-        Test Description: Test to verify different values to same
-        keys.
+        Test Description: Test to verify different type of
+        values passed to the same akey and dkey.
         Case1: Insert akey,dkey with single value
                Insert same akey,dkey with array value
-               Result: should return Error.
+               Result: should return -1001 Error.
         Case2: Insert akey,dkey with single value
                Punch the keys
                Trigger aggregation
-               Insert same akey,dkey with array value
+               Insert same akey,dkey under same object with array value
                Result: Should work without errors.
         :avocado: tags=object,samekeydifferentvalue,vm,small
         """
@@ -130,12 +128,12 @@ class SameKeyDifferentValue(TestWithServers):
             if single_value_data != read_back_data.value:
                 print("data I wrote:" + single_value_data)
                 print("data I read back" + read_back_data.value)
-                self.fail("Wrote data, read it back, didn't match\n")
+                self.fail("Write data, read it back, didn't match\n")
 
             # write array value data to same keys, expected to fail
-            obj, txn = self.container.write_an_array_value(array_value_data,
-                                                           dkey, akey,
-                                                           obj_cls=1)
+            self.container.write_an_array_value(array_value_data,
+                                                dkey, akey, obj,
+                                                obj_cls=1)
 
             # above line is expected to return an error, if not fail the test
             self.fail("Array value write to existing single value key"
@@ -153,11 +151,12 @@ class SameKeyDifferentValue(TestWithServers):
             # trigger aggregation
             self.container.aggregate(self.container.coh, 0)
 
-            # write array value to same keys, it should succeed this time
+            # write array value to same set of keys under same object
+            # it should be successful this time
             obj, txn = self.container.write_an_array_value(array_value_data,
-                                                           dkey, akey,
+                                                           dkey, akey, obj,
                                                            obj_cls=1)
         # test should fail if exception occurs
         except DaosApiError as excp:
-            self.fail("Writing array value after punching keys failed:{}"
+            self.fail("Test failed while trying to write array value:{}"
                       .format(excp))
