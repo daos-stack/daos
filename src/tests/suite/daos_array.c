@@ -509,7 +509,6 @@ enumerate_key(daos_handle_t oh, int *total_nr, daos_key_t *dkey, int key_type)
 		else
 			rc = daos_obj_list_akey(oh, DAOS_TX_NONE, dkey, &nr,
 						kds, &sgl, &anchor, NULL);
-		printf("rc = %d\n", rc);
 		assert_int_equal(rc, 0);
 		if (nr == 0)
 			continue;

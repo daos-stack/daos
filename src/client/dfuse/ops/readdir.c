@@ -33,7 +33,6 @@ struct rd_data {
 	void		*buf;
 	size_t		size;
 	size_t		b_offset;
-	uint32_t	nr;
 };
 
 int
@@ -43,19 +42,20 @@ rd_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
 	dfs_obj_t	*obj;
 	daos_obj_id_t	oid;
-	mode_t		mode;
-	struct stat	stbuf;
+	struct stat	stbuf = {0};
 	int		ns;
 	int		rc;
 
-	fprintf(stderr, "rd_cb: Adding %s\n", name);
-	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &mode);
+	/*
+	 * MSC - from fuse fuse_add_direntry: "From the 'stbuf' argument the
+	 * st_ino field and bits 12-15 of the st_mode field are used. The other
+	 * fields are ignored." So we only need to lookup the entry for the
+	 * mode.
+	 */
+	DFUSE_TRA_DEBUG(udata->inode, "Adding entry name '%s'", name);
+	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode);
 	if (rc)
 		return rc;
-
-	rc = dfs_ostat(dfs, obj, &stbuf);
-	if (rc)
-		D_GOTO(out, rc = -rc);
 
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
@@ -66,16 +66,19 @@ rd_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc = EIO);
 
-	fprintf(stderr, "fuse_add_direntry: ptr = %p size = %ld\n",
-		udata->buf + udata->b_offset, udata->size - udata->b_offset);
 	ns = fuse_add_direntry(udata->req, udata->buf + udata->b_offset,
 			       udata->size - udata->b_offset, name, &stbuf,
 			       (off_t)(udata->anchor));
-	fprintf(stderr, "fuse_add_direntry: ns = %d, anchor = %p, %ld\n", ns,
-		udata->anchor, (off_t)(udata->anchor));
+
+	DFUSE_TRA_DEBUG(udata->inode, "add direntry: size = %ld, return %d\n",
+			udata->size - udata->b_offset, ns);
+
+	/*
+	 * This should be true since we accounted for the fuse_dirent size when
+	 * we started dfs_readdir_size().
+	 */
 	D_ASSERT(ns <= udata->size - udata->b_offset);
 	udata->b_offset += ns;
-	udata->nr++;
 
 out:
 	dfs_release(obj);
@@ -94,13 +97,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	int		i;
 	int		rc;
 
-	fprintf(stderr, "dfuse_cb_readdir: offset = %ld\n", offset);
+	DFUSE_TRA_DEBUG(inode, "Offset %zi", offset);
 
 	if (offset != 0) {
 		anchor = (daos_anchor_t *)offset;
-		fprintf(stderr, "offset = %ld anchor = %p\n", offset, anchor);
 		if (daos_anchor_is_eof(anchor)) {
-			fprintf(stderr, "Anchor is EOF\n");
 			D_FREE(anchor);
 			fuse_reply_buf(req, NULL, 0);
 			return;
@@ -111,7 +112,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			D_GOTO(err, rc = ENOMEM);
 	}
 
-	fprintf(stderr, "Anchor is NOT EOF\n");
 	D_ALLOC(buf, size);
 	if (!buf)
 		D_GOTO(err, rc = ENOMEM);
@@ -124,7 +124,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	udata->buf = buf;
 	udata->size = size;
 	udata->b_offset = 0;
-	udata->nr = 1;
 	udata->anchor = anchor;
 	udata->inode = inode;
 
@@ -142,10 +141,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		rc = dfs_readdir_size(inode->ie_dfs->dffs_dfs, inode->ie_obj,
 				      anchor, &nr, readdir_size, rd_cb, udata);
 		/** if entry does not fit in buffer, just return */
-		if (rc == DER_KEY2BIG) {
-			fprintf(stderr, "rc = KEY2BIG\n");
+		if (rc == DER_KEY2BIG)
 			D_GOTO(out, 0);
-		}
 		/** otherwise a different error occured */
 		if (rc)
 			D_GOTO(err, 0);
@@ -153,14 +150,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	}
 
 out:
-	fprintf(stderr, "fuse_reply_buf: buf = %p, offset = %ld\n",
-		buf, udata->b_offset);
-	rc = fuse_reply_buf(req, buf, udata->b_offset);
-	if (rc != 0) {
-		DFUSE_TRA_ERROR(req, "fuse_reply_buf() failed: (%d)", rc);
-	}
+	DFUSE_TRA_DEBUG(req, "Returning %zi bytes", udata->b_offset);
+	fuse_reply_buf(req, buf, udata->b_offset);
 	D_FREE(buf);
-
 	return;
 err:
 	DFUSE_FUSE_REPLY_ERR(req, rc);

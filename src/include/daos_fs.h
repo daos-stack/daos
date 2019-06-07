@@ -261,7 +261,8 @@ typedef int (*dfs_readdir_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
- * enumerating. On every entry, it issues a user defined callback.
+ * enumerating. On every entry, it issues a user defined callback. If size
+ * limitation is reached, function returns -DER_KEY2BIG.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
@@ -270,8 +271,8 @@ typedef int (*dfs_readdir_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
  * \param[in,out]
- *		nr	[in]: number of dirents allocated in \a dirs.
- *			[out]: number of returned dirents.
+ *		nr	[in]: MAX number of entries to enumerate.
+ *			[out]: Actual number of entries enumerated.
  * \param[in]	size	Max buffer size to be used internally before breaking.
  * \param[in]	op	Function callback to be issued on every entry.
  * \param[in]	udata	Pointer to user data to be passed to op.

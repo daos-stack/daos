@@ -63,7 +63,6 @@
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
 
 /** Parameters for dkey enumeration */
-#define ENUM_KEY_NR     1000
 #define ENUM_DESC_NR    10
 #define ENUM_DESC_BUF   (ENUM_DESC_NR * DFS_MAX_PATH)
 
