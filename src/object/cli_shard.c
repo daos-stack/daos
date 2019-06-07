@@ -269,7 +269,7 @@ obj_shard_ptr2pool(struct dc_obj_shard *shard)
 
 int
 dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
-		void *shard_args, struct daos_obj_shard_tgt *fw_shard_tgts,
+		void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		uint32_t fw_cnt, tse_task_t *task)
 {
 	struct shard_rw_args	*args = shard_args;
@@ -447,7 +447,7 @@ obj_shard_punch_cb(tse_task_t *task, void *data)
 
 int
 dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
-		   void *shard_args, struct daos_obj_shard_tgt *fw_shard_tgts,
+		   void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		   uint32_t fw_cnt, tse_task_t *task)
 {
 	struct shard_punch_args		*args = shard_args;
