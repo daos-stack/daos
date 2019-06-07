@@ -37,7 +37,7 @@ class CreateContainerTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_container_create(self): # just a line to make checkpatch post about this file
+    def test_container_create(self):
         """
         Test ID: DAOS-689
 
