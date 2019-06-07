@@ -37,6 +37,7 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_types.h>
 
 #include "obj_rpc.h"
@@ -143,7 +144,7 @@ enum obj_profile_op {
 	OBJ_PF_UPDATE_END,
 	OBJ_PF_UPDATE_WAIT,
 	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE
+	OBJ_PF_UPDATE,
 };
 
 struct obj_tls {
@@ -164,7 +165,7 @@ obj_tls_get()
 
 typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			     void *shard_args,
-			     struct daos_obj_shard_tgt *fw_shard_tgts,
+			     struct daos_shard_tgt *fw_shard_tgts,
 			     uint32_t fw_cnt, tse_task_t *task);
 
 /* shard update/punch auxiliary args, must be the first field of
@@ -213,7 +214,7 @@ int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 void dc_obj_shard_close(struct dc_obj_shard *shard);
 
 int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
-		    void *shard_args, struct daos_obj_shard_tgt *fw_shard_tgts,
+		    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		    uint32_t fw_cnt, tse_task_t *task);
 
 int
@@ -222,7 +223,7 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 
 int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		       void *shard_args,
-		       struct daos_obj_shard_tgt *fw_shard_tgts,
+		       struct daos_shard_tgt *fw_shard_tgts,
 		       uint32_t fw_cnt, tse_task_t *task);
 
 int
@@ -254,24 +255,29 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 
+struct ds_obj_exec_arg {
+	crt_rpc_t		*rpc;
+	struct ds_cont_hdl	*cont_hdl;
+	struct ds_cont_child	*cont;
+	uint32_t		flags;
+};
+
+int
+ds_obj_remote_update(struct dtx_handle *dth, void *arg, int idx,
+		     dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
+int
+ds_obj_remote_punch(struct dtx_handle *dth, void *arg, int idx,
+		    dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
+void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
+void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
-#define OBJ_TGTS_IGNORE		((d_rank_t)-1)
 ABT_pool
 ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
-struct obj_req_disp_arg;
-int ds_obj_req_disp_prepare(crt_opcode_t opc,
-			struct daos_obj_shard_tgt *fw_shard_tgts,
-			uint32_t fw_cnt, ds_iofw_cb_t prefw_cb,
-			ds_iofw_cb_t postfw_cb, void *cb_data,
-			uint32_t flags, int dti_cos_count,
-			struct dtx_id *dti_cos, struct obj_req_disp_arg **arg);
-void ds_obj_req_dispatch(void *arg);
-void ds_obj_req_disp_arg_free(struct obj_req_disp_arg *obj_arg);
 
 static inline uint64_t
 obj_dkey2hash(daos_key_t *dkey)
