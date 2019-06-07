@@ -28,6 +28,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/rpc.h>
+#include <daos/object.h>
 #include "obj_rpc.h"
 
 static int
@@ -371,8 +372,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 
 
 static int
-crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc,
-				   struct daos_obj_shard_tgt *st)
+crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *st)
 {
 	int rc;
 
@@ -431,6 +431,7 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 		((struct obj_rw_out *)reply)->orw_ret = status;
 		break;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -442,6 +443,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
@@ -459,6 +463,7 @@ obj_reply_get_status(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_ret;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -469,6 +474,9 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
@@ -485,6 +493,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		((struct obj_rw_out *)reply)->orw_map_version = map_version;
 		break;
@@ -498,6 +507,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
@@ -516,6 +528,7 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_map_version;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -526,6 +539,9 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_map_version;
@@ -541,7 +557,8 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 	void *reply = crt_reply_get(rpc);
 
 	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_UPDATE: {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE: {
 		struct obj_rw_out	*orw = reply;
 
 		daos_dti_copy(&orw->orw_dti_conflict, &dce->dce_xid);
@@ -550,7 +567,10 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 	}
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
 		struct obj_punch_out	*opo = reply;
 
 		daos_dti_copy(&opo->opo_dti_conflict, &dce->dce_xid);

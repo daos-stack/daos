@@ -43,6 +43,7 @@ enum dtx_cos_list_types {
 	DCLT_PUNCH		= (1 << 1),
 };
 
+struct dtx_exec_arg;
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -83,6 +84,8 @@ struct dtx_handle {
 	struct dtx_id			*dth_dti_cos;
 	/* The identifier of the DTX that conflict with current one. */
 	struct dtx_conflict_entry	*dth_conflict;
+	/* The data attached to the dth for dispatch */
+	struct dtx_exec_arg		*dth_exec_arg;
 	/** The address of the DTX entry in SCM. */
 	umem_off_t			 dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
@@ -106,6 +109,30 @@ enum dtx_status {
 	DTX_ST_COMMITTED	= 2,
 };
 
+struct dtx_exec_arg;
+
+struct dtx_exec_shard_arg {
+	struct daos_shard_tgt		*exec_shard_tgt;
+	struct dtx_exec_arg		*exec_arg;
+	struct dtx_conflict_entry	 exec_dce;
+	int				 exec_shard_rc;
+};
+
+typedef void (*dtx_exec_shard_comp_cb_t)(struct dtx_exec_shard_arg *arg,
+					 int rc);
+typedef int (*dtx_exec_shard_func_t)(struct dtx_handle *dth, void *arg, int idx,
+				     dtx_exec_shard_comp_cb_t comp_cb,
+				     struct dtx_exec_shard_arg *comp_cb_arg);
+struct dtx_exec_arg {
+	dtx_exec_shard_func_t	exec_func;
+	void			*exec_func_arg;
+	struct dtx_handle	*dth;
+	ABT_future		future;
+	uint32_t		shard_cnt;
+	int			exec_result;
+	struct dtx_exec_shard_arg exec_shards_args[0];
+};
+
 int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
 
@@ -121,6 +148,9 @@ int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 int dtx_conflict(daos_handle_t coh, struct dtx_handle *dth, uuid_t po_uuid,
 		 uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,
 		 uint32_t version);
+int dtx_exec_ops(struct daos_shard_tgt *shard_tgts, int tgts_cnt,
+		 struct dtx_handle *dth, dtx_exec_shard_func_t exec_func,
+		 void *func_arg);
 
 int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
 
