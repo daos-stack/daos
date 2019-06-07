@@ -272,8 +272,6 @@ static void
 process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 {
 	Mgmt__CreatePoolReq	*pb_req = NULL;
-	size_t			len;
-	int			rc;
 
 	/* response status is populated with SUCCESS on init */
 	mgmt__create_pool_resp__init(resp);
@@ -291,16 +289,14 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 
 	D_DEBUG(DB_MGMT, "Received request to create pool\n");
 
-//	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid,
-//				     ranks_size, tgt_uuids, pc_in->pc_grp,
-//				     rank_list, pc_in->pc_prop, pc_out->pc_svc);
-//	if (rc)
-//		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
-//			DP_UUID(pc_in->pc_pool_uuid), rc);
-
-	mgmt__join_req__free_unpacked(pb_req, NULL);
-	if (rc != 0)
-		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+/*	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid,
+				     ranks_size, tgt_uuids, pc_in->pc_grp,
+				     rank_list, pc_in->pc_prop, pc_out->pc_svc);
+	if (rc)
+		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
+			DP_UUID(pc_in->pc_pool_uuid), rc);
+*/
+	mgmt__create_pool_req__free_unpacked(pb_req, NULL);
 }
 
 static void
