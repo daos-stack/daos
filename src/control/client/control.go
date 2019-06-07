@@ -38,8 +38,10 @@ type Control interface {
 	getAddress() string
 	scanStorage() (*pb.ScanStorageResp, error)
 	formatStorage(context.Context) (pb.MgmtControl_FormatStorageClient, error)
-	// TODO: implement Update and Burnin client features
-	//updateStorage(*pb.UpdateStorageParams) (*pb.UpdateStorageResp, error)
+	updateStorage(
+		context.Context, *pb.UpdateStorageParams) (
+		pb.MgmtControl_UpdateStorageClient, error)
+	// TODO: implement Burnin client features
 	//burninStorage(*pb.BurninStorageParams) (*pb.BurninStorageResp, error)
 	listAllFeatures() (FeatureMap, error)
 	killRank(uuid string, rank uint32) error

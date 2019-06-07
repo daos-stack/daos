@@ -600,6 +600,11 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 			" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
 			DP_UUID(rpt->rt_pool_uuid), tgts[i], shards[i]);
 
+		struct pool_target *target;
+
+		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
+		D_ASSERT(rc == 1);
+
 		/* During rebuild test, it will manually exclude some target to
 		 * trigger the rebuild, then later add it back, so some objects
 		 * might exist on some illegal target, so they might use its
@@ -607,7 +612,7 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 		 * now. When we have better support from CART exclude/addback,
 		 * myrank should always not equal to tgt_rebuild. XXX
 		 */
-		if (myrank != tgts[i]) {
+		if (myrank != target->ta_comp.co_rank) {
 			rc = rebuild_object_insert(arg, tgts[i], shards[i],
 						   rpt->rt_pool_uuid, co_uuid,
 						   oid, ent->ie_epoch);

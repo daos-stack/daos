@@ -69,7 +69,7 @@ def build_client_libs_shared(env):
     env.Install('$PREFIX/TESTING/scripts', script)
     script = ilenv.Command('il/ioil-ld-opts', gen_script,
                            '$SOURCE -l $TARGET')
-    env.Install('$PREFIX/share', script)
+    env.Install('$PREFIX/share/daos', script)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib'), dfuse_lib)
 
     return dfuse_lib + il_lib

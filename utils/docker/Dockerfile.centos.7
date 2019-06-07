@@ -1,5 +1,5 @@
-#
-# Copyright 2018-2019, Intel Corporation
+# Copyright (C) 2018-2019 Intel Corporation
+# All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted for any purpose (including commercial purposes)
@@ -64,11 +64,11 @@ RUN yum -y install epel-release; \
 
 # DAOS specific
 RUN yum -y install \
-        python2-avocado python2-avocado-plugins-output-html            \
-        python2-avocado-plugins-varianter-yaml-to-mux                  \
-        yum-plugin-copr; \
-    yum -y copr enable jhli/ipmctl; \
-    yum -y copr enable jhli/safeclib; \
+           python2-avocado python2-avocado-plugins-output-html \
+           python2-avocado-plugins-varianter-yaml-to-mux       \
+           yum-plugin-copr;                                    \
+    yum -y copr enable jhli/ipmctl;                            \
+    yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
 
 # Dependencies
