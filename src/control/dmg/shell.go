@@ -177,7 +177,7 @@ func setupShell() *ishell.Shell {
 				c.Println(err)
 			}
 
-			updateStor(params, false)
+			updateStor(req, false)
 		},
 	})
 

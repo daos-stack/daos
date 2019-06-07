@@ -110,7 +110,7 @@ type UpdateStorCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(params *pb.UpdateStorageParams, force bool) {
+func updateStor(req *pb.UpdateStorageReq, force bool) {
 	fmt.Println(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
