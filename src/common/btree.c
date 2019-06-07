@@ -34,13 +34,6 @@
 #include <daos/dtx.h>
 #include <daos_srv/vos_types.h>
 
-/** A few steps of btree node size to try before allocating a full node.  The
- * last entry is BTR_ORDER_MAX which will force using the configured tree order
- */
-const int btree_node_size_idx[] = {
-	1, 5, 11, 23, BTR_ORDER_MAX,
-};
-
 /**
  * Tree node types.
  * NB: a node can be both root and leaf.
@@ -772,10 +765,9 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 	root->tr_feats		= tcx->tc_feats;
 	root->tr_order		= tcx->tc_order;
 	if (tcx->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
-		root->tr_node_size	= btree_node_size_idx[0];
+		root->tr_node_size	= 1;
 	else
 		root->tr_node_size	= tcx->tc_order;
-	root->tr_node_size_idx	= 0;
 	root->tr_node		= BTR_NODE_NULL;
 
 	return 0;
@@ -1193,9 +1185,7 @@ btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
 		}
 	}
 
-	root->tr_node_size_idx++;
-	new_order = MIN(btree_node_size_idx[root->tr_node_size_idx],
-			tcx->tc_order);
+	new_order = MIN(root->tr_node_size * 2 + 1, tcx->tc_order);
 
 	D_DEBUG(DB_TRACE, "Root node size increase from %d to %d\n",
 		root->tr_node_size, new_order);
@@ -3699,9 +3689,12 @@ int
 dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 		    int tree_order, struct daos_tree_overhead *ovhd)
 {
-	btr_ops_t	*ops;
-	size_t		 hkey_size;
-	size_t		 btr_size;
+	btr_ops_t		*ops;
+	struct btr_class	*btr_class;
+	size_t			 hkey_size;
+	size_t			 btr_size;
+	int			 order_idx;
+	int			 order;
 
 	if (ovhd == NULL) {
 		D_ERROR("Invalid ovhd argument\n");
@@ -3713,7 +3706,8 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 		return -DER_INVAL;
 	}
 
-	ops = btr_class_registered[tclass].tc_ops;
+	btr_class = &btr_class_registered[tclass];
+	ops = btr_class->tc_ops;
 
 	if (ops->to_rec_msize == NULL) {
 		D_ERROR("No record meta size callback for tree class: %d\n",
@@ -3725,11 +3719,28 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 	btr_size = sizeof(struct btr_record) + hkey_size;
 
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
-	ovhd->to_single_size = ovhd->to_record_msize + btr_size;
+	ovhd->to_node_rec_msize = btr_size;
 
-	ovhd->to_order = tree_order;
-	ovhd->to_node_size = alloc_overhead + sizeof(struct btr_node) +
-		btr_size * tree_order;
+	ovhd->to_node_overhead.no_order = tree_order;
+	ovhd->to_node_overhead.no_size = alloc_overhead +
+		sizeof(struct btr_node) + btr_size * tree_order;
+
+	order_idx = 0;
+
+	if ((btr_class->tc_feats & BTR_FEAT_DYNAMIC_ROOT) == 0)
+		goto done;
+
+	order = 1;
+	while (order != tree_order) {
+		ovhd->to_dyn_overhead[order_idx].no_order = order;
+		ovhd->to_dyn_overhead[order_idx].no_size = alloc_overhead +
+			sizeof(struct btr_node) + btr_size * order;
+		order_idx++;
+		order = MIN(order * 2 + 1, tree_order);
+	}
+
+done:
+	ovhd->to_dyn_count = order_idx;
 
 	return 0;
 }

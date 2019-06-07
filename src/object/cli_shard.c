@@ -344,6 +344,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_map_ver = args->auxi.map_ver;
 	orw->orw_start_shard = args->auxi.start_shard;
 	orw->orw_oid = shard->do_id;
+	uuid_copy(orw->orw_pool_uuid, pool->dp_pool);
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 	daos_dti_copy(&orw->orw_dti, &args->dti);
@@ -471,8 +472,6 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	dc_pool_put(pool);
-
 	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d epoch "DF_U64".\n",
 		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag, args->pa_epoch);
 
@@ -507,6 +506,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		opi->opi_shard_tgts.ca_count = 0;
 		opi->opi_shard_tgts.ca_arrays = NULL;
 	}
+	uuid_copy(opi->opi_pool_uuid, pool->dp_pool);
 	uuid_copy(opi->opi_co_hdl, args->pa_coh_uuid);
 	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
@@ -524,6 +524,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 out_req:
 	crt_req_decref(req);
 out:
+	if (pool != NULL)
+		dc_pool_put(pool);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -657,7 +659,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 		  tse_task_t *task)
 {
 	crt_endpoint_t		tgt_ep;
-	struct dc_pool	       *pool;
+	struct dc_pool	       *pool = NULL;
 	crt_rpc_t	       *req;
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
@@ -703,6 +705,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, unsigned int opc,
 	oei->oei_epoch		= epoch;
 	oei->oei_nr		= *nr;
 	oei->oei_rec_type	= type;
+	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
 
@@ -907,7 +910,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		       const uuid_t cont_uuid, unsigned int *map_ver,
 		       tse_task_t *task)
 {
-	struct dc_pool			*pool;
+	struct dc_pool			*pool = NULL;
 	struct obj_query_key_in		*okqi;
 	crt_rpc_t			*req;
 	struct obj_query_key_cb_args	 cb_args;
@@ -926,7 +929,6 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	tgt_ep.ep_grp	= pool->dp_group;
 	tgt_ep.ep_tag	= shard->do_target_idx;
 	tgt_ep.ep_rank = shard->do_target_rank;
-	dc_pool_put(pool);
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
@@ -963,6 +965,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		okqi->okqi_dkey		= *dkey;
 	if (akey != NULL)
 		okqi->okqi_akey		= *akey;
+	uuid_copy(okqi->okqi_pool_uuid, pool->dp_pool);
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
 
@@ -976,6 +979,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 out_req:
 	crt_req_decref(req);
 out:
+	if (pool)
+		dc_pool_put(pool);
 	tse_task_complete(task, rc);
 	return rc;
 }

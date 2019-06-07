@@ -66,17 +66,19 @@ func (s *ScanStorCmd) Execute(args []string) error {
 }
 
 // FormatStorCmd is the struct representing the format storage subcommand.
-type FormatStorCmd struct{}
+type FormatStorCmd struct {
+	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+}
 
 // run NVMe and SCM storage format on all connected servers
-func formatStor() {
+func formatStor(force bool) {
 	fmt.Println(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
 			"Please be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	if getConsent() {
+	if force || getConsent() {
 		fmt.Println("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
 		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage format result")
@@ -90,7 +92,7 @@ func (s *FormatStorCmd) Execute(args []string) error {
 		return err
 	}
 
-	formatStor()
+	formatStor(s.Force)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
@@ -100,14 +102,15 @@ func (s *FormatStorCmd) Execute(args []string) error {
 
 // UpdateStorCmd is the struct representing the update storage subcommand.
 type UpdateStorCmd struct {
+	Force        bool   `short:"f" long:"force" description:"Perform update without prompting for confirmation"`
 	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`
-	NVMeStartRev string `short:"f" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
+	NVMeStartRev string `short:"r" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
 	NVMeFwPath   string `short:"p" long:"nvme-fw-path" description:"Update firmware on NVMe SSDs with image file at this path (path must be accessible on all servers)." required:"1"`
 	NVMeFwSlot   int    `short:"s" default:"0" long:"nvme-fw-slot" description:"Update firmware on NVMe SSDs to this firmware register."`
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(req *pb.UpdateStorageReq) {
+func updateStor(req *pb.UpdateStorageReq, force bool) {
 	fmt.Println(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -115,7 +118,7 @@ func updateStor(req *pb.UpdateStorageReq) {
 			"and be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	if getConsent() {
+	if force || getConsent() {
 		fmt.Println("")
 		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
 		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
@@ -137,7 +140,7 @@ func (u *UpdateStorCmd) Execute(args []string) error {
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},
-		})
+		}, u.Force)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
