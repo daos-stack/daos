@@ -48,13 +48,9 @@ bool crt_initialized(void);
 
 /** crt_register.c */
 int crt_opc_map_create(unsigned int bits);
-int crt_opc_map_create_legacy(unsigned int bits);
 void crt_opc_map_destroy(struct crt_opc_map *map);
-void crt_opc_map_destroy_legacy(struct crt_opc_map_legacy *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
-struct crt_opc_info *crt_opc_lookup_legacy(struct crt_opc_map_legacy *map,
-					   crt_opcode_t opc, int locked);
 
 /** crt_hg.c */
 int

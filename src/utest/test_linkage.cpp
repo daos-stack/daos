@@ -49,11 +49,10 @@
 #include <gurt/common.h>
 #include <gurt/list.h>
 #include <cart/api.h>
+#include <cart/types.h>
 #include "utest_cmocka.h"
 
 using namespace std;
-
-#define LINKAGE_TEST_OPC (0x8)
 
 struct crt_msg_field *linkage_test_rpc_in[] = {
 	&CMF_UINT32,
@@ -63,8 +62,39 @@ struct crt_msg_field *linkage_test_rpc_out[] = {
 	&CMF_UINT32,
 };
 
-struct crt_req_format CRF_TEST_RPC =
-	DEFINE_CRT_REQ_FMT(linkage_test_rpc_in, linkage_test_rpc_out);
+#define TEST_LINKAGE_BASE 0x010000000
+#define TEST_LINKAGE_VER  0
+
+#define CRT_ISEQ_LINKAGE	/* input fields */		 \
+	((uint32_t)		(unused)		CRT_VAR)
+
+#define CRT_OSEQ_LINKAGE	/* output fields */		 \
+	((uint32_t)		(unused)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_linkage, CRT_ISEQ_LINKAGE, CRT_OSEQ_LINKAGE);
+CRT_RPC_DEFINE(crt_linkage, CRT_ISEQ_LINKAGE, CRT_OSEQ_LINKAGE);
+
+enum {
+	LINKAGE_TEST_OPC = CRT_PROTO_OPC(TEST_LINKAGE_BASE, TEST_LINKAGE_VER, 0)
+};
+
+
+struct crt_proto_rpc_format my_proto_rpc_linkage[] = {
+	{
+		prf_req_fmt	: &CQF_crt_linkage,
+		prf_hdlr	: NULL,
+		prf_co_ops	: NULL,
+		prf_flags	: 0,
+	}
+};
+
+struct crt_proto_format my_proto_fmt_linkage = {
+	cpf_name : "my-proto-linkage",
+	cpf_ver : TEST_LINKAGE_VER,
+	cpf_count : ARRAY_SIZE(my_proto_rpc_linkage),
+	cpf_prf : &my_proto_rpc_linkage[0],
+	cpf_base : TEST_LINKAGE_BASE,
+};
 
 static void
 test_crt_api_linkage(void **state)
@@ -87,7 +117,7 @@ test_crt_api_linkage(void **state)
 	assert_int_equal(rc, 0);
 
 	/* test RPC register */
-	rc = crt_rpc_register(LINKAGE_TEST_OPC, 0, &CRF_TEST_RPC);
+	rc = crt_proto_register(&my_proto_fmt_linkage);
 	assert_int_equal(rc, 0);
 
 }

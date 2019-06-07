@@ -149,11 +149,6 @@ typedef uint32_t crt_opcode_t;
  * \retval			zero means legal opcode for user
  * \retval                      non-zero means CRT internally reserved opcode.
  */
-static inline int
-crt_opcode_reserved_legacy(crt_opcode_t opc)
-{
-	return (opc & CRT_OPC_INTERNAL_BASE) == CRT_OPC_INTERNAL_BASE;
-}
 
 typedef void *crt_rpc_input_t;
 typedef void *crt_rpc_output_t;

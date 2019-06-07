@@ -83,8 +83,6 @@ struct crt_gdata {
 	uint32_t		cg_ctx_max_num;
 	/* the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
-	/* the legacy global opcode map */
-	struct crt_opc_map_legacy *cg_opc_map_legacy;
 	/* HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
@@ -221,15 +219,6 @@ struct crt_ep_inflight {
 #define CRT_PROTO_BASEOPC_MASK	(0xFF000000UL)
 #define CRT_PROTO_VER_MASK	(0x00FF0000UL)
 #define CRT_PROTO_COUNT_MASK	(0x0000FFFFUL)
-
-/* opcode map (hash list) */
-struct crt_opc_map_legacy {
-	pthread_rwlock_t	 com_rwlock;
-	unsigned int		 com_lock_init:1;
-	unsigned int		 com_pid;
-	unsigned int		 com_bits;
-	d_list_t		*com_hash;
-};
 
 struct crt_opc_info {
 	d_list_t		 coi_link;

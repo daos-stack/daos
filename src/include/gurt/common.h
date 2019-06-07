@@ -156,7 +156,7 @@ extern "C" {
 		int _esz = (int)(size);					\
 		int _sz = (int)(size) * (cnt);				\
 		/* Compiler check to ensure type match */		\
-		typeof(newptr) optr = oldptr;				\
+		__typeof__(newptr) optr = oldptr;			\
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
 		(newptr) =  realloc(optr, (_sz));			\
 		if ((newptr) != NULL) {					\
@@ -203,7 +203,7 @@ extern "C" {
 
 #define D_GOTO(label, rc)			\
 	do {					\
-		typeof(rc) __rc = (rc);		\
+		__typeof__(rc) __rc = (rc);		\
 		(void)(__rc);			\
 		goto label;			\
 	} while (0)

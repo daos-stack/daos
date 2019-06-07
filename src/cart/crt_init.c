@@ -371,14 +371,6 @@ do_init:
 		}
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
-		rc = crt_opc_map_create_legacy(CRT_OPC_MAP_BITS_LEGACY);
-		if (rc != 0) {
-			D_ERROR("crt_opc_map_create_legacy failed rc: %d.\n",
-				rc);
-			D_GOTO(cleanup, rc);
-		}
-		D_ASSERT(crt_gdata.cg_opc_map_legacy != NULL);
-
 		crt_gdata.cg_inited = 1;
 		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0) {
 			rc = crt_lm_init();
@@ -416,8 +408,6 @@ cleanup:
 		crt_grp_fini();
 	if (crt_gdata.cg_opc_map != NULL)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
-	if (crt_gdata.cg_opc_map_legacy != NULL)
-		crt_opc_map_destroy_legacy(crt_gdata.cg_opc_map_legacy);
 
 	crt_na_ofi_config_fini();
 
@@ -540,7 +530,6 @@ crt_finalize(void)
 		crt_gdata.cg_server = false;
 
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
-		crt_opc_map_destroy_legacy(crt_gdata.cg_opc_map_legacy);
 
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		rc = D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);

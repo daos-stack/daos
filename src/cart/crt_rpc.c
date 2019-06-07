@@ -234,9 +234,6 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 
 	D_DEBUG(DB_TRACE, "entering (opc: %#x)\n", opc);
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
-	if (opc_info == NULL)
-		opc_info = crt_opc_lookup_legacy(crt_gdata.cg_opc_map_legacy,
-						 opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		D_GOTO(out, rc = -DER_UNREG);
