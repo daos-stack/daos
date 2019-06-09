@@ -296,35 +296,59 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	return 0;
 }
 
+static int
+dtx_wait(struct dtx_handle *dth, struct dtx_conflict_entry **dces,
+	 int *dces_cnt);
+
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	struct ds_cont_child *cont, int result)
 {
-	int	rc = 0;
+	struct dtx_conflict_entry	*dces = NULL;
+	int				dces_cnt = 0;
+	int				rc = 0;
 
-	if (result < 0) {
-		if (!dth->dth_leader && dth->dth_dti_cos_count > 0) {
-			/* XXX: For non-leader replica, even if we fail to
-			 *	make related modification for some reason,
-			 *	we still need to commit the DTXs for CoS.
-			 *	Because other replica may have already
-			 *	committed them. For leader case, it is
-			 *	not important even if we miss to commit
-			 *	the CoS DTXs, because they are still in
-			 *	CoS cache, and can be committed next time.
-			 */
-			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
-					    dth->dth_dti_cos_count);
-			if (rc != 0)
-				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
-					DP_UUID(cont->sc_uuid), rc);
+	if (dth == NULL)
+		return result;
+
+	if (!dth->dth_leader || dth->dth_non_rep || dtx_is_null(dth->dth_ent) ||
+	    dth->dth_exec_arg == NULL)
+		goto out_free;
+
+	rc = dtx_wait(dth, &dces, &dces_cnt);
+	if (rc == -DER_INPROGRESS && dces != NULL) {
+		/* XXX: The local modification has been done, but remote
+		 *	replica failed because of some uncommitted DTX,
+		 *	it may be caused by some garbage DTXs on remote
+		 *	replicas or leader has more information because
+		 *	of CoS cache. So handle (abort or commit) them
+		 *	firstly then retry.
+		 */
+		D_ASSERT(dth != NULL);
+		D_DEBUG(DB_TRACE, "Hit conflict DTX (%d)"DF_DTI" for "
+			DF_DTI", handle them and retry update.\n",
+			rc, DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
+
+		rc = dtx_conflict(cont_hdl->sch_cont->sc_hdl, dth,
+				  cont_hdl->sch_pool->spc_uuid,
+				  cont->sc_uuid, dces, dces_cnt,
+				  cont_hdl->sch_pool->spc_map_version);
+		D_FREE(dces);
+		if (rc >= 0) {
+			D_DEBUG(DB_TRACE, "retry DTX "DF_DTI"\n",
+				DP_DTI(&dth->dth_xid));
+			D_GOTO(out, result = -DER_AGAIN);
 		}
 
-		goto fail;
-	}
+		if (result == 0)
+			result = rc;
 
-	if (!dth->dth_leader || dth->dth_non_rep ||  dtx_is_null(dth->dth_ent))
-		goto out;
+		D_GOTO(fail, rc);
+	} else  if (rc < 0) {
+		if (result == 0)
+			result = rc;
+		D_GOTO(fail, rc);
+	}
 
 	/* If the DTX is started befoe DTX resync operation (for rebuild),
 	 * then it is possbile that the DTX resync ULT may have aborted
@@ -364,11 +388,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	}
 
 fail:
-	if (result < 0 && dth->dth_leader)
+	if (result < 0)
 		dtx_abort(cont_hdl->sch_pool->spc_uuid, cont->sc_uuid,
 			  &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);
-out:
+out_free:
 	D_DEBUG(DB_TRACE,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
 		"%s, %s, %s: rc = %d\n",
@@ -382,7 +406,7 @@ out:
 	if (dth->dth_leader && dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
 	D_FREE_PTR(dth);
-
+out:
 	return result > 0 ? 0 : result;
 }
 
@@ -648,4 +672,206 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
+}
+
+static void
+dtx_exec_ops_comp_cb(void **arg)
+{
+	struct dtx_exec_shard_arg	*shard_arg;
+	struct dtx_exec_arg		*exec_arg;
+	uint32_t			i;
+	uint32_t			shard_cnt;
+
+	shard_arg = arg[0];
+	exec_arg = shard_arg->exec_arg;
+	shard_cnt = exec_arg->shard_cnt;
+	D_ASSERT(shard_cnt >= 1);
+	for (i = 0; i < shard_cnt; i++) {
+		shard_arg = arg[i];
+		D_ASSERT(shard_arg->exec_arg == exec_arg);
+
+		if (shard_arg->exec_shard_rc == 0)
+			continue;
+
+		/* Ignore DER_INPROGRESS if there are other failures */
+		if (exec_arg->exec_result == 0 ||
+		    exec_arg->exec_result == -DER_INPROGRESS)
+			exec_arg->exec_result = shard_arg->exec_shard_rc;
+	}
+}
+
+static void
+dtx_shard_exec_comp_cb(struct dtx_exec_shard_arg *shard_arg, int rc)
+{
+	shard_arg->exec_shard_rc = rc;
+	rc = ABT_future_set(shard_arg->exec_arg->future, shard_arg);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+
+	D_DEBUG(DB_TRACE, "execute from rank %d tag %d, rc %d.\n",
+		shard_arg->exec_shard_tgt->st_rank,
+		shard_arg->exec_shard_tgt->st_tgt_idx,
+		shard_arg->exec_shard_rc);
+}
+
+static int
+dtx_exec_op(struct dtx_exec_shard_arg *shard_arg, int idx)
+{
+	struct dtx_exec_arg	*exec_arg = shard_arg->exec_arg;
+	struct daos_shard_tgt	*shard_tgt;
+	int			 rc = 0;
+
+	D_ASSERT(idx < exec_arg->shard_cnt);
+	shard_tgt = shard_arg->exec_shard_tgt;
+	if (shard_tgt->st_rank == TGTS_IGNORE) {
+		D_DEBUG(DB_TRACE, "ignore exec on tgt rank %d. idx %d\n",
+			shard_tgt->st_rank, idx);
+		shard_arg->exec_shard_rc = rc;
+		rc = ABT_future_set(exec_arg->future, shard_arg);
+		return rc;
+	}
+
+	rc = exec_arg->exec_func(exec_arg->dth, exec_arg->exec_func_arg, idx,
+				 dtx_shard_exec_comp_cb, shard_arg);
+	return rc;
+}
+
+void
+dtx_exec_arg_free(struct dtx_exec_arg *exec_arg)
+{
+	ABT_future_free(&exec_arg->future);
+	D_FREE(exec_arg);
+}
+
+static int
+dtx_wait(struct dtx_handle *dth, struct dtx_conflict_entry **dces,
+	 int *dces_cnt)
+{
+	struct dtx_exec_arg	*exec_arg = dth->dth_exec_arg;
+	int			rc;
+
+	D_ASSERT(exec_arg != NULL);
+	D_ASSERT(exec_arg->future != ABT_FUTURE_NULL);
+	rc = ABT_future_wait(exec_arg->future);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
+	rc = exec_arg->exec_result;
+	if (rc == -DER_INPROGRESS && dces != NULL) {
+		struct dtx_conflict_entry	*conflict;
+		int				shard_cnt = exec_arg->shard_cnt;
+		int				i;
+		int				j;
+
+		D_ALLOC_ARRAY(conflict, shard_cnt);
+		if (conflict == NULL) {
+			rc = -DER_NOMEM;
+			goto out;
+		}
+
+		for (i = 0, j = 0; i < shard_cnt; i++) {
+			struct dtx_exec_shard_arg *shard_arg;
+
+			shard_arg = &exec_arg->exec_shards_args[i];
+			if (!daos_is_zero_dti(&shard_arg->exec_dce.dce_xid)) {
+				daos_dti_copy(&conflict[j].dce_xid,
+					      &shard_arg->exec_dce.dce_xid);
+				conflict[j++].dce_dkey =
+						shard_arg->exec_dce.dce_dkey;
+			}
+		}
+
+		D_ASSERT(j > 0);
+
+		*dces = conflict;
+		*dces_cnt = j;
+	}
+
+out:
+	D_DEBUG(DB_TRACE, "dth "DF_DTI" rc %d\n", DP_DTI(&dth->dth_xid), rc);
+	dtx_exec_arg_free(exec_arg);
+
+	return rc;
+};
+
+void
+dtx_exec_ops_ult(void *arg)
+{
+	struct dtx_exec_arg	*exec_arg = arg;
+	ABT_future		future = exec_arg->future;
+	int			shard_cnt = exec_arg->shard_cnt;
+	uint32_t		i;
+	int			rc = 0;
+
+	D_ASSERT(shard_cnt >= 1);
+	D_ASSERT(future != ABT_FUTURE_NULL);
+	for (i = 0; i < shard_cnt; i++) {
+		rc = dtx_exec_op(&exec_arg->exec_shards_args[i], i);
+		if (rc != 0)
+			break;
+	}
+
+	if (rc != 0) {
+		D_ASSERT(i < shard_cnt);
+		for (i++; i < shard_cnt; i++) {
+			exec_arg->exec_shards_args[i].exec_shard_rc = rc;
+			rc = ABT_future_set(future,
+					    &exec_arg->exec_shards_args[i]);
+			D_ASSERTF(rc == ABT_SUCCESS,
+				  "ABT_future_set failed %d.\n", rc);
+		}
+	}
+}
+
+/**
+ * Execute the operations on all targets.
+ */
+int
+dtx_exec_ops(struct daos_shard_tgt *shard_tgts, int tgts_cnt,
+	     struct dtx_handle *dth, dtx_exec_shard_func_t exec_func,
+	     void *func_arg)
+{
+	struct dtx_exec_arg		*exec_arg;
+	ABT_future			future;
+	int				i;
+	int				rc;
+
+	D_ALLOC(exec_arg,
+		offsetof(struct dtx_exec_arg, exec_shards_args[tgts_cnt]));
+	if (exec_arg == NULL)
+		return -DER_NOMEM;
+
+	rc = ABT_future_create(tgts_cnt, dtx_exec_ops_comp_cb, &future);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_future_create failed %d.\n", rc);
+		D_FREE(exec_arg);
+		return dss_abterr2der(rc);
+	}
+
+	exec_arg->exec_func	= exec_func;
+	exec_arg->exec_func_arg	= func_arg;
+	exec_arg->future	= future;
+	exec_arg->shard_cnt	= tgts_cnt;
+	exec_arg->dth		= dth;
+	for (i = 0; i < tgts_cnt; i++) {
+		exec_arg->exec_shards_args[i].exec_shard_tgt = shard_tgts + i;
+		exec_arg->exec_shards_args[i].exec_arg = exec_arg;
+	}
+
+	dth->dth_exec_arg = exec_arg;
+
+	/*
+	 * XXX ideally, we probably should create ULT for each shard, but
+	 * for performance reasons, let's create one for all remote targets
+	 * for now.
+	 */
+	rc = dss_ult_create(dtx_exec_ops_ult, exec_arg, DSS_ULT_IOFW,
+			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
+	if (rc != 0) {
+		D_ERROR("ult create failed %d.\n", rc);
+		dtx_exec_arg_free(exec_arg);
+		D_GOTO(out, rc);
+	}
+
+	/* Then execute the local operation */
+	rc = exec_func(dth, func_arg, -1, NULL, NULL);
+out:
+	return rc;
 }
