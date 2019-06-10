@@ -151,10 +151,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 				ie->ie_dfs,
 				NULL,
 				&ie->ie_stat.st_ino);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)",
-				rc);
-		D_GOTO(close, rc = EIO);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
+		D_GOTO(close, rc);
 	}
 
 	dfs->dffs_root = ie->ie_stat.st_ino;

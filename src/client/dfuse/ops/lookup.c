@@ -40,16 +40,14 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
-		if (rc) {
+		if (rc)
 			D_GOTO(err, rc = -rc);
-		}
 		rc = dfuse_lookup_inode(fs_handle,
 					ie->ie_dfs,
 					&oid,
 					&ie->ie_stat.st_ino);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(err, daos_der2errno(rc));
-		}
+		if (rc)
+			D_GOTO(err, rc);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -121,9 +119,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
+	if (rc)
 		D_GOTO(err, rc = -rc);
-	}
 
 	dfuse_reply_entry(fs_handle, ie, false, req);
 	return true;

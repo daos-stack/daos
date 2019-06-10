@@ -144,9 +144,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
-	if (rc != -DER_SUCCESS) {
+	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
-		D_GOTO(release, rc = daos_der2errno(rc));
+		D_GOTO(release, rc);
 	}
 
 	dfs->dffs_root = ie->ie_stat.st_ino;

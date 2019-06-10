@@ -176,7 +176,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				DFUSE_TRA_ERROR(inode, "no ino");
 				dfs_release(ie->ie_obj);
 				D_FREE(ie);
-				D_GOTO(err_or_buf, rc = -rc);
+				D_GOTO(err_or_buf, rc);
 			}
 
 			entry.attr = ie->ie_stat;
