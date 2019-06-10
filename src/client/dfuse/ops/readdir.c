@@ -73,7 +73,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				count = offset;
 			}
 
-			rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj,
+			rc = dfs_readdir(inode->ie_dfs->dfs_ns, inode->ie_obj,
 					 &anchor, &count, dirents);
 			if (rc != -DER_SUCCESS) {
 				D_GOTO(err, 0);
@@ -90,7 +90,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	while (!daos_anchor_is_eof(&anchor)) {
 
-		rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj,
+		rc = dfs_readdir(inode->ie_dfs->dfs_ns, inode->ie_obj,
 				 &anchor, &nr, dirents);
 		if (rc != -DER_SUCCESS) {
 			D_GOTO(err_or_buf, 0);
@@ -144,7 +144,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			 * the inode number we need to do a lookup, then a stat
 			 * from the object, rather than a stat on the path.
 			 */
-			rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs,
+			rc = dfs_lookup_rel(inode->ie_dfs->dfs_ns,
 					    inode->ie_obj, dirents[i].d_name,
 					    O_RDONLY, &ie->ie_obj, &mode);
 			if (rc != -DER_SUCCESS) {
@@ -152,7 +152,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				D_GOTO(err_or_buf, 0);
 			}
 
-			rc = dfs_ostat(inode->ie_dfs->dffs_dfs, ie->ie_obj,
+			rc = dfs_ostat(inode->ie_dfs->dfs_ns, ie->ie_obj,
 				       &ie->ie_stat);
 			if (rc != -DER_SUCCESS) {
 				dfs_release(ie->ie_obj);
@@ -193,7 +193,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			 * TODO: Verify the parent inode count is correct after
 			 * this.
 			 */
-			rlink = d_hash_rec_find_insert(&fs_handle->dfpi_iet,
+			rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 						       &ie->ie_stat.st_ino,
 						       sizeof(ie->ie_stat.st_ino),
 						       &ie->ie_htl);

@@ -25,7 +25,7 @@
 #include "dfuse.h"
 
 #define REQ_NAME request
-#define POOL_NAME fsh_da
+#define POOL_NAME dpi_fsh
 #define TYPE_NAME common_req
 #include "dfuse_ops.h"
 

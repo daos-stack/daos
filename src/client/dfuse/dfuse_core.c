@@ -103,15 +103,15 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	}
 
 	/* Now check the pool name */
-	if (strncmp(ir->ir_id.irid_dfs->dffs_pool,
-		    ir_id->irid_dfs->dffs_pool,
+	if (strncmp(ir->ir_id.irid_dfs->dfs_pool,
+		    ir_id->irid_dfs->dfs_pool,
 		    NAME_MAX) != 0) {
 		return false;
 	}
 
 	/* Now check the container name */
-	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
-		    ir_id->irid_dfs->dffs_cont,
+	if (strncmp(ir->ir_id.irid_dfs->dfs_cont,
+		    ir_id->irid_dfs->dfs_cont,
 			NAME_MAX) != 0) {
 		return false;
 	}
@@ -174,7 +174,7 @@ static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfuse_projection_info	*fs_handle = htable->ht_priv;
-	struct dfuse_inode_entry		*ie;
+	struct dfuse_inode_entry	*ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -283,30 +283,26 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!fs_handle)
 		return false;
 
-	fs_handle->dfuse_info = dfuse_info;
+	fs_handle->dpi_info = dfuse_info;
 
-	rc = dfuse_da_init(&fs_handle->da, fs_handle);
+	rc = dfuse_da_init(&fs_handle->dpi_da, fs_handle);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err, 0);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
-					  D_HASH_FT_EPHEMERAL,
-					  3,
-					  fs_handle, &ie_hops,
-					  &fs_handle->dfpi_iet);
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
+					 3, fs_handle, &ie_hops,
+					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK,
-					 3,
-					 fs_handle, &ir_hops,
-					 &fs_handle->dfpi_irt);
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK, 3, fs_handle,
+					 &ir_hops, &fs_handle->dpi_irt);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	fs_handle->proj.progress_thread = 1;
+	fs_handle->dpi_proj.progress_thread = 1;
 
-	atomic_fetch_add(&fs_handle->dfpi_ino_next, 2);
+	atomic_fetch_add(&fs_handle->dpi_ino_next, 2);
 
 	args.argc = 4;
 
@@ -327,7 +323,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!args.argv[2])
 		D_GOTO(err, 0);
 
-	D_ASPRINTF(args.argv[3], "-omax_read=%u", fs_handle->max_read);
+	D_ASPRINTF(args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
 	if (!args.argv[3])
 		D_GOTO(err, 0);
 
@@ -336,34 +332,32 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 		D_GOTO(err, 0);
 
 	common.init = getattr_common_init;
-	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common);
-	if (!fs_handle->fgh_da)
+	fs_handle->dpi_fgh = dfuse_da_register(&fs_handle->dpi_da, &common);
+	if (!fs_handle->dpi_fgh)
 		D_GOTO(err, 0);
 
 	common.init = setattr_common_init;
-	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common);
-	if (!fs_handle->fsh_da)
+	fs_handle->dpi_fsh = dfuse_da_register(&fs_handle->dpi_da, &common);
+	if (!fs_handle->dpi_fsh)
 		D_GOTO(err, 0);
 
 	entry.init = symlink_entry_init;
-	fs_handle->symlink_da = dfuse_da_register(&fs_handle->da,
-						      &entry);
-	if (!fs_handle->symlink_da)
+	fs_handle->dpi_symlink = dfuse_da_register(&fs_handle->dpi_da, &entry);
+	if (!fs_handle->dpi_symlink)
 		D_GOTO(err, 0);
 
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(err, 0);
-	}
 
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
-	dfs->dffs_root = ie->ie_stat.st_ino;
+	dfs->dfs_root = ie->ie_stat.st_ino;
 
-	rc = d_hash_rec_insert(&fs_handle->dfpi_iet,
+	rc = d_hash_rec_insert(&fs_handle->dpi_iet,
 			       &ie->ie_stat.st_ino,
 			       sizeof(ie->ie_stat.st_ino),
 			       &ie->ie_htl,
@@ -384,7 +378,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	return -DER_SUCCESS;
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed");
-	dfuse_da_destroy(&fs_handle->da);
+	dfuse_da_destroy(&fs_handle->dpi_da);
 	D_FREE(fuse_ops);
 	D_FREE(ie);
 	D_FREE(fs_handle);
@@ -406,7 +400,7 @@ ino_flush(d_list_t *rlink, void *arg)
 	if (ie->ie_parent != 1)
 		return 0;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->session,
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
 					      ie->ie_parent,
 					      ie->ie_name,
 					      strlen(ie->ie_name));
@@ -442,8 +436,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
-	rc = d_hash_table_traverse(&fs_handle->dfpi_iet, ino_flush,
-				   fs_handle);
+	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
 
@@ -452,7 +445,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		struct dfuse_inode_entry *ie;
 		uint32_t ref;
 
-		rlink = d_hash_rec_first(&fs_handle->dfpi_iet);
+		rlink = d_hash_rec_first(&fs_handle->dpi_iet);
 
 		if (!rlink)
 			break;
@@ -465,27 +458,25 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 		refs += ref;
 		ie->ie_parent = 0;
-		d_hash_rec_ndecref(&fs_handle->dfpi_iet, ref, rlink);
+		d_hash_rec_ndecref(&fs_handle->dpi_iet, ref, rlink);
 		handles++;
 	} while (rlink);
 
 	if (handles) {
-		DFUSE_TRA_WARNING(fs_handle,
-				  "dropped %lu refs on %u inodes",
+		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes",
 				  refs, handles);
 	} else {
-		DFUSE_TRA_INFO(fs_handle,
-			       "dropped %lu refs on %u inodes",
+		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes",
 			       refs, handles);
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_iet, false);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_irt, true);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, true);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
@@ -500,7 +491,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 		do {
 
-			active = dfuse_da_reclaim(&fs_handle->da);
+			active = dfuse_da_reclaim(&fs_handle->dpi_da);
 
 			if (!active)
 				break;
@@ -515,7 +506,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(fs_handle, "Count not destroy context");
 
-	dfuse_da_destroy(&fs_handle->da);
+	dfuse_da_destroy(&fs_handle->dpi_da);
 
 	return rcp;
 }

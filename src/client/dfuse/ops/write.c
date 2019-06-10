@@ -35,7 +35,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	d_iov_t			iov = {};
 	d_sg_list_t			sgl = {};
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
 				ino);
@@ -49,11 +49,11 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_write(ie->ie_dfs->dffs_dfs, ie->ie_obj, sgl, position);
+	rc = dfs_write(ie->ie_dfs->dfs_ns, ie->ie_obj, sgl, position);
 	if (rc == -DER_SUCCESS) {
 		DFUSE_REPLY_WRITE(ie, req, len);
 	} else {
 		DFUSE_REPLY_ERR_RAW(ie, req, rc);
 	}
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 }

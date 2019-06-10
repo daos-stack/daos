@@ -43,7 +43,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 * so check that the lookup is relative to the root of the sub-tree,
 	 * and abort if not.
 	 */
-	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dffs_root);
+	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
 
 	/* Dentry names where are not valid uuids cannot possibly be added so in
 	 * this case return the negative dentry with a timeout to prevent future
@@ -61,13 +61,13 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!dfs) {
 		D_GOTO(err, rc = ENOMEM);
 	}
-	strncpy(dfs->dffs_cont, name, NAME_MAX);
-	dfs->dffs_cont[NAME_MAX] = '\0';
-	strncpy(dfs->dffs_pool, parent->ie_dfs->dffs_pool, NAME_MAX - 1);
-	dfs->dffs_pool[NAME_MAX] = '\0';
+	strncpy(dfs->dfs_cont, name, NAME_MAX);
+	dfs->dfs_cont[NAME_MAX] = '\0';
+	strncpy(dfs->dfs_pool, parent->ie_dfs->dfs_pool, NAME_MAX - 1);
+	dfs->dfs_pool[NAME_MAX] = '\0';
 
 	if (create) {
-		rc = daos_cont_create(parent->ie_dfs->dffs_poh, co_uuid,
+		rc = daos_cont_create(parent->ie_dfs->dfs_poh, co_uuid,
 				      NULL, NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_LOG_ERROR("daos_cont_create() failed: (%d)",
@@ -87,7 +87,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			/* Update the stat information, but copy in the
 			 * inode value afterwards.
 			 */
-			rc = dfs_ostat(ie->ie_dfs->dffs_dfs,
+			rc = dfs_ostat(ie->ie_dfs->dfs_ns,
 				       ie->ie_obj, &entry.attr);
 			if (rc != -DER_SUCCESS) {
 				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%d)",
@@ -103,8 +103,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		}
 	}
 
-	rc = daos_cont_open(parent->ie_dfs->dffs_poh, co_uuid,
-			    DAOS_COO_RW, &dfs->dffs_coh, &dfs->dffs_co_info,
+	rc = daos_cont_open(parent->ie_dfs->dfs_poh, co_uuid,
+			    DAOS_COO_RW, &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)",
@@ -117,15 +117,15 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc = ENOMEM);
 	}
 
-	rc = dfs_mount(parent->ie_dfs->dffs_poh, dfs->dffs_coh, O_RDWR, &ddfs);
+	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("dfs_mount() failed: (%d)", rc);
 		D_GOTO(close, 0);
 	}
 
-	dfs->dffs_dfs = ddfs;
+	dfs->dfs_ns = ddfs;
 
-	rc = dfs_lookup(dfs->dffs_dfs, "/", O_RDONLY, &ie->ie_obj, &mode);
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, &mode);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%d)",
 				rc);
@@ -136,7 +136,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
+	rc = dfs_ostat(dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%d)",
 				rc);
@@ -146,9 +146,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
-	rc = dfuse_lookup_inode(fs_handle,
-				ie->ie_dfs,
-				NULL,
+	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)",
@@ -156,15 +154,15 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(release, rc = EIO);
 	}
 
-	dfs->dffs_root = ie->ie_stat.st_ino;
-	dfs->dffs_ops = &dfuse_dfs_ops;
+	dfs->dfs_root = ie->ie_stat.st_ino;
+	dfs->dfs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, ie, false, req);
 	return true;
 release:
 	dfs_release(ie->ie_obj);
 close:
-	daos_cont_close(dfs->dffs_coh, NULL);
+	daos_cont_close(dfs->dfs_coh, NULL);
 	D_FREE(ie);
 
 err:

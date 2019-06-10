@@ -40,20 +40,15 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-/* Command line configuration data */
-struct dfuse_data {
-	char		*pool;
-	char		*cont;
-	char		*group;
-	char		*mountpoint;
-	bool		threaded;
-	d_rank_list_t	*svcl;
-};
-
 struct dfuse_info {
-	struct fuse_session		*dfi_session;
-	struct dfuse_projection_info	*dfi_handle;
-	struct dfuse_data		dfi_dfd;
+	struct fuse_session		*di_session;
+	struct dfuse_projection_info	*di_handle;
+	char				*di_pool;
+	char				*di_cont;
+	char				*di_group;
+	char				*di_mountpoint;
+	d_rank_list_t			*di_svcl;
+	bool				di_threaded;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -64,20 +59,19 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 		  struct dfuse_projection_info *dfi_handle);
 
 struct dfuse_projection_info {
-	struct dfuse_projection		proj;
-	struct dfuse_info		*dfuse_info;
-	struct fuse_session		*session;
-	struct dfuse_dfs		*dfpi_ddfs;
-	int				fs_id;
-	struct dfuse_da			da;
-	struct dfuse_da_type		*fgh_da;
-	struct dfuse_da_type		*fsh_da;
-	struct dfuse_da_type		*symlink_da;
-	uint32_t			max_read;
+	struct dfuse_projection		dpi_proj;
+	struct dfuse_info		*dpi_info;
+	struct dfuse_dfs		*dpi_ddfs;
+	int				dpi_id;
+	struct dfuse_da			dpi_da;
+	struct dfuse_da_type		*dpi_fgh;
+	struct dfuse_da_type		*dpi_fsh;
+	struct dfuse_da_type		*dpi_symlink;
+	uint32_t			dpi_max_read;
 	/** Hash table of open inodes */
-	struct d_hash_table		dfpi_iet;
-	struct d_hash_table		dfpi_irt;
-	ATOMIC uint64_t			dfpi_ino_next;
+	struct d_hash_table		dpi_iet;
+	struct d_hash_table		dpi_irt;
+	ATOMIC uint64_t			dpi_ino_next;
 };
 
 struct dfuse_inode_entry;
@@ -86,18 +80,14 @@ struct dfuse_inode_ops {
 	bool (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
 		       struct fuse_file_info *fi);
-	void (*getattr)(fuse_req_t req,
-			struct dfuse_inode_entry *inode);
-	bool (*lookup)(fuse_req_t req,
-		       struct dfuse_inode_entry *parent,
+	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
+	bool (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
-	bool (*mkdir)(fuse_req_t req,
-		      struct dfuse_inode_entry *parent,
+	bool (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			size_t size, off_t offset);
-	void (*unlink)(fuse_req_t req,
-		       struct dfuse_inode_entry *parent,
+	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
 };
 
@@ -106,15 +96,15 @@ extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
 
 struct dfuse_dfs {
-	struct dfuse_inode_ops	*dffs_ops;
-	dfs_t			*dffs_dfs;
-	char			dffs_pool[NAME_MAX + 1];
-	char			dffs_cont[NAME_MAX + 1];
-	daos_handle_t		dffs_poh;
-	daos_handle_t		dffs_coh;
-	daos_pool_info_t	dffs_pool_info;
-	daos_cont_info_t	dffs_co_info;
-	ino_t			dffs_root;
+	struct dfuse_inode_ops	*dfs_ops;
+	dfs_t			*dfs_ns;
+	char			dfs_pool[NAME_MAX + 1];
+	char			dfs_cont[NAME_MAX + 1];
+	daos_handle_t		dfs_poh;
+	daos_handle_t		dfs_coh;
+	daos_pool_info_t	dfs_pool_info;
+	daos_cont_info_t	dfs_co_info;
+	ino_t			dfs_root;
 };
 
 /* dfuse_core.c */
