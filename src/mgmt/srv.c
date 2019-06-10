@@ -41,6 +41,8 @@
 #include "srv.pb-c.h"
 #include "srv_internal.h"
 
+const int max_svc_nreplicas = 13;
+
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
 	.co_pre_forward	= NULL,
@@ -272,6 +274,16 @@ static void
 process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 {
 	Mgmt__CreatePoolReq	*pb_req = NULL;
+	/* d_rank_list_t		*targets = NULL; */
+	d_rank_t		ranks[max_svc_nreplicas];
+	d_rank_list_t		svc = {};
+	d_rank_list_t		*svc_p = &svc;
+	uuid_t			pool_uuid;
+	/* int			i; */
+	int			rc;
+
+	memset(ranks, 0, sizeof(ranks));
+	svc_p->rl_ranks = ranks;
 
 	/* response status is populated with SUCCESS on init */
 	mgmt__create_pool_resp__init(resp);
@@ -287,15 +299,38 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to create pool\n");
+	/* TODO: allocate targets rank list */
+	/* targets = daos_rank_list_parse(pb_req->ranks, ",");
+	 * if (targets == NULL) {
+	 *	fprintf(stderr, "failed to parse target ranks\n");
+	 *	return 2;
+	 * }
+	 */
 
-/*	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid,
-				     ranks_size, tgt_uuids, pc_in->pc_grp,
-				     rank_list, pc_in->pc_prop, pc_out->pc_svc);
-	if (rc)
-		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
-			DP_UUID(pc_in->pc_pool_uuid), rc);
-*/
+	uuid_generate(pool_uuid);
+	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
+
+	/* supply tgt rl to allocate across [IN] & svc for pool replicas [OUT] */
+	rc = ds_mgmt_create_pool(pool_uuid, pb_req->procgroup, "pmem",
+			NULL /* tgt ranks */, pb_req->scmbytes,
+			pb_req->nvmebytes, NULL /* props */, pb_req->numsvcreps,
+			&svc_p);
+	/* if (targets != NULL)
+	 *	d_rank_list_free(targets);
+	 */
+	if (rc != 0) {
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("failed to create pool: %d\n", rc);
+
+		return;
+	}
+
+	/* Print the pool service replica ranks. */
+	/* for (i = 0; i < svc.rl_nr - 1; i++)
+	 *	printf("%u:", svc.rl_ranks[i]);
+	 * printf("%u\n", svc.rl_ranks[svc.rl_nr - 1]);
+	 */
+
 	mgmt__create_pool_req__free_unpacked(pb_req, NULL);
 }
 
