@@ -748,6 +748,13 @@ err:
 	return rc;
 }
 
+struct cont_tgt_open_arg {
+	uuid_t	pool_uuid;
+	uuid_t	cont_uuid;
+	uuid_t	cont_hdl_uuid;
+	uint64_t capas;
+};
+
 /*
  * Called via dss_collective() to establish the ds_cont_hdl object as well as
  * the ds_cont object.
@@ -755,54 +762,46 @@ err:
 static int
 cont_open_one(void *vin)
 {
-	struct cont_tgt_open_in	       *in = vin;
+	struct cont_tgt_open_arg	*arg = vin;
 
-	return ds_cont_local_open(in->toi_pool_uuid, in->toi_hdl,
-				  in->toi_uuid, in->toi_capas, NULL);
+	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
+				  arg->cont_uuid, arg->capas, NULL);
 }
 
-void
-ds_cont_tgt_open_handler(crt_rpc_t *rpc)
+int
+ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		 uuid_t cont_uuid, uint64_t capas)
 {
-	struct cont_tgt_open_in	       *in = crt_req_get(rpc);
-	struct cont_tgt_open_out       *out = crt_reply_get(rpc);
-	struct ds_cont			*cont;
-	struct ds_pool			*pool = NULL;
-	int				rc;
+	struct ds_pool		*pool = NULL;
+	struct ds_cont		*cont = NULL;
+	struct cont_tgt_open_arg arg;
+	int			 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
-		DP_UUID(in->toi_hdl));
+	uuid_copy(arg.pool_uuid, pool_uuid);
+	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
+	uuid_copy(arg.cont_uuid, cont_uuid);
+	arg.capas = capas;
 
-	rc = dss_thread_collective(cont_open_one, in, 0);
+	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
+		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
+
+	rc = dss_thread_collective(cont_open_one, &arg, 0);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	pool = ds_pool_lookup(in->toi_pool_uuid);
+	pool = ds_pool_lookup(pool_uuid);
 	D_ASSERT(pool != NULL);
-	rc = ds_cont_lookup_create(in->toi_uuid, &in->toi_uuid, &cont);
+	rc = ds_cont_lookup_create(cont_uuid, &cont_uuid, &cont);
 	if (rc)
 		D_GOTO(out, rc);
 
 	cont->sc_iv_ns = pool->sp_iv_ns;
 out:
-	out->too_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
-		DP_UUID(in->toi_uuid), rpc, out->too_rc, rc);
 	if (pool)
 		ds_pool_put(pool);
 	if (cont)
 		ds_cont_put(cont);
-	crt_reply_send(rpc);
-}
 
-int
-ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
-{
-	struct cont_tgt_open_out    *out_source = crt_reply_get(source);
-	struct cont_tgt_open_out    *out_result = crt_reply_get(result);
-
-	out_result->too_rc += out_source->too_rc;
-	return 0;
+	return rc;
 }
 
 /* Close a single record (i.e., handle). */
@@ -1352,7 +1351,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	daos_iov_set(&iov, &rg, sizeof(rg));
+	d_iov_set(&iov, &rg, sizeof(rg));
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;

@@ -54,16 +54,27 @@
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
+#define MAX_TREE_ORDER_INC	7
+
+struct daos_node_overhead {
+	/** Node size in bytes for tree with only */
+	int	no_size;
+	/** Order of node */
+	int	no_order;
+};
+
 /** Overheads for a tree */
 struct daos_tree_overhead {
-	/** Static size of an allocated tree node */
-	int			to_node_size;
+	/** Overhead for full size tree node */
+	struct daos_node_overhead	to_node_overhead;
+	/** Overhead for dynamic tree nodes */
+	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
+	/** Number of dynamic tree node sizes */
+	int				to_dyn_count;
+	/** Inline metadata size for each record */
+	int				to_node_rec_msize;
 	/** Dynamic metadata size of an allocated record. */
-	int			to_record_msize;
-	/** Size of first insertion.  Full node allocated on second key */
-	int			to_single_size;
-	/** Tree order */
-	int			to_order;
+	int				to_record_msize;
 };
 
 /*
@@ -163,15 +174,15 @@ int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
-daos_size_t daos_sgls_packed_size(daos_sg_list_t *sgls, int nr,
+daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 
 char *daos_str_trimwhite(char *str);
-int daos_iov_copy(daos_iov_t *dst, daos_iov_t *src);
-void daos_iov_free(daos_iov_t *iov);
+int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
+void daos_iov_free(d_iov_t *iov);
 bool daos_key_match(daos_key_t *key1, daos_key_t *key2);
 
 /* The DAOS BITS is composed by uint32_t[x] */
@@ -321,7 +332,9 @@ daos_crt_network_error(int err)
 
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
+#define daos_rank_list_filter		d_rank_list_filter
 #define daos_rank_list_alloc		d_rank_list_alloc
+#define daos_rank_list_free		d_rank_list_free
 #define daos_rank_list_copy		d_rank_list_copy
 #define daos_rank_list_sort		d_rank_list_sort
 #define daos_rank_list_find		d_rank_list_find
@@ -342,6 +355,8 @@ enum {
 
 void
 daos_fail_loc_set(uint64_t id);
+void
+daos_fail_loc_reset(void);
 void
 daos_fail_value_set(uint64_t val);
 void
@@ -417,10 +432,13 @@ enum {
 #define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
-#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
+#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 
-#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
-#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
+#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
+#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
+#define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
+
+#define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

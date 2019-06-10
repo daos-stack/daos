@@ -297,35 +297,35 @@ tgt_vos_create_one(void *varg)
 	return rc;
 }
 
-static int
-tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+struct vos_create {
+	uuid_t		vc_uuid;
+	daos_size_t	vc_scm_size;
+	int		vc_tgt_nr;
+	int		vc_rc;
+};
+
+static void *
+tgt_vos_preallocate(void *arg)
 {
-	daos_size_t	 scm_size, nvme_size;
-	char		*path = NULL;
-	int		 i, fd = -1, rc = 0;
+	char			*path = NULL;
+	struct vos_create	*vc = arg;
+	int			 i;
+	int			 fd = -1;
 
-	/**
-	 * Create one VOS file per execution stream
-	 * 16MB minimum per pmemobj file (SCM partition)
-	 */
-	D_ASSERT(dss_tgt_nr > 0);
-	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
-	nvme_size = tgt_nvme_size / dss_tgt_nr;
-	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
-
-	for (i = 0; i < dss_tgt_nr; i++) {
-		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
-		if (rc)
+	for (i = 0; i < vc->vc_tgt_nr; i++) {
+		vc->vc_rc = path_gen(vc->vc_uuid, newborns_path, VOS_FILE, &i,
+				     &path);
+		if (vc->vc_rc)
 			break;
 
 		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
-			DP_UUID(uuid), path);
+			DP_UUID(vc->vc_uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
+			vc->vc_rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der(errno);
+				DP_UUID(vc->vc_uuid), path, vc->vc_rc);
 			break;
 		}
 
@@ -336,30 +336,73 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 		 * Use fallocate(2) instead of posix_fallocate(3) since the
 		 * latter is bogus with tmpfs.
 		 */
-		rc = fallocate(fd, 0, 0, scm_size);
-		if (rc) {
-			rc = daos_errno2der(errno);
+		vc->vc_rc = fallocate(fd, 0, 0, vc->vc_scm_size);
+		if (vc->vc_rc) {
+			vc->vc_rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64", rc: %d, %s.\n", DP_UUID(uuid),
-				path, scm_size, rc, strerror(errno));
+				"size: "DF_U64", rc: %d, %s.\n",
+				DP_UUID(vc->vc_uuid), path, vc->vc_scm_size,
+				vc->vc_rc, strerror(errno));
 			break;
 		}
 
-		rc = fsync(fd);
+		vc->vc_rc = fsync(fd);
 		(void)close(fd);
 		fd = -1;
-		if (rc) {
+		if (vc->vc_rc) {
 			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der(errno);
+				DP_UUID(vc->vc_uuid), path, vc->vc_rc);
+			vc->vc_rc = daos_errno2der(errno);
 			break;
 		}
-	}
-	if (path)
 		D_FREE(path);
-	if (fd >= 0)
-		(void)close(fd);
+	}
 
+	if (fd != -1)
+		close(fd);
+
+	D_FREE(path);
+
+	return NULL;
+}
+
+static int
+tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+{
+	daos_size_t		scm_size, nvme_size;
+	struct vos_create	vc = {0};
+	int			rc = 0;
+	pthread_t		thread;
+
+
+	/**
+	 * Create one VOS file per execution stream
+	 * 16MB minimum per pmemobj file (SCM partition)
+	 */
+	D_ASSERT(dss_tgt_nr > 0);
+	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
+	nvme_size = tgt_nvme_size / dss_tgt_nr;
+
+	vc.vc_tgt_nr = dss_tgt_nr;
+	vc.vc_scm_size = scm_size;
+	uuid_copy(vc.vc_uuid, uuid);
+
+	rc = pthread_create(&thread, NULL, tgt_vos_preallocate, &vc);
+	if (rc != 0) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to create thread for vos file "
+			"creation: %d\n", DP_UUID(uuid), rc);
+		return rc;
+	}
+
+	for (;;) {
+		rc = pthread_tryjoin_np(thread, NULL);
+		if (rc == 0)
+			break;
+		ABT_thread_yield();
+	}
+
+	rc = vc.vc_rc;
 	if (!rc) {
 		struct vos_pool_arg	vpa;
 

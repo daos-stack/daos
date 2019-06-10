@@ -69,12 +69,21 @@ if [ -d "/mnt/daos" ]; then
     fi
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+    export DAOS_IO_BYPASS=pm
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+    export DAOS_IO_BYPASS=pm_snap
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+    unset DAOS_IO_BYPASS
     run_test src/common/tests/btree.sh ukey -s 20000
     run_test src/common/tests/btree.sh direct -s 20000
     run_test src/common/tests/btree.sh -s 20000
     run_test src/common/tests/btree.sh perf -s 20000
     run_test src/common/tests/btree.sh perf direct -s 20000
     run_test src/common/tests/btree.sh perf ukey -s 20000
+    run_test src/common/tests/btree.sh dyn ukey -s 20000
+    run_test src/common/tests/btree.sh dyn -s 20000
+    run_test src/common/tests/btree.sh dyn perf -s 20000
+    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
     run_test build/src/common/tests/umem_test
     run_test build/src/common/tests/sched
     run_test build/src/common/tests/drpc_tests

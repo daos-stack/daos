@@ -46,12 +46,6 @@ extern "C" {
 /** Maximum length (excluding the '\0') of a DAOS system name */
 #define DAOS_SYS_NAME_MAX 15
 
-/** Scatter/gather list for memory buffers */
-#define daos_sg_list_t d_sg_list_t
-
-/** free function for d_rank_list_t */
-#define daos_rank_list_free d_rank_list_free
-
 /**
  * Generic data type definition
  */
@@ -59,17 +53,17 @@ extern "C" {
 typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
-#define daos_iov_t		d_iov_t
+/**
+ * daos_sg_list_t/daos_iov_t/daos_iov_set is for keeping compatibility for
+ * upper layer.
+ */
+#define daos_sg_list_t			d_sg_list_t
+#define daos_iov_t			d_iov_t
+#define daos_iov_set(iov, buf, size)	d_iov_set((iov), (buf), (size))
+
 #define crt_proc_daos_key_t	crt_proc_d_iov_t
 #define crt_proc_daos_size_t	crt_proc_uint64_t
 #define crt_proc_daos_epoch_t	crt_proc_uint64_t
-
-static inline void
-daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
@@ -337,12 +331,6 @@ typedef struct {
 	uint32_t			pi_ndisabled;
 	/** Latest pool map version */
 	uint32_t			pi_map_ver;
-	/** pool UID */
-	uid_t				pi_uid;
-	/** pool GID */
-	gid_t				pi_gid;
-	/** Mode */
-	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
 	/** pool info bits, see daos_pool_info_bit */
@@ -645,7 +633,7 @@ typedef struct {
 } daos_obj_attr_t;
 
 /** key type */
-typedef daos_iov_t daos_key_t;
+typedef d_iov_t daos_key_t;
 
 /**
  * Record

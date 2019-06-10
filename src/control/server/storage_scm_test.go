@@ -307,21 +307,22 @@ func TestFormatScm(t *testing.T) {
 		ss := newMockScmStorage(
 			nil, []DeviceDiscovery{}, false, config)
 		ss.formatted = tt.formatted
-		resp := new(pb.FormatStorageResp)
+
+		results := []*pb.ScmMountResult{}
 
 		if tt.inited {
 			// not concerned with response
 			ss.Discover(new(pb.ScanStorageResp))
 		}
 
-		ss.Format(srvIdx, resp)
+		ss.Format(srvIdx, &results)
 
 		// only ocm result in response for the moment
 		AssertEqual(
-			t, len(resp.Mrets), 1,
+			t, len(results), 1,
 			"unexpected number of response results, "+tt.desc)
 
-		result := resp.Mrets[0]
+		result := results[0]
 
 		AssertEqual(
 			t, result.State.Error, tt.expResults[0].State.Error,
@@ -347,5 +348,57 @@ func TestFormatScm(t *testing.T) {
 				t, s, tt.expCmds[i],
 				fmt.Sprintf("commands don't match (%s)", tt.desc))
 		}
+	}
+}
+
+// TestUpdateScm currently just verifies that response is populated with not
+// implemented state in result.
+func TestUpdateScm(t *testing.T) {
+	tests := []struct {
+		expResults []*pb.ScmModuleResult
+		desc       string
+	}{
+		{
+			expResults: []*pb.ScmModuleResult{
+				{
+					Loc: &pb.ScmModule_Location{},
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+						Error:  msgScmUpdateNotImpl,
+					},
+				},
+			},
+			desc: "not implemented",
+		},
+	}
+
+	srvIdx := 0
+
+	for _, tt := range tests {
+		config := defaultMockConfig(t)
+		ss := newMockScmStorage(
+			nil, []DeviceDiscovery{}, false, &config)
+
+		results := []*pb.ScmModuleResult{}
+
+		params := &pb.UpdateScmParams{}
+		ss.Update(srvIdx, params, &results)
+
+		// only ocm result in response for the moment
+		AssertEqual(
+			t, len(results), 1,
+			"unexpected number of response results, "+tt.desc)
+
+		result := results[0]
+
+		AssertEqual(
+			t, result.State.Error, tt.expResults[0].State.Error,
+			"unexpected result error message, "+tt.desc)
+		AssertEqual(
+			t, result.State.Status, tt.expResults[0].State.Status,
+			"unexpected response status, "+tt.desc)
+		AssertEqual(
+			t, result.Loc, tt.expResults[0].Loc,
+			"unexpected module location, "+tt.desc)
 	}
 }

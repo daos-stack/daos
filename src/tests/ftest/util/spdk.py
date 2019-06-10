@@ -46,7 +46,7 @@ def nvme_setup_thread(result_queue, hostname, debug=True):
     try:
         host = Ssh(hostname, debug=debug)
         host.connect()
-        cmd = ["sudo /usr/binasd/mkdasdir -p /opt/daos",
+        cmd = ["sudo /usr/bin/mkdir -p /opt/daos",
                "sudo /usr/bin/git clone https://github.com/spdk/spdk.git" \
                " /opt/daos/spdk",
                "sudo HUGEMEM=4096 TARGET_USER=\"{0}\" {1}"

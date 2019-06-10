@@ -93,7 +93,7 @@ static struct io_test_flag io_test_flags[] = {
 			dts_key_gen(dest, len, (arg)->lkey);	\
 	} while (0)
 
-static void
+void
 vts_key_gen(char *dest, size_t len, bool is_dkey, struct io_test_args *arg)
 {
 	memset(dest, 0, len);
@@ -120,17 +120,8 @@ vts_key_gen(char *dest, size_t len, bool is_dkey, struct io_test_args *arg)
 
 }
 
-static uint32_t
-hash_key(d_iov_t *key, int flag)
-{
-	if (flag)
-		return *(uint64_t *)key->iov_buf;
-
-	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
-}
-
 void
-set_iov(daos_iov_t *iov, char *buf, int int_flag)
+set_iov(d_iov_t *iov, char *buf, int int_flag)
 {
 	if (int_flag)
 		d_iov_set(iov, buf, sizeof(uint64_t));
@@ -243,7 +234,7 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 {
 	daos_handle_t	ih = DAOS_HDL_INVAL;
 	char		fetch_buf[8192];
-	daos_iov_t	iov_out;
+	d_iov_t	iov_out;
 	int		itype;
 	int		nr = 0;
 	int		rc;
@@ -270,7 +261,7 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 	}
 
 	/* 8k fetch_buf is large enough to hold largest recx */
-	daos_iov_set(&iov_out, fetch_buf, sizeof(fetch_buf));
+	d_iov_set(&iov_out, fetch_buf, sizeof(fetch_buf));
 
 	while (rc == 0) {
 		vos_iter_entry_t  ent;
@@ -482,12 +473,13 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 }
 
 int
-io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		   daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
+io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
+		   daos_key_t *dkey, daos_iod_t *iod, d_sg_list_t *sgl,
+		   struct dtx_handle *dth, bool verbose)
 {
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
-	daos_iov_t		*srv_iov;
+	d_iov_t		*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
 	int			i;
@@ -504,7 +496,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, dkey,
-			      1, iod, &ioh, NULL);
+			      1, iod, &ioh, dth);
 	if (rc != 0) {
 		if (verbose)
 			print_error("Failed to prepare ZC update: %d\n", rc);
@@ -529,7 +521,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
-	rc = vos_update_end(ioh, 0, dkey, rc, NULL);
+	rc = vos_update_end(ioh, 0, dkey, rc, dth);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -537,12 +529,13 @@ end:
 }
 
 int
-io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		  daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
+io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
+		  daos_key_t *dkey, daos_iod_t *iod, d_sg_list_t *sgl,
+		  bool verbose)
 {
 	struct bio_sglist *bsgl;
 	struct bio_iov	*biov;
-	daos_iov_t	*dst_iov;
+	d_iov_t	*dst_iov;
 	daos_handle_t	 ioh;
 	unsigned int	 off;
 	int		 i;
@@ -597,7 +590,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 			 daos_epoch_t fetch_epoch)
 {
 	int			rc = 0;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rex;
@@ -610,7 +603,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	unsigned int		recx_size;
 	unsigned int		recx_nr;
 
@@ -666,7 +659,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 		dts_buf_render(update_buf, UPDATE_BUF_SIZE);
-		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+		d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		iod.iod_size = recx_size;
 		rex.rx_nr    = recx_nr;
 	} else {
@@ -674,7 +667,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		set_iov(&akey, &last_akey[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 		memset(update_buf, 0, UPDATE_BUF_SIZE);
-		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+		d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		rex.rx_nr    = recx_nr;
 		iod.iod_size = 0;
 	}
@@ -689,7 +682,8 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_nr	= 1;
 
 	/* Act */
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
+				NULL, true);
 	if (rc)
 		goto exit;
 
@@ -697,7 +691,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	inc_cntr(arg->ta_flags);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	iod.iod_size = DAOS_REC_ANY;
 	memset(actual_csum_buf, 0, sizeof(actual_csum_buf));
@@ -730,8 +724,8 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	int i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, *coh, *oid, 1, true, DAOS_INTENT_DEFAULT,
-				  &objs[i]);
+		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, 1, true,
+				  DAOS_INTENT_DEFAULT, &objs[i]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -800,8 +794,8 @@ io_obj_cache_test(void **state)
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_hold(occ, l_coh, oids[1], 1, true, DAOS_INTENT_DEFAULT,
-			  &objs[16]);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], 1, true,
+			  DAOS_INTENT_DEFAULT, &objs[16]);
 	assert_int_equal(rc, 0);
 	vos_obj_release(occ, objs[16]);
 
@@ -1119,7 +1113,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 {
 
 	int			rc = 0;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rex;
@@ -1128,7 +1122,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
@@ -1142,7 +1136,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 	iod.iod_size	= val_iov.iov_len;
 
 	sgl.sg_nr = 1;
@@ -1156,14 +1150,15 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	iod.iod_nr	= 1;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
+				NULL, true);
 	if (rc)
 		goto exit;
 
 	inc_cntr(arg->ta_flags);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	/* will be set to zero after fetching a nonexistent key */
 	iod.iod_size = -1;
@@ -1184,7 +1179,7 @@ io_fetch_wo_object(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rex;
@@ -1192,7 +1187,7 @@ io_fetch_wo_object(void **state)
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
@@ -1214,7 +1209,7 @@ io_fetch_wo_object(void **state)
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	/* should be set to zero after fetching a nonexistent object */
 	iod.iod_size = -1;
@@ -1328,6 +1323,22 @@ io_set_attribute_test(void **state)
 	int rc;
 	uint64_t attr;
 	uint64_t i, expected;
+	daos_unit_oid_t oid;
+
+	oid = gen_oid(arg->ofeat);
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, 0);
+
+	rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     VOS_OI_FAILED);
+	assert_int_equal(rc, 0);
+
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, VOS_OI_FAILED);
 
 	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
 			     NULL, &attr);
@@ -1394,7 +1405,7 @@ pool_cont_same_uuid(void **state)
 	struct io_test_args	*arg = *state;
 	uuid_t			pool_uuid, co_uuid;
 	daos_handle_t		poh, coh;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rex;
@@ -1402,7 +1413,7 @@ pool_cont_same_uuid(void **state)
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_unit_oid_t		oid;
 	int			ret = 0;
 
@@ -1437,7 +1448,7 @@ pool_cont_same_uuid(void **state)
 	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
 	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 	iod.iod_size = UPDATE_BUF_SIZE;
 	rex.rx_nr    = 1;
 
@@ -1538,14 +1549,14 @@ io_simple_one_key_cross_container(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_recx_t		rex;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_DKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_epoch_t		epoch = gen_rand_epoch();
@@ -1579,7 +1590,7 @@ io_simple_one_key_cross_container(void **state)
 	sgl.sg_iovs = &val_iov;
 
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 
 	if (arg->ta_flags & TF_REC_EXT) {
 		iod.iod_size = UPDATE_REC_SIZE;
@@ -1611,7 +1622,7 @@ io_simple_one_key_cross_container(void **state)
 	}
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
 	/**
@@ -1623,7 +1634,7 @@ io_simple_one_key_cross_container(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 	iod.iod_size = DAOS_REC_ANY;
 
 	/**
@@ -1695,7 +1706,7 @@ io_sgl_update(void **state)
 	daos_key_t		akey;
 	daos_recx_t		rex;
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			*update_buffs[SGL_TEST_BUF_COUNT];
@@ -1736,7 +1747,7 @@ io_sgl_update(void **state)
 		memcpy(&ground_truth[i * SGL_TEST_BUF_SIZE], update_buffs[i],
 			SGL_TEST_BUF_SIZE);
 		/* Attach the buffer to the scatter-gather list */
-		daos_iov_set(&sgl.sg_iovs[i], update_buffs[i],
+		d_iov_set(&sgl.sg_iovs[i], update_buffs[i],
 			SGL_TEST_BUF_SIZE);
 	}
 
@@ -1755,7 +1766,7 @@ io_sgl_update(void **state)
 	memset(fetch_buf, 0, SGL_TEST_BUF_COUNT * SGL_TEST_BUF_SIZE);
 	rc = daos_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
-	daos_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
+	d_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
 				&sgl);
@@ -1782,7 +1793,7 @@ io_sgl_fetch(void **state)
 	daos_key_t		akey;
 	daos_recx_t		rex;
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			*fetch_buffs[SGL_TEST_BUF_COUNT];
@@ -1816,7 +1827,7 @@ io_sgl_fetch(void **state)
 		SGL_TEST_BUF_SIZE);
 	/* Attach the buffer to the scatter-gather list */
 	daos_sgl_init(&sgl, 1);
-	daos_iov_set(sgl.sg_iovs, &update_buf[0], SGL_TEST_BUF_COUNT *
+	d_iov_set(sgl.sg_iovs, &update_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
 
 	/* Write/Update */
@@ -1836,7 +1847,7 @@ io_sgl_fetch(void **state)
 		assert_non_null(fetch_buffs[i]);
 		memset(fetch_buffs[i], 0, SGL_TEST_BUF_SIZE);
 		/* Attach the buffer to the scatter-gather list */
-		daos_iov_set(&sgl.sg_iovs[i], fetch_buffs[i],
+		d_iov_set(&sgl.sg_iovs[i], fetch_buffs[i],
 			SGL_TEST_BUF_SIZE);
 	}
 	/* Now fetch */
@@ -1859,12 +1870,12 @@ io_fetch_hole(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rexs[3];
 	daos_iod_t		iod;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[3 * 1024];
@@ -1901,7 +1912,7 @@ io_fetch_hole(void **state)
 	memcpy(&ground_truth[0], &update_buf[0], 3 * 1024);
 
 	/* Attach buffer to sgl */
-	daos_iov_set(&val_iov, &update_buf[0], 3 * 1024);
+	d_iov_set(&val_iov, &update_buf[0], 3 * 1024);
 	sgl.sg_iovs = &val_iov;
 	sgl.sg_nr = 1;
 
@@ -1912,7 +1923,7 @@ io_fetch_hole(void **state)
 	inc_cntr(arg->ta_flags);
 
 	/* Fetch */
-	daos_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
+	d_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
 				&sgl);
 	assert_int_equal(rc, 0);
@@ -1932,7 +1943,7 @@ io_fetch_hole(void **state)
 	/* Update the IOD */
 	rexs[1].rx_idx = 2 * 1024;
 	iod.iod_nr = 2;
-	daos_iov_set(&val_iov, &update_buf[0], 2 * 1024);
+	d_iov_set(&val_iov, &update_buf[0], 2 * 1024);
 	sgl.sg_iovs = &val_iov;
 	/* Update using epoch 2 */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 2, 0, &dkey, 1, &iod,
@@ -1943,7 +1954,7 @@ io_fetch_hole(void **state)
 	rexs[0].rx_nr = 3 * 1024;
 	iod.iod_nr = 1;
 	memset(fetch_buf, 0, 3 * 1024);
-	daos_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
+	d_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
 	/* Fetch using epoch 2 */
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 2, &dkey, 1, &iod,
 				&sgl);
@@ -2032,10 +2043,10 @@ oid_iter_test_with_anchor(void **state)
 static void gen_query_tree(struct io_test_args *arg, daos_unit_oid_t oid)
 {
 	daos_iod_t		iod = {0};
-	daos_sg_list_t		sgl = {0};
+	d_sg_list_t		sgl = {0};
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_recx_t		recx;
 	daos_epoch_t		epoch = 1;
 	uint64_t		dkey_value;
@@ -2052,7 +2063,7 @@ static void gen_query_tree(struct io_test_args *arg, daos_unit_oid_t oid)
 	iod.iod_nr = 1;
 
 	/* Attach buffer to sgl */
-	daos_iov_set(&val_iov, &update_var, sizeof(update_var));
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
 	sgl.sg_iovs = &val_iov;
 	sgl.sg_nr = 1;
 

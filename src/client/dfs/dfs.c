@@ -35,6 +35,7 @@
 #include "daos_api.h"
 #include "daos_addons.h"
 #include "daos_fs.h"
+#include "daos_security.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"
@@ -87,7 +88,7 @@ struct dfs_obj {
 	/** DAOS object ID of the parent of the object */
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
-	char			name[DFS_MAX_PATH];
+	char			name[DFS_MAX_PATH + 1];
 	/** Symlink value if object is a symbolic link */
 	char			*value;
 };
@@ -257,10 +258,10 @@ static int
 fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	    bool fetch_sym, bool *exists, struct dfs_entry *entry)
 {
-	daos_sg_list_t	sgls[INODE_AKEYS + 1];
-	daos_iov_t	sg_iovs[INODE_AKEYS + 1];
+	d_sg_list_t	sgls[INODE_AKEYS + 1];
+	d_iov_t	sg_iovs[INODE_AKEYS + 1];
 	daos_iod_t	iods[INODE_AKEYS + 1];
-	char		value[DFS_MAX_PATH];
+	char		*value = NULL;
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
@@ -271,38 +272,41 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	if (strcmp(name, ".") == 0)
 		D_ASSERT(0);
 
-	daos_iov_set(&dkey, (void *)name, strlen(name));
+	d_iov_set(&dkey, (void *)name, strlen(name));
 	i = 0;
 
 	/** Set Akey for MODE */
-	daos_iov_set(&sg_iovs[i], &entry->mode, sizeof(mode_t));
-	daos_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
+	d_iov_set(&sg_iovs[i], &entry->mode, sizeof(mode_t));
+	d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
 	i++;
 
 	/** Set Akey for OID; if entry is symlink, this value will be bogus */
-	daos_iov_set(&sg_iovs[i], &entry->oid, sizeof(daos_obj_id_t));
-	daos_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
+	d_iov_set(&sg_iovs[i], &entry->oid, sizeof(daos_obj_id_t));
+	d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
 	i++;
 
 	/** Set Akey for ATIME */
-	daos_iov_set(&sg_iovs[i], &entry->atime, sizeof(time_t));
-	daos_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
+	d_iov_set(&sg_iovs[i], &entry->atime, sizeof(time_t));
+	d_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
 	i++;
 
 	/** Set Akey for MTIME */
-	daos_iov_set(&sg_iovs[i], &entry->mtime, sizeof(time_t));
-	daos_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
+	d_iov_set(&sg_iovs[i], &entry->mtime, sizeof(time_t));
+	d_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
 	i++;
 
 	/** Set Akey for CTIME */
-	daos_iov_set(&sg_iovs[i], &entry->ctime, sizeof(time_t));
-	daos_iov_set(&iods[i].iod_name, CTIME_NAME, strlen(CTIME_NAME));
+	d_iov_set(&sg_iovs[i], &entry->ctime, sizeof(time_t));
+	d_iov_set(&iods[i].iod_name, CTIME_NAME, strlen(CTIME_NAME));
 	i++;
 
 	if (fetch_sym) {
+		value = malloc(PATH_MAX);
+		if (value == NULL)
+			return -DER_NOMEM;
 		/** Set Akey for Symlink Value, will be empty if no symlink */
-		daos_iov_set(&sg_iovs[i], value, DFS_MAX_PATH);
-		daos_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
+		d_iov_set(&sg_iovs[i], value, PATH_MAX);
+		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
 		i++;
 	}
 
@@ -325,16 +329,17 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	rc = daos_obj_fetch(oh, th, &dkey, akeys_nr, iods, sgls, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
-		return rc;
+		D_GOTO(out, rc);
 	}
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
 		size_t sym_len = iods[INODE_AKEYS].iod_size;
 
 		if (sym_len != 0) {
+			D_ASSERT(value);
 			entry->value = strdup(value);
 			if (entry->value == NULL)
-				return -DER_NOMEM;
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
@@ -343,6 +348,9 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	else
 		*exists = true;
 
+out:
+	if (fetch_sym)
+		D_FREE(value);
 	return rc;
 }
 
@@ -371,7 +379,7 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 			return rc;
 	}
 
-	daos_iov_set(&dkey, (void *)name, strlen(name));
+	d_iov_set(&dkey, (void *)name, strlen(name));
 	return daos_obj_punch_dkeys(parent_oh, th, 1, &dkey, NULL);
 }
 
@@ -379,50 +387,50 @@ static int
 insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	     struct dfs_entry entry)
 {
-	daos_sg_list_t	sgls[INODE_AKEYS];
-	daos_iov_t	sg_iovs[INODE_AKEYS];
+	d_sg_list_t	sgls[INODE_AKEYS];
+	d_iov_t	sg_iovs[INODE_AKEYS];
 	daos_iod_t	iods[INODE_AKEYS];
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
 
-	daos_iov_set(&dkey, (void *)name, strlen(name));
+	d_iov_set(&dkey, (void *)name, strlen(name));
 
 	i = 0;
 
 	/** Add the mode */
-	daos_iov_set(&sg_iovs[i], &entry.mode, sizeof(mode_t));
-	daos_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
+	d_iov_set(&sg_iovs[i], &entry.mode, sizeof(mode_t));
+	d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
 	iods[i].iod_size = sizeof(mode_t);
 	i++;
 
 	/** If entry is a symlink add the value, otherwise add the oid */
 	if (S_ISLNK(entry.mode)) {
-		daos_iov_set(&sg_iovs[i], entry.value, strlen(entry.value) + 1);
-		daos_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
+		d_iov_set(&sg_iovs[i], entry.value, strlen(entry.value) + 1);
+		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
 		iods[i].iod_size = strlen(entry.value) + 1;
 	} else {
-		daos_iov_set(&sg_iovs[i], &entry.oid, sizeof(daos_obj_id_t));
-		daos_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
+		d_iov_set(&sg_iovs[i], &entry.oid, sizeof(daos_obj_id_t));
+		d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
 		iods[i].iod_size = sizeof(daos_obj_id_t);
 	}
 	i++;
 
 	/** Add the access time */
-	daos_iov_set(&sg_iovs[i], &entry.atime, sizeof(time_t));
-	daos_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
+	d_iov_set(&sg_iovs[i], &entry.atime, sizeof(time_t));
+	d_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
 	iods[i].iod_size = sizeof(time_t);
 	i++;
 
 	/** Add the modify time */
-	daos_iov_set(&sg_iovs[i], &entry.mtime, sizeof(time_t));
-	daos_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
+	d_iov_set(&sg_iovs[i], &entry.mtime, sizeof(time_t));
+	d_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
 	iods[i].iod_size = sizeof(time_t);
 	i++;
 
 	/** Add the change time */
-	daos_iov_set(&sg_iovs[i], &entry.ctime, sizeof(time_t));
-	daos_iov_set(&iods[i].iod_name, CTIME_NAME, strlen(CTIME_NAME));
+	d_iov_set(&sg_iovs[i], &entry.ctime, sizeof(time_t));
+	d_iov_set(&iods[i].iod_name, CTIME_NAME, strlen(CTIME_NAME));
 	iods[i].iod_size = sizeof(time_t);
 	i++;
 
@@ -457,14 +465,14 @@ get_nlinks(daos_handle_t oh, daos_handle_t th, uint32_t *nlinks,
 	daos_key_desc_t	kds[ENUM_DESC_NR];
 	daos_anchor_t	anchor = {0};
 	uint32_t	key_nr = 0;
-	daos_sg_list_t	sgl;
-	daos_iov_t	iov;
+	d_sg_list_t	sgl;
+	d_iov_t	iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
 	int		rc;
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	daos_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
+	d_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
 	sgl.sg_iovs = &iov;
 
 	/** TODO - Enum of links is expensive. Need to make this faster */
@@ -600,7 +608,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return -DER_INVAL;
-	if (strlen(name) > DFS_MAX_PATH - 1)
+	if (strlen(name) > DFS_MAX_PATH)
 		return -DER_INVAL;
 	return 0;
 }
@@ -891,21 +899,21 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 static int
 check_sb(dfs_t *dfs, daos_handle_t th, bool insert, bool *exists)
 {
-	daos_sg_list_t	sgl;
-	daos_iov_t	sg_iov;
+	d_sg_list_t	sgl;
+	d_iov_t	sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	uint64_t	sb_magic;
 	int		rc;
 
-	daos_iov_set(&dkey, SB_DKEY, strlen(SB_DKEY));
+	d_iov_set(&dkey, SB_DKEY, strlen(SB_DKEY));
 
-	daos_iov_set(&sg_iov, &sb_magic, sizeof(uint64_t));
+	d_iov_set(&sg_iov, &sb_magic, sizeof(uint64_t));
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &sg_iov;
 
-	daos_iov_set(&iod.iod_name, SB_AKEY, strlen(SB_AKEY));
+	d_iov_set(&iod.iod_name, SB_AKEY, strlen(SB_AKEY));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_size	= DAOS_REC_ANY;
@@ -954,6 +962,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs_t			*dfs;
 	daos_handle_t		th;
 	daos_pool_info_t	pool_info;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*prop_entry;
 	struct dfs_entry	entry = {0};
 	bool			sb_exists;
 	int			amode, obj_mode;
@@ -977,27 +987,49 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		return rc;
 
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
-	if (rc) {
-		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
+	/* Fetch ownership props with the query */
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate pool prop for query\n");
+		rc = -DER_NOMEM;
 		D_GOTO(err_dfs, rc);
 	}
 
-	dfs->uid = pool_info.pi_uid;
-	dfs->gid = pool_info.pi_gid;
+	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
+		D_GOTO(err_prop, rc);
+	}
+
+	/* Convert the owner information to uid/gid */
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_uid(prop_entry->dpe_str, &dfs->uid);
+	if (rc != 0) {
+		D_ERROR("Unable to convert owner to uid\n");
+		D_GOTO(err_prop, rc);
+	}
+
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_gid(prop_entry->dpe_str, &dfs->gid);
+	if (rc != 0) {
+		D_ERROR("Unable to convert owner-group to gid\n");
+		D_GOTO(err_prop, rc);
+	}
 
 	/** if mount RW, create TX */
 	if (amode == O_RDWR) {
 		rc = daos_tx_open(coh, &th, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() Failed (%d)\n", rc);
-			D_GOTO(err_dfs, rc);
+			D_GOTO(err_prop, rc);
 		}
 	} else if (amode == O_RDONLY) {
 		th = DAOS_TX_NONE;
 	} else {
 		D_ERROR("Invalid dfs_mount access mode\n");
-		D_GOTO(err_dfs, rc = -DER_INVAL);
+		D_GOTO(err_prop, rc = -DER_INVAL);
 	}
 
 	dfs->oid.hi = 0;
@@ -1106,9 +1138,13 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_ERROR("TX commit failed (rc = %d)\n", rc);
 			D_GOTO(err_root, rc);
 		}
+		rc = daos_tx_close(th, NULL);
+		if (rc) {
+			D_ERROR("TX close failed (rc = %d)\n", rc);
+			D_GOTO(err_root, rc);
+		}
 	}
 
-	daos_tx_close(th, NULL);
 	dfs->mounted = true;
 	*_dfs = dfs;
 
@@ -1124,6 +1160,8 @@ err_tx:
 		daos_tx_abort(th, NULL);
 		daos_tx_close(th, NULL);
 	}
+err_prop:
+	daos_prop_free(prop);
 err_dfs:
 	D_FREE(dfs);
 	return rc;
@@ -1185,6 +1223,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
+	new_dir.name[DFS_MAX_PATH] = '\0';
 	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), 0,
 			&new_dir);
 	if (rc)
@@ -1210,9 +1249,9 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 	daos_handle_t	oh;
 	daos_key_desc_t	kds[ENUM_DESC_NR];
 	daos_anchor_t	anchor = {0};
-	daos_iov_t	iov;
+	d_iov_t	iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 	int		rc;
 
 	D_ASSERT(S_ISDIR(entry.mode));
@@ -1223,7 +1262,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
-	daos_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
+	d_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
 	sgl.sg_iovs = &iov;
 
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -1241,7 +1280,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
 			struct dfs_entry child_entry;
-			char entry_name[DFS_MAX_PATH];
+			char entry_name[DFS_MAX_PATH + 1];
 			bool exists;
 
 			snprintf(entry_name, kds[i].kd_key_len + 1, "%s", ptr);
@@ -1387,6 +1426,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
 	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc);
@@ -1425,6 +1465,7 @@ dfs_lookup_loop:
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
 		strncpy(obj->name, token, DFS_MAX_PATH);
+		obj->name[DFS_MAX_PATH] = '\0';
 		obj->mode = entry.mode;
 
 		/** if entry is a file, open the array object and return */
@@ -1536,7 +1577,7 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	daos_key_desc_t *kds;
 	char *enum_buf;
 	uint32_t number, key_nr, i;
-	daos_sg_list_t sgl;
+	d_sg_list_t sgl;
 	int rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1567,14 +1608,14 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	key_nr = 0;
 	number = *nr;
 	while (!daos_anchor_is_eof(anchor)) {
-		daos_iov_t iov;
+		d_iov_t iov;
 		char *ptr;
 
 		memset(enum_buf, 0, (*nr) * DFS_MAX_PATH);
 
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 0;
-		daos_iov_set(&iov, enum_buf, (*nr) * DFS_MAX_PATH);
+		d_iov_set(&iov, enum_buf, (*nr) * DFS_MAX_PATH);
 		sgl.sg_iovs = &iov;
 
 		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &number, kds,
@@ -1652,6 +1693,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		D_GOTO(err_obj, rc = -DER_NONEXIST);
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
@@ -1733,6 +1775,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return -DER_NOMEM;
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
+	obj->name[DFS_MAX_PATH] = '\0';
 	obj->mode = mode;
 	oid_cp(&obj->parent_oid, parent->oid);
 
@@ -1798,7 +1841,7 @@ dfs_release(dfs_obj_t *obj)
 }
 
 static int
-io_internal(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
+io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	    int flag)
 {
 	daos_array_iod_t	iod;
@@ -1838,7 +1881,7 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
 }
 
 int
-dfs_read(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
+dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	 daos_size_t *read_size)
 {
 	daos_size_t	array_size, max_read;
@@ -1891,7 +1934,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
 }
 
 int
-dfs_write(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off)
+dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
 {
 	if (dfs == NULL || !dfs->mounted)
 		return -DER_INVAL;
@@ -2044,8 +2087,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
 	struct dfs_entry	entry;
-	daos_sg_list_t		sgl;
-	daos_iov_t		sg_iov;
+	d_sg_list_t		sgl;
+	d_iov_t		sg_iov;
 	daos_iod_t		iod;
 	daos_key_t		dkey;
 	int			rc;
@@ -2117,10 +2160,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	/** set dkey as the entry name */
-	daos_iov_set(&dkey, (void *)name, strlen(name));
+	d_iov_set(&dkey, (void *)name, strlen(name));
 
 	/** set akey as the mode attr name */
-	daos_iov_set(&iod.iod_name, MODE_NAME, strlen(MODE_NAME));
+	d_iov_set(&iod.iod_name, MODE_NAME, strlen(MODE_NAME));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
@@ -2130,7 +2173,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	iod.iod_size	= sizeof(mode_t);
 
 	/** set sgl for update */
-	daos_iov_set(&sg_iov, &mode, sizeof(mode_t));
+	d_iov_set(&sg_iov, &mode, sizeof(mode_t));
 	sgl.sg_nr	= 1;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
@@ -2404,7 +2447,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	}
 
 	/** remove the old entry from the old parent (just the dkey) */
-	daos_iov_set(&dkey, (void *)name, strlen(name));
+	d_iov_set(&dkey, (void *)name, strlen(name));
 	rc = daos_obj_punch_dkeys(parent->oh, th, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
@@ -2487,7 +2530,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/** remove the first entry from parent1 (just the dkey) */
-	daos_iov_set(&dkey, (void *)name1, strlen(name1));
+	d_iov_set(&dkey, (void *)name1, strlen(name1));
 	rc = daos_obj_punch_dkeys(parent1->oh, th, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name1, rc);
@@ -2495,7 +2538,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 	}
 
 	/** remove the second entry from parent2 (just the dkey) */
-	daos_iov_set(&dkey, (void *)name2, strlen(name2));
+	d_iov_set(&dkey, (void *)name2, strlen(name2));
 	rc = daos_obj_punch_dkeys(parent2->oh, th, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name2, rc);
@@ -2564,8 +2607,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 {
 	char		*xname = NULL;
 	daos_handle_t	th = DAOS_TX_NONE;
-	daos_sg_list_t	sgl;
-	daos_iov_t	sg_iov;
+	d_sg_list_t	sgl;
+	d_iov_t	sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
@@ -2595,10 +2638,10 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 		D_GOTO(out, rc);
 
 	/** set dkey as the entry name */
-	daos_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 
 	/** set akey as the xattr name */
-	daos_iov_set(&iod.iod_name, xname, strlen(xname));
+	d_iov_set(&iod.iod_name, xname, strlen(xname));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
@@ -2630,7 +2673,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 	/** set sgl for update */
-	daos_iov_set(&sg_iov, (void *)value, size);
+	d_iov_set(&sg_iov, (void *)value, size);
 	sgl.sg_nr	= 1;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
@@ -2654,8 +2697,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	     daos_size_t *size)
 {
 	char            *xname = NULL;
-	daos_sg_list_t	sgl;
-	daos_iov_t	sg_iov;
+	d_sg_list_t	sgl;
+	d_iov_t	sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
@@ -2682,10 +2725,10 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		return rc;
 
 	/** set dkey as the entry name */
-	daos_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 
 	/** set akey as the xattr name */
-	daos_iov_set(&iod.iod_name, xname, strlen(xname));
+	d_iov_set(&iod.iod_name, xname, strlen(xname));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
@@ -2697,7 +2740,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		iod.iod_size	= *size;
 
 		/** set sgl for fetch */
-		daos_iov_set(&sg_iov, value, *size);
+		d_iov_set(&sg_iov, value, *size);
 		sgl.sg_nr	= 1;
 		sgl.sg_nr_out	= 0;
 		sgl.sg_iovs	= &sg_iov;
@@ -2759,10 +2802,10 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		D_GOTO(out, rc);
 
 	/** set dkey as the entry name */
-	daos_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 
 	/** set akey as the xattr name */
-	daos_iov_set(&iod.iod_name, xname, strlen(xname));
+	d_iov_set(&iod.iod_name, xname, strlen(xname));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
@@ -2807,7 +2850,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 		return rc;
 
 	/** set dkey as the entry name */
-	daos_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 
 	list_size = *size;
 	ret_size = 0;
@@ -2816,14 +2859,14 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	number = ENUM_DESC_NR;
 		uint32_t	i;
-		daos_iov_t	iov;
+		d_iov_t	iov;
 		char		enum_buf[ENUM_DESC_BUF] = {0};
-		daos_sg_list_t	sgl;
+		d_sg_list_t	sgl;
 		char		*ptr;
 
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 0;
-		daos_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
+		d_iov_set(&iov, enum_buf, ENUM_DESC_BUF);
 		sgl.sg_iovs = &iov;
 
 		rc = daos_obj_list_akey(oh, DAOS_TX_NONE, &dkey, &number, kds,

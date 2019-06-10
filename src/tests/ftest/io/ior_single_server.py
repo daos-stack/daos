@@ -73,9 +73,6 @@ class IorSingleServer(Test):
         server_utils.run_server(self.hostfile_servers, self.server_group,
                                 self.basepath)
 
-        #if int(str(self.name).split("-")[0]) == 1:
-        #    ior_utils.build_ior(self.basepath)
-
     def tearDown(self):
         try:
             if self.hostfile_clients is not None:

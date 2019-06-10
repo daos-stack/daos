@@ -450,7 +450,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
 		struct dfuse_inode_entry *ie;
-		uint ref;
+		uint32_t ref;
 
 		rlink = d_hash_rec_first(&fs_handle->dfpi_iet);
 

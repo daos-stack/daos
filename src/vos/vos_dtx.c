@@ -94,7 +94,7 @@ dtx_hkey_size(void)
 }
 
 static void
-dtx_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+dtx_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(struct dtx_id));
 
@@ -114,8 +114,8 @@ dtx_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 }
 
 static int
-dtx_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	      daos_iov_t *val_iov, struct btr_record *rec)
+dtx_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	      d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct dtx_rec_bundle	*rbund;
 
@@ -148,20 +148,20 @@ dtx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 dtx_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key_iov, daos_iov_t *val_iov)
+	      d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_dtx_entry_df	*dtx;
 
 	D_ASSERT(val_iov != NULL);
 
 	dtx = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	daos_iov_set(val_iov, dtx, sizeof(*dtx));
+	d_iov_set(val_iov, dtx, sizeof(*dtx));
 	return 0;
 }
 
 static int
 dtx_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *key, daos_iov_t *val)
+	       d_iov_t *key, d_iov_t *val)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -701,15 +701,15 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	struct vos_dtx_entry_df		*ent;
 	struct vos_dtx_table_df		*tab;
 	struct dtx_rec_bundle		 rbund;
-	daos_iov_t			 kiov;
-	daos_iov_t			 riov;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	umem_off_t			 umoff;
 	int				 rc = 0;
 
-	daos_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&kiov, dti, sizeof(*dti));
 	rc = dbtree_delete(cont->vc_dtx_active_hdl, &kiov, &umoff);
 	if (rc == -DER_NONEXIST) {
-		daos_iov_set(&riov, NULL, 0);
+		d_iov_set(&riov, NULL, 0);
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		goto out;
 	}
@@ -722,7 +722,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 
 	dtx->te_state = DTX_ST_COMMITTED;
 	rbund.trb_umoff = umoff;
-	daos_iov_set(&riov, &rbund, sizeof(rbund));
+	d_iov_set(&riov, &rbund, sizeof(rbund));
 	rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 	if (rc != 0)
@@ -767,11 +767,11 @@ static int
 vos_dtx_abort_one(struct vos_container *cont, struct dtx_id *dti,
 		  bool force)
 {
-	daos_iov_t	 kiov;
+	d_iov_t	 kiov;
 	umem_off_t	 dtx;
 	int		 rc;
 
-	daos_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&kiov, dti, sizeof(*dti));
 	rc = dbtree_delete(cont->vc_dtx_active_hdl, &kiov, &dtx);
 	if (rc == 0)
 		dtx_rec_release(&cont->vc_pool->vp_umm, dtx, true, true);
@@ -793,9 +793,6 @@ struct vos_dtx_share {
 	umem_off_t		vds_record;
 };
 
-static int (*vos_dtx_check_leader)(uuid_t, daos_unit_oid_t *,
-				   uint32_t, struct pl_obj_layout **) = NULL;
-
 static bool
 vos_dtx_is_normal_entry(struct umem_instance *umm, umem_off_t entry)
 {
@@ -813,8 +810,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	struct vos_dtx_entry_df	*dtx;
 	struct vos_container	*cont;
 	umem_off_t		 dtx_umoff;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	struct dtx_rec_bundle	 rbund;
 	int			 rc;
 
@@ -831,8 +828,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	dtx->te_dkey_hash = dth->dth_dkey_hash;
 	dtx->te_epoch = dth->dth_epoch;
 	dtx->te_ver = dth->dth_ver;
-	dtx->te_state = DTX_ST_INIT;
-	dtx->te_flags = 0;
+	dtx->te_state = DTX_ST_PREPARED;
+	dtx->te_flags = dth->dth_leader ? DTX_EF_LEADER : 0;
 	dtx->te_intent = dth->dth_intent;
 	dtx->te_sec = crt_hlc_get();
 	dtx->te_records = rec_umoff;
@@ -840,8 +837,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 	dtx->te_prev = UMOFF_NULL;
 
 	rbund.trb_umoff = dtx_umoff;
-	daos_iov_set(&riov, &rbund, sizeof(rbund));
-	daos_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+	d_iov_set(&riov, &rbund, sizeof(rbund));
+	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 	if (rc == 0) {
@@ -982,8 +979,7 @@ vos_dtx_share_obj(struct umem_instance *umm, struct dtx_handle *dth,
 
 	sh_dtx = umem_off2ptr(umm, obj->vo_dtx);
 	D_ASSERT(dtx != sh_dtx);
-	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED ||
-		  sh_dtx->te_state == DTX_ST_INIT,
+	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED,
 		  "Invalid shared obj DTX state: %u\n",
 		  sh_dtx->te_state);
 
@@ -1035,8 +1031,7 @@ vos_dtx_share_key(struct umem_instance *umm, struct dtx_handle *dth,
 
 	sh_dtx = umem_off2ptr(umm, key->kr_dtx);
 	D_ASSERT(dtx != sh_dtx);
-	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED ||
-		  sh_dtx->te_state == DTX_ST_INIT,
+	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED,
 		  "Invalid shared key DTX state: %u\n",
 		  sh_dtx->te_state);
 
@@ -1234,18 +1229,15 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 
 		if (intent == DAOS_INTENT_DEFAULT ||
 		    intent == DAOS_INTENT_REBUILD) {
-			rc = vos_dtx_check_leader(cont->vc_pool->vp_id,
-						  &dtx->te_oid,
-						  dtx->te_ver, NULL);
-			if (rc < 0)
-				return rc;
-
-			if (rc == 0) {
+			if (!(dtx->te_flags & DTX_EF_LEADER) ||
+			    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER)) {
 				/* Inavailable for rebuild case. */
 				if (intent == DAOS_INTENT_REBUILD)
 					return hidden ? ALB_AVAILABLE_CLEAN :
 						ALB_UNAVAILABLE;
 
+				D_DEBUG(DB_TRACE, "Let's ask leader "DF_DTI
+					"\n", DP_DTI(&dtx->te_xid));
 				/* Non-leader and non-rebuild case,
 				 * return -DER_INPROGRESS, then the
 				 * caller will retry the RPC with
@@ -1265,20 +1257,13 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			return dtx_inprogress(dtx, 3);
 		}
 
-		/* Fall through. */
-	}
-	case DTX_ST_INIT:
 		if (dtx->te_intent != DAOS_INTENT_UPDATE) {
 			D_ERROR("Unexpected DTX intent %u\n", dtx->te_intent);
 			return -DER_INVAL;
 		}
 
-		if ((intent == DAOS_INTENT_DEFAULT ||
-		     intent == DAOS_INTENT_REBUILD) &&
-		    dtx->te_state == DTX_ST_INIT)
-			return hidden ? ALB_AVAILABLE_CLEAN : ALB_UNAVAILABLE;
-
 		return vos_dtx_check_shares(dth, dtx, record, intent, type);
+	}
 	default:
 		D_ERROR("Unexpected DTX state %u\n", dtx->te_state);
 		return -DER_INVAL;
@@ -1483,16 +1468,16 @@ vos_dtx_prepared(struct dtx_handle *dth)
 
 	dtx = umem_off2ptr(&cont->vc_pool->vp_umm, dth->dth_ent);
 	if (dth->dth_intent == DAOS_INTENT_UPDATE) {
-		daos_iov_t	kiov;
-		daos_iov_t	riov;
+		d_iov_t	kiov;
+		d_iov_t	riov;
 
 		/* There is CPU yield during the bulk transfer, then it is
 		 * possible that some others (rebuild) abort this DTX by race.
 		 * So we need to locate (or verify) DTX via its ID instead of
 		 * directly using the dth_ent.
 		 */
-		daos_iov_set(&kiov, &dth->dth_xid, sizeof(struct dtx_id));
-		daos_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, &dth->dth_xid, sizeof(struct dtx_id));
+		d_iov_set(&riov, NULL, 0);
 		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 		if (rc == -DER_NONEXIST)
 			/* The DTX has been aborted by race, notify the RPC
@@ -1531,21 +1516,14 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	return rc;
 }
 
-void
-vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
-			      uint32_t, struct pl_obj_layout **))
-{
-	vos_dtx_check_leader = checker;
-}
-
 int
 vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
 			  struct dtx_id *dti, uint64_t dkey_hash,
 			  bool punch)
 {
 	struct vos_container	*cont;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	int			 rc;
 
 	cont = vos_hdl2cont(coh);
@@ -1557,8 +1535,8 @@ vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
 			return DTX_ST_COMMITTED;
 	}
 
-	daos_iov_set(&kiov, dti, sizeof(*dti));
-	daos_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == 0) {
 		struct vos_dtx_entry_df	*dtx;
@@ -1661,14 +1639,14 @@ vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age)
 	for (count = 0, dtx_umoff = tab->tt_entry_head;
 	     count < max && !dtx_is_null(dtx_umoff); count++) {
 		struct vos_dtx_entry_df	*dtx;
-		daos_iov_t		 kiov;
+		d_iov_t		 kiov;
 		umem_off_t		 umoff;
 
 		dtx = umem_off2ptr(umm, dtx_umoff);
 		if (dtx_hlc_age2sec(dtx->te_sec) <= age)
 			break;
 
-		daos_iov_set(&kiov, &dtx->te_xid, sizeof(dtx->te_xid));
+		d_iov_set(&kiov, &dtx->te_xid, sizeof(dtx->te_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, &kiov, &umoff);
 		D_ASSERT(rc == 0);
 

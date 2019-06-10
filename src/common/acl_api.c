@@ -806,9 +806,9 @@ daos_ace_get_size(struct daos_ace *ace)
 
 
 static void
-indent(uint num_tabs)
+indent(uint32_t num_tabs)
 {
-	uint i;
+	uint32_t i;
 
 	for (i = 0; i < num_tabs; i++) {
 		printf("\t");
@@ -842,7 +842,7 @@ get_principal_type_string(uint8_t type)
 }
 
 static void
-print_principal(uint indent_tabs, struct daos_ace *ace)
+print_principal(uint32_t indent_tabs, struct daos_ace *ace)
 {
 	indent(indent_tabs);
 	printf("Principal Type: %s (%hhu)\n",
@@ -879,14 +879,14 @@ get_access_type_string(uint8_t type)
 }
 
 static void
-print_access_type(uint indent_tabs, uint8_t type)
+print_access_type(uint32_t indent_tabs, uint8_t type)
 {
 	indent(indent_tabs);
 	printf("%s (0x%hhx)\n", get_access_type_string(type), type);
 }
 
 static void
-print_all_access_types(uint indent_tabs, struct daos_ace *ace)
+print_all_access_types(uint32_t indent_tabs, struct daos_ace *ace)
 {
 	int i;
 
@@ -932,14 +932,14 @@ get_flag_string(uint16_t flag)
 }
 
 static void
-print_flag(uint indent_tabs, uint16_t flag)
+print_flag(uint32_t indent_tabs, uint16_t flag)
 {
 	indent(indent_tabs);
 	printf("%s (0x%hx)\n", get_flag_string(flag), flag);
 }
 
 static void
-print_all_flags(uint indent_tabs, struct daos_ace *ace)
+print_all_flags(uint32_t indent_tabs, struct daos_ace *ace)
 {
 	int i;
 
@@ -979,7 +979,7 @@ get_perm_string(uint64_t perm)
 }
 
 static void
-print_permissions(uint indent_tabs, const char *name, uint64_t perms)
+print_permissions(uint32_t indent_tabs, const char *name, uint64_t perms)
 {
 	int i;
 
@@ -1004,7 +1004,7 @@ print_permissions(uint indent_tabs, const char *name, uint64_t perms)
 }
 
 static void
-print_all_perm_types(uint indent_tabs, struct daos_ace *ace)
+print_all_perm_types(uint32_t indent_tabs, struct daos_ace *ace)
 {
 	print_permissions(indent_tabs, "Allow", ace->dae_allow_perms);
 	print_permissions(indent_tabs, "Audit", ace->dae_audit_perms);
@@ -1012,7 +1012,7 @@ print_all_perm_types(uint indent_tabs, struct daos_ace *ace)
 }
 
 void
-daos_ace_dump(struct daos_ace *ace, uint tabs)
+daos_ace_dump(struct daos_ace *ace, uint32_t tabs)
 {
 	indent(tabs);
 	printf("Access Control Entry:\n");

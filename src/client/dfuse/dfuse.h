@@ -108,8 +108,8 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dffs_ops;
 	dfs_t			*dffs_dfs;
-	char			dffs_pool[NAME_MAX];
-	char			dffs_cont[NAME_MAX];
+	char			dffs_pool[NAME_MAX + 1];
+	char			dffs_cont[NAME_MAX + 1];
 	daos_handle_t		dffs_poh;
 	daos_handle_t		dffs_coh;
 	daos_pool_info_t	dffs_pool_info;
@@ -463,7 +463,7 @@ struct dfuse_inode_entry {
 	 * even match the local kernels view of the projection as it is
 	 * not updated on local rename requests.
 	 */
-	char			ie_name[NAME_MAX];
+	char			ie_name[NAME_MAX + 1];
 
 	/** The parent inode of this entry.
 	 *
