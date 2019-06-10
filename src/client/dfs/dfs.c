@@ -1644,8 +1644,8 @@ out:
 }
 
 int
-dfs_readdir_size(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-		 uint32_t *nr, size_t size, dfs_readdir_cb_t op, void *udata)
+dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata)
 {
 	daos_key_desc_t	*kds;
 	d_sg_list_t	sgl;
@@ -1674,6 +1674,7 @@ dfs_readdir_size(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	if (kds == NULL)
 		return -DER_NOMEM;
 
+	/** Allocate a buffer to store the entry keys */
 	D_ALLOC_ARRAY(enum_buf, size);
 	if (enum_buf == NULL) {
 		D_FREE(kds);
@@ -1690,28 +1691,41 @@ dfs_readdir_size(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 		char		*ptr;
 		uint32_t	i;
 
+		/*
+		 * list num or less entries, but not more than we can fit in
+		 * enum_buf
+		 */
 		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &num, kds,
 					&sgl, anchor, NULL);
 		if (rc)
 			D_GOTO(out, rc);
 
+		/** If no entries were listed, continue to check anchor */
 		if (num == 0)
 			continue; /* loop should break for EOF */
 
+		/** for every entry, issue the filler cb */
 		for (ptr = enum_buf, i = 0; i < num; i++) {
 			char name[DFS_MAX_PATH];
 
 			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
-			rc = op(dfs, obj, name, udata);
-			if (rc)
-				D_GOTO(out, rc);
+			if (op) {
+				rc = op(dfs, obj, name, udata);
+				if (rc)
+					D_GOTO(out, rc);
+			}
+
+			/** advance pointer to next entry */
 			ptr += kds[i].kd_key_len;
+			/** adjust size of buffer data remaining */
 			size -= kds[i].kd_key_len;
 			keys_nr++;
 		}
 		num = *nr - keys_nr;
+		/** stop if no more size or entries available to fill */
 		if (size == 0 || num == 0)
 			break;
+		/** adjust iov for iteration */
 		d_iov_set(&iov, ptr, size);
 	}
 

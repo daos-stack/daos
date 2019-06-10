@@ -256,8 +256,8 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 /**
  * User callback defined for dfs_readdir_size.
  */
-typedef int (*dfs_readdir_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-				void *_udata);
+typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
+			       void *_udata);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
@@ -274,14 +274,14 @@ typedef int (*dfs_readdir_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  *		nr	[in]: MAX number of entries to enumerate.
  *			[out]: Actual number of entries enumerated.
  * \param[in]	size	Max buffer size to be used internally before breaking.
- * \param[in]	op	Function callback to be issued on every entry.
- * \param[in]	udata	Pointer to user data to be passed to op.
+ * \param[in]	op	Optional callback to be issued on every entry.
+ * \param[in]	udata	Pointer to user data to be passed to \a op.
  *
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_readdir_size(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-		 uint32_t *nr, size_t size, dfs_readdir_cb_t op, void *udata);
+dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
 
 /**
  * Create a directory.

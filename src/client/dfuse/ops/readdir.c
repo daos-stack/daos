@@ -26,7 +26,7 @@
 
 #define LOOP_COUNT 10
 
-struct rd_data {
+struct iterate_data {
 	fuse_req_t	req;
 	struct dfuse_inode_entry *inode;
 	daos_anchor_t	*anchor;
@@ -36,15 +36,15 @@ struct rd_data {
 };
 
 int
-rd_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
+filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 {
-	struct rd_data	*udata = (struct rd_data *)_udata;
+	struct iterate_data	*udata = (struct iterate_data *)_udata;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
-	dfs_obj_t	*obj;
-	daos_obj_id_t	oid;
-	struct stat	stbuf = {0};
-	int		ns;
-	int		rc;
+	dfs_obj_t		*obj;
+	daos_obj_id_t		oid;
+	struct stat		stbuf = {0};
+	int			ns;
+	int			rc;
 
 	/*
 	 * MSC - from fuse fuse_add_direntry: "From the 'stbuf' argument the
@@ -75,7 +75,7 @@ rd_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 
 	/*
 	 * This should be true since we accounted for the fuse_dirent size when
-	 * we started dfs_readdir_size().
+	 * we started dfs_iterate().
 	 */
 	D_ASSERT(ns <= udata->size - udata->b_offset);
 	udata->b_offset += ns;
@@ -92,8 +92,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	daos_anchor_t	*anchor = NULL;
 	uint32_t	nr = LOOP_COUNT;
 	void		*buf = NULL;
-	size_t		readdir_size, loop_size;
-	struct rd_data	*udata = NULL;
+	size_t		buf_size, loop_size;
+	struct iterate_data	*udata = NULL;
 	int		i;
 	int		rc;
 
@@ -137,9 +137,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		if (size <= loop_size * i)
 			D_GOTO(out, 0);
 
-		readdir_size = size - (loop_size * i);
-		rc = dfs_readdir_size(inode->ie_dfs->dffs_dfs, inode->ie_obj,
-				      anchor, &nr, readdir_size, rd_cb, udata);
+		buf_size = size - (loop_size * i);
+		rc = dfs_iterate(inode->ie_dfs->dffs_dfs, inode->ie_obj,
+				 anchor, &nr, buf_size, filler_cb,
+				 udata);
 		/** if entry does not fit in buffer, just return */
 		if (rc == DER_KEY2BIG)
 			D_GOTO(out, 0);
