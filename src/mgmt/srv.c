@@ -36,6 +36,7 @@
 #include <daos/drpc_modules.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rsvc.h>
+#include <daos_api.h>
 
 #include "mgmt.pb-c.h"
 #include "srv.pb-c.h"
@@ -274,13 +275,13 @@ static void
 process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 {
 	Mgmt__CreatePoolReq	*pb_req = NULL;
-	/* d_rank_list_t		*targets = NULL; */
+	d_rank_list_t		*targets = NULL;
 	d_rank_t		ranks[max_svc_nreplicas];
 	d_rank_list_t		svc = {};
 	d_rank_list_t		*svc_p = &svc;
 	uuid_t			pool_uuid;
 	int			i;
-	int			rc;
+	int			rc = 0;
 
 	memset(ranks, 0, sizeof(ranks));
 	svc_p->rl_ranks = ranks;
@@ -300,20 +301,21 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 	}
 
 	/* parse targets rank list */
-	targets = daos_rank_list_parse(pb_req->ranks, ",");
-	if (targets == NULL) {
-		D_ERROR("failed to parse target ranks\n");
-		goto out;
+	if (strlen(pb_req->ranks) != 0) {
+		targets = daos_rank_list_parse(pb_req->ranks, ",");
+		if (targets == NULL) {
+			D_ERROR("failed to parse target ranks\n");
+			goto out;
+		}
 	}
 
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
 	/* supply tgt rl to allocate across [IN] & svc for pool replicas [OUT] */
-	rc = ds_mgmt_create_pool(pool_uuid, pb_req->procgroup, "pmem",
-			NULL /* tgt ranks */, pb_req->scmbytes,
-			pb_req->nvmebytes, NULL /* props */, pb_req->numsvcreps,
-			&svc_p);
+	rc = ds_mgmt_create_pool(pool_uuid, pb_req->sys, "pmem",
+			targets, pb_req->scmbytes, pb_req->nvmebytes,
+			NULL /* props */, pb_req->numsvcreps, &svc_p);
 	/* if (targets != NULL)
 	 *	d_rank_list_free(targets);
 	 */
@@ -322,7 +324,7 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 		goto out;
 	}
 
-	resp->uuid = pool_uuid
+	resp->uuid = DP_UUID(pool_uuid);
 
 	/* Print the pool service replica ranks. */
 	for (i = 0; i < svc_p->rl_nr - 1; i++) {
