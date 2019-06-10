@@ -45,7 +45,7 @@ class Snapshot(TestWithServers):
           DAOS-1402 Test creating multiple snapshots
 
     Test Class Description:
-          Start DAOS servers, set up the pool and container for the above 
+          Start DAOS servers, set up the pool and container for the above
           snapshot Epic and Testcases, including snapshot basic, container
           information, list, creation and destroy.
     :avocado: recursive
