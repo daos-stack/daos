@@ -279,7 +279,7 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 	d_rank_list_t		svc = {};
 	d_rank_list_t		*svc_p = &svc;
 	uuid_t			pool_uuid;
-	/* int			i; */
+	int			i;
 	int			rc;
 
 	memset(ranks, 0, sizeof(ranks));
@@ -299,13 +299,12 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 		return;
 	}
 
-	/* TODO: allocate targets rank list */
-	/* targets = daos_rank_list_parse(pb_req->ranks, ",");
-	 * if (targets == NULL) {
-	 *	fprintf(stderr, "failed to parse target ranks\n");
-	 *	return 2;
-	 * }
-	 */
+	/* parse targets rank list */
+	targets = daos_rank_list_parse(pb_req->ranks, ",");
+	if (targets == NULL) {
+		D_ERROR("failed to parse target ranks\n");
+		goto out;
+	}
 
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
@@ -319,19 +318,26 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 	 *	d_rank_list_free(targets);
 	 */
 	if (rc != 0) {
-		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
 		D_ERROR("failed to create pool: %d\n", rc);
-
-		return;
+		goto out;
 	}
 
-	/* Print the pool service replica ranks. */
-	/* for (i = 0; i < svc.rl_nr - 1; i++)
-	 *	printf("%u:", svc.rl_ranks[i]);
-	 * printf("%u\n", svc.rl_ranks[svc.rl_nr - 1]);
-	 */
+	resp->uuid = pool_uuid
 
+	/* Print the pool service replica ranks. */
+	for (i = 0; i < svc_p->rl_nr - 1; i++) {
+		D_DEBUG(DB_MGMT, "rank: %u,", svc_p->rl_ranks[i]);
+		resp->svcreps += sprintf(resp->svcreps, "%u,",
+				svc_p->rl_ranks[i]);
+	}
+	D_DEBUG(DB_MGMT, "rank: %u\n", svc_p->rl_ranks[svc_p->rl_nr - 1]);
+	resp->svcreps += sprintf(resp->svcreps, "%u",
+			svc_p->rl_ranks[svc_p->rl_nr - 1]);
+
+out:
 	mgmt__create_pool_req__free_unpacked(pb_req, NULL);
+	if (rc != 0)
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
 }
 
 static void

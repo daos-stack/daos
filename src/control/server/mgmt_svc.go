@@ -182,7 +182,7 @@ func (svc *mgmtSvc) CreatePool(
 	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
 
 	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
-	// TODO: implement lock and drpc IDs & handler in iosr
+
 	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, createPool, req)
 	svc.mutex.Unlock()

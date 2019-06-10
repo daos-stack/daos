@@ -31,10 +31,9 @@ struct  _Mgmt__CreatePoolReq
   uint64_t scmbytes;
   uint64_t nvmebytes;
   /*
-   * colon separated integers
+   * comma separated integers
    */
-  size_t n_ranks;
-  uint32_t *ranks;
+  char *ranks;
   /*
    * desired number of pool service replicas
    */
@@ -48,13 +47,13 @@ struct  _Mgmt__CreatePoolReq
    */
   char *usergroup;
   /*
-   * DAOS process group identifier
+   * DAOS system identifier
    */
-  char *procgroup;
+  char *sys;
 };
 #define MGMT__CREATE_POOL_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__create_pool_req__descriptor) \
-    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -69,9 +68,9 @@ struct  _Mgmt__CreatePoolResp
    */
   char *uuid;
   /*
-   * colon separated integers
+   * comma separated integers
    */
-  char *ranklist;
+  char *svcreps;
 };
 #define MGMT__CREATE_POOL_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__create_pool_resp__descriptor) \

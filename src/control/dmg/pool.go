@@ -26,7 +26,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -56,7 +55,7 @@ type CreatePoolCmd struct {
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
-	ProcGroup  string `short:"G" long:"proc-group" default:"daos_server" description:"Pool process group name"`
+	SysGroup   string `short:"G" long:"sys-group" default:"daos_server" description:"Pool system (process) group name"`
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -122,33 +121,28 @@ func calcStorage(scmSize string, nvmeSize string) (
 	return scmBytes, nvmeBytes, nil
 }
 
-func parseRanks(ranksStr string) (ranks []uint32, err error) {
-	for i, rankStr := range strings.Split(ranksStr, ",") {
-		rank, err := strconv.ParseUint(rankStr, 10, 32)
-		if err != nil {
-			return ranks, errors.WithMessagef(err, "element %d", i)
-		}
-
-		ranks = append(ranks, uint32(rank))
-	}
-
-	return
-}
+//func parseRanks(ranksStr string) (ranks []uint32, err error) {
+//	for i, rankStr := range strings.Split(ranksStr, ",") {
+//		rank, err := strconv.ParseUint(rankStr, 10, 32)
+//		if err != nil {
+//			return ranks, errors.WithMessagef(err, "element %d", i)
+//		}
+//
+//		ranks = append(ranks, uint32(rank))
+//	}
+//
+//	return
+//}
 
 // createPool with specified parameters on all connected servers
 func createPool(
 	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
-	groupName string, userName string, procGroup string,
+	groupName string, userName string, sysGroup string,
 	aclFile string) error {
 
 	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
 	if err != nil {
 		return errors.Wrap(err, "calculating pool storage sizes")
-	}
-
-	ranks, err := parseRanks(rankList)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
 	}
 
 	if aclFile != "" {
@@ -163,9 +157,9 @@ func createPool(
 
 	req := &pb.CreatePoolReq{
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
-		Ranks: ranks, Numsvcreps: numSvcReps,
+		Ranks: rankList, Numsvcreps: numSvcReps,
 		// TODO: format and populate user/group
-		Procgroup: procGroup,
+		Sys: sysGroup,
 	}
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)
@@ -186,7 +180,7 @@ func (c *CreatePoolCmd) Execute(args []string) error {
 
 	if err := createPool(
 		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
-		c.GroupName, c.UserName, c.ProcGroup, c.ACLFile); err != nil {
+		c.GroupName, c.UserName, c.SysGroup, c.ACLFile); err != nil {
 
 		return err
 	}

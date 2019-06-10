@@ -126,12 +126,12 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[7
   {
     "ranks",
     3,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__CreatePoolReq, n_ranks),
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
     offsetof(Mgmt__CreatePoolReq, ranks),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -172,12 +172,12 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[7
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "procgroup",
+    "sys",
     7,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__CreatePoolReq, procgroup),
+    offsetof(Mgmt__CreatePoolReq, sys),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -187,9 +187,9 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[7
 static const unsigned mgmt__create_pool_req__field_indices_by_name[] = {
   3,   /* field[3] = numsvcreps */
   1,   /* field[1] = nvmebytes */
-  6,   /* field[6] = procgroup */
   2,   /* field[2] = ranks */
   0,   /* field[0] = scmbytes */
+  6,   /* field[6] = sys */
   4,   /* field[4] = user */
   5,   /* field[5] = usergroup */
 };
@@ -240,12 +240,12 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ranklist",
+    "svcreps",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__CreatePoolResp, ranklist),
+    offsetof(Mgmt__CreatePoolResp, svcreps),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -253,8 +253,8 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_resp__field_descriptors[
   },
 };
 static const unsigned mgmt__create_pool_resp__field_indices_by_name[] = {
-  2,   /* field[2] = ranklist */
   0,   /* field[0] = status */
+  2,   /* field[2] = svcreps */
   1,   /* field[1] = uuid */
 };
 static const ProtobufCIntRange mgmt__create_pool_resp__number_ranges[1 + 1] =
