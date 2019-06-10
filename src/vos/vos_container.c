@@ -660,6 +660,7 @@ cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	vos_pool_addref(vpool);
 	co_iter->cot_pool = vpool;
+	co_iter->cot_iter.it_type = type;
 
 	rc = dbtree_iter_prepare(vpool->vp_cont_th, 0, &co_iter->cot_hdl);
 	if (rc)
