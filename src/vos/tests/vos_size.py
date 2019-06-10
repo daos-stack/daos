@@ -257,20 +257,33 @@ class MetaOverhead(object):
                 self.csum_size = tree["csum_size"]
             self.calc_tree(stats, tree)
 
+    def get_dynamic(self, key, num_values):
+        """Handle dynamic tree ordering.  Retrieve number of nodes and size"""
+        order = self.meta["trees"][key]["order"]
+        max_dyn = 0
+
+        if self.meta["trees"][key]["num_dynamic"] != 0:
+            max_dyn = self.meta["trees"][key]["dynamic"][-1]["order"]
+        if num_values > max_dyn:
+            node_size = self.meta["trees"][key]["node_size"]
+            tree_nodes = (num_values * 2 + order - 1) / order
+            return node_size, tree_nodes
+
+        for item in self.meta["trees"][key]["dynamic"]:
+            if item["order"] >= num_values:
+                return item["size"], 1
+        raise "Bug parsing dynamic tree order information!!!"
+
+
     def calc_tree(self, stats, tree):
         """calculate the totals"""
         tree_stats = Stats()
         key = tree["key"]
         num_values = tree["count"]
         record_size = self.meta["trees"][key]["record_msize"]
-        node_size = self.meta["trees"][key]["node_size"]
-        order = self.meta["trees"][key]["order"]
-        if num_values == 1 and key in self.args.trees:
-            overhead = self.meta["trees"][key]["single_size"]
-        else:
-            rec_overhead = num_values * record_size
-            tree_nodes = (num_values * 2 + order -1) / order
-            overhead = tree_nodes * node_size + rec_overhead
+        node_size, tree_nodes = self.get_dynamic(key, num_values)
+        rec_overhead = num_values * record_size
+        overhead = tree_nodes * node_size + rec_overhead
         if key == "akey" or key == "single_value" or key == "array":
             #key refers to child tree
             if tree["overhead"] == "user":
@@ -309,10 +322,6 @@ def run_vos_size():
                         help='Input configuration file')
     parser.add_argument('--meta', metavar='META', help='Input metadata file',
                         default='vos_size.yaml')
-    parser.add_argument('trees', metavar='TREETYPE',
-                        nargs='*', default='no',
-                        choices=['akey', 'dkey', 'single_value', 'array', 'no'],
-                        help='Tree type for first entry in root')
 
     args = parser.parse_args()
 
