@@ -30,7 +30,6 @@ import re
 import avocado
 from apricot import TestWithServers
 
-import write_host_file
 import ior_utils
 
 from general_utils import DaosTestError
@@ -39,7 +38,7 @@ from daos_api import DaosPool, DaosApiError
 class NvmeIo(TestWithServers):
     """
     Test Class Description:
-        Test the IO over NVMe and verify the pool size based on IO transfer size.
+        Test IO over NVMe and verify the pool size based on IO transfer size.
     :avocado: recursive
     """
     def setUp(self):
