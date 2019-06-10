@@ -63,6 +63,9 @@ struct mgmt_join_out {
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
 
 /** srv_pool.c */
+int ds_mgmt_pool_create(uuid_t uuid, d_rank_list_t *tgts, char *dev,
+			daos_size_t scm_size, daos_size_t nvme_size,
+			daos_prop_t *prop, d_rank_list_t *svc);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 

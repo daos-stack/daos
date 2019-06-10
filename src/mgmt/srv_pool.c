@@ -94,12 +94,17 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 	return rc;
 }
 
-#define TMP_RANKS_ARRAY_SIZE	32
-void
-ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
+/*
+ * Create a pool. Callers must allocate all parameter memory. svc is the only
+ * output parameter. svc->rl_nr must be filled by callers with the requested
+ * number of pool service replicas. If the return value is zero, svc outputs
+ * the actual list of pool service replicas.
+ */
+int
+ds_mgmt_pool_create(uuid_t uuid, d_rank_list_t *tgts, char *dev,
+		    daos_size_t scm_size, daos_size_t nvme_size,
+		    daos_prop_t *prop, d_rank_list_t *svc)
 {
-	struct mgmt_pool_create_in	*pc_in;
-	struct mgmt_pool_create_out	*pc_out;
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
@@ -110,28 +115,23 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	char				id[DAOS_UUID_STR_SIZE];
 	d_rank_list_t			*rank_list;
 	d_rank_list_t			tmp_rank_list = {0};
-	d_rank_t			ranks_array[TMP_RANKS_ARRAY_SIZE];
+	d_rank_t			ranks_array[32];
 	unsigned int			ranks_size;
 	uuid_t				*tgt_uuids = NULL;
 	unsigned int			i;
 	int				topo;
 	int				rc;
 
-	pc_in = crt_req_get(rpc_req);
-	D_ASSERT(pc_in != NULL);
-	pc_out = crt_reply_get(rpc_req);
-	D_ASSERT(pc_out != NULL);
-
-	if (pc_in->pc_tgts) {
-		daos_rank_list_sort(pc_in->pc_tgts);
-		rank_list = pc_in->pc_tgts;
-		ranks_size = pc_in->pc_tgts->rl_nr;
+	if (tgts) {
+		daos_rank_list_sort(tgts);
+		rank_list = tgts;
+		ranks_size = tgts->rl_nr;
 	} else {
 		rc = crt_group_size(NULL, &ranks_size);
 		D_ASSERT(rc == 0);
 
 		tmp_rank_list.rl_nr = ranks_size;
-		if (ranks_size > TMP_RANKS_ARRAY_SIZE) {
+		if (ranks_size > ARRAY_SIZE(ranks_array)) {
 			d_rank_t *ranks;
 
 			D_ALLOC_ARRAY(ranks, ranks_size);
@@ -149,7 +149,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	}
 
 	/* Collective RPC to all of targets of the pool */
-	uuid_unparse_lower(pc_in->pc_pool_uuid, id);
+	uuid_unparse_lower(uuid, id);
 	rc = dss_group_create(id, rank_list, &grp);
 	if (rc != 0)
 		D_GOTO(free, rc);
@@ -164,15 +164,11 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
-	uuid_copy(tc_in->tc_pool_uuid, pc_in->pc_pool_uuid);
+	uuid_copy(tc_in->tc_pool_uuid, uuid);
 
-	/* the pc_in->pc_tgt_dev will be freed when the MGMT_POOL_CREATE
-	 * finishes, it is after TGT_CREATE RPC handling so it is safe
-	 * to directly use it here.
-	 */
-	tc_in->tc_tgt_dev = pc_in->pc_tgt_dev;
-	tc_in->tc_scm_size = pc_in->pc_scm_size;
-	tc_in->tc_nvme_size = pc_in->pc_nvme_size;
+	tc_in->tc_tgt_dev = dev;
+	tc_in->tc_scm_size = scm_size;
+	tc_in->tc_nvme_size = nvme_size;
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);
@@ -188,8 +184,8 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		D_GOTO(tgt_pool_create_fail, rc);
 	}
 
-	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n",
-		DP_UUID(pc_in->pc_pool_uuid), tc_out->tc_tgt_uuids.ca_count);
+	D_DEBUG(DB_MGMT, DF_UUID" create %zu tgts pool\n", DP_UUID(uuid),
+		tc_out->tc_tgt_uuids.ca_count);
 
 	/** Gather target uuids ranks from collective RPC to start pool svc. */
 	D_ALLOC_ARRAY(tgt_uuids, ranks_size);
@@ -218,27 +214,15 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	dss_group_destroy(grp);
 	grp = NULL;
 
-	/** allocate service rank list */
-	D_ALLOC_PTR(pc_out->pc_svc);
-	if (pc_out->pc_svc == NULL)
-		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
-
-	D_ALLOC_ARRAY(pc_out->pc_svc->rl_ranks,
-		pc_in->pc_svc_nr);
-	if (pc_out->pc_svc->rl_ranks == NULL)
-		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
-	pc_out->pc_svc->rl_nr = pc_in->pc_svc_nr;
-
-	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid,
-				     ranks_size, tgt_uuids, pc_in->pc_grp,
-				     rank_list, pc_in->pc_prop, pc_out->pc_svc);
+	rc = ds_mgmt_pool_svc_create(uuid, ranks_size, tgt_uuids, NULL,
+				     rank_list, prop, svc);
 	if (rc)
 		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
-			DP_UUID(pc_in->pc_pool_uuid), rc);
+			DP_UUID(uuid), rc);
 
 tgt_pool_create_fail:
 	if (rc)
-		ds_mgmt_tgt_pool_destroy(pc_in->pc_pool_uuid, grp);
+		ds_mgmt_tgt_pool_destroy(uuid, grp);
 free:
 	if (tmp_rank_list.rl_ranks != NULL &&
 	    tmp_rank_list.rl_ranks != ranks_array)
@@ -250,11 +234,43 @@ free:
 	if (grp != NULL)
 		dss_group_destroy(grp);
 
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
+{
+	struct mgmt_pool_create_in	*pc_in;
+	struct mgmt_pool_create_out	*pc_out;
+	int				rc;
+
+	pc_in = crt_req_get(rpc_req);
+	D_ASSERT(pc_in != NULL);
+	pc_out = crt_reply_get(rpc_req);
+	D_ASSERT(pc_out != NULL);
+
+	pc_out->pc_svc = d_rank_list_alloc(pc_in->pc_svc_nr);
+	if (pc_out->pc_svc == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = ds_mgmt_pool_create(pc_in->pc_pool_uuid, pc_in->pc_tgts,
+				 pc_in->pc_tgt_dev, pc_in->pc_scm_size,
+				 pc_in->pc_nvme_size, pc_in->pc_prop,
+				 pc_out->pc_svc);
+	if (rc != 0)
+		D_ERROR("failed to create pool "DF_UUID": %d\n",
+			DP_UUID(pc_in->pc_pool_uuid), rc);
+
+out:
 	pc_out->pc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d "
 			"(pc_tgt_dev: %s).\n", rc, pc_in->pc_tgt_dev);
+	if (pc_out->pc_svc != NULL)
+		d_rank_list_free(pc_out->pc_svc);
 }
 
 void
