@@ -164,9 +164,7 @@ func createPool(
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)
 
-	fmt.Printf(
-		unpackClientMap(conns.CreatePool(req)),
-		"pool create command results")
+	fmt.Printf("Response: %+v\n", conns.CreatePool(req))
 
 	return nil
 }

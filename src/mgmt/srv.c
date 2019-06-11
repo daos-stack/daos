@@ -280,8 +280,14 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 	d_rank_list_t		svc = {};
 	d_rank_list_t		*svc_p = &svc;
 	uuid_t			pool_uuid;
+	int			buflen = 16;
+	int			len;
 	int			i;
 	int			rc = 0;
+	char			id[DAOS_UUID_STR_SIZE];
+	char			buf[buflen];
+	char			*svc_str = buf;
+	char			*extra = NULL;
 
 	memset(ranks, 0, sizeof(ranks));
 	svc_p->rl_ranks = ranks;
@@ -305,41 +311,67 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 		targets = daos_rank_list_parse(pb_req->ranks, ",");
 		if (targets == NULL) {
 			D_ERROR("failed to parse target ranks\n");
+			rc = -DER_UNKNOWN;
 			goto out;
 		}
+		D_DEBUG(DB_MGMT, "ranks in: %s\n", pb_req->ranks);
 	}
 
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	/* supply tgt rl to allocate across [IN] & svc for pool replicas [OUT] */
+	/* ranks to allocate targets (in) & svc for pool replicas (out) */
 	rc = ds_mgmt_create_pool(pool_uuid, pb_req->sys, "pmem",
 			targets, pb_req->scmbytes, pb_req->nvmebytes,
 			NULL /* props */, pb_req->numsvcreps, &svc_p);
-	/* if (targets != NULL)
-	 *	d_rank_list_free(targets);
-	 */
+	if (targets != NULL)
+	     d_rank_list_free(targets);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: %d\n", rc);
 		goto out;
 	}
 
-	resp->uuid = DP_UUID(pool_uuid);
+	uuid_unparse_lower(pool_uuid, id);
 
-	/* Print the pool service replica ranks. */
-	for (i = 0; i < svc_p->rl_nr - 1; i++) {
-		D_DEBUG(DB_MGMT, "rank: %u,", svc_p->rl_ranks[i]);
-		resp->svcreps += sprintf(resp->svcreps, "%u,",
-				svc_p->rl_ranks[i]);
+	if (svc_p->rl_nr == 0) {
+		D_ERROR("no pool svc replicas returned");
+		rc = -DER_UNKNOWN;
+		goto out;
 	}
-	D_DEBUG(DB_MGMT, "rank: %u\n", svc_p->rl_ranks[svc_p->rl_nr - 1]);
-	resp->svcreps += sprintf(resp->svcreps, "%u",
-			svc_p->rl_ranks[svc_p->rl_nr - 1]);
+
+	/* Populate the pool service replica ranks string. */
+	snprintf(buf, buflen, "%u", svc_p->rl_ranks[0]);
+
+	for (i = 1; i < svc_p->rl_nr; i++) {
+		if ((len = snprintf(svc_str, buflen, "%s,%u", svc_str,
+				svc_p->rl_ranks[i])) >= buflen) {
+
+			buflen *= 2;
+
+			extra = malloc(buflen * sizeof(char));
+			if (extra) {
+				snprintf(extra, buflen, "%s,%u", svc_str,
+						svc_p->rl_ranks[i]);
+				free(svc_str);
+				svc_str = extra;
+			} else {
+				D_ERROR("failed to allocate buffer");
+				rc = -DER_NOMEM;
+				goto out;
+			}
+		}
+	}
+
+	D_DEBUG(DB_MGMT, "%d service replicas: %s\n", svc_p->rl_nr, svc_str);
+	resp->uuid = id;
+	resp->svcreps = svc_str;
 
 out:
 	mgmt__create_pool_req__free_unpacked(pb_req, NULL);
 	if (rc != 0)
 		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (extra)
+		free(extra);
 }
 
 static void
