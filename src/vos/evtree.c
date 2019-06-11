@@ -2622,9 +2622,11 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 				width = tcx->tc_inob * evt_rect_width(rect);
 				desc = evt_off2desc(tcx, ne->ne_child);
 				rc = evt_desc_free(tcx, desc, width);
-			} else {
-				rc = umem_free(evt_umm(tcx), ne->ne_child);
+				if (rc != 0)
+					return rc;
 			}
+
+			rc = umem_free(evt_umm(tcx), ne->ne_child);
 			if (rc != 0)
 				return rc;
 		}
