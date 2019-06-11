@@ -373,7 +373,6 @@ def get_hosts_from_yaml(test_yaml):
 
     """
     yaml_data = get_yaml_data(test_yaml)
-    # TODO: Clean these keys up when test yaml files are standardized
     server_keys = [
         "test_machines",
         "test_servers",
@@ -438,15 +437,15 @@ def archive_logs(avocado_logs_dir, test_yaml):
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful
     file_commands = []
-    for file in log_files.values():
-        name, ext = os.path.splitext(os.path.basename(file))
+    for log_file in log_files.values():
+        name, ext = os.path.splitext(os.path.basename(log_file))
         if ext != "":
             # Do not copy directories
             new_file = os.path.join(
                 doas_logs_dir, "{{host}}-{}{}".format(name, ext))
             file_commands.append(
                 "if [ -e {0} ]; then scp {0} {1}:{2} && rm -fr {0}; fi".format(
-                    file, this_host, new_file))
+                    log_file, this_host, new_file))
     spawn_commands(
         host_list, "ssh {{host}} \"{}\"".format("; ".join(file_commands)))
 
@@ -479,7 +478,7 @@ def main():
     description = [
         "DAOS functional test launcher",
         "",
-        "Launches tests by specifying a category.  For example:",
+        "Launches tests by specifying a test tag.  For example:",
         "\tbadconnect  --run pool connect tests that pass NULL ptrs, etc.",
         "\tbadevict    --run pool client evict tests that pass NULL ptrs, "
         "etc.",
@@ -496,13 +495,14 @@ def main():
         "\tpoolinfo    --run all pool info retrieval related tests",
         "\tquick       --run tests that complete quickly, with minimal "
         "resources",
-        "\tall         --run all tests",
         "",
-        "Specifying multiple tags is supported.  Space-separated tags result",
-        "in separate avocado '--filter-by-tags' arguments.  Each string of",
-        "comma-separated tags yield a single '--filter-by-tags' argument.",
+        "Multiple tags can be specified:",
+        "\ttag_a,tag_b -- run all tests with both tag_a and tag_b",
+        "\ttag_a tag_b -- run all tests with either tag_a or tag_b",
         "",
-        "Tests can also be launched by specifying a path to the python script",
+        "Specifying no tags will run all of the available tests.",
+        "",
+        "Tests can also be launched by specifying a path to the python script "
         "instead of its tag.",
         "",
         "You can also specify the sparse flag -s to limit output to "
@@ -535,7 +535,7 @@ def main():
         help="limit output to pass/fail")
     parser.add_argument(
         "tags",
-        nargs="+",
+        nargs="*",
         type=str,
         help="test category or file to run")
     args = parser.parse_args()
