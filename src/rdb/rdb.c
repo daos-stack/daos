@@ -48,7 +48,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
@@ -79,7 +79,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	 * Mark this replica as fully initialized by storing its UUID.
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
-	daos_iov_set(&value, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
 
 out_mc_hdl:
@@ -224,7 +224,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	  struct rdb **dbp)
 {
 	struct rdb     *db;
-	daos_iov_t	value;
+	d_iov_t	value;
 	uuid_t		uuid_persist;
 	int		rc;
 
@@ -276,7 +276,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	}
 
 	/* Check if this replica is fully initialized. See rdb_create(). */
-	daos_iov_set(&value, uuid_persist, sizeof(uuid_t));
+	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
 	if (rc == -DER_NONEXIST) {
 		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
@@ -448,7 +448,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 
 /**
  * Get the list of replica ranks. Callers are responsible for
- * daos_rank_list_free(*ranksp).
+ * d_rank_list_free(*ranksp).
  *
  * \param[in]	db	database
  * \param[out]	ranksp	list of replica ranks

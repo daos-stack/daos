@@ -88,6 +88,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	oiter->oit_iter.it_type = type;
 	oiter->oit_cont = cont;
 	vos_cont_addref(cont);
 
@@ -131,12 +132,12 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_entry_df	*dtx;
-	daos_iov_t		 rec_iov;
+	d_iov_t		 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
 		D_ERROR("Error while fetching DTX info: rc = %d\n", rc);
@@ -150,7 +151,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_oid = dtx->te_oid;
 	it_entry->ie_dtx_sec = dtx->te_sec;
 	it_entry->ie_dtx_intent = dtx->te_intent;
-	it_entry->ie_dtx_hash = dtx->te_dkey_hash[0];
+	it_entry->ie_dtx_hash = dtx->te_dkey_hash;
 
 	D_DEBUG(DB_TRACE, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&dtx->te_xid));

@@ -39,7 +39,7 @@ extern "C" {
 
 #include <dirent.h>
 
-#define DFS_MAX_PATH 128
+#define DFS_MAX_PATH NAME_MAX
 #define DFS_MAX_FSIZE (~0ULL)
 
 typedef struct dfs_obj dfs_obj_t;
@@ -76,6 +76,17 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Convert from a dfs_obj_t to a daos_obj_id_t.
+ *
+ * \param[in]	obj	Object to convert
+ * \param[out]	oid	Daos object ID.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
+
+/**
  * Lookup a path in the DFS and return the associated open object and mode.
  * The object must be released with dfs_release().
  *
@@ -90,6 +101,28 @@ dfs_umount(dfs_t *dfs);
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 	   mode_t *mode);
+
+/**
+ * Lookup an entry in the parent object and return the associated open object
+ * and mode of that entry.  If the entry is a symlink, the symlink value is not
+ * resolved and the user can decide what to do to further resolve the value of
+ * the symlink. The object must be released with dfs_release().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ *			This is useful in cases where the creator/opener is
+ *			working in a flat namespace and doesn't need to
+ *			lookup/release the root object.
+ * \param[in]	name	Link name of the object to create/open.
+ * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
+ * \param[out]	obj	Pointer to the object looked up.
+ * \params[out]	mode	Optional mode_t (permissions + type).
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
+	       dfs_obj_t **_obj, mode_t *mode);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -119,20 +152,22 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **obj);
 
-/*
+/**
  * Duplicate the DFS object without any RPCs (locally) by using the existing
  * open handles. This is used mostly for low-level fuse to avoid re-opening. The
  * duplicated object must be released with dfs_release().
  *
+ * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Object to dup.
+ * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
  * \param[out]	new_obj	DFS object that is duplicated/opened.
  *
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_dup(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t **new_obj);
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
 
-/*
+/**
  * Close/release open object.
  *
  * \param[in]	obj	Object to release.
@@ -155,7 +190,7 @@ dfs_release(dfs_obj_t *obj);
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_read(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
+dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	 daos_size_t *read_size);
 
 /**
@@ -169,7 +204,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off,
  * \return		0 on Success. Negative on Failure.
  */
 int
-dfs_write(dfs_t *dfs, dfs_obj_t *obj, daos_sg_list_t sgl, daos_off_t off);
+dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off);
 
 /**
  * Query size of file data.

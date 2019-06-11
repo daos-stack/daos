@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,9 @@
 	X(CONT_EPOCH_COMMIT,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_AGGREGATE,						\
+		0, &CQF_cont_epoch_op,					\
+		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_LIST,						\
 		0, &CQF_cont_snap_list,					\
 		ds_cont_op_handler, NULL),				\
@@ -94,10 +97,6 @@
 		0, &CQF_cont_tgt_destroy,				\
 		ds_cont_tgt_destroy_handler,				\
 		&ds_cont_tgt_destroy_co_ops),				\
-	X(CONT_TGT_OPEN,						\
-		0, &CQF_cont_tgt_open,					\
-		ds_cont_tgt_open_handler,				\
-		&ds_cont_tgt_open_co_ops),				\
 	X(CONT_TGT_CLOSE,						\
 		0, &CQF_cont_tgt_close,					\
 		ds_cont_tgt_close_handler,				\
@@ -288,19 +287,6 @@ CRT_RPC_DECLARE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 	((int32_t)		(tdo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
-
-#define DAOS_ISEQ_TGT_OPEN	/* input fields */		 \
-	((uuid_t)		(toi_pool_uuid)		CRT_VAR) \
-	((uuid_t)		(toi_pool_hdl)		CRT_VAR) \
-	((uuid_t)		(toi_uuid)		CRT_VAR) \
-	((uuid_t)		(toi_hdl)		CRT_VAR) \
-	((uint64_t)		(toi_capas)		CRT_VAR)
-
-#define DAOS_OSEQ_TGT_OPEN	/* output fields */		 \
-				/* number of errors */		 \
-	((int32_t)		(too_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_tgt_open, DAOS_ISEQ_TGT_OPEN, DAOS_OSEQ_TGT_OPEN)
 
 struct cont_tgt_close_rec {
 	uuid_t		tcr_hdl;

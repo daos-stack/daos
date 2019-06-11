@@ -78,7 +78,7 @@ struct agg_lgc_ent {
 };
 
 /*
- * EV tree logical segment (no holes), it'll be used to form new physical
+ * EV tree logical segment, it'll be used to form new physical
  * rectangle and being inserted in evtree on merge window flush.
  */
 struct agg_lgc_seg {
@@ -591,29 +591,29 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 	int			 rc;
 
 	memset(addr, 0, sizeof(*addr));
-	media = vos_media_select(obj, DAOS_IOD_ARRAY, size);
+	media = vos_media_select(obj->obj_cont, DAOS_IOD_ARRAY, size);
 
 	if (media == DAOS_MEDIA_SCM) {
 		struct pobj_action	*scm_ext;
-		umem_id_t		 mmid;
+		umem_off_t		 umoff;
 
 		D_ASSERT(io->ic_scm_max > io->ic_scm_cnt);
 		D_ASSERT(io->ic_scm_exts != NULL);
 		scm_ext = &io->ic_scm_exts[io->ic_scm_cnt];
 
 		if (vos_obj2umm(obj)->umm_ops->mo_reserve != NULL)
-			mmid = umem_reserve(vos_obj2umm(obj), scm_ext, size);
+			umoff = umem_reserve(vos_obj2umm(obj), scm_ext, size);
 		else
-			mmid = umem_alloc(vos_obj2umm(obj), size);
+			umoff = umem_alloc(vos_obj2umm(obj), size);
 
-		if (UMMID_IS_NULL(mmid)) {
+		if (UMOFF_IS_NULL(umoff)) {
 			D_ERROR("Reserve "DF_U64" bytes on SCM failed.\n",
 				size);
 			return -DER_NOSPACE;
 		}
 
 		io->ic_scm_cnt++;
-		bio_addr_set(addr, media, mmid.off);
+		bio_addr_set(addr, media, umoff);
 		return 0;
 	}
 
@@ -621,7 +621,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	vsi = obj->obj_cont->vc_pool->vp_vea_info;
 	D_ASSERT(vsi);
-	hint_ctxt = obj->obj_cont->vc_hint_ctxt;
+	hint_ctxt = obj->obj_cont->vc_hint_ctxt[VOS_IOS_AGGREGATION];
 	D_ASSERT(hint_ctxt);
 	blk_cnt = vos_byte2blkcnt(size);
 
@@ -660,8 +660,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct agg_phy_ent	*phy_ent;
 	struct bio_io_context	*bio_ctxt;
 	struct bio_sglist	 bsgl;
-	daos_sg_list_t		 sgl;
-	daos_iov_t		 iov;
+	d_sg_list_t		 sgl;
+	d_iov_t		 iov;
 	bio_addr_t		 addr_dst, addr_src;
 	daos_size_t		 seg_size, copy_size, buf_max;
 	struct evt_extent	 ext = { 0 };
@@ -911,8 +911,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete "DF_RECT" error: %d\n",
-				DP_RECT(&rect), rc);
+			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: %d\n",
+				DP_RECT(&rect), phy_ent->pe_off, rc);
 			goto abort;
 		}
 
@@ -950,7 +950,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Publish NVMe reservations */
-	rc = vos_publish_blocks(obj, &io->ic_nvme_exts, true);
+	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
+				VOS_IOS_AGGREGATION);
 	if (rc) {
 		D_ERROR("Publish NVMe extents error: %d\n", rc);
 		goto abort;
@@ -979,7 +980,8 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 			io->ic_scm_cnt = 0;
 		}
 		if (!d_list_empty(&io->ic_nvme_exts))
-			vos_publish_blocks(obj, &io->ic_nvme_exts, false);
+			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
+					   false, VOS_IOS_AGGREGATION);
 	}
 
 	/* Reset io context */
@@ -1459,6 +1461,11 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct vos_container	*cont;
 	int			 rc;
 
+	cont = vos_hdl2cont(param->ip_hdl);
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate, type:%d, is_discard:%d\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
+		agg_param->ap_discard);
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		rc = vos_agg_obj(ih, entry, agg_param, acts);
@@ -1486,7 +1493,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	cont = vos_hdl2cont(param->ip_hdl);
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
 		cont->vc_abort_aggregation = 0;

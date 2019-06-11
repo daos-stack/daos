@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,8 +30,9 @@
 This script runs the rdb tests. From the command line the tests are run with:
 
 server:
-orterun -N 1 --report-uri /tmp/urifile <debug_cmds> -x LD_LIBRARY_PATH
-daos_server -d ./ -c 1 -m vos,rdb,rdbt
+orterun -N 1 --report-uri /tmp/urifile -x LD_LIBRARY_PATH
+daos_server -o <builddir>/utils/config/examples/daos_server_rdb_tests.yml
+-d ./ -t 1 -m vos,rdb,rsvc,rdbt
 
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
@@ -55,6 +56,7 @@ import sys
 import time
 import signal
 import shlex
+import string
 
 build_root = os.path.join(sys.path[0], "../../../")
 sys.path.insert(0, os.path.join(build_root, "scons_local"))
@@ -62,8 +64,6 @@ from build_info import BuildInfo
 
 urifile = "/tmp/urifile"
 pid_file = "/tmp/" + str(os.getpid()) + "_output"
-debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
-             "-x DD_SUBSYS=all -x DD_MASK=all"
 
 # To avoid repetition of parts of the oretrun command.
 client_prefix = ""
@@ -78,22 +78,34 @@ class ServerFailedToStart(Exception):
 class ServerTimedOut(Exception):
         pass
 
+def set_logfile(config, logfile):
+    f = open(config, "r+")
+    for line in f.readlines():
+        string.replace(line,
+                       "  log_file: /tmp/server.log",
+                       "  log_file: {}".format(logfile))
+    f.close()
+
 def start_server(binfo):
     """
     Start the DAOS server with an orterun command as a child process. We use
     subprocess.Popen since it returns control to the calling process and
     provides access to the polling feature.
     """
+    config_file = os.path.join(build_root, "utils", "config", "examples",
+                               "daos_server_unittests.yml")
     log_file = os.path.join(binfo.get("PREFIX"),
                             "TESTING",
                             "daos-rdb-test.log")
+    set_logfile(config_file, log_file) # set D_LOG_FILE through config file
+
     print("Starting DAOS server\n")
     cmd = binfo.get("OMPI_PREFIX") + "/bin/orterun "
     cmd += "-N 1 --report-uri {} ".format(urifile)
-    cmd += "-x D_LOG_FILE=" + log_file + " "
-    cmd += debug_cmds + " -x LD_LIBRARY_PATH "
+    cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
-    cmd += "-d ./ -c 1 -m vos,rdb,rdbt "
+    cmd += "-o {} ".format(config_file)
+    cmd += "-d ./ -t 1 -m vos,rdb,rsvc,rdbt "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
 
@@ -222,6 +234,8 @@ if __name__ == "__main__":
     print("Running rdb tests")
     rc = 0
     binfo = BuildInfo(os.path.join(build_root, ".build_vars.json"));
+    debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
+                 "-x DD_SUBSYS=all -x DD_MASK=all"
 
     try:
         # Server operations

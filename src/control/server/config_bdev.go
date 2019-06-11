@@ -26,8 +26,11 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"text/template"
+
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -54,84 +57,157 @@ const (
 `
 	gbyte   = 1000000000
 	blkSize = 4096
+
+	bdNVMe   BdevClass = "nvme"
+	bdMalloc BdevClass = "malloc"
+	bdKdev   BdevClass = "kdev"
+	bdFile   BdevClass = "file"
+
+	msgBdevNone    = "in config, no nvme.conf generated for server"
+	msgBdevEmpty   = "bdev device list entry empty"
+	msgBdevBadSize = "bdev_size should be greater than 0"
 )
 
+// bdev describes parameters and behaviours for a particular bdev class.
+type bdev struct {
+	templ   string
+	vosEnv  string
+	isEmpty func(*server) string            // check no elements
+	isValid func(*server) string            // check valid elements
+	prep    func(int, *configuration) error // prerequisite actions
+}
+
+func nilValidate(srv *server) string { return "" }
+
+func nilPrep(i int, c *configuration) error { return nil }
+
+func isEmptyList(srv *server) string {
+	if len(srv.BdevList) == 0 {
+		return "bdev_list empty " + msgBdevNone
+	}
+
+	return ""
+}
+
+func isEmptyNumber(srv *server) string {
+	if srv.BdevNumber == 0 {
+		return "bdev_number == 0 " + msgBdevNone
+	}
+
+	return ""
+}
+
+func isValidList(srv *server) string {
+	for i, elem := range srv.BdevList {
+		if elem == "" {
+			return fmt.Sprintf(
+				"%s (index %d)", msgBdevEmpty, i)
+		}
+	}
+
+	return ""
+}
+
+func isValidSize(srv *server) string {
+	if srv.BdevSize < 1 {
+		return msgBdevBadSize
+	}
+
+	return ""
+}
+
+func prepBdevFile(i int, c *configuration) error {
+	srv := c.Servers[i]
+
+	// truncate or create files for SPDK AIO emulation,
+	// requested size aligned with block size
+	size := (int64(srv.BdevSize*gbyte) / int64(blkSize)) *
+		int64(blkSize)
+
+	for _, path := range srv.BdevList {
+		err := c.ext.createEmpty(path, size)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// bdevMap provides lookup of params and behaviour for each bdev class.
+var bdevMap = map[BdevClass]bdev{
+	bdNVMe:   {nvmeTempl, "", isEmptyList, isValidList, nilPrep},
+	bdMalloc: {mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep},
+	bdKdev:   {kdevTempl, "AIO", isEmptyList, isValidList, nilPrep},
+	bdFile:   {fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile},
+}
+
+// rank represents a rank of an I/O server or a nil rank.
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(server *server, templ string) (string, error) {
+func genFromTempl(server *server, templ string) (out bytes.Buffer, err error) {
 	t := template.Must(
 		template.New(confOut).Parse(templ))
-	var out bytes.Buffer
-	if err := t.Execute(&out, server); err != nil {
-		return "", err
-	}
-	return out.String(), nil
+
+	err = t.Execute(&out, server)
+
+	return
 }
 
-func createConf(ext External, server *server, templ string) error {
-	out, err := genFromTempl(server, templ)
+// createConf writes NVMe conf to persistent SCM mount at location "path"
+// generated from io_server config at given index populating template "templ".
+// Generated file is written to SCM mount specific to an io_server instance
+// to be consumed by SPDK in that process.
+func (c *configuration) createConf(srv *server, templ string, path string) (
+	err error) {
+
+	confBytes, err := genFromTempl(srv, templ)
 	if err != nil {
-		return err
+		return
 	}
-	if out == "" {
-		return errors.New("generated NVMe config unexpectedly empty")
+
+	confStr := confBytes.String()
+	if confStr == "" {
+		return errors.New(
+			"spdk: generated NVMe config is unexpectedly empty")
 	}
-	confPath := filepath.Join(server.ScmMount, confOut)
-	// write NVMe config file for this I/O Server located in
-	// server-local SCM mount dir
-	if err := ext.writeToFile(out, confPath); err != nil {
-		return err
+
+	if err = c.ext.writeToFile(confStr, path); err != nil {
+		return
 	}
-	// set location of daos_nvme.conf to pass to I/O Server
-	server.CliOpts = append(server.CliOpts, "-n", confPath)
-	return nil
+
+	return
 }
 
-func (c *configuration) parseNvme(i int) error {
+// parseNvme reads server config file, calls createConf and performs necessary
+// file creation and sets environment variable for SPDK emulation if needed.
+// Direct io_server to use generated NVMe conf by setting "-n" cli opt.
+func (c *configuration) parseNvme(i int) (err error) {
 	srv := &c.Servers[i]
+	confPath := filepath.Join(srv.ScmMount, confOut)
+	bdev := bdevMap[srv.BdevClass]
 
-	switch srv.BdevClass {
-	case bdNVMe:
-		if len(srv.BdevList) == 0 {
-			break
-		}
-		// standard daos_nvme.conf, don't need to set VOS_BDEV_CLASS
-		if err := createConf(c.ext, srv, nvmeTempl); err != nil {
-			return err
-		}
-	case bdMalloc:
-		if srv.BdevNumber == 0 {
-			break
-		}
-		if err := createConf(c.ext, srv, mallocTempl); err != nil {
-			return err
-		}
-		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS=MALLOC")
-	case bdKdev:
-		if len(srv.BdevList) == 0 {
-			break
-		}
-		if err := createConf(c.ext, srv, kdevTempl); err != nil {
-			return err
-		}
-		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS=AIO")
-	case bdFile:
-		if len(srv.BdevList) == 0 {
-			break
-		}
-		// requested size aligned with block size
-		size := (int64(srv.BdevSize*gbyte) / int64(blkSize)) * int64(blkSize)
-		for _, path := range srv.BdevList {
-			err := c.ext.createEmpty(path, size)
-			if err != nil {
-				return err
-			}
-		}
-		if err := createConf(c.ext, srv, fileTempl); err != nil {
-			return err
-		}
-		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS=AIO")
+	if msg := bdev.isEmpty(srv); msg != "" {
+		log.Debugf("spdk %s: %s (server %d)\n", srv.BdevClass, msg, i)
+		return
 	}
 
-	return nil
+	if err = bdev.prep(i, c); err != nil {
+		return
+	}
+
+	if err = c.createConf(srv, bdev.templ, confPath); err != nil {
+		return
+	}
+
+	if bdev.vosEnv != "" {
+		srv.EnvVars = append(srv.EnvVars, "VOS_BDEV_CLASS="+bdev.vosEnv)
+	}
+
+	// if we get here we can assume we have SPDK conf in SCM mount, set
+	// location in io_server cli opts (assuming config hasn't changed
+	// between restarts)
+	srv.CliOpts = append(srv.CliOpts, "-n", confPath)
+
+	return
 }

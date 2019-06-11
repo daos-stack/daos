@@ -24,110 +24,51 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static bool
-read_bulk_cb(struct dfuse_request *request)
-{
-	struct dfuse_rb *rb = container_of(request, struct dfuse_rb, rb_req);
-	struct dfuse_readx_out *out = request->out;
-	int rc = 0;
-	size_t bytes_read = 0;
-	void *buff = NULL;
-
-	if (out->err) {
-		DFUSE_TRA_ERROR(rb, "Error from target %d", out->err);
-		rb->failure = true;
-		D_GOTO(out, request->rc = EIO);
-	}
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc)
-		D_GOTO(out, 0);
-
-	if (out->iov_len > 0) {
-		if (out->data.iov_len != out->iov_len)
-			D_GOTO(out, request->rc = EIO);
-		buff = out->data.iov_buf;
-		bytes_read = out->data.iov_len;
-	} else if (out->bulk_len > 0) {
-		bytes_read = out->bulk_len;
-	}
-
-out:
-	if (request->rc) {
-		DFUSE_REPLY_ERR(request, request->rc);
-	} else {
-
-		/* It's not clear without benchmarking which approach is better
-		 * here, fuse_reply_buf() is a small wrapper around writev()
-		 * which is a much shorter code-path however fuse_reply_data()
-		 * attempts to use splice which may well be faster.
-		 *
-		 * For now it's easy to pick between them, and both of them are
-		 * passing valgrind tests.
-		 */
-		if (request->fsh->flags & DFUSE_FUSE_READ_BUF) {
-			rc = fuse_reply_buf(request->req, buff, bytes_read);
-			if (rc != 0)
-				DFUSE_TRA_ERROR(rb,
-						"fuse_reply_buf returned %d:%s",
-						rc, strerror(-rc));
-
-		} else {
-			rb->fbuf.buf[0].size = bytes_read;
-			rb->fbuf.buf[0].mem = buff;
-			rc = fuse_reply_data(request->req, &rb->fbuf, 0);
-			if (rc != 0)
-				DFUSE_TRA_ERROR(rb,
-						"fuse_reply_data returned %d:%s",
-						rc, strerror(-rc));
-		}
-	}
-	dfuse_da_release(rb->pt, rb);
-	return false;
-}
-
-static const struct dfuse_request_api api = {
-	.on_result	= read_bulk_cb,
-};
-
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
 {
-	struct dfuse_file_handle *handle = (void *)fi->fh;
-	struct dfuse_projection_info *fs_handle = handle->open_req.fsh;
-	struct dfuse_da_type *pt;
-	struct dfuse_rb *rb = NULL;
-	int rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
+	d_iov_t			iov = {};
+	d_sg_list_t			sgl = {};
+	daos_size_t read_size;
+	void *buff;
 
-	DFUSE_TRA_INFO(handle, "%#zx-%#zx " GAH_PRINT_STR, position,
-		       position + len - 1, GAH_PRINT_VAL(handle->common.gah));
-
-	if (len <= 4096)
-		pt = fs_handle->rb_da_page;
-	else
-		pt = fs_handle->rb_da_large;
-
-	rb = dfuse_da_acquire(pt);
-	if (!rb)
-		D_GOTO(out_err, rc = ENOMEM);
-
-	DFUSE_TRA_UP(rb, handle, "readbuf");
-
-	rb->rb_req.req = req;
-	rb->rb_req.ir_api = &api;
-	rb->rb_req.ir_file = handle;
-	rb->pt = pt;
-
-	rc = dfuse_fs_send(&rb->rb_req);
-	if (rc != 0) {
-		DFUSE_REPLY_ERR(&rb->rb_req, rc);
-		dfuse_da_release(pt, rb);
+	D_ALLOC(buff, len);
+	if (!buff) {
+		DFUSE_REPLY_ERR_RAW(NULL, req, ENOMEM);
+		return;
 	}
 
-	dfuse_da_restock(pt);
-	return;
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+				ino);
+		DFUSE_REPLY_ERR_RAW(NULL, req, ENOENT);
+		return;
+	}
 
-out_err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, (void *)buff, len);
+	sgl.sg_iovs = &iov;
+
+	rc = dfs_read(inode->ie_dfs->dffs_dfs, inode->ie_obj, sgl, position,
+		      &read_size);
+	if (rc == -DER_SUCCESS) {
+		rc = fuse_reply_buf(req, buff, read_size);
+		if (rc != 0)
+			DFUSE_TRA_ERROR(inode,
+					"fuse_reply_buf returned %d:%s",
+					rc, strerror(-rc));
+	} else {
+		DFUSE_REPLY_ERR_RAW(NULL, req, rc);
+		D_FREE(buff);
+	}
+
+	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
 }

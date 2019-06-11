@@ -44,6 +44,10 @@ enum drpc_module {
 
 enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_KILL_RANK	= 201,
+	DRPC_METHOD_MGMT_SET_RANK	= 202,
+	DRPC_METHOD_MGMT_CREATE_MS	= 203,
+	DRPC_METHOD_MGMT_START_MS	= 204,
+	DRPC_METHOD_MGMT_JOIN		= 205,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };

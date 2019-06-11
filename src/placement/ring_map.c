@@ -1027,8 +1027,8 @@ ring_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 {
 	struct ring_failed_shard *f_shard;
 
-	D_DEBUG(DB_PL, "remap list for "DF_OID", %s\n",
-		DP_OID(md->omd_id), comment);
+	D_DEBUG(DB_PL, "remap list for "DF_OID", %s, ver %d\n",
+		DP_OID(md->omd_id), comment, md->omd_ver);
 
 	d_list_for_each_entry(f_shard, remap_list, rfs_list) {
 		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u rank %d\n",
@@ -1191,7 +1191,24 @@ next_fail:
 		if (spare_avail) {
 			/* The selected spare target is up and ready */
 			l_shard->po_target = spare_tgt->ta_comp.co_id;
-			l_shard->po_fseq = spare_tgt->ta_comp.co_fseq;
+
+			/* XXX: Use pl_obj_shard::po_fseq to record the latest
+			 *	failure sequence of the targets on the remap
+			 *	chain for the given shard (@l_shard).
+			 *
+			 *	The f_shard->rfs_fseq is the snapshot of the
+			 *	pool map version (that is incremental only)
+			 *	when related spare (or the original target)
+			 *	became down.
+			 *
+			 *	Currently, DAOS does not support the target
+			 *	re-integration. So the failure sequence for
+			 *	available spares will be the initial value
+			 *	(the oldest one). So here, we only need to
+			 *	consider those unavailable spares's failure
+			 *	sequences to find out the latest (largest).
+			 */
+			l_shard->po_fseq = f_shard->rfs_fseq;
 
 			/*
 			 * Mark the shard as 'rebuilding' so that read will
@@ -1211,16 +1228,21 @@ next_fail:
 	ring_remap_dump(remap_list, md, "after remap:");
 }
 
-static void
+void
 obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 {
 	int i;
 
-	D_DEBUG(DB_PL, "dump layout for "DF_OID"\n", DP_OID(oid));
+	D_DEBUG(DB_PL, "dump layout for "DF_OID", ver %d\n",
+		DP_OID(oid), layout->ol_ver);
+
 	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d\n",
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s\n",
 			i, layout->ol_shards[i].po_shard,
-			layout->ol_shards[i].po_target);
+			layout->ol_shards[i].po_target,
+			layout->ol_shards[i].po_fseq,
+			layout->ol_shards[i].po_rebuilding ?
+			"rebuilding" : "healthy");
 }
 
 static int
@@ -1427,7 +1449,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					 * the shard that will be handled by
 					 * the leader on another server.
 					 */
-					D_DEBUG(DB_TRACE, "Current replica (%d)"
+					D_DEBUG(DB_PL, "Current replica (%d)"
 						"isn't the leader (%d) for obj "
 						DF_OID", fseq:%d, status:%d, "
 						"ver:%d, shard:%d, skip it\n",
@@ -1440,10 +1462,15 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 				}
 
 fill:
+				D_DEBUG(DB_PL, "Current replica (%d) is the "
+					"leader for obj "DF_OID", fseq:%d, "
+					"ver:%d, shard:%d, to be rebuilt.\n",
+					myrank, DP_OID(md->omd_id),
+					f_shard->rfs_fseq,
+					rebuild_ver, l_shard->po_shard);
 				tgt_id[idx] = f_shard->rfs_tgt_id;
 				shard_idx[idx] = l_shard->po_shard;
 				idx++;
-				D_DEBUG(DB_PL, "idx %d\n", idx);
 			}
 		} else if (f_shard->rfs_tgt_id != -1) {
 			rc = -DER_ALREADY;

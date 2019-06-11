@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,18 +21,16 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-import sys
 
-sys.path.append('./util')
-sys.path.append('../util')
 
-from general_utils import get_file_path
-from avocado       import Test
 from avocado.utils import process
+from general_utils import get_file_path
+from apricot import Test
 
 class UnitTest(Test):
     """
     Avocado Unit Test class.
+    :avocado: recursive
     """
     def tearDown(self):
         process.system("rm -f /mnt/daos/*")

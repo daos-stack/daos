@@ -24,10 +24,7 @@
 package main
 
 import (
-	"fmt"
 	"testing"
-
-	. "github.com/daos-stack/daos/src/control/common"
 )
 
 func defaultMockControlService(t *testing.T) *controlService {
@@ -43,67 +40,4 @@ func mockControlService(config *configuration) *controlService {
 	}
 
 	return &cs
-}
-
-func TestFormatScmStorage(t *testing.T) {
-	tests := []struct {
-		mountRet   error
-		unmountRet error
-		mkdirRet   error
-		removeRet  error
-		mount      string
-		class      ScmClass
-		devs       []string
-		size       int
-		desc       string
-		errMsg     string
-	}{
-		{
-			desc:  "ram success",
-			mount: "/mnt/daos",
-			class: scmRAM,
-			size:  6,
-		},
-		{
-			desc:  "dcpm success",
-			mount: "/mnt/daos",
-			class: scmDCPM,
-			devs:  []string{"/dev/pmem1"},
-		},
-	}
-
-	serverIdx := 0
-
-	for _, tt := range tests {
-		config := newMockScmConfig(
-			tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
-			tt.mount, tt.class, tt.devs, tt.size)
-
-		config.FormatOverride = false
-
-		cs := mockControlService(config)
-		cs.Setup() // set cond var locked
-
-		c := cs.config.Servers[serverIdx].FormatCond
-
-		go func() {
-			// should wait for lock to be released on main thread
-			// then signal to unlock once format completed
-			if _, err := cs.FormatStorage(nil, nil); err != nil {
-				// for purposes of test, signal cond on fail
-				c.L.Lock()
-				c.Broadcast()
-				c.L.Unlock()
-				t.Fatal(fmt.Sprintf("%+v", err))
-			}
-		}()
-
-		AssertEqual(t, cs.nvme.formatted, false, tt.desc)
-		AssertEqual(t, cs.scm.formatted, false, tt.desc)
-
-		c.Wait()
-
-		AssertEqual(t, cs.nvme.formatted, true, tt.desc)
-		AssertEqual(t, cs.scm.formatted, true, tt.desc)
-	}
 }

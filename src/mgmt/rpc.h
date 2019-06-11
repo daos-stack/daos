@@ -69,8 +69,11 @@
 		ds_mgmt_tgt_params_set_hdlr, NULL),			\
 	X(MGMT_TGT_PROFILE,						\
 		0, &CQF_mgmt_profile,					\
-		ds_mgmt_tgt_profile_hdlr, NULL)
-
+		ds_mgmt_tgt_profile_hdlr, NULL),			\
+	X(MGMT_TGT_MAP_UPDATE,						\
+		0, &CQF_mgmt_tgt_map_update,				\
+		ds_mgmt_hdlr_tgt_map_update,				\
+		&ds_mgmt_hdlr_tgt_map_update_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -99,10 +102,7 @@ extern struct crt_proto_format mgmt_proto_fmt;
 	((daos_size_t)		(pc_scm_size)		CRT_VAR) \
 	((daos_size_t)		(pc_nvme_size)		CRT_VAR) \
 	((daos_prop_t)		(pc_prop)		CRT_PTR) \
-	((uint32_t)		(pc_svc_nr)		CRT_VAR) \
-	((uint32_t)		(pc_mode)		CRT_VAR) \
-	((uint32_t)		(pc_uid)		CRT_VAR) \
-	((uint32_t)		(pc_gid)		CRT_VAR)
+	((uint32_t)		(pc_svc_nr)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_POOL_CREATE /* output fields */		 \
 	((d_rank_list_t)	(pc_svc)		CRT_PTR) \
@@ -185,5 +185,23 @@ CRT_RPC_DECLARE(mgmt_tgt_destroy, DAOS_ISEQ_MGMT_TGT_DESTROY,
 
 CRT_RPC_DECLARE(mgmt_tgt_params_set, DAOS_ISEQ_MGMT_TGT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_TGT_PARAMS_SET)
+
+#define DAOS_SEQ_SERVER_ENTRY \
+	((d_rank_t)		(se_rank)		CRT_VAR) \
+	((uint16_t)		(se_flags)		CRT_VAR) \
+	((uint16_t)		(se_nctxs)		CRT_VAR) \
+	((d_string_t)		(se_uri)		CRT_VAR)
+
+CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
+
+#define DAOS_ISEQ_MGMT_TGT_MAP_UPDATE /* input fields */	   \
+	((struct server_entry)	(tm_servers)		CRT_ARRAY) \
+	((uint32_t)		(tm_map_version)	CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_TGT_MAP_UPDATE /* output fields */	 \
+	((int32_t)		(tm_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
+		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
 
 #endif /* __MGMT_RPC_H__ */

@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2018 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,11 +32,12 @@
 #include <ftw.h>
 #include <dirent.h>
 
-#include "srv_internal.h"
-
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_mgmt_srv.h>
+
+#include "srv_internal.h"
+#include "srv_layout.h"		/* for a couple of constants only */
 
 /** directory for newly created pool, reclaimed on restart */
 static char *newborns_path;
@@ -296,35 +297,35 @@ tgt_vos_create_one(void *varg)
 	return rc;
 }
 
-static int
-tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+struct vos_create {
+	uuid_t		vc_uuid;
+	daos_size_t	vc_scm_size;
+	int		vc_tgt_nr;
+	int		vc_rc;
+};
+
+static void *
+tgt_vos_preallocate(void *arg)
 {
-	daos_size_t	 scm_size, nvme_size;
-	char		*path = NULL;
-	int		 i, fd = -1, rc = 0;
+	char			*path = NULL;
+	struct vos_create	*vc = arg;
+	int			 i;
+	int			 fd = -1;
 
-	/**
-	 * Create one VOS file per execution stream
-	 * 16MB minimum per pmemobj file (SCM partition)
-	 */
-	D_ASSERT(dss_tgt_nr > 0);
-	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
-	nvme_size = tgt_nvme_size / dss_tgt_nr;
-	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
-
-	for (i = 0; i < dss_tgt_nr; i++) {
-		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
-		if (rc)
+	for (i = 0; i < vc->vc_tgt_nr; i++) {
+		vc->vc_rc = path_gen(vc->vc_uuid, newborns_path, VOS_FILE, &i,
+				     &path);
+		if (vc->vc_rc)
 			break;
 
 		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
-			DP_UUID(uuid), path);
+			DP_UUID(vc->vc_uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
+			vc->vc_rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der(errno);
+				DP_UUID(vc->vc_uuid), path, vc->vc_rc);
 			break;
 		}
 
@@ -335,30 +336,73 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 		 * Use fallocate(2) instead of posix_fallocate(3) since the
 		 * latter is bogus with tmpfs.
 		 */
-		rc = fallocate(fd, 0, 0, scm_size);
-		if (rc) {
-			rc = daos_errno2der(errno);
+		vc->vc_rc = fallocate(fd, 0, 0, vc->vc_scm_size);
+		if (vc->vc_rc) {
+			vc->vc_rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64", rc: %d, %s.\n", DP_UUID(uuid),
-				path, scm_size, rc, strerror(errno));
+				"size: "DF_U64", rc: %d, %s.\n",
+				DP_UUID(vc->vc_uuid), path, vc->vc_scm_size,
+				vc->vc_rc, strerror(errno));
 			break;
 		}
 
-		rc = fsync(fd);
+		vc->vc_rc = fsync(fd);
 		(void)close(fd);
 		fd = -1;
-		if (rc) {
+		if (vc->vc_rc) {
 			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der(errno);
+				DP_UUID(vc->vc_uuid), path, vc->vc_rc);
+			vc->vc_rc = daos_errno2der(errno);
 			break;
 		}
-	}
-	if (path)
 		D_FREE(path);
-	if (fd >= 0)
-		(void)close(fd);
+	}
 
+	if (fd != -1)
+		close(fd);
+
+	D_FREE(path);
+
+	return NULL;
+}
+
+static int
+tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+{
+	daos_size_t		scm_size, nvme_size;
+	struct vos_create	vc = {0};
+	int			rc = 0;
+	pthread_t		thread;
+
+
+	/**
+	 * Create one VOS file per execution stream
+	 * 16MB minimum per pmemobj file (SCM partition)
+	 */
+	D_ASSERT(dss_tgt_nr > 0);
+	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
+	nvme_size = tgt_nvme_size / dss_tgt_nr;
+
+	vc.vc_tgt_nr = dss_tgt_nr;
+	vc.vc_scm_size = scm_size;
+	uuid_copy(vc.vc_uuid, uuid);
+
+	rc = pthread_create(&thread, NULL, tgt_vos_preallocate, &vc);
+	if (rc != 0) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to create thread for vos file "
+			"creation: %d\n", DP_UUID(uuid), rc);
+		return rc;
+	}
+
+	for (;;) {
+		rc = pthread_tryjoin_np(thread, NULL);
+		if (rc == 0)
+			break;
+		ABT_thread_yield();
+	}
+
+	rc = vc.vc_rc;
 	if (!rc) {
 		struct vos_pool_arg	vpa;
 
@@ -734,4 +778,165 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	out = crt_reply_get(rpc);
 	out->p_rc = rc;
 	crt_reply_send(rpc);
+}
+
+/*
+ * Return a URI string, like "ofi+sockets://192.168.1.70:44821", that callers
+ * are responsible for freeing with D_FREE.
+ */
+static int
+create_tag_uri(const char *base_uri, int i, char **uri)
+{
+	char   *type = "ofi+sockets:";
+	char   *u;
+	char   *p;
+	int	port;
+
+	/* TODO: Support other URI types. */
+	if (strncmp(base_uri, type, strlen(type)) != 0) {
+		D_ERROR("URI %s type not supported\n", base_uri);
+		return -DER_NOSYS;
+	}
+
+	/* Locate the ":" between the host and the port. */
+	p = strrchr(base_uri, ':');
+	if (p == NULL) {
+		D_ERROR("no ':' in base URI %s\n", base_uri);
+		return -DER_INVAL;
+	}
+
+	/* Calculate the port. */
+	port = atoi(p + 1) + i;
+	if (port > 65535 /* maximal port number */) {
+		D_ERROR("port %d out of range\n", port);
+		return -DER_INVAL;
+	}
+
+	/* Print the base URI with the port into u. */
+	D_ASPRINTF(u, "%.*s%d", (int)(p + 1 - base_uri), base_uri, port);
+	if (u == NULL)
+		return -DER_NOMEM;
+
+	*uri = u;
+	return 0;
+}
+
+static int
+add_server(crt_group_t *group, struct server_entry *server)
+{
+	int i;
+
+	D_DEBUG(DB_MGMT, "rank=%u uri=%s nctxs=%u\n", server->se_rank,
+		server->se_uri, server->se_nctxs);
+
+	for (i = 0; i < server->se_nctxs; i++) {
+		crt_node_info_t	info;
+		int		rc;
+
+		rc = create_tag_uri(server->se_uri, i, &info.uri);
+		if (rc != 0)
+			return rc;
+		rc = crt_group_node_add(group, server->se_rank, i, info);
+		if (rc != 0)
+			D_ERROR("failed to add rank=%u tag=%d uri=%s: %d\n",
+				server->se_rank, i, info.uri, rc);
+		D_FREE(info.uri);
+		if (rc != 0)
+			return rc;
+	}
+
+	return 0;
+}
+
+static int
+remove_server(crt_group_t *group, struct server_entry *server)
+{
+	int rc;
+
+	D_DEBUG(DB_MGMT, "rank=%u uri=%s nctxs=%u\n", server->se_rank,
+		server->se_uri, server->se_nctxs);
+
+	rc = crt_group_rank_remove(group, server->se_rank);
+	if (rc != 0)
+		D_ERROR("failed to remove rank=%u: %d\n", server->se_rank, rc);
+
+	return rc;
+}
+
+/* State of the local system map (i.e., the CaRT PG membership) */
+static uint32_t sys_map_version;
+
+int
+ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
+{
+	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
+	struct server_entry	       *servers = in->tm_servers.ca_arrays;
+	crt_group_t		       *group = crt_group_lookup(NULL);
+	d_rank_t			self_rank;
+	d_rank_list_t		       *ranks;
+	int				i;
+	int				rc;
+
+	if (in->tm_map_version <= sys_map_version)
+		return 0;
+
+	rc = crt_group_rank(group, &self_rank);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT, "self rank unknown: %d\n", rc);
+		return rc;
+	}
+
+	rc = crt_group_ranks_get(group, &ranks);
+	if (rc != 0) {
+		D_ERROR("failed to get existing ranks: %d\n", rc);
+		return rc;
+	}
+
+	for (i = 0; i < in->tm_servers.ca_count; i++) {
+		bool existing = d_rank_list_find(ranks, servers[i].se_rank,
+						 NULL /* idx */);
+
+		if (servers[i].se_flags & SERVER_IN) {
+			if (existing)
+				continue;
+			rc = add_server(group, &servers[i]);
+		} else {
+			if (!existing)
+				continue;
+			rc = remove_server(group, &servers[i]);
+		}
+		/*
+		 * Commit suicide upon errors, so that others can detect and
+		 * choose to proceed without me.
+		 */
+		D_ASSERTF(rc == 0, "update system map (version %u): %d\n",
+			  in->tm_map_version, rc);
+	}
+	sys_map_version = in->tm_map_version;
+
+	d_rank_list_free(ranks);
+	return 0;
+}
+
+void
+ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc)
+{
+	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
+	struct mgmt_tgt_map_update_out *out = crt_reply_get(rpc);
+
+	if (in->tm_map_version != sys_map_version)
+		out->tm_rc = 1;
+
+	crt_reply_send(rpc);
+}
+
+int
+ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				  void *priv)
+{
+	struct mgmt_tgt_map_update_out *out_source = crt_reply_get(source);
+	struct mgmt_tgt_map_update_out *out_result = crt_reply_get(result);
+
+	out_result->tm_rc += out_source->tm_rc;
+	return 0;
 }

@@ -25,19 +25,10 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
-import json
 import threading
 import string
 import random
-from avocado       import Test
-
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-import server_utils
-import write_host_file
+from apricot import TestWithServers
 
 from general_utils import DaosTestError
 from daos_api import DaosContext, DaosPool, DaosApiError
@@ -82,42 +73,29 @@ def verify_get_attr(indata, outdata):
                                 " Expected val={0} and received val = {1}"
                                 .format(value, outdata[attr]))
 
-class PoolAttributeTest(Test):
+class PoolAttributeTest(TestWithServers):
     """
     Test class Description: Tests DAOS pool attribute get/set/list.
+    :avocado: recursive
     """
     def setUp(self):
+        super(PoolAttributeTest, self).setUp()
+
+        self.large_data_set = {}
+
+        createmode = self.params.get("mode",
+                                     '/run/attrtests/createmode/')
+        createuid = os.geteuid()
+        creategid = os.getgid()
+        createsetid = self.params.get("setname",
+                                      '/run/attrtests/createset/')
+        createsize = self.params.get("size",
+                                     '/run/attrtests/createsize/')
         try:
-            self.pool = None
-            self.hostlist = None
-            with open('../../../.build_vars.json') as build_file:
-                build_paths = json.load(build_file)
-                basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-                server_group = self.params.get("name",
-                                               '/server_config/',
-                                               'daos_server')
-                context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
-                self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-                self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                                self.workdir)
-
-                server_utils.run_server(self.hostfile, server_group, basepath)
-
-                createmode = self.params.get("mode",
-                                             '/run/attrtests/createmode/')
-                createuid = os.geteuid()
-                creategid = os.getgid()
-                createsetid = self.params.get("setname",
-                                              '/run/attrtests/createset/')
-                createsize = self.params.get("size",
-                                             '/run/attrtests/createsize/')
-
-                self.pool = DaosPool(context)
-                self.pool.create(createmode, createuid, creategid, createsize,
-                                 createsetid)
-                self.pool.connect(1 << 1)
-                self.large_data_set = {}
+            self.pool = DaosPool(self.context)
+            self.pool.create(createmode, createuid, creategid, createsize,
+                             createsetid)
+            self.pool.connect(1 << 1)
 
         except DaosApiError as excep:
             print("In the setup exception handler\n")
@@ -130,7 +108,7 @@ class PoolAttributeTest(Test):
                 self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
-            server_utils.stop_server(hosts=self.hostlist)
+            super(PoolAttributeTest, self).tearDown()
 
     def create_data_set(self):
         """
@@ -141,6 +119,31 @@ class PoolAttributeTest(Test):
             self.large_data_set[str(i)] = (
                 "".join(random.choice(allchar)
                         for x in range(random.randint(1, 100))))
+
+    def test_pool_large_attributes(self):
+        """
+        Test ID: DAOS-1359
+
+        Test description: Test large randomly created pool attribute.
+
+        :avocado: tags=regression,pool,pool_attr,attribute,large_poolattribute
+        """
+        self.create_data_set()
+        attr_dict = self.large_data_set
+
+        try:
+            self.pool.set_attr(data=attr_dict)
+            size, buf = self.pool.list_attr()
+
+            verify_list_attr(attr_dict, size.value, buf)
+
+            results = {}
+            results = self.pool.get_attr(attr_dict.keys())
+            verify_get_attr(attr_dict, results)
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
+            self.fail("Test was expected to pass but it failed.\n")
 
     def test_pool_attributes(self):
         """
@@ -154,21 +157,15 @@ class PoolAttributeTest(Test):
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
-        if value[0] is None:
-            self.cancel("skipping these tests until DAOS-2170 is fixed")
         expected_for_param.append(value[1])
-
-        attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
 
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        attr_dict = {name[0]:value[0]}
         try:
             self.pool.set_attr(data=attr_dict)
             size, buf = self.pool.list_attr()
@@ -179,13 +176,9 @@ class PoolAttributeTest(Test):
                 # Request something that doesn't exist
                 if "Negative" in name[0]:
                     name[0] = "rubbish"
-                # large attr test messes with the dictionary so skip
-                # the get test
-                if "largenumberofattr" not in name[0]:
-                    results = {}
-                    results = self.pool.get_attr([name[0]])
-                    verify_get_attr(attr_dict, results)
-
+                results = {}
+                results = self.pool.get_attr([name[0]])
+                verify_get_attr(attr_dict, results)
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
@@ -214,21 +207,15 @@ class PoolAttributeTest(Test):
         else:
             expected_for_param.append(name[1])
         value = self.params.get("value", '/run/attrtests/value_handles/*/')
-        if value[0] is None:
-            self.cancel("skipping this test until DAOS-2170 is fixed")
         expected_for_param.append(value[1])
-
-        attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
 
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        attr_dict = {name[0]:value[0]}
         try:
             GLOB_SIGNAL = threading.Event()
             self.pool.set_attr(attr_dict, None, cb_func)

@@ -111,9 +111,6 @@ struct evt_context {
 #define evt_umm(tcx)			(&(tcx)->tc_umm)
 #define evt_has_tx(tcx)			umem_has_tx(evt_umm(tcx))
 
-#define evt_off2mmid(tcx, offset)	\
-	umem_off2id(evt_umm(tcx), offset)
-
 #define evt_off2ptr(tcx, offset)			\
 	umem_off2ptr(evt_umm(tcx), offset)
 
@@ -414,7 +411,7 @@ void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 /**
  * Check whether the EVT record is available or not.
  * \param[IN]	tcx		The evtree context
- * \param[IN]	entry		Address of the DTX to be checked.
+ * \param[IN]	entry		Address (offset) of the DTX to be checked.
  * \param[IN]	intent		The operation intent
  *
  * \return	ALB_AVAILABLE_DIRTY	The target is available but with
@@ -429,7 +426,7 @@ void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
  *					time later.
  *		Other negative values on error.
  */
-int evt_dtx_check_availability(struct evt_context *tcx, umem_id_t entry,
+int evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
 			       uint32_t intent);
 
 static inline bool

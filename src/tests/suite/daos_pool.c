@@ -79,9 +79,6 @@ pool_connect(void **state)
 				    sizeof(info.pi_uuid));
 		/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
 		assert_int_equal(info.pi_ndisabled, 0);
-		assert_int_equal(info.pi_uid, arg->uid);
-		assert_int_equal(info.pi_gid, arg->gid);
-		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
 
 		print_message("rank 0 querying pool info... ");
@@ -92,9 +89,6 @@ pool_connect(void **state)
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		assert_int_equal(info.pi_ndisabled, 0);
-		assert_int_equal(info.pi_uid, arg->uid);
-		assert_int_equal(info.pi_gid, arg->gid);
-		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
 	}
 
@@ -471,6 +465,8 @@ pool_properties(void **state)
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry *entry;
 	int			 rc;
+	char			*expected_owner;
+	char			*expected_group;
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
@@ -491,7 +487,7 @@ pool_properties(void **state)
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, 5);
+	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -521,6 +517,28 @@ pool_properties(void **state)
 	if (entry == NULL || entry->dpe_val_ptr == NULL ||
 	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
 		print_message("ACL prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	/* default owner should be effective uid */
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &expected_owner),
+			 0);
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, expected_owner,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	/* default owner-group should be effective gid */
+	assert_int_equal(daos_acl_gid_to_principal(getegid(), &expected_group),
+			 0);
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, expected_group,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 

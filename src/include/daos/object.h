@@ -28,6 +28,12 @@
 #include <daos_types.h>
 #include <daos_api.h>
 
+enum daos_io_mode {
+	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
+	DIM_SERVER_DISPATCH	= 1,
+	DIM_CLIENT_DISPATCH	= 2,
+};
+
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
@@ -61,6 +67,15 @@ struct daos_obj_layout {
 	uint32_t	ol_class;
 	uint32_t	ol_nr;
 	struct daos_obj_shard	*ol_shards[0];
+};
+
+#define TGTS_IGNORE		((d_rank_t)-1)
+/** to identify each obj shard's target */
+struct daos_shard_tgt {
+	uint32_t		st_rank;	/* rank of the shard */
+	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_tgt_idx;	/* target xstream index */
+	uint32_t		st_tgt_id;	/* target id */
 };
 
 static inline bool

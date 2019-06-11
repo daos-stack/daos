@@ -30,32 +30,33 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/security.h>
 
+#include "auth.pb-c.h"
 #include "srv_internal.h"
-#include "security.pb-c.h"
 
 static int
 sanity_check_validation_response(Drpc__Response *response)
 {
 	int rc = DER_SUCCESS;
 
-	AuthToken *pb_auth = auth_token__unpack(NULL,
-			response->body.len, response->body.data);
+	Auth__Token *pb_auth = auth__token__unpack(NULL,
+						   response->body.len,
+						   response->body.data);
 	if (pb_auth == NULL) {
 		D_ERROR("Response body was not an AuthToken\n");
-		return -DER_MISC;
+		return -DER_PROTO;
 	}
 
-	if (!pb_auth->has_data) {
+	if (pb_auth->data.data == NULL) {
 		D_ERROR("AuthToken did not include data\n");
-		rc = -DER_MISC;
+		rc = -DER_PROTO;
 	}
 
-	auth_token__free_unpacked(pb_auth, NULL);
+	auth__token__free_unpacked(pb_auth, NULL);
 	return rc;
 }
 
 static Drpc__Call *
-new_validation_request(struct drpc *ctx, daos_iov_t *creds)
+new_validation_request(struct drpc *ctx, d_iov_t *creds)
 {
 	uint8_t		*body;
 	Drpc__Call	*request;
@@ -83,7 +84,7 @@ new_validation_request(struct drpc *ctx, daos_iov_t *creds)
 }
 
 static int
-validate_credentials_via_drpc(Drpc__Response **response, daos_iov_t *creds)
+validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 {
 	struct drpc	*server_socket;
 	Drpc__Call	*request;
@@ -108,11 +109,10 @@ validate_credentials_via_drpc(Drpc__Response **response, daos_iov_t *creds)
 }
 
 static int
-process_validation_response(Drpc__Response *response,
-		AuthToken **token)
+process_validation_response(Drpc__Response *response, Auth__Token **token)
 {
 	int		rc = DER_SUCCESS;
-	AuthToken	*auth;
+	Auth__Token	*auth;
 
 	if (response == NULL) {
 		D_ERROR("Response was NULL\n");
@@ -129,11 +129,11 @@ process_validation_response(Drpc__Response *response,
 		return rc;
 	}
 
-	auth = auth_token__unpack(NULL, response->body.len,
-					response->body.data);
+	auth = auth__token__unpack(NULL, response->body.len,
+				   response->body.data);
 	if (auth == NULL) {
 		D_ERROR("Failed to unpack response body\n");
-		return -DER_MISC;
+		return -DER_PROTO;
 	}
 	*token = auth;
 
@@ -141,12 +141,16 @@ process_validation_response(Drpc__Response *response,
 }
 
 int
-ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token)
+ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 {
 	Drpc__Response	*response = NULL;
 	int		rc;
 
-	if (creds == NULL) {
+	if (creds == NULL ||
+	    token == NULL ||
+	    creds->iov_buf_len == 0 ||
+	    creds->iov_buf == NULL) {
+		D_ERROR("Credential iov invalid\n");
 		return -DER_INVAL;
 	}
 
@@ -161,46 +165,171 @@ ds_sec_validate_credentials(daos_iov_t *creds, AuthToken **token)
 	return rc;
 }
 
-int
-ds_sec_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
-				uint64_t access)
+static int
+get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
 {
-	int		rc;
-	int		shift;
-	uint32_t	access_permitted;
-	AuthToken	*sec_token = NULL;
-	AuthSys		*sys_creds = NULL;
+	if (token->flavor != AUTH__FLAVOR__AUTH_SYS) {
+		D_ERROR("Credential auth flavor not supported\n");
+		return -DER_PROTO;
+	}
 
-	if (ugm == NULL || cred == NULL) {
+	*payload = auth__sys__unpack(NULL, token->data.len, token->data.data);
+	if (*payload == NULL) {
+		D_ERROR("Invalid auth_sys payload\n");
+		return -DER_PROTO;
+	}
+
+	return 0;
+}
+
+static bool
+ace_allowed(struct daos_ace *ace, enum daos_acl_perm perm)
+{
+	if (ace->dae_allow_perms & perm)
+		return true;
+
+	return false;
+}
+
+static bool
+ace_has_access(struct daos_ace *ace, uint64_t capas)
+{
+	D_DEBUG(DB_MGMT, "Allow Perms: 0x%lx\n", ace->dae_allow_perms);
+
+	if ((capas & DAOS_PC_RO) &&
+	    ace_allowed(ace, DAOS_ACL_PERM_READ)) {
+		D_DEBUG(DB_MGMT, "Allowing read-only access\n");
+		return true;
+	}
+
+	if ((capas & (DAOS_PC_RW | DAOS_PC_EX)) &&
+	    ace_allowed(ace, DAOS_ACL_PERM_READ) &&
+	    ace_allowed(ace, DAOS_ACL_PERM_WRITE)) {
+		D_DEBUG(DB_MGMT, "Allowing RW access\n");
+		return true;
+	}
+
+	return false;
+}
+
+static int
+check_access_for_principal(struct daos_acl *acl,
+			   enum daos_acl_principal_type type,
+			   uint64_t capas)
+{
+	struct daos_ace *ace;
+	int		rc;
+
+	D_DEBUG(DB_MGMT, "Checking ACE for principal type %d\n", type);
+
+	rc = daos_acl_get_ace_for_principal(acl, type, NULL, &ace);
+	if (rc == 0 && ace_has_access(ace, capas))
+		return 0;
+
+	/* ACE not found */
+	if (rc == -DER_NONEXIST)
+		return rc;
+
+	return -DER_NO_PERM;
+}
+
+static bool
+authsys_has_owner_group(struct pool_owner *ownership, Auth__Sys *authsys)
+{
+	size_t i;
+
+	if (strncmp(authsys->group, ownership->group,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
+		return true;
+
+	for (i = 0; i < authsys->n_groups; i++) {
+		if (strncmp(authsys->groups[i], ownership->group,
+			    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+static int
+check_authsys_permissions(struct daos_acl *acl,
+			  struct pool_owner *ownership,
+			  Auth__Sys *authsys, uint64_t capas)
+{
+	int rc = -DER_NO_PERM;
+
+	/* If this is the owner, and there's an owner entry... */
+	if (strncmp(authsys->user, ownership->user,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0) {
+		rc = check_access_for_principal(acl, DAOS_ACL_OWNER,
+						capas);
+		if (rc != -DER_NONEXIST)
+			return rc;
+	}
+
+	/* Check all the user's groups for owner group... */
+	if (authsys_has_owner_group(ownership, authsys))
+		rc = check_access_for_principal(acl, DAOS_ACL_OWNER_GROUP,
+						capas);
+
+	return rc;
+}
+
+int
+ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
+			 d_iov_t *cred, uint64_t capas)
+{
+	int		rc = 0;
+	Auth__Token	*token = NULL;
+	Auth__Sys	*authsys = NULL;
+
+	if (acl == NULL || ownership == NULL || cred == NULL) {
+		D_ERROR("NULL input, acl=0x%p, ownership=0x%p, cred=0x%p\n",
+			acl, ownership, cred);
 		return -DER_INVAL;
 	}
 
-	rc = ds_sec_validate_credentials(cred, &sec_token);
-	if (rc != DER_SUCCESS) {
+	if (ownership->user == NULL || ownership->group == NULL) {
+		D_ERROR("Invalid ownership structure\n");
+		return -DER_INVAL;
+	}
+
+	if (daos_acl_validate(acl) != 0) {
+		D_ERROR("ACL content not valid\n");
+		return -DER_INVAL;
+	}
+
+	rc = ds_sec_validate_credentials(cred, &token);
+	if (rc != 0) {
+		D_ERROR("Failed to validate credentials, rc=%d\n", rc);
 		return rc;
 	}
 
-	sys_creds = auth_sys__unpack(NULL, sec_token->data.len,
-					sec_token->data.data);
+	rc = get_auth_sys_payload(token, &authsys);
+	auth__token__free_unpacked(token, NULL);
+	if (rc != 0)
+		return rc;
 
 	/*
-	 * Determine which set of capability bits applies. See also the
-	 * comment/diagram for ds_pool_attr_mode in src/pool/srv_layout.h.
+	 * Check ACL for permission via AUTH_SYS credentials
 	 */
-	if (sys_creds->uid == ugm->pp_uid)
-		shift = DAOS_PC_NBITS * 2;	/* user */
-	else if (sys_creds->gid == ugm->pp_gid)
-		shift = DAOS_PC_NBITS;		/* group */
-	else
-		shift = 0;			/* other */
+	rc = check_authsys_permissions(acl, ownership, authsys, capas);
+	if (rc == 0)
+		goto access_allowed;
 
-	/* Extract the applicable set of capability bits. */
-	access_permitted = (ugm->pp_mode >> shift) & DAOS_PC_MASK;
+	/*
+	 * Last resort - if we don't have access via credentials
+	 */
+	rc = check_access_for_principal(acl, DAOS_ACL_EVERYONE, capas);
+	if (rc == 0)
+		goto access_allowed;
 
-	/* Only if all requested capability bits are permitted... */
-	if ((access & access_permitted) == access) {
-		return 0;
-	}
-
+	D_INFO("Access denied\n");
+	auth__sys__free_unpacked(authsys, NULL);
 	return -DER_NO_PERM;
+
+access_allowed:
+	D_INFO("Access allowed\n");
+	auth__sys__free_unpacked(authsys, NULL);
+	return 0;
 }

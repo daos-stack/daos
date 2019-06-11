@@ -29,18 +29,19 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-func hasConns(results client.ResultMap) (out string) {
-	out = sprintConns(results)
+func hasConns(results client.ResultMap) (bool, string) {
+	out := sprintConns(results)
 	for _, res := range results {
 		if res.Err == nil {
-			return
+			return true, out
 		}
 	}
 
 	// notify if there have been no successful connections
-	return fmt.Sprintf("%sNo active connections!", out)
+	return false, fmt.Sprintf("%sNo active connections!", out)
 }
 
 func sprintConns(results client.ResultMap) (out string) {
@@ -67,9 +68,19 @@ func sprintConns(results client.ResultMap) (out string) {
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
-// unpackFormat takes a map of addresses to result type and prints either
+// annotateState adds status string representation if no Info provided
+func annotateState(state *pb.ResponseState) {
+	if state.Info == "" {
+		state.Info = fmt.Sprintf(
+			"status=%s",
+			state.Status.String())
+	}
+}
+
+// unpackClientMap takes a map of addresses to result type and prints either
 // decoded struct or provided error.
-func unpackFormat(i interface{}) string {
+func unpackClientMap(i interface{}) string {
+	var answer interface{}
 	decoded := make(map[string]interface{})
 
 	switch v := i.(type) {
@@ -82,23 +93,59 @@ func unpackFormat(i interface{}) string {
 
 			decoded[addr] = res.Fm
 		}
-	case client.ClientNvmeMap:
+	case client.ClientCtrlrMap:
 		for addr, res := range v {
-			if res.Err != nil {
-				decoded[addr] = res.Err.Error()
-				continue
+			if res.Err == nil {
+				if len(res.Ctrlrs) > 0 {
+					answer = res.Ctrlrs
+				} else if len(res.Responses) == 0 {
+					answer = "unexpected error: no responses"
+				} else {
+					for i := range res.Responses {
+						annotateState(res.Responses[i].State)
+					}
+					answer = res.Responses
+				}
+			} else {
+				answer = res.Err.Error()
 			}
-
-			decoded[addr] = res.Ctrlrs
+			decoded[addr] = answer
 		}
-	case client.ClientScmMap:
+	case client.ClientModuleMap:
 		for addr, res := range v {
-			if res.Err != nil {
-				decoded[addr] = res.Err.Error()
-				continue
+			if res.Err == nil {
+				if len(res.Modules) > 0 {
+					answer = res.Modules
+				} else if len(res.Responses) == 0 {
+					answer = "unexpected error: no responses"
+				} else {
+					for i := range res.Responses {
+						annotateState(res.Responses[i].State)
+					}
+					answer = res.Responses
+				}
+			} else {
+				answer = res.Err.Error()
 			}
-
-			decoded[addr] = res.Mms
+			decoded[addr] = answer
+		}
+	case client.ClientMountMap:
+		for addr, res := range v {
+			if res.Err == nil {
+				if len(res.Mounts) > 0 {
+					answer = res.Mounts
+				} else if len(res.Responses) == 0 {
+					answer = "unexpected error: no responses"
+				} else {
+					for i := range res.Responses {
+						annotateState(res.Responses[i].State)
+					}
+					answer = res.Responses
+				}
+			} else {
+				answer = res.Err.Error()
+			}
+			decoded[addr] = answer
 		}
 	case client.ResultMap:
 		for addr, res := range v {

@@ -207,13 +207,7 @@ func TestProvidedConfigs(t *testing.T) {
 			defaultMockExt(),
 			defaultConfig,
 			"default empty config",
-			"no servers specified in config file and missing os envvar CRT_PHY_ADDR_STR",
-		},
-		{
-			envExistsMockExt(),
-			defaultConfig,
-			"default empty config with os env present",
-			"",
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigNoProvider,
 		},
 	}
 
@@ -319,71 +313,6 @@ func TestProvidedConfigs(t *testing.T) {
 	}
 }
 
-func TestGetNumCores(t *testing.T) {
-	tests := []struct {
-		cpus   []string
-		cores  int
-		errMsg string
-	}{
-		{nil, 0, ""},
-		{[]string{}, 0, ""},
-		{[]string{"1-8"}, 8, ""},
-		{[]string{"0-7", "20-26"}, 15, ""},
-		{[]string{"0-1"}, 2, ""},
-		{[]string{"0"}, 1, ""},
-		{[]string{"1", "5"}, 2, ""},
-		{[]string{"0-i"}, 15, "strconv.Atoi: parsing \"i\": invalid syntax"},
-		{[]string{"blah"}, 15, "strconv.Atoi: parsing \"blah\": invalid syntax"},
-		{[]string{"0-8-8"}, 8, "unsupported range format 0-8-8, need <int>-<int> e.g. 1-10"},
-		{[]string{"8-8"}, 8, "unsupported range format 8-8, need <int>-<int> e.g. 1-10"},
-		{[]string{"8-1"}, 8, "unsupported range format 8-1, need <int>-<int> e.g. 1-10"},
-		{[]string{"0-0"}, 0, "unsupported range format 0-0, need <int>-<int> e.g. 1-10"},
-	}
-
-	for _, tt := range tests {
-		num, err := getNumCores(tt.cpus)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.cpus)
-			continue
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		AssertEqual(t, num, tt.cores, "unexpected number of cores calculated")
-	}
-}
-
-func TestSetNumCores(t *testing.T) {
-	tests := []struct {
-		num    int
-		cpus   []string
-		errMsg string
-	}{
-		{8, []string{"0-7"}, ""},
-		{10, []string{"0-9"}, ""},
-		{1, []string{"0"}, ""},
-		{2, []string{"0-1"}, ""},
-		{0, []string{"0-0"}, "invalid number of cpus (cores) specified: 0"},
-	}
-
-	for _, tt := range tests {
-		cpus, err := setNumCores(tt.num)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.num)
-			continue
-		}
-
-		AssertEqual(t, cpus, tt.cpus, "failed to convert number to range")
-
-		num, err := getNumCores(cpus)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		AssertEqual(t, num, tt.num, "failed to convert to expected number")
-	}
-}
-
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
@@ -422,7 +351,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -447,7 +376,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/foo/bar",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -472,7 +401,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "testing123",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -497,7 +426,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -522,7 +451,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -547,7 +476,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -578,7 +507,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
@@ -609,7 +538,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-m", "moduleA moduleB",
 					"-a", "/some/file",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-y", "/another/different/file",
 					"-r", "1",
 					"-d", "/tmp/Jeremy",
@@ -635,7 +564,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-x", "1",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -663,7 +592,7 @@ func TestCmdlineOverride(t *testing.T) {
 					"-t", "20",
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
-					"-f", "21",
+					"-f", "22",
 					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
@@ -671,45 +600,12 @@ func TestCmdlineOverride(t *testing.T) {
 			desc: "exceed max NrXsHelpers results in default and no option",
 		},
 		{
-			// no provider set but os env set mock getenv returns not empty string
-			inConfig: mockConfigFromFile(t, envExistsMockExt(), socketsExample),
-			outCliOpts: [][]string{
-				{
-					"-t", "8",
-					"-g", "daos_server",
-					"-s", "/mnt/daos",
-					"-d", "/tmp/daos_sockets",
-				},
-			},
-			desc: "use defaults, no Provider set but provider env exists",
-		},
-		{
-			// no provider set but os env set mock getenv returns not empty string
-			inCliOpts: cliOptions{
-				Cores: 2, Group: "bob", MountPath: "/foo/bar",
-				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
-			inConfig: mockConfigFromFile(t, envExistsMockExt(), socketsExample),
-			outCliOpts: [][]string{
-				{
-					"-t", "2",
-					"-g", "bob",
-					"-s", "/foo/bar",
-					"-m", "moduleA moduleB",
-					"-a", "/some/file",
-					"-y", "/another/different/file",
-					"-d", "/tmp/Jeremy",
-				},
-			},
-			desc: "override defaults, no Provider set but provider env exists",
-		},
-		{
-			// no provider set and no os env set mock getenv returns empty string
 			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
 				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
 			inConfig: mockConfigFromFile(t, defaultMockExt(), defaultConfig),
-			desc:     "override defaults, no Provider set and no provider env exists",
-			errMsg:   "no servers specified in config file and missing os envvar CRT_PHY_ADDR_STR",
+			desc:     "override defaults, empty config file",
+			errMsg:   msgBadConfig + relConfExamplesPath + ": " + msgConfigNoProvider,
 		},
 	}
 
@@ -743,6 +639,13 @@ func TestCmdlineOverride(t *testing.T) {
 }
 
 func TestPopulateEnv(t *testing.T) {
+	noOfiPortConfig := func() configuration {
+		c := mockConfigFromFile(t, defaultMockExt(), socketsExample)
+		c.Servers[0].FabricIfacePort = 0
+
+		return c
+	}()
+
 	tests := []struct {
 		inConfig configuration
 		ioIdx    int
@@ -754,22 +657,10 @@ func TestPopulateEnv(t *testing.T) {
 		{
 			mockConfigFromFile(t, defaultMockExt(), defaultConfig),
 			0,
-			[]string{},
-			[]string{},
-			fmt.Sprintf(
-				"no servers specified in config file and missing os "+
-					"envvar %s", providerEnvKey),
-			"empty config (no envs) and getenv returns empty",
-		},
-		{
-			mockConfigFromFile(t, defaultMockExt(), defaultConfig),
-			0,
 			[]string{"FOO=bar"},
 			[]string{"FOO=bar"},
-			fmt.Sprintf(
-				"no servers specified in config file and missing os "+
-					"envvar %s", providerEnvKey),
-			"empty config (no envs) and getenv returns empty",
+			msgConfigNoProvider,
+			"empty config (no envs)",
 		},
 		{
 			mockConfigFromFile(t, defaultMockExt(), socketsExample),
@@ -784,18 +675,18 @@ func TestPopulateEnv(t *testing.T) {
 				"FI_SOCKETS_CONN_TIMEOUT=2000",
 				"CRT_PHY_ADDR_STR=ofi+sockets",
 				"OFI_INTERFACE=eth0",
-				"OFI_PORT=31416",
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
-			"sockets populated config (with envs) and getenv returns empty",
+			"sockets populated config (with envs)",
 		},
 		{
-			mockConfigFromFile(t, envExistsMockExt(), socketsExample),
+			mockConfigFromFile(t, defaultMockExt(), socketsExample),
 			0,
-			// existing os vars already set, config values should be ignored and
-			// result in no change
+			// config values should be ignored overwritten from
+			// input env
 			[]string{
 				"FOO=bar",
 				"DAOS_MD_CAP=somevalue",
@@ -810,18 +701,19 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			[]string{
 				"FOO=bar",
-				"DAOS_MD_CAP=somevalue",
-				"CRT_TIMEOUT=somevalue",
-				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
-				"FI_SOCKETS_CONN_TIMEOUT=somevalue",
-				"CRT_PHY_ADDR_STR=somevalue",
-				"OFI_INTERFACE=somevalue",
-				"OFI_PORT=somevalue",
-				"D_LOG_MASK=somevalue",
-				"D_LOG_FILE=somevalue",
+				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
+				"CRT_TIMEOUT=30",
+				"FI_SOCKETS_MAX_CONN_RETRY=1",
+				"FI_SOCKETS_CONN_TIMEOUT=2000",
+				"CRT_PHY_ADDR_STR=ofi+sockets",
+				"OFI_INTERFACE=eth0",
+				"D_LOG_MASK=ERR",
+				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
-			"sockets populated config (with envs) and getenv returns with 'somevalue'",
+			"sockets populated config (with envs) overwriting pre-existing values",
 		},
 		{
 			mockConfigFromFile(t, defaultMockExt(), psm2Example),
@@ -835,18 +727,18 @@ func TestPopulateEnv(t *testing.T) {
 				"CRT_CREDIT_EP_CTX=0",
 				"CRT_PHY_ADDR_STR=ofi+psm2",
 				"OFI_INTERFACE=ib0",
-				"OFI_PORT=31416",
 				"D_LOG_MASK=ERR",
 				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
-			"psm2 populated config (with envs) and getenv returns empty",
+			"psm2 populated config (with envs)",
 		},
 		{
-			mockConfigFromFile(t, envExistsMockExt(), psm2Example),
+			mockConfigFromFile(t, defaultMockExt(), psm2Example),
 			0,
-			// existing os vars already set, config values should be ignored and
-			// result in no change, as provider is set in os, no changes made
+			// config values should be ignored overwritten from
+			// input env
 			[]string{
 				"FOO=bar",
 				"DAOS_MD_CAP=somevalue",
@@ -861,19 +753,40 @@ func TestPopulateEnv(t *testing.T) {
 			},
 			[]string{
 				"FOO=bar",
-				"DAOS_MD_CAP=somevalue",
-				"CRT_TIMEOUT=somevalue",
-				// "CRT_CREDIT_EP_CTX=0", // whilst this is a new env, it is ignored
 				"FI_SOCKETS_MAX_CONN_RETRY=somevalue",
 				"FI_SOCKETS_CONN_TIMEOUT=somevalue",
-				"CRT_PHY_ADDR_STR=somevalue",
-				"OFI_INTERFACE=somevalue",
-				"OFI_PORT=somevalue",
-				"D_LOG_MASK=somevalue",
-				"D_LOG_FILE=somevalue",
+				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
+				"CRT_TIMEOUT=30",
+				"CRT_CREDIT_EP_CTX=0",
+				"CRT_PHY_ADDR_STR=ofi+psm2",
+				"OFI_INTERFACE=ib0",
+				"D_LOG_MASK=ERR",
+				"D_LOG_FILE=/tmp/server.log",
+				"OFI_PORT=31416",
 			},
 			"",
-			"psm2 populated config (with envs) and getenv returns with 'somevalue'",
+			"psm2 populated config (with envs) overwriting pre-existing values",
+		},
+		{
+			noOfiPortConfig,
+			0,
+			[]string{"FOO=bar"},
+			[]string{
+				"FOO=bar",
+				"DAOS_MD_CAP=1024",
+				"CRT_CTX_SHARE_ADDR=0",
+				"CRT_TIMEOUT=30",
+				"FI_SOCKETS_MAX_CONN_RETRY=1",
+				"FI_SOCKETS_CONN_TIMEOUT=2000",
+				"CRT_PHY_ADDR_STR=ofi+sockets",
+				"OFI_INTERFACE=eth0",
+				"D_LOG_MASK=ERR",
+				"D_LOG_FILE=/tmp/server.log",
+				//"OFI_PORT=31416", // not set if not provided via config file
+			},
+			"",
+			"sockets populated config (with envs) but no fabric interface port provided",
 		},
 	}
 
@@ -881,22 +794,20 @@ func TestPopulateEnv(t *testing.T) {
 		config := tt.inConfig
 		inEnvs := tt.inEnvs
 
-		_, err := config.validateConfig()
-		if err != nil {
+		if err := config.validateConfig(); err != nil {
 			if tt.errMsg != "" {
 				AssertEqual(
 					t, err.Error(), tt.errMsg,
 					"unexpected error")
 				continue
 			}
-			t.Fatalf("validate config: %s", err)
+			t.Fatalf("validate config (%s: %s)", tt.desc, err)
 		}
 
 		// optionally add to server EnvVars from config (with empty cliOptions)
 		opts := &cliOptions{}
 
-		err = config.getIOParams(opts)
-		if err != nil {
+		if err := config.getIOParams(opts); err != nil {
 			t.Fatalf("Params could not be generated (%s: %s)", tt.desc, err)
 		}
 

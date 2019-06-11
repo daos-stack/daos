@@ -30,16 +30,16 @@
 #include <daos/agent.h>
 #include <daos/security.h>
 
-#include "security.pb-c.h"
+#include "auth.pb-c.h"
 
 /* Prototypes for static helper functions */
 static int request_credentials_via_drpc(Drpc__Response **response);
 static int process_credential_response(Drpc__Response *response,
-		daos_iov_t *creds);
+		d_iov_t *creds);
 static int sanity_check_credential_response(Drpc__Response *response);
 
 int
-dc_sec_request_creds(daos_iov_t *creds)
+dc_sec_request_creds(d_iov_t *creds)
 {
 	Drpc__Response	*response = NULL;
 	int		rc;
@@ -95,7 +95,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 
 static int
 process_credential_response(Drpc__Response *response,
-		daos_iov_t *creds)
+		d_iov_t *creds)
 {
 	int rc = DER_SUCCESS;
 
@@ -126,7 +126,7 @@ process_credential_response(Drpc__Response *response,
 		}
 
 		memcpy(bytes, response->body.data, response->body.len);
-		daos_iov_set(creds, bytes, response->body.len);
+		d_iov_set(creds, bytes, response->body.len);
 	}
 
 	return rc;
@@ -138,7 +138,7 @@ sanity_check_credential_response(Drpc__Response *response)
 	int rc = DER_SUCCESS;
 
 	/* Unpack the response body for a basic sanity check */
-	SecurityCredential *pb_cred = security_credential__unpack(NULL,
+	Auth__Credential *pb_cred = auth__credential__unpack(NULL,
 			response->body.len, response->body.data);
 	if (pb_cred == NULL) {
 		D_ERROR("Body was not a SecurityCredential\n");
@@ -150,7 +150,7 @@ sanity_check_credential_response(Drpc__Response *response)
 		rc = -DER_MISC;
 	}
 
-	security_credential__free_unpacked(pb_cred, NULL);
+	auth__credential__free_unpacked(pb_cred, NULL);
 	return rc;
 }
 

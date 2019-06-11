@@ -306,27 +306,34 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
-			target->ta_comp.co_fseq = version;
+			target->ta_comp.co_fseq = version++;
 			nchanges++;
 			if (pool_map_node_status_match(dom,
 				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
 					dom->do_comp.co_rank);
 				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-				dom->do_comp.co_fseq = version;
+				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			}
 		} else if (opc == POOL_ADD &&
 			 target->ta_comp.co_status != PO_COMP_ST_UP &&
 			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			/**
+			 * XXX this is only temporarily used for recovering
+			 * the DOWNOUT target back to UP after rebuild test,
+			 * so we do not update co_ver for now, otherwise the
+			 * object layout might be changed, so the ring shuffle
+			 * is based on target version. Once this is used
+			 * for reintegrate new target, co_ver should be
+			 * updated.
+			 */
 			D_DEBUG(DF_DSMS, "change target %u/%u to UP %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
-			target->ta_comp.co_ver = version;
-			target->ta_comp.co_fseq = 0;
+			target->ta_comp.co_fseq = 1;
 			nchanges++;
 			dom->do_comp.co_status = PO_COMP_ST_UP;
-			dom->do_comp.co_ver = version;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",

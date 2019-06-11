@@ -25,24 +25,14 @@ from __future__ import print_function
 
 import os
 import traceback
-import sys
-import json
 import threading
 import string
 import random
-from avocado       import Test
+from apricot import TestWithServers
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-
-import server_utils
-import write_host_file
-import AgentUtils
 from general_utils import DaosTestError
 
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosPool, DaosContainer, DaosApiError
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
@@ -82,31 +72,15 @@ def verify_get_attr(indata, outdata):
                                 " Expected val={0} and received val = {1}"
                                 .format(value, outdata[attr]))
 
-class ContainerAttributeTest(Test):
+class ContainerAttributeTest(TestWithServers):
     """
     Tests DAOS container attribute get/set/list.
+    :avocado: recursive
     """
     def setUp(self):
-        self.agent_sessions = None
-        self.pool = None
-        self.container = None
-        self.hostlist = None
+        super(ContainerAttributeTest, self).setUp()
+
         self.large_data_set = {}
-
-        with open('../../../.build_vars.json') as build_file:
-            build_paths = json.load(build_file)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
-        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-
-        self.agent_sessions = AgentUtils.run_agent(basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, basepath)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/attrtests/createmode/*'),
@@ -127,9 +101,7 @@ class ContainerAttributeTest(Test):
             if self.container:
                 self.container.close()
         finally:
-            if self.agent_sessions:
-                AgentUtils.stop_agent(self.hostlist, self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
+            super(ContainerAttributeTest, self).tearDown()
 
     def create_data_set(self):
         """
@@ -140,6 +112,31 @@ class ContainerAttributeTest(Test):
             self.large_data_set[str(i)] = (
                 "".join(random.choice(allchar)
                         for x in range(random.randint(1, 100))))
+
+    def test_container_large_attributes(self):
+        """
+        Test ID: DAOS-1359
+
+        Test description: Test large randomly created container attribute.
+
+        :avocado: tags=container,container_attr,attribute,large_conattribute
+        """
+        self.create_data_set()
+        attr_dict = self.large_data_set
+
+        try:
+            self.container.set_attr(data=attr_dict)
+            size, buf = self.container.list_attr()
+
+            verify_list_attr(attr_dict, size, buf)
+
+            results = {}
+            results = self.container.get_attr(attr_dict.keys())
+            verify_get_attr(attr_dict, results)
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
+            self.fail("Test was expected to pass but it failed.\n")
 
     def test_container_attribute(self):
         """
@@ -153,11 +150,6 @@ class ContainerAttributeTest(Test):
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -176,13 +168,6 @@ class ContainerAttributeTest(Test):
 
             results = {}
             results = self.container.get_attr([name[0]])
-
-            # for this test the dictionary has been altered, need to just
-            # set it to what we are expecting to get back
-            if name[0] is not None:
-                if "largenumberofattr" in name[0]:
-                    attr_dict.clear()
-                    attr_dict[name[0]] = value[0]
 
             verify_get_attr(attr_dict, results)
 
@@ -211,11 +196,6 @@ class ContainerAttributeTest(Test):
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:

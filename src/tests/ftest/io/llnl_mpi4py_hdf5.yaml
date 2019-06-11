@@ -1,0 +1,26 @@
+hosts:
+    test_servers:
+        - boro-A
+    test_clients:
+        - boro-B
+timeout: 1800
+server_config:
+    name: daos_server
+pool:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 60000000000
+    createsvc:
+        svcn: 1
+client_processes:
+    np: 8
+# below mentioned path should be replaced by path of
+# LLNL and Mpi4py test suite directory in CI nodes when available.
+test_repo:
+    llnl: "/home/standan/mpiio/Testmpio"
+    mpi4py: "/home/standan/mpiio/mpi4py_latest/test"
+    hdf5: "/home/standan/mpiio/hdf5/build/testpar"

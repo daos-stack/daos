@@ -29,25 +29,38 @@
 #define __DAOS_SRV_SECURITY_H__
 
 #include <daos_types.h>
-#include <daos_srv/daos_server.h>
+#include <daos_security.h>
 #include <daos_srv/pool.h>
+
+/**
+ * Structure representing the pool's ownership by user and group, respectively.
+ */
+struct pool_owner {
+	char *user;	/** name of the user owner */
+	char *group;	/** name of the group owner */
+};
 
 /**
  * Determine whether the provided credentials can access a pool.
  *
- * \param[in]	ugm		Pool properties uid/gid/mode
- * \param[in]	cred		Opaque Credential Data
- * \param[in]	access		Requested pool access
+ * \param[in]	acl		Access Control List for pool
+ * \param[in]	ownership	Pool ownership information
+ * \param[in]	cred		Credentials of user attempting access
+ * \param[in]	capas		Requested access capabilities (DAOS_PC_* flags
+ *				from include/daos_types.h)
  *
- * \return	0		Success. The access is allowed.
+ * \return	0		Requested access is allowed
+ *		-DER_NO_PERM	Requested access is forbidden
  *		-DER_INVAL	Invalid parameter
- *		-DER_BADPATH	Can't connect to the daos_server socket at
+ *		-DER_BADPATH	Can't connect to the control plane socket at
  *				the expected path
  *		-DER_NOMEM	Out of memory
- *		-DER_NOREPLY	No response from daos_server
- *		-DER_MISC	Invalid response from daos_server
- *		-DER_NO_PERM	Credential does not have access
+ *		-DER_NOREPLY	No response from control plane
+ *		-DER_MISC	Error in control plane communications
+ *		-DER_PROTO	Unexpected or corrupt payload from control plane
  */
-int ds_sec_check_pool_access(const struct pool_prop_ugm *ugm, d_iov_t *cred,
-				uint64_t access);
+int
+ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
+			 d_iov_t *cred, uint64_t capas);
+
 #endif /* __DAOS_SRV_SECURITY_H__ */

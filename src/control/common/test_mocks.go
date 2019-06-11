@@ -39,8 +39,8 @@ func MockFeaturePB() *pb.Feature {
 
 // MockNamespacePB is a mock protobuf Namespace message used in tests for
 // multiple packages.
-func MockNamespacePB() *pb.NvmeNamespace {
-	return &pb.NvmeNamespace{
+func MockNamespacePB() *pb.NvmeController_Namespace {
+	return &pb.NvmeController_Namespace{
 		Id:       int32(12345),
 		Capacity: int32(99999),
 	}
@@ -50,11 +50,25 @@ func MockNamespacePB() *pb.NvmeNamespace {
 // multiple packages (message contains repeated namespace field).
 func MockControllerPB(fwRev string) *pb.NvmeController {
 	return &pb.NvmeController{
-		Model:     "ABC",
-		Serial:    "123ABC",
-		Pciaddr:   "1:2:3.0",
-		Fwrev:     fwRev,
-		Namespace: []*pb.NvmeNamespace{MockNamespacePB()},
+		Model:      "ABC",
+		Serial:     "123ABC",
+		Pciaddr:    "0000:81:00.0",
+		Fwrev:      fwRev,
+		Namespaces: []*pb.NvmeController_Namespace{MockNamespacePB()},
+	}
+}
+
+// NewMockControllerPB generates specific protobuf controller message
+func NewMockControllerPB(
+	pciAddr string, fwRev string, model string, serial string,
+	nss []*pb.NvmeController_Namespace) *pb.NvmeController {
+
+	return &pb.NvmeController{
+		Model:      model,
+		Serial:     serial,
+		Pciaddr:    pciAddr,
+		Fwrev:      fwRev,
+		Namespaces: nss,
 	}
 }
 
@@ -63,11 +77,13 @@ func MockControllerPB(fwRev string) *pb.NvmeController {
 func MockModulePB() *pb.ScmModule {
 	return &pb.ScmModule{
 		Physicalid: uint32(12345),
-		Channel:    uint32(1),
-		Channelpos: uint32(2),
-		Memctrlr:   uint32(3),
-		Socket:     uint32(4),
 		Capacity:   12345,
+		Loc: &pb.ScmModule_Location{
+			Channel:    uint32(1),
+			Channelpos: uint32(2),
+			Memctrlr:   uint32(3),
+			Socket:     uint32(4),
+		},
 	}
 }
 

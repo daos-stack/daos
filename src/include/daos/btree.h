@@ -33,18 +33,6 @@
 #include <daos_types.h>
 #include <daos/mem.h>
 
-enum {
-	BTR_UMEM_TYPE	= 100,
-	BTR_UMEM_ROOT	= (BTR_UMEM_TYPE + 0),
-	BTR_UMEM_NODE	= (BTR_UMEM_TYPE + 1),
-};
-
-struct btr_root;
-struct btr_node;
-
-TMMID_DECLARE(struct btr_root, BTR_UMEM_ROOT);
-TMMID_DECLARE(struct btr_node, BTR_UMEM_NODE);
-
 /**
  * KV record of the btree.
  *
@@ -59,7 +47,7 @@ struct btr_record {
 	 * - a structure includes both the variable-length key and value.
 	 * - a complex data structure under this record, e.g. a sub-tree.
 	 */
-	umem_id_t		rec_mmid;
+	umem_off_t		rec_off;
 	/**
 	 * Fix-size key can be stored in if it is small enough (DAOS_HKEY_MAX),
 	 * or hashed key for variable-length/large key. In the later case,
@@ -68,13 +56,13 @@ struct btr_record {
 	 * When BTR_FEAT_UINT_KEY is set, no key callbacks are used for
 	 * comparisons.
 	 *
-	 * When BTR_FEAT_DIRECT_KEY is used, we store the mmid of the
+	 * When BTR_FEAT_DIRECT_KEY is used, we store the umem offset of the
 	 * relevant leaf node for direct key comparison
 	 */
 	union {
 		char			rec_hkey[0]; /* hashed key */
 		uint64_t		rec_ukey[0]; /* uint key */
-		TMMID(struct btr_node)	rec_node[0]; /* direct key */
+		umem_off_t		rec_node[0]; /* direct key */
 	};
 };
 
@@ -93,25 +81,29 @@ struct btr_node {
 	/** generation, reserved for COW */
 	uint64_t			tn_gen;
 	/** the first child, it is unused on leaf node */
-	TMMID(struct btr_node)		tn_child;
+	umem_off_t			tn_child;
 	/** records in this node */
 	struct btr_record		tn_recs[0];
 };
 
 enum {
 	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 4096
+	BTR_ORDER_MAX			= 255
 };
 
 /**
  * Tree root descriptor, it consits of tree attributes and reference to the
  * actual root node.
  *
- * NB: could be PM data structure.
+ * NB: Can be stored in pmem
  */
 struct btr_root {
-	/** btree order */
-	uint16_t			tr_order;
+	/** For dynamic tree ordering, the root node temporarily has less
+	 * entries than the order
+	 */
+	uint8_t				tr_node_size;
+	/** configured btree order */
+	uint8_t				tr_order;
 	/** depth of the tree */
 	uint16_t			tr_depth;
 	/**
@@ -123,8 +115,8 @@ struct btr_root {
 	uint64_t			tr_feats;
 	/** generation, reserved for COW */
 	uint64_t			tr_gen;
-	/** pointer to the root node, it is NULL for an empty tree */
-	TMMID(struct btr_node)		tr_node;
+	/** pointer to root node (struct btr_node), UMOFF_NULL for empty tree */
+	umem_off_t			tr_node;
 };
 
 /** btree attributes returned by query function. */
@@ -230,13 +222,13 @@ typedef struct {
 	/**
 	 * Generate a fix-size hashed key from the real key.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param key	[IN]	key buffer
 	 * \param hkey	[OUT]	hashed key
 	 */
 	void		(*to_hkey_gen)(struct btr_instance *tins,
-				       daos_iov_t *key, void *hkey);
+				       d_iov_t *key, void *hkey);
 	/** Static callback to get size of the hashed key. */
 	int		(*to_hkey_size)(void);
 
@@ -252,8 +244,8 @@ typedef struct {
 	 * Absent:
 	 * Calls memcmp.
 	 *
-	 * \param tins	[IN]		Tree instance which contains the root
-	 *				mmid and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be compared with \a key.
 	 * \param key	[IN]	Key to be compared with key of \a rec.
 	 *
@@ -274,8 +266,8 @@ typedef struct {
 	 * Absent:
 	 * Skip the function and only check rec::rec_hkey for the search.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be compared with \a key.
 	 * \param key	[IN]	Key to be compared with key of \a rec.
 	 *
@@ -287,7 +279,7 @@ typedef struct {
 	 *		other undefined result.
 	 */
 	int		(*to_key_cmp)(struct btr_instance *tins,
-				      struct btr_record *rec, daos_iov_t *key);
+				      struct btr_record *rec, d_iov_t *key);
 
 	/**
 	 * Required if using direct keys. (Should only be called for direct key)
@@ -295,46 +287,46 @@ typedef struct {
 	 * be serialized.
 	 *
 	 * @param tins		[IN]	Tree instance which contains the
-	 *				root mmid and memory class etc.
+	 *				root umem offset and memory class etc.
 	 * @param key		[IN]	The current key of iteration.
 	 * @param anchor	[OUT]	Anchor for the iteration
 	 */
 	void		(*to_key_encode)(struct btr_instance *tins,
-					 daos_iov_t *key,
+					 d_iov_t *key,
 					 daos_anchor_t *anchor);
 	/**
 	 * Required if using direct keys. (Should only be called for direct key)
 	 *
 	 * @param tins		[IN]	Tree instance which contains the root
-	 *				mmid and memory class etc.
+	 *				umem offset and memory class etc.
 	 * @param key		[OUT]	The key of iteration. Anchor will
 	 *				be decoded to key.
 	 * @param anchor	[IN]	Anchor of where iteration process is.
 	 */
 	void		(*to_key_decode)(struct btr_instance *tins,
-					 daos_iov_t *key,
+					 d_iov_t *key,
 					 daos_anchor_t *anchor);
 
 	/**
 	 * Allocate record body for \a key and \a val.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param key	[IN]	Key buffer
 	 * \param val	[IN]	Value buffer, it could be either data blob,
 	 *			or complex data structure that can be parsed
 	 *			by the tree class.
-	 * \param rec	[OUT]	Returned record body mmid,
+	 * \param rec	[OUT]	Returned record body pointer,
 	 *			See \a btr_record for the details.
 	 */
 	int		(*to_rec_alloc)(struct btr_instance *tins,
-					daos_iov_t *key, daos_iov_t *val,
+					d_iov_t *key, d_iov_t *val,
 					struct btr_record *rec);
 	/**
-	 * Free the record body stored in \a rec::rec_mmid
+	 * Free the record body stored in \a rec::rec_off
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	The record to be destroyed.
 	 * \param args	[OUT]
 	 *			Optional: opaque buffer for providing arguments
@@ -346,8 +338,8 @@ typedef struct {
 	/**
 	 * Fetch value or both key & value of a record.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be read from.
 	 * \param key	[OUT]	Optional, sink buffer for the returned key,
 	 *			or key address.
@@ -356,13 +348,13 @@ typedef struct {
 	 */
 	int		(*to_rec_fetch)(struct btr_instance *tins,
 					struct btr_record *rec,
-					daos_iov_t *key, daos_iov_t *val);
+					d_iov_t *key, d_iov_t *val);
 	/**
 	 * Update value of a record, the new value should be stored in the
-	 * current rec::rec_mmid.
+	 * current rec::rec_off.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be updated.
 	 * \param val	[IN]	New value to be stored for the record.
 	 * \a return	0	success.
@@ -374,12 +366,12 @@ typedef struct {
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
-					 daos_iov_t *key, daos_iov_t *val);
+					 d_iov_t *key, d_iov_t *val);
 	/**
 	 * Optional:
 	 * Return key and value size of the record.
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to get size from.
 	 * \param rstat	[OUT]	Returned key & value size.
 	 */
@@ -389,8 +381,8 @@ typedef struct {
 	/**
 	 * Convert record into readable string and store it in \a buf.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be converted.
 	 * \param leaf	[IN]	Both key and value should be converted to
 	 *			string if it is true, otherwise only the
@@ -404,89 +396,10 @@ typedef struct {
 					 char *buf, int buf_len);
 	/**
 	 * Optional:
-	 * Allocate an empty tree. Upper layer can have customized
-	 * implementation to manange internal tree node and record cache etc.
-	 *
-	 * Absent:
-	 * The common code will allocate the root and initialise the empty tree.
-	 *
-	 * \param tins	[IN/OUT]
-	 *			Input  : Tree instance which includes memory
-	 *				 class and customized tree operations.
-	 *			output : root mmid
-	 * \param feats	[IN]	Feature bits of this true.
-	 * \param order	[IN]	Order of the tree.
-	 */
-	int		(*to_root_alloc)(struct btr_instance *tins,
-					 uint64_t feats, unsigned int order);
-	/**
-	 * Optional:
-	 * Free the empty tree, and internal caches.
-	 *
-	 * Absent:
-	 * The common code will free the root.
-	 *
-	 * \param tins	[IN]	Tree instance to be destroyed.
-	 */
-	void		(*to_root_free)(struct btr_instance *tins);
-	/**
-	 * Optional:
-	 * Add tree root to current transaction.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid,
-	 *			root address and memory class etc.
-	 */
-	int		(*to_root_tx_add)(struct btr_instance *tins);
-	/**
-	 * Optional:
-	 * Allocate tree node from internal cache.
-	 *
-	 * Absent:
-	 * The common code will allocate the tree node.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
-	 * \param nd_mmid_p [OUT]
-	 *			Returned mmid of the new node.
-	 *
-	 * Absent:
-	 * The common code will allocate a new tree node.
-	 */
-	int		(*to_node_alloc)(struct btr_instance *tins,
-					 TMMID(struct btr_node) *nd_mmid_p);
-	/**
-	 * Optional:
-	 * Release the tree node for the internal cache.
-	 *
-	 * Absent:
-	 * The common code will free the tree node.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
-	 * \param nd_mmid [IN]
-	 *			Node mmid to be freed.
-	 *
-	 * Absent:
-	 * The common code will free the tree node.
-	 */
-	void		(*to_node_free)(struct btr_instance *tins,
-					TMMID(struct btr_node) nd_mmid);
-	/**
-	 * Optional: add \a nd_mmid to the current transaction.
-	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
-	 * \param nd_mmid [IN]
-	 *			Node mmid to be added to transaction.
-	 */
-	int		(*to_node_tx_add)(struct btr_instance *tins,
-					  TMMID(struct btr_node) nd_mmid);
-	/**
-	 * Optional:
 	 * Check whether the given record is available to outside or not.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root mmid
-	 *			and memory class etc.
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be checked.
 	 * \parem intent [IN]	The intent for why check the record.
 	 *
@@ -522,8 +435,8 @@ struct btr_instance {
 	 * The container open handle.
 	 */
 	daos_handle_t			 ti_coh;
-	/** root mmid */
-	TMMID(struct btr_root)		 ti_root_mmid;
+	/** root umem offset */
+	umem_off_t			 ti_root_off;
 	/** root pointer */
 	struct btr_root			*ti_root;
 	/** Customized operations for the tree */
@@ -543,6 +456,10 @@ enum btr_feats {
 	 * to_key_cmp callback
 	 */
 	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	/** Root is dynamically sized up to tree order.  This bit is set for a
+	 *  tree class
+	 */
+	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
 };
 
 /**
@@ -564,7 +481,7 @@ int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 			   btr_ops_t *ops);
 int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
-		   TMMID(struct btr_root) *root_mmidp, daos_handle_t *toh);
+		   umem_off_t *root_offp, daos_handle_t *toh);
 int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 			   unsigned int tree_order, struct umem_attr *uma,
 			   struct btr_root *root, daos_handle_t *toh);
@@ -572,7 +489,7 @@ int  dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 			      unsigned int tree_order, struct umem_attr *uma,
 			      struct btr_root *root, daos_handle_t coh,
 			      daos_handle_t *toh);
-int  dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
+int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
@@ -580,13 +497,13 @@ int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *info, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
-int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
-int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
+int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
+int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
+		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
 int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		   daos_iov_t *key, daos_iov_t *val);
-int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
+		   d_iov_t *key, d_iov_t *val);
+int  dbtree_delete(daos_handle_t toh, d_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
@@ -607,13 +524,13 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
 int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      uint32_t intent, daos_iov_t *key, daos_anchor_t *anchor);
+		      uint32_t intent, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_next_with_intent(daos_handle_t ih, uint32_t intent);
 int dbtree_iter_prev_with_intent(daos_handle_t ih, uint32_t intent);
-int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
-		      daos_iov_t *val, daos_anchor_t *anchor);
+int dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
+		      d_iov_t *val, daos_anchor_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih, void *args);
 int dbtree_iter_empty(daos_handle_t ih);
 
@@ -624,8 +541,8 @@ int dbtree_iter_empty(daos_handle_t ih);
  *   - if rc == 1, dbtree_iterate() stops and returns 0;
  *   - otherwise, dbtree_iterate() stops and returns rc.
  */
-typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
-				   daos_iov_t *val, void *arg);
+typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
+				   d_iov_t *val, void *arg);
 int dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 		   dbtree_iterate_cb_t cb, void *arg);
 

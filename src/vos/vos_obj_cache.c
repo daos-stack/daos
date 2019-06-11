@@ -194,17 +194,15 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 
 
 int
-vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
+vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
 	     bool no_create, uint32_t intent, struct vos_object **obj_p)
 {
 
 	struct vos_object	*obj;
-	struct vos_container	*cont;
 	struct obj_lru_key	 lkey;
 	int			 rc;
 
-	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
@@ -230,12 +228,23 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 
 		if ((!(obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) ||
 		     obj->obj_df->vo_latest >= epoch) &&
-		    obj->obj_df->vo_incarnation == obj->obj_incarnation) {
-			if (obj->obj_epoch <= epoch)
-				goto out; /* belong to the same incarnation */
+		    (obj->obj_df->vo_incarnation == obj->obj_incarnation) &&
+		    (obj->obj_epoch <= epoch || obj->obj_incarnation == 0)) {
+			struct umem_instance	*umm = &cont->vc_pool->vp_umm;
 
-			if (obj->obj_incarnation == 0) { /* never punched */
-				obj->obj_epoch = epoch;
+			rc = vos_dtx_check_availability(umm, vos_cont2hdl(cont),
+						obj->obj_df->vo_dtx,
+						umem_ptr2off(umm, obj->obj_df),
+						intent, DTX_RT_OBJ);
+			if (rc < 0) {
+				vos_obj_release(occ, obj);
+				D_GOTO(failed, rc);
+			}
+
+			if (rc != ALB_UNAVAILABLE) {
+				if (obj->obj_incarnation == 0)
+					obj->obj_epoch = epoch;
+
 				goto out;
 			}
 		}
@@ -314,7 +323,7 @@ vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
 	if (!vos_obj_evicted(obj))
 		return 0;
 
-	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id,
+	rc = vos_obj_hold(occ, obj->obj_cont, obj->obj_id,
 			  epoch, !obj->obj_df, DAOS_INTENT_UPDATE, obj_p);
 	if (rc == 0) {
 		D_ASSERT(*obj_p != obj);
