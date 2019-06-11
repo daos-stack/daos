@@ -337,7 +337,7 @@ fi
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -s \"$TEST_TAG\"; then
+if ! ./launch.py -c -a -r -s \"$TEST_TAG\"; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
