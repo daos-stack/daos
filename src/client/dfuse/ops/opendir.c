@@ -25,35 +25,40 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
-	       off_t position, struct fuse_file_info *fi)
+dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ino,
+		 struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie;
-	d_list_t			*rlink;
+	struct dfuse_obj_hdl		*oh = NULL;
 	int				rc;
-	d_iov_t				iov = {};
-	d_sg_list_t			sgl = {};
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				ino);
-		DFUSE_REPLY_ERR_RAW(NULL, req, ENOENT);
-		return;
-	}
+	D_ALLOC_PTR(oh);
+	if (!oh)
+		D_GOTO(err, rc = ENOMEM);
 
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	/** duplicate the file handle for the fuse handle */
+	rc = dfs_dup(ino->ie_dfs->dffs_dfs, ino->ie_obj, fi->flags,
+		     &oh->doh_obj);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err, 0);
+	fi->direct_io = 1;
+	fi->fh = (uint64_t)oh;
 
-	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
+	DFUSE_REPLY_OPEN(req, fi);
+	return;
+err:
+	D_FREE(oh);
+	DFUSE_FUSE_REPLY_ERR(req, rc);
+}
 
-	rc = dfs_write(ie->ie_dfs->dffs_dfs, ie->ie_obj, sgl, position);
-	if (rc == -DER_SUCCESS) {
-		DFUSE_REPLY_WRITE(ie, req, len);
-	} else {
-		DFUSE_REPLY_ERR_RAW(ie, req, rc);
-	}
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+void
+dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
+		    struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	int				rc;
+
+	rc = dfs_release(oh->doh_obj);
+	if (rc == 0)
+		D_FREE(oh);
+	DFUSE_FUSE_REPLY_ERR(req, rc);
 }
