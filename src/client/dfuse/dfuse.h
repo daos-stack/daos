@@ -80,6 +80,14 @@ struct dfuse_projection_info {
 	ATOMIC uint64_t			dfpi_ino_next;
 };
 
+/** what is returned as the handle for fuse fuse_file_info on create/open */
+struct dfuse_obj_hdl {
+	/** the DFS object handle */
+	dfs_obj_t	*doh_obj;
+	/** an anchor to track listing in readdir */
+	daos_anchor_t	doh_anchor;
+};
+
 struct dfuse_inode_entry;
 
 struct dfuse_inode_ops {

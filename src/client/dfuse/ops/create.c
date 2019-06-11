@@ -30,18 +30,18 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_obj_hdl		*oh = NULL;
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle,
-		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+		       name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o",
-			       fi->flags);
+		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o", fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
@@ -55,28 +55,34 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	/* Check that only the flag for a regular file is specified */
 	if ((mode & S_IFMT) != S_IFREG) {
-		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o",
-			       mode);
+		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o", mode);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
-	}
+	D_ALLOC_PTR(oh);
+	if (!oh)
+		D_GOTO(err, rc = ENOMEM);
 
 	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
 	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
-		      mode, O_CREAT, 0, 0, NULL, &ie->ie_obj);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
-	}
+		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err, 0);
 
-	/* TODO: Add a dfs_dup() call to get a object for the handle as well
-	 * as the inode.
-	 */
+	/** duplicate the file handle for the fuse handle */
+	rc = dfs_dup(parent->ie_dfs->dffs_dfs, ie->ie_obj, fi->flags,
+		     &oh->doh_obj);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(release1, 0);
+
+	fi->direct_io = 1;
+	fi->fh = (uint64_t)oh;
+
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
@@ -85,7 +91,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+		D_GOTO(release2, 0);
 	}
 
 	LOG_FLAGS(ie, fi->flags);
@@ -95,11 +101,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_reply_entry(fs_handle, ie, true, req);
 
 	return true;
-release:
+release2:
+	dfs_release(oh->doh_obj);
+release1:
 	dfs_release(ie->ie_obj);
-
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	D_FREE(oh);
 	D_FREE(ie);
 	return false;
 }
