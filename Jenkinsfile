@@ -935,7 +935,7 @@ pipeline {
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=regression,vm
+                                               test_tag=pr
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
