@@ -187,7 +187,7 @@ class SameKeyDifferentValue(TestWithServers):
                     aggregation = True
 
                 # punch the entire object after each iteration
-                obj.punch(0)
+                obj.close()
 
             # catch the exception if test fails to write to an object
             # or fails to punch the written object
