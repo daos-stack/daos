@@ -785,7 +785,7 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 			/*
 			* The selected spare is down prior to current failed
 			* one, then it can't be a valid spare, let's skip it
-			* and try next spare on the ring.
+			* and try next spare.
 			*/
 			if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq)
 				continue; /* try next spare */
@@ -793,7 +793,7 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 			/*
 			* If both failed target and spare target are down, then
 			* add the spare target to the fail list for remap, and
-			* try next spare on the ring.
+			* try next spare..
 			*/
 			if (f_shard->fs_status == PO_COMP_ST_DOWN)
 				D_ASSERTF(spare_tgt->ta_comp.co_status !=
