@@ -89,8 +89,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			rc = dfs_ostat(ie->ie_dfs->dffs_dfs,
 				       ie->ie_obj, &entry.attr);
 			if (rc) {
-				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%d)",
-						rc);
+				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)",
+						strerror(-rc));
 				D_GOTO(err, rc = -rc);
 			}
 
@@ -134,7 +134,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 
 	rc = dfs_ostat(dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
+	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)", strerror(-rc));
 		D_GOTO(release, rc = -rc);
 	}
