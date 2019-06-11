@@ -989,7 +989,6 @@ crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 	int		rc = 0;
 
 	D_ASSERT(grp_priv->gp_service);
-
 	if (!CRT_PMIX_ENABLED()) {
 		D_ALLOC_PTR(grp_priv->gp_rwlock_ft);
 		if (!grp_priv->gp_rwlock_ft)
@@ -1986,6 +1985,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 				rc);
 			D_GOTO(out, rc);
 		}
+
 		rc = crt_grp_ras_init(grp_priv);
 		if (rc != 0) {
 			D_ERROR("crt_grp_ras_init() failed, rc %d.\n", rc);
@@ -4108,6 +4108,115 @@ int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list)
 	membs = grp_priv->gp_membs.cgm_linear_list;
 	rc = d_rank_list_dup(list, membs);
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+out:
+	return rc;
+}
+
+int crt_group_view_create(crt_group_id_t srv_grpid,
+			crt_group_t **ret_grp)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_grp_priv	*grp_priv = NULL;
+	int			rc = 0;
+
+	if (ret_grp == NULL) {
+		D_ERROR("grp ptr is NULL\n");
+		return -DER_INVAL;
+	}
+
+	grp_gdata = crt_gdata.cg_grp;
+
+	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true,
+				NULL, NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("crt_grp_priv_create(%s) failed; rc=%d\n",
+			srv_grpid, rc);
+		D_GOTO(out, rc);
+	}
+
+	grp_priv->gp_local = 0;
+	grp_priv->gp_service = 1;
+	grp_priv->gp_size = 0;
+	grp_priv->gp_self = 0;
+
+	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
+	if (rc != 0) {
+		D_ERROR("grp_priv_init_membs() failed; rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_grp_lc_create(grp_priv);
+	if (rc != 0) {
+		D_ERROR("crt_grp_lc_create() failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_grp_ras_init(grp_priv);
+	if (rc != 0) {
+		D_ERROR("crt_grp_ras_init() failed; rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	*ret_grp = &grp_priv->gp_pub;
+
+	/* decref done in crt_group_view_destroy() */
+	crt_grp_priv_addref(grp_priv);
+
+	D_RWLOCK_WRLOCK(&grp_gdata->gg_rwlock);
+	d_list_add_tail(&grp_priv->gp_link, &grp_gdata->gg_srv_grps_attached);
+	D_RWLOCK_UNLOCK(&grp_gdata->gg_rwlock);
+out:
+	if (rc != 0 && grp_priv) {
+		/* Note: This will perform all cleanups required */
+		crt_grp_priv_destroy(grp_priv);
+	}
+
+	return rc;
+}
+
+int crt_group_view_destroy(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			rc = 0;
+
+	if (!grp) {
+		D_ERROR("Null grp handle passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+
+	rc = crt_grp_priv_decref(grp_priv);
+	if (rc != 0) {
+		D_ERROR("crt_grp_priv_decref() failed; rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	return rc;
+}
+
+int crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
+{
+	struct crt_grp_priv	*grp_priv;
+	char			*uri;
+	int			rc = 0;
+
+	if (!grp) {
+		D_ERROR("Passed grp is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+
+	rc = crt_rank_uri_get(grp, rank, 0, &uri);
+	if (rc != 0) {
+		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	crt_grp_psr_set(grp_priv, rank, uri);
 
 out:
 	return rc;

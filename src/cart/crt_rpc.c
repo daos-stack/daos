@@ -337,6 +337,7 @@ static int check_ep(crt_endpoint_t *tgt_ep)
 	} else {
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
+
 		if (grp_priv->gp_service == 0) {
 			D_ERROR("bad parameter tgt_ep->ep_grp: %p (gp_primary: "
 				"%d, gp_service: %d, gp_local: %d.\n",
@@ -1361,8 +1362,12 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 	uint32_t	xid;
 	int		rc;
 
-	rc = crt_group_rank(0, &rank);
-	D_ASSERT(rc == 0);
+	if (crt_is_service()) {
+		rc = crt_group_rank(0, &rank);
+		D_ASSERT(rc == 0);
+	} else {
+		rank = 0; /* Client rank */
+	}
 
 	xid = atomic_fetch_add(&crt_gdata.cg_xid, 1);
 

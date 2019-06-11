@@ -1875,6 +1875,40 @@ int crt_group_info_set(d_iov_t *grp_info);
  */
 int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
 
+/**
+ * Create local group view and return a handle to a group.
+ * This call is only supported for cliens.
+ *
+ * \param[in] grp_id            Group id to create
+ * \param[out] ret_grp          Returned group handle
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure
+ */
+int crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
+
+/**
+ * Destroy group handle previously created by \a crt_Group_view_create
+ * This call is only suppoted for clients
+ *
+ * \param[in] grp               Group handle to destroy
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_view_destroy(crt_group_t *grp);
+
+/**
+ * Specify rank to be a PSR for the provided group
+ *
+ * \param[in] grp               Group handle
+ * \param[in] rank              Rank to set as PSR
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t

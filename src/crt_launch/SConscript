@@ -35,66 +35,29 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Build cart src"""
+"""Build crt_launch"""
+
 import os
 
-HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
-HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
-                'heap.h', 'errno.h', 'fault_inject.h', 'debug_setup.h',
-                'types.h', 'atomic.h']
+CRT_LAUNCH = 'crt_launch.c'
 
 def scons():
-    """Scons function"""
+    """scons function"""
 
-    Import('env')
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
-    env.Append(CPPPATH=['#src/include'])
-    for header in HEADERS:
-        env.Install(os.path.join('$PREFIX', 'include', 'cart'),
-                    os.path.join('include', 'cart', header))
-    for header in HEADERS_GURT:
-        env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
-                    os.path.join('include', 'gurt', header))
+    tenv = env.Clone()
 
-    # Generate the common libraries used by everyone
-    SConscript('gurt/SConscript')
-    SConscript('swim/SConscript')
-    SConscript('cart/SConscript')
+    tenv.AppendUnique(CPPPATH=['#/src/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'mpi'])
+    prereqs.require(tenv, 'mercury')
+    tenv.AppendUnique(LIBPATH=['#/src/cart'])
+    tenv.AppendUnique(RPATH="$PREFIX/lib")
+    tenv.AppendUnique(FLAGS='-pthread')
 
-    # Builders
-    SConscript('test/SConscript')
-
-    # Build self test
-    SConscript('self_test/SConscript')
-
-    # Build crt_launch
-    SConscript('crt_launch/SConscript')
-
-    # Build cart_ctl
-    SConscript('ctl/SConscript')
-
-    # Build the unit tests
-    SConscript('utest/SConscript')
-
-    if not env.GetOption('clean'):
-
-        print("Checking local headers can be included")
-        broken_includes = False
-        config_env = env.Clone()
-        config = Configure(config_env)
-        for header in HEADERS_GURT:
-            if not config.CheckHeader(os.path.join('gurt', header)):
-                broken_includes = True
-        for header in HEADERS:
-            if not config.CheckHeader(os.path.join('cart', header)):
-                broken_includes = True
-        config.Finish()
-
-        if broken_includes:
-            print("Broken local header files, cannot continue")
-            Exit(2)
-
-    Default('gurt', 'swim', 'cart', 'test', 'self_test')
+    crt_launch = tenv.Program(CRT_LAUNCH)
+    tenv.Requires(crt_launch, [cart_lib, gurt_lib])
+    tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
 
 if __name__ == "SCons.Script":
     scons()
