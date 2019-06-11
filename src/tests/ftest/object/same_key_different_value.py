@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -97,66 +97,99 @@ class SameKeyDifferentValue(TestWithServers):
         values passed to the same akey and dkey.
         Case1: Insert akey,dkey with single value
                Insert same akey,dkey with array value
-               Result: should return -1001 Error.
+               Result: should return -1001 ERR.
         Case2: Insert akey,dkey with single value
+               Punch the keys
+               Insert same akey,dkey under same object with array value
+               Result: should either pass or return -1001 ERR
+        Case3: Insert akey,dkey with single value
                Punch the keys
                Trigger aggregation
                Insert same akey,dkey under same object with array value
-               Result: Should work without errors.
+               Result: should either pass or return -1001 ERR
         :avocado: tags=object,samekeydifferentvalue,vm,small
         """
 
-        try:
-            # define akey,dkey, single value data and array value data
-            single_value_data = "a string that I want to stuff into an object"
-            array_value_data = []
-            array_value_data.append("data string one")
-            array_value_data.append("data string two")
-            array_value_data.append("data string tre")
+        # define akey,dkey, single value data and array value data
+        single_value_data = "a string that I want to stuff into an object"
+        array_value_data = []
+        array_value_data.append("data string one")
+        array_value_data.append("data string two")
+        array_value_data.append("data string tre")
 
-            dkey = "this is the dkey"
-            akey = "this is the akey"
+        dkey = "this is the dkey"
+        akey = "this is the akey"
 
-            # create an object and write single value data into it
-            obj, txn = self.container.write_an_obj(single_value_data,
-                                                   len(single_value_data)+1,
-                                                   dkey, akey, obj_cls=1)
+        aggregation = False
 
-            # read the data back and make sure its correct
-            read_back_data = self.container.read_an_obj(
-                len(single_value_data)+1, dkey, akey, obj, txn)
-            if single_value_data != read_back_data.value:
-                print("data I wrote:" + single_value_data)
-                print("data I read back" + read_back_data.value)
-                self.fail("Write data, read it back, didn't match\n")
+        for i in range(3):
+            try:
+                # create an object and write single value data into it
+                obj, txn = self.container.write_an_obj(single_value_data,
+                                                       len(single_value_data)+1,
+                                                       dkey, akey, obj_cls=1)
 
-            # write array value data to same keys, expected to fail
-            self.container.write_an_array_value(array_value_data,
-                                                dkey, akey, obj,
-                                                obj_cls=1)
+                # read the data back and make sure its correct
+                read_back_data = self.container.read_an_obj(
+                    len(single_value_data)+1, dkey, akey, obj, txn)
+                if single_value_data != read_back_data.value:
+                    print("data I wrote:" + single_value_data)
+                    print("data I read back" + read_back_data.value)
+                    self.fail("Write data, read it back, didn't match\n")
 
-            # above line is expected to return an error, if not fail the test
-            self.fail("Array value write to existing single value key"
-                      + " should have failed\n")
-        except DaosApiError as excp:
-            if "-1001" not in str(excp):
-                print(excp)
-                self.fail("Should have failed with -1001 error message,"
-                          + " but it did not\n")
-        try:
-            # punch akey and dkey
-            obj.punch_akeys(0, dkey, [akey])
-            obj.punch_dkeys(0, [dkey])
+                # test case 1
+                if i == 0:
+                    try:
+                        # write array value data to same keys, expected to fail
+                        self.container.write_an_array_value(array_value_data,
+                                                            dkey, akey, obj,
+                                                            obj_cls=1)
 
-            # trigger aggregation
-            self.container.aggregate(self.container.coh, 0)
+                        # above line is expected to return an error,
+                        # if not fail the test
+                        self.fail("Array value write to existing single value"
+                                  + " key should have failed\n")
 
-            # write array value to same set of keys under same object
-            # it should be successful this time
-            obj, txn = self.container.write_an_array_value(array_value_data,
-                                                           dkey, akey, obj,
-                                                           obj_cls=1)
-        # test should fail if exception occurs
-        except DaosApiError as excp:
-            self.fail("Test failed while trying to write array value:{}"
-                      .format(excp))
+                    # should fail with -1001 ERR
+                    except DaosApiError as excp:
+                        if "-1001" not in str(excp):
+                            print(excp)
+                            self.fail("Should have failed with -1001 error"
+                                      + " message, but it did not\n")
+
+                # test case 2 and 3
+                elif i == 1 or 2:
+                    try:
+                        # punch the keys
+                        obj.punch_akeys(0, dkey, [akey])
+                        obj.punch_dkeys(0, [dkey])
+
+                        if aggregation is True:
+                            # trigger aggregation
+                            self.container.aggregate(self.container.coh, 0)
+
+                        # write to the same set of keys under same object
+                        # with array value type
+                        self.container.write_an_array_value(array_value_data,
+                                                            dkey, akey, obj,
+                                                            obj_cls=1)
+
+                    # above write of array value should either succeed
+                    # or fail with -1001 ERR
+                    except DaosApiError as excp:
+                        if "-1001" not in str(excp):
+                            print(excp)
+                            self.fail("Should have failed with -1001 error"
+                                      + " message or the write should have"
+                                      + " been successful, but it did not\n")
+
+                    # change the value of aggregation to test Test Case 3
+                    aggregation = True
+
+                # punch the entire object after each iteration
+                obj.punch(0)
+
+            # catch the exception if test fails to write to an object
+            # or fails to punch the written object
+            except DaosApiError as excp:
+                self.fail("Failed to write to akey/dkey or punch the object")

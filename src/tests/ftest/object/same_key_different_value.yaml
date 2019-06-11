@@ -12,4 +12,4 @@ pool:
    createset:
      setname: daos_server
    createsize:
-     size: 1073741824
+     size: 10000000
