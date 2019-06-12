@@ -27,16 +27,22 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/ioserver"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security/acl"
 	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	if serverMain() != nil {
+	if err := serverMain(); err != nil {
+		log.Errorf("%+v\n", err)
 		os.Exit(1)
 	}
 }
@@ -53,6 +59,39 @@ func parseCliOpts(opts *cliOptions) error {
 	}
 
 	return nil
+}
+
+// Temporary bridge between existing configuration and scoped configuration
+func createIoserverConfigs(cfg *configuration) []*ioserver.Config {
+	configs := make([]*ioserver.Config, 0, len(cfg.Servers))
+
+	for _, cfgSrv := range cfg.Servers {
+		rank := uint32(nilRank)
+		if cfgSrv.Rank != nil {
+			rank = uint32(*cfgSrv.Rank)
+		}
+		instanceCfg := ioserver.NewConfig().
+			WithServerGroup(cfg.SystemName).
+			WithRank(rank).
+			WithStoragePath(cfgSrv.ScmMount).
+			WithXSHelperCount(cfgSrv.NrXsHelpers).
+			WithSocketDir(cfg.SocketDir).
+			WithTargetCount(cfgSrv.Targets).
+			WithSharedSegmentID(cfg.NvmeShmID).
+			WithCartProvider(cfg.Provider).
+			WithFabricInterface(cfgSrv.FabricIface).
+			WithLogMask(cfgSrv.LogMask).
+			WithLogFile(cfgSrv.LogFile)
+		// temporary hack to deal with hard-coded env goop in config
+		instanceCfg = instanceCfg.
+			WithMetadataCap(1024).
+			WithCartContextShareAddress(0).
+			WithCartTimeout(30).
+			WithDebugSubsystems("all")
+		configs = append(configs, instanceCfg)
+	}
+
+	return configs
 }
 
 func serverMain() error {
@@ -130,42 +169,72 @@ func serverMain() error {
 		return err
 	}
 
-	// Format the unformatted servers by writing persistant superblock.
-	if err = formatIosrvs(&config, false); err != nil {
-		log.Errorf("Failed to format servers: %s", err)
-		return err
+	harness := NewIOServerHarness()
+	for i, instanceConfig := range createIoserverConfigs(&config) {
+		// only start one for now
+		if i > 0 {
+			break
+		}
+		harness.AddInstance(instanceConfig)
 	}
 
-	// Only start single io_server for now.
-	// TODO: Extend to start two io_servers per host.
-	iosrv, err := newIosrv(&config, 0)
-	if err != nil {
-		log.Errorf("Failed to load server: %s", err)
-		return err
-	}
-	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
+	if err = drpcSetup(config.SocketDir, harness); err != nil {
 		log.Errorf("Failed to set up dRPC: %s", err)
 		return err
 	}
-	if err = iosrv.start(); err != nil {
-		log.Errorf("Failed to start server: %s", err)
-		return err
-	}
 
-	extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
-	if err != nil {
-		log.Errorf(
-			"Unable to determine if management service replica: %s",
-			err)
-		return err
-	}
-	log.Debugf("DAOS I/O server running %s", extraText)
+	ctx, shutdown := context.WithCancel(context.Background())
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		for {
+			select {
+			case sig := <-sigChan:
+				log.Debugf("Caught signal: %s", sig)
+				shutdown()
+			}
+		}
+	}()
 
-	// Wait for I/O server to return.
-	err = iosrv.wait()
-	if err != nil {
-		log.Errorf("DAOS I/O server exited with error: %s", err)
-	}
+	log.Debugf("Starting DAOS I/O Server")
+	return errors.Wrap(harness.StartInstances(ctx), "DAOS Server exited abnormally")
+	/*
+		// Format the unformatted servers by writing persistant superblock.
+		if err = formatIosrvs(&config, false); err != nil {
+			log.Errorf("Failed to format servers: %s", err)
+			return err
+		}
 
-	return err
+		// Only start single io_server for now.
+		// TODO: Extend to start two io_servers per host.
+		iosrv, err := newIosrv(&config, 0)
+		if err != nil {
+			log.Errorf("Failed to load server: %s", err)
+			return err
+		}
+		if err = drpcSetup(config.SocketDir, iosrv); err != nil {
+			log.Errorf("Failed to set up dRPC: %s", err)
+			return err
+		}
+		if err = iosrv.start(); err != nil {
+			log.Errorf("Failed to start server: %s", err)
+			return err
+		}
+
+		extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
+		if err != nil {
+			log.Errorf(
+				"Unable to determine if management service replica: %s",
+				err)
+			return err
+		}
+		log.Debugf("DAOS I/O server running %s", extraText)
+
+		// Wait for I/O server to return.
+		err = iosrv.wait()
+		if err != nil {
+			log.Errorf("DAOS I/O server exited with error: %s", err)
+		}
+
+		return err*/
 }

@@ -45,7 +45,7 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv) error {
+func drpcSetup(sockDir string, iosrv *IOServerHarness) error {
 	// Create our socket directory if it doesn't exist
 	_, err := os.Stat(sockDir)
 	if err != nil && os.IsPermission(err) {

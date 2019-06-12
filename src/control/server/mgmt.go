@@ -110,11 +110,11 @@ func awaitStorageFormat(config *configuration) error {
 			<-srv.formatted
 		}
 
-		if err := dropPrivileges(config); err != nil {
+		/*if err := dropPrivileges(config); err != nil {
 			log.Errorf(
 				"Failed to drop privileges: %s, running as root "+
 					"is dangerous and is not advised!", err)
-		}
+		}*/
 
 		return nil
 	}
