@@ -79,35 +79,44 @@ func (c *controlService) Teardown() {
 	}
 }
 
-// awaitStorageFormat checks if running as root and server superblocks exist,
-// if both conditions are true, wait until storage is formatted through client
-// API calls from management tool. Then drop privileges of running process.
+// awaitStorageFormat checks conditions; running as root && format_override ==
+// false in config && server superblock doesn't exist. If conds met, wait until
+// storage is formatted through client API call from management tool.
+//
+// Attempt to drop privileges of running process if running as root.
 func awaitStorageFormat(config *configuration) error {
+	var reason string
 	msgFormat := "storage format on server %d"
 	msgSkip := "skipping " + msgFormat
 	msgWait := "waiting for " + msgFormat + "\n"
 
 	if syscall.Getuid() == 0 {
-		for i, srv := range config.Servers {
-			if ok, err := config.ext.exists(
-				iosrvSuperPath(srv.ScmMount)); err != nil {
+		if !config.FormatOverride {
+			for i, srv := range config.Servers {
+				ok, err := config.ext.exists(
+					iosrvSuperPath(srv.ScmMount))
 
-				return errors.WithMessage(
-					err, "checking superblock exists")
-			} else if ok {
-				log.Debugf(
-					msgSkip+" (server already formatted)\n",
-					i)
+				if err != nil {
+					return errors.WithMessage(
+						err,
+						"checking superblock exists")
+				} else if ok {
+					log.Debugf(
+						msgSkip+" (already formatted)\n",
+						i)
 
-				continue
+					continue
+				}
+
+				// want this to be visible on stdout and log
+				fmt.Printf(msgWait, i)
+				log.Debugf(msgWait, i)
+
+				// wait on storage format client API call
+				<-srv.formatted
 			}
-
-			// want this to be visible on stdout and log
-			fmt.Printf(msgWait, i)
-			log.Debugf(msgWait, i)
-
-			// wait on storage format client API call
-			<-srv.formatted
+		} else {
+			reason = "format override set in server config"
 		}
 
 		if err := dropPrivileges(config); err != nil {
@@ -115,14 +124,15 @@ func awaitStorageFormat(config *configuration) error {
 				"Failed to drop privileges: %s, running as root "+
 					"is dangerous and is not advised!", err)
 		}
-
-		return nil
+	} else {
+		reason = os.Args[0] + " running as non-root user"
 	}
 
-	log.Debugf(
-		"skipping storage format (%s running as non-root user)\n",
-		os.Args[0])
+	if reason != "" {
+		log.Debugf("storage format skipped (%s)\n", reason)
+	}
 
+	// broadcast storage formatting stage completed
 	for _, srv := range config.Servers {
 		close(srv.formatted)
 	}

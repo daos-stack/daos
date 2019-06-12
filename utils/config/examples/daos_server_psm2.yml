@@ -7,6 +7,8 @@ socket_dir: /tmp/daos_psm2
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
+## uncomment to start data plane as root without waiting for storage format
+# format_override: true
 ## uncomment to drop privileges before starting data plane
 ## (if started as root to perform hardware provisioning)
 # user_name: daosuser

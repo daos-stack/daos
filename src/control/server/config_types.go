@@ -24,9 +24,9 @@
 package main
 
 import (
-	"os"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -175,7 +175,7 @@ type server struct {
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
 	CliOpts   []string      // tuples (short option, value) e.g. ["-p", "10000"...]
-	Hostname string   // used when generating templates
+	Hostname  string        // used when generating templates
 	formatted chan struct{} // closed when server is formatted
 }
 
@@ -187,7 +187,7 @@ func newDefaultServer() server {
 	return server{
 		ScmClass:    scmDCPM,
 		BdevClass:   bdNVMe,
-		Hostname:  host,
+		Hostname:    host,
 		NrXsHelpers: 2,
 	}
 }
@@ -227,6 +227,7 @@ type configuration struct {
 	FaultPath      string          `yaml:"fault_path"`
 	FaultCb        string          `yaml:"fault_cb"`
 	FabricIfaces   []string        `yaml:"fabric_ifaces"`
+	FormatOverride bool            `yaml:"format_override"`
 	ScmMountPath   string          `yaml:"scm_mount_path"`
 	BdevInclude    []string        `yaml:"bdev_include"`
 	BdevExclude    []string        `yaml:"bdev_exclude"`

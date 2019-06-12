@@ -167,11 +167,11 @@
 #
 #
 ## Format override when true will continue to format and start data plane
-## without waiting for client API storage format call (which formats
-## NVMe and SCM storage devices.
+## without waiting for client API storage format call (formats NVMe and SCM
+## storage devices). Only relevant when daos_server it started by root.
 #
-## default: true
-#format_override: false
+## default: false
+#format_override: true
 #
 #
 ## Username used to lookup user uid/gid to drop privileges to if started

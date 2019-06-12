@@ -312,7 +312,7 @@ DAOS I/O server (v0.4.0) process 135939 started on rank 0 (out of 1) with 1 targ
 If `format_override` IS SET to `false` in config file, control plane will attempt to start the data plane instances ONLY if the DAOS superblock exists within the specified `scm_mount`.
 Otherwise, the control plane will wait until an administrator calls "[storage format](../dmg/README.md#subcommands)" over the client API from the management tool.
 If `storage format` call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
-If a superblock exists in `scm_mount`, and the location is mounted, the control plane will fail (so as to not inadvertently wipe a useful SCM location).
+If a superblock exists in `scm_mount`, and the location is mounted, the control plane will not perform a storage format (so as to not inadvertently wipe an active SCM dir).
 
 <details>
 <summary>Example output from invoking `daos_server` on single host with `format_override` FALSE when superblock already exists</summary>
