@@ -1,0 +1,9 @@
+# Unittests Name and Paramter to be mention in this file.
+hosts:
+  test_machines:
+    - boro-A
+server_config:
+    name: daos_server
+Test:
+  daos_addons:
+    testname: daos_addons_test
