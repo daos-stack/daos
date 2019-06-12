@@ -116,7 +116,7 @@ func awaitStorageFormat(config *configuration) error {
 				<-srv.formatted
 			}
 		} else {
-			reason = "format override set in server config"
+			reason = "format override set true in server config"
 		}
 
 		if err := dropPrivileges(config); err != nil {
@@ -130,11 +130,11 @@ func awaitStorageFormat(config *configuration) error {
 
 	if reason != "" {
 		log.Debugf("storage format skipped (%s)\n", reason)
-	}
 
-	// broadcast storage formatting stage completed
-	for _, srv := range config.Servers {
-		close(srv.formatted)
+		// broadcast storage formatting stage completed
+		for _, srv := range config.Servers {
+			close(srv.formatted)
+		}
 	}
 
 	return nil
