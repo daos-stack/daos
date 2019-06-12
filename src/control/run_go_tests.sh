@@ -47,7 +47,7 @@ function setup_environment()
 	LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
 	export LD_LIBRARY_PATH
 	export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
-	export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include -I${SRCDIR}/../../include"
+	export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
 }
 
 check=$(check_environment)
