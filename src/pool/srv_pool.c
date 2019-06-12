@@ -2232,6 +2232,48 @@ out:
 	daos_prop_free(prop);
 }
 
+
+static int
+replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
+{
+	d_rank_list_t	*replicas;
+	d_rank_list_t	*tmp_replicas;
+	d_rank_list_t	 failed_ranks;
+	d_rank_list_t	 replace_ranks;
+	int		 rc;
+
+	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
+					   &replace_ranks);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out, rc);
+	}
+	if (replace_ranks.rl_nr > 0)
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replace_ranks,
+				       ds_rsvc_get_md_cap());
+	if (failed_ranks.rl_nr > 0)
+		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed_ranks);
+	D_FREE(failed_ranks.rl_ranks);
+	memset(&failed_ranks, 0, sizeof(failed_ranks));
+	memset(&replace_ranks, 0, sizeof(replace_ranks));
+
+	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
+		daos_rank_list_sort(replicas);
+		daos_rank_list_sort(tmp_replicas);
+		if (!daos_rank_list_identical(replicas, tmp_replicas))
+			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
+				DP_UUID(svc->ps_uuid));
+		daos_rank_list_free(tmp_replicas);
+	}
+	daos_rank_list_free(replicas);
+out:
+	return rc;
+}
+
 /* Callers are responsible for d_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
@@ -2257,12 +2299,6 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 	ABT_rwlock_wrlock(svc->ps_lock);
-
-	if (replicasp != NULL) {
-		rc = rdb_get_ranks(svc->ps_rsvc.s_db, replicasp);
-		if (rc != 0)
-			D_GOTO(out_map_version, rc);
-	}
 
 	/* Create a temporary pool map based on the last committed version. */
 	rc = read_map(&tx, &svc->ps_root, &map);
@@ -2300,13 +2336,16 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	}
 
 	updated = true;
+	replace_failed_replicas(svc, map);
 
 out_replicas:
-	if (rc) {
-		d_rank_list_free(*replicasp);
-		*replicasp = NULL;
+	if (replicasp != NULL) {
+		if (rc == 0)
+			rc = rdb_get_ranks(svc->ps_rsvc.s_db, replicasp);
+		else
+			*replicasp = NULL;
 	}
-out_map_version:
+
 	if (map_version_p != NULL)
 		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
 						      svc->ps_pool->sp_map :

@@ -812,16 +812,11 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 }
 
 int
-ds_rsvc_add_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
-		     d_rank_list_t *ranks, size_t size, struct rsvc_hint *hint)
+ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 {
-	struct ds_rsvc	*svc;
 	int		 rc;
 
-	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
-	if (rc != 0)
-		goto out;
-	rc = ds_rsvc_dist_start(class, id, svc->s_db_uuid, ranks,
+	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks,
 				true /* create */, false /* bootstrap */, size);
 
 	/* TODO: Attempt to add replicas that were successfully started */
@@ -830,13 +825,45 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
 	rc = rdb_add_replicas(svc->s_db, ranks);
 	/* Clean up failed ranks */
 	if (ranks->rl_nr == 0)
-		goto out_leader;
+		goto out;
 out_stop:
-	ds_rsvc_dist_stop(class, id, ranks, true /* destroy */);
-out_leader:
+	ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks, true /* destroy */);
+out:
+	return rc;
+}
+
+int
+ds_rsvc_add_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
+		     d_rank_list_t *ranks, size_t size, struct rsvc_hint *hint)
+{
+	struct ds_rsvc	*svc;
+	int		 rc;
+
+	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
+	if (rc != 0)
+		return rc;
+	rc = ds_rsvc_add_replicas_s(svc, ranks, size);
 	ds_rsvc_set_hint(svc, hint);
 	put_leader(svc);
-out:
+	return rc;
+}
+
+int
+ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
+{
+	d_rank_list_t	*stop_ranks;
+	int		 rc;
+
+	rc = daos_rank_list_dup(&stop_ranks, ranks);
+	if (rc != 0)
+		return rc;
+	rc = rdb_remove_replicas(svc->s_db, ranks);
+
+	/* filter out failed ranks */
+	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
+	ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
+			  true /* destroy */);
+	daos_rank_list_free(stop_ranks);
 	return rc;
 }
 
@@ -845,25 +872,14 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
 			d_rank_list_t *ranks, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;
-	d_rank_list_t	*stop_ranks;
 	int		 rc;
 
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
-		goto out;
-	rc = daos_rank_list_dup(&stop_ranks, ranks);
-	if (rc != 0)
-		goto out_leader;
-	rc = rdb_remove_replicas(svc->s_db, ranks);
-
-	/* filter out failed ranks */
-	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
-	ds_rsvc_dist_stop(class, id, stop_ranks, true /* destroy */);
-	daos_rank_list_free(stop_ranks);
-out_leader:
+		return rc;
+	rc = ds_rsvc_remove_replicas_s(svc, ranks);
 	ds_rsvc_set_hint(svc, hint);
 	put_leader(svc);
-out:
 	return rc;
 }
 

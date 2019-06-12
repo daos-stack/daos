@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -371,3 +371,86 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	return 0;
 }
 
+#define SWAP_RANKS(ranks, i, j)					\
+	do {							\
+		d_rank_t r = ranks->rl_ranks[i];		\
+								\
+		ranks->rl_ranks[i] = ranks->rl_ranks[j];	\
+		ranks->rl_ranks[j] = r;				\
+	} while (0)
+
+/*
+ * Find failed ranks in `replicas` and copy to a new list `failed`
+ * Replace the failed ranks with ranks which are up and running.
+ * `alt` points to the subset of `replicas` containing replacements.
+ */
+int
+ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
+			      d_rank_list_t *failed, d_rank_list_t *alt)
+{
+	struct pool_domain	*domains = NULL;
+	int			 nnodes;
+	int			 nfailed;
+	int			 nreplaced;
+	int			 idx;
+	int			 i;
+
+	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
+	if (nnodes == 0) {
+		D_ERROR("no nodes in pool map\n");
+		return -DER_IO;
+	}
+
+#define COND1(s) map_ranks_include((s), domains[i].do_comp.co_status)
+#define COND2    daos_rank_list_find(replicas, domains[i].do_comp.co_rank, &idx)
+
+	/**
+	 * Move all ranks in the list of replicas which are marked as DOWN
+	 * in the pool map to the end of the list.
+	 **/
+	for (i = 0, nfailed = 0; i < nnodes; i++) {
+		if (!COND1(MAP_RANKS_DOWN) || !COND2)
+			continue;
+		if (idx < replicas->rl_nr - (nfailed + 1))
+			SWAP_RANKS(replicas, idx,
+				   replicas->rl_nr - (nfailed + 1));
+		++nfailed;
+	}
+
+	if (nfailed == 0) {
+		memset(failed, 0, sizeof(*failed));
+		memset(alt, 0, sizeof(*alt));
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(failed->rl_ranks, nfailed);
+	if (failed->rl_ranks == NULL)
+		return -DER_NOMEM;
+
+	/** Make `alt` point to failed subset towards the end **/
+	alt->rl_nr = nfailed;
+	alt->rl_ranks = replicas->rl_ranks + (replicas->rl_nr - nfailed);
+
+	/** Copy failed ranks to make room for replacements **/
+	failed->rl_nr = nfailed;
+	daos_rank_list_copy(failed, alt);
+
+	/**
+	 * For replacements, search all ranks which are marked as UP
+	 * in the pool map and not present in the list of replicas.
+	 **/
+	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
+		if (!COND1(MAP_RANKS_UP) || COND2 ||
+		    domains[i].do_comp.co_rank == 0 /* Skip rank 0 */)
+			continue;
+		alt->rl_ranks[nreplaced++] = domains[i].do_comp.co_rank;
+	}
+
+	if (nreplaced < nfailed) {
+		D_WARN("Not enough ranks available; Failed %d, Replacements %d",
+			nfailed, nreplaced);
+		alt->rl_nr = nreplaced;
+		replicas->rl_nr -= (nfailed - nreplaced);
+	}
+	return 0;
+}

@@ -112,6 +112,8 @@ int ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 int ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group);
 int ds_pool_map_tgts_update(struct pool_map *map,
 			    struct pool_target_id_list *tgts, int opc);
+int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
+				  d_rank_list_t *failed, d_rank_list_t *alt);
 
 /*
  * srv_iv.c
