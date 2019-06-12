@@ -216,7 +216,8 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return rc;
 	}
 
-	iter->it_type		= type;
+	D_ASSERT(iter->it_type == type);
+
 	iter->it_ops		= dict->id_ops;
 	iter->it_state		= VOS_ITS_NONE;
 	iter->it_ref_cnt	= 1;

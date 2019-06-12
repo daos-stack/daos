@@ -360,6 +360,18 @@ struct iv_priv_entry {
 	void			**priv;
 };
 
+static bool
+iv_entry_valid(struct ds_iv_entry *entry, struct ds_iv_key *key)
+{
+	if (!entry->iv_valid)
+		return false;
+
+	if (entry->iv_class->iv_class_ops->ivc_ent_valid)
+		return entry->iv_class->iv_class_ops->ivc_ent_valid(entry, key);
+
+	return true;
+}
+
 static int
 ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	     crt_iv_ver_t *iv_ver, uint32_t flags,
@@ -368,7 +380,8 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct iv_priv_entry	*priv_entry = priv;
 	struct ds_iv_ns		*ns;
 	struct ds_iv_entry	*entry;
-	struct ds_iv_key	 key;
+	struct ds_iv_key	key;
+	bool			valid;
 	int			 rc;
 
 	D_ASSERT(iv_value != NULL);
@@ -386,13 +399,14 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		entry = priv_entry->entry;
 	}
 
+	valid = iv_entry_valid(entry, &key);
 	D_DEBUG(DB_TRACE, "FETCH: Key [%d:%d] entry %p valid %s\n", key.rank,
-		key.class_id, entry, entry->iv_valid ? "yes" : "no");
+		key.class_id, entry, valid ? "yes" : "no");
 
 	/* Forward the request to its parent if it is not root, and
 	 * let's caller decide how to deal with leader.
 	 */
-	if (!entry->iv_valid && ns->iv_master_rank != dss_self_rank())
+	if (!valid && ns->iv_master_rank != dss_self_rank())
 		return -DER_IVCB_FORWARD;
 
 	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);

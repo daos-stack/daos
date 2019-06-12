@@ -304,8 +304,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		return -DER_INVAL;
 	}
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
-			  DAOS_INTENT_DEFAULT, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, true, DAOS_INTENT_DEFAULT, &obj);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
 		return rc;

@@ -1655,6 +1655,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 	struct evt_desc		*dst_desc;
 	struct evt_trace	*trace;
 	struct evt_node		*node;
+	daos_size_t		 csum_buf_len;
 	daos_size_t		 size;
 	int			 rc;
 
@@ -1670,7 +1671,10 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 	if (rc != 0)
 		return rc;
 
-	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc, sizeof(*dst_desc));
+	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+
+	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc,
+			     sizeof(*dst_desc) + csum_buf_len);
 	if (rc != 0)
 		return rc;
 
@@ -2618,9 +2622,11 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 				width = tcx->tc_inob * evt_rect_width(rect);
 				desc = evt_off2desc(tcx, ne->ne_child);
 				rc = evt_desc_free(tcx, desc, width);
-			} else {
-				rc = umem_free(evt_umm(tcx), ne->ne_child);
+				if (rc != 0)
+					return rc;
 			}
+
+			rc = umem_free(evt_umm(tcx), ne->ne_child);
 			if (rc != 0)
 				return rc;
 		}
@@ -2845,11 +2851,13 @@ int evt_overhead_get(int alloc_overhead, int tree_order,
 		return -DER_INVAL;
 	}
 
+	ovhd->to_dyn_count = 0;
 	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
-	ovhd->to_single_size = alloc_overhead + sizeof(struct evt_desc) +
-		sizeof(struct evt_node_entry);
-	ovhd->to_node_size = alloc_overhead + sizeof(struct evt_node) +
+	ovhd->to_node_rec_msize = sizeof(struct evt_node_entry);
+	ovhd->to_node_overhead.no_size = alloc_overhead +
+		sizeof(struct evt_node) +
 		(tree_order * sizeof(struct evt_node_entry));
-	ovhd->to_order = tree_order;
+	ovhd->to_node_overhead.no_order = tree_order;
+
 	return 0;
 }

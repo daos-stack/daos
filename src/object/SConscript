@@ -14,12 +14,13 @@ def scons():
 
     # generate server module
     srv = daos_build.library(denv, 'obj',
-                             common_tgts + ['srv_obj.c', 'srv_mod.c'])
+                             common_tgts + ['srv_obj.c', 'srv_mod.c',
+                                            'srv_obj_remote.c'])
     denv.Install('$PREFIX/lib/daos_srv', srv)
 
     # Object client library
     dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_mod.c',
-				     'cli_ec.c'])
+                                     'cli_ec.c'])
     dc_obj_tgts += common_tgts
     Export('dc_obj_tgts')
 

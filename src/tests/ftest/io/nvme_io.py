@@ -30,53 +30,27 @@ import traceback
 import uuid
 import re
 import avocado
+from apricot import TestWithServers
 
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-import server_utils
 import write_host_file
 import ior_utils
 
 from general_utils import DaosTestError
-from daos_api import DaosContext, DaosPool, DaosApiError, DaosLog
+from daos_api import DaosPool, DaosApiError
 
-class NvmeIo(avocado.Test):
+class NvmeIo(TestWithServers):
     """
     Test Class Description:
         Test the general Metadata operations and boundary conditions.
+    :avocado: recursive
     """
 
     def setUp(self):
-        self.pool = None
-        self.hostlist = None
-        self.hostfile_clients = None
-        self.hostfile = None
+        super(NvmeIo, self).setUp()
+
+        # initialize variables
         self.out_queue = None
         self.pool_connect = False
-
-        with open('../../../.build_vars.json') as json_f:
-            build_paths = json.load(json_f)
-
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("name", '/server_config/',
-                                            'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.d_log = DaosLog(self.context)
-        self.hostlist = self.params.get("servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
-        #Start Server
-        server_utils.run_server(self.hostfile, self.server_group, self.basepath)
-
-    def tearDown(self):
-        try:
-            if self.pool_connect:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            server_utils.stop_server(hosts=self.hostlist)
 
     def verify_pool_size(self, original_pool_info, ior_args):
         """
@@ -88,7 +62,7 @@ class NvmeIo(avocado.Test):
         current_pool_info = self.pool.pool_query()
         #if Transfer size is < 4K, Pool size will verified against NVMe, else
         #it will be checked against SCM
-        if ior_args['stripe_size'] >= 4096:
+        if ior_args['transfer_size'] >= 4096:
             print("Size is > 4K,Size verification will be done with NVMe size")
             storage_index = 1
         else:
@@ -103,8 +77,8 @@ class NvmeIo(avocado.Test):
         replica_number = re.findall(r'\d+', "ior_args['object_class']")
         if replica_number:
             obj_multiplier = int(replica_number[0])
-        expected_pool_size = (ior_args['slots'] * ior_args['block_size'] *
-                              obj_multiplier)
+        expected_pool_size = (ior_args['client_processes'] *
+                              ior_args['block_size'] * obj_multiplier)
 
         if free_pool_size < expected_pool_size:
             raise DaosTestError(
@@ -123,16 +97,11 @@ class NvmeIo(avocado.Test):
         """
         ior_args = {}
 
-        hostlist_clients = self.params.get("clients", '/run/hosts/*')
         tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
         #Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                self.hostfile_clients = write_host_file.write_host_file(
-                    hostlist_clients,
-                    self.workdir,
-                    ior_param[4])
                 #There is an issue with NVMe if Transfer size>64M, Skipped this
                 #sizes for now
                 if ior_param[2] > 67108864:
@@ -166,35 +135,25 @@ class NvmeIo(avocado.Test):
                                                        '/run/ior/*')
                 ior_args['iteration'] = self.params.get("iteration",
                                                         '/run/ior/*')
-                ior_args['stripe_size'] = ior_param[2]
+                ior_args['transfer_size'] = ior_param[2]
                 ior_args['block_size'] = ior_param[3]
-                ior_args['stripe_count'] = self.params.get("stripecount",
-                                                           '/run/ior/*')
-                ior_args['async_io'] = self.params.get("asyncio",
-                                                       '/run/ior/*')
                 ior_args['object_class'] = obj_type
-                ior_args['slots'] = ior_param[4]
+                ior_args['client_processes'] = ior_param[4]
 
-                #IOR is going to use the same --daos.stripeSize,
-                #--daos.recordSize and Transfer size.
                 try:
                     size_before_ior = self.pool.pool_query()
-                    ior_utils.run_ior(ior_args['client_hostfile'],
-                                      ior_args['iorflags'],
-                                      ior_args['iteration'],
-                                      ior_args['block_size'],
-                                      ior_args['stripe_size'],
-                                      ior_args['pool_uuid'],
-                                      ior_args['svc_list'],
-                                      ior_args['stripe_size'],
-                                      ior_args['stripe_size'],
-                                      ior_args['stripe_count'],
-                                      ior_args['async_io'],
-                                      ior_args['object_class'],
-                                      ior_args['basepath'],
-                                      ior_args['slots'],
-                                      filename=str(uuid.uuid4()),
-                                      display_output=True)
+                    ior_utils.run_ior_daos(ior_args['client_hostfile'],
+                                           ior_args['iorflags'],
+                                           ior_args['iteration'],
+                                           ior_args['block_size'],
+                                           ior_args['transfer_size'],
+                                           ior_args['pool_uuid'],
+                                           ior_args['svc_list'],
+                                           ior_args['object_class'],
+                                           ior_args['basepath'],
+                                           ior_args['client_processes'],
+                                           cont_uuid=str(uuid.uuid4()),
+                                           display_output=True)
                     self.verify_pool_size(size_before_ior, ior_args)
                 except ior_utils.IorFailed as exe:
                     print (exe)

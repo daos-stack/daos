@@ -113,6 +113,31 @@ class ContainerAttributeTest(TestWithServers):
                 "".join(random.choice(allchar)
                         for x in range(random.randint(1, 100))))
 
+    def test_container_large_attributes(self):
+        """
+        Test ID: DAOS-1359
+
+        Test description: Test large randomly created container attribute.
+
+        :avocado: tags=container,container_attr,attribute,large_conattribute
+        """
+        self.create_data_set()
+        attr_dict = self.large_data_set
+
+        try:
+            self.container.set_attr(data=attr_dict)
+            size, buf = self.container.list_attr()
+
+            verify_list_attr(attr_dict, size, buf)
+
+            results = {}
+            results = self.container.get_attr(attr_dict.keys())
+            verify_get_attr(attr_dict, results)
+        except DaosApiError as excep:
+            print(excep)
+            print(traceback.format_exc())
+            self.fail("Test was expected to pass but it failed.\n")
+
     def test_container_attribute(self):
         """
         Test basic container attribute tests.
@@ -125,11 +150,6 @@ class ContainerAttributeTest(TestWithServers):
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -148,13 +168,6 @@ class ContainerAttributeTest(TestWithServers):
 
             results = {}
             results = self.container.get_attr([name[0]])
-
-            # for this test the dictionary has been altered, need to just
-            # set it to what we are expecting to get back
-            if name[0] is not None:
-                if "largenumberofattr" in name[0]:
-                    attr_dict.clear()
-                    attr_dict[name[0]] = value[0]
 
             verify_get_attr(attr_dict, results)
 
@@ -183,11 +196,6 @@ class ContainerAttributeTest(TestWithServers):
         expected_for_param.append(value[1])
 
         attr_dict = {name[0]:value[0]}
-        if name[0] is not None:
-            if "largenumberofattr" in name[0]:
-                self.create_data_set()
-                attr_dict = self.large_data_set
-                attr_dict[name[0]] = value[0]
 
         expected_result = 'PASS'
         for result in expected_for_param:

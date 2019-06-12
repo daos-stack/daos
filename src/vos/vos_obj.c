@@ -156,8 +156,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	/* NB: punch always generate a new incarnation of the object */
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
-			  false, DAOS_INTENT_PUNCH, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, false, DAOS_INTENT_PUNCH, &obj);
 	if (rc == 0) {
 		if (dkey) /* key punch */
 			rc = key_punch(obj, epoch, pm_ver, dkey,
@@ -929,6 +929,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	oiter->it_iter.it_type = type;
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
@@ -941,7 +942,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(param->ip_hdl),
 			  param->ip_oid, param->ip_epr.epr_hi, true,
 			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj);
 	if (rc != 0)
@@ -1042,7 +1043,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), info->ii_hdl,
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(info->ii_hdl),
 			  info->ii_oid, info->ii_epr.epr_hi, true,
 			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj);
 	if (rc != 0)
@@ -1359,19 +1360,21 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, uint64_t attr, bool set)
 {
 	struct vos_pool		*vpool;
-	struct vos_object	*obj;
+	struct vos_object	*obj = NULL;
+	struct vos_container	*cont;
 	daos_epoch_range_t	 epr = {epoch, epoch};
 	int			 rc;
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
-			  DAOS_INTENT_UPDATE, &obj);
-	if (rc != 0)
-		return rc;
-
-	vpool = vos_obj2pool(obj);
+	cont = vos_hdl2cont(coh);
+	vpool = vos_cont2pool(cont);
 	rc = vos_tx_begin(vpool);
 	if (rc != 0)
 		goto exit;
+
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, false, DAOS_INTENT_UPDATE, &obj);
+	if (rc != 0)
+		goto end;
 
 	rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
 			     sizeof(obj->obj_df->vo_oi_attr));
@@ -1454,8 +1457,8 @@ vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	vos_dth_set(dth);
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
-			  DAOS_INTENT_DEFAULT, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, true, DAOS_INTENT_DEFAULT, &obj);
 	vos_dth_set(NULL);
 	if (rc != 0)
 		return rc;

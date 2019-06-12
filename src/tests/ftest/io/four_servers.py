@@ -24,30 +24,32 @@
 from __future__ import print_function
 
 import os
-import distutils.spawn
 from apricot import TestWithServers
 
 import write_host_file
 import ior_utils
 from daos_api import DaosPool, DaosApiError
 
-class EightServers(TestWithServers):
+class FourServers(TestWithServers):
     """
-    Test class Description: Runs IOR with 8 servers.
+    Test class Description: Runs IOR with four servers.
     :avocado: recursive
     """
-
     def setUp(self):
-        super(EightServers, self).setUp()
+        super(FourServers, self).setUp()
 
-        # setting client variables
+        #set client variables
         self.hostfile_clients = (
-            write_host_file.write_host_file(self.hostlist_clients, self.workdir,
-                                            None))
+            write_host_file.write_host_file(self.hostlist_clients,
+                                            self.workdir, None))
 
-    def executable(self, iorflags=None):
+    def test_fourservers(self):
         """
-        Executable function to run ior for sequential and random order
+        Jira ID: DAOS-1263
+        Test Description: Test IOR with four servers.
+        Use Cases: Different combinations of 1/64/128 Clients,
+                   1K/4K/32K/128K/512K/1M transfer size.
+        :avocado: tags=ior,fourservers
         """
 
         # parameters used in pool create
@@ -59,59 +61,34 @@ class EightServers(TestWithServers):
         createsvc = self.params.get("svcn", '/run/pool/createsvc/')
 
         # ior parameters
-        client_processes = self.params.get("np", '/run/ior/clientslots/*')
         iteration = self.params.get("iter", '/run/ior/iteration/')
-        block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
-        object_class = self.params.get("o", '/run/ior/objectclass/*/')
+        client_processes = self.params.get("np", '/run/ior/clientslots/*')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/')
         transfer_size = self.params.get("t",
                                         '/run/ior/transfersize_blocksize/*/')
+        block_size = self.params.get("b",
+                                     '/run/ior/transfersize_blocksize/*/')
+        object_class = self.params.get("o", '/run/ior/objectclass/')
 
         try:
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            #print("self.context:{}".format(self.context))
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None, None, createsvc)
+            self.pool.create(createmode, createuid, creategid, createsize,
+                             createsetid, None, None, createsvc)
 
             pool_uuid = self.pool.get_uuid_str()
+            tmp_rank_list = []
             svc_list = ""
-            for item in range(createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
+            for i in range(createsvc):
+                tmp_rank_list.append(int(self.pool.svc.rl_ranks[i]))
+                svc_list += str(tmp_rank_list[i]) + ":"
             svc_list = svc_list[:-1]
 
-            print ("svc_list: {}".format(svc_list))
-
-            ior_utils.run_ior_daos(self.hostfile_clients, iorflags, iteration,
+            ior_utils.run_ior_daos(self.hostfile_clients, ior_flags, iteration,
                                    block_size, transfer_size, pool_uuid,
                                    svc_list, object_class, self.basepath,
                                    client_processes)
 
         except (DaosApiError, ior_utils.IorFailed) as excep:
-            print(excep)
-            self.fail("Test was expected to pass but it failed.\n")
-
-    def test_sequential(self):
-        """
-        Jira ID: DAOS-1264
-        Test Description: Run IOR with 1,64 and 128 clients config
-                          sequentially.
-        Use Cases: Different combinations of 1/64/128 Clients and
-                   1K/4K/32K/128K/512K/1M transfersize.
-        :avocado: tags=all,daosio,large,ior_sequential
-        """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/sequential/')
-        self.executable(ior_flags)
-
-    def test_random(self):
-        """
-        Jira ID: DAOS-1264
-        Test Description: Run IOR with 1,64 and 128 clients config in random
-                          order.
-        Use Cases: Different combinations of 1/64/128 Clients and
-                   1K/4K/32K/128K/512K/1M transfersize.
-        :avocado: tags=ior,eightservers,ior_random
-        :avocado: tags=all,daosio,large,ior_random
-        """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/random/')
-        self.executable(ior_flags)
+            self.fail("<FourServers Test run Failed>\n {}".format(excep))

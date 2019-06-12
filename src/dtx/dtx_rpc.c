@@ -219,23 +219,13 @@ dtx_req_list_cb(void **args)
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case DTX_ST_INIT:
-				if (dra->dra_result != DTX_ST_COMMITTED)
-					dra->dra_result = DTX_ST_INIT;
-				break;
 			case DTX_ST_PREPARED:
 				if (dra->dra_result == 0)
 					dra->dra_result = DTX_ST_PREPARED;
 				break;
 			default:
-				if (drr->drr_result == -DER_NONEXIST) {
-					if (dra->dra_result <= 0 ||
-					    dra->dra_result == DTX_ST_PREPARED)
-						dra->dra_result = DTX_ST_INIT;
-				} else if (dra->dra_result != DTX_ST_INIT) {
-					dra->dra_result = drr->drr_result >= 0 ?
-						-DER_IO : drr->drr_result;
-				}
+				dra->dra_result = drr->drr_result >= 0 ?
+					-DER_IO : drr->drr_result;
 				break;
 			}
 

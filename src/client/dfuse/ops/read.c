@@ -59,7 +59,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	rc = dfs_read(inode->ie_dfs->dffs_dfs, inode->ie_obj, sgl, position,
 		      &read_size);
-	if (rc == -DER_SUCCESS) {
+	if (rc) {
 		rc = fuse_reply_buf(req, buff, read_size);
 		if (rc != 0)
 			DFUSE_TRA_ERROR(inode,
