@@ -311,8 +311,7 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 		targets = daos_rank_list_parse(pb_req->ranks, ",");
 		if (targets == NULL) {
 			D_ERROR("failed to parse target ranks\n");
-			rc = -DER_UNKNOWN;
-			goto out;
+			D_GOTO(out, rc = -DER_UNKNOWN);
 		}
 		D_DEBUG(DB_MGMT, "ranks in: %s\n", pb_req->ranks);
 	}
@@ -335,8 +334,7 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 
 	if (svc_p->rl_nr == 0) {
 		D_ERROR("no pool svc replicas returned");
-		rc = -DER_UNKNOWN;
-		goto out;
+		D_GOTO(out, rc = -DER_UNKNOWN);
 	}
 
 	/* Populate the pool service replica ranks string. */
@@ -356,8 +354,7 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 				svc_str = extra;
 			} else {
 				D_ERROR("failed to allocate buffer");
-				rc = -DER_NOMEM;
-				goto out;
+				D_GOTO(out, rc = -DER_NOMEM);
 			}
 		}
 	}
