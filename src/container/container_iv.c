@@ -365,6 +365,29 @@ cont_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 	return 0;
 }
 
+static bool
+cont_iv_ent_valid(struct ds_iv_entry *entry, struct ds_iv_key *key)
+{
+	daos_handle_t		root_hdl;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
+	struct cont_iv_key	*civ_key = key2priv(key);
+	int			rc;
+
+	if (!entry->iv_valid)
+		return false;
+
+	/* Let's check whether the container really exist */
+	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
+	d_iov_set(&key_iov, civ_key->cont_uuid, sizeof(uuid_t));
+	d_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
+	if (rc != 0)
+		return false;
+
+	return true;
+}
+
 struct ds_iv_class_ops cont_iv_ops = {
 	.ivc_ent_init	= cont_iv_ent_init,
 	.ivc_ent_get	= cont_iv_ent_get,
@@ -374,6 +397,7 @@ struct ds_iv_class_ops cont_iv_ops = {
 	.ivc_ent_update	= cont_iv_ent_update,
 	.ivc_ent_refresh = cont_iv_ent_refresh,
 	.ivc_value_alloc = cont_iv_value_alloc,
+	.ivc_ent_valid	= cont_iv_ent_valid,
 };
 
 int
