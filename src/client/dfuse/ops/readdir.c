@@ -75,8 +75,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 			rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj,
 					 &anchor, &count, dirents);
-			if (rc != -DER_SUCCESS) {
-				D_GOTO(err, 0);
+			if (rc) {
+				D_GOTO(err, rc = -rc);
 			}
 			offset -= count;
 			next_offset += count;
@@ -92,8 +92,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 		rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj,
 				 &anchor, &nr, dirents);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(err_or_buf, 0);
+		if (rc) {
+			D_GOTO(err_or_buf, rc = -rc);
 		}
 
 		for (i = 0; i < nr; i++) {
@@ -147,36 +147,36 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs,
 					    inode->ie_obj, dirents[i].d_name,
 					    O_RDONLY, &ie->ie_obj, &mode);
-			if (rc != -DER_SUCCESS) {
+			if (rc) {
 				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
+				D_GOTO(err_or_buf, rc = -rc);
 			}
 
 			rc = dfs_ostat(inode->ie_dfs->dffs_dfs, ie->ie_obj,
 				       &ie->ie_stat);
-			if (rc != -DER_SUCCESS) {
+			if (rc) {
 				dfs_release(ie->ie_obj);
 				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
+				D_GOTO(err_or_buf, rc = -rc);
 			}
 
 			rc = dfs_obj2id(ie->ie_obj, &oid);
-			if (rc != -DER_SUCCESS) {
+			if (rc) {
 				DFUSE_TRA_ERROR(inode, "no oid");
 				dfs_release(ie->ie_obj);
 				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
+				D_GOTO(err_or_buf, rc = -rc);
 			}
 
 			rc = dfuse_lookup_inode(fs_handle,
 						inode->ie_dfs,
 						&oid,
 						&ie->ie_stat.st_ino);
-			if (rc != -DER_SUCCESS) {
+			if (rc) {
 				DFUSE_TRA_ERROR(inode, "no ino");
 				dfs_release(ie->ie_obj);
 				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
+				D_GOTO(err_or_buf, rc);
 			}
 
 			entry.attr = ie->ie_stat;

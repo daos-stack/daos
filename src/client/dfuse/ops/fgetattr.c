@@ -31,8 +31,8 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	int		rc;
 
 	rc = dfs_ostat(ie->ie_dfs->dffs_dfs, ie->ie_obj, &stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
+	if (rc) {
+		D_GOTO(err, rc = -rc);
 	}
 
 	/* Copy the inode number from the inode struct, to avoid having to

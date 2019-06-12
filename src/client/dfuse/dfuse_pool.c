@@ -73,8 +73,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
 		if (rc == -DER_SUCCESS) {
 
-			DFUSE_TRA_INFO(ie,
-				       "Reusing existing pool entry without reconnect");
+			DFUSE_TRA_INFO(ie, "Reusing existing pool entry "
+				       "without reconnect");
 
 			D_FREE(dfs);
 
@@ -93,7 +93,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("daos_pool_connect() failed: (%d)",
 				rc);
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = daos_der2errno(rc));
 	}
 
 	D_ALLOC_PTR(ie);
@@ -117,7 +117,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = daos_pool_query(dfs->dffs_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "daos_pool_query() failed: (%d)", rc);
-		D_GOTO(close, rc);
+		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
 	/* Convert the owner information to uid/gid */
@@ -151,10 +151,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 				ie->ie_dfs,
 				NULL,
 				&ie->ie_stat.st_ino);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)",
-				rc);
-		D_GOTO(close, rc = EIO);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
+		D_GOTO(close, rc);
 	}
 
 	dfs->dffs_root = ie->ie_stat.st_ino;
