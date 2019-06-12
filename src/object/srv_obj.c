@@ -465,8 +465,9 @@ ds_check_container(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	int			 rc;
 
 	rc = cont_iv_capa_fetch(pool_uuid, cont_hdl_uuid, cont_uuid, &cont_hdl);
-	if (rc == -DER_NONEXIST) {
-		rc = -DER_NO_PERM;
+	if (rc) {
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_HDL;
 		D_GOTO(out, rc);
 	}
 

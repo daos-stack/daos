@@ -2008,8 +2008,8 @@ dc_obj_update(tse_task_t *task)
 	if (rc)
 		goto out_task;
 
-	D_DEBUG(DB_IO, "update "DF_OID" dkey %llu\n",
-		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
+	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
+		DP_OID(obj->cob_md.omd_id), dkey_hash);
 
 	if (!obj_auxi->io_retry) {
 		rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
