@@ -162,8 +162,9 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%d)", rc);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
+					strerror(-rc));
 		}
 	}
 

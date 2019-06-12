@@ -70,8 +70,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
 		      mode, O_CREAT, 0, 0, NULL, &ie->ie_obj);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+	if (rc) {
+		D_GOTO(release, rc = -rc);
 	}
 
 	/* TODO: Add a dfs_dup() call to get a object for the handle as well
@@ -84,8 +84,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+	if (rc) {
+		D_GOTO(release, rc = -rc);
 	}
 
 	LOG_FLAGS(ie, fi->flags);
