@@ -78,7 +78,8 @@ def set_test_environment():
         os.environ["PYTHONPATH"] = ":".join(required_python_paths)
     else:
         defined_python_paths = [
-            os.path.abspath(path) for path in python_path.split(":")]
+            os.path.abspath(os.path.expanduser(path))
+            for path in python_path.split(":")]
         for required_path in required_python_paths:
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
@@ -335,12 +336,14 @@ def get_log_files(config_yaml, daos_files=None):
     """
     # List of default DAOS files
     if daos_files is None:
+        env_log = os.getenv("D_LOG_FILE", "/tmp/daos.log")
         daos_files = {
             "log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
-            "daos_log_file": "/tmp/daos.log",
+            "daos_log_file": env_log,
+            "daos_core_test_logs": "{}/*_{}".format(*os.path.split(env_log))
         }
 
     # Determine the log file locations defined by the last run test
@@ -434,20 +437,18 @@ def archive_logs(avocado_logs_dir, test_yaml):
     print("Archiving host logs from {} in {}".format(host_list, doas_logs_dir))
     get_output("mkdir {}".format(doas_logs_dir))
 
+    # Create a list of log files that are not directories
+    non_dir_files = [
+        log_file for log_file in log_files.values()
+        if os.path.splitext(os.path.basename(log_file))[1] != ""]
+
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful
-    file_commands = []
-    for log_file in log_files.values():
-        name, ext = os.path.splitext(os.path.basename(log_file))
-        if ext != "":
-            # Do not copy directories
-            new_file = os.path.join(
-                doas_logs_dir, "{{host}}-{}{}".format(name, ext))
-            file_commands.append(
-                "if [ -e {0} ]; then scp {0} {1}:{2} && rm -fr {0}; fi".format(
-                    log_file, this_host, new_file))
-    spawn_commands(
-        host_list, "ssh {{host}} \"{}\"".format("; ".join(file_commands)))
+    command = "set -e; ssh {{host}} '{}'".format(
+        "for file in {}; do if [ -e $file ]; then "
+        "scp $file {}:{}/{{host}}-${{{{file##*/}}}} && rm -fr $file; fi; "
+        "done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
+    spawn_commands(host_list, command)
 
 
 def rename_logs(avocado_logs_dir, test_file):
