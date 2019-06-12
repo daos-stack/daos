@@ -48,7 +48,6 @@ function setup_environment()
 	export LD_LIBRARY_PATH
 	export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
 	export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include -I${SRCDIR}/../../include"
-	echo "Just set CGO flags.."
 }
 
 check=$(check_environment)
