@@ -180,7 +180,7 @@ daos_debug_init(char *logfile)
 		D_PRINT_ERR("Failed to register daos debug bits: %d\n", rc);
 
 	/* Register DAOS debug bit groups */
-	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default");
+	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default", D_LOG_SET_AS_DEFAULT);
 	if (rc < 0) {
 		D_PRINT_ERR("Error allocating daos debug group: %d\n", rc);
 		rc = -DER_UNINIT;

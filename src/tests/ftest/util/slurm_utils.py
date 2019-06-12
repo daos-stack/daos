@@ -90,7 +90,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
             output = output + "_" + str(unique) + "_%j_%t"
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
-            for key, value in sbatch.iteritems():
+            for key, value in sbatch.items():
                 script_file.write("#SBATCH --{}={}\n".format(key, value))
         script_file.write("\n")
 
@@ -131,7 +131,7 @@ def run_slurm_script(script, logfile=None):
     cmd = "sbatch " + script
     output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
     print(output)
-    if 'Submitted batch job' in output:
+    if 'Submitted batch job' in str(output):
         output_list = output.split()
         if len(output_list) >= 4:
             return output_list[3]

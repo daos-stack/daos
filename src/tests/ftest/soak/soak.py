@@ -27,7 +27,7 @@ import os
 import time
 from apricot import TestWithServers
 from daos_api import DaosPool, DaosApiError
-import ior_utils
+from ior_utils import IorCommand
 import slurm_utils
 
 
@@ -48,7 +48,7 @@ class Soak(TestWithServers):
     that are listed in the yaml file.
 
     The tests also use an IOR that is compiled with MPICH and is built with
-    both the DAOS and MPI-IO drivers.
+    both the DAOS and MPI-IO drivers.  
 
     """
 
@@ -92,7 +92,10 @@ class Soak(TestWithServers):
             self.fail("Pool.create failed.\n")
 
         pool_uuid = pool_cxt.get_uuid_str()
-        svc_list = ":".join([str(int(pool_cxt.svc.rl_ranks[i])) for i in range(createsvc)])
+
+        svc_int_list = [
+            int(pool_cxt.svc.rl_ranks[item]) for item in range(createsvc)]
+        svc_list = ":".join([str(item) for item in svc_int_list])
 
         self.pool_attr = [pool_cxt, pool_uuid, svc_list, createsize]
         return self.pool_attr
@@ -114,23 +117,35 @@ class Soak(TestWithServers):
 
         """
         # TODO blocksize will need to be poolsize/(#nodes*#task) per job
-        pool_uuid = pool_attr[1]
-        pool_svcl = pool_attr[2]
         iteration = self.test_iteration
         ior_params = "/run/" + job_spec + "/"
-        iorflags = self.params.get("F", ior_params + "iorflags/")
-        block_size = self.params.get("blocksize", job_params + "*")
-        object_class = self.params.get("o", ior_params + "objectclass/*")
-        transfer_size = self.params.get("t", ior_params + "transfersize/*")
-        mode = self.params.get("a", ior_params + "iormode/*")
-        cmd_time = self.params.get("time", job_params + '*')
         if self.test_iteration < 0:
             iteration = 1000000
-        cmd = ior_utils.get_ior_cmd(iorflags, iteration, block_size,
-                                    transfer_size, pool_uuid, pool_svcl,
-                                    object_class, duration=cmd_time,
-                                    mode=mode)
-        return cmd
+        ior_cmd = IorCommand()
+        ior_cmd.set_params(self, ior_params)
+        ior_cmd.block_size.value = self.params.get(
+            "blocksize", job_params + "*")
+        ior_cmd.repetitions.value = iteration
+        ior_cmd.max_duration.value = self.params.get("time", job_params + '*')
+        ior_cmd.daos_pool.value = pool_attr[1]
+        ior_cmd.daos_svcl.value = pool_attr[2]
+
+        command = ior_cmd.__str__()
+        if ior_cmd.api.value == "MPIIO":
+            env = {
+                "CRT_ATTACH_INFO_PATH": os.path.join(
+                    self.basepath, "install/tmp"),
+                "DAOS_POOL": str(ior_cmd.daos_pool.value),
+                "MPI_LIB": "",
+                "DAOS_SVCL": str(ior_cmd.daos_svcl.value),
+                "DAOS_SINGLETON_CLI": 1,
+                "FI_PSM2_DISCONNECT": 1,
+            }
+            export_cmd = [
+                "export {}={}".format(key, val) for key, val in env.items()]
+            command = "; ".join(export_cmd + command)
+        print("<<IOR cmdline >>: {}".format(command))
+        return command
 
     def create_dmg_cmdline(self, job_params, job_spec):
         """Create a dmg cmdline to run in slurm batch.
@@ -189,8 +204,8 @@ class Soak(TestWithServers):
                 self.fail("Soak job: {} Job spec {} is invalid".format(
                     job, job_spec))
 
-            # a single cmdline per sbatch job; so that a failure is per cmdline
-            # change to a single batch per multiple jobs later.
+            # a single cmdline per batch job; so that a failure is per cmdline
+            # change to multiple cmdlines per batch job  later.
 
             output = os.path.join(self.tmp, self.test_name + "_" + job_name
                                   + "_" + job_spec + "_results.out")
@@ -282,7 +297,7 @@ class Soak(TestWithServers):
             # print("<<Waiting for results {} >>".format(self.soak_results))
             time.sleep(10)
         # check for job COMPLETED and remove it from the job queue
-        for job, result in self.soak_results.iteritems():
+        for job, result in self.soak_results.items():
             if result == "COMPLETED":
                 job_id_list.remove(int(job))
             else:
@@ -354,9 +369,9 @@ class Soak(TestWithServers):
         Test ID: DAOS-2256
         Test Description: This will create a slurm batch job that runs
         various jobs defined in the soak yaml
-        This test will run for 12 hours.
+        This test will run for 1 hours.
         Initially it will run the same jobs in a loop.  As new benchmarks
-        and applications are added, the soak12 will be continuous
+        and applications are added, the soak1 will be continuous
         stream of random jobs
         :avocado: tags=soak_1
         """

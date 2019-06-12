@@ -38,15 +38,6 @@
 #include <daos_srv/vos_types.h>
 
 /**
- * Register the function for checking whether the replica is leader or not.
- *
- * \param checker	[IN]	The specified function for checking leader.
- */
-void
-vos_dtx_register_check_leader(int (*checker)(uuid_t, daos_unit_oid_t *,
-			      uint32_t, struct pl_obj_layout **));
-
-/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
@@ -119,9 +110,7 @@ vos_dtx_fetch_committable(daos_handle_t coh, int max, struct dtx_entry **dtes);
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param punch		[IN]	For punch operation or not.
  *
- * \return		DTX_ST_INIT	Related DTX has been initialized, but
- *					the modification has not completed yet.
- *			DTX_ST_PREPARED	means that the DTX has been 'prepared',
+ * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
  *					on related replica(s). If all replicas
  *					have 'prepared', then the whole DTX is

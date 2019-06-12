@@ -13,8 +13,10 @@ def scons():
 
     dmg = daos_build.program(denv, 'dmg', 'dmg.c', LIBS=libs)
     dcont = daos_build.program(denv, 'dcont', 'dcont.c', LIBS=libs)
+    daos = daos_build.program(denv, 'daos', 'daos.c', LIBS=libs)
     denv.Install('$PREFIX/bin/', dmg)
     denv.Install('$PREFIX/bin/', dcont)
+    denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,12 +1,18 @@
 hosts:
-   test_machines:
-        test_servers:
-            - boro-4
-            - boro-5
-        test_clients:
-            - boro-4
-            - boro-5
-
+    test_servers:
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
+    test_clients:
+        - boro-E
+        - boro-F
+        - boro-G
+        - boro-H
+        - boro-I
+        - boro-J
+        - boro-K
+        - boro-L
 timeout: 7200
 server_config:
     name: daos_server
@@ -24,7 +30,7 @@ pool1:
     createsize:
         size: 100000000000
     createsvc:
-        svcn: 1
+        svcn: 3
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -50,7 +56,7 @@ smoke:
 soak1:
     name: soak1
     test_timeout: 3600
-    test_iteration: 1
+    test_iteration: 5
     nodesperjob: 1
     pool: pool1
     joblist:
@@ -59,7 +65,7 @@ soak1:
       - job24
 # job_params  - defines the job specifications for each cmdline listed
 #               name:                The name of the Avocado testcase
-#               test_timeout:        The cmdline timeout; passed to slurm
+#               time:                The IOR cmdline timeout; passed to slurm
 #               tasks:               slurm --ntaskspernode param
 #               blocksize:           IOR blocksize; need to consider poolsize
 #                                    and total ntasks (nodes * ntaskspernode)
@@ -71,7 +77,7 @@ jobsmoke:
     name: smoke
     time: 10
     tasks: 1
-    blocksize: '10G'
+    blocksize: '64M'
     jobspec:
       - ior3
       - ior1
@@ -81,7 +87,7 @@ job1:
     name: job1
     time: 10
     tasks: 1
-    blocksize: '4G'
+    blocksize: '64M'
     jobspec:
         - ior1
         - ior2
@@ -91,7 +97,7 @@ job16:
     name: job16
     time: 20
     tasks: 16
-    blocksize: '1G'
+    blocksize: '64M'
     jobspec:
         - ior1
         - ior2
@@ -101,8 +107,8 @@ job16:
 job24:
     name: job24
     time: 30
-    tasks: 20
-    blocksize: '128m'
+    tasks: 24
+    blocksize: '64m'
     jobspec:
         - ior1
         - ior2
@@ -115,62 +121,39 @@ job2:
     jobspec:
         - dmg1
 # IOR params -a DAOS and -a MPIIO
-# 
+# sequential
 ior1:
-    iormode:
-        a: "DAOS"
-    iorflags:
-        F: "-v -w -W -r -R"
-    transfersize:
-        t: '4m'
-    objectclass:
-        o: "LARGE"
+    api: DAOS
+    flags: -v -w -W -r -R
+    transfer_size: 4k
+    daos_oclass: LARGE
 ior2:
-    iormode:
-        a: "DAOS"
-    iorflags:
-        F: "-v -w -W -r -R"
-    transfersize:
-        t: '2m'
-    objectclass:
-        o: "LARGE"
+    api: DAOS
+    flags: -v -w -W -r -R
+    transfer_size: 128k
+    daos_oclass: LARGE
+# random
 ior3:
-    iormode:
-        a: "DAOS"
-    iorflags:
-        F: "-v -w -W -r -R"
-    transfersize:
-        t: '1m'
-    objectclass:
-        o: "LARGE"
+    api: DAOS
+    flags: -v -w -W -r -R
+    transfer_size: 1m
+    daos_oclass: LARGE
 # IOR MPIIO cmdlines  - TBD
 ior4:
-    iormode:
-        a: "MPIIO"
-    iorflags:
-        F: "-v -w -W -r -R"
-    transfersize:
-        t: '4k'
-    objectclass:
-        o: "TINY"
+    api: MPIIO
+    flags: -v -w -W -r -R
+    transfer_size: 4k
+    daos_oclass: TINY
 ior5:
-    iormode:
-        a: "MPIIO"
-    iorflags:
-        F: "-v -w -W -r -R"
-    transfersize:
-        t: '8k'
-    objectclass:
-        o: "SMALL"
+    api: MPIIO
+    flags: -v -w -W -r -R
+    transfer_size: 128k
+    daos_oclass: LARGE
 ior6:
-    iormode:
-        a: "MPIIO"
-    iorflags:
-        F: "-v -w -W -r -R"
-    transfersize:
-        t: '4m'
-    objectclass:
-        o: "LARGE"
+    api: MPIIO
+    flags: -v -w -W -r -R
+    transfer_size: 1m
+    daos_oclass: LARGE
 # dmg cmdline params - TBD
 dmg1:
     commands:
