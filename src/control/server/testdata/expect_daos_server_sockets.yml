@@ -24,6 +24,7 @@ servers:
   bdev_number: 0
   bdev_size: 0
   cliopts: []
+  hostname: ""
 provider: ofi+sockets
 socket_dir: /tmp/daos_sockets
 access_points:

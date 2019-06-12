@@ -23,6 +23,7 @@ servers:
   bdev_number: 0
   bdev_size: 0
   cliopts: []
+  hostname: ""
 provider: ofi+psm2
 socket_dir: /tmp/daos_psm2
 access_points:
