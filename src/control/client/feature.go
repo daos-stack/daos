@@ -26,6 +26,7 @@ package client
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -36,15 +37,45 @@ import (
 // FeatureMap is an alias for mgmt features supported by gRPC server.
 type FeatureMap map[string]string
 
+func (fm FeatureMap) String() string {
+	var sb strings.Builder
+
+	for k, v := range fm {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", k, v))
+	}
+
+	return sb.String()
+}
+
 // FeatureResult contains results and error of a request
 type FeatureResult struct {
 	Fm  FeatureMap
 	Err error
 }
 
+func (fr FeatureResult) String() string {
+	if fr.Err != nil {
+		return fr.Err.Error()
+	}
+	return fr.Fm.String()
+}
+
 // ClientFeatureMap is an alias for management features supported on server
 // connected to given client.
 type ClientFeatureMap map[string]FeatureResult
+
+func (cfm ClientFeatureMap) String() string {
+	var sb strings.Builder
+
+	for server, featureMap := range cfm {
+		sb.WriteString(fmt.Sprintf("%s:\n", server))
+		for _, feature := range strings.Split(featureMap.String(), "\n") {
+			sb.WriteString(fmt.Sprintf(" %s\n", feature))
+		}
+	}
+
+	return sb.String()
+}
 
 // getFeature returns a feature from a requested name.
 func (c *control) getFeature(name string) (*pb.Feature, error) {

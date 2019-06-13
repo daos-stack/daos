@@ -43,12 +43,8 @@ type ScanStorCmd struct{}
 // run NVMe and SCM storage query on all connected servers
 func scanStor() {
 	cCtrlrs, cModules := conns.ScanStorage()
-
-	fmt.Printf(
-		unpackClientMap(cCtrlrs),
-		"NVMe SSD controller and constituent namespace")
-
-	fmt.Printf(unpackClientMap(cModules), "SCM module")
+	fmt.Printf("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
+	fmt.Printf("SCM modules:\n%s", cModules)
 }
 
 // Execute is run when ScanStorCmd activates
@@ -81,8 +77,8 @@ func formatStor(force bool) {
 	if force || getConsent() {
 		fmt.Println("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
-		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage format result")
-		fmt.Printf(unpackClientMap(cMountResults), "SCM storage format result")
+		fmt.Printf("NVMe storage format results:\n%s", cCtrlrResults)
+		fmt.Printf("SCM storage format results:\n%s", cMountResults)
 	}
 }
 
@@ -121,8 +117,8 @@ func updateStor(params *pb.UpdateStorageParams, force bool) {
 	if force || getConsent() {
 		fmt.Println("")
 		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
-		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
-		fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
+		fmt.Printf("NVMe storage update results:\n%s", cCtrlrResults)
+		fmt.Printf("SCM storage update results:\n%s", cModuleResults)
 	}
 }
 
