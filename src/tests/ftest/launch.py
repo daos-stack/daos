@@ -324,11 +324,13 @@ def get_yaml_data(yaml_file):
 
 
 def get_log_files(config_yaml, daos_files=None):
-    """Get a list of DAOS files for used by the specified yaml file.
+    """Get a list of DAOS files used by the specified yaml file.
 
     Args:
         config_yaml (str): yaml file defining log file locations
-        daos_files (dict, optional): default DAOS log files. Defaults to None.
+        daos_files (dict, optional): dictionary of default DAOS log files whose
+            keys define which yaml log parameters to use to update the default
+            values. Defaults to None.
 
     Returns:
         dict: a dictionary of DAOS file name keys and full path values
@@ -444,9 +446,9 @@ def archive_logs(avocado_logs_dir, test_yaml):
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful
-    command = "set -e; ssh {{host}} '{}'".format(
+    command = "ssh {{host}} 'set -e; {}'".format(
         "for file in {}; do if [ -e $file ]; then "
-        "scp $file {}:{}/{{host}}-${{{{file##*/}}}} && rm -fr $file; fi; "
+        "scp $file {}:{}/${{{{file##*/}}}}-{{host}} && rm -fr $file; fi; "
         "done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
     spawn_commands(host_list, command)
 
