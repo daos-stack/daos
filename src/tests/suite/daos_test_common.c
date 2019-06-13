@@ -395,9 +395,18 @@ test_teardown(void **state)
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc) {
+			/* The container might be left some reference count
+			 * during rebuild test due to "hacky"exclude triggering
+			 * rebuild mechanism(REBUILD24/25), so even the
+			 * container is not closed, then delete will fail
+			 * here, but if we do not free the arg, then next
+			 * subtest might fail, expecially for rebuild test.
+			 * so let's destory the arg anyway. Though some pool
+			 * might be left here. XXX
+			 */
 			print_message("failed to destroy container "DF_UUIDF
 				      ": %d\n", DP_UUID(arg->co_uuid), rc);
-			return rc;
+			goto free;
 		}
 	}
 
@@ -419,7 +428,9 @@ test_teardown(void **state)
 		}
 	}
 
+free:
 	D_FREE(arg);
+	*state = NULL;
 	return 0;
 }
 
@@ -632,17 +643,19 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 
 	for (i = 0; i < sub_tests_size; i++) {
 		int idx = sub_tests ? sub_tests[i] : i;
-		test_arg_t	*arg = state;
+		test_arg_t	*arg;
 
 		if (idx >= tests_size) {
 			print_message("No test %d\n", idx);
 			continue;
 		}
 
-		arg->index = idx;
 		print_message("%s\n", tests[idx].name);
 		if (tests[idx].setup_func)
 			tests[idx].setup_func(&state);
+
+		arg = state;
+		arg->index = idx;
 
 		tests[idx].test_func(&state);
 		if (tests[idx].teardown_func)

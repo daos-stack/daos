@@ -25,21 +25,41 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
-	       off_t position, struct fuse_file_info *fi)
+dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ino,
+		 struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
-	d_iov_t			iov = {};
-	d_sg_list_t		sgl = {};
-	int			rc;
+	struct dfuse_obj_hdl		*oh = NULL;
+	int				rc;
 
-	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
+	D_ALLOC_PTR(oh);
+	if (!oh)
+		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, sgl, position);
+	/** duplicate the file handle for the fuse handle */
+	rc = dfs_dup(ino->ie_dfs->dffs_dfs, ino->ie_obj, fi->flags,
+		     &oh->doh_obj);
+	if (rc)
+		D_GOTO(err, rc = -rc);
+
+	oh->doh_dfs = ino->ie_dfs->dffs_dfs;
+	fi->fh = (uint64_t)oh;
+
+	DFUSE_REPLY_OPEN(req, fi);
+	return;
+err:
+	D_FREE(oh);
+	DFUSE_FUSE_REPLY_ERR(req, rc);
+}
+
+void
+dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
+		    struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	int				rc;
+
+	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
-		DFUSE_REPLY_WRITE(NULL, req, len);
-	else
-		DFUSE_REPLY_ERR_RAW(NULL, req, -rc);
+		D_FREE(oh);
+	DFUSE_FUSE_REPLY_ERR(req, -rc);
 }

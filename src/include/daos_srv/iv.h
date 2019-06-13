@@ -242,6 +242,18 @@ typedef int (*ds_iv_ent_refresh_t)(struct ds_iv_entry *entry,
 typedef int (*ds_iv_value_alloc_t)(struct ds_iv_entry *ent,
 				   d_sg_list_t *sgl);
 
+/**
+ * Check whether the entry is valid
+ *
+ * \param ent [IN]	entry to be check
+ * \param key [IN]	key to help checking
+ *
+ * \return		true if it is valid
+ *                      false if it is not valid
+ */
+typedef bool (*ds_iv_ent_valid_t)(struct ds_iv_entry *ent,
+				 struct ds_iv_key *key);
+
 struct ds_iv_class_ops {
 	ds_iv_key_pack_t	ivc_key_pack;
 	ds_iv_key_unpack_t	ivc_key_unpack;
@@ -254,6 +266,7 @@ struct ds_iv_class_ops {
 	ds_iv_ent_update_t	ivc_ent_update;
 	ds_iv_ent_refresh_t	ivc_ent_refresh;
 	ds_iv_value_alloc_t	ivc_value_alloc;
+	ds_iv_ent_valid_t	ivc_ent_valid;
 };
 
 extern struct crt_iv_ops iv_cache_ops;

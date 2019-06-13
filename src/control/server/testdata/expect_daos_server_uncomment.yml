@@ -20,6 +20,7 @@ servers:
   bdev_number: 0
   bdev_size: 0
   cliopts: []
+  hostname: ""
 - rank: 1
   targets: 20
   nr_xs_helpers: 1
@@ -42,6 +43,7 @@ servers:
   bdev_number: 1
   bdev_size: 16
   cliopts: []
+  hostname: ""
 provider: ofi+verbs;ofi_rxm
 socket_dir: ./.daos/daos_server
 access_points:

@@ -27,12 +27,12 @@
 #define LOOP_COUNT 10
 
 struct iterate_data {
-	fuse_req_t	req;
-	struct dfuse_inode_entry *inode;
-	daos_anchor_t	*anchor;
-	void		*buf;
-	size_t		size;
-	size_t		b_offset;
+	fuse_req_t			req;
+	struct dfuse_inode_entry	*inode;
+	struct dfuse_obj_hdl		*oh;
+	void				*buf;
+	size_t				size;
+	size_t				b_offset;
 };
 
 int
@@ -59,16 +59,16 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
-		D_GOTO(out, rc = -rc);
+		D_GOTO(out, rc);
 
 	rc = dfuse_lookup_inode(fs_handle, udata->inode->ie_dfs, &oid,
 				&stbuf.st_ino);
 	if (rc)
-		D_GOTO(out, rc = EIO);
+		D_GOTO(out, rc);
 
 	ns = fuse_add_direntry(udata->req, udata->buf + udata->b_offset,
 			       udata->size - udata->b_offset, name, &stbuf,
-			       (off_t)(udata->anchor));
+			       (off_t)(&udata->oh->doh_anchor));
 
 	DFUSE_TRA_DEBUG(udata->inode, "add direntry: size = %ld, return %d\n",
 			udata->size - udata->b_offset, ns);
@@ -82,34 +82,34 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 
 out:
 	dfs_release(obj);
+	/* we return the negative errno back to DFS */
 	return rc;
 }
 
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
-		 size_t size, off_t offset)
+		 size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	daos_anchor_t	*anchor = NULL;
-	uint32_t	nr = LOOP_COUNT;
-	void		*buf = NULL;
-	size_t		buf_size, loop_size;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
+	uint32_t		nr = LOOP_COUNT;
+	void			*buf = NULL;
+	size_t			buf_size, loop_size;
 	struct iterate_data	*udata = NULL;
-	int		i;
-	int		rc;
+	int			i = 1;
+	int			rc;
 
 	DFUSE_TRA_DEBUG(inode, "Offset %zi", offset);
 
-	if (offset != 0) {
-		anchor = (daos_anchor_t *)offset;
-		if (daos_anchor_is_eof(anchor)) {
-			D_FREE(anchor);
-			fuse_reply_buf(req, NULL, 0);
-			return;
-		}
+	if (offset < 0)
+		D_GOTO(err, rc = EINVAL);
+
+	D_ASSERT(oh);
+
+	if (offset == 0) {
+		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
 	} else {
-		D_ALLOC_PTR(anchor);
-		if (anchor == NULL)
-			D_GOTO(err, rc = ENOMEM);
+		if (offset != (off_t)&oh->doh_anchor)
+			D_GOTO(err, rc = EIO);
 	}
 
 	D_ALLOC(buf, size);
@@ -124,25 +124,22 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	udata->buf = buf;
 	udata->size = size;
 	udata->b_offset = 0;
-	udata->anchor = anchor;
 	udata->inode = inode;
-
-	i = 1;
+	udata->oh = oh;
 
 	/** account for the size to hold the fuse dirent + padding */
 	loop_size = LOOP_COUNT * sizeof(uint64_t) * 4;
 
-	while (!daos_anchor_is_eof(anchor)) {
+	while (!daos_anchor_is_eof(&oh->doh_anchor)) {
 		/** while the size still fits, continue enumerating */
 		if (size <= loop_size * i)
 			D_GOTO(out, 0);
 
 		buf_size = size - (loop_size * i);
-		rc = dfs_iterate(inode->ie_dfs->dffs_dfs, inode->ie_obj,
-				 anchor, &nr, buf_size, filler_cb,
-				 udata);
+		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor,
+				 &nr, buf_size, filler_cb, udata);
 		/** if entry does not fit in buffer, just return */
-		if (rc == DER_KEY2BIG)
+		if (rc == -E2BIG)
 			D_GOTO(out, 0);
 		/** otherwise a different error occured */
 		if (rc)

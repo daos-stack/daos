@@ -367,11 +367,12 @@ out:
 
 static int
 dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
-	      daos_handle_t *oh)
+	      unsigned int mode, daos_handle_t *oh)
 {
 	struct dac_array	*array;
 	uuid_t			coh_uuid;
 	uuid_t			cont_uuid;
+	unsigned int		array_mode;
 	int			rc = 0;
 
 	D_ASSERT(array_glob != NULL);
@@ -393,8 +394,9 @@ dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
 	if (array == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = daos_obj_open(coh, array_glob->oid, array_glob->mode,
-			   &array->daos_oh, NULL);
+	array_mode = (mode == 0) ? array_glob->mode : mode;
+	rc = daos_obj_open(coh, array_glob->oid, array_mode, &array->daos_oh,
+			   NULL);
 	if (rc) {
 		D_ERROR("Failed local object open (%d).\n", rc);
 		D_GOTO(out_array, rc);
@@ -405,7 +407,7 @@ dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
 	array->chunk_size = array_glob->chunk_size;
 	array->oid.hi = array_glob->oid.hi;
 	array->oid.lo = array_glob->oid.lo;
-	array->mode = array_glob->mode;
+	array->mode = array_mode;
 
 	array_hdl_link(array);
 	*oh = array_ptr2hdl(array);
@@ -418,7 +420,8 @@ out:
 }
 
 int
-dac_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh)
+dac_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
+		       daos_handle_t *oh)
 {
 	struct dac_array_glob	*array_glob;
 	int			 rc = 0;
@@ -452,7 +455,7 @@ dac_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dac_array_g2l(coh, array_glob, oh);
+	rc = dac_array_g2l(coh, array_glob, mode, oh);
 	if (rc != 0)
 		D_ERROR("dac_array_g2l failed (%d).\n", rc);
 

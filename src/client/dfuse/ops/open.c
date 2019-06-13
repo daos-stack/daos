@@ -25,17 +25,54 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name)
+dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*ie;
+	d_list_t			*rlink;
+	struct dfuse_obj_hdl		*oh = NULL;
 	int				rc;
 
-	rc = dfs_remove(parent->ie_dfs->dffs_dfs, parent->ie_obj, name, false);
-
-	if (rc == 0) {
-		DFUSE_FUSE_REPLY_ZERO(req);
-	} else {
-		DFUSE_REPLY_ERR_RAW(fs_handle, req, -rc);
+	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_FUSE_REPLY_ERR(req, ENOENT);
+		return;
 	}
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	D_ALLOC_PTR(oh);
+	if (!oh)
+		D_GOTO(err, rc = ENOMEM);
+
+	/** duplicate the file handle for the fuse handle */
+	rc = dfs_dup(ie->ie_dfs->dffs_dfs, ie->ie_obj, fi->flags,
+		     &oh->doh_obj);
+	if (rc)
+		D_GOTO(err, rc = -rc);
+
+	oh->doh_dfs = ie->ie_dfs->dffs_dfs;
+	fi->direct_io = 1;
+	fi->fh = (uint64_t)oh;
+
+	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	DFUSE_REPLY_OPEN(req, fi);
+
+	return;
+err:
+	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	D_FREE(oh);
+	DFUSE_FUSE_REPLY_ERR(req, rc);
+}
+
+void
+dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	int				rc;
+
+	/** duplicate the file handle for the fuse handle */
+	rc = dfs_release(oh->doh_obj);
+	if (rc == 0)
+		D_FREE(oh);
+	DFUSE_FUSE_REPLY_ERR(req, -rc);
 }
