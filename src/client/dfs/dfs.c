@@ -1814,6 +1814,80 @@ out:
 }
 
 int
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
+{
+	dfs_obj_t	*new_obj;
+	unsigned int	daos_mode;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -EINVAL;
+	if (obj == NULL || _new_obj == NULL)
+		return -EINVAL;
+
+	daos_mode = get_daos_obj_mode(flags);
+	if (daos_mode == -1) {
+		D_ERROR("Invalid access mode.\n");
+		return -EINVAL;
+	}
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode,
+			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
+	if (rc) {
+		D_ERROR("Permission Denied.\n");
+		return rc;
+	}
+
+	D_ALLOC_PTR(new_obj);
+	if (new_obj == NULL)
+		return -ENOMEM;
+
+	switch (obj->mode & S_IFMT) {
+	case S_IFDIR:
+		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode,
+				   &new_obj->oh, NULL);
+		if (rc)
+			D_GOTO(err, rc = -daos_der2errno(rc));
+		break;
+	case S_IFREG:
+	{
+		char		buf[1024];
+		daos_iov_t	ghdl;
+
+		daos_iov_set(&ghdl, buf, 1024);
+
+		rc = daos_array_local2global(obj->oh, &ghdl);
+		if (rc)
+			D_GOTO(err, rc = -daos_der2errno(rc));
+
+		rc = daos_array_global2local(dfs->coh, ghdl, daos_mode,
+					     &new_obj->oh);
+		if (rc)
+			D_GOTO(err, rc = -daos_der2errno(rc));
+		break;
+	}
+	case S_IFLNK:
+		new_obj->value = strdup(obj->value);
+		break;
+	default:
+		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
+		D_GOTO(err, rc = -EINVAL);
+	}
+
+	strncpy(new_obj->name, obj->name, DFS_MAX_PATH);
+	new_obj->mode = obj->mode;
+	oid_cp(&new_obj->parent_oid, obj->parent_oid);
+	oid_cp(&new_obj->oid, obj->oid);
+
+	*_new_obj = new_obj;
+	return 0;
+
+err:
+	D_FREE(new_obj);
+	return rc;
+}
+
+int
 dfs_release(dfs_obj_t *obj)
 {
 	int rc = 0;
