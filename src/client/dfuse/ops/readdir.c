@@ -37,7 +37,7 @@
 
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
-		 size_t size, off_t offset)
+		 size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	size_t				b_offset = 0;
