@@ -1388,7 +1388,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return -EINVAL;
 
 	daos_mode = get_daos_obj_mode(flags);
-	if (daos_mode == -1) 
+	if (daos_mode == -1)
 		return -EINVAL;
 
 	rem = strdup(path);
