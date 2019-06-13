@@ -64,12 +64,6 @@ do {								\
 } while (0)
 
 static int
-error_convert(int error)
-{
-	return -daos_der2errno(error);
-}
-
-static int
 parse_filename(const char *path, char **_obj_name, char **_cont_name)
 {
 	char *f1 = NULL;
@@ -174,7 +168,7 @@ dfuse_access(const char *path, int mask)
 		if (!S_ISDIR(pmode)) {
 			fprintf(stderr, "%s does not resolve to a dir\n",
 				dir_name);
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out, rc = -ENOTDIR);
 		}
 	}
 
@@ -187,7 +181,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -204,7 +198,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 	/** TODO - maybe add a dfs_fchmod() for this */
 	if (fi != NULL) {
 		rc = dfs_chmod(dfs, (dfs_obj_t *)fi->fh, mode);
-		return error_convert(rc);
+		return rc;
 	}
 #endif
 
@@ -225,7 +219,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 		if (!S_ISDIR(pmode)) {
 			fprintf(stderr, "%s does not resolve to a dir\n",
 				dir_name);
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out, rc = -ENOTDIR);
 		}
 	}
 
@@ -238,7 +232,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -253,7 +247,7 @@ dfuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 
 	if (fi != NULL) {
 		rc = dfs_ostat(dfs, (dfs_obj_t *)fi->fh, stbuf);
-		return error_convert(rc);
+		return rc;
 	}
 
 	if (path == NULL)
@@ -270,7 +264,7 @@ dfuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	rc = dfs_stat(dfs, parent, name, stbuf);
@@ -284,7 +278,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -297,7 +291,7 @@ dfuse_truncate(const char *path, off_t size, struct fuse_file_info *fi)
 
 	if (fi != NULL) {
 		rc = dfs_punch(dfs, (dfs_obj_t *)fi->fh, size, DFS_MAX_FSIZE);
-		return error_convert(rc);
+		return rc;
 	}
 
 	if (path == NULL)
@@ -314,7 +308,7 @@ dfuse_truncate(const char *path, off_t size, struct fuse_file_info *fi)
 out:
 	if (obj)
 		dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 #define NUM_DIRENTS 10
@@ -343,7 +337,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		if (rc) {
 			fprintf(stderr, "Failed to lookup path %s (%d)\n",
 				path, rc);
-			return error_convert(rc);
+			return rc;
 		}
 		release = true;
 	}
@@ -368,7 +362,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 out:
 	if (release && obj)
 		dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -396,7 +390,7 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	mode = S_IFREG | mode;
@@ -416,7 +410,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -444,7 +438,7 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	/** TODO - set the oclass and array chunk size using the UNS */
@@ -463,7 +457,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -490,7 +484,7 @@ dfuse_opendir(const char *path, struct fuse_file_info *fi)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	if (name == NULL) {
@@ -512,7 +506,7 @@ out:
 		free(dir_name);
 	if (free_parent && parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -538,7 +532,7 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 
 	rc = dfs_read(dfs, obj, sgl, offset, &actual);
 	if (rc)
-		return error_convert(rc);
+		return rc;
 
 	return actual;
 }
@@ -565,7 +559,7 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 
 	rc = dfs_write(dfs, obj, sgl, offset);
 	if (rc)
-		return error_convert(rc);
+		return rc;
 
 	return size;
 }
@@ -595,7 +589,7 @@ dfuse_mkdir(const char *path, mode_t mode)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	rc = dfs_mkdir(dfs, parent, name, mode);
@@ -609,7 +603,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -638,7 +632,7 @@ dfuse_symlink(const char *from, const char *to)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	/** TODO - set the object class and array chunk size using the UNS */
@@ -655,7 +649,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -674,7 +668,7 @@ dfuse_readlink(const char *path, char *buf, size_t size)
 	}
 	if (!S_ISLNK(mode)) {
 		fprintf(stderr, "%s does not resolve to a symlink\n", path);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -EINVAL);
 	}
 
 	rc = dfs_get_symlink_value(obj, buf, &size);
@@ -684,7 +678,7 @@ dfuse_readlink(const char *path, char *buf, size_t size)
 out:
 	if (obj)
 		dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -712,7 +706,7 @@ dfuse_unlink(const char *path)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	rc = dfs_remove(dfs, parent, name, false);
@@ -728,7 +722,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -756,7 +750,7 @@ dfuse_rmdir(const char *path)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	rc = dfs_remove(dfs, parent, name, false);
@@ -772,7 +766,7 @@ out:
 		free(dir_name);
 	if (parent)
 		dfs_release(parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -784,7 +778,7 @@ dfuse_release(const char *path, struct fuse_file_info *fi)
 
 	if (fi != NULL) {
 		rc = dfs_release((dfs_obj_t *)fi->fh);
-		return error_convert(rc);
+		return rc;
 	}
 
 	return 0;
@@ -816,7 +810,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 	rc = parse_filename(new_path, &new_name, &new_dir_name);
@@ -835,7 +829,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 	}
 	if (!S_ISDIR(pmode)) {
 		fprintf(stderr, "%s does not resolve to a dir\n", new_dir_name);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -ENOTDIR);
 	}
 
 #ifdef RENAME_NOREPLACE
@@ -854,7 +848,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 			dfs_obj_t *obj = NULL;
 
 			rc = dfs_lookup(dfs, new_path, O_RDWR, &obj, &pmode);
-			if (rc != -DER_NONEXIST) {
+			if (rc != -ENOENT) {
 				if (rc == 0)
 					dfs_release(obj);
 				D_GOTO(out, rc);
@@ -890,7 +884,7 @@ out:
 		dfs_release(parent);
 	if (new_parent)
 		dfs_release(new_parent);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -901,7 +895,7 @@ dfuse_sync(const char *path, int isdatasync, struct fuse_file_info *fi)
 	FUNC_ENTER("path = %s\n", path);
 
 	rc = dfs_sync(dfs);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -915,11 +909,11 @@ dfuse_setxattr(const char *path, const char *name, const char *val,
 
 	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL);
 	if (rc)
-		return error_convert(rc);
+		return rc;
 
 	rc = dfs_setxattr(dfs, obj, name, val, size, flags);
 	dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -932,7 +926,7 @@ dfuse_getxattr(const char *path, const char *name, char *val, size_t size)
 
 	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL);
 	if (rc)
-		return error_convert(rc);
+		return rc;
 
 	rc = dfs_getxattr(dfs, obj, name, val, &size);
 	if (rc)
@@ -941,7 +935,7 @@ dfuse_getxattr(const char *path, const char *name, char *val, size_t size)
 	rc = (int)size;
 out:
 	dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -954,7 +948,7 @@ dfuse_listxattr(const char *path, char *list, size_t size)
 
 	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL);
 	if (rc)
-		return error_convert(rc);
+		return rc;
 
 	rc = dfs_listxattr(dfs, obj, list, &size);
 	if (rc)
@@ -963,7 +957,7 @@ dfuse_listxattr(const char *path, char *list, size_t size)
 	rc = (int)size;
 out:
 	dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 static int
@@ -976,11 +970,11 @@ dfuse_removexattr(const char *path, const char *name)
 
 	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL);
 	if (rc)
-		return error_convert(rc);
+		return rc;
 
 	rc = dfs_removexattr(dfs, obj, name);
 	dfs_release(obj);
-	return error_convert(rc);
+	return rc;
 }
 
 static void *
