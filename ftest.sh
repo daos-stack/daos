@@ -343,6 +343,10 @@ else
     rc=0
 fi
 
+# Remove the latest avocado symlink directory to avoid inclusion in the
+# jenkins build artifacts
+unlink $DAOS_BASE/src/tests/ftest/avocado/job-results/latest
+
 # get stacktraces for the core files
 if ls core.*; then
     # this really should be a debuginfo-install command but our systems lag
