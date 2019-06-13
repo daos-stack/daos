@@ -94,7 +94,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	uint32_t		nr = LOOP_COUNT;
 	void			*buf = NULL;
 	size_t			buf_size, loop_size;
-	struct iterate_data	*udata = NULL;
+	struct iterate_data	udata;
 	int			i = 1;
 	int			rc;
 
@@ -116,16 +116,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	if (!buf)
 		D_GOTO(err, rc = ENOMEM);
 
-	D_ALLOC_PTR(udata);
-	if (!udata)
-		D_GOTO(err, rc = ENOMEM);
-
-	udata->req = req;
-	udata->buf = buf;
-	udata->size = size;
-	udata->b_offset = 0;
-	udata->inode = inode;
-	udata->oh = oh;
+	udata.req = req;
+	udata.buf = buf;
+	udata.size = size;
+	udata.b_offset = 0;
+	udata.inode = inode;
+	udata.oh = oh;
 
 	/** account for the size to hold the fuse dirent + padding */
 	loop_size = LOOP_COUNT * sizeof(uint64_t) * 4;
@@ -137,7 +133,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 		buf_size = size - (loop_size * i);
 		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor,
-				 &nr, buf_size, filler_cb, udata);
+				 &nr, buf_size, filler_cb, &udata);
 		/** if entry does not fit in buffer, just return */
 		if (rc == -E2BIG)
 			D_GOTO(out, 0);
@@ -148,8 +144,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	}
 
 out:
-	DFUSE_TRA_DEBUG(req, "Returning %zi bytes", udata->b_offset);
-	fuse_reply_buf(req, buf, udata->b_offset);
+	DFUSE_TRA_DEBUG(req, "Returning %zi bytes", udata.b_offset);
+	fuse_reply_buf(req, buf, udata.b_offset);
 	D_FREE(buf);
 	return;
 err:
