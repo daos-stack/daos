@@ -1336,6 +1336,10 @@ test_evt_find_internal(void **state)
 		assert_int_equal(rc, 0);
 	}
 	evt_ent_array_fini(&ent_array);
+	/* Destroy the tree */
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+
 }
 /*
 *   10: EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
