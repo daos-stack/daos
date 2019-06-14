@@ -36,6 +36,7 @@ import fcntl
 import errno
 import getpass
 import yaml
+import getpass
 
 from ClusterShell.Task import task_self
 from avocado.utils import genio
