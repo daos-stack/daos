@@ -88,6 +88,10 @@ struct dfuse_obj_hdl {
 	dfs_obj_t	*doh_obj;
 	/** an anchor to track listing in readdir */
 	daos_anchor_t	doh_anchor;
+	/** enumeration buffer to store missed entries from readdir */
+	void		*doh_buf;
+	/** offset to start from of doh_buffer */
+	off_t		doh_offset;
 };
 
 struct dfuse_inode_entry;

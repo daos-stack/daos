@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define LOOP_COUNT 10
+#define LOOP_COUNT 20
 
 struct iterate_data {
 	fuse_req_t			req;
@@ -40,10 +40,11 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 {
 	struct iterate_data	*udata = (struct iterate_data *)_udata;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
+	struct dfuse_obj_hdl	*oh = udata->oh;
 	dfs_obj_t		*obj;
 	daos_obj_id_t		oid;
 	struct stat		stbuf = {0};
-	int			ns;
+	int			ns = 0;
 	int			rc;
 
 	/*
@@ -53,6 +54,7 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	 * mode.
 	 */
 	DFUSE_TRA_DEBUG(udata->inode, "Adding entry name '%s'", name);
+
 	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode);
 	if (rc)
 		return rc;
@@ -66,19 +68,39 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc);
 
-	ns = fuse_add_direntry(udata->req, udata->buf + udata->b_offset,
-			       udata->size - udata->b_offset, name, &stbuf,
-			       (off_t)(&udata->oh->doh_anchor));
+	/* if the buffer on the OH has not been used yet */
+	if (oh->doh_buf == NULL) {
+		/** add the entry to the buffer to return to fuse first */
+		ns = fuse_add_direntry(udata->req, udata->buf + udata->b_offset,
+				       udata->size - udata->b_offset, name,
+				       &stbuf, (off_t)(&oh->doh_anchor));
+		/** If entry does not fit */
+		if (ns >= udata->size - udata->b_offset) {
+			/** alloc a buffer on oh to hold further entries */
+			D_ALLOC(oh->doh_buf, udata->size);
+			if (!oh->doh_buf)
+				return -ENOMEM;
 
-	DFUSE_TRA_DEBUG(udata->inode, "add direntry: size = %ld, return %d\n",
-			udata->size - udata->b_offset, ns);
-
-	/*
-	 * This should be true since we accounted for the fuse_dirent size when
-	 * we started dfs_iterate().
-	 */
-	D_ASSERT(ns <= udata->size - udata->b_offset);
-	udata->b_offset += ns;
+			ns = fuse_add_direntry(udata->req,
+					       oh->doh_buf + oh->doh_offset,
+					       udata->size - oh->doh_offset,
+					       name, &stbuf,
+					       (off_t)(&oh->doh_anchor));
+			oh->doh_offset += ns;
+		} else {
+			/** entry did fit, just increment the buf offset */
+			udata->b_offset += ns;
+		}
+	} else {
+		/** fuse buffer already full so just use oh buffer */
+		ns = fuse_add_direntry(udata->req,
+				       oh->doh_buf + oh->doh_offset,
+				       udata->size - oh->doh_offset, name,
+				       &stbuf, (off_t)(&oh->doh_anchor));
+		/** DFS would have just returned E2BIG before we get here */
+		D_ASSERT(ns <= udata->size - oh->doh_offset);
+		oh->doh_offset += ns;
+	}
 
 out:
 	dfs_release(obj);
@@ -93,9 +115,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	uint32_t		nr = LOOP_COUNT;
 	void			*buf = NULL;
-	size_t			buf_size, loop_size;
 	struct iterate_data	udata;
-	int			i = 1;
 	int			rc;
 
 	DFUSE_TRA_DEBUG(inode, "Offset %zi", offset);
@@ -110,7 +130,16 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	} else {
 		if (offset != (off_t)&oh->doh_anchor)
 			D_GOTO(err, rc = EIO);
+		if (oh->doh_buf) {
+			fuse_reply_buf(req, oh->doh_buf, oh->doh_offset);
+			D_FREE(oh->doh_buf);
+			oh->doh_offset = 0;
+			return;
+		}
 	}
+
+	D_ASSERT(oh->doh_buf == NULL);
+	D_ASSERT(oh->doh_offset == 0);
 
 	D_ALLOC(buf, size);
 	if (!buf)
@@ -123,24 +152,20 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	udata.inode = inode;
 	udata.oh = oh;
 
-	/** account for the size to hold the fuse dirent + padding */
-	loop_size = LOOP_COUNT * sizeof(uint64_t) * 4;
-
 	while (!daos_anchor_is_eof(&oh->doh_anchor)) {
-		/** while the size still fits, continue enumerating */
-		if (size <= loop_size * i)
-			D_GOTO(out, 0);
-
-		buf_size = size - (loop_size * i);
 		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor,
-				 &nr, buf_size, filler_cb, &udata);
+				 &nr, size, filler_cb, &udata);
+
 		/** if entry does not fit in buffer, just return */
 		if (rc == -E2BIG)
 			D_GOTO(out, rc = 0);
 		/** otherwise a different error occured */
 		if (rc)
 			D_GOTO(err, rc = -rc);
-		i++;
+
+		/** if buffer is full, break enumeration */
+		if (size <= udata.b_offset || oh->doh_offset)
+			D_GOTO(out, rc = 0);
 	}
 
 out:
