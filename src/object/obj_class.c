@@ -85,8 +85,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "repl_2_grp_2_rw",
-		.oc_id		= DAOS_OC_R2G2_RW,
+		.oc_name	= "repl_2_rw",
+		.oc_id		= DAOS_OC_R2_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
@@ -97,8 +97,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "repl_2_rw",
-		.oc_id		= DAOS_OC_R2_RW,
+		.oc_name	= "repl_2_max_rw",
+		.oc_id		= DAOS_OC_R2_MAX_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
@@ -121,8 +121,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "repl_3_grp_2_rw",
-		.oc_id		= DAOS_OC_R3G2_RW,
+		.oc_name	= "repl_3_rw",
+		.oc_id		= DAOS_OC_R3_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
@@ -133,8 +133,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "repl_3_rw",
-		.oc_id		= DAOS_OC_R3_RW,
+		.oc_name	= "repl_3_max_rw",
+		.oc_id		= DAOS_OC_R3_MAX_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
@@ -157,8 +157,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "repl_4_grp_2_rw",
-		.oc_id		= DAOS_OC_R4G2_RW,
+		.oc_name	= "repl_4_rw",
+		.oc_id		= DAOS_OC_R4_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
@@ -169,8 +169,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "repl_4_rw",
-		.oc_id		= DAOS_OC_R4_RW,
+		.oc_name	= "repl_4_max_rw",
+		.oc_id		= DAOS_OC_R4_MAX_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
