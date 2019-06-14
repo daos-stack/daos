@@ -68,18 +68,24 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc);
 
-	/* if the buffer on the OH has not been used yet */
-	if (oh->doh_buf == NULL) {
+	/*
+	 * if the buffer on the OH has not been used yet (i.e. did not run out
+	 * of space yet on the fuse buf.
+	 */
+	if (oh->doh_offset == 0) {
 		/** add the entry to the buffer to return to fuse first */
 		ns = fuse_add_direntry(udata->req, udata->buf + udata->b_offset,
 				       udata->size - udata->b_offset, name,
 				       &stbuf, (off_t)(&oh->doh_anchor));
-		/** If entry does not fit */
+
+		/** If entry does not fit, start using the buffer on the oh */
 		if (ns >= udata->size - udata->b_offset) {
 			/** alloc a buffer on oh to hold further entries */
-			D_ALLOC(oh->doh_buf, udata->size);
-			if (!oh->doh_buf)
-				return -ENOMEM;
+			if (oh->doh_buf == NULL) {
+				D_ALLOC(oh->doh_buf, udata->size);
+				if (!oh->doh_buf)
+					D_GOTO(out, rc = -ENOMEM);
+			}
 
 			ns = fuse_add_direntry(udata->req,
 					       oh->doh_buf + oh->doh_offset,
@@ -130,15 +136,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	} else {
 		if (offset != (off_t)&oh->doh_anchor)
 			D_GOTO(err, rc = EIO);
-		if (oh->doh_buf) {
+		if (oh->doh_offset) {
 			fuse_reply_buf(req, oh->doh_buf, oh->doh_offset);
-			D_FREE(oh->doh_buf);
 			oh->doh_offset = 0;
 			return;
 		}
 	}
 
-	D_ASSERT(oh->doh_buf == NULL);
 	D_ASSERT(oh->doh_offset == 0);
 
 	D_ALLOC(buf, size);

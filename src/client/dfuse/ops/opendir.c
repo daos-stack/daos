@@ -58,8 +58,11 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int				rc;
 
+	D_FREE(oh->doh_buf);
+
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
 		D_FREE(oh);
+
 	DFUSE_FUSE_REPLY_ERR(req, -rc);
 }
