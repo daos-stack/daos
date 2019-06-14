@@ -104,16 +104,17 @@ type ClientCtrlrMap map[string]CtrlrResults
 
 func (ccm ClientCtrlrMap) String() string {
 	var buf bytes.Buffer
-	var addrs []string
+	servers := make([]string, 0, len(ccm))
 
-	for addr := range ccm {
-		addrs = append(addrs, addr)
+	for server := range ccm {
+		servers = append(servers, server)
 	}
-	sort.Strings(addrs)
+	sort.Strings(servers)
 
-	for server, result := range ccm {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, result)
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
 	}
+	fmt.Println(buf.String())
 
 	return buf.String()
 }
@@ -126,16 +127,7 @@ func (sm ScmMounts) String() string {
 	var buf bytes.Buffer
 
 	for _, mount := range sm {
-		fmt.Fprintf(
-			&buf, "\t%+v\n", mount)
-		//			PCI Address:%s Serial:%s Model:%s\n",
-		//			mount.ctrlr.Pciaddr, ctrlr.Serial, ctrlr.Model)
-		//
-		//		for _, ns := range ctrlr.Namespaces {
-		//			fmt.Fprintf(
-		//				&buf, "\t\tNamespace: %+v\n", ns)
-		//		}
-		//		fmt.Fprintf(&buf, "%s%v\n", buf.String(), mount)
+		fmt.Fprintf(&buf, "\t%+v\n", mount)
 	}
 
 	return buf.String()
@@ -150,8 +142,7 @@ func (smr ScmMountResults) String() string {
 
 	for _, resp := range smr {
 		fmt.Fprintf(
-			&buf, "%smntpoint %s: status %s", buf.String(),
-			resp.Mntpoint, resp.State.Status)
+			&buf, "\tmntpoint %s: status %s", resp.Mntpoint, resp.State.Status)
 
 		if resp.State.Error != "" {
 			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
@@ -194,17 +185,17 @@ type ClientMountMap map[string]MountResults
 
 func (cmm ClientMountMap) String() string {
 	var buf bytes.Buffer
-	var addrs []string
+	servers := make([]string, 0, len(cmm))
 
-	for addr := range cmm {
-		addrs = append(addrs, addr)
+	for server := range cmm {
+		servers = append(servers, server)
 	}
-	sort.Strings(addrs)
+	sort.Strings(servers)
 
-	for server, result := range cmm {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, result)
-		fmt.Println(buf.String())
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
 	}
+	fmt.Println(buf.String())
 
 	return buf.String()
 }
@@ -217,7 +208,7 @@ func (sm ScmModules) String() string {
 	var buf bytes.Buffer
 
 	for _, module := range sm {
-		fmt.Fprintf(&buf, "%s%+v\n", buf.String(), module)
+		fmt.Fprintf(&buf, "\t%+v\n", module)
 	}
 
 	return buf.String()
@@ -232,8 +223,7 @@ func (smr ScmModuleResults) String() string {
 
 	for _, resp := range smr {
 		fmt.Fprintf(
-			&buf, "%smodule location %+v: status %s", buf.String(),
-			resp.Loc, resp.State.Status)
+			&buf, "\tmodule location %+v: status %s", resp.Loc, resp.State.Status)
 
 		if resp.State.Error != "" {
 			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
@@ -276,16 +266,17 @@ type ClientModuleMap map[string]ModuleResults
 
 func (cmm ClientModuleMap) String() string {
 	var buf bytes.Buffer
-	var addrs []string
+	servers := make([]string, 0, len(cmm))
 
-	for addr := range cmm {
-		addrs = append(addrs, addr)
+	for server := range cmm {
+		servers = append(servers, server)
 	}
-	sort.Strings(addrs)
+	sort.Strings(servers)
 
-	for server, result := range cmm {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, result)
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
 	}
+	fmt.Println(buf.String())
 
 	return buf.String()
 }

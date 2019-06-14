@@ -24,8 +24,9 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -58,13 +59,19 @@ func (cr ClientResult) String() string {
 type ResultMap map[string]ClientResult
 
 func (rm ResultMap) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
 
-	for server, result := range rm {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", server, result))
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, rm[server])
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // ScmModules is an alias for protobuf ScmModule message slice representing
