@@ -114,7 +114,6 @@ func (ccm ClientCtrlrMap) String() string {
 	for _, server := range servers {
 		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
 	}
-	fmt.Println(buf.String())
 
 	return buf.String()
 }
@@ -195,7 +194,6 @@ func (cmm ClientMountMap) String() string {
 	for _, server := range servers {
 		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
 	}
-	fmt.Println(buf.String())
 
 	return buf.String()
 }
@@ -276,7 +274,6 @@ func (cmm ClientModuleMap) String() string {
 	for _, server := range servers {
 		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
 	}
-	fmt.Println(buf.String())
 
 	return buf.String()
 }
