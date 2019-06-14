@@ -47,9 +47,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(ie->ie_dfs->dffs_dfs, ie->ie_obj, fi->flags,
 		     &oh->doh_obj);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err, 0);
+	if (rc)
+		D_GOTO(err, rc = -rc);
 
+	oh->doh_dfs = ie->ie_dfs->dffs_dfs;
 	fi->direct_io = 1;
 	fi->fh = (uint64_t)oh;
 
@@ -73,5 +74,5 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
 		D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, rc);
+	DFUSE_FUSE_REPLY_ERR(req, -rc);
 }

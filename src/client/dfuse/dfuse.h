@@ -82,10 +82,16 @@ struct dfuse_projection_info {
 
 /** what is returned as the handle for fuse fuse_file_info on create/open */
 struct dfuse_obj_hdl {
+	/** pointer to dfs_t */
+	dfs_t		*doh_dfs;
 	/** the DFS object handle */
 	dfs_obj_t	*doh_obj;
 	/** an anchor to track listing in readdir */
 	daos_anchor_t	doh_anchor;
+	/** enumeration buffer to store missed entries from readdir */
+	void		*doh_buf;
+	/** offset to start from of doh_buffer */
+	off_t		doh_offset;
 };
 
 struct dfuse_inode_entry;
