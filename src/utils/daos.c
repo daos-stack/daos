@@ -35,6 +35,7 @@
 
 #include "daos_types.h"
 #include "daos_api.h"
+#include "daos_uns.h"
 #include "daos_hdlr.h"
 
 const char		*default_group = DAOS_DEFAULT_GROUP_ID;
@@ -500,13 +501,20 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	ARGS_VERIFY_PATH_OR_CUUID(ap, out, rc = RC_PRINT_HELP);
 
 	if ((ap->path != NULL) && (op != CONT_CREATE)) {
+		struct duns_attr_t dattr;
+
 		/* Resolve pool, container UUIDs from path if needed */
-		rc = resolve_by_path(ap);
+		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
 			fprintf(stderr, "could not resolve pool, container "
 					"by path: %s\n", ap->path);
 			D_GOTO(out, rc);
 		}
+		ap->type = dattr.da_type;
+		uuid_copy(ap->p_uuid, dattr.da_puuid);
+		uuid_copy(ap->c_uuid, dattr.da_cuuid);
+		ap->oclass = dattr.da_oclass;
+		ap->chunk_size = dattr.da_chunk_size;
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}

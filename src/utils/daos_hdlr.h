@@ -145,9 +145,6 @@ struct cmd_args_s {
 
 typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 
-/* Misc utility functions needed by daos */
-int resolve_by_path(struct cmd_args_s *ap);
-
 /* Pool operations */
 int pool_query_hdlr(struct cmd_args_s *ap);
 

@@ -149,67 +149,6 @@ out:
  * int cont_rollback_hdlr()
  */
 
-int
-resolve_by_path(struct cmd_args_s *ap)
-{
-	ssize_t	s;
-	char	str[DUNS_MAX_XATTR_LEN];
-	char	*saveptr, *t;
-	int	rc;
-
-	s = lgetxattr(ap->path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
-	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
-		if (s == ENOTSUP)
-			D_ERROR("Path is not in a filesystem that supports the"
-				" DAOS unified namespace\n");
-		else if (s == ENODATA)
-			D_ERROR("Path does not represent a DAOS link\n");
-		else if (s > DUNS_MAX_XATTR_LEN)
-			D_ERROR("Invalid xattr length\n");
-		else
-			D_ERROR("Invalid DAOS unified namespace xattr\n");
-		return -DER_INVAL;
-	}
-
-	t = strtok_r(str, ".", &saveptr);
-	if (t == NULL) {
-		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
-		return -DER_INVAL;
-	}
-
-	t = strtok_r(NULL, ":", &saveptr);
-	daos_parse_ctype(t, &ap->type);
-	if (ap->type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
-		D_ERROR("Invalid DAOS xattr format: Container layout cannot be"
-			" unknown\n");
-		return -DER_INVAL;
-	}
-
-	t = strtok_r(NULL, "/", &saveptr);
-	rc = uuid_parse(t, ap->p_uuid);
-	if (rc) {
-		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be"
-			" parsed\n");
-		return -DER_INVAL;
-	}
-
-	t = strtok_r(NULL, "/", &saveptr);
-	rc = uuid_parse(t, ap->c_uuid);
-	if (rc) {
-		D_ERROR("Invalid DAOS xattr format: container UUID cannot be"
-			" parsed\n");
-		return -DER_INVAL;
-	}
-
-	t = strtok_r(NULL, "/", &saveptr);
-	daos_parse_oclass(t, &ap->oclass);
-
-	t = strtok_r(NULL, "/", &saveptr);
-	ap->chunk_size = strtoull(t, NULL, 10);
-
-	return 0;
-}
-
 /* cont_create_hdlr() - create container by UUID */
 int
 cont_create_hdlr(struct cmd_args_s *ap)
