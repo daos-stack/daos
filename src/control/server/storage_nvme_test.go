@@ -778,11 +778,11 @@ func TestUpdateNvme(t *testing.T) {
 		}
 
 		// create parameters message with desired model name & starting fwrev
-		params := &pb.UpdateNvmeParams{
+		req := &pb.UpdateNvmeReq{
 			Startrev: startRev, Model: model, Path: "", Slot: 0,
 		}
-		// call with io_server index, params and results list to populate
-		sn.Update(srvIdx, params, &results)
+		// call with io_server index, req and results list to populate
+		sn.Update(srvIdx, req, &results)
 
 		// verify expected response results have been populated
 		AssertEqual(
