@@ -34,8 +34,10 @@ import resource
 import signal
 import fcntl
 import errno
+import getpass
 import yaml
 
+from ClusterShell.Task import task_self
 from avocado.utils import genio
 
 SESSIONS = {}
@@ -271,3 +273,31 @@ def kill_server(hosts):
     for host in hosts:
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
+
+def storage_prepare(hosts):
+    """
+    Prepare the Storage for server
+    """
+    nvme_task = task_self()
+    cmd = ("sudo /usr/bin/daos_server storage prep-nvme "
+           "--target-user=\"{0}\" --hugepages=4096"
+           .format(getpass.getuser()))
+    nvme_task.run(cmd, nodes=hosts, timeout=120)
+    for rc_code, _keys in nvme_task.iter_retcodes():
+        if rc_code is not 0:
+            for output, _node in nvme_task.iter_buffers():
+                raise ServerFailed("Failed to prepare Storage\n{} : RC={} :{}"
+                                   .format(_node, rc_code, output))
+
+def storage_reset(hosts):
+    """
+    Reset the Storage
+    """
+    nvme_task = task_self()
+    cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
+    nvme_task.run(cmd, nodes=hosts, timeout=60)
+    for rc_code, _keys in nvme_task.iter_retcodes():
+        if rc_code is not 0:
+            for output, _node in nvme_task.iter_buffers():
+                raise ServerFailed("Failed to Reset Storage\n{} : RC={} :{}"
+                                   .format(_node, rc_code, output))
