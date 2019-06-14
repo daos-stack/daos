@@ -100,7 +100,7 @@ func cleanUp(topology C.hwloc_topology_t) {
 // The order of network devices in the return string depends on the natural
 // order in the system topology and does not depend on the order specified
 // by the input string.
-func GetAffinityForNetworkDevices(deviceNames []string) (*[]DeviceAffinity, error) {
+func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error) {
 	var affinity []DeviceAffinity
 	var node C.hwloc_obj_t
 	var i C.uint
@@ -146,17 +146,18 @@ func GetAffinityForNetworkDevices(deviceNames []string) (*[]DeviceAffinity, erro
 		nodesetLen := C.hwloc_bitmap_asprintf(&nodeset,
 			ancestorNode.nodeset)
 		if cpusetLen > 0 && nodesetLen > 0 {
-			var deviceNode DeviceAffinity
-			deviceNode.DeviceName = C.GoString(node.name)
-			deviceNode.CPUSet = C.GoString(cpuset)
-			deviceNode.NodeSet = C.GoString(nodeset)
+			deviceNode := DeviceAffinity{
+				DeviceName : C.GoString(node.name),
+				CPUSet : C.GoString(cpuset),
+				NodeSet : C.GoString(nodeset),
+			}
 			affinity = append(affinity, deviceNode)
 		}
 		C.free(unsafe.Pointer(cpuset))
 		C.free(unsafe.Pointer(nodeset))
 	}
 	cleanUp(topology)
-	return &affinity, nil
+	return affinity, nil
 }
 
 // GetDeviceNames examines the network interfaces
