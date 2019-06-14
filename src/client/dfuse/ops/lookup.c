@@ -42,12 +42,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		rc = dfs_obj2id(ie->ie_obj, &oid);
 		if (rc)
 			D_GOTO(err, rc = -rc);
-		rc = dfuse_lookup_inode(fs_handle,
-					ie->ie_dfs,
-					&oid,
+		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &oid,
 					&ie->ie_stat.st_ino);
 		if (rc)
-			D_GOTO(err, rc);
+			D_GOTO(err, rc = -rc);
 	}
 
 	entry.attr = ie->ie_stat;
