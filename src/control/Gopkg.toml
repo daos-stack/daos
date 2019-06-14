@@ -67,3 +67,9 @@
 [[constraint]]
   name = "github.com/daos-stack/go-spdk"
   revision = "6756cd10c5c773de2b0c7aa99eb891a5bacf9e6a"
+
+# go-bytesize: BSD 3-Clause, handle conversion from human readable size
+# strings to bytes.
+[[constraint]]
+  branch = "master"
+  name = "github.com/inhies/go-bytesize"
