@@ -52,6 +52,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare']
 
+CART_VERSION = "0.0.1"
 
 def save_build_info(env, prereqs, platform):
     """Save the build information"""
@@ -117,7 +118,7 @@ def scons():
         print('c++ Compiler options: %s %s' % (env.get('CXX'),
                                                ' '.join(env.get('CCFLAGS'))))
 
-    Export('env', 'prereqs')
+    Export('env', 'prereqs', 'CART_VERSION')
     # generate targets in specific build dir to avoid polluting the source code
     arch_dir = 'build/%s' % platform
     VariantDir(arch_dir, '.', duplicate=0)
