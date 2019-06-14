@@ -136,10 +136,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				 &nr, buf_size, filler_cb, &udata);
 		/** if entry does not fit in buffer, just return */
 		if (rc == -E2BIG)
-			D_GOTO(out, 0);
+			D_GOTO(out, rc = 0);
 		/** otherwise a different error occured */
 		if (rc)
-			D_GOTO(err, 0);
+			D_GOTO(err, rc = -rc);
 		i++;
 	}
 
