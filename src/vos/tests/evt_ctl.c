@@ -1334,8 +1334,8 @@ test_evt_find_internal(void **state)
 		entry.ei_rect.rc_epc = rect.rc_epc;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
+		evt_ent_array_fini(&ent_array);
 	}
-	evt_ent_array_fini(&ent_array);
 	/* Destroy the tree */
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
@@ -1405,10 +1405,9 @@ test_evt_iter_delete_internal(void **state)
 				break;
 			}
 		}
+		rc = evt_iter_finish(ih);
+		assert_int_equal(rc, 0);
 	}
-	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
-
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
