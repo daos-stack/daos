@@ -24,8 +24,9 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
+	"sort"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
@@ -35,13 +36,20 @@ import (
 type NvmeControllers []*pb.NvmeController
 
 func (nc NvmeControllers) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
 
 	for _, ctrlr := range nc {
-		sb.WriteString(fmt.Sprintf("%+v\n", ctrlr))
+		fmt.Fprintf(
+			&buf, "\tPCI Address:%s Serial:%s Model:%s\n",
+			ctrlr.Pciaddr, ctrlr.Serial, ctrlr.Model)
+
+		for _, ns := range ctrlr.Namespaces {
+			fmt.Fprintf(
+				&buf, "\t\tNamespace: %+v\n", ns)
+		}
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
@@ -49,24 +57,23 @@ func (nc NvmeControllers) String() string {
 type NvmeControllerResults []*pb.NvmeControllerResult
 
 func (ncr NvmeControllerResults) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
 
 	for _, resp := range ncr {
-		sb.WriteString(
-			fmt.Sprintf(
-				"pci-address %s: status %s", resp.Pciaddr, resp.State.Status))
+		fmt.Fprintf(
+			&buf, "\tpci-address %s: status %s", resp.Pciaddr, resp.State.Status)
 
 		if resp.State.Error != "" {
-			sb.WriteString(fmt.Sprintf(" error: %s", resp.State.Error))
+			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
 		}
 		if resp.State.Info != "" {
-			sb.WriteString(fmt.Sprintf(" info: %s", resp.State.Info))
+			fmt.Fprintf(&buf, " info: %s", resp.State.Info)
 		}
 
-		sb.WriteString("\n")
+		fmt.Fprintf(&buf, "\n")
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // CtrlrResults contains controllers and/or results of operations on controllers
@@ -88,7 +95,7 @@ func (cr CtrlrResults) String() string {
 		return cr.Responses.String()
 	}
 
-	return "unexpected error: no responses"
+	return "no controllers found"
 }
 
 // ClientCtrlrMap is an alias for query results of NVMe controllers (and
@@ -96,13 +103,19 @@ func (cr CtrlrResults) String() string {
 type ClientCtrlrMap map[string]CtrlrResults
 
 func (ccm ClientCtrlrMap) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
+	var addrs []string
+
+	for addr := range ccm {
+		addrs = append(addrs, addr)
+	}
+	sort.Strings(addrs)
 
 	for server, result := range ccm {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", server, result))
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, result)
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // ScmMounts is an alias for protobuf ScmMount message slice representing
@@ -110,13 +123,22 @@ func (ccm ClientCtrlrMap) String() string {
 type ScmMounts []*pb.ScmMount
 
 func (sm ScmMounts) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
 
 	for _, mount := range sm {
-		sb.WriteString(fmt.Sprintf("%+v\n", mount))
+		fmt.Fprintf(
+			&buf, "\t%+v\n", mount)
+		//			PCI Address:%s Serial:%s Model:%s\n",
+		//			mount.ctrlr.Pciaddr, ctrlr.Serial, ctrlr.Model)
+		//
+		//		for _, ns := range ctrlr.Namespaces {
+		//			fmt.Fprintf(
+		//				&buf, "\t\tNamespace: %+v\n", ns)
+		//		}
+		//		fmt.Fprintf(&buf, "%s%v\n", buf.String(), mount)
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
@@ -124,24 +146,24 @@ func (sm ScmMounts) String() string {
 type ScmMountResults []*pb.ScmMountResult
 
 func (smr ScmMountResults) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
 
 	for _, resp := range smr {
-		sb.WriteString(
-			fmt.Sprintf(
-				"mntpoint %s: status %s", resp.Mntpoint, resp.State.Status))
+		fmt.Fprintf(
+			&buf, "%smntpoint %s: status %s", buf.String(),
+			resp.Mntpoint, resp.State.Status)
 
 		if resp.State.Error != "" {
-			sb.WriteString(fmt.Sprintf(" error: %s", resp.State.Error))
+			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
 		}
 		if resp.State.Info != "" {
-			sb.WriteString(fmt.Sprintf(" info: %s", resp.State.Info))
+			fmt.Fprintf(&buf, " info: %s", resp.State.Info)
 		}
 
-		sb.WriteString("\n")
+		fmt.Fprintf(&buf, "\n")
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // MountResults contains modules and/or results of operations on mounted SCM
@@ -163,7 +185,7 @@ func (mr MountResults) String() string {
 		return mr.Responses.String()
 	}
 
-	return "unexpected error: no responses"
+	return "no scm mounts found"
 }
 
 // ClientMountMap is an alias for query results of SCM regions mounted
@@ -171,13 +193,20 @@ func (mr MountResults) String() string {
 type ClientMountMap map[string]MountResults
 
 func (cmm ClientMountMap) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
+	var addrs []string
+
+	for addr := range cmm {
+		addrs = append(addrs, addr)
+	}
+	sort.Strings(addrs)
 
 	for server, result := range cmm {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", server, result))
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, result)
+		fmt.Println(buf.String())
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // ScmModules is an alias for protobuf ScmModule message slice representing
@@ -185,13 +214,13 @@ func (cmm ClientMountMap) String() string {
 type ScmModules []*pb.ScmModule
 
 func (sm ScmModules) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
 
 	for _, module := range sm {
-		sb.WriteString(fmt.Sprintf("%+v\n", module))
+		fmt.Fprintf(&buf, "%s%+v\n", buf.String(), module)
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
@@ -199,24 +228,24 @@ func (sm ScmModules) String() string {
 type ScmModuleResults []*pb.ScmModuleResult
 
 func (smr ScmModuleResults) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
 
 	for _, resp := range smr {
-		sb.WriteString(
-			fmt.Sprintf(
-				"module location %+v: status %s", resp.Loc, resp.State.Status))
+		fmt.Fprintf(
+			&buf, "%smodule location %+v: status %s", buf.String(),
+			resp.Loc, resp.State.Status)
 
 		if resp.State.Error != "" {
-			sb.WriteString(fmt.Sprintf(" error: %s", resp.State.Error))
+			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
 		}
 		if resp.State.Info != "" {
-			sb.WriteString(fmt.Sprintf(" info: %s", resp.State.Info))
+			fmt.Fprintf(&buf, " info: %s", resp.State.Info)
 		}
 
-		sb.WriteString("\n")
+		fmt.Fprintf(&buf, "\n")
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // ModuleResults contains scm modules and/or results of operations on modules
@@ -238,7 +267,7 @@ func (mr ModuleResults) String() string {
 		return mr.Responses.String()
 	}
 
-	return "unexpected error: no responses"
+	return "no scm modules found"
 }
 
 // ClientModuleMap is an alias for query results of SCM modules installed
@@ -246,13 +275,19 @@ func (mr ModuleResults) String() string {
 type ClientModuleMap map[string]ModuleResults
 
 func (cmm ClientModuleMap) String() string {
-	var sb strings.Builder
+	var buf bytes.Buffer
+	var addrs []string
+
+	for addr := range cmm {
+		addrs = append(addrs, addr)
+	}
+	sort.Strings(addrs)
 
 	for server, result := range cmm {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", server, result))
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, result)
 	}
 
-	return sb.String()
+	return buf.String()
 }
 
 // storageResult generic container for results of storage subsystems queries.
