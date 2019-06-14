@@ -24,7 +24,6 @@
 //
 
 package netdetect
-
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../include
 #cgo LDFLAGS: -lhwloc
@@ -45,9 +44,9 @@ import (
 )
 
 type DeviceAffinity struct {
-	DeviceName string
-	CPUSet     string
-	NodeSet    string
+	DeviceName	string
+	CPUSet	string
+	NodeSet	string
 }
 
 func (da *DeviceAffinity) String() string {
@@ -77,14 +76,31 @@ func initLib() (C.hwloc_topology_t, error) {
 
 // cleanUp closes out the hwloc resources
 func cleanUp(topology C.hwloc_topology_t) {
-	if topology != nil {
+	if (topology != nil) {
 		C.hwloc_topology_destroy(topology)
 	}
 }
 
+// GetAffinityForNetworkDevices searches the system topology reported by hwloc
+// for the devices specified by deviceNames and returns the corresponding
+// name, cpuset and nodeset information for each device it finds.
+//
+// The input deviceNames []string specifies names of each network device to
+// search for. Typical network device names are "eth0", "eth1", "ib0", etc.
+//
+// The DeviceAffinity struct specifies a name, cpuset and nodeset strings.
+// The DeviceAffinity DeviceName matches the deviceNames strings and should be
+// used to help match an input device with the output.
+// The DeviceAffinity CPUSet and NodeSet are string representations of the
+// corresponding hwloc bitmaps.  When converted back to hwloc_bitmap_t via
+// hwloc_bitmap_sscanf() these bitmaps are used by the hwloc API to bind a
+// thread to processing units that are closest to the given network device.
+//
+// Network device names that are not found in the topology are ignored.
+// The order of network devices in the return string depends on the natural
+// order in the system topology and does not depend on the order specified
+// by the input string.
 func GetAffinityForNetworkDevices(deviceNames []string) (*[]DeviceAffinity, error) {
-
-	//var affinity []string
 	var affinity []DeviceAffinity
 	var node C.hwloc_obj_t
 	var i C.uint
@@ -92,11 +108,12 @@ func GetAffinityForNetworkDevices(deviceNames []string) (*[]DeviceAffinity, erro
 	var nodeset *C.char
 
 	topology, err := initLib()
-	if err != nil {
+	if (err != nil) {
 		log.Debugf("Error from initLib %v", err)
 		return nil,
 			errors.New("unable to initialize hwloc library")
 	}
+
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_OS_DEVICE)
 	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
 		return nil,
