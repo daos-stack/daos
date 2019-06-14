@@ -63,8 +63,8 @@ type scmStorage struct {
 }
 
 // TODO: implement remaining methods for scmStorage
-// func (s *scmStorage) Update(params interface{}) interface{} {return nil}
-// func (s *scmStorage) BurnIn(params interface{}) (fioPath string, cmds []string, env string, err error) {
+// func (s *scmStorage) Update(req interface{}) interface{} {return nil}
+// func (s *scmStorage) BurnIn(req interface{}) (fioPath string, cmds []string, env string, err error) {
 // return
 // }
 
@@ -317,7 +317,7 @@ func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
 
 // Update is currently a placeholder method stubbing SCM module fw update.
 func (s *scmStorage) Update(
-	i int, req *pb.UpdateScmParams, results *([]*pb.ScmModuleResult)) {
+	i int, req *pb.UpdateScmReq, results *([]*pb.ScmModuleResult)) {
 
 	// respond with single result indicating no implementation
 	*results = append(

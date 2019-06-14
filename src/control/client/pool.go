@@ -1,3 +1,4 @@
+//
 // (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,30 +21,22 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-syntax = "proto3";
-package mgmt;
+package client
 
-message EmptyReq {}
+import (
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"golang.org/x/net/context"
+)
 
-message FilePath {
-	string path = 1;
+// CreatePool will create a DAOS pool using provided parameters and return uuid
+func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
+	results := make(ResultMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	resp, err := mc.getSvcClient().CreatePool(context.Background(), req)
+
+	result := ClientResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
 }
-
-enum ResponseStatus {
-	CTRL_SUCCESS = 0;
-	CTRL_IN_PROGRESS = 1;	// Not yet completed
-	CTRL_WAITING = 2;	// Blocked
-	CTRL_ERR_CONF = -1;	// Config file parsing error
-	CTRL_ERR_NVME = -2;	// NVMe subsystem error
-	CTRL_ERR_SCM = -3;	// SCM subsystem error
-	CTRL_ERR_APP = -4;	// Other application error
-	CTRL_ERR_UNKNOWN = -5;	// Unknown error
-	CTRL_NO_IMPL = -6;	// No implementation
-}
-
-message ResponseState {
-	ResponseStatus status = 1;
-	string error = 2;
-	string info = 3;
-}
-

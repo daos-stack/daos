@@ -36,6 +36,7 @@ import (
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
@@ -174,4 +175,26 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 	}
 
 	return resp, nil
+}
+
+// CreatePool implements the method defined for the Management Service.
+func (svc *mgmtSvc) CreatePool(
+	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
+
+	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
+	// TODO: implement lock and drpc IDs & handler in iosrv
+	// svc.mutex.Lock()
+	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, poolCreate, req)
+	// svc.mutex.Unlock()
+	// if err != nil {
+	//	return nil, err
+	//}
+
+	resp := &pb.CreatePoolResp{}
+	// TODO
+	// if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+	// 	return nil, errors.Wrap(err, "unmarshal CreatePool response")
+	// }
+
+	return resp, errors.New("CreatePool dRPC not implemented")
 }

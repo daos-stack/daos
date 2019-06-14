@@ -1,3 +1,4 @@
+//
 // (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,27 +24,25 @@
 syntax = "proto3";
 package mgmt;
 
-message EmptyReq {}
+import "srv.proto";
 
-message FilePath {
-	string path = 1;
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS pools.
+
+message CreatePoolReq {
+	uint64 scmbytes = 1;
+	uint64 nvmebytes = 2;
+	repeated uint32 ranks = 3; // colon separated integers
+	uint32 numsvcreps = 4; // desired number of pool service replicas
+	string user = 5; // formatted user e.g. "bob@"
+	string usergroup = 6; // formatted group e.g. "builders@"
+	string procgroup = 7; // DAOS process group identifier
 }
 
-enum ResponseStatus {
-	CTRL_SUCCESS = 0;
-	CTRL_IN_PROGRESS = 1;	// Not yet completed
-	CTRL_WAITING = 2;	// Blocked
-	CTRL_ERR_CONF = -1;	// Config file parsing error
-	CTRL_ERR_NVME = -2;	// NVMe subsystem error
-	CTRL_ERR_SCM = -3;	// SCM subsystem error
-	CTRL_ERR_APP = -4;	// Other application error
-	CTRL_ERR_UNKNOWN = -5;	// Unknown error
-	CTRL_NO_IMPL = -6;	// No implementation
-}
-
-message ResponseState {
-	ResponseStatus status = 1;
-	string error = 2;
-	string info = 3;
+// CreatePoolResp returns created pool uuid and ranks.
+message CreatePoolResp {
+	DaosRequestStatus status = 1;
+	string uuid = 2; // new pool's uuid
+	string ranklist = 3; // colon separated integers
 }
 
