@@ -76,7 +76,7 @@ func initLib() (C.hwloc_topology_t, error) {
 
 // cleanUp closes out the hwloc resources
 func cleanUp(topology C.hwloc_topology_t) {
-	if (topology != nil) {
+	if topology != nil {
 		C.hwloc_topology_destroy(topology)
 	}
 }
