@@ -98,7 +98,7 @@ RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/d
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/pmdk/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ pmdk;             \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/raft/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ raft;             \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/argobots/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ argbots;      \
-    zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/cart/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ cart;             \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/cart/job/daos_devel/lastSuccessfulBuild/artifact/artifacts/sles12.3/ cart;         \
     zypper --non-interactive ar http://download.opensuse.org/repositories/devel:/languages:/go/SLE_12_SP3_Backports/devel:languages:go.repo;                                                    \
     zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo;                                                                                    \
     zypper --non-interactive --gpg-auto-import-keys ref spdk isa-l protobuf-c                                                                                                                   \

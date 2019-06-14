@@ -210,9 +210,9 @@ int daos_rpc_send_wait(crt_rpc_t *rpc);
 static inline int
 daos_group_attach(const char *group_id, crt_group_t **group)
 {
-	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	if (group_id == NULL)
 		group_id = DAOS_DEFAULT_GROUP_ID;
+	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	return crt_group_attach((char *)group_id, group);
 }
 

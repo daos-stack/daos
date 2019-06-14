@@ -23,9 +23,8 @@
 package drpc
 
 import (
-	"fmt"
-
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // ModuleState is an interface to allow a module to pass in private
@@ -60,7 +59,7 @@ func NewRPCService() *Service {
 func (r *Service) RegisterModule(mod Module) error {
 	_, ok := r.modules[mod.ID()]
 	if ok == true {
-		return fmt.Errorf("module with Id %d already exists", mod.ID())
+		return errors.Errorf("module with Id %d already exists", mod.ID())
 	}
 	r.modules[mod.ID()] = mod
 	return nil
@@ -94,7 +93,7 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 
 	responseBytes, mErr := proto.Marshal(&response)
 	if mErr != nil {
-		return nil, mErr
+		return nil, errors.Wrap(mErr, "Failed to marshal response")
 	}
 	return responseBytes, nil
 }
@@ -112,7 +111,7 @@ func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, erro
 	}
 	module, ok := r.modules[rpcMsg.GetModule()]
 	if !ok {
-		err = fmt.Errorf("Attempted to call unregistered module")
+		err = errors.Errorf("Attempted to call unregistered module")
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
 	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())

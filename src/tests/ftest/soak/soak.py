@@ -81,9 +81,6 @@ class Soak(Test):
 
         """
 
-        # for the moment build IOR
-        #IorUtils.build_ior(self.basepath)
-
         # read job info
         job_params = "/run/" + job + "/"
         job_name = self.params.get("name", job_params)

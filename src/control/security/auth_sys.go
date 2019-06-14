@@ -25,14 +25,13 @@ package security
 
 import (
 	"crypto/sha512"
-	"errors"
-	"fmt"
 	"os"
 	"os/user"
 
 	"github.com/daos-stack/daos/src/control/security/auth"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // User is an interface wrapping a representation of a specific system user
@@ -54,8 +53,7 @@ func HashFromToken(token *auth.Token) ([]byte, error) {
 
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthToken (%s)", err)
-		return nil, err
+		return nil, errors.Wrap(err, "Unable to marshal AuthToken")
 	}
 
 	hash.Write(tokenBytes)
@@ -75,9 +73,23 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 		return nil, errors.New("No credentials supplied")
 	}
 
-	userInfo, _ := ext.LookupUserID(creds.creds.Uid)
-	groupInfo, _ := ext.LookupGroupID(creds.creds.Gid)
-	groups, _ := userInfo.GroupIDs()
+	userInfo, err := ext.LookupUserID(creds.creds.Uid)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to lookup uid %v",
+			creds.creds.Uid)
+	}
+
+	groupInfo, err := ext.LookupGroupID(creds.creds.Gid)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to lookup gid %v",
+			creds.creds.Gid)
+	}
+
+	groups, err := userInfo.GroupIDs()
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to get group IDs for user %v",
+			userInfo.Username())
+	}
 
 	name, err := os.Hostname()
 	if err != nil {
@@ -108,8 +120,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
-		fmt.Errorf("Unable to marshal AuthSys token (%s)", err)
-		return nil, err
+		return nil, errors.Wrap(err, "Unable to marshal AuthSys token")
 	}
 	token := auth.Token{
 		Flavor: auth.Flavor_AUTH_SYS,
@@ -117,8 +128,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 
 	verifier, err := HashFromToken(&token)
 	if err != nil {
-		fmt.Errorf("Unable to generate verifier (%s)", err)
-		return nil, err
+		return nil, errors.WithMessage(err, "Unable to generate verifier")
 	}
 
 	verifierToken := auth.Token{
@@ -142,7 +152,7 @@ func AuthSysFromAuthToken(authToken *auth.Token) (*auth.Sys, error) {
 	sysToken := &auth.Sys{}
 	err := proto.Unmarshal(authToken.GetData(), sysToken)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshaling %s: %v", authToken.GetFlavor(), err)
+		return nil, errors.Wrapf(err, "unmarshaling %s", authToken.GetFlavor())
 	}
 	return sysToken, nil
 }

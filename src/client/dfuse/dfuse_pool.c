@@ -25,6 +25,7 @@
 #include "dfuse.h"
 #include "daos_fs.h"
 #include "daos_api.h"
+#include "daos_security.h"
 
 /* Lookup a pool */
 bool
@@ -34,7 +35,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_info		*dfuse_info = fs_handle->dfuse_info;
 	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_dfs		*dfs;
+	struct dfuse_dfs		*dfs = NULL;
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*prop_entry;
 	uuid_t				pool_uuid;
 	daos_pool_info_t		pool_info;
 	int				rc;
@@ -62,6 +65,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 	strncpy(dfs->dffs_pool, name, NAME_MAX);
+	dfs->dffs_pool[NAME_MAX] = '\0';
 
 	{
 		struct fuse_entry_param	entry = {0};
@@ -69,8 +73,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
 		if (rc == -DER_SUCCESS) {
 
-			DFUSE_TRA_INFO(ie,
-				       "Reusing existing pool entry without reconnect");
+			DFUSE_TRA_INFO(ie, "Reusing existing pool entry "
+				       "without reconnect");
 
 			D_FREE(dfs);
 
@@ -89,7 +93,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("daos_pool_connect() failed: (%d)",
 				rc);
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = daos_der2errno(rc));
 	}
 
 	D_ALLOC_PTR(ie);
@@ -99,32 +103,55 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
-	rc = daos_pool_query(dfs->dffs_poh, NULL, &pool_info, NULL, NULL);
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		DFUSE_LOG_ERROR("Failed to allocate pool property");
+		D_GOTO(close, rc = ENOMEM);
+	}
+
+	rc = daos_pool_query(dfs->dffs_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "daos_pool_query() failed: (%d)", rc);
+		D_GOTO(close, rc = daos_der2errno(rc));
+	}
+
+	/* Convert the owner information to uid/gid */
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_uid(prop_entry->dpe_str,
+				       &ie->ie_stat.st_uid);
+	if (rc != 0) {
+		DFUSE_LOG_ERROR("Unable to convert owner to uid: (%d)", rc);
 		D_GOTO(close, rc);
 	}
 
-	ie->ie_stat.st_uid = pool_info.pi_uid;
-	ie->ie_stat.st_gid = pool_info.pi_gid;
+	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(prop_entry != NULL);
+	rc = daos_acl_principal_to_gid(prop_entry->dpe_str,
+				       &ie->ie_stat.st_gid);
+	if (rc != 0) {
+		DFUSE_LOG_ERROR("Unable to convert owner-group to gid: (%d)",
+				rc);
+		D_GOTO(close, rc);
+	}
 
-	/* TODO: This should inspect pi_mode and corrrectly construct a correct
+	/* TODO: This should inspect ACLs and correctly construct a correct
 	 * st_mode value accordingly.
 	 */
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 
-	rc = dfuse_lookup_inode(fs_handle,
-				ie->ie_dfs,
-				NULL,
+	daos_prop_free(prop);
+
+	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)",
-				rc);
-		D_GOTO(close, rc = EIO);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
+		D_GOTO(close, rc = -rc);
 	}
 
 	dfs->dffs_root = ie->ie_stat.st_ino;
@@ -135,6 +162,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 close:
 	daos_pool_disconnect(dfs->dffs_poh, NULL);
 	D_FREE(ie);
+	daos_prop_free(prop);
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);

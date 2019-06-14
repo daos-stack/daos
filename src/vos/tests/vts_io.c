@@ -93,7 +93,7 @@ static struct io_test_flag io_test_flags[] = {
 			dts_key_gen(dest, len, (arg)->lkey);	\
 	} while (0)
 
-static void
+void
 vts_key_gen(char *dest, size_t len, bool is_dkey, struct io_test_args *arg)
 {
 	memset(dest, 0, len);
@@ -118,15 +118,6 @@ vts_key_gen(char *dest, size_t len, bool is_dkey, struct io_test_args *arg)
 		vts_key_gen_helper(dest, len, AKEY, akey, arg);
 	}
 
-}
-
-static uint32_t
-hash_key(d_iov_t *key, int flag)
-{
-	if (flag)
-		return *(uint64_t *)key->iov_buf;
-
-	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
 }
 
 void
@@ -482,8 +473,9 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 }
 
 int
-io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		   daos_iod_t *iod, d_sg_list_t *sgl, bool verbose)
+io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
+		   daos_key_t *dkey, daos_iod_t *iod, d_sg_list_t *sgl,
+		   struct dtx_handle *dth, bool verbose)
 {
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
@@ -504,7 +496,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, dkey,
-			      1, iod, &ioh, NULL);
+			      1, iod, &ioh, dth);
 	if (rc != 0) {
 		if (verbose)
 			print_error("Failed to prepare ZC update: %d\n", rc);
@@ -529,7 +521,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
-	rc = vos_update_end(ioh, 0, dkey, rc, NULL);
+	rc = vos_update_end(ioh, 0, dkey, rc, dth);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -537,8 +529,9 @@ end:
 }
 
 int
-io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		  daos_iod_t *iod, d_sg_list_t *sgl, bool verbose)
+io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
+		  daos_key_t *dkey, daos_iod_t *iod, d_sg_list_t *sgl,
+		  bool verbose)
 {
 	struct bio_sglist *bsgl;
 	struct bio_iov	*biov;
@@ -689,7 +682,8 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_nr	= 1;
 
 	/* Act */
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
+				NULL, true);
 	if (rc)
 		goto exit;
 
@@ -730,8 +724,8 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	int i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, *coh, *oid, 1, true, DAOS_INTENT_DEFAULT,
-				  &objs[i]);
+		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, 1, true,
+				  DAOS_INTENT_DEFAULT, &objs[i]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -800,8 +794,8 @@ io_obj_cache_test(void **state)
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_hold(occ, l_coh, oids[1], 1, true, DAOS_INTENT_DEFAULT,
-			  &objs[16]);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], 1, true,
+			  DAOS_INTENT_DEFAULT, &objs[16]);
 	assert_int_equal(rc, 0);
 	vos_obj_release(occ, objs[16]);
 
@@ -1156,7 +1150,8 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	iod.iod_nr	= 1;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl, true);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
+				NULL, true);
 	if (rc)
 		goto exit;
 
@@ -1328,6 +1323,22 @@ io_set_attribute_test(void **state)
 	int rc;
 	uint64_t attr;
 	uint64_t i, expected;
+	daos_unit_oid_t oid;
+
+	oid = gen_oid(arg->ofeat);
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, 0);
+
+	rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     VOS_OI_FAILED);
+	assert_int_equal(rc, 0);
+
+	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
+			     NULL, &attr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(attr, VOS_OI_FAILED);
 
 	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
 			     NULL, &attr);
