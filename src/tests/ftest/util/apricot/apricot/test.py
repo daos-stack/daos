@@ -153,8 +153,10 @@ class TestWithServers(TestWithoutServers):
         self.agent_sessions = None
         self.nvme_parameter = None
 
-    def init_server_param(self):
-        '''Read the server related parameter from avocado yaml file'''
+    def setUp(self):
+        """Set up each test case."""
+        super(TestWithServers, self).setUp()
+
         self.server_group = self.params.get(
             "name", "/server_config/", "daos_server")
 
@@ -198,24 +200,10 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-    def spdk_setup(self):
-        '''SPDK setup for NVMe drives'''
-        try:
-            if self.nvme_parameter == "nvme":
-                spdk.nvme_setup(self.hostlist_servers)
-        except spdk.SpdkFailed as error:
-            self.fail("Error setting up NVMe: {}".format(error))
-
-    def spdk_cleanup(self):
-        '''SPDK cleanup for NVMe drives'''
+        #Storage setup if requested in test input file
         if self.nvme_parameter == "nvme":
-            spdk.nvme_cleanup(self.hostlist_servers)
+            server_utils.storage_prepare(','.join(self.hostlist_servers))
 
-    def setUp(self):
-        """Set up each test case."""
-        super(TestWithServers, self).setUp()
-        self.init_server_param()
-        self.spdk_setup()
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
@@ -240,5 +228,7 @@ class TestWithServers(TestWithoutServers):
             try:
                 server_utils.stop_server(hosts=self.hostlist_servers)
             finally:
-                self.spdk_cleanup()
+                #Storage reset
+                if self.nvme_parameter == "nvme":
+                    server_utils.storage_reset(','.join(self.hostlist_servers))
                 super(TestWithServers, self).tearDown()
