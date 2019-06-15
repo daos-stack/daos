@@ -171,122 +171,32 @@ cont_create_hdlr(struct cmd_args_s *ap)
 int
 cont_create_uns_hdlr(struct cmd_args_s *ap)
 {
-	char			pool[37], cont[37];
-	char			oclass[10], type[10];
-	char			str[DUNS_MAX_XATTR_LEN];
-	int			len;
+	struct duns_attr_t	dattr = {0};
+	char			type[10];
 	int			rc;
 	const int		RC_PRINT_HELP = 2;
 
-	/* Path also requires container type be specified (for create) */
+	/* Create by path requires container type, obj class, chunk_size */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
-	if (ap->type == DAOS_PROP_CO_LAYOUT_HDF5) {
-		/** create a new file if HDF5 container */
-		int fd;
+	uuid_copy(dattr.da_puuid, ap->p_uuid);
+	dattr.da_type = ap->type;
+	dattr.da_oclass = ap->oclass;
+	dattr.da_chunk_size = ap->chunk_size;
 
-		fd = open(ap->path, O_CREAT | O_EXCL,
-			  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
-		if (fd == -1) {
-			D_ERROR("Failed to create file %s: %s\n",
-				ap->path, strerror(errno));
-			/** TODO - convert errno to rc */
-			return -DER_INVAL;
-		}
-		close(fd);
-	} else if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		/** create a new directory if POSIX/MPI-IO container */
-		rc = mkdir(ap->path,
-			   S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH);
-		if (rc == -1) {
-			D_ERROR("Failed to create dir %s: %s\n",
-				ap->path, strerror(errno));
-			/** TODO - convert errno to rc */
-			return -DER_INVAL;
-		}
-		D_INFO("created directory: %s\n", ap->path);
-	} else {
-		D_ERROR("Invalid container layout.\n");
-		return -DER_INVAL;
-	}
-
-	uuid_unparse(ap->p_uuid, pool);
-	daos_unparse_oclass(ap->oclass, oclass);
-	daos_unparse_ctype(ap->type, type);
-
-	D_INFO("unparsed pool: %s\n", pool);
-	D_INFO("unparsed oclass: %s\n", oclass);
-	D_INFO("unparsed ctype: %s\n", type);
-
-	/** generate a random container uuid and try to create it */
-	do {
-		uuid_generate(ap->c_uuid);
-		uuid_unparse(ap->c_uuid, cont);
-
-		/** store the daos attributes in the path xattr */
-		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
-			      ap->chunk_size);
-		if (len < 90) {
-			D_ERROR("Failed to create xattr value\n");
-			D_GOTO(err_link, rc = -DER_INVAL);
-		}
-
-		D_INFO("lxsetattr(path=%s, xattr_name=%s, str=%s, %d, 0)\n",
-			ap->path, DUNS_XATTR_NAME, str, len + 1);
-
-		rc = lsetxattr(ap->path, DUNS_XATTR_NAME, str,
-			       len + 1, 0);
-		if (rc) {
-			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
-			D_GOTO(err_link, rc = -DER_INVAL);
-		}
-
-		rc = daos_cont_create(ap->pool, ap->c_uuid, NULL, NULL);
-	} while (rc == -DER_EXIST);
+	rc = duns_link_path(ap->path, ap->group, ap->mdsrv, &dattr);
 	if (rc) {
-		D_ERROR("Failed to create container (%d)\n", rc);
-		D_GOTO(err_link, rc);
+		fprintf(stderr, "duns_link_path() error: rc=%d\n", rc);
+		D_GOTO(err_rc, rc);
 	}
-
-	/*
-	 * TODO: Add a container attribute to store the inode number (or Lustre
-	 * FID) of the file.
-	 */
-
-	/** If this is a POSIX container, test create a DFS mount */
-	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		daos_cont_info_t	co_info;
-		dfs_t			*dfs;
-
-		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
-				    &ap->cont, &co_info, NULL);
-		if (rc) {
-			D_ERROR("Failed to open container (%d)\n", rc);
-			D_GOTO(err_cont, rc = 1);
-		}
-
-		rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &dfs);
-		dfs_umount(dfs);
-		daos_cont_close(ap->cont, NULL);
-		if (rc) {
-			D_ERROR("dfs_mount failed (%d)\n", rc);
-			D_GOTO(err_cont, rc = 1);
-		}
-	}
-
-	fprintf(stdout, "Successfully created %s container "DF_UUIDF
-			" linked to %s\n", type, DP_UUID(ap->c_uuid),
-			ap->path);
+	
+	uuid_copy(ap->c_uuid, dattr.da_cuuid);
+	daos_unparse_ctype(ap->type, type);
+	fprintf(stdout, "Successfully created container "DF_UUIDF" type %s\n",
+			DP_UUID(ap->c_uuid), type);
 
 	return 0;
 
-err_cont:
-	daos_cont_destroy(ap->pool, ap->c_uuid, 1, NULL);
-err_link:
-	if (ap->type == DAOS_PROP_CO_LAYOUT_HDF5)
-		unlink(ap->path);
-	else if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX)
-		rmdir(ap->path);
 err_rc:
 	return rc;
 }

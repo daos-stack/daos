@@ -501,7 +501,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	ARGS_VERIFY_PATH_OR_CUUID(ap, out, rc = RC_PRINT_HELP);
 
 	if ((ap->path != NULL) && (op != CONT_CREATE)) {
-		struct duns_attr_t dattr;
+		struct duns_attr_t dattr = {0};
 
 		/* Resolve pool, container UUIDs from path if needed */
 		rc = duns_resolve_path(ap->path, &dattr);
@@ -675,7 +675,8 @@ help_hdlr(struct cmd_args_s *ap)
 "	--type=CTYPESTR    container type (HDF5, POSIX)\n"
 "	--oclass=OCLSSTR   container object class\n"
 "			   (tiny, small, large, R2, R2S, repl_max)\n"
-"	--chunk_size=BYTES chunk size of files created\n"
+"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
+"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 "	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 "	--eprange=B-E      container epoch range (destroy-snap)\n");
