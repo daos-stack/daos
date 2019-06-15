@@ -814,21 +814,22 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 int
 ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 {
-	int		 rc;
+	int	rc;
 
 	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks,
 				true /* create */, false /* bootstrap */, size);
 
-	/* TODO: Attempt to add replicas that were successfully started */
+	/* TODO: Attempt to only add replicas that were successfully started */
 	if (rc != 0)
 		goto out_stop;
 	rc = rdb_add_replicas(svc->s_db, ranks);
-	/* Clean up failed ranks */
-	if (ranks->rl_nr == 0)
-		goto out;
 out_stop:
-	ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks, true /* destroy */);
-out:
+	/* Clean up ranks that were not added */
+	if (ranks->rl_nr > 0) {
+		D_ASSERT(rc != 0);
+		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks,
+				  true /* destroy */);
+	}
 	return rc;
 }
 
@@ -861,8 +862,9 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 
 	/* filter out failed ranks */
 	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
-	ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
-			  true /* destroy */);
+	if (stop_ranks->rl_nr > 0)
+		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
+				  true /* destroy */);
 	daos_rank_list_free(stop_ranks);
 	return rc;
 }

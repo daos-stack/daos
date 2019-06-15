@@ -388,28 +388,30 @@ int
 ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 			      d_rank_list_t *failed, d_rank_list_t *alt)
 {
-	struct pool_domain	*domains = NULL;
+	struct pool_domain	*nodes = NULL;
 	int			 nnodes;
 	int			 nfailed;
 	int			 nreplaced;
 	int			 idx;
 	int			 i;
+	int			 rc;
 
-	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
+	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &nodes);
 	if (nnodes == 0) {
 		D_ERROR("no nodes in pool map\n");
 		return -DER_IO;
 	}
-
-#define COND1(s) map_ranks_include((s), domains[i].do_comp.co_status)
-#define COND2    daos_rank_list_find(replicas, domains[i].do_comp.co_rank, &idx)
 
 	/**
 	 * Move all ranks in the list of replicas which are marked as DOWN
 	 * in the pool map to the end of the list.
 	 **/
 	for (i = 0, nfailed = 0; i < nnodes; i++) {
-		if (!COND1(MAP_RANKS_DOWN) || !COND2)
+		if (!map_ranks_include(MAP_RANKS_DOWN,
+				       nodes[i].do_comp.co_status))
+			continue;
+		if (!daos_rank_list_find(replicas,
+					 nodes[i].do_comp.co_rank, &idx))
 			continue;
 		if (idx < replicas->rl_nr - (nfailed + 1))
 			SWAP_RANKS(replicas, idx,
@@ -423,27 +425,30 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(failed->rl_ranks, nfailed);
-	if (failed->rl_ranks == NULL)
-		return -DER_NOMEM;
-
 	/** Make `alt` point to failed subset towards the end **/
 	alt->rl_nr = nfailed;
 	alt->rl_ranks = replicas->rl_ranks + (replicas->rl_nr - nfailed);
 
 	/** Copy failed ranks to make room for replacements **/
-	failed->rl_nr = nfailed;
-	daos_rank_list_copy(failed, alt);
+	memset(failed, 0, sizeof(*failed));
+	rc = daos_rank_list_copy(failed, alt);
+	if (rc != 0)
+		return rc;
 
 	/**
 	 * For replacements, search all ranks which are marked as UP
 	 * in the pool map and not present in the list of replicas.
 	 **/
 	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
-		if (!COND1(MAP_RANKS_UP) || COND2 ||
-		    domains[i].do_comp.co_rank == 0 /* Skip rank 0 */)
+		if (nodes[i].do_comp.co_rank == 0 /* Skip rank 0 */)
 			continue;
-		alt->rl_ranks[nreplaced++] = domains[i].do_comp.co_rank;
+		if (!map_ranks_include(MAP_RANKS_UP,
+				       nodes[i].do_comp.co_status))
+			continue;
+		if (daos_rank_list_find(replicas,
+					nodes[i].do_comp.co_rank, &idx))
+			continue;
+		alt->rl_ranks[nreplaced++] = nodes[i].do_comp.co_rank;
 	}
 
 	if (nreplaced < nfailed) {
