@@ -353,7 +353,7 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
 func (n *nvmeStorage) Update(
-	i int, req *pb.UpdateNvmeParams, results *([]*pb.NvmeControllerResult)) {
+	i int, req *pb.UpdateNvmeReq, results *([]*pb.NvmeControllerResult)) {
 
 	var pciAddr string
 	srv := n.config.Servers[i]

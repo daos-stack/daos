@@ -410,7 +410,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->releasedir	= df_ll_releasedir;
 	fuse_ops->unlink	= df_ll_unlink;
 	fuse_ops->rmdir		= df_ll_unlink;
-	fuse_ops->readdirplus	= df_ll_readdir;
+	fuse_ops->readdir	= df_ll_readdir;
 	fuse_ops->create	= df_ll_create;
 
 	/* Ops that do not need to support per-inode indirection */

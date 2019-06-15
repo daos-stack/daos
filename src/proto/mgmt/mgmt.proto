@@ -26,11 +26,15 @@ package mgmt;
 
 // Import DaosRequestStatus.
 import "srv.proto";
+// Import Pool request and response
+import "pool.proto";
 
 // Management Service is replicated on a small number of servers in the system.
 service MgmtSvc {
 	// Join the server described by JoinReq to the system.
 	rpc Join(JoinReq) returns (JoinResp) {}
+	// Create a DAOS pool allocated across a number of ranks
+	rpc CreatePool(CreatePoolReq) returns (CreatePoolResp) {};
 }
 
 message JoinReq {

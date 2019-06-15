@@ -28,14 +28,12 @@ void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode;
-	d_list_t			*rlink;
-	int				rc;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	d_iov_t			iov = {};
-	d_sg_list_t			sgl = {};
-	daos_size_t read_size;
-	void *buff;
+	d_sg_list_t		sgl = {};
+	daos_size_t		read_size;
+	void			*buff;
+	int			rc;
 
 	D_ALLOC(buff, len);
 	if (!buff) {
@@ -43,32 +41,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		return;
 	}
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				ino);
-		DFUSE_REPLY_ERR_RAW(NULL, req, ENOENT);
-		return;
-	}
-
-	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_read(inode->ie_dfs->dffs_dfs, inode->ie_obj, sgl, position,
-		      &read_size);
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, sgl, position, &read_size);
 	if (rc) {
-		rc = fuse_reply_buf(req, buff, read_size);
-		if (rc != 0)
-			DFUSE_TRA_ERROR(inode,
-					"fuse_reply_buf returned %d:%s",
-					rc, strerror(-rc));
+		fuse_reply_buf(req, buff, read_size);
 	} else {
-		DFUSE_REPLY_ERR_RAW(NULL, req, rc);
+		DFUSE_REPLY_ERR_RAW(NULL, req, -rc);
 		D_FREE(buff);
 	}
-
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
 }
