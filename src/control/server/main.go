@@ -27,6 +27,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
+	"syscall"
+	"time"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
@@ -36,6 +39,9 @@ import (
 )
 
 func main() {
+	// TODO: wait for any previous instances to release resources
+	fmt.Printf("waiting at start-up\n")
+	time.Sleep(10 * time.Second)
 	if serverMain() != nil {
 		os.Exit(1)
 	}
@@ -115,18 +121,51 @@ func serverMain() error {
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
-	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	acl.RegisterAccessControlServer(grpcServer, secServer)
+
+	// Only provide IO/Agent communication if running as non-root user or if no
+	// non-root user has been specified in config (not recommended, will log error).
+	// If root, only provide gRPC mgmt control service for hardware provisioning.
+	if syscall.Getuid() != 0 || config.UserName == "" {
+		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
+		secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
+		acl.RegisterAccessControlServer(grpcServer, secServer)
+	}
 
 	go grpcServer.Serve(lis)
 	defer grpcServer.GracefulStop()
 
-	// Wait for storage to be formatted if necessary and subsequently drop
-	// current process privileges to that of normal user.
-	if err = awaitStorageFormat(&config); err != nil {
-		log.Errorf("Failed to format storage: %+v", err)
-		return err
+	// If running as root, wait for storage to be formatted if necessary and
+	// respawn with ownership set to non-root user.
+	if syscall.Getuid() == 0 {
+		if err = awaitStorageFormat(&config); err != nil {
+			log.Errorf("Failed to format storage: %+v", err)
+			return err
+		}
+
+		if err := dropPrivileges(&config); err != nil {
+			log.Errorf(
+				"Failed to drop privileges:\n%+v\nrunning as root "+
+					"is dangerous and is not advised!", err)
+		} else {
+			// respawn as normal user if running as root
+			var argString string
+			for _, arg := range os.Args {
+				argString += arg + " "
+			}
+			argString += "&> " + config.ControlLogFile
+
+			msg := fmt.Sprintf(
+				"dropping privileges: re-spawning owned by user %s (%s)\n",
+				config.UserName, argString)
+			log.Debugf(msg)
+
+			err = exec.Command("su", config.UserName, "-c", argString).Start()
+			if err != nil {
+				log.Errorf(msg)
+			}
+
+			return err
+		}
 	}
 
 	// Format the unformatted servers by writing persistant superblock.

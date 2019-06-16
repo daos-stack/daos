@@ -27,8 +27,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -87,44 +85,23 @@ func awaitStorageFormat(config *configuration) error {
 	msgSkip := "skipping " + msgFormat
 	msgWait := "waiting for " + msgFormat + "\n"
 
-	if syscall.Getuid() == 0 {
-		for i, srv := range config.Servers {
-			if ok, err := config.ext.exists(
-				iosrvSuperPath(srv.ScmMount)); err != nil {
+	for i, srv := range config.Servers {
+		if ok, err := config.ext.exists(
+			iosrvSuperPath(srv.ScmMount)); err != nil {
 
-				return errors.WithMessage(
-					err, "checking superblock exists")
-			} else if ok {
-				log.Debugf(
-					msgSkip+" (server already formatted)\n",
-					i)
+			return errors.WithMessage(err, "checking superblock exists")
+		} else if ok {
+			log.Debugf(msgSkip+" (server already formatted)\n", i)
 
-				continue
-			}
-
-			// want this to be visible on stdout and log
-			fmt.Printf(msgWait, i)
-			log.Debugf(msgWait, i)
-
-			// wait on storage format client API call
-			<-srv.formatted
+			continue
 		}
 
-		if err := dropPrivileges(config); err != nil {
-			log.Errorf(
-				"Failed to drop privileges:\n%+v\nrunning as root "+
-					"is dangerous and is not advised!", err)
-		}
+		// want this to be visible on stdout and log
+		fmt.Printf(msgWait, i)
+		log.Debugf(msgWait, i)
 
-		return nil
-	}
-
-	log.Debugf(
-		"skipping storage format (%s running as non-root user)\n",
-		os.Args[0])
-
-	for _, srv := range config.Servers {
-		close(srv.formatted)
+		// wait on storage format client API call
+		<-srv.formatted
 	}
 
 	return nil

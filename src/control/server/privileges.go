@@ -131,14 +131,15 @@ func dropPrivileges(config *configuration) error {
 		return errors.New("no username supplied in config")
 	}
 
-	log.Debugf("running as root, downgrading to user %s", config.UserName)
+	log.Debugf(
+		"running as root, changing file ownership to user %s", config.UserName)
 
-	usr, uid, err := getUID(config.ext, config.UserName)
+	usr, _, err := getUID(config.ext, config.UserName)
 	if err != nil {
 		return errors.WithMessage(err, "get uid")
 	}
 
-	grpName, gid, err := getGID(config.ext, usr, config.GroupName)
+	grpName, _, err := getGID(config.ext, usr, config.GroupName)
 	if err != nil {
 		return errors.WithMessage(err, "get gid")
 	}
@@ -147,13 +148,13 @@ func dropPrivileges(config *configuration) error {
 		return err
 	}
 
-	if err := config.ext.setGID(gid); err != nil {
-		return errors.WithMessage(err, "setting gid")
-	}
-
-	if err := config.ext.setUID(uid); err != nil {
-		return errors.WithMessage(err, "setting uid")
-	}
+	//	if err := config.ext.setGID(gid); err != nil {
+	//		return errors.WithMessage(err, "setting gid")
+	//	}
+	//
+	//	if err := config.ext.setUID(uid); err != nil {
+	//		return errors.WithMessage(err, "setting uid")
+	//	}
 
 	return nil
 }
