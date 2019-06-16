@@ -233,7 +233,7 @@ TODO: return details of AppDirect memory regions
 
 Format can be [triggered](../dmg/README.md#subcommands) through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is performed as specified in config file parameters prefixed with `scm_`.
 
-SCM device format is expected only to be performed when installing DAOS system for the first time and requires `daos_server` to be started by rot user.
+SCM device format is expected only to be performed when installing DAOS system for the first time and requires `daos_server` to be started by root user.
 
 If `daos_server` is run by root user, data plane will be started automatically ONLY if the DAOS superblock exists within the specified `scm_mount`.
 Otherwise, the control plane will wait until an administrator calls "[storage format](../dmg/README.md#subcommands)" over the client API from the management tool.
