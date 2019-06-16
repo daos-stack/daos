@@ -274,30 +274,34 @@ def kill_server(hosts):
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
 
+def clustershell_execute(cmd, hosts, timeout=60):
+    """
+    Python cluster sheel execute function with error check.
+    Args:
+        cmd: Command in string to run on cluster
+        hosts: Cluster nodes
+        timeout: Command timeout
+    """
+    local_task = task_self()
+    local_task.run(cmd=cmd, nodes=hosts, timeout=timeout)
+    for rc_code, _keys in local_task.iter_retcodes():
+        if rc_code is not 0:
+            for output, _node in local_task.iter_buffers():
+                raise ServerFailed("Cluster Command Failed\n{} : RC={} :{}"
+                                   .format(_node, rc_code, output))
+
 def storage_prepare(hosts):
     """
     Prepare the Storage for server
     """
-    nvme_task = task_self()
     cmd = ("sudo /usr/bin/daos_server storage prep-nvme "
            "--target-user=\"{0}\" --hugepages=4096"
            .format(getpass.getuser()))
-    nvme_task.run(cmd, nodes=hosts, timeout=120)
-    for rc_code, _keys in nvme_task.iter_retcodes():
-        if rc_code is not 0:
-            for output, _node in nvme_task.iter_buffers():
-                raise ServerFailed("Failed to prepare Storage\n{} : RC={} :{}"
-                                   .format(_node, rc_code, output))
+    clustershell_execute(cmd, hosts, timeout=120)
 
 def storage_reset(hosts):
     """
     Reset the Storage
     """
-    nvme_task = task_self()
     cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
-    nvme_task.run(cmd, nodes=hosts, timeout=60)
-    for rc_code, _keys in nvme_task.iter_retcodes():
-        if rc_code is not 0:
-            for output, _node in nvme_task.iter_buffers():
-                raise ServerFailed("Failed to Reset Storage\n{} : RC={} :{}"
-                                   .format(_node, rc_code, output))
+    clustershell_execute(cmd, hosts)
