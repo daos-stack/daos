@@ -65,7 +65,7 @@ echo "GOPATH $GOPATH"
 repopath=github.com/daos-stack/daos
 
 # Lint source then run Go tests for each package
-for d in client security server dmg drpc; do
+for d in client security server dmg drpc lib/netdetect; do
     echo "testing $d"
     pushd "$GOPATH/src/$repopath/src/control/$d"
     # todo: provide a sensible way of linting and returning review comments

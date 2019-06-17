@@ -119,6 +119,10 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 		return config, errors.New("missing I/O service params")
 	}
 
+	for idx := range config.Servers {
+		config.Servers[idx].Hostname = host
+	}
+
 	return config, nil
 }
 

@@ -38,7 +38,7 @@ int dac_array_punch(tse_task_t *task);
 int dac_array_get_size(tse_task_t *task);
 int dac_array_set_size(tse_task_t *task);
 int dac_array_local2global(daos_handle_t oh, d_iov_t *glob);
-int dac_array_global2local(daos_handle_t coh, d_iov_t glob,
+int dac_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 			   daos_handle_t *oh);
 
 /* task function for HL operations */

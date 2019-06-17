@@ -79,7 +79,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 
 	if (rank != 0) {
 		/** unpack global handle */
-		rc = daos_array_global2local(coh, ghdl, oh);
+		rc = daos_array_global2local(coh, ghdl, 0, oh);
 		assert_int_equal(rc, 0);
 	}
 

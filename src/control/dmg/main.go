@@ -46,13 +46,12 @@ type cliOptions struct {
 }
 
 var (
-	opts   = new(cliOptions)
-	conns  = client.NewConnect()
-	config = client.NewConfiguration()
+	opts  = new(cliOptions)
+	conns = client.NewConnect()
 )
 
 // appSetup loads config file, processes cli overrides and connects clients.
-func appSetup() error {
+func appSetup(broadcast bool) error {
 	config, err := client.ProcessConfigFile(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
@@ -66,7 +65,14 @@ func appSetup() error {
 		return errors.New("hostfile option not implemented")
 	}
 
-	ok, out := hasConns(conns.ConnectClients(config.HostList))
+	// broadcast app requests to host list by default
+	addresses := config.HostList
+	if !broadcast {
+		// send app requests to first access point only
+		addresses = []string{config.AccessPoints[0]}
+	}
+
+	ok, out := hasConns(conns.ConnectClients(addresses))
 	if !ok {
 		return errors.New(out) // no active connections
 	}
@@ -99,7 +105,7 @@ func dmgMain() error {
 	// If no subcommand has been specified, interactive shell is started
 	// with expected functionality (tab expansion and utility commands)
 	// after parsing config/opts and setting up connections.
-	if err := appSetup(); err != nil {
+	if err := appSetup(true); err != nil {
 		fmt.Println(err.Error()) // notify of app setup errors
 		fmt.Println("")
 	}
