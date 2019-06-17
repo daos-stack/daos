@@ -189,7 +189,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "duns_link_path() error: rc=%d\n", rc);
 		D_GOTO(err_rc, rc);
 	}
-	
+
 	uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	daos_unparse_ctype(ap->type, type);
 	fprintf(stdout, "Successfully created container "DF_UUIDF" type %s\n",
