@@ -231,7 +231,7 @@ export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!
-export D_LOG_FILE=/tmp/Functional_$TEST_TAG/server_daos.log
+export D_LOG_FILE=/tmp/Functional_$TEST_TAG/client_daos.log
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
@@ -337,11 +337,15 @@ fi
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -s \"$TEST_TAG\"; then
+if ! ./launch.py -c -a -r -s \"$TEST_TAG\"; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+# Remove the latest avocado symlink directory to avoid inclusion in the
+# jenkins build artifacts
+unlink $DAOS_BASE/src/tests/ftest/avocado/job-results/latest
 
 # get stacktraces for the core files
 if ls core.*; then
@@ -377,17 +381,4 @@ else
     rc=0
 fi
 
-# collect the logs
-if ! rpdcp -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-    -w "$(IFS=','; echo "${nodes[*]}")" \
-    /tmp/Functional_"$TEST_TAG"/\*daos.log "$PWD"/; then
-    echo "Copying daos.logs from remote nodes failed"
-    # pass
-fi
-if ! rpdcp -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-    -w "$(IFS=','; echo "${nodes[*]}")" \
-    /tmp/daos_agent.log "$PWD"/; then
-    echo "Copying daos_agent.logs from remote nodes failed"
-    # pass
-fi
 exit "$rc"
