@@ -112,7 +112,8 @@ RUN zypper --non-interactive rm libpmem1;                                      \
                                      libpmemobj-devel raft-devel               \
                                      argobots-devel cart-devel                 \
                                      ipmctl-devel readline-devel               \
-                                     go1.10 fio\ \<\ 3.4
+                                     go1.10 fio\ \<\ 3.4;                      \
+    zypper --non-interactive rm go1.7 go1.8 go1.9
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
