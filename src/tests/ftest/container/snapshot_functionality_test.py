@@ -50,6 +50,9 @@ class Snapshot(TestWithServers):
           information, list, creation and destroy.
     :avocado: recursive
     """
+    DAOS_PC_RO = int(1 << 0)
+    DAOS_PC_RW = int(1 << 1)
+    DAOS_PC_EX = int(1 << 2)
 
     def setUp(self):
         """
@@ -73,8 +76,8 @@ class Snapshot(TestWithServers):
             self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None)
 
-            # need a connection to create container
-            self.pool.connect(1 << 1)
+            # need a connection to the pool with rw permission
+            self.pool.connect(self.DAOS_PC_RW)
 
             # create a container
             self.container = DaosContainer(self.context)
@@ -320,7 +323,7 @@ class Snapshot(TestWithServers):
                  DAOS-1395 Test snapshot destroy
                  DAOS-1402 Test creating multiple snapshots
         Test Description:
-                (1)Create an object, write random adata into it, and take
+                (1)Create an object, write a random data into it, and take
                    a snapshot.
                 (2)Make changes to the data object. The write_an_obj function
                    does a commit when the update is complete.

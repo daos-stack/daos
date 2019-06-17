@@ -4,8 +4,8 @@ hosts:
     test_machines:
         - boro-A
         - boro-B
-timeout: 100
-faults: !mux
+timeout: 500
+faults:
     no_faults:
         fault_list: []
 server_config:
