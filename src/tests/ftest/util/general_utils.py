@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
-
 import os
 import re
 import json
@@ -30,13 +28,17 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
-from avocado import fail_on
 from time import sleep
+from avocado import fail_on
+from ClusterShell.Task import task_self
 
+from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
 
+class ClusterCommandFailed(Exception):
+    """ Exception for ClusterCommandFailed """
 
 def get_file_path(bin_name, dir_path=""):
     """
@@ -304,3 +306,25 @@ def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
                 "Unexpected {} value: expected={}, detected={}".format(
                     key, expected, detected))
     return messages
+
+def clustershell_execute(cmd, hosts, timeout=60):
+    """
+    Run command on given hosts using cluster shell utility.
+    Args:
+        cmd (str): command in string format to run on cluster
+        hosts (list):  a list of host names
+        timeout (int): command timeout in seconds
+    Raise:
+        ClusterCommandFailed: raied in case of command failed on any host
+                              return dictionary with hostname,rc,output.
+    """
+    rc_err = {}
+    local_task = task_self()
+    local_task.run(cmd, nodes=','.join(hosts), timeout=timeout)
+    for rc_code, _keys in local_task.iter_retcodes():
+        if rc_code is not 0:
+            rc_err[_keys[0]] = 'RC={}, output={}'.format(rc_code,
+                                                         local_task.
+                                                         node_buffer(_keys[0]))
+    if rc_err:
+        raise ClusterCommandFailed(rc_err)

@@ -37,8 +37,8 @@ import errno
 import getpass
 import yaml
 
-from ClusterShell.Task import task_self
 from avocado.utils import genio
+from general_utils import clustershell_execute, ClusterCommandFailed
 
 SESSIONS = {}
 
@@ -109,7 +109,6 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
     """
     Launches DAOS servers in accordance with the supplied hostfile.
     """
-    global SESSIONS
     try:
         servers = (
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
@@ -211,7 +210,6 @@ def stop_server(setname=None, hosts=None):
     has spawned.  Doesn't always work though.
     """
 
-    global SESSIONS
     try:
         if setname is None:
             for _key, val in SESSIONS.items():
@@ -274,34 +272,24 @@ def kill_server(hosts):
         subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)),
                         shell=True)
 
-def clustershell_execute(cmd, hosts, timeout=60):
-    """
-    Python cluster shell execute function with error check.
-    Args:
-        cmd: Command in string to run on cluster
-        hosts: Cluster nodes
-        timeout: Command timeout
-    """
-    local_task = task_self()
-    local_task.run(cmd=cmd, nodes=hosts, timeout=timeout)
-    for rc_code, _keys in local_task.iter_retcodes():
-        if rc_code is not 0:
-            for output, _node in local_task.iter_buffers():
-                raise ServerFailed("Cluster Command Failed\n{} : RC={} :{}"
-                                   .format(_node, rc_code, output))
-
 def storage_prepare(hosts):
     """
     Prepare the Storage for server
     """
-    cmd = ("sudo /usr/bin/daos_server storage prep-nvme "
-           "--target-user=\"{0}\" --hugepages=4096"
-           .format(getpass.getuser()))
-    clustershell_execute(cmd, hosts, timeout=120)
+    try:
+        cmd = ("sudo /usr/bin/daos_server storage prep-nvme "
+               "--target-user=\"{0}\" --hugepages=4096"
+               .format(getpass.getuser()))
+        clustershell_execute(cmd, hosts, timeout=120)
+    except ClusterCommandFailed as error:
+        raise ServerFailed(error)
 
 def storage_reset(hosts):
     """
     Reset the Storage
     """
-    cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
-    clustershell_execute(cmd, hosts)
+    try:
+        cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
+        clustershell_execute(cmd, hosts)
+    except ClusterCommandFailed as error:
+        raise ServerFailed(error)

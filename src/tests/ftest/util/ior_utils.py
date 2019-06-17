@@ -105,7 +105,6 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                           ior_flags, seg_count, iteration, block_size,
                           transfer_size, pool_uuid, svc_list, cont_uuid,
                           chunk_size, object_class)
-
         if display_output:
             print("ior_cmd: {}".format(ior_cmd))
 

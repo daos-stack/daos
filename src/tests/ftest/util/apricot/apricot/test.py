@@ -167,8 +167,7 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-        self.nvme_parameter = self.params.get("bdev_class", '/server_config/',
-                                              None)
+        self.nvme_parameter = self.params.get("bdev_class", '/server_config/')
 
         # Supported combinations of yaml hosts arguments:
         #   - test_machines [+ server_count]
@@ -201,7 +200,7 @@ class TestWithServers(TestWithoutServers):
 
         #Storage setup if requested in test input file
         if self.nvme_parameter == "nvme":
-            server_utils.storage_prepare(','.join(self.hostlist_servers))
+            server_utils.storage_prepare(self.hostlist_servers)
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
@@ -227,7 +226,9 @@ class TestWithServers(TestWithoutServers):
             try:
                 server_utils.stop_server(hosts=self.hostlist_servers)
             finally:
-                #Storage reset
-                if self.nvme_parameter == "nvme":
-                    server_utils.storage_reset(','.join(self.hostlist_servers))
-                super(TestWithServers, self).tearDown()
+                try:
+                    #Storage reset
+                    if self.nvme_parameter == "nvme":
+                        server_utils.storage_reset(self.hostlist_servers)
+                finally:
+                    super(TestWithServers, self).tearDown()
