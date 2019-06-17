@@ -104,7 +104,7 @@ func TestDropPrivileges(t *testing.T) {
 		config.GroupName = tt.groupname
 
 		// TODO: verify chownRecursive gets called and if err
-		err := dropPrivileges(&config)
+		err := changeFileOwnership(&config)
 		if err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)

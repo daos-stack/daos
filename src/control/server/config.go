@@ -374,9 +374,17 @@ func (c *configuration) setLogging(name string) (*os.File, error) {
 		return f, nil
 	}
 
+	log.Errorf("no control log file specified")
+
 	// if no logfile specified, output from multiple hosts
 	// may get aggregated, prefix entries with hostname
 	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+
+	for i, srv := range c.Servers {
+		if srv.LogFile == "" {
+			log.Errorf("no daos log file specified for server %d", i)
+		}
+	}
 
 	return nil, nil
 }

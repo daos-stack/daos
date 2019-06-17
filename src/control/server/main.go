@@ -24,12 +24,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"syscall"
-	"time"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
@@ -39,9 +39,6 @@ import (
 )
 
 func main() {
-	// TODO: wait for any previous instances to release resources
-	fmt.Printf("waiting at start-up\n")
-	time.Sleep(10 * time.Second)
 	if serverMain() != nil {
 		os.Exit(1)
 	}
@@ -86,13 +83,13 @@ func serverMain() error {
 	// Backup active config.
 	saveActiveConfig(&config)
 
-	f, err := config.setLogging(host)
+	ctrlLogFile, err := config.setLogging(host)
 	if err != nil {
 		log.Errorf("Failed to configure logging: %+v", err)
 		return err
 	}
-	if f != nil {
-		defer f.Close()
+	if ctrlLogFile != nil {
+		defer ctrlLogFile.Close()
 	}
 
 	// Create and setup control service.
@@ -147,28 +144,30 @@ func serverMain() error {
 				"Failed to drop privileges:\n%+v\nrunning as root "+
 					"is dangerous and is not advised!", err)
 		} else {
-			// Make NVMe storage accessible to new user.
-			err = mgmtCtlSvc.nvme.spdk.prep(1024, config.UserName, "")
-			if err != nil {
-				log.Errorf("Failed to prep nvme storage: %+v", err)
-				return err
+			var buf bytes.Buffer // build command string
+
+			// Wait for this (old) process to exit and make NVMe storage accessible
+			// to new user.
+			fmt.Fprintf(
+				&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
+				os.Args[0], config.UserName, config.ControlLogFile)
+
+			// Run daos_server from within a subshell of target user with the same args.
+			fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
+
+			for _, arg := range os.Args {
+				fmt.Fprintf(&buf, arg+" ")
 			}
 
-			// Respawn process owned by new user.
-			var argString string
-			for _, arg := range os.Args {
-				argString += arg + " "
-			}
-			argString += "&> " + config.ControlLogFile
+			// Redirect output to existing log file.
+			fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)
 
 			msg := fmt.Sprintf(
-				"dropping privileges: re-spawning owned by user %s (%s)\n",
-				config.UserName, argString)
+				"dropping privileges: re-spawning (%s)\n", buf.String())
 			log.Debugf(msg)
 
-			err = exec.Command("su", config.UserName, "-c", argString).Start()
-			if err != nil {
-				log.Errorf(msg)
+			if err := exec.Command("bash", "-c", buf.String()).Start(); err != nil {
+				log.Errorf("Failed to respawn: %+v", err)
 			}
 
 			return err
@@ -192,7 +191,8 @@ func serverMain() error {
 		log.Errorf("Failed to set up dRPC: %+v", err)
 		return err
 	}
-	if err = iosrv.start(); err != nil {
+	// Log iosrv std{err,out} (unformatted) to ctrl log to not pollute DAOS log.
+	if err = iosrv.start(ctrlLogFile); err != nil {
 		log.Errorf("Failed to start server: %+v", err)
 		return err
 	}

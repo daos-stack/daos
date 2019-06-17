@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -35,7 +36,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v2"
@@ -222,7 +223,7 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 	return srv, nil
 }
 
-func (srv *iosrv) start() (err error) {
+func (srv *iosrv) start(logFile io.Writer) (err error) {
 	defer func() {
 		err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount)
 	}()
@@ -235,7 +236,7 @@ func (srv *iosrv) start() (err error) {
 		return
 	}
 
-	if err = srv.startCmd(); err != nil {
+	if err = srv.startCmd(logFile); err != nil {
 		return
 	}
 	defer func() {
@@ -292,11 +293,11 @@ func (srv *iosrv) wait() error {
 	return nil
 }
 
-func (srv *iosrv) startCmd() error {
+func (srv *iosrv) startCmd(logFile io.Writer) error {
 	// Exec io_server with generated cli opts from config context.
 	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
-	srv.cmd.Stdout = os.Stdout
-	srv.cmd.Stderr = os.Stderr
+	srv.cmd.Stdout = logFile
+	srv.cmd.Stderr = logFile
 	srv.cmd.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.
