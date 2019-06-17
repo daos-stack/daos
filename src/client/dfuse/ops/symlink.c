@@ -50,6 +50,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 
 	desc->da = fs_handle->symlink_da;
 	strncpy(desc->ie->ie_name, name, NAME_MAX);
+	desc->ie->ie_name[NAME_MAX] = '\0';
 	desc->ie->ie_parent = parent;
 
 	desc->request.ir_inode_num = parent;

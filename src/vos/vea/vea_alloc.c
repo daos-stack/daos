@@ -52,7 +52,7 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	       struct vea_entry *entry)
 {
 	struct vea_free_extent remain;
-	daos_iov_t key;
+	d_iov_t key;
 	unsigned int flags = VEA_FL_NO_MERGE | VEA_FL_GEN_AGE;
 	int rc;
 
@@ -63,7 +63,7 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	/* Remove the found free extent from compound index */
 	free_class_remove(&vsi->vsi_class, entry);
 
-	daos_iov_set(&key, &remain.vfe_blk_off, sizeof(remain.vfe_blk_off));
+	d_iov_set(&key, &remain.vfe_blk_off, sizeof(remain.vfe_blk_off));
 	rc = dbtree_delete(vsi->vsi_free_btr, &key, NULL);
 	if (rc)
 		return rc;
@@ -84,7 +84,7 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 {
 	struct vea_free_extent vfe;
 	struct vea_entry *entry;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	int rc;
 
 	/* No hint offset provided */
@@ -95,8 +95,8 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	vfe.vfe_blk_cnt = blk_cnt;
 
 	/* Fetch & operate on the in-tree record */
-	daos_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
-	daos_iov_set(&val, NULL, 0);
+	d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
+	d_iov_set(&val, NULL, 0);
 
 	D_ASSERT(!daos_handle_is_inval(vsi->vsi_free_btr));
 	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
@@ -368,7 +368,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
 	struct vea_free_extent found, frag;
 	daos_handle_t btr_hdl;
-	daos_iov_t key_in, key_out, val;
+	d_iov_t key_in, key_out, val;
 	uint64_t blk_off, found_end, vfe_end;
 	int rc, opc = BTR_PROBE_LE;
 
@@ -383,9 +383,9 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		vfe->vfe_blk_off, vfe->vfe_blk_cnt);
 
 	/* Fetch & operate on the copied record */
-	daos_iov_set(&key_in, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
-	daos_iov_set(&key_out, &blk_off, sizeof(blk_off));
-	daos_iov_set(&val, &found, sizeof(found));
+	d_iov_set(&key_in, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
+	d_iov_set(&key_out, &blk_off, sizeof(blk_off));
+	d_iov_set(&val, &found, sizeof(found));
 
 	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_PUNCH, &key_in, &key_out,
 			  &val);
@@ -419,9 +419,9 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		frag = found;
 		frag.vfe_blk_cnt = vfe->vfe_blk_off - found.vfe_blk_off;
 
-		daos_iov_set(&key_in, &frag.vfe_blk_off,
+		d_iov_set(&key_in, &frag.vfe_blk_off,
 			     sizeof(frag.vfe_blk_off));
-		daos_iov_set(&val, &frag, sizeof(frag));
+		d_iov_set(&val, &frag, sizeof(frag));
 		rc = dbtree_update(btr_hdl, &key_in, &val);
 		if (rc)
 			return rc;
@@ -435,9 +435,9 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		if (rc)
 			return rc;
 
-		daos_iov_set(&key_in, &frag.vfe_blk_off,
+		d_iov_set(&key_in, &frag.vfe_blk_off,
 			     sizeof(frag.vfe_blk_off));
-		daos_iov_set(&val, &frag, sizeof(frag));
+		d_iov_set(&val, &frag, sizeof(frag));
 		rc = dbtree_update(btr_hdl, &key_in, &val);
 		if (rc)
 			return rc;

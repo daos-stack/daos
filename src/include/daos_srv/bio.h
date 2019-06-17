@@ -132,11 +132,11 @@ bio_sgl_fini(struct bio_sglist *sgl)
 }
 
 /*
- * Convert bio_sglist into daos_sg_list_t, caller is responsible to
+ * Convert bio_sglist into d_sg_list_t, caller is responsible to
  * call daos_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 {
 	int i, rc;
 
@@ -151,7 +151,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
 
 	for (i = 0; i < sgl->sg_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-		daos_iov_t	*iov = &sgl->sg_iovs[i];
+		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		iov->iov_buf = biov->bi_buf;
 		iov->iov_len = biov->bi_data_len;
@@ -272,7 +272,7 @@ int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Read from per VOS instance blob.
@@ -283,7 +283,7 @@ int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Write SGL to per VOS instance blob.
@@ -295,7 +295,7 @@ int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
  * \returns		Zero on success, negative value on error
  */
 int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	       daos_sg_list_t *sgl);
+	       d_sg_list_t *sgl);
 
 /**
  * Read SGL from per VOS instance blob.
@@ -307,7 +307,7 @@ int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  * \returns		Zero on success, negative value on error
  */
 int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	      daos_sg_list_t *sgl);
+	      d_sg_list_t *sgl);
 
 /*
  * Finish setting up blob header and write info to blob offset 0.

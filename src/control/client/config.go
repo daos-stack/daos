@@ -24,13 +24,15 @@
 package client
 
 import (
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -105,15 +107,17 @@ func ProcessConfigFile(ConfigPath string) (Configuration, error) {
 	if !filepath.IsAbs(config.Path) {
 		newPath, err := common.GetAbsInstallPath(config.Path)
 		if err != nil {
-			return config, err
+			return config, errors.WithMessage(
+				err, "resolving install path")
 		}
+
 		config.Path = newPath
 	}
 
 	err := config.LoadConfig()
 	if err != nil {
-		log.Debugf("\nUnable to read the configuration file from: '%s'\nUsing default configuration.", config.Path)
-		return config, nil
+		return config, errors.WithMessagef(
+			err, "parsing config file %s", config.Path)
 	}
 	log.Debugf("DAOS Client config read from %s", config.Path)
 

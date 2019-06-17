@@ -98,7 +98,7 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 
 int
 daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-	     daos_key_desc_t *kds, daos_sg_list_t *sgl, daos_anchor_t *anchor,
+	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 	     daos_event_t *ev)
 {
 	daos_kv_list_t	*args;

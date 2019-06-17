@@ -216,7 +216,8 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return rc;
 	}
 
-	iter->it_type		= type;
+	D_ASSERT(iter->it_type == type);
+
 	iter->it_ops		= dict->id_ops;
 	iter->it_state		= VOS_ITS_NONE;
 	iter->it_ref_cnt	= 1;
@@ -336,7 +337,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 
 int
 vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int rc;

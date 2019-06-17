@@ -24,6 +24,7 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -151,10 +152,11 @@ func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // TODO: implement UnMarshal for LogMask discriminated union
 
-// server defines configuration options for DAOS IO Server instances
+// server defines configuration options for DAOS IO Server instances.
+// See utils/config/daos_server.yml for parameter descriptions.
 type server struct {
 	Rank            *rank     `yaml:"rank"`
-	Targets         []string  `yaml:"targets"` // cpus to run xstreams
+	Targets         int       `yaml:"targets"`
 	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
 	FirstCore       int       `yaml:"first_core"`
 	FabricIface     string    `yaml:"fabric_iface"`
@@ -173,14 +175,19 @@ type server struct {
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
 	CliOpts   []string      // tuples (short option, value) e.g. ["-p", "10000"...]
+	Hostname string   // used when generating templates
 	formatted chan struct{} // closed when server is formatted
 }
 
 // newDefaultServer creates a new instance of server struct with default values.
 func newDefaultServer() server {
+	// TODO: fix by only ever creating server in one place
+	host, _ := os.Hostname()
+
 	return server{
 		ScmClass:    scmDCPM,
 		BdevClass:   bdNVMe,
+		Hostname:  host,
 		NrXsHelpers: 2,
 	}
 }
@@ -205,6 +212,8 @@ func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// configuration describes options for DAOS control plane.
+// See utils/config/daos_server.yml for parameter descriptions.
 type configuration struct {
 	SystemName     string          `yaml:"name"`
 	Servers        []server        `yaml:"servers"`

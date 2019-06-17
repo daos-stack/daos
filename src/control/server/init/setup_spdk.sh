@@ -7,7 +7,7 @@
 
 set -e
 
-rootdir="$(readlink -f "$(dirname "$0")")"/..
+rootdir="$(readlink -f "$(dirname "$0")")"/../..
 scriptpath="$rootdir/spdk/scripts/setup.sh"
 
 if [[ $1 == reset ]]; then

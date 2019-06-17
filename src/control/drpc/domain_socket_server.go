@@ -23,11 +23,11 @@
 package drpc
 
 import (
-	"errors"
-	"fmt"
 	"net"
 	"os"
 	"syscall"
+
+	"github.com/pkg/errors"
 )
 
 // MAXMSGSIZE is the maximum drpc message size that may be sent.
@@ -113,7 +113,7 @@ func ConnReceiver(d *DomainSocketServer) error {
 				}
 				return nil
 			default:
-				return fmt.Errorf("Unable to accept connection on unix socket %s: %s", d.sockFile, err)
+				return errors.Wrapf(err, "Unable to accept connection on unix socket %s", d.sockFile)
 			}
 		}
 
@@ -128,22 +128,22 @@ func ConnReceiver(d *DomainSocketServer) error {
 // go routine.
 func (d *DomainSocketServer) Start() error {
 
-	addr := &net.UnixAddr{d.sockFile, "unixpacket"}
+	addr := &net.UnixAddr{Name: d.sockFile, Net: "unixpacket"}
 
 	// Setup our unix domain socket for our socket server to listen on
 	err := syscall.Unlink(d.sockFile)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("Unable to unlink %s: %s", d.sockFile, err)
+		return errors.Wrapf(err, "Unable to unlink %s", d.sockFile)
 	}
 
 	lis, err := net.ListenUnix("unixpacket", addr)
 	if err != nil {
-		return fmt.Errorf("Unable to listen on unix socket %s: %s", d.sockFile, err)
+		return errors.Wrapf(err, "Unable to listen on unix socket %s", d.sockFile)
 	}
 
 	err = os.Chmod(d.sockFile, 0777)
 	if err != nil {
-		return fmt.Errorf("Unable to set permissions on %s: %s", d.sockFile, err)
+		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
 	}
 
 	d.listener = lis

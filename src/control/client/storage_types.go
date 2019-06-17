@@ -51,25 +51,25 @@ type ScmMounts []*pb.ScmMount
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*pb.NvmeController
 
-// NvmeResult contains controllers and/or results of operations on controllers
+// CtrlrResults contains controllers and/or results of operations on controllers
 // and an error signifying a problem in making the request.
-type NvmeResult struct {
+type CtrlrResults struct {
 	Ctrlrs    NvmeControllers
 	Responses NvmeControllerResults
 	Err       error
 }
 
-// ScmResult contains modules and/or results of operations on modules and an
-// error signifying a problem in making the request.
-type ScmResult struct {
+// ModuleResults contains scm modules and/or results of operations on modules
+// and an error signifying a problem in making the request.
+type ModuleResults struct {
 	Modules   ScmModules
 	Responses ScmModuleResults
 	Err       error
 }
 
-// MountResult contains modules and/or results of operations on mounted SCM
+// MountResults contains modules and/or results of operations on mounted SCM
 // regions and an error signifying a problem in making the request.
-type MountResult struct {
+type MountResults struct {
 	Mounts    ScmMounts
 	Responses ScmMountResults
 	Err       error
@@ -77,19 +77,19 @@ type MountResult struct {
 
 // storageResult generic container for results of storage subsystems queries.
 type storageResult struct {
-	nvme  NvmeResult
-	scm   ScmResult
-	mount MountResult
+	nvmeCtrlr CtrlrResults
+	scmModule ModuleResults
+	scmMount  MountResults
 }
 
-// ClientNvmeMap is an alias for query results of NVMe controllers (and
+// ClientCtrlrMap is an alias for query results of NVMe controllers (and
 // any residing namespaces) on connected servers keyed on address.
-type ClientNvmeMap map[string]NvmeResult
+type ClientCtrlrMap map[string]CtrlrResults
 
-// ClientScmMap is an alias for query results of SCM modules installed
+// ClientModuleMap is an alias for query results of SCM modules installed
 // on connected servers keyed on address.
-type ClientScmMap map[string]ScmResult
+type ClientModuleMap map[string]ModuleResults
 
 // ClientMountMap is an alias for query results of SCM regions mounted
 // on connected servers keyed on address.
-type ClientMountMap map[string]MountResult
+type ClientMountMap map[string]MountResults

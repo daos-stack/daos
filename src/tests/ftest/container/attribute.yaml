@@ -59,10 +59,6 @@ attrtests:
       name:
         - "Negative-Name"
         - FAIL
-    largenumberofattr:
-      name:
-        - "largenumberofattr"
-        - PASS
   value_handles: !mux
     validvalue:
       value:

@@ -55,7 +55,7 @@ typedef struct daos_csum daos_csum_t;
 int		daos_csum_init(const char *cs_name, daos_csum_t *checksum);
 int		daos_csum_free(daos_csum_t *csum);
 int		daos_csum_reset(daos_csum_t *csum);
-int		daos_csum_compute(daos_csum_t *csum, daos_sg_list_t *sgl);
+int		daos_csum_compute(daos_csum_t *csum, d_sg_list_t *sgl);
 daos_size_t	daos_csum_get_size(const daos_csum_t *csum);
 int		daos_csum_get(daos_csum_t *csum, daos_csum_buf_t *csum_buf);
 int		daos_csum_compare(daos_csum_t *csum, daos_csum_t *csum_src);

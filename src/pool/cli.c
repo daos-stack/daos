@@ -185,20 +185,20 @@ static int
 map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
 		unsigned int nr)
 {
-	daos_iov_t	iov;
-	daos_sg_list_t	sgl;
+	d_iov_t	iov;
+	d_sg_list_t	sgl;
 	int		rc;
 
 	*buf = pool_buf_alloc(nr);
 	if (*buf == NULL)
 		return -DER_NOMEM;
 
-	daos_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
+	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = crt_bulk_create(ctx, daos2crt_sg(&sgl), CRT_BULK_RW, bulk);
+	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
 	if (rc != 0) {
 		pool_buf_free(*buf);
 		*buf = NULL;
@@ -265,8 +265,7 @@ out:
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
-		    uint32_t map_version, uint32_t uid, uint32_t gid,
-		    uint32_t mode, uint32_t leader_rank,
+		    uint32_t map_version, uint32_t leader_rank,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t *tgts, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
@@ -318,9 +317,6 @@ out_unlock:
 		info->pi_ntargets	= map_buf->pb_target_nr;
 		info->pi_nnodes		= map_buf->pb_node_nr;
 		info->pi_map_ver	= map_version;
-		info->pi_uid		= uid;
-		info->pi_gid		= gid;
-		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
 		if (info->pi_bits & DPI_SPACE)
 			info->pi_space		= *ps;
@@ -409,7 +405,6 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_uid, pco->pco_gid, pco->pco_mode,
 				 pco->pco_op.po_hint.sh_rank,
 				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, NULL, NULL, true);
@@ -836,7 +831,7 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 }
 
 static int
-dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
+dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
@@ -914,7 +909,7 @@ out:
 }
 
 int
-dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+dc_pool_local2global(daos_handle_t poh, d_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -1000,7 +995,7 @@ out:
 }
 
 int
-dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 {
 	struct dc_pool_glob	 *pool_glob;
 	int			  rc = 0;
@@ -1279,7 +1274,6 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
-				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
 				 arg->dqa_tgts, arg->dqa_info,
@@ -1734,17 +1728,17 @@ dc_pool_list_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.pra_rpc);
 	if (*args->size > 0) {
-		daos_iov_t iov = {
+		d_iov_t iov = {
 			.iov_buf     = args->buf,
 			.iov_buf_len = *args->size,
 			.iov_len     = 0
 		};
-		daos_sg_list_t sgl = {
+		d_sg_list_t sgl = {
 			.sg_nr_out = 0,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->pali_bulk);
 		if (rc != 0) {
 			pool_req_cleanup(CLEANUP_RPC, &cb_args);
@@ -1782,7 +1776,7 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 	int		rc;
 	int		i;
 	int		j;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 
 	/* Buffers = 'n' names + non-null values + 1 sizes */
 	sgl.sg_nr_out	= 0;
@@ -1797,20 +1791,20 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 
 	/* names */
 	for (j = 0, i = 0; j < n; ++j)
-		daos_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
+		d_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
 			     strlen(names[j]) + 1 /* trailing '\0' */);
 
 	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
 	/* sizes */
-	daos_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+	d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
 
 	/* values */
 	for (j = 0; j < n; ++j)
 		if (sizes[j] > 0)
-			daos_iov_set(&sgl.sg_iovs[i++],
+			d_iov_set(&sgl.sg_iovs[i++],
 				     values[j], sizes[j]);
 
-	rc = crt_bulk_create(crt_ctx, daos2crt_sg(&sgl), perm, bulk);
+	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
 	D_FREE(sgl.sg_iovs);
 out:
 	return rc;

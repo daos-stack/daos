@@ -478,7 +478,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 
 static int
 bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
-	daos_sg_list_t *sgl, bool update)
+	d_sg_list_t *sgl, bool update)
 {
 	struct bio_sglist	*bsgl;
 	struct bio_desc		*biod;
@@ -529,7 +529,7 @@ out:
 
 int
 bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	  daos_sg_list_t *sgl)
+	  d_sg_list_t *sgl)
 {
 	int	rc;
 
@@ -546,7 +546,7 @@ bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
 
 int
 bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	   daos_sg_list_t *sgl)
+	   d_sg_list_t *sgl)
 {
 	int	rc;
 
@@ -562,12 +562,12 @@ bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
 }
 
 static int
-bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov,
+bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov,
 	bool update)
 {
 	struct bio_sglist	bsgl;
 	struct bio_iov		biov;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	int			rc;
 
 	biov.bi_buf = NULL;
@@ -594,14 +594,14 @@ bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov,
 }
 
 int
-bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov)
+bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 {
 	return bio_rw(ioctxt, addr, iov, false);
 }
 
 
 int
-bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov)
+bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
 {
 
 	return bio_rw(ioctxt, addr, iov, true);
@@ -612,7 +612,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 {
 	struct smd_nvme_pool_info	smd_pool;
 	struct smd_nvme_stream_bond	smd_xs_mapping;
-	daos_iov_t			iov;
+	d_iov_t			iov;
 	bio_addr_t			addr;
 	uint64_t			off = 0; /* byte offset in SPDK blob */
 	uint16_t			dev_type = DAOS_MEDIA_NVME;
@@ -654,7 +654,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	uuid_copy(bio_bh->bbh_blobstore, smd_xs_mapping.nsm_dev_id);
 
 	/* Create an iov to store blob header structure */
-	daos_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
+	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
 
 	rc = bio_write(ioctxt, addr, &iov);
 

@@ -529,7 +529,7 @@ class DaosPool(object):
 
     def get_attr(self, attr_names, poh=None, cb_func=None):
         """
-        Retrieve a list of user-defined container attribute values.
+        Retrieve a list of user-defined pool attribute values.
         Args:
             attr_names:         list of attributes to retrieve
             poh [Optional]:     Pool Handle if you really want to override it
@@ -577,7 +577,7 @@ class DaosPool(object):
         results = {}
         i = 0
         for attr in attr_names:
-            results[attr] = buff[i]
+            results[attr] = buff[i][:sizes[i]]
             i += 1
 
         return results
@@ -1809,10 +1809,42 @@ class DaosContainer(object):
         results = {}
         i = 0
         for attr in attr_names:
-            results[attr] = buff[i]
+            results[attr] = buff[i][:sizes[i]]
             i += 1
 
         return results
+
+    def aggregate(self, coh, epoch, cb_func=None):
+        """
+        Container Epoch Aggregation
+        Args:
+            coh - Container handler
+            epoch - Epoch to be aggregated to.
+            cb_func[Optional]:  To run API in Asynchronous mode.
+        return:
+            None
+        raise:
+            DaosApiError raised incase of API return code is nonzero
+        """
+        self.coh = coh
+        func = self.context.get_function('cont-aggregate')
+        epoch = ctypes.c_uint64(epoch)
+
+        if cb_func is None:
+            retcode = func(coh, epoch, None)
+            if retcode != 0:
+                raise DaosApiError("cont aggregate returned non-zero.RC: {0}"
+                                   .format(retcode))
+        else:
+            event = DaosEvent()
+            params = [coh, epoch, event]
+            thread = threading.Thread(target=AsyncWorker1,
+                                      args=(func,
+                                            params,
+                                            self.context,
+                                            cb_func,
+                                            self))
+            thread.start()
 
 class DaosSnapshot(object):
     """ A python object that can represent a DAOS snapshot. We do not save the
@@ -1921,7 +1953,7 @@ class DaosContext(object):
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.4.0",
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.5.0",
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
@@ -1966,6 +1998,7 @@ class DaosContext(object):
             'list-attr'      : self.libdaos.daos_cont_list_attr,
             'list-cont-attr' : self.libdaos.daos_cont_list_attr,
             'list-pool-attr' : self.libdaos.daos_pool_list_attr,
+            'cont-aggregate' : self.libdaos.daos_cont_aggregate,
             'list-snap'      : self.libdaos.daos_cont_list_snap,
             'open-cont'      : self.libdaos.daos_cont_open,
             'open-obj'       : self.libdaos.daos_obj_open,

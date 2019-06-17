@@ -68,7 +68,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	struct umem_attr uma;
 	uint64_t tot_blks;
 	daos_handle_t free_btr, vec_btr;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	int rc;
 
 	D_ASSERT(umem != NULL);
@@ -152,9 +152,9 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	free_ext.vfe_flags = 0;
 	free_ext.vfe_age = VEA_EXT_AGE_MAX;
 
-	daos_iov_set(&key, &free_ext.vfe_blk_off,
+	d_iov_set(&key, &free_ext.vfe_blk_off,
 		     sizeof(free_ext.vfe_blk_off));
-	daos_iov_set(&val, &free_ext, sizeof(free_ext));
+	d_iov_set(&val, &free_ext, sizeof(free_ext));
 
 	rc = dbtree_update(free_btr, &key, &val);
 	if (rc != 0)
@@ -610,7 +610,7 @@ vea_hint_unload(struct vea_hint_context *thc)
 }
 
 static int
-count_free_persistent(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+count_free_persistent(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		      void *arg)
 {
 	struct vea_free_extent	*vfe;
@@ -631,7 +631,7 @@ count_free_persistent(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 }
 
 static int
-count_free_transient(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+count_free_transient(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		     void *arg)
 {
 	struct vea_entry	*ve;

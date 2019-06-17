@@ -449,6 +449,9 @@ func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
 	}
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+		return nil, errors.Errorf("join %s %v: %d\n", ap, *req, resp.Status)
+	}
 
 	return resp, nil
 }

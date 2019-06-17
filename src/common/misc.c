@@ -202,7 +202,7 @@ daos_sgl_buf_size(d_sg_list_t *sgl)
 }
 
 daos_size_t
-daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
+daos_sgls_buf_size(d_sg_list_t *sgls, int nr)
 {
 	daos_size_t size = 0;
 	int	    i;
@@ -221,7 +221,7 @@ daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
  * value as buffer size as well.
  */
 daos_size_t
-daos_sgls_packed_size(daos_sg_list_t *sgls, int nr, daos_size_t *buf_size)
+daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 {
 	daos_size_t size = 0;
 	int i;
@@ -351,7 +351,7 @@ daos_str_trimwhite(char *str)
 }
 
 int
-daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
+daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 {
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
@@ -364,7 +364,7 @@ daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
 }
 
 void
-daos_iov_free(daos_iov_t *iov)
+daos_iov_free(d_iov_t *iov)
 {
 	if (iov->iov_buf == NULL)
 		return;
@@ -997,12 +997,11 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		entries_alloc = true;
 	}
 
-	for (i = 0; i < prop_req->dpp_nr; i++) {
+	for (i = 0; i < prop_req->dpp_nr && i < prop_reply->dpp_nr; i++) {
 		entry_req = &prop_req->dpp_entries[i];
 		type = entry_req->dpe_type;
 		if (type == 0) {
-			/* this is the case that dpp_entries allocated above */
-			D_ASSERT(prop_req->dpp_nr == prop_reply->dpp_nr);
+			/* req doesn't have any entry type populated yet */
 			type = prop_reply->dpp_entries[i].dpe_type;
 			entry_req->dpe_type = type;
 		}

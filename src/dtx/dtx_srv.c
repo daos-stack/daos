@@ -110,7 +110,6 @@ dtx_setup(void)
 {
 	int	rc;
 
-	vos_dtx_register_check_leader(ds_pool_check_leader);
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0)
 		D_ERROR("Failed to create DTX batched commit ULT: %d\n", rc);

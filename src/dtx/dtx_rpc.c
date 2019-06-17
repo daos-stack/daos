@@ -219,23 +219,13 @@ dtx_req_list_cb(void **args)
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case DTX_ST_INIT:
-				if (dra->dra_result != DTX_ST_COMMITTED)
-					dra->dra_result = DTX_ST_INIT;
-				break;
 			case DTX_ST_PREPARED:
 				if (dra->dra_result == 0)
 					dra->dra_result = DTX_ST_PREPARED;
 				break;
 			default:
-				if (drr->drr_result == -DER_NONEXIST) {
-					if (dra->dra_result <= 0 ||
-					    dra->dra_result == DTX_ST_PREPARED)
-						dra->dra_result = DTX_ST_INIT;
-				} else if (dra->dra_result != DTX_ST_INIT) {
-					dra->dra_result = drr->drr_result >= 0 ?
-						-DER_IO : drr->drr_result;
-				}
+				dra->dra_result = drr->drr_result >= 0 ?
+					-DER_IO : drr->drr_result;
 				break;
 			}
 
@@ -317,8 +307,8 @@ dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
 }
 
 static int
-dtx_cf_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		 daos_iov_t *val_iov, struct btr_record *rec)
+dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		 d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -364,7 +354,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	D_ASSERTF(0, "We should not come here.\n");
 	return 0;
@@ -372,7 +362,7 @@ dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key, daos_iov_t *val)
+		  d_iov_t *key, d_iov_t *val)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -460,8 +450,8 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	for (i = start; i < start + replicas && rc >= 0; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
-		daos_iov_t		 kiov;
-		daos_iov_t		 riov;
+		d_iov_t		 kiov;
+		d_iov_t		 riov;
 
 		/* skip unavailable replica(s). */
 		shard = &layout->ol_shards[i];
@@ -479,8 +469,8 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		dcrb.dcrb_rank = target->ta_comp.co_rank;
 		dcrb.dcrb_tag = target->ta_comp.co_index;
 
-		daos_iov_set(&riov, &dcrb, sizeof(dcrb));
-		daos_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
+		d_iov_set(&riov, &dcrb, sizeof(dcrb));
+		d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
 		rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
 				   &kiov, &riov);
 	}

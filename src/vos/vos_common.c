@@ -60,7 +60,7 @@ vos_csum_enabled(void)
 }
 
 int
-vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum)
+vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum)
 {
 	int	rc;
 #ifdef VOS_STANDALONE

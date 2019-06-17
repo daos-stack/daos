@@ -53,11 +53,11 @@ list_keys(daos_handle_t oh, int *num_keys)
 	daos_key_desc_t  kds[ENUM_DESC_NR];
 	daos_anchor_t	 anchor = {0};
 	int		 key_nr = 0;
-	daos_sg_list_t	 sgl;
-	daos_iov_t       sg_iov;
+	d_sg_list_t	 sgl;
+	d_iov_t       sg_iov;
 
 	buf = malloc(ENUM_DESC_BUF);
-	daos_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
+	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
@@ -242,7 +242,7 @@ simple_multi_io(void **state)
 	daos_handle_t	oh;
 	daos_size_t	buf_size = 128;
 	daos_event_t	ev;
-	daos_iov_t	sg_iov[NUM_KEYS];
+	d_iov_t	sg_iov[NUM_KEYS];
 	daos_recx_t	recx;
 	const char      *key_fmt = "key%d";
 	char		*buf[NUM_KEYS];
@@ -268,7 +268,7 @@ simple_multi_io(void **state)
 
 	for (i = 0; i < NUM_KEYS; i++) {
 		D_ALLOC(io_array[i].ioa_iods, sizeof(daos_iod_t));
-		D_ALLOC(io_array[i].ioa_sgls, sizeof(daos_sg_list_t));
+		D_ALLOC(io_array[i].ioa_sgls, sizeof(d_sg_list_t));
 		D_ALLOC(io_array[i].ioa_dkey, sizeof(daos_key_t));
 		io_array[i].ioa_nr = 1;
 
@@ -284,14 +284,14 @@ simple_multi_io(void **state)
 		assert_non_null(keys[i]);
 		assert_int_not_equal(rc, -1);
 
-		daos_iov_set(io_array[i].ioa_dkey, keys[i], strlen(keys[i]));
+		d_iov_set(io_array[i].ioa_dkey, keys[i], strlen(keys[i]));
 		/** init scatter/gather */
-		daos_iov_set(&sg_iov[i], buf[i], buf_size);
+		d_iov_set(&sg_iov[i], buf[i], buf_size);
 		io_array[i].ioa_sgls[0].sg_nr		= 1;
 		io_array[i].ioa_sgls[0].sg_nr_out	= 0;
 		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
 		/** init I/O descriptor */
-		daos_iov_set(&io_array[i].ioa_iods[0].iod_name, "akey",
+		d_iov_set(&io_array[i].ioa_iods[0].iod_name, "akey",
 			     strlen("akey"));
 		daos_csum_set(&io_array[i].ioa_iods[0].iod_kcsum, NULL, 0);
 		io_array[i].ioa_iods[0].iod_nr	= 1;
@@ -315,7 +315,7 @@ simple_multi_io(void **state)
 
 	for (i = 0; i < NUM_KEYS; i++) {
 		/** init scatter/gather */
-		daos_iov_set(&sg_iov[i], buf_out[i], buf_size);
+		d_iov_set(&sg_iov[i], buf_out[i], buf_size);
 		io_array[i].ioa_sgls[0].sg_nr		= 1;
 		io_array[i].ioa_sgls[0].sg_nr_out	= 0;
 		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];

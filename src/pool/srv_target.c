@@ -903,14 +903,14 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	}
 
 	if (rpc->cr_co_bulk_hdl != NULL) {
-		daos_iov_t	iov;
-		daos_sg_list_t	sgl;
+		d_iov_t	iov;
+		d_sg_list_t	sgl;
 
 		memset(&iov, 0, sizeof(iov));
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
-		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		buf = iov.iov_buf;

@@ -15,6 +15,7 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 #include "srv.pb-c.h"
+#include "pool.pb-c.h"
 
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
@@ -235,6 +236,10 @@ struct _Mgmt__MgmtSvc_Service
                const Mgmt__JoinReq *input,
                Mgmt__JoinResp_Closure closure,
                void *closure_data);
+  void (*create_pool)(Mgmt__MgmtSvc_Service *service,
+                      const Mgmt__CreatePoolReq *input,
+                      Mgmt__CreatePoolResp_Closure closure,
+                      void *closure_data);
   void (*get_attach_info)(Mgmt__MgmtSvc_Service *service,
                           const Mgmt__GetAttachInfoReq *input,
                           Mgmt__GetAttachInfoResp_Closure closure,
@@ -248,11 +253,16 @@ void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
 #define MGMT__MGMT_SVC__INIT(function_prefix__) \
     { MGMT__MGMT_SVC__BASE_INIT,\
       function_prefix__ ## join,\
+      function_prefix__ ## create_pool,\
       function_prefix__ ## get_attach_info  }
 void mgmt__mgmt_svc__join(ProtobufCService *service,
                           const Mgmt__JoinReq *input,
                           Mgmt__JoinResp_Closure closure,
                           void *closure_data);
+void mgmt__mgmt_svc__create_pool(ProtobufCService *service,
+                                 const Mgmt__CreatePoolReq *input,
+                                 Mgmt__CreatePoolResp_Closure closure,
+                                 void *closure_data);
 void mgmt__mgmt_svc__get_attach_info(ProtobufCService *service,
                                      const Mgmt__GetAttachInfoReq *input,
                                      Mgmt__GetAttachInfoResp_Closure closure,

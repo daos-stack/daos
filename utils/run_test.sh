@@ -80,6 +80,10 @@ if [ -d "/mnt/daos" ]; then
     run_test src/common/tests/btree.sh perf -s 20000
     run_test src/common/tests/btree.sh perf direct -s 20000
     run_test src/common/tests/btree.sh perf ukey -s 20000
+    run_test src/common/tests/btree.sh dyn ukey -s 20000
+    run_test src/common/tests/btree.sh dyn -s 20000
+    run_test src/common/tests/btree.sh dyn perf -s 20000
+    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
     run_test build/src/common/tests/umem_test
     run_test build/src/common/tests/sched
     run_test build/src/common/tests/drpc_tests

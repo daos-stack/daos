@@ -181,7 +181,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 {
 	struct dts_io_credit *cred;
 	daos_iod_t	     *iod;
-	daos_sg_list_t	     *sgl;
+	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
 	int		      vsize = ts_ctx.tsc_cred_vsize;
 	int		      rc = 0;
@@ -203,12 +203,12 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 
 	/* setup dkey */
 	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-	daos_iov_set(&cred->tc_dkey, cred->tc_dbuf,
+	d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
 			strlen(cred->tc_dbuf));
 
 	/* setup I/O descriptor */
 	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
-	daos_iov_set(&iod->iod_name, cred->tc_abuf,
+	d_iov_set(&iod->iod_name, cred->tc_abuf,
 			strlen(cred->tc_abuf));
 	iod->iod_size = vsize;
 	recx->rx_nr  = 1;
@@ -232,7 +232,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 		memset(cred->tc_vbuf, 0, vsize);
 	}
 
-	daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
+	d_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
 	sgl->sg_iovs = &cred->tc_val;
 	sgl->sg_nr = 1;
 

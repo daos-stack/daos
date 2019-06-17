@@ -182,14 +182,14 @@ create_hdlr(int argc, char *argv[])
 		fprintf(stderr, "--svcn must be in [1, %lu]\n",
 			ARRAY_SIZE(ranks));
 		if (targets != NULL)
-			daos_rank_list_free(targets);
+			d_rank_list_free(targets);
 		return 2;
 	}
 
 	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", scm_size,
 			      nvme_size, NULL, &svc, pool_uuid, NULL /* ev */);
 	if (targets != NULL)
-		daos_rank_list_free(targets);
+		d_rank_list_free(targets);
 	if (rc != 0) {
 		fprintf(stderr, "failed to create pool: %d\n", rc);
 		return rc;
@@ -365,7 +365,7 @@ pool_op_hdlr(int argc, char *argv[])
 	if (ranks == NULL &&
 	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL)) {
 		fprintf(stderr, "valid target ranks required\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
@@ -428,9 +428,9 @@ pool_op_hdlr(int argc, char *argv[])
 			fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		break;
 	}
-	daos_rank_list_free(svc);
-	daos_rank_list_free(ranks);
-	daos_rank_list_free(targets);
+	d_rank_list_free(svc);
+	d_rank_list_free(ranks);
+	d_rank_list_free(targets);
 	if (rc != 0)
 		return rc;
 
@@ -639,13 +639,13 @@ obj_op_hdlr(int argc, char *argv[])
 	}
 	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
 	rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO,
 			       &poh, NULL /* info */, NULL /* ev */);
-	daos_rank_list_free(svc);
+	d_rank_list_free(svc);
 	if (rc) {
 		fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		return rc;
@@ -857,8 +857,7 @@ create options:\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
   --nvme=BYTES	target NVMe size in bytes (%s)\n\
   --svcn=N	number of pool service replicas (\"%u\")\n\
-  --target=RANKS\n\
-		pool targets like 0:1:2:3:4 (whole group)\n\
+  --target=N	pool targets on server like 0:1:2:3:4 (whole group)\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
 	       default_scm_size, default_nvme_size, default_svc_nreplicas);
 	printf("\
@@ -876,6 +875,7 @@ exclude options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
+  --rank=N	storage server rank \n\
   --target=RANK	target rank\n", default_group);
 	printf("\
 add options:\n\

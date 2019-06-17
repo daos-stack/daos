@@ -68,8 +68,8 @@ out_rpc:
 }
 
 static int
-ds_mgmt_pool_svc_create(uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-			unsigned int mode, int ntargets, uuid_t target_uuids[],
+ds_mgmt_pool_svc_create(uuid_t pool_uuid,
+			int ntargets, uuid_t target_uuids[],
 			const char *group, d_rank_list_t *ranks,
 			daos_prop_t *prop, d_rank_list_t *svc_list)
 {
@@ -87,7 +87,7 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	 * TODO: fetch domain list from external source
 	 * Report 1 domain per target for now
 	 */
-	rc = ds_pool_svc_create(pool_uuid, uid, gid, mode, ranks->rl_nr,
+	rc = ds_pool_svc_create(pool_uuid, ranks->rl_nr,
 				target_uuids, group, ranks, ARRAY_SIZE(doms),
 				doms, prop, svc_list);
 
@@ -108,8 +108,8 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	uuid_t				*tc_out_uuids;
 	crt_group_t			*grp = NULL;
 	char				id[DAOS_UUID_STR_SIZE];
-	d_rank_list_t		*rank_list;
-	d_rank_list_t		tmp_rank_list = {0};
+	d_rank_list_t			*rank_list;
+	d_rank_list_t			tmp_rank_list = {0};
 	d_rank_t			ranks_array[TMP_RANKS_ARRAY_SIZE];
 	unsigned int			ranks_size;
 	uuid_t				*tgt_uuids = NULL;
@@ -229,8 +229,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		D_GOTO(tgt_pool_create_fail, rc = -DER_NOMEM);
 	pc_out->pc_svc->rl_nr = pc_in->pc_svc_nr;
 
-	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid, pc_in->pc_uid,
-				     pc_in->pc_gid, pc_in->pc_mode,
+	rc = ds_mgmt_pool_svc_create(pc_in->pc_pool_uuid,
 				     ranks_size, tgt_uuids, pc_in->pc_grp,
 				     rank_list, pc_in->pc_prop, pc_out->pc_svc);
 	if (rc)

@@ -49,7 +49,7 @@ func TestParseBdev(t *testing.T) {
 			expFiles: [][]string{
 				{
 					`/mnt/daos/daos_nvme.conf:[Nvme]`,
-					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme0`,
+					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme__0`,
 					`RetryCount 4`,
 					`TimeoutUsec 0`,
 					`ActionOnTimeout None`,
@@ -67,8 +67,8 @@ func TestParseBdev(t *testing.T) {
 			expFiles: [][]string{
 				{
 					`/mnt/daos/daos_nvme.conf:[Nvme]`,
-					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme0`,
-					`TransportID "trtype:PCIe traddr:0000:81:00.1" Nvme1`,
+					`TransportID "trtype:PCIe traddr:0000:81:00.0" Nvme__0`,
+					`TransportID "trtype:PCIe traddr:0000:81:00.1" Nvme__1`,
 					`RetryCount 4`,
 					`TimeoutUsec 0`,
 					`ActionOnTimeout None`,
@@ -89,8 +89,8 @@ func TestParseBdev(t *testing.T) {
 				{`/tmp/myotherfile:empty size 4999999488`},
 				{
 					"/mnt/daos/daos_nvme.conf:[AIO]",
-					"AIO /tmp/myfile AIO0 4096",
-					"AIO /tmp/myotherfile AIO1 4096",
+					"AIO /tmp/myfile AIO__0 4096",
+					"AIO /tmp/myotherfile AIO__1 4096",
 					"",
 				},
 			},
@@ -104,8 +104,8 @@ func TestParseBdev(t *testing.T) {
 			expFiles: [][]string{
 				{
 					"/mnt/daos/daos_nvme.conf:[AIO]",
-					"AIO /tmp/myfile AIO0 4096",
-					"AIO /tmp/myotherfile AIO1 4096",
+					"AIO /tmp/myfile AIO__0 4096",
+					"AIO /tmp/myotherfile AIO__1 4096",
 					"",
 				},
 			},
@@ -119,8 +119,8 @@ func TestParseBdev(t *testing.T) {
 			expFiles: [][]string{
 				{
 					"/mnt/daos/daos_nvme.conf:[AIO]",
-					`AIO /dev/sdb AIO0`,
-					`AIO /dev/sdc AIO1`,
+					`AIO /dev/sdb AIO__0`,
+					`AIO /dev/sdc AIO__1`,
 					"",
 				},
 			},

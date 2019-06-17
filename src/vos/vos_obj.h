@@ -54,7 +54,7 @@ struct vos_container;
  * add it to the cache.
  *
  * \param occ	[IN]	Object cache, it could be a percpu data structure.
- * \param coh	[IN]	Container open handle.
+ * \param cont	[IN]	Open container.
  * \param oid	[IN]	VOS object ID.
  * \param no_create [IN]
  *			Do not allocate object if it's not there yet.
@@ -62,7 +62,7 @@ struct vos_container;
  * \param obj_p [OUT]	Returned object cache reference.
  */
 int
-vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
+vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
 	     bool no_create, uint32_t intent, struct vos_object **obj_p);
 
@@ -140,7 +140,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  * If the object is not found, create a new object for the @oid and return
  * the direct pointer of the new allocated object.
  *
- * \param coh	[IN]	Container handle
+ * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
  * \param intent [IN]	The request intent
  * \param obj	[OUT]	Direct pointer to VOS object
@@ -158,7 +158,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  * Created to us in tests for checking sanity of obj index
  * after deletion
  *
- * \param coh	[IN]	Container handle
+ * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
  * \param intent [IN]	The operation intent
  * \param obj	[OUT]	Direct pointer to VOS object

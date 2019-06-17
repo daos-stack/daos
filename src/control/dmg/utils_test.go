@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ var (
 )
 
 func init() {
-	log.NewDefaultLogger(log.Error, "utils_test: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "dmg_tests: ", os.Stderr)
 }
 
 func TestHasConnection(t *testing.T) {
@@ -82,7 +82,8 @@ func TestHasConnection(t *testing.T) {
 	}
 
 	for _, tt := range shelltests {
-		AssertEqual(t, hasConns(tt.results), tt.out, "bad output")
+		_, out := hasConns(tt.results)
+		AssertEqual(t, out, tt.out, "bad output")
 	}
 }
 
@@ -127,6 +128,6 @@ func TestCheckSprint(t *testing.T) {
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, unpackFormat(tt.m), tt.out, "bad output")
+		AssertEqual(t, unpackClientMap(tt.m), tt.out, "bad output")
 	}
 }

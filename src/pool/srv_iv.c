@@ -231,7 +231,7 @@ int
 pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 {
 	d_sg_list_t		sgl = { 0 };
-	daos_iov_t		iov = { 0 };
+	d_iov_t		iov = { 0 };
 	uint32_t		pool_iv_len;
 	struct ds_iv_key	key;
 	int			rc;
@@ -241,7 +241,7 @@ pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv)
 	 */
 	if (pool_iv != NULL) {
 		pool_iv_len = pool_iv_ent_size(pool_iv->piv_pool_buf.pb_nr);
-		daos_iov_set(&iov, pool_iv, pool_iv_len);
+		d_iov_set(&iov, pool_iv, pool_iv_len);
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 0;
 		sgl.sg_iovs = &iov;
@@ -261,7 +261,7 @@ pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
 	       unsigned int shortcut, unsigned int sync_mode)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	uint32_t		pool_iv_len;
 	struct ds_iv_key	key;
 	int			rc;

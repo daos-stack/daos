@@ -35,81 +35,8 @@ import (
 	. "google.golang.org/grpc/connectivity"
 )
 
-var (
-	addresses    = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features     = []*pb.Feature{MockFeaturePB()}
-	ctrlrs       = NvmeControllers{MockControllerPB("")}
-	ctrlrResults = NvmeControllerResults{
-		&pb.NvmeControllerResult{
-			Pciaddr: "0000:81:00.s",
-			State: &pb.ResponseState{
-				Status: pb.ResponseStatus_CTRL_ERR_APP,
-				Error:  "example application error",
-			},
-		},
-	}
-	modules      = ScmModules{MockModulePB()}
-	mountResults = ScmMountResults{
-		&pb.ScmMountResult{
-			Mntpoint: "/mnt/daos",
-			State: &pb.ResponseState{
-				Status: pb.ResponseStatus_CTRL_ERR_APP,
-				Error:  "example application error",
-			},
-		},
-	}
-	errExample = errors.New("unknown failure")
-)
-
 func init() {
 	log.NewDefaultLogger(log.Error, "connect_test: ", os.Stderr)
-}
-
-type mockControllerFactory struct {
-	state        State
-	features     []*pb.Feature
-	ctrlrs       NvmeControllers
-	ctrlrResults NvmeControllerResults
-	modules      ScmModules
-	mountResults ScmMountResults
-	// to provide error injection into Control objects
-	scanRet    error
-	formatRet  error
-	killRet    error
-	connectRet error
-}
-
-func (m *mockControllerFactory) create(address string) (Control, error) {
-	// returns controller with mock properties specified in constructor
-	controller := newMockControl(
-		address, m.state, m.features, m.ctrlrs, m.ctrlrResults,
-		m.modules, m.mountResults,
-		m.scanRet, m.formatRet, m.killRet, m.connectRet)
-
-	err := controller.connect(address)
-
-	return controller, err
-}
-
-func newMockConnect(
-	state State, features []*pb.Feature, ctrlrs NvmeControllers,
-	ctrlrResults NvmeControllerResults, modules ScmModules,
-	mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error,
-	connectRet error) Connect {
-
-	return &connList{
-		factory: &mockControllerFactory{
-			state, features, ctrlrs, ctrlrResults, modules,
-			mountResults, scanRet, formatRet, killRet, connectRet,
-		},
-	}
-}
-
-func defaultMockConnect() Connect {
-	return newMockConnect(
-		Ready, features, ctrlrs, ctrlrResults, modules, mountResults,
-		nil, nil, nil, nil)
 }
 
 func TestConnectClients(t *testing.T) {
@@ -132,8 +59,9 @@ func TestConnectClients(t *testing.T) {
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
-			tt.state, features, ctrlrs, ctrlrResults, modules, mountResults,
-			nil, nil, nil, tt.connRet)
+			tt.state, features, ctrlrs, ctrlrResults, modules,
+			moduleResults, mountResults, nil, nil, nil, nil, nil,
+			tt.connRet)
 
 		results := cc.ConnectClients(tt.addrsIn)
 
@@ -156,19 +84,21 @@ func TestConnectClients(t *testing.T) {
 	}
 }
 
-func clientSetup(
+func connectSetup(
 	state State, features []*pb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
-	mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error, connectRet error) Connect {
+	moduleResults ScmModuleResults, mountResults ScmMountResults,
+	scanRet error, formatRet error, updateRet error, burninRet error,
+	killRet error, connectRet error) Connect {
 
-	cc := newMockConnect(
-		state, features, ctrlrs, ctrlrResults, modules, mountResults,
-		scanRet, formatRet, killRet, connectRet)
+	connect := newMockConnect(
+		state, features, ctrlrs, ctrlrResults, modules,
+		moduleResults, mountResults, scanRet, formatRet,
+		updateRet, burninRet, killRet, connectRet)
 
-	_ = cc.ConnectClients(addresses)
+	_ = connect.ConnectClients(addresses)
 
-	return cc
+	return connect
 }
 
 func defaultClientSetup() Connect {
@@ -254,9 +184,10 @@ func TestFormatStorage(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cc := clientSetup(
+		cc := connectSetup(
 			Ready, features, ctrlrs, ctrlrResults, modules,
-			mountResults, nil, tt.formatRet, nil, nil)
+			moduleResults, mountResults, nil, tt.formatRet,
+			nil, nil, nil, nil)
 
 		cNvmeMap, cMountMap := cc.FormatStorage()
 
@@ -264,11 +195,11 @@ func TestFormatStorage(t *testing.T) {
 			for _, addr := range addresses {
 				AssertEqual(
 					t, cNvmeMap[addr],
-					NvmeResult{Err: tt.formatRet},
+					CtrlrResults{Err: tt.formatRet},
 					"unexpected error for nvme result")
 				AssertEqual(
 					t, cMountMap[addr],
-					MountResult{Err: tt.formatRet},
+					MountResults{Err: tt.formatRet},
 					"unexpected error for scm mount result")
 			}
 			continue
@@ -288,6 +219,52 @@ func TestFormatStorage(t *testing.T) {
 	}
 }
 
+func TestUpdateStorage(t *testing.T) {
+	tests := []struct {
+		updateRet error
+	}{
+		{
+			nil,
+		},
+		{
+			errors.New(msgOpenStreamFail + errExample.Error()),
+		},
+	}
+
+	for _, tt := range tests {
+		cc := connectSetup(
+			Ready, features, ctrlrs, ctrlrResults, modules,
+			moduleResults, mountResults, nil, nil, tt.updateRet,
+			nil, nil, nil)
+
+		cNvmeMap, cModuleMap := cc.UpdateStorage(new(pb.UpdateStorageReq))
+
+		if tt.updateRet != nil {
+			for _, addr := range addresses {
+				AssertEqual(
+					t, cNvmeMap[addr],
+					CtrlrResults{Err: tt.updateRet},
+					"unexpected error for nvme result")
+				AssertEqual(
+					t, cModuleMap[addr],
+					ModuleResults{Err: tt.updateRet},
+					"unexpected error for scm module result")
+			}
+			continue
+		}
+
+		AssertEqual(
+			t, cNvmeMap, NewClientNvmeResults(ctrlrResults, addresses),
+			"unexpected client NVMe SSD controller results returned")
+
+		AssertEqual(
+			t, cModuleMap, NewClientModuleResults(
+				moduleResults,
+				addresses),
+			"unexpected client SCM Module results returned")
+	}
+}
+
 func TestKillRank(t *testing.T) {
 	tests := []struct {
 		killRet error
@@ -301,12 +278,13 @@ func TestKillRank(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cc := clientSetup(
+		cc := connectSetup(
 			Ready, features, ctrlrs, ctrlrResults, modules,
-			mountResults, nil, nil, tt.killRet, nil)
+			moduleResults, mountResults, nil, nil, nil, nil,
+			tt.killRet, nil)
 
 		resultMap := cc.KillRank("acd", 0)
 
-		checkResults(t, addresses, resultMap, tt.killRet)
+		checkResults(t, Addresses{addresses[0]}, resultMap, tt.killRet)
 	}
 }

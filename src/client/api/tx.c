@@ -122,13 +122,13 @@ daos_tx_open_snap(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th,
 }
 
 int
-daos_tx_local2global(daos_handle_t th, daos_iov_t *glob)
+daos_tx_local2global(daos_handle_t th, d_iov_t *glob)
 {
 	return -DER_NOSYS;
 }
 
 int
-daos_tx_global2local(daos_handle_t coh, daos_iov_t glob, daos_handle_t *th)
+daos_tx_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *th)
 {
 	return -DER_NOSYS;
 }

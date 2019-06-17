@@ -201,25 +201,6 @@ daos_rpc_unregister(struct crt_proto_format *proto_fmt)
 	return 0;
 }
 
-static inline d_sg_list_t *
-daos2crt_sg(daos_sg_list_t *sgl)
-{
-	/** XXX better integration with CaRT required */
-	D_CASSERT(sizeof(daos_sg_list_t) == sizeof(d_sg_list_t));
-	D_CASSERT(offsetof(daos_sg_list_t, sg_nr) ==
-		  offsetof(d_sg_list_t, sg_nr));
-	D_CASSERT(offsetof(daos_sg_list_t, sg_iovs) ==
-		  offsetof(d_sg_list_t, sg_iovs));
-	D_CASSERT(sizeof(daos_iov_t) == sizeof(d_iov_t));
-	D_CASSERT(offsetof(daos_iov_t, iov_buf) ==
-		  offsetof(d_iov_t, iov_buf));
-	D_CASSERT(offsetof(daos_iov_t, iov_buf_len) ==
-		  offsetof(d_iov_t, iov_buf_len));
-	D_CASSERT(offsetof(daos_iov_t, iov_len) ==
-		  offsetof(d_iov_t, iov_len));
-	return (d_sg_list_t *)sgl;
-}
-
 int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_send_wait(crt_rpc_t *rpc);
@@ -229,9 +210,9 @@ int daos_rpc_send_wait(crt_rpc_t *rpc);
 static inline int
 daos_group_attach(const char *group_id, crt_group_t **group)
 {
-	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	if (group_id == NULL)
 		group_id = DAOS_DEFAULT_GROUP_ID;
+	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	return crt_group_attach((char *)group_id, group);
 }
 

@@ -44,18 +44,19 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
+	if (rc) {
+		D_GOTO(err, rc = -rc);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+	if (rc) {
+		D_GOTO(release, rc = -rc);
 	}
 
 	/* Return the new inode data, and keep the parent ref */

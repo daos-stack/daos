@@ -249,7 +249,7 @@ int
 rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	struct ds_iv_key	key;
 	int			rc;
 
@@ -275,7 +275,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 		  unsigned int shortcut, unsigned int sync_mode)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	struct ds_iv_key	key;
 	int			rc;
 

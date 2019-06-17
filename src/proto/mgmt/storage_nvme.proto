@@ -50,17 +50,19 @@ message NvmeControllerResult {
 	ResponseState state = 2;	// state of current operation
 }
 
-message ScanNvmeParams {}
+message ScanNvmeReq {}
 
-message FormatNvmeParams {}
+message FormatNvmeReq {}
 
-message UpdateNvmeParams {
-	string path = 1;	// Filesystem path containing firmware image
-	int32 slot = 2;		// Firmware slot (register) to update
+message UpdateNvmeReq {
+	string model = 1; // Only upgrade devices of specific model
+	string startrev = 2; // Only upgrade devices with starting revision
+	string path = 3;	// Filesystem path containing firmware image
+	int32 slot = 4;		// Firmware slot (register) to update
 }
 
 // TODO: provide facility to supply FIO config in params
-message BurninNvmeParams {
+message BurninNvmeReq {
 	FilePath fioconfig = 1;	// FIO workload configuration file path
 }
 

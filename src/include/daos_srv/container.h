@@ -111,4 +111,8 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 int
 cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 			int *snap_count);
+int
+cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		   uuid_t cont_uuid, struct ds_cont_hdl **cont_hdl);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

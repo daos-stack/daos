@@ -130,11 +130,11 @@ struct a_ioreq {
 	d_list_t		list;
 	daos_event_t		ev;
 	daos_key_t		dkey;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_iod_t		iod;
 	daos_recx_t		rex;
 	daos_epoch_range_t	erange;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	char			*dkey_buf;
@@ -259,20 +259,20 @@ static void
 ioreq_init_dkey(struct a_ioreq *ioreq, void *buf, size_t size)
 {
 	ioreq->dkey_buf = buf;
-	daos_iov_set(&ioreq->dkey, buf, size);
+	d_iov_set(&ioreq->dkey, buf, size);
 }
 
 static void
 ioreq_init_akey(struct a_ioreq *ioreq, void *buf, size_t size)
 {
 	ioreq->akey_buf = buf;
-	daos_iov_set(&ioreq->iod.iod_name, buf, size);
+	d_iov_set(&ioreq->iod.iod_name, buf, size);
 }
 
 static void
 ioreq_init_value(struct a_ioreq *ioreq, void *buf, size_t size)
 {
-	daos_iov_set(&ioreq->val_iov, buf, size);
+	d_iov_set(&ioreq->val_iov, buf, size);
 }
 
 static void
@@ -627,7 +627,7 @@ enumerate(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 {
 	int	rc;
 
-	daos_iov_set(&req->val_iov, buf, len);
+	d_iov_set(&req->val_iov, buf, len);
 
 	/** execute fetch operation */
 	rc = daos_obj_list_dkey(oh, th, number, kds, &req->sgl, anchor, NULL);
@@ -1834,7 +1834,7 @@ test_fini(struct test *test)
 		printf("\n");
 		printf("Ended at %s", ctime(&t));
 	}
-	daos_rank_list_free(svcl);
+	d_rank_list_free(svcl);
 }
 
 int main(int argc, char *argv[])

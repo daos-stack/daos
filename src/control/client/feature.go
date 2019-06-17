@@ -46,25 +46,19 @@ type FeatureResult struct {
 // connected to given client.
 type ClientFeatureMap map[string]FeatureResult
 
-// getFeature returns a feature from a requested name.
-func (c *control) getFeature(name string) (*pb.Feature, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// listFeaturesRequest is to be called as a goroutine and returns result
+// containing supported server features over channel.
+func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	return c.client.GetFeature(ctx, &pb.FeatureName{Name: name})
-}
-
-// listAllFeatures returns map of all supported management features.
-func (c *control) listAllFeatures() (fm FeatureMap, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := c.client.ListAllFeatures(ctx, &pb.EmptyParams{})
+	stream, err := mc.getCtlClient().ListFeatures(ctx, &pb.EmptyReq{})
 	if err != nil {
+		ch <- ClientResult{mc.getAddress(), nil, err}
 		return
 	}
 
-	fm = make(FeatureMap)
+	fm := make(FeatureMap)
 	var f *pb.Feature
 	for {
 		f, err = stream.Recv()
@@ -72,53 +66,20 @@ func (c *control) listAllFeatures() (fm FeatureMap, err error) {
 			err = nil
 			break
 		} else if err != nil {
+			ch <- ClientResult{mc.getAddress(), nil, err}
 			return
 		}
 		fm[f.Fname.Name] = fmt.Sprintf(
 			"category %s, %s", f.Category.Category, f.Description)
 	}
 
-	return
-}
-
-// listFeatures returns supported management features for a given category.
-func (c *control) listFeatures(category string) (
-	fm FeatureMap, err error) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := c.client.ListFeatures(ctx, &pb.Category{Category: category})
-	if err != nil {
-		return
-	}
-
-	fm = make(FeatureMap)
-	var f *pb.Feature
-	for {
-		f, err = stream.Recv()
-		if err == io.EOF {
-			err = nil
-			break
-		} else if err != nil {
-			return
-		}
-		fm[f.Fname.Name] = f.Description
-	}
-	return
-}
-
-// listFeaturesRequest is to be called as a goroutine and returns result
-// containing supported server features over channel.
-func listFeaturesRequest(controller Control, ch chan ClientResult) {
-	fMap, err := controller.listAllFeatures()
-	ch <- ClientResult{controller.getAddress(), fMap, err}
+	ch <- ClientResult{mc.getAddress(), fm, nil}
 }
 
 // ListFeatures returns supported management features for each server connected.
 func (c *connList) ListFeatures() ClientFeatureMap {
 	var err error
-	cResults := c.makeRequests(listFeaturesRequest)
+	cResults := c.makeRequests(nil, listFeaturesRequest)
 	cFeatures := make(ClientFeatureMap) // mapping of server addresses to features
 
 	for _, res := range cResults {
