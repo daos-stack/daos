@@ -24,15 +24,16 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define LOOP_COUNT 20
+#define LOOP_COUNT 512
 
 struct iterate_data {
 	fuse_req_t			req;
 	struct dfuse_inode_entry	*inode;
 	struct dfuse_obj_hdl		*oh;
-	void				*buf;
 	size_t				size;
-	size_t				b_offset;
+	size_t				fuse_size;
+	size_t				b_off;
+	uint8_t				stop;
 };
 
 int
@@ -68,44 +69,67 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc);
 
-	/*
-	 * if the buffer on the OH has not been used yet (i.e. did not run out
-	 * of space yet on the fuse buf.
-	 */
-	if (oh->doh_offset == 0) {
+	/** if we have not run out of space on the fuse buffer */
+	if (oh->doh_cur_off == 0) {
 		/** add the entry to the buffer to return to fuse first */
-		ns = fuse_add_direntry(udata->req, udata->buf + udata->b_offset,
-				       udata->size - udata->b_offset, name,
+		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
+				       udata->fuse_size - udata->b_off, name,
 				       &stbuf, (off_t)(&oh->doh_anchor));
 
-		/** If entry does not fit, start using the buffer on the oh */
-		if (ns >= udata->size - udata->b_offset) {
-			/** alloc a buffer on oh to hold further entries */
-			if (oh->doh_buf == NULL) {
-				D_ALLOC(oh->doh_buf, udata->size);
-				if (!oh->doh_buf)
-					D_GOTO(out, rc = -ENOMEM);
-			}
+		/*
+		 * If entry does not fit within the readdir buff size, save
+		 * state in oh and re-add it to the buf. this will not be
+		 * returned for current readdir call.
+		 */
+		if (ns > udata->fuse_size - udata->b_off) {
+			oh->doh_start_off[oh->doh_idx] = udata->b_off;
+			oh->doh_cur_off = udata->b_off;
 
 			ns = fuse_add_direntry(udata->req,
-					       oh->doh_buf + oh->doh_offset,
-					       udata->size - oh->doh_offset,
+					       oh->doh_buf + udata->b_off,
+					       udata->size - udata->b_off,
 					       name, &stbuf,
 					       (off_t)(&oh->doh_anchor));
-			oh->doh_offset += ns;
+
+			D_ASSERT(ns <= udata->size - udata->b_off);
+			oh->doh_cur_off += ns;
+
+			/** no need to issue futher dfs_iterate() calls */
+			udata->stop = 1;
 		} else {
 			/** entry did fit, just increment the buf offset */
-			udata->b_offset += ns;
+			udata->b_off += ns;
 		}
 	} else {
-		/** fuse buffer already full so just use oh buffer */
+insert:
+		/** fuse size exceeded so add entry & update the oh counters */
 		ns = fuse_add_direntry(udata->req,
-				       oh->doh_buf + oh->doh_offset,
-				       udata->size - oh->doh_offset, name,
+				       oh->doh_buf + oh->doh_cur_off,
+				       udata->size - oh->doh_cur_off, name,
 				       &stbuf, (off_t)(&oh->doh_anchor));
-		/** DFS would have just returned E2BIG before we get here */
-		D_ASSERT(ns <= udata->size - oh->doh_offset);
-		oh->doh_offset += ns;
+
+		/*
+		 * If entry does not fit, realloc to fit the entries that were
+		 * already enumerated.
+		 */
+		if (ns > udata->size - oh->doh_cur_off) {
+			udata->size = udata->size * 2;
+			oh->doh_buf = realloc(oh->doh_buf, udata->size);
+			if (oh->doh_buf == NULL)
+				D_GOTO(out, rc = -ENOMEM);
+			goto insert;
+		}
+
+		oh->doh_cur_off += ns;
+		/*
+		 * we need to keep track of offsets where we exceed 4k in
+		 * entries for further calls to readdir
+		 */
+		if (oh->doh_cur_off - oh->doh_start_off[oh->doh_idx] >
+		    udata->fuse_size) {
+			oh->doh_idx++;
+			oh->doh_start_off[oh->doh_idx] = oh->doh_cur_off - ns;
+		}
 	}
 
 out:
@@ -120,11 +144,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 {
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	uint32_t		nr = LOOP_COUNT;
-	void			*buf = NULL;
+	size_t			buf_size;
 	struct iterate_data	udata;
 	int			rc;
-
-	DFUSE_TRA_DEBUG(inode, "Offset %zi", offset);
 
 	if (offset < 0)
 		D_GOTO(err, rc = EINVAL);
@@ -136,48 +158,70 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	} else {
 		if (offset != (off_t)&oh->doh_anchor)
 			D_GOTO(err, rc = EIO);
-		if (oh->doh_offset) {
-			fuse_reply_buf(req, oh->doh_buf, oh->doh_offset);
-			oh->doh_offset = 0;
-			return;
-		}
 	}
 
-	D_ASSERT(oh->doh_offset == 0);
+	/** if there was anything left in the old buffer */
+	if (offset && oh->doh_cur_off) {
+		/** if remaining does not fit in the fuse buf, return a block */
+		if (size < oh->doh_cur_off - oh->doh_start_off[oh->doh_idx]) {
+			fuse_reply_buf(req, oh->doh_buf +
+				       oh->doh_start_off[oh->doh_idx],
+				       oh->doh_start_off[oh->doh_idx + 1] -
+				       oh->doh_start_off[oh->doh_idx]);
+			oh->doh_idx++;
+		} else {
+			fuse_reply_buf(req, oh->doh_buf +
+				       oh->doh_start_off[oh->doh_idx],
+				       oh->doh_cur_off -
+				       oh->doh_start_off[oh->doh_idx]);
+			oh->doh_cur_off = 0;
+			oh->doh_idx = 0;
+		}
+		return;
+	}
 
-	D_ALLOC(buf, size);
-	if (!buf)
+	/*
+	 * the DFS size should be less than what we want in fuse to account for
+	 * the fuse metadata for each entry, so just use 1/2 for now
+	 */
+	buf_size = size * READDIR_BLOCKS / 2;
+
+	/** buffer will be freed when this oh is closed */
+	D_ALLOC(oh->doh_buf, buf_size);
+	if (!oh->doh_buf)
 		D_GOTO(err, rc = ENOMEM);
 
 	udata.req = req;
-	udata.buf = buf;
-	udata.size = size;
-	udata.b_offset = 0;
+	udata.size = buf_size;
+	udata.fuse_size = size;
+	udata.b_off = 0;
 	udata.inode = inode;
 	udata.oh = oh;
+	udata.stop = 0;
 
 	while (!daos_anchor_is_eof(&oh->doh_anchor)) {
-		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor,
-				 &nr, size, filler_cb, &udata);
+		/** should not be here if extra buf space is used */
+		D_ASSERT(oh->doh_cur_off == 0);
+
+		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &nr,
+				 buf_size - udata.b_off, filler_cb, &udata);
 
 		/** if entry does not fit in buffer, just return */
 		if (rc == -E2BIG)
-			D_GOTO(out, rc = 0);
+			break;
 		/** otherwise a different error occured */
 		if (rc)
 			D_GOTO(err, rc = -rc);
 
 		/** if buffer is full, break enumeration */
-		if (size <= udata.b_offset || oh->doh_offset)
-			D_GOTO(out, rc = 0);
+		if (udata.stop)
+			break;
 	}
 
-out:
-	DFUSE_TRA_DEBUG(req, "Returning %zi bytes", udata.b_offset);
-	fuse_reply_buf(req, buf, udata.b_offset);
-	D_FREE(buf);
+	oh->doh_idx = 0;
+	fuse_reply_buf(req, oh->doh_buf, udata.b_off);
 	return;
+
 err:
 	DFUSE_FUSE_REPLY_ERR(req, rc);
-	D_FREE(buf);
 }

@@ -80,6 +80,8 @@ struct dfuse_projection_info {
 	ATOMIC uint64_t			dfpi_ino_next;
 };
 
+#define READDIR_BLOCKS 8
+
 /** what is returned as the handle for fuse fuse_file_info on create/open */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
@@ -91,7 +93,11 @@ struct dfuse_obj_hdl {
 	/** enumeration buffer to store missed entries from readdir */
 	void		*doh_buf;
 	/** offset to start from of doh_buffer */
-	off_t		doh_offset;
+	off_t		doh_start_off[READDIR_BLOCKS];
+	/** ending offset in doh_buf */
+	off_t		doh_cur_off;
+	/** current idx to process in doh_start_off */
+	uint32_t	doh_idx;
 };
 
 struct dfuse_inode_entry;
