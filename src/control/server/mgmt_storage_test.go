@@ -177,7 +177,7 @@ func TestScanStorage(t *testing.T) {
 		resp := new(pb.ScanStorageResp)
 
 		cs.Setup() // runs discovery for nvme & scm
-		resp, err := cs.ScanStorage(nil, &pb.ScanStorageParams{})
+		resp, err := cs.ScanStorage(nil, &pb.ScanStorageReq{})
 		if err != nil {
 			AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
 		}
@@ -430,8 +430,8 @@ func TestUpdateStorage(t *testing.T) {
 	tests := []struct {
 		updateRet  error
 		bDevs      []string
-		nvmeParams *pb.UpdateNvmeParams // provided in client gRPC call
-		scmParams  *pb.UpdateScmParams
+		nvmeParams *pb.UpdateNvmeReq // provided in client gRPC call
+		scmParams  *pb.UpdateScmReq
 		moduleRets []*pb.ScmModuleResult
 		ctrlrRets  []*pb.NvmeControllerResult
 		desc       string
@@ -440,7 +440,7 @@ func TestUpdateStorage(t *testing.T) {
 		{
 			desc:  "nvme update success",
 			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeParams{
+			nvmeParams: &pb.UpdateNvmeReq{
 				Startrev: "1.0.0",
 				Model:    "ABC",
 			},
@@ -463,7 +463,7 @@ func TestUpdateStorage(t *testing.T) {
 		{
 			desc:  "nvme update wrong model",
 			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeParams{
+			nvmeParams: &pb.UpdateNvmeReq{
 				Startrev: "1.0.0",
 				Model:    "AB",
 			},
@@ -491,7 +491,7 @@ func TestUpdateStorage(t *testing.T) {
 		{
 			desc:  "nvme update wrong starting revision",
 			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeParams{
+			nvmeParams: &pb.UpdateNvmeReq{
 				Startrev: "2.0.0",
 				Model:    "ABC",
 			},
@@ -524,12 +524,12 @@ func TestUpdateStorage(t *testing.T) {
 		cs.Setup() // init channel used for sync
 		mock := &mockUpdateStorageServer{}
 
-		params := &pb.UpdateStorageParams{
+		req := &pb.UpdateStorageReq{
 			Nvme: tt.nvmeParams,
 			Scm:  tt.scmParams,
 		}
 
-		cs.UpdateStorage(params, mock)
+		cs.UpdateStorage(req, mock)
 
 		AssertEqual(
 			t, len(mock.Results), 1,

@@ -24,47 +24,22 @@
 package client
 
 import (
-	"time"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
-func (c *control) killRank(uuid string, rank uint32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	resp, err := c.client.KillRank(ctx, &pb.DaosRank{PoolUuid: uuid, Rank: rank})
-	if err != nil {
-		return err
-	}
-	if resp.Status != pb.DaosRequestStatus_SUCCESS {
-		return errors.New("DAOS request status " + resp.Status.String())
-	}
-
-	return nil
-}
-
 // KillRank Will terminate server running at given rank on pool specified by
-// uuid.
+// uuid. Request will only be issued to a single access point.
 func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	results := make(ResultMap)
-	ch := make(chan ClientResult)
+	mc := c.controllers[0]
 
-	for _, mc := range c.controllers {
-		go func(mc Control, u string, r uint32, ch chan ClientResult) {
-			ch <- ClientResult{
-				mc.getAddress(), nil, mc.killRank(u, r),
-			}
-		}(mc, uuid, rank, ch)
-	}
+	resp, err := mc.getCtlClient().KillRank(
+		context.Background(),
+		&pb.DaosRank{PoolUuid: uuid, Rank: rank})
 
-	for range c.controllers {
-		res := <-ch
-		results[res.Address] = res
-	}
+	result := ClientResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
 
 	return results
 }

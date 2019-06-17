@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.5.0
-Release:       2%{?dist}
+Release:       3%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -69,6 +69,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
+Requires: spdk-tools
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -150,10 +151,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
-%{_bindir}/obj_ctl
 %{_bindir}/vos_size
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
 %{_bindir}/io_conf
 %{_bindir}/pl_map
 %{_bindir}/rdbt
@@ -214,6 +212,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daosbench
 %{_bindir}/daos_perf
 %{_bindir}/evt_ctl
+%{_bindir}/obj_ctl
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
 
 %files devel
 %{_includedir}/*
@@ -221,6 +222,11 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Thu Jun 12 2019 Brian J. Murrell <brian.murrell@intel.com>
+- move obj_ctl daos_gen_io_conf daos_run_io_conf to
+  daos-tests sub-package
+- daos-server needs spdk-tools
+
 * Fri May 31 2019 Ken Cain <kenneth.c.cain@intel.com>
 - Add new daos utility binary
 

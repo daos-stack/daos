@@ -33,7 +33,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getUpdateStorageParams(c *ishell.Context) (*pb.UpdateStorageParams, error) {
+func getUpdateStorageReq(c *ishell.Context) (*pb.UpdateStorageReq, error) {
 	// disable the '>>>' for cleaner same line input.
 	c.ShowPrompt(false)
 	defer c.ShowPrompt(true) // revert after user input.
@@ -66,8 +66,8 @@ func getUpdateStorageParams(c *ishell.Context) (*pb.UpdateStorageParams, error) 
 	}
 
 	// only populate nvme fwupdate params for the moment
-	return &pb.UpdateStorageParams{
-		Nvme: &pb.UpdateNvmeParams{
+	return &pb.UpdateStorageReq{
+		Nvme: &pb.UpdateNvmeReq{
 			Model:    strings.TrimSpace(model),
 			Startrev: strings.TrimSpace(startRev),
 			Path:     strings.TrimSpace(path), Slot: slot,
@@ -134,9 +134,7 @@ func setupShell() *ishell.Shell {
 		Func: func(c *ishell.Context) {
 			_, out := hasConns(conns.GetActiveConns(nil))
 			c.Println(out)
-			c.Printf(
-				unpackClientMap(conns.ListFeatures()),
-				"management feature")
+			c.Printf("management features: %s", conns.ListFeatures())
 		},
 	})
 
@@ -172,15 +170,18 @@ func setupShell() *ishell.Shell {
 			_, out := hasConns(conns.GetActiveConns(nil))
 			c.Println(out)
 
-			params, err := getUpdateStorageParams(c)
+			req, err := getUpdateStorageReq(c)
 			if err != nil {
 				c.Println(err)
 			}
 
-			updateStor(params, false)
+			updateStor(req, false)
 		},
 	})
 
+	// TODO: operations requiring access to management service will
+	//       need to connect to the first access point rather than
+	//       host list, perhaps clear then ConnectClients ap[0]
 	shell.AddCmd(&ishell.Cmd{
 		Name: "killrank",
 		Help: "Command to terminate server running as specific rank " +
