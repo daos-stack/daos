@@ -43,17 +43,13 @@ type ScanStorCmd struct{}
 // run NVMe and SCM storage query on all connected servers
 func scanStor() {
 	cCtrlrs, cModules := conns.ScanStorage()
-
-	fmt.Printf(
-		unpackClientMap(cCtrlrs),
-		"NVMe SSD controller and constituent namespace")
-
-	fmt.Printf(unpackClientMap(cModules), "SCM module")
+	fmt.Printf("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
+	fmt.Printf("SCM modules:\n%s", cModules)
 }
 
 // Execute is run when ScanStorCmd activates
 func (s *ScanStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		return err
 	}
 
@@ -81,14 +77,14 @@ func formatStor(force bool) {
 	if force || getConsent() {
 		fmt.Println("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
-		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage format result")
-		fmt.Printf(unpackClientMap(cMountResults), "SCM storage format result")
+		fmt.Printf("NVMe storage format results:\n%s", cCtrlrResults)
+		fmt.Printf("SCM storage format results:\n%s", cMountResults)
 	}
 }
 
 // Execute is run when FormatStorCmd activates
 func (s *FormatStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		return err
 	}
 
@@ -110,7 +106,7 @@ type UpdateStorCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(params *pb.UpdateStorageParams, force bool) {
+func updateStor(req *pb.UpdateStorageReq, force bool) {
 	fmt.Println(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -120,23 +116,23 @@ func updateStor(params *pb.UpdateStorageParams, force bool) {
 
 	if force || getConsent() {
 		fmt.Println("")
-		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
-		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
-		fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
+		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
+		fmt.Printf("NVMe storage update results:\n%s", cCtrlrResults)
+		fmt.Printf("SCM storage update results:\n%s", cModuleResults)
 	}
 }
 
 // Execute is run when UpdateStorCmd activates
 func (u *UpdateStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		fmt.Printf("app setup returned %s", err)
 		return err
 	}
 
 	// only populate nvme fwupdate params for the moment
 	updateStor(
-		&pb.UpdateStorageParams{
-			Nvme: &pb.UpdateNvmeParams{
+		&pb.UpdateStorageReq{
+			Nvme: &pb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},

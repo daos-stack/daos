@@ -36,12 +36,11 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 {
 	struct dfuse_inode_record	*dfir;
 	d_list_t			*rlink;
-	int				rc = -DER_SUCCESS;
+	int				rc = 0;
 
 	D_ALLOC_PTR(dfir);
-	if (!dfir) {
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (!dfir)
+		D_GOTO(out, rc = -ENOMEM);
 
 	if (oid) {
 		dfir->ir_id.irid_oid.lo = oid->lo;
@@ -162,8 +161,9 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%d)", rc);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
+					strerror(-rc));
 		}
 	}
 

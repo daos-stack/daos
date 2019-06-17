@@ -23,7 +23,7 @@
 syntax = "proto3";
 package mgmt;
 
-message EmptyParams {}
+message EmptyReq {}
 
 message FilePath {
 	string path = 1;

@@ -906,6 +906,9 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	struct rebuild_scan_out *dst = crt_reply_get(result);
 	int i;
 
+	if (dst->rso_status == 0)
+		dst->rso_status = src->rso_status;
+
 	if (src->rso_ranks_list == NULL ||
 	    src->rso_ranks_list->rl_nr == 0)
 		return 0;
