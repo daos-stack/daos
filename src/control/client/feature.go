@@ -24,8 +24,10 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -36,16 +38,50 @@ import (
 // FeatureMap is an alias for mgmt features supported by gRPC server.
 type FeatureMap map[string]string
 
+func (fm FeatureMap) String() string {
+	var buf bytes.Buffer
+
+	for k, v := range fm {
+		fmt.Fprintf(&buf, "%s: %s\n", k, v)
+	}
+
+	return buf.String()
+}
+
 // FeatureResult contains results and error of a request
 type FeatureResult struct {
 	Fm  FeatureMap
 	Err error
 }
 
+func (fr FeatureResult) String() string {
+	if fr.Err != nil {
+		return fr.Err.Error()
+	}
+	return fr.Fm.String()
+}
+
 // ClientFeatureMap is an alias for management features supported on server
 // connected to given client.
 type ClientFeatureMap map[string]FeatureResult
 
+func (cfm ClientFeatureMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(cfm))
+
+	for server := range cfm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cfm[server])
+	}
+
+	return buf.String()
+}
+
+// listAllFeatures returns map of all supported management features.
 // listFeaturesRequest is to be called as a goroutine and returns result
 // containing supported server features over channel.
 func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
