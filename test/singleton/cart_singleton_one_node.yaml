@@ -1,0 +1,37 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/singleton
+  D_LOG_MASK: "DEBUG,MEM=ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  srv_CRT_CTX_NUM: "16"
+  cli_CRT_CTX_NUM: "16"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: one_node
+    srv:
+      - boro-A
+    cli:
+      - boro-A
+tests: !mux
+  singleton:
+    name: singleton_basic
+    srv_bin: tests/crt_echo_srv
+    srv_arg: ""
+    srv_env: ""
+    srv_ppn: "1"
+
+    cli_bin: tests/crt_echo_cli
+    cli_arg: ""
+    cli_env: ""
+    cli_ppn: "1"

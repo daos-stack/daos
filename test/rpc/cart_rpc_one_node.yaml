@@ -1,0 +1,146 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/rpc_error
+  D_LOG_MASK: "DEBUG,MEM=ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  srv_CRT_CTX_NUM: "16"
+  cli_CRT_CTX_NUM: "16"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: one_node
+    srv:
+      - boro-A
+    cli:
+      - boro-A
+tests: !mux
+  proto:
+    name: proto_basic
+    srv_bin: tests/test_proto_server
+    srv_arg: "--name service_group  --is_service"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_proto_client
+    cli_arg: " --name client_group --attach_to service_group"
+    cli_env: ""
+    cli_ppn: "1"
+  echo:
+    name: echo_basic
+    srv_bin: tests/crt_echo_srv
+    srv_arg: ""
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/crt_echo_cli
+    cli_arg: ""
+    cli_env: ""
+    cli_ppn: "1"
+  test_group:
+    name: test_group_basic
+    srv_bin: tests/test_group
+    srv_arg: "--name service_group --is_service"
+    srv_env: "-x D_FI_CONFIG=../etc/fault-inject-cart.yaml"
+    srv_ppn: "1"
+    cli_bin: tests/test_group
+    cli_arg: "--name client_group --attach_to service_group"
+    cli_env: "-x D_FI_CONFIG=../etc/fault-inject-cart.yaml"
+    cli_ppn: "1"
+  ep_credits_1:
+    name: ep_credits_1
+    srv_bin: tests/test_ep_cred_server
+    srv_arg: "-n cred_group -s"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 1 -b 20 -f -q"
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_2:
+    name: ep_credits_2
+    srv_bin: tests/test_ep_cred_server
+    srv_arg: "-n cred_group -s"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 5 -b 20 -q"
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_3:
+    name: ep_credits_3
+    srv_bin: tests/test_ep_cred_server
+    srv_arg: "-n cred_group -s"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 10 -b 20 -q"
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_4:
+    name: ep_credits_4
+    srv_bin: tests/test_ep_cred_server
+    srv_arg: "-n cred_group -s"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 20 -b 20 -q"
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_5:
+    name: ep_credits_5
+    srv_bin: tests/test_ep_cred_server
+    srv_arg: "-n cred_group -s"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 255 -b 20 -q"
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_6:
+    name: ep_credits_6
+    srv_bin: tests/test_ep_cred_server
+    srv_arg: "-n cred_group -s"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 0 -b 20 -q"
+    cli_env: ""
+    cli_ppn: "1"
+  no_timeout:
+    name: no_timeout_basic
+    srv_bin: tests/test_group
+    srv_arg: "--name service_group  --is_service"
+    srv_env: "-x CRT_TIMEOUT=10"
+    srv_ppn: "1"
+    cli_bin: tests/test_no_timeout
+    cli_arg: " --name client_group --attach_to service_group"
+    cli_env: "-x CRT_TIMEOUT=10"
+    cli_ppn: "1"
+  threaded:
+    name: threaded_basic
+    srv_bin: tests/threaded_server
+    srv_arg: ""
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/threaded_client
+    cli_arg: ""
+    cli_env: ""
+    cli_ppn: "1"
+  rpc_error:
+    name: rpc_error_basic
+    srv_bin: tests/test_rpc_error
+    srv_arg: "--name service_group --is_service"
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_rpc_error
+    cli_arg: "--name client_group --attach_to service_group"
+    cli_env: ""
+    cli_ppn: "1"

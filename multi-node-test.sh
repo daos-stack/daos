@@ -46,53 +46,22 @@ fi
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
-# A list of tests to run as a two node instance on Jenkins
-JENKINS_TEST_LIST_2=(scripts/cart_echo_test.yml                   \
-                     scripts/cart_echo_test_non_sep.yml           \
-                     scripts/cart_self_test.yml                   \
-                     scripts/cart_self_test_non_sep.yml           \
-                     scripts/cart_test_corpc_prefwd.yml           \
-                     scripts/cart_test_corpc_prefwd_non_sep.yml   \
-                     scripts/cart_test_group.yml                  \
-                     scripts/cart_test_group_non_sep.yml          \
-                     scripts/cart_test_barrier.yml                \
-                     scripts/cart_test_barrier_non_sep.yml        \
-                     scripts/cart_threaded_test.yml               \
-                     scripts/cart_threaded_test_non_sep.yml       \
-                     scripts/cart_test_rpc_error.yml              \
-                     scripts/cart_test_rpc_error_non_sep.yml      \
-                     scripts/cart_test_singleton.yml              \
-                     scripts/cart_test_singleton_non_sep.yml      \
-                     scripts/cart_rpc_test.yml                    \
-                     scripts/cart_rpc_test_non_sep.yml            \
-                     scripts/cart_test_corpc_version.yml          \
-                     scripts/cart_test_corpc_version_non_sep.yml  \
-                     scripts/cart_test_iv.yml                     \
-                     scripts/cart_test_iv_non_sep.yml             \
-                     scripts/cart_test_proto.yml                  \
-                     scripts/cart_test_proto_non_sep.yml          \
-                     scripts/cart_test_no_timeout.yml             \
-                     scripts/cart_test_no_timeout_non_sep.yml)
-
-# A list of tests to run as a three node instance on Jenkins
-JENKINS_TEST_LIST_3=(scripts/cart_test_group_tiers.yml)
-
-# A list of tests to run as a five node instance on Jenkins
-JENKINS_TEST_LIST_5=(scripts/cart_test_cart_ctl.yml      \
-                     scripts/cart_test_corpc_prefwd.yml  \
-                     scripts/cart_test_corpc_version.yml \
-                     scripts/cart_test_barrier.yml)
-
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 # shellcheck disable=SC1091
 . .build_vars-Linux.sh
 
+if [ -z "$CART_TEST_MODE"  ]; then
+  CART_TEST_MODE="native"
+fi
+
+if [ "$CART_TEST_MODE" == "memcheck" ]; then
+  CART_DIR="${1}vgd"
+else
+  CART_DIR="${1}"
+fi
+
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-
-log_base_path="testLogs-${1}_node"
-
-rm -f results_1.yml CART_[235]-node_junit.xml
 
 # shellcheck disable=SC1004
 # shellcheck disable=SC2154
@@ -127,7 +96,7 @@ while [ $i -gt 0 ]; do
     let i-=1
 done' EXIT
 
-CART_BASE=${SL_PREFIX%/install/*}
+CART_BASE="${SL_PREFIX%/install/*}"
 if ! pdsh -l jenkins -R ssh -S \
           -w "$(IFS=','; echo "${nodes[*]:0:$1}")" "set -ex
 ulimit -c unlimited
@@ -148,114 +117,114 @@ df -h" 2>&1 | dshbak -c; then
     exit 1
 fi
 
+TEST_TAG="${3:-quick}"
+
+TESTDIR=${SL_PREFIX}/TESTING
+
+LOGDIR="$TESTDIR/avocado/job-results/CART_${CART_DIR}node"
+
 # shellcheck disable=SC2029
 if ! ssh -i ci_key jenkins@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 cd $CART_BASE
 
-# now run it!
-pushd install/Linux/TESTING/
-# TODO: this needs DRYing out into a single block that can handle
-# any number of nodes
-if [ \"$1\" = \"2\" ]; then
-    cat <<EOF > scripts/cart_multi_two_node.cfg
-{
-    \"with_test_runner_host_list\": [\"${nodes[1]}\",
-                                     \"${nodes[2]}\"],
-    \"host_list\": [\"${nodes[0]}\",
-                    \"${nodes[1]}\"],
-    \"use_daemon\": \"DvmRunner\",
-    \"log_base_path\": \"$log_base_path\"
-}
+mkdir -p ~/.config/avocado/
+cat <<EOF > ~/.config/avocado/avocado.conf
+[datadir.paths]
+logs_dir = $LOGDIR
+
+[sysinfo.collectibles]
+# File with list of commands that will be executed and have their output
+# collected
+commands = \$HOME/.config/avocado/sysinfo/commands
 EOF
-    rm -rf $log_base_path/
-    python3 test_runner config=scripts/cart_multi_two_node.cfg \\
-        ${JENKINS_TEST_LIST_2[*]} || {
-        rc=\${PIPESTATUS[0]}
-        echo \"Test exited with \$rc\"
-    }
-    find $log_base_path/testRun -name subtest_results.yml \\
-         -exec grep -Hi fail {} \\;
-elif [ \"$1\" = \"3\" ]; then
-    cat <<EOF > scripts/cart_multi_three_node.cfg
-{
-    \"with_test_runner_host_list\": [
-        \"${nodes[1]}\",
-        \"${nodes[2]}\",
-        \"${nodes[3]}\"
-    ],
-    \"host_list\": [\"${nodes[0]}\",
-        \"${nodes[1]}\",
-        \"${nodes[2]}\"
-    ],
-    \"use_daemon\": \"DvmRunner\",
-    \"log_base_path\": \"$log_base_path\"
-}
+
+mkdir -p ~/.config/avocado/sysinfo/
+cat <<EOF > ~/.config/avocado/sysinfo/commands
+ps axf
+dmesg
+df -h
 EOF
-    rm -rf $log_base_path/
-    python3 test_runner config=scripts/cart_multi_three_node.cfg \\
-        ${JENKINS_TEST_LIST_3[*]} || {
-        rc=\${PIPESTATUS[0]}
-        echo \"Test exited with \$rc\"
-    }
-    find $log_base_path/testRun -name subtest_results.yml \\
-         -exec grep -Hi fail {} \\;
-elif [ \"$1\" = \"5\" ]; then
-    cat <<EOF > scripts/cart_multi_five_node.cfg
-{
-    \"with_test_runner_host_list\": [
-        \"${nodes[1]}\",
-        \"${nodes[2]}\",
-        \"${nodes[3]}\",
-        \"${nodes[4]}\",
-        \"${nodes[5]}\"
-    ],
-    \"host_list\": [\"${nodes[0]}\",
-        \"${nodes[1]}\",
-        \"${nodes[2]}\",
-        \"${nodes[3]}\",
-        \"${nodes[4]}\"
-    ],
-    \"use_daemon\": \"DvmRunner\",
-    \"log_base_path\": \"$log_base_path\"
-}
+
+# apply fix for https://github.com/avocado-framework/avocado/issues/2908
+sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/core/runner.py
+/TIMEOUT_TEST_INTERRUPTED/s/[0-9]*$/60/
+wq
 EOF
-    rm -rf $log_base_path/
-    python3 test_runner config=scripts/cart_multi_five_node.cfg \\
-        ${JENKINS_TEST_LIST_5[*]} || {
-        rc=\${PIPESTATUS[0]}
-        echo \"Test exited with \$rc\"
-    }
-    find $log_base_path/testRun -name subtest_results.yml \\
-         -exec grep -Hi fail {} \\;
+# apply fix for https://github.com/avocado-framework/avocado/pull/2922
+if grep \"testsuite.setAttribute('name', 'avocado')\" \
+    /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py; then
+    sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py
+/testsuite.setAttribute('name', 'avocado')/s/'avocado'/\
+os.path.basename(os.path.dirname(result.logfile))/
+wq
+EOF
 fi
+
+# put yaml files back
+restore_dist_files() {
+    local dist_files=\"\$*\"
+
+    for file in \$dist_files; do
+        if [ -f \"\$file\".dist ]; then
+            mv -f \"\$file\".dist \"\$file\"
+        fi
+    done
+
+}
+
+# set our machine names
+mapfile -t yaml_files < <(find \"$TESTDIR\" -name \\*.yaml)
+
+trap 'set +e; restore_dist_files \"\${yaml_files[@]}\"' EXIT
+
+# shellcheck disable=SC2086
+sed -i.dist -e \"s/- boro-A/- ${nodes[0]}/g\" \
+            -e \"s/- boro-B/- ${nodes[1]}/g\" \
+            -e \"s/- boro-C/- ${nodes[2]}/g\" \
+            -e \"s/- boro-D/- ${nodes[3]}/g\" \
+            -e \"s/- boro-E/- ${nodes[4]}/g\" \
+            -e \"s/- boro-F/- ${nodes[5]}/g\" \
+            -e \"s/- boro-G/- ${nodes[6]}/g\" \
+            -e \"s/- boro-H/- ${nodes[7]}/g\" \"\${yaml_files[@]}\"
+
+# let's output to a dir in the tree
+rm -rf \"$TESTDIR/avocado\" \"./*_results.xml\"
+mkdir -p \"$LOGDIR\"
+
+# remove test_runner dir until scons_local is updated
+rm -rf \"$TESTDIR/test_runner\"
+
+# shellcheck disable=SC2154
+trap 'set +e restore_dist_files \"\${yaml_files[@]}\"' EXIT
+
+pushd \"$TESTDIR\"
+
+# now run it!
+export PYTHONPATH=./util
+export CART_TEST_MODE=\"$CART_TEST_MODE\"
+if ! ./launch.py -s \"$TEST_TAG\"; then
+    rc=\${PIPESTATUS[0]}
+else
+    rc=0
+fi
+
+mkdir -p \"testLogs-${CART_DIR}_node\"
+
+cp -r testLogs/* \"testLogs-${CART_DIR}_node\"
+
 exit \$rc"; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
 fi
 
-scp -i ci_key -r jenkins@"${nodes[0]}:\
-$CART_BASE/install/Linux/TESTING/$log_base_path" install/Linux/TESTING/
-{
-    cat <<EOF
-TestGroup:
-    submission: $(TZ=UTC date)
-    test_group: CART_${1}-node
-    testhost: $HOSTNAME
-    user_name: jenkins
-Tests:
-EOF
-    find install/Linux/TESTING/"$log_base_path" \
-         -name subtest_results.yml -print0 | xargs -0 cat
-} > results_1.yml
+mkdir -p install/Linux/TESTING/avocado/job-results
 
-if ! PYTHONPATH=scony_python-junit/ \
-       jenkins/autotest_utils/results_to_junit.py; then
-    echo "Failed to convert YML to Junit"
-    if [ "$rc" = "0" ]; then
-        rc=1
-    fi
-fi
+scp -i ci_key -r jenkins@${nodes[0]}:"$TESTDIR/testLogs-${CART_DIR}_node" \
+                                      install/Linux/TESTING/
+
+scp -i ci_key -r jenkins@${nodes[0]}:"$LOGDIR" \
+                                      install/Linux/TESTING/avocado/job-results
 
 exit "$rc"

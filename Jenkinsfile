@@ -43,40 +43,6 @@
 def arch="-Linux"
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def singleNodeTest(test_mode) {
-    provisionNodes NODELIST: env.NODELIST,
-                   node_count: 1,
-                   snapshot: true
-    runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-            script: """set -x
-                       . ./.build_vars-Linux.sh
-                       CART_BASE=\${SL_PREFIX%/install*}
-                       NODELIST=$nodelist
-                       NODE=\${NODELIST%%,*}
-                       trap 'set +e; set -x; ssh -i ci_key jenkins@\$NODE "set -ex; sudo umount \$CART_BASE"' EXIT
-                       rc=0
-                       if ! ssh -i ci_key jenkins@\$NODE "set -x
-                           set -e
-                           sudo mkdir -p \$CART_BASE
-                           sudo mount -t nfs \$HOSTNAME:\$PWD \$CART_BASE
-                           export CART_TEST_MODE=$test_mode
-                           cd \$CART_BASE
-                           if RUN_UTEST=false bash -x utils/run_test.sh; then
-                               echo \"run_test.sh exited successfully with \\\${PIPESTATUS[0]}\"
-                           else
-                               rc=\\\${PIPESTATUS[0]}
-                               echo \"run_test.sh exited failure with \\\$rc\"
-                           fi
-                           exit \\\$rc"; then
-                           rc=\${PIPESTATUS[0]}
-                       fi
-                       mkdir -p install/Linux/TESTING/
-                       scp -i ci_key -r jenkins@\$NODE:\$CART_BASE/install/Linux/TESTING/testLogs \
-                                        install/Linux/TESTING/
-                       exit \$rc""",
-          junit_files: null
-}
-
 pipeline {
     agent { label 'lightweight' }
 
@@ -883,23 +849,31 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        singleNodeTest('native')
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       snapshot: true
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                           export CART_TEST_MODE=native
+                                           bash -x ./multi-node-test.sh 1 ''' +
+                                           env.NODELIST + ''' one_node''',
+                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_1node/*/*.xml"
                     }
                     post {
                         always {
-                            /* Uncomment this on a day when unit testing works without
-                             * having to build the test in the test phase
-                             archiveArtifacts artifacts: '''install/Linux/TESTING/testLogs/**,
-                                                            build/Linux/src/utest/utest.log,
-                                                            build/Linux/src/utest/test_output'''
-                             */
-                             archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs/**'
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            sh '''rm -rf install/Linux/TESTING/avocado/job-results/CART_1node/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      mv install/Linux/TESTING/avocado/job-results/CART_1node/* \
+                                         install/Linux/TESTING/testLogs-1_node \
+                                         "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -928,19 +902,29 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        singleNodeTest('memcheck')
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       snapshot: true
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                           export CART_TEST_MODE=memcheck
+                                           bash -x ./multi-node-test.sh 1 ''' +
+                                           env.NODELIST + ''' one_node''',
+                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_1vgdnode/*/*.xml"
                     }
                     post {
                         always {
-                            /* Uncomment this on a day when unit testing works without
-                             * having to build the test in the test phase
-                            sh '''mv install/Linux/TESTING/testLogs{,_valgrind}
-                                  mv build/Linux/src/utest{,_valgrind}'''
-                            archiveArtifacts artifacts: '''install/Linux/TESTING/testLogs_valgrind/**,
-                                                           build/Linux/src/utest_valgrind/utest.log,
-                                                           build/Linux/src/utest_valgrind/test_output'''
-                             */
-                            sh 'mv install/Linux/TESTING/testLogs{,_valgrind}'
+                            sh '''rm -rf install/Linux/TESTING/avocado/job-results/CART_1vgdnode/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      mv install/Linux/TESTING/avocado/job-results/CART_1vgdnode/* \
+                                         install/Linux/TESTING/testLogs-1vgd_node \
+                                         "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
                             publishValgrind (
                                 failBuildOnInvalidReports: true,
                                 failBuildOnMissingReports: true,
@@ -955,14 +939,7 @@ pipeline {
                                 unstableThresholdInvalidReadWrite: '',
                                 unstableThresholdTotal: ''
                                 )
-
-                            archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs_valgrind/**,**/*.memcheck'
-                        /* when JENKINS-39203 is resolved, can probably use stepResult
-                           here and remove the remaining post conditions
-                           stepResult name: env.STAGE_NAME,
-                                   context: 'build/' + env.STAGE_NAME,
-                                    result: ${currentBuild.currentResult}
-                        */
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -994,30 +971,28 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 2,
                                        snapshot: true
-                        checkoutScm url: 'ssh://review.hpdd.intel.com:29418/exascale/jenkins',
-                                    checkoutDir: 'jenkins',
-                                    credentialsId: 'daos-gerrit-read'
-
-                        checkoutScm url: 'ssh://review.hpdd.intel.com:29418/coral/scony_python-junit',
-                                    checkoutDir: 'scony_python-junit',
-                                    credentialsId: 'daos-gerrit-read'
-
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                           export CART_TEST_MODE=none
                                            bash -x ./multi-node-test.sh 2 ''' +
-                                           env.NODELIST,
-                                junit_files: "CART_2-node_junit.xml"
+                                           env.NODELIST + ''' two_node''',
+                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_2node/*/*.xml"
                     }
                     post {
                         always {
-                            junit 'CART_2-node_junit.xml'
-                            archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs-2_node/**'
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            sh '''rm -rf install/Linux/TESTING/avocado/job-results/CART_2node/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      mv install/Linux/TESTING/avocado/job-results/CART_2node/* \
+                                         install/Linux/TESTING/testLogs-2_node \
+                                         "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1049,30 +1024,28 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 3,
                                        snapshot: true
-                        checkoutScm url: 'ssh://review.hpdd.intel.com:29418/exascale/jenkins',
-                                    checkoutDir: 'jenkins',
-                                    credentialsId: 'daos-gerrit-read'
-
-                        checkoutScm url: 'ssh://review.hpdd.intel.com:29418/coral/scony_python-junit',
-                                    checkoutDir: 'scony_python-junit',
-                                    credentialsId: 'daos-gerrit-read'
-
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                           export CART_TEST_MODE=none
                                            bash -x ./multi-node-test.sh 3 ''' +
-                                           env.NODELIST,
-                                junit_files: "CART_3-node_junit.xml"
+                                           env.NODELIST + ''' three_node''',
+                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_3node/*/*.xml"
                     }
                     post {
                         always {
-                            junit 'CART_3-node_junit.xml'
-                            archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs-3_node/**'
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            sh '''rm -rf install/Linux/TESTING/avocado/job-results/CART_3node/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      mv install/Linux/TESTING/avocado/job-results/CART_3node/* \
+                                         install/Linux/TESTING/testLogs-3_node \
+                                         "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1104,30 +1077,28 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 5,
                                        snapshot: true
-                        checkoutScm url: 'ssh://review.hpdd.intel.com:29418/exascale/jenkins',
-                                    checkoutDir: 'jenkins',
-                                    credentialsId: 'daos-gerrit-read'
-
-                        checkoutScm url: 'ssh://review.hpdd.intel.com:29418/coral/scony_python-junit',
-                                    checkoutDir: 'scony_python-junit',
-                                    credentialsId: 'daos-gerrit-read'
-
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                           export CART_TEST_MODE=none
                                            bash -x ./multi-node-test.sh 5 ''' +
-                                           env.NODELIST,
-                                junit_files: "CART_5-node_junit.xml"
+                                           env.NODELIST + ''' five_node''',
+                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_5node/*/*.xml"
                     }
                     post {
                         always {
-                            junit 'CART_5-node_junit.xml'
-                            archiveArtifacts artifacts: 'install/Linux/TESTING/testLogs-5_node/**'
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            sh '''rm -rf install/Linux/TESTING/avocado/job-results/CART_5node/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      mv install/Linux/TESTING/avocado/job-results/CART_5node/* \
+                                         install/Linux/TESTING/testLogs-5_node \
+                                         "$STAGE_NAME/"
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            junit env.STAGE_NAME + '/*/results.xml'
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {

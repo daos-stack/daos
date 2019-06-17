@@ -41,9 +41,32 @@ def scons():
 
     Import('env')
 
+    env["CRT_TSTDIR"] = "$PREFIX/TESTING"
+
     # move the test files (.py) to the TESTING scrpits directory
-    env.Install("$PREFIX/TESTING/scripts", Glob("*.py"))
-    env.Install("$PREFIX/TESTING/scripts", Glob("*.yml"))
+    env.Install("$CRT_TSTDIR", Glob("launch.py"))
+    env.Install("$CRT_TSTDIR/rpc", Glob("rpc/*.py"))
+    env.Install("$CRT_TSTDIR/rpc", Glob("rpc/*.yaml"))
+    env.Install("$CRT_TSTDIR/barrier", Glob("barrier/*.py"))
+    env.Install("$CRT_TSTDIR/barrier", Glob("barrier/*.yaml"))
+    env.Install("$CRT_TSTDIR/ctl", Glob("ctl/*.py"))
+    env.Install("$CRT_TSTDIR/ctl", Glob("ctl/*.yaml"))
+    env.Install("$CRT_TSTDIR/corpc", Glob("corpc/*.py"))
+    env.Install("$CRT_TSTDIR/corpc", Glob("corpc/*.yaml"))
+    env.Install("$CRT_TSTDIR/iv", Glob("iv/*.py"))
+    env.Install("$CRT_TSTDIR/iv", Glob("iv/*.yaml"))
+    env.Install("$CRT_TSTDIR/util", Glob("util/*.py"))
+    env.Install("$CRT_TSTDIR/util", Glob("util/*.yaml"))
+    env.Install("$CRT_TSTDIR/singleton", Glob("singleton/*.py"))
+    env.Install("$CRT_TSTDIR/singleton", Glob("singleton/*.yaml"))
+    env.Install("$CRT_TSTDIR/no_pmix", Glob("no_pmix/*.py"))
+    env.Install("$CRT_TSTDIR/no_pmix", Glob("no_pmix/*.yaml"))
+    env.Install("$CRT_TSTDIR/selftest", Glob("selftest/*.py"))
+    env.Install("$CRT_TSTDIR/selftest", Glob("selftest/*.yaml"))
+    env.Install("$CRT_TSTDIR/group_tiers", Glob("group_tiers/*.py"))
+    env.Install("$CRT_TSTDIR/group_tiers", Glob("group_tiers/*.yaml"))
+    env.Install("$CRT_TSTDIR/nopmix_launcher", Glob("nopmix_launcher/*.py"))
+    env.Install("$CRT_TSTDIR/nopmix_launcher", Glob("nopmix_launcher/*.yaml"))
 
 if __name__ == 'SCons.Script':
     scons()
