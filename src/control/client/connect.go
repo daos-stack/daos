@@ -24,7 +24,9 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -46,8 +48,34 @@ type ClientResult struct {
 	Err     error
 }
 
+func (cr ClientResult) String() string {
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+	return fmt.Sprintf("%+v", cr.Value)
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
+
+func (rm ResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+// ScmModules is an alias for protobuf ScmModule message slice representing
+// a number of SCM modules installed on a storage node.
 
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {

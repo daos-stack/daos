@@ -46,9 +46,8 @@ type cliOptions struct {
 }
 
 var (
-	opts   = new(cliOptions)
-	conns  = client.NewConnect()
-	config = client.NewConfiguration()
+	opts  = new(cliOptions)
+	conns = client.NewConnect()
 )
 
 // appSetup loads config file, processes cli overrides and connects clients.
