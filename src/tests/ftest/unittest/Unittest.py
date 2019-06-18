@@ -25,25 +25,25 @@
 
 from avocado.utils import process
 from general_utils import get_file_path
-from apricot import Test,TestWithServers
+from apricot import Test, TestWithServers
 
 def unittest_runner(self, unit_testname):
-        """
-        Common unitetest runner function.
-        Args:
-            unit_testname: unittest name.
-        return:
-            None
-        """
-        name = self.params.get("testname", '/run/UnitTest/{0}/'
-                               .format(unit_testname))
-        bin_path = get_file_path(name, "install/bin")
+    """
+    Common unitetest runner function.
+    Args:
+        unit_testname: unittest name.
+    return:
+        None
+    """
+    name = self.params.get("testname", '/run/UnitTest/{0}/'
+                           .format(unit_testname))
+    bin_path = get_file_path(name, "install/bin")
 
-        cmd = ("{0}".format(bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("{0} unittest failed with return code={1}.\n"
-                      .format(unit_testname, return_code))
+    cmd = ("{0}".format(bin_path[0]))
+    return_code = process.system(cmd)
+    if return_code is not 0:
+        self.fail("{0} unittest failed with return code={1}.\n"
+                  .format(unit_testname, return_code))
 
 class UnitTestWithoutServers(Test):
     """
