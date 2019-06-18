@@ -25,17 +25,9 @@
 
 from avocado.utils import process
 from general_utils import get_file_path
-from apricot import Test
+from apricot import Test,TestWithServers
 
-class UnitTest(Test):
-    """
-    Avocado Unit Test class.
-    :avocado: recursive
-    """
-    def tearDown(self):
-        process.system("rm -f /mnt/daos/*")
-
-    def unittest_runner(self, unit_testname):
+def unittest_runner(self, unit_testname):
         """
         Common unitetest runner function.
         Args:
@@ -53,37 +45,59 @@ class UnitTest(Test):
             self.fail("{0} unittest failed with return code={1}.\n"
                       .format(unit_testname, return_code))
 
+class UnitTestWithoutServers(Test):
+    """
+    Avocado Unit Test class for tests which don't need servers.
+    :avocado: recursive
+    """
+    def tearDown(self):
+        process.system("rm -f /mnt/daos/*")
+
     def test_smd_ut(self):
         """
         Test smd unittest.
         :avocado: tags=unittest,nvme,smd_ut
         """
-        self.unittest_runner("smd_ut")
+        unittest_runner(self, "smd_ut")
 
     def test_vea_ut(self):
         """
         Test vea unittest.
         :avocado: tags=unittest,nvme,vea_ut
         """
-        self.unittest_runner("vea_ut")
+        unittest_runner(self, "vea_ut")
 
     def test_pl_map(self):
         """
         Test pl_map unittest.
         :avocado: tags=unittest,pl_map
         """
-        self.unittest_runner("pl_map")
+        unittest_runner(self, "pl_map")
 
     def test_eq_tests(self):
         """
         Test eq_tests unittest.
         :avocado: tags=unittest,eq_tests
         """
-        self.unittest_runner("eq_tests")
+        unittest_runner(self, "eq_tests")
 
     def test_vos_tests(self):
         """
         Test eq_tests unittest.
         :avocado: tags=unittest,vos_tests
         """
-        self.unittest_runner("vos_tests")
+        unittest_runner(self, "vos_tests")
+
+class UnittestWithServers(TestWithServers):
+    """
+    Avocado Unit Test class for tests which need servers.
+    :avocado: recursive
+    """
+
+    def test_daos_addons(self):
+        """
+        Jira ID: DAOS-2326
+        Test daos_addons unittest.
+        :avocado: tags=unittest,daos_addons_test1
+        """
+        unittest_runner(self, "daos_addons_test")
