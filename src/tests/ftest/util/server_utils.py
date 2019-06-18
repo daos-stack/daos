@@ -274,7 +274,10 @@ def kill_server(hosts):
 
 def storage_prepare(hosts):
     """
-    Prepare the Storage for server
+    Prepare the storage on servers using the DAOS server's yaml settings file.
+
+    Args:
+        hosts (str): a string of comma-separated host names
     """
     try:
         cmd = ("sudo /usr/bin/daos_server storage prep-nvme "
@@ -286,7 +289,10 @@ def storage_prepare(hosts):
 
 def storage_reset(hosts):
     """
-    Reset the Storage
+    Reset the Storage on servers using the DAOS server's yaml settings file.
+
+    Args:
+        hosts (str): a string of comma-separated host names
     """
     try:
         cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
