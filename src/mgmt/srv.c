@@ -203,6 +203,38 @@ process_startms_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
 }
 
 static void
+process_getattachinfo_request(Drpc__Call *drpc_req,
+			      Mgmt__GetAttachInfoResp *resp)
+{
+	Mgmt__GetAttachInfoReq	*pb_req = NULL;
+	int			rc;
+
+	mgmt__get_attach_info_resp__init(resp);
+
+	/* Unpack the daos request from the drpc call body */
+	pb_req = mgmt__get_attach_info_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (pb_req == NULL) {
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		D_ERROR("Failed to extract request\n");
+
+		return;
+	}
+
+	/* response status is populated with SUCCESS on init */
+	D_DEBUG(DB_MGMT, "Received request to get attach info\n");
+
+	rc = ds_mgmt_get_attach_info_handler(resp);
+	if (rc != 0)
+		D_ERROR("Failed to get attach info: %d\n", rc);
+
+	mgmt__get_attach_info_req__free_unpacked(pb_req, NULL);
+	if (rc != 0)
+		resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+}
+
+static void
 process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *resp)
 {
 	Mgmt__JoinReq		*pb_req = NULL;
@@ -298,6 +330,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResponse	*daos_resp = NULL;
 	Mgmt__JoinResp		*join_resp;
+	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
 	uint8_t			*body;
 	size_t			len;
 
@@ -329,6 +362,28 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_START_MS:
 		process_startms_request(drpc_req, daos_resp);
 		pack_daos_response(daos_resp, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_GET_ATTACH_INFO:
+		D_ALLOC_PTR(getattachinfo_resp);
+		if (getattachinfo_resp == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate daos response ref\n");
+			break;
+		}
+		process_getattachinfo_request(drpc_req, getattachinfo_resp);
+		len = mgmt__get_attach_info_resp__get_packed_size(
+							    getattachinfo_resp);
+		D_ALLOC(body, len);
+		if (body == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate drpc response body\n");
+			D_FREE(getattachinfo_resp);
+			break;
+		}
+		mgmt__get_attach_info_resp__pack(getattachinfo_resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+		D_FREE(getattachinfo_resp);
 		break;
 	case DRPC_METHOD_MGMT_JOIN:
 		D_ALLOC_PTR(join_resp);
