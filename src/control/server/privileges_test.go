@@ -30,7 +30,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 )
 
-func TestDropPrivileges(t *testing.T) {
+func TestChangeFilePermissions(t *testing.T) {
 	tests := []struct {
 		desc        string
 		username    string
@@ -41,13 +41,11 @@ func TestDropPrivileges(t *testing.T) {
 		lGrpErr     error       // lookup group error
 		listGrpsRet []string    // list of user's groups
 		listGrpsErr error       // list groups error
-		sUIDErr     error       // set uid error
-		sGIDErr     error       // set gid error
 		expHistory  []string
 		errMsg      string
 	}{
 		{
-			desc:     "drop success uid",
+			desc:     "chown success",
 			username: "bob",
 			lUsrRet: &user.User{
 				Uid: "1001", Gid: "1001", Username: "bob",
@@ -96,7 +94,6 @@ func TestDropPrivileges(t *testing.T) {
 			lUsrRet: tt.lUsrRet, lUsrErr: tt.lUsrErr,
 			lGrpRet: tt.lGrpRet, lGrpErr: tt.lGrpErr,
 			listGrpsRet: tt.listGrpsRet, listGrpsErr: tt.listGrpsErr,
-			sUIDErr: tt.sUIDErr, sGIDErr: tt.sGIDErr,
 		}
 
 		config := mockConfigFromFile(t, &ext, socketsExample)

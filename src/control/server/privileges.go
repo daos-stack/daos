@@ -24,26 +24,23 @@
 package main
 
 import (
-	"fmt"
+	"os"
 	"os/user"
-	"strings"
+	"path/filepath"
+	"strconv"
 
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 )
 
-const msgNotExist = "No such file or directory"
-
-// getGroupName returns group name, either of the supplied group if user
+// getGroup returns group name, either of the supplied group if user
 // belong to supplied group or default usr group otherwise.
-func getGroupName(
-	ext External, usr *user.User, tgtGroup string) (groupName string, err error) {
+func getGroup(
+	ext External, usr *user.User, tgtGroup string) (group *user.Group, err error) {
 
-	var group *user.Group
 	var ids []string
-	groupName = usr.Username
 
-	if tgtGroup == "" || tgtGroup != usr.Username {
+	if tgtGroup == "" || tgtGroup == usr.Username {
 		return // no useful group specified
 	}
 
@@ -58,40 +55,56 @@ func getGroupName(
 	}
 	for _, gid := range ids {
 		if group.Gid == gid {
-			return tgtGroup, nil
+			return group, nil
 		}
 	}
 
-	if groupName != tgtGroup {
-		return "", errors.Errorf("user %s not member of group %s", usr.Username, tgtGroup)
-	}
-
-	return
+	return group, errors.Errorf("user %s not member of group %s", usr.Username, tgtGroup)
 }
 
 // chownAll changes ownership of required directories (recursive) and
 // files using user/group derived from config file parameters.
-func chownAll(config *configuration, user string, group string) error {
+func chownAll(config *configuration, usr *user.User, grp *user.Group) error {
+	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
+	if err != nil {
+		return errors.Wrap(err, "parsing uid to int")
+	}
+
+	gidS := usr.Gid
+	if grp != nil {
+		gidS = grp.Gid // valid group
+	}
+
+	gid, err := strconv.ParseInt(gidS, 10, 32)
+	if err != nil {
+		return errors.Wrap(err, "parsing gid to int")
+	}
+
+	log.Debugf("running as root, changing file ownership to uid/gid %d/%d", uid, gid)
+
 	paths := []string{
 		config.SocketDir,
+		config.ControlLogFile,
 	}
 
 	for _, srv := range config.Servers {
 		paths = append(paths, srv.ScmMount, srv.LogFile)
 	}
 
-	// add last because we don't want to fail to write before chown proc
-	paths = append(paths, config.ControlLogFile)
-
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
 
-		err := config.ext.runCommand(
-			fmt.Sprintf("chown -R %s:%s %s", user, group, path))
-		if err != nil && !strings.Contains(err.Error(), msgNotExist) {
-			return err
+		err := filepath.Walk(path, func(name string, info os.FileInfo, err error) error {
+			if err != nil {
+				return errors.Wrapf(err, "accessing path %s", name)
+			}
+
+			return os.Chown(name, int(uid), int(gid)) // 32 bit int from ParseInt
+		})
+		if err != nil && !os.IsNotExist(err) {
+			return errors.Wrapf(err, "walking path %s", path)
 		}
 	}
 
@@ -106,19 +119,17 @@ func changeFileOwnership(config *configuration) error {
 		return errors.New("no username supplied in config")
 	}
 
-	log.Debugf("running as root, changing file ownership to user %s", config.UserName)
-
 	usr, err := config.ext.lookupUser(config.UserName)
 	if err != nil {
 		return errors.Wrap(err, "user lookup")
 	}
 
-	groupName, err := getGroupName(config.ext, usr, config.GroupName)
+	grp, err := getGroup(config.ext, usr, config.GroupName)
 	if err != nil {
 		return errors.WithMessage(err, "group lookup")
 	}
 
-	if err := chownAll(config, usr.Username, groupName); err != nil {
+	if err := chownAll(config, usr, grp); err != nil {
 		return err
 	}
 
