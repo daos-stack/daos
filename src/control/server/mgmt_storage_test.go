@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -174,10 +175,10 @@ func TestScanStorage(t *testing.T) {
 				[]spdk.Namespace{MockNamespace(&ctrlr)},
 				tt.spdkDiscoverRet, nil, nil),
 			false, cs.config)
-		resp := new(pb.ScanStorageResp)
+		_ = new(pb.ScanStorageResp)
 
 		cs.Setup() // runs discovery for nvme & scm
-		resp, err := cs.ScanStorage(nil, &pb.ScanStorageReq{})
+		resp, err := cs.ScanStorage(context.TODO(), &pb.ScanStorageReq{})
 		if err != nil {
 			AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
 		}
@@ -229,7 +230,6 @@ func TestFormatStorage(t *testing.T) {
 		mountRets        []*pb.ScmMountResult
 		ctrlrRets        []*pb.NvmeControllerResult
 		desc             string
-		errMsg           string
 	}{
 		{
 			desc:            "ram success",
@@ -373,7 +373,7 @@ func TestFormatStorage(t *testing.T) {
 		go func() {
 			// should signal wait group in srv to unlock if
 			// successful once format completed
-			cs.FormatStorage(nil, mock)
+			_ = cs.FormatStorage(nil, mock)
 			mockWg.Done()
 		}()
 
@@ -428,14 +428,12 @@ func TestUpdateStorage(t *testing.T) {
 	pciAddr := "0000:81:00.0" // default pciaddr for tests
 
 	tests := []struct {
-		updateRet  error
 		bDevs      []string
 		nvmeParams *pb.UpdateNvmeReq // provided in client gRPC call
 		scmParams  *pb.UpdateScmReq
 		moduleRets []*pb.ScmModuleResult
 		ctrlrRets  []*pb.NvmeControllerResult
 		desc       string
-		errMsg     string
 	}{
 		{
 			desc:  "nvme update success",
@@ -529,7 +527,7 @@ func TestUpdateStorage(t *testing.T) {
 			Scm:  tt.scmParams,
 		}
 
-		cs.UpdateStorage(req, mock)
+		_ = cs.UpdateStorage(req, mock)
 
 		AssertEqual(
 			t, len(mock.Results), 1,

@@ -123,7 +123,7 @@ func (e *ext) createEmpty(path string, size int64) (err error) {
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
 			log.Debugf(
 				"Warning: Fallocate not supported, attempting Truncate: ", e)
-			err = file.Truncate(size)
+			_ = file.Truncate(size)
 		}
 	}
 	return
