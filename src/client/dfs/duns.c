@@ -169,7 +169,8 @@ duns_link_path(const char *path, const char *sysname,
 	if (!uuid_is_null(attrp->da_cuuid)) {
 		try_multiple = 0;
 		uuid_unparse(attrp->da_cuuid, cont);
-		D_INFO("using provided container UUID: %36s\n", cont);
+		D_INFO("try create once with provided container UUID: %36s\n",
+			cont);
 	}
 	do {
 		if (try_multiple) {

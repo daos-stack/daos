@@ -503,7 +503,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
-	if ((ap->path != NULL) && (op != CONT_CREATE)) {
+	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
@@ -532,22 +532,21 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	/* container UUID: use provided, or generate one */
+	/* container UUID: user-provided, generated here or by uns library */
 
 	/* for container lookup ops: if no path specified, require --cont */
-	if ((ap->path == NULL) && (op != CONT_CREATE))
+	if ((op != CONT_CREATE) && (ap->path == NULL))
 		ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 
 	/* container create scenarios (generate UUID if necessary):
-	 * 1) both --cont, --path : uns library use provided UUID.
-	 * 2) --cont only         : use provided UUID.
-	 * 3) --path only         : create UUID (uns library to use).
-	 * 4) neither specified   : create a UUID.
+	 * 1) both --cont, --path : uns library will use specified c_uuid.
+	 * 2) --cont only         : use specified c_uuid.
+	 * 3) --path only         : uns library will create & return c_uuid
+	 *                          (currently c_uuid null / clear).
+	 * 4) neither specified   : create a UUID in c_uuid.
 	 */
-	if (op == CONT_CREATE) {
-		if (uuid_is_null(ap->c_uuid))
-			uuid_generate(ap->c_uuid);
-	}
+	if ((op == CONT_CREATE) && (ap->path == NULL) && (uuid_is_null(ap->c_uuid)))
+		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
