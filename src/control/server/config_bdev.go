@@ -36,7 +36,7 @@ import (
 const (
 	confOut   = "daos_nvme.conf"
 	nvmeTempl = `[Nvme]
-{{ range $i, $e := .BdevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme{{$i}}
+{{ $host := .Hostname }}{{ range $i, $e := .BdevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
 {{ end }}    RetryCount 4
     TimeoutUsec 0
     ActionOnTimeout None
@@ -46,10 +46,10 @@ const (
 `
 	// device block size hardcoded to 4096
 	fileTempl = `[AIO]
-{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}} 4096
+{{ $host := .Hostname }}{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO_{{$host}}_{{$i}} 4096
 {{ end }} `
 	kdevTempl = `[AIO]
-{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO{{$i}}
+{{ $host := .Hostname }}{{ range $i, $e := .BdevList }}    AIO {{$e}} AIO_{{$host}}_{{$i}}
 {{ end }}`
 	mallocTempl = `[Malloc]
 	NumberOfLuns {{.BdevNumber}}

@@ -108,8 +108,10 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 
 char *profile_op_names[] = {
 	[OBJ_PF_UPDATE_PREP] = "update_prep",
+	[OBJ_PF_UPDATE_DISPATCH] = "update_dispatch",
 	[OBJ_PF_UPDATE_LOCAL] = "update_local",
 	[OBJ_PF_UPDATE_END] = "update_end",
+	[OBJ_PF_UPDATE_WAIT] = "update_end",
 	[OBJ_PF_UPDATE_REPLY] = "update_repl",
 	[OBJ_PF_UPDATE] = "update",
 };

@@ -83,7 +83,19 @@
 		ds_obj_punch_handler, NULL),				\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler, NULL)
+		ds_obj_query_key_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
+		0, &CQF_obj_update,					\
+		ds_obj_tgt_update_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
+		0, &CQF_obj_punch,					\
+		ds_obj_tgt_punch_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
+		0, &CQF_obj_punch,					\
+		ds_obj_tgt_punch_handler, NULL),			\
+	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
+		0, &CQF_obj_punch,					\
+		ds_obj_tgt_punch_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -102,18 +114,8 @@ enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
 	/** It is a resent RPC. */
 	ORF_RESEND		= (1 << 1),
-	/** The request is from leader server (replica). */
-	ORF_FROM_LEADER		= (1 << 2),
 	/** Disable DTX or not. */
 	ORF_DTX_DISABLED	= (1 << 3),
-};
-
-/** to identify each obj shard's target */
-struct daos_obj_shard_tgt {
-	uint32_t		st_rank;	/* rank of the shard */
-	uint32_t		st_shard;	/* shard index */
-	uint32_t		st_tgt_idx;	/* target xstream index */
-	uint32_t		st_tgt_id;	/* target id */
 };
 
 /* common for update/fetch */
@@ -134,7 +136,7 @@ struct daos_obj_shard_tgt {
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
-	((struct daos_obj_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
+	((struct daos_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
@@ -199,7 +201,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((struct dtx_id)	(opi_dti_cos)		CRT_ARRAY) \
 	((d_iov_t)		(opi_dkeys)		CRT_ARRAY) \
 	((d_iov_t)		(opi_akeys)		CRT_ARRAY) \
-	((struct daos_obj_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
+	((struct daos_shard_tgt) (opi_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_PUNCH	/* output fields */		 \
 	((int32_t)		(opo_ret)		CRT_VAR) \
@@ -253,5 +255,25 @@ int obj_reply_get_status(crt_rpc_t *rpc);
 void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);
 uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
 void obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce);
+
+static inline bool
+obj_is_modification_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE ||
+		opc == DAOS_OBJ_RPC_PUNCH || opc == DAOS_OBJ_RPC_TGT_PUNCH ||
+		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
+		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_is_tgt_modification_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_TGT_UPDATE ||
+	       opc == DAOS_OBJ_RPC_TGT_PUNCH ||
+	       opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
+	       opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
 
 #endif /* __DAOS_OBJ_RPC_H__ */
