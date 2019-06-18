@@ -98,6 +98,6 @@ class UnittestWithServers(TestWithServers):
         """
         Jira ID: DAOS-2326
         Test daos_addons unittest.
-        :avocado: tags=unittest,daos_addons_test1
+        :avocado: tags=unittest,daos_addons_test
         """
         unittest_runner(self, "daos_addons_test")
