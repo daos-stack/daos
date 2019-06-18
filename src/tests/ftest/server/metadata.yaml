@@ -3,10 +3,10 @@
 
 hosts:
   servers:
-    - boro-34
-    - boro-35
+    - boro-A
+    - boro-B
   clients:
-    - boro-65
+    - boro-C
 timeout: 1800
 server_config:
    name: daos_server
