@@ -323,7 +323,7 @@ class Snapshot(TestWithServers):
                  DAOS-1395 Test snapshot destroy
                  DAOS-1402 Test creating multiple snapshots
         Test Description:
-                (1)Create an object, write a random data into it, and take
+                (1)Create an object, write random data into it, and take
                    a snapshot.
                 (2)Make changes to the data object. The write_an_obj function
                    does a commit when the update is complete.
