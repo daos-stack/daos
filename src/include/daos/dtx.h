@@ -34,8 +34,8 @@
 struct dtx_id {
 	/** The uuid of the transaction */
 	uuid_t			dti_uuid;
-	/** The timestamp in second for the transaction */
-	uint64_t		dti_sec;
+	/** The HLC timestamp for the transaction */
+	uint64_t		dti_hlc;
 };
 
 struct dtx_conflict_entry {
@@ -43,17 +43,7 @@ struct dtx_conflict_entry {
 	uint64_t		dce_dkey;
 };
 
-static inline void
-daos_dti_gen(struct dtx_id *dti, bool zero)
-{
-	if (zero) {
-		memset(dti, 0, sizeof(*dti));
-	} else {
-		/* It will be replaced by HLC when it is ready. */
-		uuid_generate(dti->dti_uuid);
-		dti->dti_sec = time(NULL);
-	}
-}
+void daos_dti_gen(struct dtx_id *dti, bool zero);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, struct dtx_id *src)
@@ -67,7 +57,7 @@ daos_dti_copy(struct dtx_id *des, struct dtx_id *src)
 static inline bool
 daos_is_zero_dti(struct dtx_id *dti)
 {
-	return dti->dti_sec == 0;
+	return dti->dti_hlc == 0;
 }
 
 static inline bool
@@ -76,8 +66,8 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }
 
-#define DF_DTI		DF_UUID
-#define DP_DTI(dti)	DP_UUID((dti)->dti_uuid)
+#define DF_DTI		DF_UUID"."DF_X64
+#define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {
 	DAOS_INTENT_DEFAULT	= 0,	/* fetch/enumerate/query */

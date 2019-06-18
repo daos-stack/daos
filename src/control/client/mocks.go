@@ -256,6 +256,10 @@ func (m *mockMgmtSvcClient) Join(
 	return &pb.JoinResp{}, nil
 }
 
+func (c *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *pb.GetAttachInfoReq, opts ...grpc.CallOption) (*pb.GetAttachInfoResp, error) {
+	return &pb.GetAttachInfoResp{}, nil
+}
+
 func newMockMgmtSvcClient() pb.MgmtSvcClient {
 	return &mockMgmtSvcClient{}
 }
