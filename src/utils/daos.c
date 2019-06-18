@@ -410,7 +410,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
-
 	return 0;
 
 out_free:
@@ -490,18 +489,24 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	op = ap->c_op;
 
 	/* Container operations require a UUID. Scenarios:
-	 * 1) provided directly by user in --cont= argument
+	 * 1) provided directly by user in --cont= argument.
 	 * 2) provided indirectly by user in -path= argument
-	 *    (looked up from extended attributes associated with path)
+	 *    (UUID generated [create] or looked up from extended attributes
+	 *     associated with path).
+	 * 3) neither --cont nor --path specified
+	 *    (container UUID will be generated).
 	 *
-	 * If both UUID and path are provided, or if neither are provided,
-	 * return an error.
+	 * If both UUID and path are provided return an error.
 	 * TODO: restrict --path use to ops CREATE, DESTROY, QUERY only?
 	 */
-	ARGS_VERIFY_PATH_OR_CUUID(ap, out, rc = RC_PRINT_HELP);
 
+	/* All container operations require a pool handle, connect here.
+	 * Take specified pool UUID or look up through unified namespace.
+	 */
 	if ((ap->path != NULL) && (op != CONT_CREATE)) {
 		struct duns_attr_t dattr = {0};
+
+		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
 		/* Resolve pool, container UUIDs from path if needed */
 		rc = duns_resolve_path(ap->path, &dattr);
@@ -519,13 +524,29 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
-	/* all container operations require a pool handle, connect here */
 	rc = daos_pool_connect(ap->p_uuid, ap->group, ap->mdsrv,
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
+	}
+
+	/* container UUID: use provided, or generate one */
+
+	/* for container lookup ops: if no path specified, require --cont */
+	if ((ap->path == NULL) && (op != CONT_CREATE))
+		ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+
+	/* container create scenarios (generate UUID if necessary):
+	 * 1) both --cont, --path : uns library use provided UUID.
+	 * 2) --cont only         : use provided UUID.
+	 * 3) --path only         : create UUID (uns library to use).
+	 * 4) neither specified   : create a UUID.
+	 */
+	if (op == CONT_CREATE) {
+		if (uuid_is_null(ap->c_uuid))
+			uuid_generate(ap->c_uuid);
 	}
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
@@ -539,10 +560,10 @@ cont_op_hdlr(struct cmd_args_s *ap)
 
 	switch (op) {
 	case CONT_CREATE:
-		if (!uuid_is_null(ap->c_uuid))
-			rc = cont_create_hdlr(ap);
-		else
+		if (ap->path != NULL)
 			rc = cont_create_uns_hdlr(ap);
+		else
+			rc = cont_create_hdlr(ap);
 		break;
 	case CONT_DESTROY:
 		rc = cont_destroy_hdlr(ap);

@@ -113,15 +113,6 @@ struct cmd_args_s {
 		}							\
 	} while (0)
 
-#define ARGS_VERIFY_PATH_OR_CUUID(ap, label, rcexpr)			     \
-	do {								     \
-		if ((((ap)->path != NULL) && !uuid_is_null((ap)->c_uuid)) || \
-		    (((ap)->path == NULL) && uuid_is_null((ap)->c_uuid))) {  \
-			fprintf(stderr, "specify path or UUID\n");	     \
-			D_GOTO(label, (rcexpr));			     \
-		}							     \
-	} while (0)
-
 #define ARGS_VERIFY_CUUID(ap, label, rcexpr)				\
 	do {								\
 		if (uuid_is_null((ap)->c_uuid)) {			\
@@ -142,6 +133,27 @@ struct cmd_args_s {
 		}							\
 	} while (0)
 
+#define ARGS_VERIFY_PATH_NON_CREATE(ap, label, rcexpr)			\
+	do {								\
+		if (((ap)->type != DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
+		    ((ap)->oclass != DAOS_OC_UNKNOWN)	||		\
+		    ((ap)->chunk_size != 0)) {				\
+			fprintf(stderr, "query by --path : do not "	\
+					"specify --type, --oclass, "	\
+					"or --chunk_size\n");		\
+			D_GOTO(label, (rcexpr));			\
+		}							\
+		if (!uuid_is_null((ap)->p_uuid)) {			\
+			fprintf(stderr, "query by --path : do not "	\
+					"specify --pool\n");		\
+			D_GOTO(label, (rcexpr));			\
+		}							\
+		if (!uuid_is_null((ap)->c_uuid)) {			\
+			fprintf(stderr, "query by --path : do not "	\
+					"specify --cont\n");		\
+			D_GOTO(label, (rcexpr));			\
+		}							\
+	} while (0)
 
 typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 

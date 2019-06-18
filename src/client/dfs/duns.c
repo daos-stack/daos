@@ -116,6 +116,7 @@ duns_link_path(const char *path, const char *sysname,
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN];
 	int			len;
+	int			try_multiple = 1;		/* boolean */
 	int			rc;
 
 	if (path == NULL) {
@@ -162,10 +163,19 @@ duns_link_path(const char *path, const char *sysname,
 	daos_unparse_oclass(attrp->da_oclass, oclass);
 	daos_unparse_ctype(attrp->da_type, type);
 
-	/** generate a random container uuid and try to create it */
-	do {
-		uuid_generate(attrp->da_cuuid);
+	/* create container with specified container uuid (try_multiple=0)
+	 * or a generated random container uuid (try_multiple!=0).
+	 */
+	if (!uuid_is_null(attrp->da_cuuid)) {
+		try_multiple = 0;
 		uuid_unparse(attrp->da_cuuid, cont);
+		D_INFO("using provided container UUID: %36s\n", cont);
+	}
+	do {
+		if (try_multiple) {
+			uuid_generate(attrp->da_cuuid);
+			uuid_unparse(attrp->da_cuuid, cont);
+		}
 
 		/** store the daos attributes in the path xattr */
 		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
@@ -182,7 +192,7 @@ duns_link_path(const char *path, const char *sysname,
 		}
 
 		rc = daos_cont_create(poh, attrp->da_cuuid, NULL, NULL);
-	} while (rc == -DER_EXIST);
+	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
 		D_GOTO(err_pool, rc);

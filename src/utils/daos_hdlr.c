@@ -176,10 +176,13 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	int			rc;
 	const int		RC_PRINT_HELP = 2;
 
-	/* Create by path requires container type, obj class, chunk_size */
+	/* Required: pool UUID, container type, obj class, chunk_size.
+	 * Optional: user-specified container UUID.
+	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
 	uuid_copy(dattr.da_puuid, ap->p_uuid);
+	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
 	dattr.da_oclass = ap->oclass;
 	dattr.da_chunk_size = ap->chunk_size;
