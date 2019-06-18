@@ -32,7 +32,7 @@ class IorFailed(Exception):
     """Raise if Ior failed."""
 
 
-class IorParam():
+class IorParam(object):
     """Defines a object representing a single IOR command line parameter."""
 
     def __init__(self, str_format, default=None):
@@ -73,7 +73,7 @@ class IorParam():
         self.value = test.params.get(name, path, self.default)
 
 
-class IorCommand():
+class IorCommand(object):
     """Defines a object representing a IOR command."""
 
     def __init__(self):
@@ -129,7 +129,7 @@ class IorCommand():
         for name, ior_param in self.__dict__.items():
             ior_param.set_yaml_value(name, test, path)
 
-    def get_launch_command(self, basepath, processes, hostfile):
+    def get_launch_command(self, basepath, processes, hostfile, runpath=None):
         """Get the process launch command used to run IOR.
 
         Args:
@@ -163,16 +163,18 @@ class IorCommand():
             export_cmd = [
                 "export {}={}".format(key, val) for key, val in env.items()]
             mpirun_cmd = [
-                os.path.join(build_paths["OMPI_PREFIX"], "bin/mpirun"),
-                "-np {}".format(processes),
-                "--hostfile {}".format(hostfile),
+               os.path.join(
+                   runpath if runpath else build_paths[
+                       "OMPI_PREFIX"], "bin/mpirun"), "-np {}".format(
+                           processes), "--hostfile {}".format(hostfile),
             ]
             command = " ".join(mpirun_cmd + [self.__str__()])
             command = "; ".join(export_cmd + command)
 
         elif self.api.value == "DAOS":
             orterun_cmd = [
-                os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun"),
+                os.path.join(runpath if runpath else build_paths[
+                    "OMPI_PREFIX"], "bin/orterun"),
                 "-np {}".format(processes),
                 "--hostfile {}".format(hostfile),
                 "--map-by node",
@@ -186,22 +188,22 @@ class IorCommand():
 
         return command
 
-    def run(self, basepath, processes, hostfile, display_output=True):
+    def run(self, basepath, processes, hostfile, display=True, path=None):
         """Run the IOR command.
 
         Args:
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
-            display_output (bool, optional): print IOR output to the console.
+            display (bool, optional): print IOR output to the console.
                 Defaults to True.
 
         Raises:
             IorFailed: if an error occured runnig the IOR command
 
         """
-        command = self.get_launch_command(basepath, processes, hostfile)
-        if display_output:
+        command = self.get_launch_command(basepath, processes, hostfile, path)
+        if display:
             print("<IOR CMD>: {}".format(command))
 
         # Run IOR
@@ -212,7 +214,7 @@ class IorCommand():
                 output = process.stdout.readline()
                 if output == "" and process.poll() is not None:
                     break
-                if output and display_output:
+                if output and display:
                     print(output.strip())
             if process.poll() != 0:
                 raise IorFailed(
@@ -228,57 +230,39 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                  pool_uuid, svc_list, object_class, basepath, client_processes,
                  cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
                  display_output=True):
-    """ Run Ior tests.
+    """Run IOR test.
 
-    Function Arguments
-    client_file    --client file holding client hostname and slots
-    ior_flags      --all ior specific flags
-    iteration      --number of iterations for ior run
-    block_size     --contiguous bytes to write per task
-    transfer_size  --size of transfer in bytes
-    pool_uuid      --Daos Pool UUID
-    svc_list       --Daos Pool SVCL
-    object_class   --object class
-    basepath       --Daos basepath
-    client_processes          --number of client processes
-    cont_uuid       -- Container UUID
-    seg_count      --segment count
-    chunk_size      --chunk size
-    display_output --print IOR output on console.
+    Args:
+        client_file (str): file holding client hostname and slots
+        ior_flags (str): all ior specific flags
+        iteration (int): number of iterations for ior run
+        block_size (int): contiguous bytes to write per task
+        transfer_size (int): size of transfer in bytes
+        pool_uuid (str): DAOS pool uuid
+        svc_list (str): DAOS pool svcl
+        object_class (str): DAOS object class designation
+        basepath (str): DAOS base path
+        client_processes (int): number of client processes
+        cont_uuid (str, optional): container uuid. Defaults to "`uuidgen`".
+        seg_count (int, optional): segment count. Defaults to 1.
+        chunk_size (int, optional): chunk size in bytes. Defaults to 1048576.
+        display_output (bool, optional): print IOR output. Defaults to True.
     """
-    with open(os.path.join(basepath, ".build_vars.json")) as afile:
-        build_paths = json.load(afile)
-    orterun_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun")
-    attach_info_path = basepath + "/install/tmp"
-    try:
+    ior_cmd = IorCommand()
+    ior_cmd.api.value = "DAOS"
+    ior_cmd.flags.value = ior_flags
+    ior_cmd.repetitions.value = iteration
+    ior_cmd.block_size.value = block_size
+    ior_cmd.transfer_size.value = transfer_size
+    ior_cmd.daos_pool.value = pool_uuid
+    ior_cmd.daos_svcl.value = svc_list
+    ior_cmd.daos_oclass.value = object_class
+    ior_cmd.daos_cont.value = cont_uuid
+    ior_cmd.segment_count.value = seg_count
+    ior_cmd.daos_chunk.value = chunk_size
 
-        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node"
-        " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={}"
-        " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {} "
-        " --daos.svcl {} --daos.cont {} --daos.destroy "
-        " --daos.chunk_size {} --daos.oclass {} ".format(
-            client_processes, client_file, attach_info_path,
-            ior_flags, seg_count, iteration, block_size,
-            transfer_size, pool_uuid, svc_list, cont_uuid,
-            chunk_size, object_class)
-
-        if display_output:
-            print("ior_cmd: {}".format(ior_cmd))
-
-        process = subprocess.Popen(ior_cmd, stdout=subprocess.PIPE, shell=True)
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output and display_output:
-                print(output.strip())
-        if process.poll() != 0:
-            raise IorFailed("IOR Run process Failed with non zero exit code:{}"
-                            .format(process.poll()))
-
-    except (OSError, ValueError) as error:
-        print("<IorRunFailed> Exception occurred: {0}".format(str(error)))
-        raise IorFailed("IOR Run process Failed")
+    ior_cmd.run(
+        basepath, client_processes, client_file, display_output)
 
 
 def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
@@ -286,60 +270,28 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
                   display_output=True):
     """Run IOR over mpich.
 
-    basepath       --Daos basepath
-    mpichinstall   --location of installed mpich
-    pool_uuid      --Daos Pool UUID
-    svcl           --Daos Pool SVCL
-    np             --number of client processes
-    hostfile       --client file holding client hostname and slots
-    ior_flags      --all ior specific flags
-    iteration      --number of iterations for ior run
-    block_size     --contiguous bytes to write per task
-    transfer_size  --size of transfer in bytes
-    display_output --print IOR output on console.
+    Args:
+        basepath (str): DAOS base path
+        mpichinstall (str): location of installed mpich
+        pool_uuid (str): DAOS pool uuid
+        svcl (str): DAOS pool svcl
+        np (int): number of client processes
+        hostfile (str): file holding client hostname and slots
+        ior_flags (str): all ior specific flags
+        iteration (int): number of iterations for ior run
+        transfer_size (int): size of transfer in bytes
+        block_size (int): contiguous bytes to write per task
+        display_output (bool, optional): print IOR output. Defaults to True.
     """
-    try:
-        env_variables = [
-            "export CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
-            "export DAOS_POOL={}".format(pool_uuid),
-            "export MPI_LIB=''",
-            "export DAOS_SVCL={}".format(svcl),
-            "export DAOS_SINGLETON_CLI=1",
-            "export FI_PSM2_DISCONNECT=1"]
+    ior_cmd = IorCommand()
+    ior_cmd.api.value = "MPIIO"
+    ior_cmd.flags.value = ior_flags
+    ior_cmd.repetitions.value = iteration
+    ior_cmd.block_size.value = block_size
+    ior_cmd.transfer_size.value = transfer_size
+    ior_cmd.daos_pool.value = pool_uuid
+    ior_cmd.daos_svcl.value = svcl
+    ior_cmd.test_file.value = "daos:testFile"
 
-        run_cmd = (
-                env_variables[0] + ";" + env_variables[1] + ";" +
-                env_variables[2] + ";" + env_variables[3] + ";" +
-                env_variables[4] + ";" + env_variables[5] + ";" +
-                mpichinstall + "/mpirun -np {0} --hostfile {1} "
-                "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} -i {3} "
-                "-t {4} -b {5} -o daos:testFile".format(np,
-                                                        hostfile,
-                                                        ior_flags,
-                                                        iteration,
-                                                        transfer_size,
-                                                        block_size))
-
-        if display_output:
-            print("run_cmd: {}".format(run_cmd))
-
-        process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE,
-                                   shell=True)
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output and display_output:
-                print(output.strip())
-        if process.poll() != 0:
-            raise IorFailed("IOR Run process failed with non zero exit "
-                            "code: {}".format(process.poll()))
-
-    except (OSError, ValueError) as excep:
-        print("<IorRunFailed> Exception occurred: {0}".format(str(excep)))
-        raise IorFailed("IOR Run process Failed")
-
-# Enable this whenever needs to check
-# if the script is functioning normally.
-# if __name__ == "__main__":
-#    IorBuild()
+    ior_cmd.run(
+        basepath, np, hostfile, display_output, mpichinstall)

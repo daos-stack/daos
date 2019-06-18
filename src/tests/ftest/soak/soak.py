@@ -48,7 +48,7 @@ class Soak(TestWithServers):
     that are listed in the yaml file.
 
     The tests also use an IOR that is compiled with MPICH and is built with
-    both the DAOS and MPI-IO drivers.  
+    both the DAOS and MPI-IO drivers.
 
     """
 
@@ -129,6 +129,8 @@ class Soak(TestWithServers):
         ior_cmd.max_duration.value = self.params.get("time", job_params + '*')
         ior_cmd.daos_pool.value = pool_attr[1]
         ior_cmd.daos_svcl.value = pool_attr[2]
+        ior_cmd.daos_cont.value = "`uuidgen`"
+        ior_cmd.segment_count.value = 1
 
         command = ior_cmd.__str__()
         if ior_cmd.api.value == "MPIIO":

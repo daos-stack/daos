@@ -79,9 +79,9 @@ jobsmoke:
     tasks: 1
     blocksize: '64M'
     jobspec:
-      - ior3
-      - ior1
-      - ior2
+      - ior_daos_1m_large
+      - ior_daos_4k_large
+      - ior_daos_128k_large
 # task = 1
 job1:
     name: job1
@@ -89,9 +89,9 @@ job1:
     tasks: 1
     blocksize: '64M'
     jobspec:
-        - ior1
-        - ior2
-        - ior3
+        - ior_daos_4k_large
+        - ior_daos_128k_large
+        - ior_daos_1m_large
 # task = 16
 job16:
     name: job16
@@ -99,20 +99,20 @@ job16:
     tasks: 16
     blocksize: '64M'
     jobspec:
-        - ior1
-        - ior2
-        - ior3
+        - ior_daos_4k_large
+        - ior_daos_128k_large
+        - ior_daos_1m_large
 # tasks 32 is failing - DAOS-2518
 # task = 24
 job24:
     name: job24
     time: 30
     tasks: 24
-    blocksize: '64m'
+    blocksize: '64M'
     jobspec:
-        - ior1
-        - ior2
-        - ior3
+        - ior_daos_4k_large
+        - ior_daos_128k_large
+        - ior_daos_1m_large
 # TBD test case for DMG
 job2:
     name: pool_job_3
@@ -122,34 +122,34 @@ job2:
         - dmg1
 # IOR params -a DAOS and -a MPIIO
 # sequential
-ior1:
+ior_daos_4k_large:
     api: DAOS
     flags: -v -w -W -r -R
     transfer_size: 4k
     daos_oclass: LARGE
-ior2:
+ior_daos_128k_large:
     api: DAOS
     flags: -v -w -W -r -R
     transfer_size: 128k
     daos_oclass: LARGE
 # random
-ior3:
+ior_daos_1m_large:
     api: DAOS
     flags: -v -w -W -r -R
     transfer_size: 1m
     daos_oclass: LARGE
 # IOR MPIIO cmdlines  - TBD
-ior4:
+ior_mpiio_4k_tiny:
     api: MPIIO
     flags: -v -w -W -r -R
     transfer_size: 4k
     daos_oclass: TINY
-ior5:
+ior_mpiio_128k_large:
     api: MPIIO
     flags: -v -w -W -r -R
     transfer_size: 128k
     daos_oclass: LARGE
-ior6:
+ior_mpiio_1m_large:
     api: MPIIO
     flags: -v -w -W -r -R
     transfer_size: 1m
