@@ -26,7 +26,6 @@ package main
 import (
 	"fmt"
 	"os/user"
-	"strconv"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/log"
@@ -35,62 +34,39 @@ import (
 
 const msgNotExist = "No such file or directory"
 
-func getUID(ext External, userName string) (*user.User, int64, error) {
-	usr, err := ext.lookupUser(userName)
-	if err != nil {
-		return nil, -1, errors.WithMessage(err, "user lookup")
+// getGroupName returns group name, either of the supplied group if user
+// belong to supplied group or default usr group otherwise.
+func getGroupName(
+	ext External, usr *user.User, tgtGroup string) (groupName string, err error) {
+
+	var group *user.Group
+	var ids []string
+	groupName = usr.Username
+
+	if tgtGroup == "" || tgtGroup != usr.Username {
+		return // no useful group specified
 	}
 
-	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
-	if err != nil {
-		return nil, -1, errors.Wrap(err, "parsing uid to int")
+	// lookup group specified in config file
+	if group, err = ext.lookupGroup(tgtGroup); err != nil {
+		return
 	}
 
-	return usr, uid, nil
-}
-
-// getGID returns group name and id, either of the supplied group if user
-// belonga to group or of usr otherwise.
-func getGID(
-	ext External, usr *user.User, groupName string) (
-	grpName string, gid int64, err error) {
-
-	_gid := usr.Gid
-	grpName = usr.Username
-
-	if groupName != "" {
-		// attempt to assign group specified in config file
-		if group, err := ext.lookupGroup(groupName); err == nil {
-			// check user group membership
-			if ids, err := ext.listGroups(usr); err == nil {
-				for _, g := range ids {
-					if group.Gid == g {
-						_gid = g
-						grpName = groupName
-						break
-					}
-				}
-
-				if _gid != group.Gid {
-					log.Debugf(
-						"user %s not member of group %s",
-						usr.Username, group.Name)
-				}
-			} else {
-				return "", -1, errors.WithMessage(
-					err, "get group membership")
-			}
-		} else {
-			log.Debugf("group lookup: %+v", err)
+	// check user group membership
+	if ids, err = ext.listGroups(usr); err != nil {
+		return
+	}
+	for _, gid := range ids {
+		if group.Gid == gid {
+			return tgtGroup, nil
 		}
 	}
 
-	gid, err = strconv.ParseInt(_gid, 10, 32)
-	if err != nil {
-		return "", -1, errors.Wrap(err, "parsing gid to int")
+	if groupName != tgtGroup {
+		return "", errors.Errorf("user %s not member of group %s", usr.Username, tgtGroup)
 	}
 
-	return grpName, gid, nil
+	return
 }
 
 // chownAll changes ownership of required directories (recursive) and
@@ -122,31 +98,27 @@ func chownAll(config *configuration, user string, group string) error {
 	return nil
 }
 
-// dropPrivileges will attempt to drop privileges by setting uid of running
-// process to that of the username specified in config file. If groupname is
-// specified in config file then check user is a member of that group and
-// set relevant gid if so, otherwise use user.gid.
+// changeFileOwnership changes the ownership of required files to the user and group
+// specified in the server config file. Fails if specified values are invalid. User
+// mandatory, group optional.
 func changeFileOwnership(config *configuration) error {
 	if config.UserName == "" {
 		return errors.New("no username supplied in config")
 	}
 
-	log.Debugf(
-		"running as root, changing file ownership to user %s", config.UserName)
+	log.Debugf("running as root, changing file ownership to user %s", config.UserName)
 
-	// TODO: getUID can be simplified to only return 2 values
-	usr, _, err := getUID(config.ext, config.UserName)
+	usr, err := config.ext.lookupUser(config.UserName)
 	if err != nil {
-		return errors.WithMessage(err, "get uid")
+		return errors.Wrap(err, "user lookup")
 	}
 
-	// TODO: getGID can be simplified to only return 2 values
-	grpName, _, err := getGID(config.ext, usr, config.GroupName)
+	groupName, err := getGroupName(config.ext, usr, config.GroupName)
 	if err != nil {
-		return errors.WithMessage(err, "get gid")
+		return errors.WithMessage(err, "group lookup")
 	}
 
-	if err := chownAll(config, usr.Username, grpName); err != nil {
+	if err := chownAll(config, usr.Username, groupName); err != nil {
 		return err
 	}
 
