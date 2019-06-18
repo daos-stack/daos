@@ -1201,7 +1201,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 
 	oei = crt_req_get(rpc);
 	oeo = crt_reply_get(rpc);
-	if (oei->oei_kds_bulk) {
+	if (oei->oei_kds_bulk && oeo->oeo_kds.ca_count > 0) {
 		tmp_iov.iov_buf = oeo->oeo_kds.ca_arrays;
 		tmp_iov.iov_buf_len = oeo->oeo_kds.ca_count *
 				      sizeof(daos_key_desc_t);
