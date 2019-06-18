@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define LOOP_COUNT 512
+#define LOOP_COUNT 128
 
 struct iterate_data {
 	fuse_req_t			req;
@@ -76,60 +76,61 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 				       udata->fuse_size - udata->b_off, name,
 				       &stbuf, (off_t)(&oh->doh_anchor));
 
+		/** if entry fits, increment the fuse buf offset and return */
+		if (ns <= udata->fuse_size - udata->b_off) {
+			udata->b_off += ns;
+			D_GOTO(out, rc = 0);
+		}
+
 		/*
 		 * If entry does not fit within the readdir buff size, save
 		 * state in oh and re-add it to the buf. this will not be
 		 * returned for current readdir call.
 		 */
-		if (ns > udata->fuse_size - udata->b_off) {
-			oh->doh_start_off[oh->doh_idx] = udata->b_off;
-			oh->doh_cur_off = udata->b_off;
+		oh->doh_start_off[oh->doh_idx] = udata->b_off;
+		oh->doh_cur_off = udata->b_off;
 
-			ns = fuse_add_direntry(udata->req,
-					       oh->doh_buf + udata->b_off,
-					       udata->size - udata->b_off,
-					       name, &stbuf,
-					       (off_t)(&oh->doh_anchor));
+		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
+				       udata->size - udata->b_off, name, &stbuf,
+				       (off_t)(&oh->doh_anchor));
 
-			D_ASSERT(ns <= udata->size - udata->b_off);
-			oh->doh_cur_off += ns;
-
-			/** no need to issue futher dfs_iterate() calls */
-			udata->stop = 1;
-		} else {
-			/** entry did fit, just increment the buf offset */
-			udata->b_off += ns;
-		}
-	} else {
-insert:
-		/** fuse size exceeded so add entry & update the oh counters */
-		ns = fuse_add_direntry(udata->req,
-				       oh->doh_buf + oh->doh_cur_off,
-				       udata->size - oh->doh_cur_off, name,
-				       &stbuf, (off_t)(&oh->doh_anchor));
-
-		/*
-		 * If entry does not fit, realloc to fit the entries that were
-		 * already enumerated.
-		 */
-		if (ns > udata->size - oh->doh_cur_off) {
-			udata->size = udata->size * 2;
-			oh->doh_buf = realloc(oh->doh_buf, udata->size);
-			if (oh->doh_buf == NULL)
-				D_GOTO(out, rc = -ENOMEM);
-			goto insert;
-		}
-
+		/** Entry should fit now */
+		D_ASSERT(ns <= udata->size - udata->b_off);
 		oh->doh_cur_off += ns;
-		/*
-		 * we need to keep track of offsets where we exceed 4k in
-		 * entries for further calls to readdir
-		 */
-		if (oh->doh_cur_off - oh->doh_start_off[oh->doh_idx] >
-		    udata->fuse_size) {
-			oh->doh_idx++;
-			oh->doh_start_off[oh->doh_idx] = oh->doh_cur_off - ns;
-		}
+
+		/** no need to issue futher dfs_iterate() calls */
+		udata->stop = 1;
+		D_GOTO(out, rc = 0);
+	}
+
+insert:
+	/** fuse size exceeded so add entry & update the oh counters */
+	ns = fuse_add_direntry(udata->req, oh->doh_buf + oh->doh_cur_off,
+			       udata->size - oh->doh_cur_off, name, &stbuf,
+			       (off_t)(&oh->doh_anchor));
+	/*
+	 * If entry does not fit, realloc to fit the entries that were already
+	 * enumerated and insert again.
+	 */
+	if (ns > udata->size - oh->doh_cur_off) {
+		udata->size = udata->size * 2;
+		oh->doh_buf = realloc(oh->doh_buf, udata->size);
+		if (oh->doh_buf == NULL)
+			D_GOTO(out, rc = -ENOMEM);
+		goto insert;
+	}
+
+	/** update the offset in the OH buffer */
+	oh->doh_cur_off += ns;
+
+	/*
+	 * we need to keep track of offsets where we exceed 4k in the buffer
+	 * size for further calls to readdir.
+	 */
+	if (oh->doh_cur_off - oh->doh_start_off[oh->doh_idx] >
+	    udata->fuse_size) {
+		oh->doh_idx++;
+		oh->doh_start_off[oh->doh_idx] = oh->doh_cur_off - ns;
 	}
 
 out:
@@ -169,14 +170,18 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				       oh->doh_start_off[oh->doh_idx + 1] -
 				       oh->doh_start_off[oh->doh_idx]);
 			oh->doh_idx++;
-		} else {
-			fuse_reply_buf(req, oh->doh_buf +
-				       oh->doh_start_off[oh->doh_idx],
-				       oh->doh_cur_off -
-				       oh->doh_start_off[oh->doh_idx]);
-			oh->doh_cur_off = 0;
-			oh->doh_idx = 0;
+			return;
 		}
+
+		/** otherwise return everything left */
+		fuse_reply_buf(req,
+			       oh->doh_buf + oh->doh_start_off[oh->doh_idx],
+			       oh->doh_cur_off -
+			       oh->doh_start_off[oh->doh_idx]);
+
+		/** reset offset counters */
+		oh->doh_cur_off = 0;
+		oh->doh_idx = 0;
 		return;
 	}
 
@@ -186,10 +191,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	 */
 	buf_size = size * READDIR_BLOCKS / 2;
 
-	/** buffer will be freed when this oh is closed */
-	D_ALLOC(oh->doh_buf, buf_size);
-	if (!oh->doh_buf)
-		D_GOTO(err, rc = ENOMEM);
+	/** Allocate readdir buffer on OH if it has not been allocated before */
+	if (oh->doh_buf == NULL) {
+		/** buffer will be freed when this oh is closed */
+		D_ALLOC(oh->doh_buf, buf_size);
+		if (!oh->doh_buf)
+			D_GOTO(err, rc = ENOMEM);
+	}
 
 	udata.req = req;
 	udata.size = buf_size;
@@ -200,7 +208,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	udata.stop = 0;
 
 	while (!daos_anchor_is_eof(&oh->doh_anchor)) {
-		/** should not be here if extra buf space is used */
+		/** should not be here if we exceeded the fuse 4k buf size */
 		D_ASSERT(oh->doh_cur_off == 0);
 
 		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &nr,
@@ -213,7 +221,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		if (rc)
 			D_GOTO(err, rc = -rc);
 
-		/** if buffer is full, break enumeration */
+		/** if the fuse buffer is full, break enumeration */
 		if (udata.stop)
 			break;
 	}
