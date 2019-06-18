@@ -314,8 +314,9 @@ vos_fini(void)
 int
 vos_init(void)
 {
-	int		rc = 0;
-	static int	is_init = 0;
+	char		*evt_mode;
+	int		 rc = 0;
+	static int	 is_init;
 
 	if (is_init) {
 		D_ERROR("Already initialized a VOS instance\n");
@@ -360,6 +361,15 @@ vos_init(void)
 	if (rc)
 		D_GOTO(exit, rc);
 
+	evt_mode = getenv("DAOS_EVTREE_MODE");
+	if (evt_mode) {
+		if (strcasecmp("soff", evt_mode) == 0) {
+			vos_evt_feats = EVT_FEAT_SORT_SOFF;
+			D_INFO("Using start offset sort for evtree\n");
+		} else {
+			D_INFO("Using distance sort for evtree (default)\n");
+		}
+	}
 	is_init = 1;
 exit:
 	D_MUTEX_UNLOCK(&mutex);

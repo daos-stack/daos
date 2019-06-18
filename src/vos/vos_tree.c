@@ -33,6 +33,8 @@
 #include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
 
+int vos_evt_feats = EVT_FEAT_SORT_DIST;
+
 /**
  * VOS Btree attributes, for tree registration and tree creation.
  */
@@ -853,7 +855,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	D_ASSERT(flags & SUBTR_CREATE);
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, uma,
+		rc = evt_create(vos_evt_feats, VOS_EVT_ORDER, uma,
 				&krec->kr_evt, coh, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);

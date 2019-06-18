@@ -49,12 +49,14 @@ enum {
 };
 
 static struct evt_policy_ops evt_ssof_pol_ops;
+static struct evt_policy_ops evt_sdist_pol_ops;
 /**
  * Tree policy table.
  * - Sorted by Start Offset(SSOF): it is the only policy for now.
  */
 static struct evt_policy_ops *evt_policies[] = {
 	&evt_ssof_pol_ops,
+	&evt_sdist_pol_ops,
 	NULL,
 };
 
@@ -853,8 +855,10 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 	tcx->tc_magic = EVT_HDL_ALIVE;
 	tcx->tc_root_off = UMOFF_NULL;
 
-	/* XXX choose ops based on feature bits */
-	tcx->tc_ops = evt_policies[0];
+	if (feats & EVT_FEAT_SORT_DIST)
+		tcx->tc_ops = evt_policies[1];
+	else
+		tcx->tc_ops = evt_policies[0];
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -1421,7 +1425,7 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	int			rc;
 
 	evt_node_weight_diff(tcx, nd1, rect, &wt1);
-	evt_node_weight_diff(tcx, nd1, rect, &wt2);
+	evt_node_weight_diff(tcx, nd2, rect, &wt2);
 
 	rc = evt_weight_cmp(&wt1, &wt2);
 	return rc < 0 ? nd1 : nd2;
@@ -2156,7 +2160,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & EVT_FEAT_SORT_SOFF)) {
+	if (!(feats & (EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_SOFF))) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -2294,27 +2298,18 @@ evt_debug(daos_handle_t toh, int debug_level)
  * Only support SSOF for now (see below).
  */
 
-/**
- * Sorted by Start Offset (SSOF)
- *
- * Extents are sorted by start offset first, then high to low epoch, then end
- * offset
- */
-
-/** Rectangle comparison for sorting */
+/** Common routines */
+typedef int (cmp_rect_cb)(struct evt_context *tcx, const struct evt_rect *mbr,
+			  const struct evt_rect *rt1,
+			  const struct evt_rect *rt2);
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *rt1,
-		  const struct evt_rect *rt2)
-{
-	return evt_rect_cmp(rt1, rt2);
-}
-
-static int
-evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent)
+evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
+		  umem_off_t in_off, const struct evt_entry_in *ent,
+		  cmp_rect_cb cb)
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
+	struct evt_rect		*mbr;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
@@ -2323,13 +2318,14 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 	D_ASSERT(!evt_node_is_full(tcx, nd));
 
 	leaf = evt_node_is_leaf(tcx, nd);
+	mbr = evt_node_mbr_get(tcx, nd);
 
 	/* NB: can use binary search to optimize */
 	for (i = 0; i < nd->tn_nr; i++) {
 		int	nr;
 
 		ne = evt_node_entry_at(tcx, nd, i);
-		rc = evt_ssof_cmp_rect(tcx, &ne->ne_rect, &ent->ei_rect);
+		rc = cb(tcx, mbr, &ne->ne_rect, &ent->ei_rect);
 		if (rc < 0)
 			continue;
 
@@ -2424,8 +2420,21 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 }
 
 static int
-evt_ssof_split(struct evt_context *tcx, bool leaf,
-	       struct evt_node *nd_src, struct evt_node *nd_dst)
+evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
+		       struct evt_weight *weight)
+{
+	memset(weight, 0, sizeof(*weight));
+	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
+	/* NB: we don't consider about high epoch for SSOF because it's based
+	 * on assumption there is no overwrite.
+	 */
+	weight->wt_minor = -rect->rc_epc;
+	return 0;
+}
+
+static int
+evt_common_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
+		 struct evt_node *nd_dst)
 {
 	struct evt_node_entry	*entry_src;
 	struct evt_node_entry	*entry_dst;
@@ -2450,22 +2459,10 @@ evt_ssof_split(struct evt_context *tcx, bool leaf,
 }
 
 static int
-evt_ssof_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
-		     struct evt_weight *weight)
+evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
+		  struct evt_node_entry *ne, int at, cmp_rect_cb cb)
 {
-	memset(weight, 0, sizeof(*weight));
-	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
-	/* NB: we don't consider about high epoch for SSOF because it's based
-	 * on assumption there is no overwrite.
-	 */
-	weight->wt_minor = -rect->rc_epc;
-	return 0;
-}
-
-static int
-evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
-		struct evt_node_entry *ne, int at)
-{
+	struct evt_rect		*mbr;
 	struct evt_node_entry	*etmp;
 	struct evt_node_entry	*dst_entry;
 	struct evt_node_entry	*src_entry;
@@ -2475,10 +2472,11 @@ evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
 	int			 offset;
 
 	D_ASSERT(!evt_node_is_leaf(tcx, nd));
+	mbr = evt_node_mbr_get(tcx, nd);
 
 	/* Check if we need to move the entry left */
 	for (i = at - 1, etmp = ne - 1; i >= 0; i--, etmp--) {
-		if (evt_ssof_cmp_rect(tcx, &etmp->ne_rect, &ne->ne_rect) <= 0)
+		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) <= 0)
 			break;
 	}
 
@@ -2497,7 +2495,7 @@ evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
 
 	/* Ok, now check if we need to move the entry right */
 	for (i = at + 1, etmp = ne + 1; i < nd->tn_nr; i++, etmp++) {
-		if (evt_ssof_cmp_rect(tcx, &etmp->ne_rect, &ne->ne_rect) >= 0)
+		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) >= 0)
 			break;
 	}
 
@@ -2522,11 +2520,93 @@ move:
 	return offset;
 }
 
+/**
+ * Sorted by Start Offset (SSOF)
+ *
+ * Extents are sorted by start offset first, then high to low epoch, then end
+ * offset
+ */
+
+/** Rectangle comparison for sorting */
+static int
+evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
+		  const struct evt_rect *rt1, const struct evt_rect *rt2)
+{
+	return evt_rect_cmp(rt1, rt2);
+}
+
+static int
+evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
+		umem_off_t in_off, const struct evt_entry_in *ent)
+{
+	return evt_common_insert(tcx, nd, in_off, ent, evt_ssof_cmp_rect);
+}
+
+static int
+evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
+		struct evt_node_entry *ne, int at)
+{
+	return evt_common_adjust(tcx, nd, ne, at, evt_ssof_cmp_rect);
+}
+
 static struct evt_policy_ops evt_ssof_pol_ops = {
 	.po_insert		= evt_ssof_insert,
 	.po_adjust		= evt_ssof_adjust,
-	.po_split		= evt_ssof_split,
-	.po_rect_weight		= evt_ssof_rect_weight,
+	.po_split		= evt_common_split,
+	.po_rect_weight		= evt_common_rect_weight,
+};
+
+/**
+ * Sorted by distances to sides of bounding box
+ */
+
+/** Rectangle comparison for sorting */
+static int64_t
+evt_mbr_dist(const struct evt_rect *mbr, const struct evt_rect *rect)
+{
+	int64_t ldist = rect->rc_ex.ex_lo - mbr->rc_ex.ex_hi + 1;
+	int64_t rdist = mbr->rc_ex.ex_lo - rect->rc_ex.ex_hi + 1;
+
+	return ldist - rdist;
+}
+
+static int
+evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
+		   const struct evt_rect *rt1, const struct evt_rect *rt2)
+{
+	int64_t	dist1, dist2;
+
+	dist1 = evt_mbr_dist(mbr, rt1);
+	dist2 = evt_mbr_dist(mbr, rt2);
+
+	if (dist1 < dist2)
+		return -1;
+	if (dist1 > dist2)
+		return 1;
+
+	/* All else being equal, revert to ssof */
+	return evt_rect_cmp(rt1, rt2);
+}
+
+static int
+evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
+		umem_off_t in_off, const struct evt_entry_in *ent)
+{
+	return evt_common_insert(tcx, nd, in_off, ent, evt_sdist_cmp_rect);
+}
+
+static int
+evt_sdist_adjust(struct evt_context *tcx, struct evt_node *nd,
+		 struct evt_node_entry *ne, int at)
+{
+	return evt_common_adjust(tcx, nd, ne, at, evt_sdist_cmp_rect);
+}
+
+static struct evt_policy_ops evt_sdist_pol_ops = {
+	.po_insert		= evt_sdist_insert,
+	.po_adjust		= evt_sdist_adjust,
+	.po_split		= evt_common_split,
+	.po_rect_weight		= evt_common_rect_weight,
 };
 
 /** After the current cursor is deleted, the trace
