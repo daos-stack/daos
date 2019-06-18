@@ -29,17 +29,21 @@ import "storage.proto";
 import "features.proto";
 import "srv.proto";
 
-// This is the main service definition for communications involving the
-// gRPC management server. In order to add RPCs associated with your
-// service add them in the ManagementService definition below.
-service MgmtControl {
-	rpc ScanStorage(ScanStorageParams) returns (ScanStorageResp) {};
-	rpc FormatStorage(FormatStorageParams) returns (stream FormatStorageResp) {};
-	rpc UpdateStorage(UpdateStorageParams) returns (stream UpdateStorageResp) {};
-	rpc BurninStorage(BurninStorageParams) returns (stream BurninStorageResp) {};
-	rpc KillRank(DaosRank) returns (DaosResponse) {}; // Kill server of rank
-	rpc FetchFioConfigPaths(EmptyParams) returns (stream FilePath) {};
-	rpc GetFeature(FeatureName) returns (Feature) {};
-	rpc ListAllFeatures(EmptyParams) returns (stream Feature) {};
-	rpc ListFeatures(Category) returns (stream Feature) {};
+// Service definitions for communications between gRPC management server and
+// client regarding tasks related to DAOS storage server hardware.
+service MgmtCtl {
+	// Retrieve details of nonvolatile storage devices on server
+	rpc ScanStorage(ScanStorageReq) returns (ScanStorageResp) {};
+	// Format nonvolatile storage devices for use with DAOS
+	rpc FormatStorage(FormatStorageReq) returns (stream FormatStorageResp) {};
+	// Update nonvolatile storage device firmware
+	rpc UpdateStorage(UpdateStorageReq) returns (stream UpdateStorageResp) {};
+	// Perform burn-in testing to verify nonvolatile storage devices
+	rpc BurninStorage(BurninStorageReq) returns (stream BurninStorageResp) {};
+	// Fetch FIO configuration file specifying burn-in jobs/workloads
+	rpc FetchFioConfigPaths(EmptyReq) returns (stream FilePath) {};
+	// Kill a given rank associated with a given pool
+	rpc KillRank(DaosRank) returns (DaosResponse) {};
+	// List features supported on remote storage server/DAOS system
+	rpc ListFeatures(EmptyReq) returns (stream Feature) {};
 }

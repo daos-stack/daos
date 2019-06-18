@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ var (
 )
 
 func init() {
-	log.NewDefaultLogger(log.Error, "utils_test: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "dmg_tests: ", os.Stderr)
 }
 
 func TestHasConnection(t *testing.T) {
@@ -94,24 +94,24 @@ func marshal(i interface{}) string {
 
 func TestCheckSprint(t *testing.T) {
 	var shelltests = []struct {
-		m   interface{}
+		m   string
 		out string
 	}{
 		{
-			NewClientFM(features, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n  burn-name: category nvme, run workloads on device to test\n1.2.3.5:10001:\n  burn-name: category nvme, run workloads on device to test\n\n\n",
+			NewClientFM(features, addresses).String(),
+			"1.2.3.4:10000:\nburn-name: category nvme, run workloads on device to test\n\n1.2.3.5:10001:\nburn-name: category nvme, run workloads on device to test\n\n",
 		},
 		{
-			NewClientNvme(ctrlrs, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- model: ABC\n  serial: 123ABC\n  pciaddr: 0000:81:00.0\n  fwrev: \"\"\n  namespaces:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- model: ABC\n  serial: 123ABC\n  pciaddr: 0000:81:00.0\n  fwrev: \"\"\n  namespaces:\n  - id: 12345\n    capacity: 99999\n\n\n",
+			NewClientNvme(ctrlrs, addresses).String(),
+			"1.2.3.4:10000:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n",
 		},
 		{
-			NewClientScm(modules, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  capacity: 12345\n  loc:\n    channel: 1\n    channelpos: 2\n    memctrlr: 3\n    socket: 4\n1.2.3.5:10001:\n- physicalid: 12345\n  capacity: 12345\n  loc:\n    channel: 1\n    channelpos: 2\n    memctrlr: 3\n    socket: 4\n\n\n",
+			NewClientScm(modules, addresses).String(),
+			"1.2.3.4:10000:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n1.2.3.5:10001:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}}.String(),
+			"1.2.3.4:10000:\nerror: something went wrong\n1.2.3.5:10001:\nerror: something went wrong\n",
 		},
 		{
 			NewClientMountResults(
@@ -123,11 +123,12 @@ func TestCheckSprint(t *testing.T) {
 							Error:  "example application error",
 						},
 					},
-				}, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n1.2.3.5:10001:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n\n\n",
+				}, addresses).String(),
+			"1.2.3.4:10000:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n",
 		},
+		// TODO: add test cases for feature/mount, ctrlr/module results
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, unpackClientMap(tt.m), tt.out, "bad output")
+		AssertEqual(t, tt.m, tt.out, "bad output")
 	}
 }

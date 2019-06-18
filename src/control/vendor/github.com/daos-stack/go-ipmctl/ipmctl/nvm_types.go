@@ -92,13 +92,3 @@ type DeviceStatus struct {
 	Error_log_status             _Ctype_struct_device_error_log_status
 	Reserved                     [56]uint8
 }
-
-// IpmCtl is the interface that provides access to libipmctl.
-type IpmCtl interface {
-	// Discover persistent memory modules
-	Discover() ([]DeviceDiscovery, error)
-	// Update persistent memory module firmware
-	//Update(...)
-	// Cleanup persistent memory references
-	//Cleanup()
-}
