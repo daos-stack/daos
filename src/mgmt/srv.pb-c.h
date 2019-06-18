@@ -86,7 +86,13 @@ struct  _Mgmt__CreateMsReq
 {
   ProtobufCMessage base;
   protobuf_c_boolean bootstrap;
+  /*
+   * Server UUID of this MS replica.
+   */
   char *uuid;
+  /*
+   * Server management address of this MS replica.
+   */
   char *addr;
 };
 #define MGMT__CREATE_MS_REQ__INIT \
