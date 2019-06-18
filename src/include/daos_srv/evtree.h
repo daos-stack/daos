@@ -40,14 +40,6 @@ enum {
 	EVT_UMEM_DESC	= (EVT_UMEM_TYPE + 2),
 };
 
-struct evt_node;
-struct evt_root;
-struct evt_desc;
-
-TMMID_DECLARE(struct evt_root, EVT_UMEM_ROOT);
-TMMID_DECLARE(struct evt_node, EVT_UMEM_NODE);
-TMMID_DECLARE(struct evt_desc, EVT_UMEM_DESC);
-
 /** Valid tree order */
 enum {
 	EVT_ORDER_MIN			= 4,
@@ -56,7 +48,6 @@ enum {
 
 /** EVTree data pointer */
 struct evt_desc {
-	uint64_t			dc_csum;
 	/** buffer on SCM or NVMe */
 	bio_addr_t			dc_ex_addr;
 	/** Pool map version for the record */
@@ -64,7 +55,10 @@ struct evt_desc {
 	/** Magic number for validation */
 	uint32_t			dc_magic;
 	/** The DTX entry in SCM. */
-	umem_id_t			dc_dtx;
+	umem_off_t			dc_dtx;
+	/** placeholder for csum array buffer */
+	/** csum_count * csum_len (from tree root) is length of csum buf */
+	uint8_t				pt_csum[0];
 };
 
 struct evt_extent {
@@ -186,6 +180,12 @@ struct evt_root {
 	uint32_t			tr_inob;
 	/** see \a evt_feats */
 	uint64_t			tr_feats;
+	/** number of bytes used to generate each csum */
+	uint32_t			tr_csum_chunk_size;
+	/** type of the csum used in tree */
+	uint16_t			tr_csum_type;
+	/** length of each csum in bytes */
+	uint16_t			tr_csum_len;
 };
 
 enum evt_feats {
@@ -200,7 +200,7 @@ struct evt_entry_in {
 	/** Extent to insert */
 	struct evt_rect	ei_rect;
 	/** checksum of entry */
-	uint64_t	ei_csum;
+	daos_csum_buf_t ei_csum;
 	/** pool map version */
 	uint32_t	ei_ver;
 	/** number of bytes per record, zero for punch */
@@ -229,8 +229,8 @@ struct evt_entry {
 	struct evt_extent		en_ext;
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
-	/** checksum of entry */
-	uint64_t			en_csum;
+	/** checksums of selected extent*/
+	daos_csum_buf_t			en_csum;
 	/** pool map version */
 	uint32_t			en_ver;
 	/** Visibility flags for extent */
@@ -239,14 +239,20 @@ struct evt_entry {
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
+	/** The DTX entry address */
+	umem_off_t			en_dtx;
 };
 
 struct evt_list_entry {
-	d_list_t		le_link;
-	struct evt_entry	le_ent;
+	/** A back pointer to the previous split entry, if applicable */
+	struct evt_entry	*le_prev;
+	/** List link for the entry */
+	d_list_t		 le_link;
+	/** The metadata associated with the entry */
+	struct evt_entry	 le_ent;
 };
 
-#define EVT_EMBEDDED_NR 32
+#define EVT_EMBEDDED_NR 16
 /**
  * list head of \a evt_entry, it contains a few embedded entries to support
  * lightweight allocation of entries.
@@ -313,6 +319,17 @@ evt_ent_array_get_next(struct evt_entry_array *ent_array, struct evt_entry *ent)
 	return &(el + 1)->le_ent;
 }
 
+/**
+ * Calculate the offset of the selected extent compared to the actual extent.
+ * @param entry - contains both selected and full extents.
+ * @return the offset
+ */
+static inline daos_size_t
+evt_entry_selected_offset(const struct evt_entry *entry)
+{
+	return entry->en_sel_ext.ex_lo - entry->en_ext.ex_lo;
+}
+
 /** iterate over all entries of a ent_array */
 #define evt_ent_array_for_each(ent, ea)				\
 	for (ent = evt_ent_array_get(ea, 0); ent != NULL;	\
@@ -359,21 +376,6 @@ struct evt_policy_ops {
 };
 
 /**
- * Create a new tree and open it.
- *
- * \param feats		[IN]	Feature bits, see \a evt_feats
- * \param order		[IN]	Tree order
- * \param uma		[IN]	Memory class attributes
- * \param root_mmidp	[OUT]	The returned tree root mmid
- * \param toh		[OUT]	The returned tree open handle
- *
- * \return		0	Success
- *			-ve	error code
- */
-int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       TMMID(struct evt_root) *root_mmidp, daos_handle_t *toh);
-
-/**
  * Create a new tree in the specified address of root \a root, and open it.
  *
  * \param feats		[IN]	Feature bits, see \a evt_feats
@@ -386,21 +388,8 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  * \return		0	Success
  *			-ve	error code
  */
-int evt_create_inplace(uint64_t feats, unsigned int order,
-		       struct umem_attr *uma, struct evt_root *root,
-		       daos_handle_t coh, daos_handle_t *toh);
-/**
- * Open a tree by its memory ID \a root_mmid
- *
- * \param root_mmid	[IN]	Memory ID of the tree root
- * \param uma		[IN]	Memory class attributes
- * \param toh		[OUT]	The returned tree open handle
- *
- * \return		0	Success
- *			-ve	error code
- */
-int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
-	     daos_handle_t *toh);
+int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
+	       struct evt_root *root, daos_handle_t coh, daos_handle_t *toh);
 /**
  * Open a tree by its root address \a root
  *
@@ -413,8 +402,8 @@ int evt_open(TMMID(struct evt_root) root_mmid, struct umem_attr *uma,
  * \return		0	Success
  *			-ve	error code
  */
-int evt_open_inplace(struct evt_root *root, struct umem_attr *uma,
-		     daos_handle_t coh, void *info, daos_handle_t *toh);
+int evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
+	     void *info, daos_handle_t *toh);
 
 /**
  * Close a opened tree
@@ -593,5 +582,16 @@ int evt_iter_delete(daos_handle_t ih, void *value_out);
  */
 int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
 		   struct evt_entry *entry, daos_anchor_t *anchor);
+
+/** Get overhead constants for an evtree
+ *
+ * \param alloc_overhead[IN]	Expected per-allocation overhead in bytes
+ * \param tree_order[IN]	The expected tree order used in creation
+ * \param ovhd[OUT]		Struct to fill with overheads
+ *
+ * \return 0 on success, error otherwise
+ */
+int evt_overhead_get(int alloc_overhead, int tree_order,
+		     struct daos_tree_overhead *ovhd);
 
 #endif /* __DAOS_EV_TREE_H__ */

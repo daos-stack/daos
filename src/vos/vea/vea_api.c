@@ -68,15 +68,15 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	struct umem_attr uma;
 	uint64_t tot_blks;
 	daos_handle_t free_btr, vec_btr;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	int rc;
 
 	D_ASSERT(umem != NULL);
 	D_ASSERT(md != NULL);
 	/* Can't reformat without 'force' specified */
 	if (md->vsd_magic == VEA_MAGIC) {
-		D_DEBUG(force ? DLOG_WARN : DLOG_ERR,
-			"reformat %p force=%d\n", md, force);
+		D_CDEBUG(force, DLOG_WARN, DLOG_ERR, "reformat %p force=%d\n",
+			 md, force);
 		if (!force)
 			return -DER_EXIST;
 
@@ -152,9 +152,9 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	free_ext.vfe_flags = 0;
 	free_ext.vfe_age = VEA_EXT_AGE_MAX;
 
-	daos_iov_set(&key, &free_ext.vfe_blk_off,
+	d_iov_set(&key, &free_ext.vfe_blk_off,
 		     sizeof(free_ext.vfe_blk_off));
-	daos_iov_set(&val, &free_ext, sizeof(free_ext));
+	d_iov_set(&val, &free_ext, sizeof(free_ext));
 
 	rc = dbtree_update(free_btr, &key, &val);
 	if (rc != 0)
@@ -384,6 +384,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	if (d_list_empty(resrvd_list))
 		return 0;
 
+	vfe.vfe_blk_off = 0;
 	vfe.vfe_blk_cnt = 0;
 
 	d_list_for_each_entry(resrvd, resrvd_list, vre_link) {
@@ -402,26 +403,25 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		seq_max = resrvd->vre_hint_seq;
 		off_p = resrvd->vre_blk_off + resrvd->vre_blk_cnt;
 
-		if (vfe.vfe_blk_cnt == 0) {
-			vfe.vfe_blk_off = resrvd->vre_blk_off;
-			vfe.vfe_blk_cnt = resrvd->vre_blk_cnt;
-		} else if (vfe.vfe_blk_off + vfe.vfe_blk_cnt ==
-			   resrvd->vre_blk_off) {
+		if (vfe.vfe_blk_off + vfe.vfe_blk_cnt == resrvd->vre_blk_off) {
 			vfe.vfe_blk_cnt += resrvd->vre_blk_cnt;
-		} else if (vfe.vfe_blk_cnt != 0) {
+			continue;
+		}
+
+		if (vfe.vfe_blk_cnt != 0) {
 			rc = publish ? persistent_alloc(vsi, &vfe) :
 				       compound_free(vsi, &vfe, flags);
-			vfe.vfe_blk_cnt = 0;
 			if (rc)
 				goto error;
-
 		}
+
+		vfe.vfe_blk_off = resrvd->vre_blk_off;
+		vfe.vfe_blk_cnt = resrvd->vre_blk_cnt;
 	}
 
 	if (vfe.vfe_blk_cnt != 0) {
 		rc = publish ? persistent_alloc(vsi, &vfe) :
 			       compound_free(vsi, &vfe, flags);
-		vfe.vfe_blk_cnt = 0;
 		if (rc)
 			goto error;
 	}
@@ -497,9 +497,8 @@ free_commit_cb(void *data, bool noop)
 	 */
 	rc = aggregated_free(fca->fca_vsi, &fca->fca_vfe);
 
-	D_DEBUG(rc ? DLOG_ERR : DB_IO,
-		"Aggregated free on vsi:%p rc %d\n",
-		fca->fca_vsi, rc);
+	D_CDEBUG(rc, DLOG_ERR, DB_IO, "Aggregated free on vsi:%p rc %d\n",
+		 fca->fca_vsi, rc);
 free:
 	D_FREE(fca);
 }
@@ -611,7 +610,7 @@ vea_hint_unload(struct vea_hint_context *thc)
 }
 
 static int
-count_free_persistent(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+count_free_persistent(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		      void *arg)
 {
 	struct vea_free_extent	*vfe;
@@ -632,7 +631,7 @@ count_free_persistent(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 }
 
 static int
-count_free_transient(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+count_free_transient(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		     void *arg)
 {
 	struct vea_entry	*ve;

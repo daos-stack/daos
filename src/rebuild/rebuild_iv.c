@@ -97,8 +97,8 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
-		     d_sg_list_t *src, void **priv)
+rebuild_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		     d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
@@ -106,11 +106,11 @@ rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
 
 /* Update the rebuild status from leaves to the master */
 static int
-rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
+rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		      d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
-	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
+	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_global_pool_tracker *rgt;
 	d_rank_t	  rank;
 	int		  rc;
@@ -162,10 +162,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 
 /* Distribute the rebuild uuid/master rank from master to leaves */
 static int
-rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
-		       void **priv)
+rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		       d_sg_list_t *src, int ref_rc, void **priv)
 {
-	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
+	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
@@ -249,7 +249,7 @@ int
 rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	struct ds_iv_key	key;
 	int			rc;
 
@@ -275,7 +275,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 		  unsigned int shortcut, unsigned int sync_mode)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	struct ds_iv_key	key;
 	int			rc;
 

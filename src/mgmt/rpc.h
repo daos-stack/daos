@@ -51,7 +51,10 @@
 		ds_mgmt_hdlr_svc_rip, NULL),				\
 	X(MGMT_PARAMS_SET,						\
 		0, &CQF_mgmt_params_set,				\
-		ds_mgmt_params_set_hdlr, NULL)
+		ds_mgmt_params_set_hdlr, NULL),				\
+	X(MGMT_PROFILE,							\
+		0, &CQF_mgmt_profile,					\
+		ds_mgmt_profile_hdlr, NULL)
 
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
@@ -63,7 +66,14 @@
 		ds_mgmt_hdlr_tgt_destroy, NULL),			\
 	X(MGMT_TGT_PARAMS_SET,						\
 		0, &CQF_mgmt_tgt_params_set,				\
-		ds_mgmt_tgt_params_set_hdlr, NULL)
+		ds_mgmt_tgt_params_set_hdlr, NULL),			\
+	X(MGMT_TGT_PROFILE,						\
+		0, &CQF_mgmt_profile,					\
+		ds_mgmt_tgt_profile_hdlr, NULL),			\
+	X(MGMT_TGT_MAP_UPDATE,						\
+		0, &CQF_mgmt_tgt_map_update,				\
+		ds_mgmt_hdlr_tgt_map_update,				\
+		&ds_mgmt_hdlr_tgt_map_update_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -77,6 +87,11 @@ enum mgmt_operation {
 
 #undef X
 
+enum mgmt_profile_op {
+	MGMT_PROFILE_START = 1,
+	MGMT_PROFILE_STOP
+};
+
 extern struct crt_proto_format mgmt_proto_fmt;
 
 #define DAOS_ISEQ_MGMT_POOL_CREATE /* input fields */		 \
@@ -87,10 +102,7 @@ extern struct crt_proto_format mgmt_proto_fmt;
 	((daos_size_t)		(pc_scm_size)		CRT_VAR) \
 	((daos_size_t)		(pc_nvme_size)		CRT_VAR) \
 	((daos_prop_t)		(pc_prop)		CRT_PTR) \
-	((uint32_t)		(pc_svc_nr)		CRT_VAR) \
-	((uint32_t)		(pc_mode)		CRT_VAR) \
-	((uint32_t)		(pc_uid)		CRT_VAR) \
-	((uint32_t)		(pc_gid)		CRT_VAR)
+	((uint32_t)		(pc_svc_nr)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_POOL_CREATE /* output fields */		 \
 	((d_rank_list_t)	(pc_svc)		CRT_PTR) \
@@ -129,6 +141,17 @@ CRT_RPC_DECLARE(mgmt_svc_rip, DAOS_ISEQ_MGMT_SVR_RIP, DAOS_OSEQ_MGMT_SVR_RIP)
 CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_PARAMS_SET)
 
+#define DAOS_ISEQ_MGMT_PROFILE /* input fields */		 \
+	((uint64_t)		(p_module)		CRT_VAR) \
+	((d_string_t)		(p_path)		CRT_VAR) \
+	((int32_t)		(p_op)			CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_PROFILE /* output fields */	 \
+	((int32_t)		(p_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
+		DAOS_OSEQ_MGMT_PROFILE)
+
 #define DAOS_ISEQ_MGMT_TGT_CREATE /* input fields */		 \
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
 	((d_string_t)		(tc_tgt_dev)		CRT_VAR) \
@@ -162,5 +185,23 @@ CRT_RPC_DECLARE(mgmt_tgt_destroy, DAOS_ISEQ_MGMT_TGT_DESTROY,
 
 CRT_RPC_DECLARE(mgmt_tgt_params_set, DAOS_ISEQ_MGMT_TGT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_TGT_PARAMS_SET)
+
+#define DAOS_SEQ_SERVER_ENTRY \
+	((d_rank_t)		(se_rank)		CRT_VAR) \
+	((uint16_t)		(se_flags)		CRT_VAR) \
+	((uint16_t)		(se_nctxs)		CRT_VAR) \
+	((d_string_t)		(se_uri)		CRT_VAR)
+
+CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
+
+#define DAOS_ISEQ_MGMT_TGT_MAP_UPDATE /* input fields */	   \
+	((struct server_entry)	(tm_servers)		CRT_ARRAY) \
+	((uint32_t)		(tm_map_version)	CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_TGT_MAP_UPDATE /* output fields */	 \
+	((int32_t)		(tm_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
+		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
 
 #endif /* __MGMT_RPC_H__ */

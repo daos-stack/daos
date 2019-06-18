@@ -24,15 +24,83 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/ishell"
+	"github.com/pkg/errors"
 )
+
+func getUpdateStorageReq(c *ishell.Context) (*pb.UpdateStorageReq, error) {
+	// disable the '>>>' for cleaner same line input.
+	c.ShowPrompt(false)
+	defer c.ShowPrompt(true) // revert after user input.
+
+	c.Print("Please enter NVMe controller model name to be updated: ")
+	model := c.ReadLine()
+
+	c.Print("Please enter starting firmware revision, only controllers " +
+		"currently at this revision will be updated: ")
+	startRev := c.ReadLine()
+
+	c.Print("Please enter firmware image file-path: ")
+	path := c.ReadLine()
+
+	c.Print("Please enter slot you would like to update [default 0]: ")
+	slotRaw := c.ReadLine()
+
+	var slot int32
+
+	if slotRaw != "" {
+		slot, err := strconv.Atoi(slotRaw)
+		if err != nil {
+			return nil, fmt.Errorf("%s is not a number", slotRaw)
+		}
+
+		if slot < 0 || slot > 7 {
+			return nil, fmt.Errorf(
+				"%d needs to be a number between 0 and 7", slot)
+		}
+	}
+
+	// only populate nvme fwupdate params for the moment
+	return &pb.UpdateStorageReq{
+		Nvme: &pb.UpdateNvmeReq{
+			Model:    strings.TrimSpace(model),
+			Startrev: strings.TrimSpace(startRev),
+			Path:     strings.TrimSpace(path), Slot: slot,
+		},
+	}, nil
+}
+
+func getKillRankParams(c *ishell.Context) (pool string, rank int, err error) {
+	// disable the '>>>' for cleaner same line input.
+	c.ShowPrompt(false)
+	defer c.ShowPrompt(true) // revert after command.
+
+	c.Print("Pool uuid: ")
+	pool = c.ReadLine()
+
+	c.Print("Rank: ")
+	rankIn := c.ReadLine()
+
+	rank, err = strconv.Atoi(rankIn)
+	if err != nil {
+		err = errors.New("bad rank")
+	}
+
+	return
+}
 
 func setupShell() *ishell.Shell {
 	shell := ishell.New()
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "addconns",
-		Help: "Command to create connections to servers by supplying a space separated list of addresses <ipv4addr/hostname:port>",
+		Help: "Create connections to servers by supplying a space " +
+			"separated list of addresses <ipv4addr/hostname:port>",
 		Func: func(c *ishell.Context) {
 			if len(c.Args) < 1 {
 				c.Println(c.HelpText())
@@ -60,94 +128,76 @@ func setupShell() *ishell.Shell {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "listmgmtfeatures",
-		Help: "Command to retrieve all supported management features from any client connections",
+		Name: "listfeatures",
+		Help: "Command to retrieve supported management features on " +
+			"connected servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
-			c.Printf(checkAndFormat(conns.ListFeatures()), "management feature")
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
+			c.Printf("management features: %s", conns.ListFeatures())
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "listnvmecontrollers",
-		Help: "Command to list NVMe SSD controllers",
+		Name: "scanstorage",
+		Help: "Command to scan NVMe SSD controllers " +
+			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
-			c.Printf(
-				checkAndFormat(conns.ListNvme()),
-				"NVMe SSD controller and constituent namespace")
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
+
+			scanStor()
 		},
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Name: "listscmmodules",
-		Help: "Command to list installed SCM modules",
+		Name: "formatstorage",
+		Help: "Command to format NVMe SSD controllers " +
+			"and SCM modules on DAOS storage servers",
 		Func: func(c *ishell.Context) {
-			c.Println(hasConnections(conns.GetActiveConns(nil)))
-			c.Printf(checkAndFormat(conns.ListScm()), "SCM module")
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
+
+			formatStor(false)
 		},
 	})
 
-	// todo: implement shell commands for features other than discovery on
-	// multiple nodes
+	shell.AddCmd(&ishell.Cmd{
+		Name: "updatestorage",
+		Help: "Command to update firmware on NVMe SSD controllers " +
+			"and SCM modules on DAOS storage servers",
+		Func: func(c *ishell.Context) {
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
 
-	//			// record strings that make up the option list
-	//			cStrs := make([]string, len(cs))
-	//			for i, v := range cs {
-	//				cStrs[i] = fmt.Sprintf("[%d] %+v", i, v)
-	//			}
-	//
-	//			ctrlrIdxs := c.Checklist(
-	//				cStrs,
-	//				"Select the controllers you want to run tasks on.",
-	//				nil)
-	//			if len(ctrlrIdxs) == 0 {
-	//				c.Println("No controllers selected!")
-	//				return
-	//			}
-	//
-	//			// filter list of selected controllers to act on
-	//			var ctrlrs []*pb.NvmeController
-	//			for i, ctrlr := range cs {
-	//				for j := range ctrlrIdxs {
-	//					if i == j {
-	//						ctrlrs = append(ctrlrs, ctrlr)
-	//					}
-	//				}
-	//			}
-	//
-	//			featureMap, err := mgmtClient.ListFeatures("nvme")
-	//			if err != nil {
-	//				c.Println("Unable to retrieve nvme features", err)
-	//				return
-	//			}
-	//
-	//			taskStrs := make([]string, len(featureMap))
-	//			taskHandlers := make([]string, len(featureMap))
-	//			i := 0
-	//			for k, v := range featureMap {
-	//				taskStrs[i] = fmt.Sprintf("[%d] %s - %s", i, k, v)
-	//				taskHandlers[i] = k
-	//				i++
-	//			}
-	//
-	//			taskIdx := c.MultiChoice(
-	//				taskStrs,
-	//				"Select the task you would like to run on the selected controllers.")
-	//
-	//			c.Printf(
-	//				"\nRunning task %s on the following controllers:\n",
-	//				taskHandlers[taskIdx])
-	//			for _, ctrlr := range ctrlrs {
-	//				c.Printf("\t- %+v\n", ctrlr)
-	//			}
-	//			c.Println("")
-	//
-	//			if err := nvmeTaskLookup(c, ctrlrs, taskHandlers[taskIdx]); err != nil {
-	//				c.Println("Problem running task: ", err)
-	//			}
-	//		},
-	//	})
+			req, err := getUpdateStorageReq(c)
+			if err != nil {
+				c.Println(err)
+			}
+
+			updateStor(req, false)
+		},
+	})
+
+	// TODO: operations requiring access to management service will
+	//       need to connect to the first access point rather than
+	//       host list, perhaps clear then ConnectClients ap[0]
+	shell.AddCmd(&ishell.Cmd{
+		Name: "killrank",
+		Help: "Command to terminate server running as specific rank " +
+			"on a DAOS pool",
+		Func: func(c *ishell.Context) {
+			_, out := hasConns(conns.GetActiveConns(nil))
+			c.Println(out)
+
+			poolUUID, rank, err := getKillRankParams(c)
+			if err != nil {
+				c.Println(err)
+			}
+
+			killRankSvc(poolUUID, uint32(rank))
+		},
+	})
 
 	return shell
 }

@@ -24,10 +24,8 @@
 package security
 
 import (
-	"errors"
-	"fmt"
-
-	pb "github.com/daos-stack/daos/src/control/security/proto"
+	"github.com/daos-stack/daos/src/control/security/auth"
+	"github.com/pkg/errors"
 
 	uuid "github.com/satori/go.uuid"
 )
@@ -39,7 +37,7 @@ type Context struct {
 	requestor string
 	shared    map[string]bool
 	alive     bool
-	token     *pb.AuthToken
+	token     *auth.Token
 	refcount  uint
 }
 
@@ -62,7 +60,7 @@ func (s *Context) unshare(requestor string) {
 // the requestor and auth token
 //	requestor: The host making the request
 //	token: The opaque AuthToken related to the handle
-func NewContext(requestor string, token *pb.AuthToken) *Context {
+func NewContext(requestor string, token *auth.Token) *Context {
 	return &Context{requestor, make(map[string]bool), true, token, 0}
 }
 
@@ -73,11 +71,11 @@ type ContextMap struct {
 
 // AddToken adds a new security context to the map returning the UUID
 // that is generated for the context.
-func (s *ContextMap) AddToken(requestor string, token *pb.AuthToken) (*uuid.UUID, error) {
+func (s *ContextMap) AddToken(requestor string, token *auth.Token) (*uuid.UUID, error) {
 	key, err := uuid.NewV4()
 
 	if err != nil {
-		return nil, fmt.Errorf("Unable to generate UUIDv4 UUID: %s", err)
+		return nil, errors.Wrap(err, "Unable to generate UUIDv4 UUID")
 	}
 	s.ctxmap[key] = NewContext(requestor, token)
 	return &key, nil
@@ -85,7 +83,7 @@ func (s *ContextMap) AddToken(requestor string, token *pb.AuthToken) (*uuid.UUID
 
 // GetToken retrieves the AuthToken represented by the UUID provided and
 // increases its reference count.
-func (s *ContextMap) GetToken(key uuid.UUID) *pb.AuthToken {
+func (s *ContextMap) GetToken(key uuid.UUID) *auth.Token {
 	ctx, ok := s.ctxmap[key]
 
 	if ok {

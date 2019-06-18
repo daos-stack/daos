@@ -123,4 +123,10 @@ int drpc_listener_fini(void);
  */
 const char *drpc_listener_get_socket_path(void);
 
+/** Initialize the dRPC client (dss_drpc_ctx). */
+int drpc_init(void);
+
+/** Finalize the dRPC client (dss_drpc_ctx). */
+void drpc_fini(void);
+
 #endif /* __DAOS_DRPC_INTERNAL_H__ */

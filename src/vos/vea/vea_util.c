@@ -132,7 +132,7 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 {
 	struct vea_free_extent *ext;
 	daos_handle_t ih, btr_hdl;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	uint64_t *off;
 	int rc, print_cnt = 0, opc = BTR_PROBE_FIRST;
 
@@ -149,8 +149,8 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL);
 
 	while (rc == 0) {
-		daos_iov_set(&key, NULL, 0);
-		daos_iov_set(&val, NULL, 0);
+		d_iov_set(&key, NULL, 0);
+		d_iov_set(&val, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key, &val, NULL);
 		if (rc != 0)
 			break;
@@ -223,7 +223,7 @@ vea_verify_alloc(struct vea_space_info *vsi, bool transient, uint64_t off,
 {
 	struct vea_free_extent vfe, *ext;
 	daos_handle_t btr_hdl;
-	daos_iov_t key, key_out, val;
+	d_iov_t key, key_out, val;
 	uint64_t *key_off;
 	int rc, opc = BTR_PROBE_LE;
 
@@ -240,10 +240,10 @@ vea_verify_alloc(struct vea_space_info *vsi, bool transient, uint64_t off,
 		btr_hdl = vsi->vsi_md_free_btr;
 
 	D_ASSERT(!daos_handle_is_inval(btr_hdl));
-	daos_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
+	d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 repeat:
-	daos_iov_set(&key_out, NULL, 0);
-	daos_iov_set(&val, NULL, 0);
+	d_iov_set(&key_out, NULL, 0);
+	d_iov_set(&val, NULL, 0);
 
 	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key, &key_out,
 			  &val);

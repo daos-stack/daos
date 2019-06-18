@@ -19,12 +19,12 @@ def scons():
 
     daos_build.test(unit_env, 'drpc_handler_tests',
                     ['drpc_handler_tests.c', common_test_utils,
-                    '../drpc_handler.c'],
+                     '../drpc_handler.c'],
                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
     daos_build.test(unit_env, 'drpc_listener_tests',
                     ['drpc_listener_tests.c', common_test_utils,
-                    '../drpc_listener.c'],
+                     '../drpc_listener.c'],
                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
 if __name__ == "SCons.Script":

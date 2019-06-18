@@ -21,176 +21,234 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package mgmtclient
+package client
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// ClientFeatureMap is an alias for management features supported on server
-// connected to given client.
-type ClientFeatureMap map[string]FeatureMap
-
-// ClientNvmeMap is an alias for NVMe controllers (and any residing namespaces)
-// on server node connected to given client.
-type ClientNvmeMap map[string]NvmeControllers
-
-// ClientScmMap is an alias for SCM modules installed on server node
-// connected to given client.
-type ClientScmMap map[string]ScmModules
-
-// ErrorMap is an alias to return errors keyed on address.
-type ErrorMap map[string]error
+const (
+	msgBadType      = "type assertion failed, wanted %+v got %+v"
+	msgConnInactive = "socket connection is not active (%s)"
+)
 
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
 type Addresses []string
 
-// ConnFactory is an interface providing capability to create clients.
-type ConnFactory interface {
-	createConn(string) MgmtClient
+// ClientResult is a container for output of any type of client request.
+type ClientResult struct {
+	Address string
+	Value   interface{}
+	Err     error
 }
 
-// Connections is an interface providing functionality across multiple
-// connected clients.
-type Connections interface {
-	// ConnectClients attempts to connect a list of addresses, returns
-	// list of connected clients and map of any errors.
-	ConnectClients(Addresses) (Addresses, ErrorMap)
-	// GetActiveConns verifies states of stored conns and removes inactive
-	// from stored. Adds failure to failure map and returns active conns.
-	GetActiveConns(ErrorMap) (Addresses, ErrorMap)
-	ClearConns() ErrorMap
-	ListFeatures() (ClientFeatureMap, error)
-	ListNvme() (ClientNvmeMap, error)
-	ListScm() (ClientScmMap, error)
+func (cr ClientResult) String() string {
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+	return fmt.Sprintf("%+v", cr.Value)
 }
 
-// connList is an implementation of Connections, a collection of connected
-// client instances, one per target server.
+// ResultMap map client addresses to method call ClientResults
+type ResultMap map[string]ClientResult
+
+func (rm ResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+// ScmModules is an alias for protobuf ScmModule message slice representing
+// a number of SCM modules installed on a storage node.
+
+// ControllerFactory is an interface providing capability to connect clients.
+type ControllerFactory interface {
+	create(string) (Control, error)
+}
+
+// controllerFactory as an implementation of ControllerFactory.
+type controllerFactory struct{}
+
+// create instantiates and connects a client to server at given address.
+func (c *controllerFactory) create(address string) (Control, error) {
+	controller := &control{}
+
+	err := controller.connect(address)
+
+	return controller, err
+}
+
+// Connect is an external interface providing functionality across multiple
+// connected clients (controllers).
+type Connect interface {
+	ConnectClients(Addresses) ResultMap // connect addresses
+	GetActiveConns(ResultMap) ResultMap // remove inactive conns
+	ClearConns() ResultMap
+	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
+	FormatStorage() (ClientCtrlrMap, ClientMountMap)
+	UpdateStorage(*pb.UpdateStorageReq) (ClientCtrlrMap, ClientModuleMap)
+	// TODO: implement Burnin client features
+	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
+	ListFeatures() ClientFeatureMap
+	KillRank(uuid string, rank uint32) ResultMap
+	CreatePool(*pb.CreatePoolReq) ResultMap
+}
+
+// connList is an implementation of Connect and stores controllers
+// (connections to clients, one per DAOS server).
 type connList struct {
-	factory ConnFactory
-	clients []MgmtClient
+	factory     ControllerFactory
+	controllers []Control
 }
 
-// connFactory as an implementation of ConnFactory.
-type connFactory struct{}
-
-// createConn instantiates and connects a client to server at given address.
-func (c *connFactory) createConn(address string) MgmtClient {
-	return &client{}
-}
-
-// ConnectClients populates collection of client-server connections.
+// ConnectClients populates collection of client-server controllers.
 //
 // Returns errors if server addresses doesn't resolve but will add
-// clients for any server addresses that are connectable.
-func (c *connList) ConnectClients(addresses Addresses) (
-	Addresses, ErrorMap) {
+// controllers for any server addresses that are connectable.
+func (c *connList) ConnectClients(addresses Addresses) ResultMap {
+	results := make(ResultMap)
+	ch := make(chan ClientResult)
 
-	failures := make(ErrorMap)
 	for _, address := range addresses {
-		client := c.factory.createConn(address)
-		if err := client.connect(address); err != nil {
-			failures[address] = err
+		go func(f ControllerFactory, addr string, ch chan ClientResult) {
+			c, err := f.create(addr)
+			ch <- ClientResult{addr, c, err}
+		}(c.factory, address, ch)
+	}
+
+	for range addresses {
+		res := <-ch
+		results[res.Address] = res
+
+		if res.Err != nil {
 			continue
 		}
-		c.clients = append(c.clients, client)
+
+		controller, ok := res.Value.(Control)
+		if !ok {
+			res.Err = fmt.Errorf(msgBadType, control{}, res.Value)
+			results[res.Address] = res
+			continue
+		}
+
+		c.controllers = append(c.controllers, controller)
 	}
-	// small delay to allow correct states to register
+
 	time.Sleep(100 * time.Millisecond)
-	return c.GetActiveConns(failures)
+	return c.GetActiveConns(results)
 }
 
-// GetActiveConns is an access method to verify active connections.
+// GetActiveConns verifies active connections and (re)builds connection list.
 //
-// Mutate client slice with only valid unique connected conns, return
-// addresses and map of failed connections.
-// todo: resolve hostname and compare destination IPs for duplicates.
-func (c *connList) GetActiveConns(failures ErrorMap) (
-	addresses Addresses, eMap ErrorMap) {
-
-	if failures == nil {
-		eMap = make(ErrorMap)
-	} else {
-		eMap = failures
+// TODO: resolve hostname and compare destination IPs for duplicates.
+func (c *connList) GetActiveConns(results ResultMap) ResultMap {
+	if results == nil {
+		results = make(ResultMap)
 	}
-	clients := c.clients[:0]
-	for _, mc := range c.clients {
+	addresses := []string{}
+
+	controllers := c.controllers[:0]
+	for _, mc := range c.controllers {
 		address := mc.getAddress()
 		if common.Include(addresses, address) {
-			eMap[address] = fmt.Errorf("duplicate connection to %s", address)
-			continue
+			continue // ignore duplicate
 		}
+
+		var err error
+
 		state, ok := mc.connected()
 		if ok {
 			addresses = append(addresses, address)
-			clients = append(clients, mc)
-			continue
+			controllers = append(controllers, mc)
+		} else {
+			err = fmt.Errorf(msgConnInactive, state)
 		}
-		eMap[address] = fmt.Errorf("socket connection is not active (%s)", state)
+
+		results[address] = ClientResult{address, state, err}
 	}
-	c.clients = clients
-	return
+
+	// purge inactive connections by replacing with active list
+	c.controllers = controllers
+	return results
 }
 
 // ClearConns clears all stored connections.
-func (c *connList) ClearConns() ErrorMap {
-	eMap := make(ErrorMap)
-	for _, client := range c.clients {
-		addr := client.getAddress()
-		if err := client.close(); err != nil {
-			eMap[addr] = err
-		}
+func (c *connList) ClearConns() ResultMap {
+	results := make(ResultMap)
+	ch := make(chan ClientResult)
+
+	for _, controller := range c.controllers {
+		go func(c Control, ch chan ClientResult) {
+			err := c.disconnect()
+			ch <- ClientResult{c.getAddress(), nil, err}
+		}(controller, ch)
 	}
-	c.clients = nil
-	return eMap
+
+	for range c.controllers {
+		res := <-ch
+		results[res.Address] = res
+	}
+	c.controllers = nil
+
+	return results
 }
 
-// ListFeatures returns supported management features for each server connected.
-func (c *connList) ListFeatures() (ClientFeatureMap, error) {
-	cf := make(ClientFeatureMap)
-	for _, mc := range c.clients {
-		fMap, err := mc.listAllFeatures()
-		if err != nil {
-			return cf, err
-		}
-		cf[mc.getAddress()] = fMap
+// makeRequests performs supplied method over each controller in connList and
+// stores generic result object for each in map keyed on address.
+func (c *connList) makeRequests(
+	req interface{},
+	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
+
+	cMap := make(ResultMap) // mapping of server host addresses to results
+	ch := make(chan ClientResult)
+
+	addrs := []string{}
+	for _, mc := range c.controllers {
+		addrs = append(addrs, mc.getAddress())
+		go requestFn(mc, req, ch)
 	}
-	return cf, nil
+
+	for {
+		res := <-ch
+
+		// remove received address from list
+		for i, v := range addrs {
+			if v == res.Address {
+				addrs = append(addrs[:i], addrs[i+1:]...)
+				cMap[res.Address] = res
+				break
+			}
+		}
+
+		if len(addrs) == 0 {
+			break // received responses from all connections
+		}
+	}
+
+	return cMap
 }
 
-// ListNvme returns installed NVMe SSD controllers for each server connected.
-func (c *connList) ListNvme() (ClientNvmeMap, error) {
-	cCtrlrs := make(ClientNvmeMap)
-	for _, mc := range c.clients {
-		ctrlrs, err := mc.listNvmeCtrlrs()
-		if err != nil {
-			return cCtrlrs, err
-		}
-		cCtrlrs[mc.getAddress()] = ctrlrs
-	}
-	return cCtrlrs, nil
-}
-
-// ListScm returns installed SCM module details for each server connected.
-func (c *connList) ListScm() (ClientScmMap, error) {
-	cmms := make(ClientScmMap)
-	for _, mc := range c.clients {
-		mms, err := mc.listScmModules()
-		if err != nil {
-			return cmms, err
-		}
-		cmms[mc.getAddress()] = mms
-	}
-	return cmms, nil
-}
-
-// NewConnections is a factory for Connections interface to operate over
+// NewConnect is a factory for Connect interface to operate over
 // multiple clients.
-func NewConnections() Connections {
-	var clients []MgmtClient
-	return &connList{factory: &connFactory{}, clients: clients}
+func NewConnect() Connect {
+	return &connList{
+		factory:     &controllerFactory{},
+		controllers: []Control{},
+	}
 }

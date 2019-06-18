@@ -50,15 +50,14 @@
 #include "rdb_layout.h"
 
 static int rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc,
-			      daos_iov_t *key, uint64_t base,
+			      d_iov_t *key, uint64_t base,
 			      uint64_t base_term, uint64_t term,
 			      struct rdb_lc_record *record);
 static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
-			       daos_iov_t *key, uuid_t uuid,
+			       d_iov_t *key, uuid_t uuid,
 			       struct rdb_lc_record *record);
 static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
-static int rdb_raft_add_node(struct rdb *db, d_rank_t rank, bool is_self,
-			     bool is_voting);
+static int rdb_raft_add_node(struct rdb *db, d_rank_t rank);
 static void rdb_raft_unload_replicas(struct rdb *db);
 
 /* Translate a raft error into an rdb error. */
@@ -104,7 +103,7 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	uuid_copy(in->rvi_op.ri_uuid, db->d_uuid);
 	in->rvi_msg = *msg;
 
-	rc = rdb_send_raft_rpc(rpc, db, node);
+	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send RV RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
@@ -194,7 +193,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 		D_GOTO(err_rpc, rc);
 	}
 
-	rc = rdb_send_raft_rpc(rpc, db, node);
+	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send AE RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
@@ -214,41 +213,41 @@ static int
 rdb_lc_store_replicas(daos_handle_t lc, uint64_t index,
 		      const d_rank_list_t *replicas)
 {
-	daos_iov_t		keys[2];
-	daos_iov_t		vals[2];
+	d_iov_t		keys[2];
+	d_iov_t		vals[2];
 	uint8_t			nreplicas;
 
 	D_ASSERTF(replicas->rl_nr <= UINT8_MAX, "nreplicas = %u",
 		  replicas->rl_nr);
 	nreplicas = replicas->rl_nr;
 	keys[0] = rdb_lc_nreplicas;
-	daos_iov_set(&vals[0], &nreplicas, sizeof(nreplicas));
+	d_iov_set(&vals[0], &nreplicas, sizeof(nreplicas));
 	keys[1] = rdb_lc_replicas;
-	daos_iov_set(&vals[1], replicas->rl_ranks,
+	d_iov_set(&vals[1], replicas->rl_ranks,
 		     sizeof(*replicas->rl_ranks) * nreplicas);
 	return rdb_lc_update(lc, index, RDB_LC_ATTRS, 2 /* n */, keys, vals);
 }
 
 static int
-rdb_raft_add_node(struct rdb *db, d_rank_t rank, bool is_self, bool is_voting)
+rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 {
 	struct rdb_raft_node	*dnode;
 	raft_node_t		*node;
+	d_rank_t		 self;
 	int			 rc = 0;
 
 	D_ALLOC_PTR(dnode);
 	if (dnode == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	rc = crt_group_rank(NULL, &self);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	dnode->dn_rank = rank;
-	node = raft_add_node(db->d_raft, dnode, rank, is_self);
+	node = raft_add_node(db->d_raft, dnode, rank, (rank == self));
 	if (node == NULL) {
 		D_ERROR(DF_DB": failed to add node %u\n", DP_DB(db), rank);
-		D_FREE_PTR(dnode);
+		D_FREE(dnode);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	raft_node_set_active(node, 1);
-	if (!is_voting)
-		raft_node_set_voting(node, 0);
 out:
 	return rc;
 }
@@ -256,9 +255,9 @@ out:
 static int
 rdb_raft_get_nreplicas(struct rdb *db, uint64_t index, uint8_t *nreplicas)
 {
-	daos_iov_t		value;
+	d_iov_t		value;
 
-	daos_iov_set(&value, nreplicas, sizeof(*nreplicas));
+	d_iov_set(&value, nreplicas, sizeof(*nreplicas));
 	return rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 			     &rdb_lc_nreplicas, &value);
 }
@@ -269,10 +268,8 @@ rdb_raft_get_nreplicas(struct rdb *db, uint64_t index, uint8_t *nreplicas)
 static int
 rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	uint8_t		nreplicas;
-	d_rank_t	self;
-	int		i;
 	int		rc;
 
 	rc = rdb_raft_get_nreplicas(db, index, &nreplicas);
@@ -281,9 +278,11 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 	D_DEBUG(DB_MD, DF_DB": nreplicas: %u\n", DP_DB(db), nreplicas);
 
 	db->d_replicas = daos_rank_list_alloc(nreplicas);
-	if (db->d_replicas == NULL)
+	if (db->d_replicas == NULL) {
+		rc = -DER_NOMEM;
 		goto err;
-	daos_iov_set(&value, db->d_replicas->rl_ranks,
+	}
+	d_iov_set(&value, db->d_replicas->rl_ranks,
 		     sizeof(*db->d_replicas->rl_ranks) * nreplicas);
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 			   &rdb_lc_replicas, &value);
@@ -291,22 +290,10 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 		D_ERROR(DF_DB": failed to read replicas: %d\n", DP_DB(db), rc);
 		goto err_replicas;
 	}
-
-	/* Add the corresponding nodes to raft. */
-	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	for (i = 0; i < db->d_replicas->rl_nr; i++) {
-		d_rank_t	rank = db->d_replicas->rl_ranks[i];
-
-		rc = rdb_raft_add_node(db, rank, rank == self, true);
-		if (rc != 0)
-			goto err_replicas;
-	}
-
 	return 0;
 
 err_replicas:
-	rdb_raft_unload_replicas(db);
+	d_rank_list_free(db->d_replicas);
 err:
 	return rc;
 }
@@ -314,21 +301,24 @@ err:
 static void
 rdb_raft_unload_replicas(struct rdb *db)
 {
-	int	n = raft_get_num_nodes(db->d_raft);
 	int	i;
 
-	for (i = 0; i < n; i++) {
+	if (db->d_replicas == NULL)
+		return;
+
+	for (i = 0; i < db->d_replicas->rl_nr; i++) {
 		raft_node_t	       *node;
 		struct rdb_raft_node   *rdb_node;
 
 		node = raft_get_node(db->d_raft, db->d_replicas->rl_ranks[i]);
-		D_ASSERT(node != NULL);
+		if (node == NULL)
+			continue;
 		rdb_node = raft_node_get_udata(node);
 		D_ASSERT(rdb_node != NULL);
 		raft_remove_node(db->d_raft, node);
 		D_FREE(rdb_node);
 	}
-	daos_rank_list_free(db->d_replicas);
+	d_rank_list_free(db->d_replicas);
 }
 
 /* Load the LC base. */
@@ -336,6 +326,7 @@ static int
 rdb_raft_load_snapshot(struct rdb *db)
 {
 	int rc;
+	int i;
 
 	D_DEBUG(DB_MD, DF_DB": loading snapshot: base="DF_U64" term="DF_U64"\n",
 		DP_DB(db), db->d_lc_record.dlr_base,
@@ -358,6 +349,15 @@ rdb_raft_load_snapshot(struct rdb *db)
 	/* TODO: If rc != 0, shut down this replica. */
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
+	/* Add the corresponding nodes to raft. */
+	for (i = 0; i < db->d_replicas->rl_nr; i++) {
+		rc = rdb_raft_add_node(db, db->d_replicas->rl_ranks[i]);
+		if (rc != 0) {
+			rdb_raft_unload_replicas(db);
+			return rc;
+		}
+	}
+
 	rc = raft_end_load_snapshot(db->d_raft);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
@@ -372,10 +372,10 @@ rdb_raft_unload_snapshot(struct rdb *db)
 }
 
 static int
-rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, daos_iov_t *kds,
-		    daos_iov_t *data, struct rdb_anchor *anchor)
+rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
+		    d_iov_t *data, struct rdb_anchor *anchor)
 {
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	struct dss_enum_arg	arg = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	vos_iter_param_t	param = { 0 };
@@ -435,9 +435,9 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 	struct rdb_raft_is	       *is = &rdb_node->dn_is;
 	crt_rpc_t		       *rpc;
 	struct rdb_installsnapshot_in  *in;
-	daos_iov_t			kds;
-	daos_iov_t			data;
-	daos_sg_list_t			sgl;
+	d_iov_t			kds;
+	d_iov_t			data;
+	d_sg_list_t			sgl;
 	struct dss_module_info	       *info = dss_get_module_info();
 	int				rc;
 
@@ -494,7 +494,7 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &kds;
-	rc = crt_bulk_create(info->dmi_ctx, daos2crt_sg(&sgl), CRT_BULK_RO,
+	rc = crt_bulk_create(info->dmi_ctx, &sgl, CRT_BULK_RO,
 			     &in->isi_kds);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to create key descriptor bulk for rank "
@@ -505,15 +505,14 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &data;
-	rc = crt_bulk_create(info->dmi_ctx, daos2crt_sg(&sgl), CRT_BULK_RO,
-			     &in->isi_data);
+	rc = crt_bulk_create(info->dmi_ctx, &sgl, CRT_BULK_RO, &in->isi_data);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to create key bulk for rank %u: %d\n",
 			DP_DB(db), rdb_node->dn_rank, rc);
 		goto err_kds_bulk;
 	}
 
-	rc = rdb_send_raft_rpc(rpc, db, node);
+	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send IS RPC to rank %u: %d\n",
 			DP_DB(db), rdb_node->dn_rank, rc);
@@ -575,8 +574,8 @@ rdb_raft_recv_is_bulk_cb(const struct crt_bulk_cb_info *cb_info)
  * TODO: Implement and use a "parallel bulk" helper.
  */
 static int
-rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, daos_iov_t *kds,
-		 daos_iov_t *data)
+rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
+		 d_iov_t *data)
 {
 	struct rdb_installsnapshot_in  *in = crt_req_get(rpc);
 	crt_bulk_t			kds_bulk;
@@ -585,7 +584,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, daos_iov_t *kds,
 	crt_bulk_t			data_bulk;
 	struct crt_bulk_desc		data_desc;
 	crt_bulk_opid_t			data_opid;
-	daos_sg_list_t			sgl;
+	d_sg_list_t			sgl;
 	struct rdb_raft_bulk		arg;
 	int				rc;
 
@@ -611,15 +610,13 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, daos_iov_t *kds,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &in->isi_local.rl_kds_iov;
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl), CRT_BULK_RW,
-			     &kds_bulk);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &kds_bulk);
 	if (rc != 0)
 		goto out_data;
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &in->isi_local.rl_data_iov;
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl), CRT_BULK_RW,
-			     &data_bulk);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &data_bulk);
 	if (rc != 0)
 		goto out_kds_bulk;
 
@@ -714,10 +711,10 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, daos_iov_t *kds, daos_iov_t *data)
+rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
 {
 	struct dss_enum_arg	arg;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
 	memset(&arg, 0, sizeof(arg));
@@ -749,8 +746,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	struct rdb_lc_record	       *slc_record = &db->d_slc_record;
 	uint64_t			seq;
 	struct rdb_anchor		anchor;
-	daos_iov_t			keys[2];
-	daos_iov_t			values[2];
+	d_iov_t			keys[2];
+	d_iov_t			values[2];
 	int				rc;
 
 	in = container_of(msg, struct rdb_installsnapshot_in, isi_msg);
@@ -860,9 +857,9 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 
 		/* Swap the records. */
 		keys[0] = rdb_mc_lc;
-		daos_iov_set(&values[0], slc_record, sizeof(*slc_record));
+		d_iov_set(&values[0], slc_record, sizeof(*slc_record));
 		keys[1] = rdb_mc_slc;
-		daos_iov_set(&values[1], lc_record, sizeof(*lc_record));
+		d_iov_set(&values[1], lc_record, sizeof(*lc_record));
 		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys,
 				   values);
 		if (rc != 0) {
@@ -905,7 +902,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 		D_DEBUG(DB_TRACE, DF_DB": chunk complete: "DF_U64"/"DF_U64"\n",
 			DP_DB(db), slc_record->dlr_base, slc_record->dlr_seq);
 
-		daos_iov_set(&values[0], slc_record, sizeof(*slc_record));
+		d_iov_set(&values[0], slc_record, sizeof(*slc_record));
 		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */,
 				   &rdb_mc_slc, &values[0]);
 		if (rc != 0) {
@@ -979,10 +976,10 @@ static int
 rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
 {
 	struct rdb     *db = arg;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
-	daos_iov_set(&value, &vote, sizeof(vote));
+	d_iov_set(&value, &vote, sizeof(vote));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_vote,
 			   &value);
 	if (rc != 0)
@@ -995,15 +992,15 @@ static int
 rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 {
 	struct rdb     *db = arg;
-	daos_iov_t	keys[2];
-	daos_iov_t	values[2];
+	d_iov_t	keys[2];
+	d_iov_t	values[2];
 	int		rc;
 
 	/* Update rdb_mc_term and rdb_mc_vote atomically. */
 	keys[0] = rdb_mc_term;
-	daos_iov_set(&values[0], &term, sizeof(term));
+	d_iov_set(&values[0], &term, sizeof(term));
 	keys[1] = rdb_mc_vote;
-	daos_iov_set(&values[1], &vote, sizeof(vote));
+	d_iov_set(&values[1], &vote, sizeof(vote));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to update term %d and vote %d: %d\n",
@@ -1014,33 +1011,21 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 static int
 rdb_raft_append_node(struct rdb *db, uint64_t index, d_rank_t rank)
 {
-	d_rank_t	 self;
 	void		*result;
 	int		 rc = 0;
 
-	if (daos_rank_list_find(db->d_replicas, rank, NULL))
+	if (daos_rank_list_find(db->d_replicas, rank, NULL)) {
+		D_WARN(DF_DB": Rank %d already exists\n", DP_DB(db), rank);
 		goto out;
-	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	}
 	rc = daos_rank_list_append(db->d_replicas, rank);
 	if (rc != 0)
 		goto out;
-	rc = rdb_raft_add_node(db, rank, rank == self, false);
-out:
-	result = rdb_raft_lookup_result(db, index);
-	if (result != NULL)
-		*(int *)result = rc;
-	return rc;
-}
-
-static int
-rdb_raft_save_node(struct rdb *db, uint64_t index, d_rank_t rank)
-{
-	void		*result;
-	int		 rc = 0;
-
-	D_ASSERTF(daos_rank_list_find(db->d_replicas, rank, NULL), "%u", rank);
+	rc = rdb_raft_add_node(db, rank);
+	if (rc != 0)
+		goto out;
 	rc = rdb_lc_store_replicas(db->d_lc, index, db->d_replicas);
+out:
 	result = rdb_raft_lookup_result(db, index);
 	if (result != NULL)
 		*(int *)result = rc;
@@ -1054,9 +1039,12 @@ rdb_raft_remove_node(struct rdb *db, uint64_t index, d_rank_t rank)
 	int			 pos;
 	int			 last;
 	void			*result;
-	int			 rc;
+	int			 rc = 0;
 
-	D_ASSERTF(daos_rank_list_find(db->d_replicas, rank, &pos), "%u", rank);
+	if (!daos_rank_list_find(db->d_replicas, rank, &pos)) {
+		D_WARN(DF_DB": Rank %d does not exist\n", DP_DB(db), rank);
+		goto out;
+	}
 	rc = rdb_raft_get_nreplicas(db, index, &nreplicas);
 	if (rc != 0)
 		goto out;
@@ -1091,15 +1079,8 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 	int	 rc = 0;
 
 	switch (entry->type) {
-	case RAFT_LOGTYPE_ADD_NONVOTING_NODE:
-		rc = rdb_raft_append_node(db, index, rank);
-		if (rc != 0)
-			D_ERROR(DF_DB": failed to add node %u at idx "
-				DF_U64": %d\n", DP_DB(db), rank, index, rc);
-		break;
-
 	case RAFT_LOGTYPE_ADD_NODE:
-		rc = rdb_raft_save_node(db, index, rank);
+		rc = rdb_raft_append_node(db, index, rank);
 		if (rc != 0)
 			D_ERROR(DF_DB": failed to add node %u at idx "
 				DF_U64": %d\n", DP_DB(db), rank, index, rc);
@@ -1111,6 +1092,7 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 			D_ERROR(DF_DB": failed to remove node %u at idx "
 				DF_U64": %d\n", DP_DB(db), rank, index, rc);
 		break;
+
 	default:
 		D_ASSERT(0);
 	}
@@ -1122,8 +1104,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 			  raft_entry_t *entry, uint64_t index)
 {
 	struct rdb	       *db = arg;
-	daos_iov_t		keys[2];
-	daos_iov_t		values[2];
+	d_iov_t		keys[2];
+	d_iov_t		values[2];
 	struct rdb_entry	header;
 	int			n = 0;
 	int			rc;
@@ -1146,10 +1128,12 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 				DP_DB(db), index, rc);
 			goto err_discard;
 		}
-	} else {
+	} else if (raft_entry_is_cfg_change(entry)) {
 		rc = rdb_raft_update_node(db, index, entry);
 		if (rc != 0)
 			goto err_discard;
+	} else {
+		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
 	}
 
 	/* Persist the header and the data (if nonempty). */
@@ -1158,11 +1142,11 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	header.dre_type = entry->type;
 	header.dre_size = entry->data.len;
 	keys[n] = rdb_lc_entry_header;
-	daos_iov_set(&values[n], &header, sizeof(header));
+	d_iov_set(&values[n], &header, sizeof(header));
 	n++;
 	if (entry->data.len > 0) {
 		keys[n] = rdb_lc_entry_data;
-		daos_iov_set(&values[n], entry->data.buf, entry->data.len);
+		d_iov_set(&values[n], entry->data.buf, entry->data.len);
 		n++;
 	}
 	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, n, keys, values);
@@ -1174,7 +1158,7 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 
 	/* Replace entry->data.buf with the data's persistent memory address. */
 	if (entry->data.len > 0) {
-		daos_iov_set(&values[0], NULL, entry->data.len);
+		d_iov_set(&values[0], NULL, entry->data.len);
 		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 				   &rdb_lc_entry_data, &values[0]);
 		if (rc != 0) {
@@ -1189,7 +1173,7 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 
 	/* Update the log tail. See the log tail assertion above. */
 	db->d_lc_record.dlr_tail++;
-	daos_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
+	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
 			   &values[0]);
 	if (rc != 0) {
@@ -1236,7 +1220,7 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	struct rdb     *db = arg;
 	uint64_t	base = db->d_lc_record.dlr_base;
 	uint64_t	base_term = db->d_lc_record.dlr_base_term;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, DF_DB": polling [%d, %d]\n", DP_DB(db), index,
@@ -1247,7 +1231,7 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	/* Update the log base index and term. */
 	db->d_lc_record.dlr_base = index + *n_entries - 1;
 	db->d_lc_record.dlr_base_term = entries[*n_entries - 1].term;
-	daos_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
+	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
 			   &value);
 	if (rc != 0) {
@@ -1272,7 +1256,7 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	struct rdb     *db = arg;
 	uint64_t	i = index;
 	uint64_t	tail = db->d_lc_record.dlr_tail;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	D_ASSERTF(i > db->d_lc_record.dlr_base, DF_U64" > "DF_U64"\n", i,
@@ -1283,7 +1267,7 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 
 	/* Update the log tail. */
 	db->d_lc_record.dlr_tail = i;
-	daos_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
+	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
 			   &value);
 	if (rc != 0) {
@@ -1292,6 +1276,10 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		db->d_lc_record.dlr_tail = tail;
 		return rc;
 	}
+	d_rank_list_free(db->d_replicas);
+	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
+	if (rc != 0)
+		return rc;
 
 	/* Ignore *n_entries; discard everything starting from index. */
 	rc = rdb_lc_discard(db->d_lc, i, RDB_LC_INDEX_MAX);
@@ -1405,7 +1393,7 @@ static int
 rdb_raft_compact(struct rdb *db, uint64_t index)
 {
 	uint64_t	aggregated = db->d_lc_record.dlr_aggregated;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, DF_DB": compacting to "DF_U64"\n", DP_DB(db), index);
@@ -1416,7 +1404,7 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 
 	/* Update the last aggregated index. */
 	db->d_lc_record.dlr_aggregated = index;
-	daos_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
+	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
 			   &value);
 	if (rc != 0) {
@@ -1818,8 +1806,9 @@ rdb_raft_unregister_result(struct rdb *db, uint64_t index)
 }
 
 /* Append and wait for \a entry to be applied. */
-int
-rdb_raft_append_apply(struct rdb *db, msg_entry_t *mentry, void *result)
+static int
+rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
+			       void *result)
 {
 	msg_entry_response_t	mresponse;
 	struct rdb_raft_state	state;
@@ -1850,30 +1839,67 @@ rdb_raft_append_apply(struct rdb *db, msg_entry_t *mentry, void *result)
 	/* The actual index must match the expected index. */
 	D_ASSERTF(mresponse.idx == index, "%d == "DF_U64"\n", mresponse.idx,
 		  index);
-
 	rc = rdb_raft_wait_applied(db, mresponse.idx, mresponse.term);
+	raft_apply_all(db->d_raft);
 
 out_result:
 	if (result != NULL)
-		rdb_raft_unregister_result(db, mresponse.idx);
+		rdb_raft_unregister_result(db, index);
 out:
 	return rc;
+}
+
+int
+rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
+{
+	msg_entry_t	 entry = {};
+	int		 result;
+	int		 rc;
+
+	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
+	entry.type = RAFT_LOGTYPE_ADD_NODE;
+	entry.data.buf = &rank;
+	entry.data.len = sizeof(d_rank_t);
+	rc = rdb_raft_append_apply_internal(db, &entry, &result);
+	return (rc != 0) ? rc : result;
+}
+
+int
+rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
+{
+	msg_entry_t	 entry = {};
+	int		 result;
+	int		 rc;
+
+	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
+	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
+	entry.data.buf = &rank;
+	entry.data.len = sizeof(d_rank_t);
+	rc = rdb_raft_append_apply_internal(db, &entry, &result);
+	return (rc != 0) ? rc : result;
+}
+
+int
+rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
+{
+	msg_entry_t	 mentry = {};
+
+	mentry.type = RAFT_LOGTYPE_NORMAL;
+	mentry.data.buf = entry;
+	mentry.data.len = size;
+	return rdb_raft_append_apply_internal(db, &mentry, result);
 }
 
 /* Verify the leadership with a quorum. */
 int
 rdb_raft_verify_leadership(struct rdb *db)
 {
-	msg_entry_t		entry = {};
-
-	entry.type = RAFT_LOGTYPE_NORMAL;
-	entry.data.buf = NULL;
-	entry.data.len = 0;
 	/*
 	 * raft does not provide this functionality yet; append an empty entry
 	 * as a (slower) workaround.
 	 */
-	return rdb_raft_append_apply(db, &entry, NULL /* result */);
+	return rdb_raft_append_apply(db, NULL /* entry */, 0 /* size */,
+				     NULL /* result */);
 }
 
 /* Generate a random double in [0.0, 1.0]. */
@@ -1930,7 +1956,7 @@ rdb_timerd(void *arg)
  * container creation fails.
  */
 static int
-rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
+rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 		   uint64_t base, uint64_t base_term, uint64_t term,
 		   struct rdb_lc_record *record)
 {
@@ -1941,7 +1967,7 @@ rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
 		.dlr_aggregated	= base,
 		.dlr_term	= term
 	};
-	daos_iov_t		value;
+	d_iov_t		value;
 	int			rc;
 
 	D_ASSERTF(key == &rdb_mc_lc || key == &rdb_mc_slc, "%p\n", key);
@@ -1958,7 +1984,7 @@ rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
 
 	/* Create the record before creating the container. */
 	uuid_generate(r.dlr_uuid);
-	daos_iov_set(&value, &r, sizeof(r));
+	d_iov_set(&value, &r, sizeof(r));
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR("failed to create %s record: %d\n",
@@ -1981,11 +2007,11 @@ rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
 }
 
 static int
-rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
+rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 		    uuid_t uuid, struct rdb_lc_record *record)
 {
 	struct rdb_lc_record	r = {};
-	daos_iov_t		value;
+	d_iov_t		value;
 	int			rc;
 
 	D_ASSERTF(key == &rdb_mc_lc || key == &rdb_mc_slc, "%p\n", key);
@@ -2000,7 +2026,7 @@ rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, daos_iov_t *key,
 
 	/* Clear the record. We cannot rollback the destroy. */
 	uuid_clear(r.dlr_uuid);
-	daos_iov_set(&value, &r, sizeof(r));
+	d_iov_set(&value, &r, sizeof(r));
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR("failed to clear %s record: %d\n",
@@ -2052,14 +2078,14 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 static int
 rdb_raft_load_entry(struct rdb *db, uint64_t index)
 {
-	daos_iov_t		value;
+	d_iov_t		value;
 	struct rdb_entry	header;
 	raft_entry_t		entry;
 	int			n_entries;
 	int			rc;
 
 	/* Look up the header. */
-	daos_iov_set(&value, &header, sizeof(header));
+	d_iov_set(&value, &header, sizeof(header));
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_entry_header,
 			   &value);
 	if (rc != 0) {
@@ -2074,7 +2100,7 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 
 	/* Look up the persistent memory address of the data (if nonempty). */
 	if (entry.data.len > 0) {
-		daos_iov_set(&value, NULL, header.dre_size);
+		d_iov_set(&value, NULL, header.dre_size);
 		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 				   &rdb_lc_entry_data, &value);
 		if (rc != 0) {
@@ -2087,11 +2113,18 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		entry.data.buf = NULL;
 	}
 
-	/* Process membership change entries */
-	if (entry.type != RAFT_LOGTYPE_NORMAL) {
-		rc = rdb_raft_update_node(db, index, &entry);
-		if (rc != 0)
-			return rc;
+	/*
+	 * Raft requires that every node affected by a membership change entry
+	 * be present in the node list when that entry gets applied
+	 */
+	if (raft_entry_is_cfg_change(&entry)) {
+		d_rank_t rank = *(d_rank_t *)entry.data.buf;
+
+		if (raft_get_node(db->d_raft, rank) == NULL) {
+			rc = rdb_raft_add_node(db, rank);
+			if (rc != 0)
+				return rc;
+		}
 	}
 
 	/*
@@ -2116,12 +2149,12 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 static int
 rdb_raft_load_lc(struct rdb *db)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	uint64_t	i;
 	int		rc;
 
 	/* Look up and open the SLC. */
-	daos_iov_set(&value, &db->d_slc_record, sizeof(db->d_slc_record));
+	d_iov_set(&value, &db->d_slc_record, sizeof(db->d_slc_record));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_slc, &value);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_MD, DF_DB": no SLC record\n", DP_DB(db));
@@ -2144,7 +2177,7 @@ rdb_raft_load_lc(struct rdb *db)
 
 lc:
 	/* Look up and open the LC. */
-	daos_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
+	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up LC: %d\n", DP_DB(db), rc);
@@ -2239,7 +2272,7 @@ rdb_raft_get_compact_thres(void)
 int
 rdb_raft_start(struct rdb *db)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		term;
 	int		vote;
 	int		election_timeout;
@@ -2300,7 +2333,7 @@ rdb_raft_start(struct rdb *db)
 	 * Read raft persistent state, if any. Done before setting the
 	 * callbacks in order to avoid unnecessary I/Os.
 	 */
-	daos_iov_set(&value, &term, sizeof(term));
+	d_iov_set(&value, &term, sizeof(term));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
 	if (rc == 0) {
 		rc = raft_set_current_term(db->d_raft, term);
@@ -2308,7 +2341,7 @@ rdb_raft_start(struct rdb *db)
 	} else if (rc != -DER_NONEXIST) {
 		goto err_raft;
 	}
-	daos_iov_set(&value, &vote, sizeof(vote));
+	d_iov_set(&value, &vote, sizeof(vote));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
 	if (rc == 0) {
 		rc = raft_vote_for_nodeid(db->d_raft, vote);
@@ -2320,6 +2353,11 @@ rdb_raft_start(struct rdb *db)
 	if (rc != 0)
 		goto err_raft;
 
+	d_rank_list_free(db->d_replicas);
+	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_tail - 1);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		goto err_lc;
+
 	/* Must be done after loading the persistent state. */
 	raft_set_callbacks(db->d_raft, &rdb_raft_cbs, db);
 
@@ -2328,17 +2366,19 @@ rdb_raft_start(struct rdb *db)
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
-	rc = dss_ult_create(rdb_recvd, db, DSS_ULT_SELF, 0, 0, &db->d_recvd);
+	rc = dss_ult_create(rdb_recvd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
+			    &db->d_recvd);
 	if (rc != 0)
 		goto err_lc;
-	rc = dss_ult_create(rdb_timerd, db, DSS_ULT_SELF, 0, 0, &db->d_timerd);
+	rc = dss_ult_create(rdb_timerd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
+			    &db->d_timerd);
 	if (rc != 0)
 		goto err_recvd;
-	rc = dss_ult_create(rdb_callbackd, db, DSS_ULT_SELF, 0, 0,
+	rc = dss_ult_create(rdb_callbackd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
 			    &db->d_callbackd);
 	if (rc != 0)
 		goto err_timerd;
-	rc = dss_ult_create(rdb_compactd, db, DSS_ULT_SELF, 0, 0,
+	rc = dss_ult_create(rdb_compactd, db, DSS_ULT_RDB, DSS_TGT_SELF, 0,
 			    &db->d_compactd);
 	if (rc != 0)
 		goto err_callbackd;
@@ -2625,7 +2665,7 @@ out:
 }
 
 void
-rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
+rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 {
 	struct rdb_raft_state		state;
 	crt_opcode_t			opc = opc_get(rpc->cr_opc);
@@ -2633,12 +2673,20 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 	struct rdb_requestvote_out     *out_rv;
 	struct rdb_appendentries_out   *out_ae;
 	struct rdb_installsnapshot_out *out_is;
+	d_rank_t			rank = rpc->cr_ep.ep_rank;
+	raft_node_t		       *node;
 	int				rc;
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_DB": opc %u failed: %d\n", DP_DB(db), opc,
 			rc);
+		return;
+	}
+
+	node = raft_get_node(db->d_raft, rank);
+	if (node == NULL) {
+		D_WARN(DF_DB": Rank %d no longer exists\n", DP_DB(db), rank);
 		return;
 	}
 
@@ -2668,16 +2716,16 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 			DP_DB(db), opc, rc);
 }
 
-/* The buffer belonging to bulk must a single daos_iov_t. */
+/* The buffer belonging to bulk must a single d_iov_t. */
 static void
 rdb_raft_free_bulk_and_buffer(crt_bulk_t bulk)
 {
-	daos_iov_t	iov;
-	daos_sg_list_t	sgl;
+	d_iov_t	iov;
+	d_sg_list_t	sgl;
 	int		rc;
 
 	/* Save the buffer address in iov.iov_buf. */
-	daos_iov_set(&iov, NULL /* buf */, 0 /* size */);
+	d_iov_set(&iov, NULL /* buf */, 0 /* size */);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;

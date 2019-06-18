@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,6 +148,7 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param  tgt_rank [OUT]	spare target ranks
  * \param  shard_id [OUT]	shard ids to be rebuilt
  * \param  array_size [IN]	array size of tgt_rank & shard_id
+ * \prarm  myrank [IN]		rank of current server in communication group
 
  * \return	> 0	the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
@@ -158,7 +159,7 @@ int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size)
+		    uint32_t *shard_id, unsigned int array_size, int myrank)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -166,7 +167,8 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
-					       tgt_rank, shard_id, array_size);
+					       tgt_rank, shard_id, array_size,
+					       myrank);
 }
 
 /**
@@ -437,9 +439,9 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 		tmp = container_of(link, struct pl_map, pl_link);
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
-			d_hash_rec_decref(&pl_htable, link);
 			if (connect)
 				tmp->pl_connects++;
+			d_hash_rec_decref(&pl_htable, link);
 			D_GOTO(out, rc = 0);
 		}
 
@@ -452,6 +454,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 
 		/* transfer the pool connection count */
 		map->pl_connects = tmp->pl_connects;
+
 		/* evict the old placement map for this pool */
 		d_hash_rec_delete_at(&pl_htable, link);
 		d_hash_rec_decref(&pl_htable, link);
@@ -488,10 +491,11 @@ pl_map_disconnect(uuid_t uuid)
 		map = container_of(link, struct pl_map, pl_link);
 		D_ASSERT(map->pl_connects > 0);
 		map->pl_connects--;
-		if (map->pl_connects == 0) {
+		if (map->pl_connects == 0)
 			d_hash_rec_delete_at(&pl_htable, link);
-			d_hash_rec_decref(&pl_htable, link);
-		}
+
+		/* Drop the reference held by above d_hash_rec_find(). */
+		d_hash_rec_decref(&pl_htable, link);
 	}
 	D_RWLOCK_UNLOCK(&pl_rwlock);
 }
@@ -526,4 +530,102 @@ uint32_t
 pl_map_version(struct pl_map *map)
 {
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
+}
+
+/**
+ * Select leader replica for the given object's shard.
+ *
+ * \param [IN]	oid		The object identifier.
+ * \param [IN]	shard_idx	The shard index.
+ * \param [IN]	shards_ns	Total count of the object's shards.
+ * \param [IN]	for_tgt_id	Require leader target id or leader shard index.
+ * \param [IN]	pl_get_shard	The callback function to parse out pl_obj_shard
+ *				from the given @data.
+ * \param [IN]	data		The parameter used by the @pl_get_shard.
+ *
+ * \return			The selected leader on success: its tgt_id or
+ *				shard index. Negative value if error.
+ */
+int
+pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
+{
+	struct pl_obj_shard		*shard;
+	struct daos_oclass_attr		*oc_attr;
+	uint32_t			 replicas;
+	int				 preferred;
+	int				 rdg_idx;
+	int				 start;
+	int				 pos;
+	int				 off;
+	int				 i;
+
+	if (shards_nr <= shard_idx)
+		return -DER_INVAL;
+
+	oc_attr = daos_oclass_attr_find(oid);
+	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		/* For non-replicated object, elect current shard as leader. */
+		shard = pl_get_shard(data, shard_idx);
+		if (for_tgt_id)
+			return shard->po_target;
+
+		return shard->po_shard;
+	}
+
+	replicas = oc_attr->u.repl.r_num;
+	if (replicas == DAOS_OBJ_REPL_MAX)
+		replicas = shards_nr;
+
+	if (replicas < 1)
+		return -DER_INVAL;
+
+	if (replicas == 1) {
+		shard = pl_get_shard(data, shard_idx);
+		if (shard->po_target == -1)
+			return -DER_NONEXIST;
+
+		/* Single replicated object will not rebuild. */
+		D_ASSERT(!shard->po_rebuilding);
+		D_ASSERT(shard->po_shard == shard_idx);
+
+		if (for_tgt_id)
+			return shard->po_target;
+
+		return shard->po_shard;
+	}
+
+	/* XXX: The shards within [start, start + replicas) will search from
+	 *	the same @preferred position, then they will have the same
+	 *	leader. The shards (belonging to the same object) in
+	 *	other redundancy group may get different leader node.
+	 *
+	 *	The one with the lowest f_seq will be elected as the leader
+	 *	to avoid leader switch.
+	 */
+	rdg_idx = shard_idx / replicas;
+	start = rdg_idx * replicas;
+	preferred = start + (oid.lo + rdg_idx) % replicas;
+	for (i = 0, off = preferred, pos = -1; i < replicas;
+	     i++, off = (off + 1) % replicas + start) {
+		shard = pl_get_shard(data, off);
+		if (shard->po_target == -1 || shard->po_rebuilding)
+			continue;
+
+		if (pos == -1 ||
+		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
+			pos = off;
+	}
+
+	if (pos != -1) {
+		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
+
+		if (for_tgt_id)
+			return pl_get_shard(data, pos)->po_target;
+
+		return pl_get_shard(data, pos)->po_shard;
+	}
+
+	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */
+	return -DER_NONEXIST;
 }

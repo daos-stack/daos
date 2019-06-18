@@ -28,6 +28,15 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
@@ -137,4 +146,71 @@ func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
 		listenIPs = append(listenIPs, listenAddr.IP)
 	}
 	return listenIPs, nil
+}
+
+// mgmtSvc implements (the Go portion of) Management Service, satisfying
+// pb.MgmtSvcServer.
+type mgmtSvc struct {
+	mutex sync.Mutex
+	dcli  drpc.DomainSocketClient
+}
+
+func newMgmtSvc(config *configuration) *mgmtSvc {
+	return &mgmtSvc{
+		dcli: getDrpcClientConnection(config.SocketDir),
+	}
+}
+
+func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq) (*pb.GetAttachInfoResp, error) {
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, getAttachInfo, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.GetAttachInfoResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
+	}
+
+	return resp, nil
+}
+
+func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, error) {
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, join, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.JoinResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal Join response")
+	}
+
+	return resp, nil
+}
+
+// CreatePool implements the method defined for the Management Service.
+func (svc *mgmtSvc) CreatePool(
+	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
+
+	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
+	// TODO: implement lock and drpc IDs & handler in iosrv
+	// svc.mutex.Lock()
+	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, poolCreate, req)
+	// svc.mutex.Unlock()
+	// if err != nil {
+	//	return nil, err
+	//}
+
+	resp := &pb.CreatePoolResp{}
+	// TODO
+	// if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+	// 	return nil, errors.Wrap(err, "unmarshal CreatePool response")
+	// }
+
+	return resp, errors.New("CreatePool dRPC not implemented")
 }

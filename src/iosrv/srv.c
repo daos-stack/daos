@@ -57,7 +57,7 @@
  *		container open/close.
  *
  * And a set of "offload XS" (dss_tgt_offload_xs_nr)
- * Now dss_tgt_offload_xs_nr can be 1 or 2.
+ * Now dss_tgt_offload_xs_nr can be [0, 2].
  * 1.2) The tasks for offload XS:
  *	ULT server for:
  *		IO request dispatch (TX coordinator, on 1st offload XS),
@@ -80,40 +80,29 @@
  * Two helper functions:
  * 1) daos_rpc_tag() to query the target tag (context ID) of specific RPC
  *    request,
- * 2) dss_tgt2xs() to query the XS id of the xstream for specific ULT task.
+ * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
-/** Number of offload XS per target (1 or 2)*/
+/** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
 /** number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 
-#define REBUILD_DEFAULT_SCHEDULE_RATIO 30
-unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
+unsigned int
+dss_ctx_nr_get(void)
+{
+	return DSS_CTX_NR_TOTAL;
+}
 
-/** Per-xstream configuration data */
-struct dss_xstream {
-	ABT_future	dx_shutdown;
-	hwloc_cpuset_t	dx_cpuset;
-	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pools[DSS_POOL_CNT];
-	ABT_sched	dx_sched;
-	ABT_thread	dx_progress;
-	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
-	int		dx_xs_id;
-	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
-	 * For offload XS it is same value as its main XS.
-	 */
-	int		dx_tgt_id;
-	/* CART context id, [0, DSS_CTX_NR_TOTAL - 1].
-	 * Invalid (-1) for the offload XS w/o CART context created.
-	 */
-	int		dx_ctx_id;
-	bool		dx_main_xs;	/* true for main XS */
-	bool		dx_comm;	/* true with cart context */
-};
+#define FIRST_DEFAULT_SCHEDULE_RATIO	80
+#define REBUILD_DEFAULT_SCHEDULE_RATIO	30
+unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
+unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
+
+#define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
+#define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
 
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
@@ -158,63 +147,65 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 }
 
 static ABT_unit
+unit_pop(ABT_pool *pools, int pool_idx, ABT_pool *pool)
+{
+	ABT_unit unit;
+
+	ABT_pool_pop(pools[pool_idx], &unit);
+	if (unit != ABT_UNIT_NULL) {
+		*pool = pools[pool_idx];
+		return unit;
+	}
+
+	return ABT_UNIT_NULL;
+}
+
+static ABT_unit
 normal_unit_pop(ABT_pool *pools, ABT_pool *pool)
 {
 	ABT_unit unit;
 
 	/* Let's pop I/O request ULT first */
-	ABT_pool_pop(pools[DSS_POOL_PRIV], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_PRIV];
+	unit = unit_pop(pools, DSS_POOL_PRIV, pool);
+	if (unit != ABT_UNIT_NULL)
 		return unit;
-	}
 
-	/* Other request and ollective ULT or created ULT */
-	ABT_pool_pop(pools[DSS_POOL_SHARE], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_SHARE];
+	/* Other request and collective ULT or created ULT */
+	unit = unit_pop(pools, DSS_POOL_SHARE, pool);
+	if (unit != ABT_UNIT_NULL)
 		return unit;
-	}
-
-	return ABT_UNIT_NULL;
-}
-
-static ABT_unit
-rebuild_unit_pop(ABT_pool *pools, ABT_pool *pool)
-{
-	ABT_unit unit;
-
-	ABT_pool_pop(pools[DSS_POOL_REBUILD], &unit);
-	if (unit != ABT_UNIT_NULL) {
-		*pool = pools[DSS_POOL_REBUILD];
-		return unit;
-	}
 
 	return ABT_UNIT_NULL;
 }
 
 /**
- * Choose ULT from the pool. Note: the rebuild ULT will be
- * be choosen by dss_rebuild_res_percentage.
- *
- * XXX we may change the sequence later once we have more cases.
+ * Choose ULT from the pool.
+ * Firstly with dss_first_res_percentage to schedule the task in
+ * DSS_POOL_URGENT, then with dss_rebuild_res_percentage (of left) to
+ * schedule rebuild task.
  */
 static ABT_unit
 dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
 {
-	size_t	 rebuild_cnt;
-	int	 rc;
+	size_t		cnt;
+	int		rc;
 
-	rc = ABT_pool_get_total_size(pools[DSS_POOL_REBUILD],
-				     &rebuild_cnt);
+	/* pop highest priority pool first */
+	rc = ABT_pool_get_total_size(pools[DSS_POOL_URGENT], &cnt);
+	if (rc != ABT_SUCCESS)
+		return ABT_UNIT_NULL;
+	if (cnt != 0 && rand() % 100 <= dss_first_res_percentage)
+		return unit_pop(pools, DSS_POOL_URGENT, pool);
+
+	/* then pop other pools */
+	rc = ABT_pool_get_total_size(pools[DSS_POOL_REBUILD], &cnt);
 	if (rc != ABT_SUCCESS)
 		return ABT_UNIT_NULL;
 
-	if (rebuild_cnt == 0 ||
-	    rand() % 100 >= dss_rebuild_res_percentage)
+	if (cnt == 0 || rand() % 100 >= dss_rebuild_res_percentage)
 		return normal_unit_pop(pools, pool);
 	else
-		return rebuild_unit_pop(pools, pool);
+		return unit_pop(pools, DSS_POOL_REBUILD, pool);
 
 	return ABT_UNIT_NULL;
 }
@@ -289,7 +280,7 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	};
 
 	/* Create a scheduler config */
-	ret = ABT_sched_config_create(&config, cv_event_freq, 10,
+	ret = ABT_sched_config_create(&config, cv_event_freq, 512,
 				      ABT_sched_config_var_end);
 	if (ret != ABT_SUCCESS)
 		return dss_abterr2der(ret);
@@ -301,26 +292,6 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
-
-static dss_abt_pool_choose_cb_t abt_pool_choose_cbs[DAOS_MAX_MODULE];
-
-/**
- * Register abt choose pool callback for each module, so the module
- * can choose the pools by itself.
- *
- * \param mod_id [IN]	module ID.
- * \param cb [IN]	callback.
- *
- * \return		0 if succes, otherwise negative errno.
- */
-void
-dss_abt_pool_choose_cb_register(unsigned int mod_id,
-				dss_abt_pool_choose_cb_t cb)
-{
-	D_ASSERT(abt_pool_choose_cbs[mod_id] == NULL);
-	abt_pool_choose_cbs[mod_id] = cb;
-}
-
 /**
  * Process the rpc received, let's create a ABT thread for each request.
  */
@@ -329,12 +300,17 @@ dss_process_rpc(crt_context_t *ctx, crt_rpc_t *rpc,
 		void (*real_rpc_hdlr)(void *), void *arg)
 {
 	unsigned int	mod_id = opc_get_mod_id(rpc->cr_opc);
+	struct dss_module *module = dss_module_get(mod_id);
 	ABT_pool	*pools = arg;
 	ABT_pool	pool;
 	int		rc;
 
-	if (abt_pool_choose_cbs[mod_id] != NULL)
-		pool = abt_pool_choose_cbs[mod_id](rpc, pools);
+	/* For RPC originally from CART might still come here, and its mod_id
+	 * is 0xfe, and module would be NULL.
+	 */
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_abt_pool_choose_cb)
+		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
 	else
 		pool = pools[DSS_POOL_SHARE];
 
@@ -381,6 +357,7 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
 
 	if (dx->dx_comm) {
 		/* create private transport context */
@@ -406,12 +383,21 @@ dss_srv_handler(void *arg)
 		}
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
 		/** verify CART assigned the ctx_id ascendantly start from 0 */
-		if (dx->dx_xs_id == 0)
-			D_ASSERT(dx->dx_ctx_id == 0);
-		else
-			D_ASSERT(dx->dx_ctx_id ==
-				 (dx->dx_tgt_id * DSS_CTX_NR_PER_TGT +
-				  dss_sys_xs_nr + !dx->dx_main_xs));
+		if (dx->dx_xs_id < dss_sys_xs_nr) {
+			D_ASSERT(dx->dx_ctx_id == dx->dx_xs_id);
+		} else {
+			if (dx->dx_main_xs)
+				D_ASSERTF(dx->dx_ctx_id ==
+					  dx->dx_tgt_id + dss_sys_xs_nr,
+					  "incorrect ctx_id %d for xs_id %d\n",
+					  dx->dx_ctx_id, dx->dx_xs_id);
+			else
+				D_ASSERTF(dx->dx_ctx_id ==
+					  (dss_sys_xs_nr + dss_tgt_nr +
+					   dx->dx_tgt_id),
+					  "incorrect ctx_id %d for xs_id %d\n",
+					  dx->dx_ctx_id, dx->dx_xs_id);
+		}
 	}
 
 	/* Prepare the scheduler */
@@ -592,7 +578,12 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	for (i = 0; i < DSS_POOL_CNT; i++) {
 		ABT_pool_access access;
 
-		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD) ?
+		/* for DSS_POOL_URGENT, now the only usage is for dtx_resync,
+		 * that creates ULT in DSS_XS_SELF. So ABT_POOL_ACCESS_PRIV
+		 * is fine.
+		 */
+		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD ||
+			  i == DSS_POOL_URGENT) ?
 			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
 
 		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
@@ -608,9 +599,15 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
 	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
-
-	dx->dx_xs_id	= xs_id;
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	if (xs_id < dss_sys_xs_nr) {
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
+			 xs_id);
+	} else {
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_TGT_XS_NAME_FMT,
+			 dx->dx_tgt_id, xs_offset + 1);
+	}
+	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
 	dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
@@ -660,13 +657,13 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 		goto out_xstream;
 	}
-	xstream_data.xd_xs_ptrs[xstream_data.xd_xs_nr++] = dx;
+	xstream_data.xd_xs_ptrs[xs_id] = dx;
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 	ABT_thread_attr_free(&attr);
 
-	D_DEBUG(DB_TRACE, "created xstream xs_id(%d)/tgt_id(%d)/"
+	D_DEBUG(DB_TRACE, "created xstream name(%s)xs_id(%d)/tgt_id(%d)/"
 		"ctx_id(%d)/comm(%d)/is_main_xs(%d).\n",
-		dx->dx_xs_id, dx->dx_tgt_id, dx->dx_ctx_id,
+		dx->dx_name, dx->dx_xs_id, dx->dx_tgt_id, dx->dx_ctx_id,
 		dx->dx_comm, dx->dx_main_xs);
 
 	return 0;
@@ -700,10 +697,14 @@ dss_xstreams_fini(bool force)
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_future_set(dx->dx_shutdown, dx);
 	}
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_thread_join(dx->dx_progress);
 		ABT_thread_free(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
@@ -712,6 +713,8 @@ dss_xstreams_fini(bool force)
 	/** Wait for each execution stream to complete */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_xstream_join(dx->dx_xstream);
 		ABT_xstream_free(&dx->dx_xstream);
 	}
@@ -719,6 +722,8 @@ dss_xstreams_fini(bool force)
 	/** housekeeping ... */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (dx == NULL)
+			continue;
 		ABT_sched_free(&dx->dx_sched);
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;
@@ -751,13 +756,34 @@ dss_xstreams_empty(void)
 }
 
 static int
+dss_start_xs_id(int xs_id)
+{
+	hwloc_obj_t	obj;
+	int		rc;
+
+	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
+				     (xs_id + dss_core_offset) % dss_core_nr);
+	if (obj == NULL) {
+		D_ERROR("Null core returned by hwloc\n");
+		return -DER_INVAL;
+	}
+
+	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static int
 dss_xstreams_init()
 {
 	int	rc;
-	int	i;
+	int	i, xs_id;
 
 	D_ASSERT(dss_tgt_nr >= 1);
-	D_ASSERT(dss_tgt_offload_xs_nr == 1 || dss_tgt_offload_xs_nr == 2);
+	D_ASSERT(dss_tgt_offload_xs_nr == 0 || dss_tgt_offload_xs_nr == 1 ||
+		 dss_tgt_offload_xs_nr == 2);
 
 	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, NULL);
@@ -770,23 +796,40 @@ dss_xstreams_init()
 	D_DEBUG(DB_TRACE, "%d cores detected, starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
 
-	for (i = 0; i < DSS_XS_NR_TOTAL; i++) {
-		hwloc_obj_t	obj;
-
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					     i % dss_core_nr);
-		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc\n");
-			D_GOTO(failed, rc = -DER_INVAL);
-		}
-
-		rc = dss_start_one_xstream(obj->allowed_cpuset, i);
+	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
+	/* start system service XS */
+	for (i = 0; i < dss_sys_xs_nr; i++) {
+		xs_id = i;
+		rc = dss_start_xs_id(xs_id);
 		if (rc)
-			D_GOTO(failed, rc);
+			D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_TRACE, "%d execution streams successfully started\n",
-		dss_tgt_nr);
-failed:
+
+	/* start main IO service XS */
+	for (i = 0; i < dss_tgt_nr; i++) {
+		xs_id = DSS_MAIN_XS_ID(i);
+		rc = dss_start_xs_id(xs_id);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
+	/* start offload XS if any */
+	if (dss_tgt_offload_xs_nr == 0)
+		D_GOTO(out, rc);
+	for (i = 0; i < dss_tgt_nr; i++) {
+		int j;
+
+		for (j = 0; j < dss_tgt_offload_xs_nr; j++) {
+			xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+			rc = dss_start_xs_id(xs_id);
+			if (rc)
+				D_GOTO(out, rc);
+		}
+	}
+
+	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
+		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
+out:
 	dss_xstreams_open_barrier();
 	if (dss_xstreams_empty()) /* started nothing */
 		pthread_key_delete(dss_tls_key);
@@ -891,22 +934,16 @@ free:
 	return dss_abterr2der(rc);
 }
 
-/* Create the pool in the normal share pool */
+/**
+ * Create the ult, will internally select the pool and XS based on ult_type
+ * and tgt_idx.
+ */
 int
 dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
 	       size_t stack_size, ABT_thread *ult)
 {
-	return dss_ult_pool_create(func, arg, dss_tgt2xs(ult_type, tgt_idx),
-				   stack_size, ult, DSS_POOL_SHARE);
-}
-
-/* Create the pool in the rebuild pool */
-int
-dss_rebuild_ult_create(void (*func)(void *), void *arg, int ult_type,
-		       int tgt_id, size_t stack_size, ABT_thread *ult)
-{
-	return dss_ult_pool_create(func, arg, dss_tgt2xs(ult_type, tgt_id),
-				   stack_size, ult, DSS_POOL_REBUILD);
+	return dss_ult_pool_create(func, arg, dss_ult_xs(ult_type, tgt_idx),
+				   stack_size, ult, dss_ult_pool(ult_type));
 }
 
 /**
@@ -914,13 +951,14 @@ dss_rebuild_ult_create(void (*func)(void *), void *arg, int ult_type,
  *
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
+ * \param[in] main	only create ULT on main XS or not.
  * \return		Success or negative error code
  *			0
  *			-DER_NOMEM
  *			-DER_INVAL
  */
 int
-dss_ult_create_all(void (*func)(void *), void *arg)
+dss_ult_create_all(void (*func)(void *), void *arg, bool main)
 {
 	struct dss_xstream      *dx;
 	int			 i;
@@ -928,6 +966,9 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
+		if (main && !dx->dx_main_xs)
+			continue;
+
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE], func, arg,
 				       ABT_THREAD_ATTR_NULL,
 				       NULL /* new thread */);
@@ -985,13 +1026,13 @@ dss_ult_create_execute_cb(void *data)
  * Note: This is
  * normally used when it needs to create an ULT on other xstream.
  *
- * \param[in]	func	function to execute
- * \param[in]	arg	argument for \a func
- * \param[in]	user_cb	user call back (mandatory for async mode)
- * \param[in]	arg	argument for \a user callback
- * \param[in]	ult_type type of ULT
- * \param[in]	tgt_id	target index
- * \param[out]		error code.
+ * \param[in]	func		function to execute
+ * \param[in]	arg		argument for \a func
+ * \param[in]	user_cb		user call back (mandatory for async mode)
+ * \param[in]	arg		argument for \a user callback
+ * \param[in]	ult_type	type of ULT
+ * \param[in]	tgt_id		target index
+ * \param[out]			error code.
  *
  */
 int

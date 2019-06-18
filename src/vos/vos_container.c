@@ -38,8 +38,6 @@
 #include <vos_internal.h>
 #include <vos_obj.h>
 
-#define CT_BTREE_ORDER 20
-
 /**
  * Parameters for vos_cont_df btree
  */
@@ -49,13 +47,20 @@ struct cont_df_args {
 };
 
 static int
-cont_df_hkey_size(struct btr_instance *tins)
+cont_df_hkey_size(void)
 {
 	return sizeof(struct d_uuid);
 }
 
+static int
+cont_df_rec_msize(int alloc_overhead)
+{
+	return alloc_overhead + sizeof(struct vos_cont_df);
+}
+
+
 static void
-cont_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+cont_df_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
@@ -66,20 +71,18 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 
-	TMMID(struct vos_cont_df) cont_mmid = umem_id_u2t(rec->rec_mmid,
-							  struct vos_cont_df);
-	if (TMMID_IS_NULL(cont_mmid))
+	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
-	umem_free_typed(umm, cont_mmid);
+	umem_free(umm, rec->rec_off);
 	return 0;
 }
 
 static int
-cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	     daos_iov_t *val_iov, struct btr_record *rec)
+cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	     d_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct vos_cont_df)	cont_mmid;
+	umem_off_t			 offset;
 	struct vos_cont_df		*cont_df;
 	struct cont_df_args		*args = NULL;
 	struct d_uuid			*ukey = NULL;
@@ -90,14 +93,14 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	D_DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
 
 	args = (struct cont_df_args *)(val_iov->iov_buf);
-	cont_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cont_df);
-	if (TMMID_IS_NULL(cont_mmid))
+	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
+	if (UMOFF_IS_NULL(offset))
 		return -DER_NOMEM;
 
-	cont_df = umem_id2ptr_typed(&tins->ti_umm, cont_mmid);
+	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 	args->ca_cont_df = cont_df;
-	rec->rec_mmid = umem_id_t2u(cont_mmid);
+	rec->rec_off = offset;
 
 	rc = vos_obj_tab_create(args->ca_pool, &cont_df->cd_otab_df);
 	if (rc) {
@@ -124,12 +127,12 @@ exit:
 
 static int
 cont_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key_iov, daos_iov_t *val_iov)
+		  d_iov_t *key_iov, d_iov_t *val_iov)
 {
-	struct vos_cont_df		*cont_df = NULL;
+	struct vos_cont_df		*cont_df;
 	struct cont_df_args		*args = NULL;
 
-	cont_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	args->ca_cont_df = cont_df;
 	val_iov->iov_len = sizeof(struct cont_df_args);
@@ -139,13 +142,14 @@ cont_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   daos_iov_t *key, daos_iov_t *val)
+		   d_iov_t *key, d_iov_t *val)
 {
 	D_DEBUG(DB_DF, "Record exists already. Nothing to do\n");
 	return 0;
 }
 
 static btr_ops_t vct_ops = {
+	.to_rec_msize	= cont_df_rec_msize,
 	.to_hkey_size	= cont_df_hkey_size,
 	.to_hkey_gen	= cont_df_hkey_gen,
 	.to_rec_alloc	= cont_df_rec_alloc,
@@ -158,10 +162,10 @@ static int
 cont_df_lookup(struct vos_pool *vpool, struct d_uuid *ukey,
 	       struct cont_df_args *args)
 {
-	daos_iov_t	key, value;
+	d_iov_t	key, value;
 
-	daos_iov_set(&key, ukey, sizeof(struct d_uuid));
-	daos_iov_set(&value, args, sizeof(struct cont_df_args));
+	d_iov_set(&key, ukey, sizeof(struct d_uuid));
+	d_iov_set(&value, args, sizeof(struct cont_df_args));
 	return dbtree_lookup(vpool->vp_cont_th, &key, &value);
 }
 
@@ -186,7 +190,8 @@ cont_cmp(struct d_ulink *ulink, void *cmp_args)
 void
 cont_free(struct d_ulink *ulink)
 {
-	struct vos_container *cont;
+	struct vos_container	*cont;
+	int			 i;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
@@ -195,8 +200,11 @@ cont_free(struct d_ulink *ulink)
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
-	if (cont->vc_hint_ctxt)
-		vea_hint_unload(cont->vc_hint_ctxt);
+
+	for (i = 0; i < VOS_IOS_CNT; i++) {
+		if (cont->vc_hint_ctxt[i])
+			vea_hint_unload(cont->vc_hint_ctxt[i]);
+	}
 
 	D_FREE(cont);
 }
@@ -272,7 +280,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 	struct vos_pool		*vpool = NULL;
 	struct cont_df_args	 args;
 	struct d_uuid		 ukey;
-	daos_iov_t		 key, value;
+	d_iov_t		 key, value;
 	int			 rc = 0;
 
 	vpool = vos_hdl2pool(poh);
@@ -296,8 +304,8 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 	if (rc != 0)
 		goto exit;
 
-	daos_iov_set(&key, &ukey, sizeof(ukey));
-	daos_iov_set(&value, &args, sizeof(args));
+	d_iov_set(&key, &ukey, sizeof(ukey));
+	d_iov_set(&value, &args, sizeof(args));
 
 	rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 
@@ -393,7 +401,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	memset(&cont->vc_dtx_cos_btr, 0, sizeof(cont->vc_dtx_cos_btr));
-	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, OT_BTREE_ORDER, &uma,
+	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, VOS_CONT_ORDER, &uma,
 				   &cont->vc_dtx_cos_btr,
 				   &cont->vc_dtx_cos_hdl);
 	if (rc != 0) {
@@ -402,12 +410,17 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	}
 
 	if (cont->vc_pool->vp_vea_info != NULL) {
-		rc = vea_hint_load(&cont->vc_cont_df->cd_hint_df,
-				   &cont->vc_hint_ctxt);
-		if (rc) {
-			D_ERROR("Error load allocator hint "DF_UUID": %d\n",
-				DP_UUID(co_uuid), rc);
-			goto exit;
+		int	i;
+
+		for (i = 0; i < VOS_IOS_CNT; i++) {
+			rc = vea_hint_load(&cont->vc_cont_df->cd_hint_df[i],
+					   &cont->vc_hint_ctxt[i]);
+			if (rc) {
+				D_ERROR("Error loading allocator %d hint "
+					DF_UUID": %d\n", i, DP_UUID(co_uuid),
+					rc);
+				goto exit;
+			}
 		}
 	}
 
@@ -478,6 +491,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	struct cont_df_args		 args;
 	struct d_uuid			 pkey;
 	struct d_uuid			 key;
+	d_iov_t			 iov;
 	int				 rc;
 
 	uuid_copy(key.uuid, co_uuid);
@@ -505,22 +519,24 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	TX_BEGIN(vos_pool_ptr2pop(vpool)) {
-		daos_iov_t	iov;
+	rc = vos_tx_begin(vpool);
+	if (rc != 0)
+		goto failed;
 
-		rc = vos_obj_tab_destroy(vpool, &args.ca_cont_df->cd_otab_df);
-		if (rc) {
-			D_ERROR("OI destroy failed with error : %d\n",
-				rc);
-			pmemobj_tx_abort(EFAULT);
-		}
+	rc = vos_obj_tab_destroy(vpool, &args.ca_cont_df->cd_otab_df);
+	if (rc) {
+		D_ERROR("OI destroy failed with error : %d\n", rc);
+		goto end;
+	}
 
-		daos_iov_set(&iov, &key, sizeof(struct d_uuid));
-		rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
-	}  TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	d_iov_set(&iov, &key, sizeof(struct d_uuid));
+	rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
+
+end:
+	rc = vos_tx_end(vpool, rc);
+failed:
+	if (rc != 0)
 		D_ERROR("Destroying container transaction failed %d\n", rc);
-	} TX_END;
 exit:
 	return rc;
 }
@@ -567,7 +583,7 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
 	D_ASSERT(ctab_df->ctb_btree.tr_class == 0);
 	D_DEBUG(DB_DF, "Create container table, type=%d\n", VOS_BTR_CONT_TABLE);
 
-	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, CT_BTREE_ORDER,
+	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, VOS_CONT_ORDER,
 				   p_umem_attr, &ctab_df->ctb_btree, &btr_hdl);
 	if (rc) {
 		D_ERROR("DBtree create failed\n");
@@ -644,6 +660,7 @@ cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	vos_pool_addref(vpool);
 	co_iter->cot_pool = vpool;
+	co_iter->cot_iter.it_type = type;
 
 	rc = dbtree_iter_prepare(vpool->vp_cont_th, 0, &co_iter->cot_hdl);
 	if (rc)
@@ -661,15 +678,15 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		  daos_anchor_t *anchor)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
-	daos_iov_t		key, value;
+	d_iov_t		key, value;
 	struct d_uuid		ukey;
 	struct cont_df_args	args;
 	int			rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
-	daos_iov_set(&key, &ukey, sizeof(struct d_uuid));
-	daos_iov_set(&value, &args, sizeof(struct cont_df_args));
+	d_iov_set(&key, &ukey, sizeof(struct d_uuid));
+	d_iov_set(&value, &args, sizeof(struct cont_df_args));
 	uuid_clear(it_entry->ie_couuid);
 
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
@@ -679,6 +696,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));
 	uuid_copy(it_entry->ie_couuid, args.ca_cont_df->cd_id);
+	it_entry->ie_child_type = VOS_ITER_OBJ;
 
 	return rc;
 }
@@ -712,19 +730,19 @@ static int
 cont_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
-	PMEMobjpool		*pop;
 	int			rc  = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
-	pop = vos_pool_ptr2pop(co_iter->cot_pool);
+	rc = vos_tx_begin(co_iter->cot_pool);
+	if (rc != 0)
+		goto failed;
 
-	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(co_iter->cot_hdl, args);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
+	rc = dbtree_iter_delete(co_iter->cot_hdl, args);
+
+	rc = vos_tx_end(co_iter->cot_pool, rc);
+failed:
+	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
-	} TX_END
-
 	return rc;
 }
 

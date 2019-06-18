@@ -371,7 +371,7 @@ Drpc__Call *mock_drpc_handler_call; /* alloc copy of the structure passed in */
 void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
 Drpc__Response *mock_drpc_handler_resp_return; /* to be returned in *resp */
 void
-mock_drpc_handler(Drpc__Call *call, Drpc__Response **resp)
+mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp)
 {
 	uint8_t buffer[UNIXCOMM_MAXMSGSIZE];
 
@@ -401,16 +401,18 @@ mock_drpc_handler(Drpc__Call *call, Drpc__Response **resp)
 	mock_drpc_handler_resp_ptr = (void *)resp;
 
 	if (resp != NULL && mock_drpc_handler_resp_return != NULL) {
-		/*
-		 * Caller will free the copy.
-		 */
-		size_t response_size = drpc__response__get_packed_size(
-				mock_drpc_handler_resp_return);
+		size_t len;
 
-		drpc__response__pack(mock_drpc_handler_resp_return,
-				buffer);
-		*resp = drpc__response__unpack(NULL, response_size,
-				buffer);
+		len = mock_drpc_handler_resp_return->body.len;
+		memcpy(resp, mock_drpc_handler_resp_return,
+				sizeof(Drpc__Response));
+		resp->body.len = len;
+		if (len > 0) {
+			D_ALLOC(resp->body.data, len);
+			memcpy(resp->body.data,
+				mock_drpc_handler_resp_return->body.data, len);
+		}
+
 	}
 }
 

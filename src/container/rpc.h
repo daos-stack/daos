@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,9 @@
 	X(CONT_EPOCH_COMMIT,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
+	X(CONT_EPOCH_AGGREGATE,						\
+		0, &CQF_cont_epoch_op,					\
+		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_LIST,						\
 		0, &CQF_cont_snap_list,					\
 		ds_cont_op_handler, NULL),				\
@@ -94,10 +97,6 @@
 		0, &CQF_cont_tgt_destroy,				\
 		ds_cont_tgt_destroy_handler,				\
 		&ds_cont_tgt_destroy_co_ops),				\
-	X(CONT_TGT_OPEN,						\
-		0, &CQF_cont_tgt_open,					\
-		ds_cont_tgt_open_handler,				\
-		&ds_cont_tgt_open_co_ops),				\
 	X(CONT_TGT_CLOSE,						\
 		0, &CQF_cont_tgt_close,					\
 		ds_cont_tgt_close_handler,				\
@@ -149,7 +148,8 @@ CRT_RPC_DECLARE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
 
 #define DAOS_ISEQ_CONT_CREATE	/* input fields */		 \
 				/* .ci_hdl unused */		 \
-	((struct cont_op_in)	(cci_op)		CRT_VAR)
+	((struct cont_op_in)	(cci_op)		CRT_VAR) \
+	((daos_prop_t)		(cci_prop)		CRT_PTR)
 
 #define DAOS_OSEQ_CONT_CREATE	/* output fields */		 \
 	((struct cont_op_out)	(cco_op)		CRT_VAR)
@@ -184,12 +184,29 @@ CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
 CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 
+/** container query request bits */
+#define DAOS_CO_QUERY_PROP_LABEL	(1ULL << 0)
+#define DAOS_CO_QUERY_PROP_LAYOUT_TYPE	(1ULL << 1)
+#define DAOS_CO_QUERY_PROP_LAYOUT_VER	(1ULL << 2)
+#define DAOS_CO_QUERY_PROP_CSUM		(1ULL << 3)
+#define DAOS_CO_QUERY_PROP_REDUN_FAC	(1ULL << 4)
+#define DAOS_CO_QUERY_PROP_REDUN_LVL	(1ULL << 5)
+#define DAOS_CO_QUERY_PROP_SNAPSHOT_MAX	(1ULL << 6)
+#define DAOS_CO_QUERY_PROP_COMPRESS	(1ULL << 7)
+#define DAOS_CO_QUERY_PROP_ENCRYPT	(1ULL << 8)
+
+#define DAOS_CO_QUERY_PROP_BITS_NR	(9)
+#define DAOS_CO_QUERY_PROP_ALL					\
+	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
+
 #define DAOS_ISEQ_CONT_QUERY	/* input fields */		 \
-	((struct cont_op_in)	(cqi_op)		CRT_VAR)
+	((struct cont_op_in)	(cqi_op)		CRT_VAR) \
+	((uint64_t)		(cqi_bits)		CRT_VAR)
 
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
-	((struct cont_op_out)	(cqo_op)		CRT_VAR)
+	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
+	((daos_prop_t)		(cqo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 
@@ -270,19 +287,6 @@ CRT_RPC_DECLARE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 	((int32_t)		(tdo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
-
-#define DAOS_ISEQ_TGT_OPEN	/* input fields */		 \
-	((uuid_t)		(toi_pool_uuid)		CRT_VAR) \
-	((uuid_t)		(toi_pool_hdl)		CRT_VAR) \
-	((uuid_t)		(toi_uuid)		CRT_VAR) \
-	((uuid_t)		(toi_hdl)		CRT_VAR) \
-	((uint64_t)		(toi_capas)		CRT_VAR)
-
-#define DAOS_OSEQ_TGT_OPEN	/* output fields */		 \
-				/* number of errors */		 \
-	((int32_t)		(too_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_tgt_open, DAOS_ISEQ_TGT_OPEN, DAOS_OSEQ_TGT_OPEN)
 
 struct cont_tgt_close_rec {
 	uuid_t		tcr_hdl;

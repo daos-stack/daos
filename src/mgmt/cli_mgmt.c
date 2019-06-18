@@ -161,6 +161,44 @@ out_task:
 	return rc;
 }
 
+int
+dc_mgmt_profile(uint64_t modules, char *path, bool start)
+{
+	struct mgmt_profile_in	*in;
+	crt_endpoint_t		ep;
+	crt_rpc_t		*rpc = NULL;
+	crt_opcode_t		opc;
+	int			rc;
+
+	rc = daos_group_attach(NULL, &ep.ep_grp);
+	if (rc != 0) {
+		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		return -DER_INVAL;
+	}
+
+	ep.ep_rank = 0;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_PROFILE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_GOTO(err_grp, rc);
+	}
+
+	D_ASSERT(rpc != NULL);
+	in = crt_req_get(rpc);
+	in->p_module = modules;
+	in->p_path = path;
+	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
+	/** send the request */
+	rc = daos_rpc_send_wait(rpc);
+err_grp:
+	D_DEBUG(DB_MGMT, "mgmt profile: rc %d\n", rc);
+	daos_group_detach(ep.ep_grp);
+	return rc;
+}
+
 /**
  * Initialize management interface
  */

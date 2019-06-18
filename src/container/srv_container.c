@@ -33,6 +33,7 @@
 
 #include <daos_srv/container.h>
 
+#include <daos_api.h>	/* for daos_prop_alloc/_free() */
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
@@ -68,7 +69,7 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_conts);
 	if (rc != 0)
 		D_GOTO(err_root, rc);
-	rc = rdb_path_push(&svc->cs_conts, &ds_cont_attr_conts);
+	rc = rdb_path_push(&svc->cs_conts, &ds_cont_prop_conts);
 	if (rc != 0)
 		D_GOTO(err_conts, rc);
 
@@ -76,7 +77,7 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_hdls);
 	if (rc != 0)
 		D_GOTO(err_conts, rc);
-	rc = rdb_path_push(&svc->cs_hdls, &ds_cont_attr_cont_handles);
+	rc = rdb_path_push(&svc->cs_hdls, &ds_cont_prop_cont_handles);
 	if (rc != 0)
 		D_GOTO(err_hdls, rc);
 
@@ -146,7 +147,7 @@ ds_cont_svc_step_down(struct cont_svc *svc)
 	svc->cs_pool = NULL;
 }
 
-static int
+int
 cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
 		       struct rsvc_hint *hint)
 {
@@ -162,7 +163,7 @@ cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp,
 	return 0;
 }
 
-static void
+void
 cont_svc_put_leader(struct cont_svc *svc)
 {
 	ds_rsvc_put_leader(svc->cs_rsvc);
@@ -210,7 +211,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_attr_conts, &attr);
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_conts, &attr);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create container KVS: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -219,11 +220,154 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_attr_cont_handles, &attr);
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create container handle KVS: %d\n",
 			DP_UUID(pool_uuid), rc);
 		return rc;
+	}
+
+	return rc;
+}
+
+/* copy \a prop to \a prop_def (duplicated default prop) */
+static int
+cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
+{
+	int			 i;
+
+	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
+		return 0;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_prop_entry	*entry;
+		struct daos_prop_entry	*entry_def;
+
+		entry = &prop->dpp_entries[i];
+		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
+		D_ASSERTF(entry_def != NULL, "type %d not found in "
+			  "default prop.\n", entry->dpe_type);
+		switch (entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			D_FREE(entry_def->dpe_str);
+			entry_def->dpe_str = strndup(entry->dpe_str,
+						     DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+		case DAOS_PROP_CO_LAYOUT_VER:
+		case DAOS_PROP_CO_CSUM:
+		case DAOS_PROP_CO_REDUN_FAC:
+		case DAOS_PROP_CO_REDUN_LVL:
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+		case DAOS_PROP_CO_COMPRESS:
+		case DAOS_PROP_CO_ENCRYPT:
+			entry_def->dpe_val = entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
+			break;
+		default:
+			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+	return 0;
+}
+
+static int
+cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
+{
+	struct daos_prop_entry	*entry;
+	d_iov_t		 value;
+	int			 i;
+	int			 rc = 0;
+
+	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
+		return 0;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_label,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_layout_type,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_LAYOUT_VER:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_layout_ver,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_CSUM:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_csum, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_redun_fac,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_REDUN_LVL:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_redun_lvl,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_snapshot_max,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_COMPRESS:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_compress,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_ENCRYPT:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_encrypt,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_ACL:
+			/* TODO: Implement container ACL */
+			break;
+		default:
+			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
+			return -DER_INVAL;
+		}
 	}
 
 	return rc;
@@ -234,8 +378,9 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	    struct cont_svc *svc, crt_rpc_t *rpc)
 {
 	struct cont_create_in  *in = crt_req_get(rpc);
-	daos_iov_t		key;
-	daos_iov_t		value;
+	daos_prop_t	       *prop_dup = NULL;
+	d_iov_t		key;
+	d_iov_t		value;
 	struct rdb_kvs_attr	attr;
 	rdb_path_t		kvs;
 	uint64_t		ghce = 0;
@@ -252,8 +397,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if a container with this UUID already exists. */
-	daos_iov_set(&key, in->cci_op.ci_uuid, sizeof(uuid_t));
-	daos_iov_set(&value, NULL /* buf */, 0 /* size */);
+	d_iov_set(&key, in->cci_op.ci_uuid, sizeof(uuid_t));
+	d_iov_set(&value, NULL /* buf */, 0 /* size */);
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
@@ -270,7 +415,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	 */
 
 	/* Create the container attribute KVS under the container KVS. */
-	daos_iov_set(&key, in->cci_op.ci_uuid, sizeof(uuid_t));
+	d_iov_set(&key, in->cci_op.ci_uuid, sizeof(uuid_t));
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &svc->cs_conts, &key, &attr);
@@ -288,34 +433,49 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
-	/* Create the GHCE and GHPCE attributes. */
-	daos_iov_set(&value, &ghce, sizeof(ghce));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_ghce, &value);
+	/* Create the GHCE and GHPCE properties. */
+	d_iov_set(&value, &ghce, sizeof(ghce));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-	daos_iov_set(&value, &ghpce, sizeof(ghpce));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_ghpce, &value);
+	d_iov_set(&value, &ghpce, sizeof(ghpce));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghpce, &value);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-	daos_iov_set(&value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_attr_max_oid, &value);
+	d_iov_set(&value, &max_oid, sizeof(max_oid));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_max_oid, &value);
+	if (rc != 0)
+		D_GOTO(out_kvs, rc);
+
+	/* duplicate the default properties, overwrite it with cont create
+	 * parameter and then write to rdb.
+	 */
+	prop_dup = daos_prop_dup(&cont_prop_default, false);
+	if (prop_dup == NULL) {
+		D_ERROR("daos_prop_dup failed.\n");
+		D_GOTO(out_kvs, rc = -DER_NOMEM);
+	}
+	rc = cont_prop_default_copy(prop_dup, in->cci_prop);
+	if (rc != 0)
+		D_GOTO(out_kvs, rc);
+	rc = cont_prop_write(tx, &kvs, prop_dup);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
 	/* Create the LRE and LHE KVSs. */
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_lres, &attr);
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_lres, &attr);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_lhes, &attr);
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_lhes, &attr);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
 	/* Create the snapshot KVS. */
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_snapshots, &attr);
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_snapshots, &attr);
 
 	/* Create the user attribute KVS. */
 	attr.dsa_class = RDB_KVS_GENERIC;
@@ -323,6 +483,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_user, &attr);
 
 out_kvs:
+	daos_prop_free(prop_dup);
 	rdb_path_fini(&kvs);
 out:
 	return rc;
@@ -373,8 +534,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	     struct cont_svc *svc, crt_rpc_t *rpc)
 {
 	struct cont_destroy_in *in = crt_req_get(rpc);
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	rdb_path_t		kvs;
 	int			rc;
 
@@ -388,8 +549,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if the container attribute KVS exists. */
-	daos_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
-	daos_iov_set(&value, NULL /* buf */, 0 /* size */);
+	d_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
+	d_iov_set(&value, NULL /* buf */, 0 /* size */);
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -415,15 +576,15 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_kvs, rc);
 
 	/* Destroy the snapshot KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_snapshots);
+	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
 	/* Destroy the LHE and LRE KVSs. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_lhes);
+	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_lhes);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_lres);
+	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_lres);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
 
@@ -438,17 +599,17 @@ out:
 	return rc;
 }
 
-static int
+int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	    struct cont **cont)
 {
 	struct cont    *p;
-	daos_iov_t	key;
-	daos_iov_t	tmp;
+	d_iov_t	key;
+	d_iov_t	tmp;
 	int		rc;
 
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
-	daos_iov_set(&tmp, NULL, 0);
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&tmp, NULL, 0);
 	/* check if the container exists or not */
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &tmp);
 	if (rc != 0)
@@ -463,41 +624,41 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	uuid_copy(p->c_uuid, uuid);
 	p->c_svc = (struct cont_svc *)svc;
 
-	/* c_attrs */
-	rc = rdb_path_clone(&svc->cs_conts, &p->c_attrs);
+	/* c_prop */
+	rc = rdb_path_clone(&svc->cs_conts, &p->c_prop);
 	if (rc != 0)
 		D_GOTO(err_p, rc);
 
-	rc = rdb_path_push(&p->c_attrs, &key);
+	rc = rdb_path_push(&p->c_prop, &key);
 	if (rc != 0)
 		D_GOTO(err_attrs, rc);
 
 	/* c_lres */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_lres);
+	rc = rdb_path_clone(&p->c_prop, &p->c_lres);
 	if (rc != 0)
 		D_GOTO(err_attrs, rc);
-	rc = rdb_path_push(&p->c_lres, &ds_cont_attr_lres);
+	rc = rdb_path_push(&p->c_lres, &ds_cont_prop_lres);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
 
 	/* c_lhes */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_lhes);
+	rc = rdb_path_clone(&p->c_prop, &p->c_lhes);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
-	rc = rdb_path_push(&p->c_lhes, &ds_cont_attr_lhes);
+	rc = rdb_path_push(&p->c_lhes, &ds_cont_prop_lhes);
 	if (rc != 0)
 		D_GOTO(err_lhes, rc);
 
 	/* c_snaps */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_snaps);
+	rc = rdb_path_clone(&p->c_prop, &p->c_snaps);
 	if (rc != 0)
 		D_GOTO(err_lhes, rc);
-	rc = rdb_path_push(&p->c_snaps, &ds_cont_attr_snapshots);
+	rc = rdb_path_push(&p->c_snaps, &ds_cont_prop_snapshots);
 	if (rc != 0)
 		D_GOTO(err_snaps, rc);
 
 	/* c_user */
-	rc = rdb_path_clone(&p->c_attrs, &p->c_user);
+	rc = rdb_path_clone(&p->c_prop, &p->c_user);
 	if (rc != 0)
 		D_GOTO(err_snaps, rc);
 	rc = rdb_path_push(&p->c_user, &ds_cont_attr_user);
@@ -516,7 +677,7 @@ err_lhes:
 err_lres:
 	rdb_path_fini(&p->c_lres);
 err_attrs:
-	rdb_path_fini(&p->c_attrs);
+	rdb_path_fini(&p->c_prop);
 err_p:
 	D_FREE(p);
 err:
@@ -528,57 +689,10 @@ cont_put(struct cont *cont)
 {
 	rdb_path_fini(&cont->c_lhes);
 	rdb_path_fini(&cont->c_lres);
-	rdb_path_fini(&cont->c_attrs);
+	rdb_path_fini(&cont->c_prop);
 	rdb_path_fini(&cont->c_snaps);
 	rdb_path_fini(&cont->c_user);
 	D_FREE(cont);
-}
-
-static int
-cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
-		const uuid_t cont_hdl, uint64_t capas)
-{
-	struct cont_tgt_open_in	       *in;
-	struct cont_tgt_open_out       *out;
-	crt_rpc_t		       *rpc;
-	int				rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting: pool_hdl="DF_UUID" cont_hdl="
-		DF_UUID" capas="DF_X64"\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
-
-	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_OPEN, &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->toi_pool_uuid, cont->c_svc->cs_pool_uuid);
-	uuid_copy(in->toi_pool_hdl, pool_hdl);
-	uuid_copy(in->toi_uuid, cont->c_uuid);
-	uuid_copy(in->toi_hdl, cont_hdl);
-	in->toi_capas = capas;
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->too_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to open %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		rc = -DER_IO;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
-		" capas="DF_X64": %d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas, rc);
-	return rc;
 }
 
 static int
@@ -586,8 +700,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc)
 {
 	struct cont_open_in    *in = crt_req_get(rpc);
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	struct container_hdl	chdl;
 	int			rc;
 
@@ -603,8 +717,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* See if this container handle already exists. */
-	daos_iov_set(&key, in->coi_op.ci_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &chdl, sizeof(chdl));
+	d_iov_set(&key, in->coi_op.ci_hdl, sizeof(uuid_t));
+	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
@@ -616,12 +730,13 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	rc = cont_open_bcast(rpc->cr_ctx, cont, in->coi_op.ci_pool_hdl,
-			     in->coi_op.ci_hdl, in->coi_capas);
+	rc = cont_iv_capability_update(pool_hdl->sph_pool->sp_iv_ns,
+				       in->coi_op.ci_hdl, in->coi_op.ci_uuid,
+				       in->coi_capas);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* TODO: Rollback cont_open_bcast() on errors from now on. */
+	/* TODO: Rollback cont_iv_capability_update() on errors from now on. */
 
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
@@ -688,15 +803,15 @@ static int
 cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
 		   crt_context_t ctx, const uuid_t uuid)
 {
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	struct container_hdl	chdl;
 	struct cont	       *cont;
 	int			rc;
 
 	/* Look up the handle. */
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
-	daos_iov_set(&value, &chdl, sizeof(chdl));
+	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &svc->cs_hdls, &key, &value);
 	if (rc != 0)
 		return rc;
@@ -771,8 +886,8 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	   crt_rpc_t *rpc)
 {
 	struct cont_close_in	       *in = crt_req_get(rpc);
-	daos_iov_t			key;
-	daos_iov_t			value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct container_hdl		chdl;
 	struct cont_tgt_close_rec	rec;
 	int				rc;
@@ -782,8 +897,8 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		DP_UUID(in->cci_op.ci_hdl));
 
 	/* See if this container handle is already closed. */
-	daos_iov_set(&key, in->cci_op.ci_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &chdl, sizeof(chdl));
+	d_iov_set(&key, in->cci_op.ci_hdl, sizeof(uuid_t));
+	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -859,65 +974,170 @@ out:
 }
 
 static int
+cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
+	       daos_prop_t **prop_out)
+{
+	daos_prop_t	*prop = NULL;
+	d_iov_t	 value;
+	uint64_t	 val, bitmap;
+	uint32_t	 idx = 0, nr = 0;
+	int		 rc;
+
+	bitmap = bits & DAOS_CO_QUERY_PROP_ALL;
+	while (idx < DAOS_CO_QUERY_PROP_BITS_NR) {
+		if (bitmap & 0x1)
+			nr++;
+		idx++;
+		bitmap = bitmap >> 1;
+	};
+
+	if (nr == 0)
+		return 0;
+	D_ASSERT(nr <= DAOS_CO_QUERY_PROP_BITS_NR);
+	prop = daos_prop_alloc(nr);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	idx = 0;
+	if (bits & DAOS_CO_QUERY_PROP_LABEL) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_label,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
+				DAOS_PROP_LABEL_MAX_LEN);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
+		prop->dpp_entries[idx].dpe_str =
+			strndup(value.iov_buf, value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_TYPE) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_layout_type,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_VER) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_layout_ver,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_CSUM) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_csum,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_CSUM;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_REDUN_FAC) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_redun_fac,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_REDUN_LVL) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_redun_lvl,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SNAPSHOT_MAX) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop,
+				   &ds_cont_prop_snapshot_max, &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_COMPRESS) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_compress,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_COMPRESS;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ENCRYPT) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_encrypt,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ENCRYPT;
+		prop->dpp_entries[idx].dpe_val = val;
+	}
+
+out:
+	if (rc)
+		daos_prop_free(prop);
+	else
+		*prop_out = prop;
+	return rc;
+}
+
+static int
 cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	   struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_query_in   *in  = crt_req_get(rpc);
 	struct cont_query_out  *out = crt_reply_get(rpc);
+	daos_prop_t	       *prop = NULL;
+	int			rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
 		DP_UUID(in->cqi_op.ci_hdl));
 
-	return cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
-				in->cqi_op.ci_hdl, out);
-}
+	rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
+			      in->cqi_op.ci_hdl, out);
+	if (rc)
+		return rc;
 
-static int
-bulk_cb(const struct crt_bulk_cb_info *cb_info)
-{
-	ABT_eventual *eventual = cb_info->bci_arg;
+	/* the allocated prop will be freed after rpc replied in
+	 * ds_cont_op_handler.
+	 */
+	rc = cont_prop_read(tx, cont, in->cqi_bits, &prop);
+	out->cqo_prop = prop;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
-	return 0;
-}
-
-static int
-attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
-		   crt_bulk_t local_bulk, crt_bulk_t remote_bulk,
-		   off_t local_off, off_t remote_off, size_t length)
-{
-	ABT_eventual		 eventual;
-	int			*status;
-	int			 rc;
-	struct crt_bulk_desc	 bulk_desc = {
-				.bd_rpc		= rpc,
-				.bd_bulk_op	= op,
-				.bd_local_hdl	= local_bulk,
-				.bd_local_off	= local_off,
-				.bd_remote_hdl	= remote_bulk,
-				.bd_remote_off	= remote_off,
-				.bd_len		= length,
-			};
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
 	return rc;
 }
 
@@ -926,81 +1146,12 @@ cont_attr_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_attr_set_in		*in = crt_req_get(rpc);
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
-	daos_iov_t			 iov;
-	daos_sg_list_t			 sgl;
-	void				*data;
-	char				*names;
-	char				*values;
-	size_t				*sizes;
-	int				 rc;
-	int				 i;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid),
 		rpc, DP_UUID(in->casi_op.ci_hdl));
-	rc = crt_bulk_get_len(in->casi_bulk, &bulk_size);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	D_DEBUG(DF_DSMS, DF_CONT": count=%lu, size=%lu\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid),
-		in->casi_count, bulk_size);
-
-	D_ALLOC(data, bulk_size);
-	if (data == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = &iov;
-	daos_iov_set(&iov, data, bulk_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_mem, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
-				in->casi_bulk, 0, 0, bulk_size);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
-
-	names = data;
-	/* go to the end of names array */
-	for (values = names, i = 0; i < in->casi_count; ++values)
-		if (*values == '\0')
-			++i;
-	sizes = (size_t *)values;
-	values = (char *)(sizes + in->casi_count);
-
-	for (i = 0; i < in->casi_count; i++) {
-		size_t len;
-		daos_iov_t key;
-		daos_iov_t value;
-
-		len = strlen(names) /* trailing '\0' */ + 1;
-		daos_iov_set(&key, names, len);
-		names += len;
-		daos_iov_set(&value, values, sizes[i]);
-		values += sizes[i];
-
-		rc = rdb_tx_update(tx, &cont->c_user, &key, &value);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update attribute "
-				 "'%s': %d\n",
-				 DP_CONT(cont->c_svc->cs_pool_uuid,
-					 cont->c_uuid),
-				 (char *) key.iov_buf, rc);
-			D_GOTO(out_bulk, rc);
-		}
-	}
-
-out_bulk:
-	crt_bulk_free(local_bulk);
-out_mem:
-	D_FREE(data);
-out:
-	return rc;
+	return ds_rsvc_set_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				in->casi_bulk, rpc, in->casi_count);
 }
 
 static int
@@ -1008,161 +1159,13 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_attr_get_in		*in = crt_req_get(rpc);
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
-	daos_size_t			 input_size;
-	daos_iov_t			*iovs;
-	daos_sg_list_t			 sgl;
-	void				*data;
-	char				*names;
-	size_t				*sizes;
-	int				 rc;
-	int				 i;
-	int				 j;
-
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid),
 		rpc, DP_UUID(in->cagi_op.ci_hdl));
-	rc = crt_bulk_get_len(in->cagi_bulk, &bulk_size);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	D_DEBUG(DF_DSMS, DF_CONT": count=%lu, key_length=%lu, size=%lu\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid),
-		in->cagi_count, in->cagi_key_length, bulk_size);
-
-	input_size = in->cagi_key_length + in->cagi_count * sizeof(*sizes);
-	D_ASSERT(input_size <= bulk_size);
-
-	D_ALLOC(data, input_size);
-	if (data == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	/* for output sizes */
-	D_ALLOC_ARRAY(iovs, (int)(1 + in->cagi_count));
-	if (iovs == NULL)
-		D_GOTO(out_data, rc = -DER_NOMEM);
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = &iovs[0];
-	daos_iov_set(&iovs[0], data, input_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
-				in->cagi_bulk, 0, 0, input_size);
-	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	names = data;
-	sizes = (size_t *)(names + in->cagi_key_length);
-	daos_iov_set(&iovs[0], (void *)sizes,
-		     in->cagi_count * sizeof(*sizes));
-
-	for (i = 0, j = 1; i < in->cagi_count; ++i) {
-		size_t len;
-		daos_iov_t key;
-
-		len = strlen(names) + /* trailing '\0' */ 1;
-		daos_iov_set(&key, names, len);
-		names += len;
-		daos_iov_set(&iovs[j], NULL, 0);
-
-		rc = rdb_tx_lookup(tx, &cont->c_user, &key, &iovs[j]);
-
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to lookup attribute "
-				 "'%s': %d\n",
-				 DP_CONT(cont->c_svc->cs_pool_uuid,
-					 cont->c_uuid),
-				 (char *) key.iov_buf, rc);
-			D_GOTO(out_iovs, rc);
-		}
-		iovs[j].iov_buf_len = sizes[i];
-		sizes[i] = iovs[j].iov_len;
-
-		/* If buffer length is zero, send only size */
-		if (iovs[j].iov_buf_len > 0)
-			++j;
-	}
-
-	sgl.sg_nr = j;
-	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs = iovs;
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RO, &local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-				in->cagi_bulk, 0, in->cagi_key_length,
-				bulk_size - in->cagi_key_length);
-	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		D_GOTO(out_iovs, rc);
-
-out_iovs:
-	D_FREE(iovs);
-out_data:
-	D_FREE(data);
-out:
-	return rc;
-}
-
-struct attr_list_iter_args {
-	size_t		 alia_available; /* Remaining client buffer space */
-	size_t		 alia_length; /* Aggregate length of attribute names */
-	size_t		 alia_iov_index;
-	size_t		 alia_iov_count;
-	daos_iov_t	*alia_iovs;
-};
-
-static int
-attr_list_iter_cb(daos_handle_t ih,
-		  daos_iov_t *key, daos_iov_t *val, void *arg)
-{
-	struct attr_list_iter_args *i_args = arg;
-
-	i_args->alia_length += key->iov_len;
-
-	if (i_args->alia_available > key->iov_len && key->iov_len > 0) {
-		/*
-		 * Exponentially grow the array of IOVs if insufficient.
-		 * Considering the pathological case where each key is just
-		 * a single character, with one additional trailing '\0',
-		 * if the client buffer is 'N' bytes, it can hold at the most
-		 * N/2 keys, which requires that many IOVs to be allocated.
-		 * Thus, the upper limit on the space required for IOVs is:
-		 * sizeof(daos_iov_t) * N/2 = 24 * N/2 = 12*N bytes.
-		 */
-		if (i_args->alia_iov_index == i_args->alia_iov_count) {
-			void *ptr;
-
-			D_REALLOC(ptr, i_args->alia_iovs,
-				  i_args->alia_iov_count *
-				  2 * sizeof(daos_iov_t));
-			/*
-			 * TODO: Fail or continue transferring
-			 *	 iteratively using available memory?
-			 */
-			if (ptr == NULL)
-				return -DER_NOMEM;
-			i_args->alia_iovs = ptr;
-			i_args->alia_iov_count *= 2;
-		}
-
-		memcpy(&i_args->alia_iovs[i_args->alia_iov_index],
-		       key, sizeof(daos_iov_t));
-		i_args->alia_iovs[i_args->alia_iov_index]
-			.iov_buf_len = key->iov_len;
-		i_args->alia_available -= key->iov_len;
-		++i_args->alia_iov_index;
-	}
-	return 0;
+	return ds_rsvc_get_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				in->cagi_bulk, rpc, in->cagi_count,
+				in->cagi_key_length);
 }
 
 static int
@@ -1171,65 +1174,12 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_attr_list_in	*in	    = crt_req_get(rpc);
 	struct cont_attr_list_out	*out	    = crt_reply_get(rpc);
-	crt_bulk_t			 local_bulk;
-	daos_size_t			 bulk_size;
-	int				 rc;
-	struct attr_list_iter_args	 iter_args;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cali_op.ci_uuid),
 		rpc, DP_UUID(in->cali_op.ci_hdl));
-	/*
-	 * If remote bulk handle does not exist, only aggregate size is sent.
-	 */
-	if (in->cali_bulk) {
-		rc = crt_bulk_get_len(in->cali_bulk, &bulk_size);
-		if (rc != 0)
-			D_GOTO(out, rc);
-		D_DEBUG(DF_DSMS, DF_CONT": bulk_size=%lu\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cali_op.ci_uuid), bulk_size);
-
-		/* Start with 1 and grow as needed */
-		D_ALLOC_PTR(iter_args.alia_iovs);
-		if (iter_args.alia_iovs == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		iter_args.alia_iov_count = 1;
-	} else {
-		bulk_size = 0;
-		iter_args.alia_iovs = NULL;
-		iter_args.alia_iov_count = 0;
-	}
-	iter_args.alia_iov_index = 0;
-	iter_args.alia_length	 = 0;
-	iter_args.alia_available = bulk_size;
-	rc = rdb_tx_iterate(tx, &cont->c_user, false /* !backward */,
-			    attr_list_iter_cb, &iter_args);
-	out->calo_size = iter_args.alia_length;
-	if (rc != 0)
-		D_GOTO(out_mem, rc);
-
-	if (iter_args.alia_iov_index > 0) {
-		daos_sg_list_t	 sgl = {
-			.sg_nr_out = iter_args.alia_iov_index,
-			.sg_nr	   = iter_args.alia_iov_index,
-			.sg_iovs   = iter_args.alia_iovs
-		};
-		rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-				     CRT_BULK_RW, &local_bulk);
-		if (rc != 0)
-			D_GOTO(out_mem, rc);
-
-		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
-					in->cali_bulk, 0, 0,
-					bulk_size - iter_args.alia_available);
-		crt_bulk_free(local_bulk);
-	}
-
-out_mem:
-	D_FREE(iter_args.alia_iovs);
-out:
-	return rc;
+	return ds_rsvc_list_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				 in->cali_bulk, rpc, &out->calo_size);
 }
 
 struct close_iter_arg {
@@ -1253,7 +1203,7 @@ shall_close(const uuid_t pool_hdl, uuid_t *pool_hdls, int n_pool_hdls)
 }
 
 static int
-close_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
+close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
 	struct close_iter_arg  *arg = varg;
 	struct container_hdl   *hdl;
@@ -1393,6 +1343,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	case CONT_EPOCH_COMMIT:
 		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
 					    false);
+	case CONT_EPOCH_AGGREGATE:
+		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
@@ -1416,8 +1368,8 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, crt_rpc_t *rpc)
 {
 	struct cont_op_in      *in = crt_req_get(rpc);
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	struct container_hdl	hdl;
 	int			rc;
 
@@ -1430,8 +1382,8 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		break;
 	default:
 		/* Look up the container handle. */
-		daos_iov_set(&key, in->ci_hdl, sizeof(uuid_t));
-		daos_iov_set(&value, &hdl, sizeof(hdl));
+		d_iov_set(&key, in->ci_hdl, sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
 		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
@@ -1515,6 +1467,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	struct cont_op_out     *out = crt_reply_get(rpc);
 	struct ds_pool_hdl     *pool_hdl;
 	crt_opcode_t		opc = opc_get(rpc->cr_opc);
+	daos_prop_t	       *prop = NULL;
 	struct cont_svc	       *svc;
 	int			rc;
 
@@ -1547,8 +1500,15 @@ out_pool_hdl:
 		DP_UUID(in->ci_hdl), opc, rc);
 	ds_pool_hdl_put(pool_hdl);
 out:
+	/* cleanup the properties for cont_query */
+	if (opc == CONT_QUERY) {
+		struct cont_query_out  *cqo = crt_reply_get(rpc);
+
+		prop = cqo->cqo_prop;
+	}
 	out->co_rc = rc;
 	crt_reply_send(rpc);
+	daos_prop_free(prop);
 
 	return;
 }
@@ -1561,8 +1521,8 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	struct cont_svc		*svc;
 	struct rdb_tx		tx;
 	struct cont		*cont = NULL;
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t		key;
+	d_iov_t		value;
 	struct container_hdl	hdl;
 	uint64_t		max_oid;
 	int			rc;
@@ -1591,8 +1551,8 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 		D_GOTO(out_lock, rc);
 
 	/* Look up the container handle. */
-	daos_iov_set(&key, coh_uuid, sizeof(uuid_t));
-	daos_iov_set(&value, &hdl, sizeof(hdl));
+	d_iov_set(&key, coh_uuid, sizeof(uuid_t));
+	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -1601,8 +1561,8 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	}
 
 	/* Read the max OID from the container metadata */
-	daos_iov_set(&value, &max_oid, sizeof(max_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_attrs, &ds_cont_attr_max_oid, &value);
+	d_iov_set(&value, &max_oid, sizeof(max_oid));
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_max_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup max_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -1615,7 +1575,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	max_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_attrs, &ds_cont_attr_max_oid, &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_max_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to update max_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -1636,3 +1596,4 @@ out_pool_hdl:
 out:
 	return rc;
 }
+

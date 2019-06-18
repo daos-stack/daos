@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,22 +143,15 @@ cont_close(test_arg_t *arg, daos_handle_t coh)
 	return daos_cont_close(coh, NULL);
 }
 
-static int
-cont_query(test_arg_t *arg, daos_handle_t coh, daos_cont_info_t *info)
-{
-	print_message(".");
-	return daos_cont_query(coh, info, NULL, NULL);
-}
-
 static void
-test_epoch_slip(void **argp)
+test_epoch_aggregate(void **argp)
 {
 	test_arg_t		*arg = *argp;
 	uuid_t			cont_uuid;
 	daos_handle_t		coh;
 	daos_handle_t		*ths = NULL;
-	daos_cont_info_t	info;
 	daos_obj_id_t		oid;
+	daos_epoch_t		epoch, epc_hi = 0;
 	int			i;
 
 	MUST(cont_create(arg, cont_uuid));
@@ -174,15 +167,16 @@ test_epoch_slip(void **argp)
 			   /* update */ true, NULL, NULL,
 			   /* verify empty record */ false);
 
-	memset(&info, 0, sizeof(daos_cont_info_t));
-	print_message("Verfying aggregated epoch before slip.. ");
-	MUST(cont_query(arg, coh, &info));
-	/** aggregated epoch before aggregation */
-	/** TODO - add check when aggregation in commit is enabled */
-	memset(&info, 0, sizeof(daos_cont_info_t));
-
-	for (i = 0 ; i < 100; i++)
+	for (i = 0 ; i < 100; i++) {
+		daos_tx_hdl2epoch(ths[i], &epoch);
+		if (epc_hi < epoch)
+			epc_hi = epoch;
 		daos_tx_close(ths[i], NULL);
+	}
+
+	/* Trigger aggregation to epc_hi */
+	print_message("Aggregate to epoch: "DF_U64"\n", epc_hi);
+	MUST(daos_cont_aggregate(coh, epc_hi, NULL));
 
 	if (arg->overlap) {
 		io_for_aggregation(arg, coh, ths, 15, oid,
@@ -193,8 +187,11 @@ test_epoch_slip(void **argp)
 			daos_tx_close(ths[i], NULL);
 	}
 
-	/** Wait for aggregation completion */
-	/** TODO - add check when aggregation in commit is enabled */
+	/*
+	 * TODO: Monitor aggregation progress and wait for completion, then
+	 * verify the aggregated result.
+	 */
+	sleep(10);
 
 	D_FREE(ths);
 	MUST(cont_close(arg, coh));
@@ -308,12 +305,12 @@ test_snapshots(void **argp)
 }
 
 static const struct CMUnitTest epoch_tests[] = {
-	{ "EPOCH1: epoch_slip",
-	  test_epoch_slip, async_disable, test_case_teardown},
-	{ "EPOCH2: epoch_slip (async)",
-	  test_epoch_slip, async_enable, test_case_teardown},
-	{ "EPOCH3: epoch_slip (overlap)",
-	  test_epoch_slip, async_overlap, test_case_teardown},
+	{ "EPOCH1: epoch_aggregate",
+	  test_epoch_aggregate, async_disable, test_case_teardown},
+	{ "EPOCH2: epoch_aggregate (async)",
+	  test_epoch_aggregate, async_enable, test_case_teardown},
+	{ "EPOCH3: epoch_aggregate (overlap)",
+	  test_epoch_aggregate, async_overlap, test_case_teardown},
 	{ "EPOCH4: snapshots",
 	  test_snapshots, async_disable, test_case_teardown},
 	{ "EPOCH5: snapshots (async)",

@@ -54,11 +54,17 @@ ds_obj_retry_cb(tse_task_t *task, void *arg)
 	 * automatically, so let's just keep refreshing the
 	 * layout.
 	 */
-	D_DEBUG(DB_TRACE, "retry task %p\n", task);
 
 	/* let's check if the pool_map has been changed */
-	dc_obj_layout_refresh(*oh);
+	rc = dc_obj_layout_refresh(*oh);
+	if (rc) {
+		D_ERROR("task %p, dc_obj_layout_refresh failed rc %d\n",
+			task, rc);
+		task->dt_result = rc;
+		return rc;
+	}
 
+	D_DEBUG(DB_TRACE, "retry task %p\n", task);
 	rc = dc_task_resched(task);
 	if (rc != 0) {
 		D_ERROR("Failed to re-init task (%p)\n", task);
@@ -113,7 +119,7 @@ tx_close_cb(tse_task_t *task, void *data)
 
 int
 ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		 uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		 daos_anchor_t *anchor)
 {
 	tse_task_t	*task;
@@ -143,7 +149,7 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	     daos_key_t *dkey, unsigned int nr,
-	     daos_iod_t *iods, daos_sg_list_t *sgls,
+	     daos_iod_t *iods, d_sg_list_t *sgls,
 	     daos_iom_t *maps)
 {
 	tse_task_t	*task;

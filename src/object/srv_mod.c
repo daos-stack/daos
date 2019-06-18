@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,31 +26,42 @@
 #define D_LOGFAC	DD_FAC(object)
 
 #include <daos_srv/daos_server.h>
+#include <daos_srv/vos.h>
+#include <daos_srv/pool.h>
 #include <daos/rpc.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-bool srv_bypass_bulk;
+/**
+ * Swtich of enable DTX or not, enabled by default.
+ */
+bool srv_enable_dtx = true;
 
 static int
 obj_mod_init(void)
 {
-	char	*env;
+	uint32_t	mode = DIM_DTX_FULL_ENABLED;
+	int		rc;
 
-	env = getenv(IO_BYPASS_ENV);
-	if (env && !strcasecmp(env, "srv_bulk")) {
-		D_DEBUG(DB_IO, "All bulk data will be dropped\n");
-		srv_bypass_bulk = true;
+	d_getenv_int("DAOS_IO_MODE", &mode);
+	if (mode != DIM_DTX_FULL_ENABLED) {
+		srv_enable_dtx = false;
+		D_DEBUG(DB_IO, "DTX is disabled.\n");
+	} else {
+		D_DEBUG(DB_IO, "DTX is enabled.\n");
 	}
 
-	dss_abt_pool_choose_cb_register(DAOS_OBJ_MODULE,
-					ds_obj_abt_pool_choose_cb);
-	return 0;
+	rc = obj_ec_codec_init();
+	if (rc != 0)
+		D_ERROR("failed to obj_ec_codec_init: %d\n", rc);
+
+	return rc;
 }
 
 static int
 obj_mod_fini(void)
 {
+	obj_ec_codec_fini();
 	return 0;
 }
 
@@ -89,7 +100,51 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	if (tls->ot_echo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&tls->ot_echo_sgl, true);
 
+	if (tls->ot_sp)
+		srv_profile_destroy(tls->ot_sp);
+
 	D_FREE(tls);
+}
+
+char *profile_op_names[] = {
+	[OBJ_PF_UPDATE_PREP] = "update_prep",
+	[OBJ_PF_UPDATE_DISPATCH] = "update_dispatch",
+	[OBJ_PF_UPDATE_LOCAL] = "update_local",
+	[OBJ_PF_UPDATE_END] = "update_end",
+	[OBJ_PF_UPDATE_WAIT] = "update_end",
+	[OBJ_PF_UPDATE_REPLY] = "update_repl",
+	[OBJ_PF_UPDATE] = "update",
+};
+
+static int
+ds_obj_profile_start(char *path)
+{
+	struct obj_tls *tls = obj_tls_get();
+	int rc;
+
+	if (tls->ot_sp)
+		return 0;
+
+	rc = srv_profile_start(&tls->ot_sp, path, profile_op_names);
+
+	D_DEBUG(DB_MGMT, "object profile start: %d\n", rc);
+	return rc;
+}
+
+static int
+ds_obj_profile_stop(void)
+{
+	struct obj_tls *tls = obj_tls_get();
+	int	rc;
+
+	if (tls->ot_sp == NULL)
+		return 0;
+
+	rc = srv_profile_stop(tls->ot_sp);
+
+	D_DEBUG(DB_MGMT, "object profile stop: %d\n", rc);
+	tls->ot_sp = NULL;
+	return rc;
 }
 
 struct dss_module_key obj_module_key = {
@@ -97,6 +152,12 @@ struct dss_module_key obj_module_key = {
 	.dmk_index = -1,
 	.dmk_init = obj_tls_init,
 	.dmk_fini = obj_tls_fini,
+};
+
+static struct dss_module_ops ds_obj_mod_ops = {
+	.dms_abt_pool_choose_cb = ds_obj_abt_pool_choose_cb,
+	.dms_profile_start = ds_obj_profile_start,
+	.dms_profile_stop = ds_obj_profile_stop,
 };
 
 struct dss_module obj_module =  {
@@ -109,4 +170,5 @@ struct dss_module obj_module =  {
 	.sm_cli_count	= OBJ_PROTO_CLI_COUNT,
 	.sm_handlers	= obj_handlers,
 	.sm_key		= &obj_module_key,
+	.sm_mod_ops	= &ds_obj_mod_ops,
 };

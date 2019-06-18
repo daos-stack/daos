@@ -225,4 +225,8 @@ dc_task_get_opc(tse_task_t *task);
 void
 dc_task_list_sched(d_list_t *head, bool instant);
 
+/* Get CART context on client side */
+crt_context_t
+daos_get_crt_ctx(void);
+
 #endif /*  __DAOS_EV_INTERNAL_H__ */

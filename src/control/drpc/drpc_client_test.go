@@ -25,15 +25,22 @@ package drpc
 
 import (
 	"fmt"
-	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/golang/protobuf/proto"
 	"net"
+	"os"
 	"testing"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/golang/protobuf/proto"
 )
 
 // testSockPath is an arbitrary path string to use for testing. These tests
 // don't touch the real filesystem.
 const testSockPath string = "/my/test/socket.sock"
+
+func init() {
+	log.NewDefaultLogger(log.Error, "drpc_client_test: ", os.Stderr)
+}
 
 // mockConn is a mock of the net.Conn interface, for testing
 type mockConn struct {
@@ -141,6 +148,7 @@ func TestNewClientConnection(t *testing.T) {
 func TestConnect_Success(t *testing.T) {
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, nil)
+	client.sequence = 10
 
 	err := client.Connect()
 
@@ -150,6 +158,8 @@ func TestConnect_Success(t *testing.T) {
 		"Expected conn returned from the mock dialer")
 	AssertEqual(t, dialer.InputSockPath, testSockPath,
 		"Should be using passed-in socket path")
+	AssertEqual(t, client.sequence, int64(0),
+		"Expected sequence number to have been reset")
 }
 
 func TestConnect_Error(t *testing.T) {
@@ -259,11 +269,12 @@ func newTestResponse(sequence int64) *Response {
 func TestSendMsg_Success(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
+	client.sequence = 2 // ClientConnection keeps track of sequence
 
 	call := newTestCall()
 	callBytes := conn.SetWriteOutputBytesForCall(t, call)
 
-	expectedResp := newTestResponse(call.Sequence)
+	expectedResp := newTestResponse(client.sequence + 1)
 	conn.SetReadOutputBytesToResponse(t, expectedResp)
 	expectedRespBytes := conn.ReadOutputBytes
 

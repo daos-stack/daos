@@ -120,10 +120,9 @@ int drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers);
  * If the request is invalid or has no handler registered, the response reflects
  * this.
  *
- * \param[in]	request		Incoming Drpc__Call
- * \param[out]	resp		Allocated Drpc__Response - should not be NULL
- *					unless memory allocation failed
+ * \param[in]	request	Incoming Drpc__Call
+ * \param[out]	resp	Result of processing the call
  */
-void drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response **resp);
+void drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response *resp);
 
 #endif /* __DAOS_DRPC_HANDLER_H__ */

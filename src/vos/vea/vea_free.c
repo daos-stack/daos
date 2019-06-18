@@ -45,7 +45,7 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 	struct vea_free_extent *ext;
 	struct vea_entry *entry;
 	daos_handle_t btr_hdl;
-	daos_iov_t key, key_out, val;
+	d_iov_t key, key_out, val;
 	uint64_t off;
 	int rc, opc = BTR_PROBE_LE;
 
@@ -59,10 +59,10 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 		return -DER_INVAL;
 
 	D_ASSERT(!daos_handle_is_inval(btr_hdl));
-	daos_iov_set(&key, &ext_in->vfe_blk_off, sizeof(ext_in->vfe_blk_off));
-	daos_iov_set(&key_out, &off, sizeof(off));
+	d_iov_set(&key, &ext_in->vfe_blk_off, sizeof(ext_in->vfe_blk_off));
+	d_iov_set(&key_out, &off, sizeof(off));
 repeat:
-	daos_iov_set(&val, NULL, 0);
+	d_iov_set(&val, NULL, 0);
 
 	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_PUNCH, &key, &key_out,
 			  &val);
@@ -151,7 +151,7 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 {
 	struct vea_entry *entry, dummy;
 	struct vea_free_class *vfc = &vsi->vsi_class;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	uint64_t cur_time = 0;
 	int rc;
 
@@ -172,18 +172,18 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 
 	/* Add to in-memory free extent tree */
 	D_ASSERT(!daos_handle_is_inval(vsi->vsi_free_btr));
-	daos_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
+	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
 		     sizeof(dummy.ve_ext.vfe_blk_off));
-	daos_iov_set(&val, &dummy, sizeof(dummy));
+	d_iov_set(&val, &dummy, sizeof(dummy));
 
 	rc = dbtree_update(vsi->vsi_free_btr, &key, &val);
 	if (rc != 0)
 		return rc;
 
 	/* Fetch & operate on the in-tree record from now on */
-	daos_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
+	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
 		     sizeof(dummy.ve_ext.vfe_blk_off));
-	daos_iov_set(&val, NULL, 0);
+	d_iov_set(&val, NULL, 0);
 
 	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
 			  &key, NULL, &val);
@@ -235,7 +235,7 @@ int
 persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
 	struct vea_free_extent dummy;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	daos_handle_t btr_hdl = vsi->vsi_md_free_btr;
 	int rc;
 
@@ -249,8 +249,8 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	/* Add to persistent free extent tree */
 	D_ASSERT(!daos_handle_is_inval(btr_hdl));
-	daos_iov_set(&key, &dummy.vfe_blk_off, sizeof(dummy.vfe_blk_off));
-	daos_iov_set(&val, &dummy, sizeof(dummy));
+	d_iov_set(&key, &dummy.vfe_blk_off, sizeof(dummy.vfe_blk_off));
+	d_iov_set(&val, &dummy, sizeof(dummy));
 
 	rc = dbtree_update(btr_hdl, &key, &val);
 	return rc;
@@ -261,7 +261,7 @@ int
 aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
 	struct vea_entry *entry, dummy;
-	daos_iov_t key, val;
+	d_iov_t key, val;
 	daos_handle_t btr_hdl = vsi->vsi_agg_btr;
 	int rc;
 
@@ -278,18 +278,18 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	/* Add to in-memory aggregate free extent tree */
 	D_ASSERT(!daos_handle_is_inval(btr_hdl));
-	daos_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
+	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
 		     sizeof(dummy.ve_ext.vfe_blk_off));
-	daos_iov_set(&val, &dummy, sizeof(dummy));
+	d_iov_set(&val, &dummy, sizeof(dummy));
 
 	rc = dbtree_update(btr_hdl, &key, &val);
 	if (rc)
 		return rc;
 
 	/* Fetch & operate on the in-tree record from now on */
-	daos_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
+	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
 		     sizeof(dummy.ve_ext.vfe_blk_off));
-	daos_iov_set(&val, NULL, 0);
+	d_iov_set(&val, NULL, 0);
 
 	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PURGE, &key, NULL,
 			  &val);
@@ -338,7 +338,7 @@ migrate_end_cb(void *data, bool noop)
 	D_INIT_LIST_HEAD(&unmap_list);
 
 	d_list_for_each_entry_safe(entry, tmp, &vsi->vsi_agg_lru, ve_link) {
-		daos_iov_t	key;
+		d_iov_t	key;
 
 		vfe = entry->ve_ext;
 		/* Not force migration, and the oldest extent isn't expired */
@@ -352,7 +352,7 @@ migrate_end_cb(void *data, bool noop)
 		 * Remove entry from aggregate tree, entry will be freed on
 		 * deletion.
 		 */
-		daos_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
+		d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 		D_ASSERT(!daos_handle_is_inval(vsi->vsi_agg_btr));
 		rc = dbtree_delete(vsi->vsi_agg_btr, &key, NULL);
 		if (rc) {

@@ -17,7 +17,7 @@ def scons():
     env.Install('$PREFIX/bin/', drpc_test)
 
     drpc_iosrv_test = denv.Program('drpc_iosrv_test',
-            ['drpc_iosrv_test.c'], LIBS=libs)
+                                   ['drpc_iosrv_test.c'], LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_iosrv_test)
 
 if __name__ == "SCons.Script":

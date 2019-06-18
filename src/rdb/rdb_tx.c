@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,8 +106,6 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 int
 rdb_tx_commit(struct rdb_tx *tx)
 {
-	struct rdb     *db = tx->dt_db;
-	msg_entry_t	entry = {};
 	int		result;
 	int		rc;
 
@@ -118,10 +116,8 @@ rdb_tx_commit(struct rdb_tx *tx)
 	if (rc != 0)
 		return rc;
 
-	entry.type = RAFT_LOGTYPE_NORMAL;
-	entry.data.buf = tx->dt_entry;
-	entry.data.len = tx->dt_entry_len;
-	rc = rdb_raft_append_apply(db, &entry, &result);
+	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
+				   &result);
 	if (rc != 0)
 		return rc;
 	return result;
@@ -180,8 +176,8 @@ rdb_tx_opc_str(enum rdb_tx_opc opc)
 struct rdb_tx_op {
 	enum rdb_tx_opc		dto_opc;
 	rdb_path_t		dto_kvs;
-	daos_iov_t		dto_key;
-	daos_iov_t		dto_value;
+	d_iov_t		dto_key;
+	d_iov_t		dto_value;
 	struct rdb_kvs_attr    *dto_attr;
 };
 
@@ -382,7 +378,7 @@ rdb_tx_destroy_root(struct rdb_tx *tx)
  */
 int
 rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
-		  const daos_iov_t *key, const struct rdb_kvs_attr *attr)
+		  const d_iov_t *key, const struct rdb_kvs_attr *attr)
 {
 	struct rdb_tx_op op = {
 		.dto_opc	= RDB_TX_CREATE,
@@ -407,7 +403,7 @@ rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
  */
 int
 rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
-		   const daos_iov_t *key)
+		   const d_iov_t *key)
 {
 	struct rdb_tx_op op = {
 		.dto_opc	= RDB_TX_DESTROY,
@@ -431,8 +427,8 @@ rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
  * \retval -DER_NOTLEADER	not current leader
  */
 int
-rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key,
-	      const daos_iov_t *value)
+rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
+	      const d_iov_t *value)
 {
 	struct rdb_tx_op op = {
 		.dto_opc	= RDB_TX_UPDATE,
@@ -455,7 +451,7 @@ rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key,
  * \retval -DER_NOTLEADER	not current leader
  */
 int
-rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key)
+rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key)
 {
 	struct rdb_tx_op op = {
 		.dto_opc	= RDB_TX_DELETE,
@@ -485,9 +481,9 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 
 static int
 rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
-		    daos_iov_t *key, enum rdb_kvs_class class)
+		    d_iov_t *key, enum rdb_kvs_class class)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	rdb_oid_t	oid_class;
 	rdb_oid_t	oid_number;
 	rdb_oid_t	oid;
@@ -502,7 +498,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	}
 
 	/* Does the KVS already exist? */
-	daos_iov_set(&value, NULL, sizeof(rdb_oid_t));
+	d_iov_set(&value, NULL, sizeof(rdb_oid_t));
 	rc = rdb_lc_lookup(db->d_lc, index, parent, key, &value);
 	if (rc == 0) {
 		return -DER_EXIST;
@@ -513,7 +509,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	}
 
 	/* Allocate an object for the new KVS. */
-	daos_iov_set(&value, &oid_number, sizeof(oid_number));
+	d_iov_set(&value, &oid_number, sizeof(oid_number));
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_oid_next,
 			   &value);
 	if (rc == -DER_NONEXIST) {
@@ -543,7 +539,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	}
 
 	/* Update the key in the parent object. */
-	daos_iov_set(&value, &oid, sizeof(oid));
+	d_iov_set(&value, &oid, sizeof(oid));
 	rc = rdb_lc_update(db->d_lc, index, parent, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
@@ -556,14 +552,14 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 static int
 rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
-		     daos_iov_t *key)
+		     d_iov_t *key)
 {
-	daos_iov_t	value;
+	d_iov_t	value;
 	rdb_oid_t	oid;
 	int		rc;
 
 	/* Does the KVS exist? */
-	daos_iov_set(&value, &oid, sizeof(oid));
+	d_iov_set(&value, &oid, sizeof(oid));
 	rc = rdb_lc_lookup(db->d_lc, index, parent, key, &value);
 	if (rc != 0) {
 		if (rc != -DER_NONEXIST)
@@ -593,7 +589,7 @@ rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
 
 static int
 rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
-		    daos_iov_t *key, daos_iov_t *value)
+		    d_iov_t *key, d_iov_t *value)
 {
 	int rc;
 
@@ -606,7 +602,7 @@ rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 
 static int
 rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
-		    daos_iov_t *key)
+		    d_iov_t *key)
 {
 	int rc;
 
@@ -834,8 +830,8 @@ rdb_tx_query_post(struct rdb_tx *tx, struct rdb_kvs *kvs)
  * \retval -DER_MISMATCH	unexpected value length
  */
 int
-rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key,
-	      daos_iov_t *value)
+rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
+	      d_iov_t *value)
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
@@ -845,7 +841,7 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key,
 	if (rc != 0)
 		return rc;
 	rc = rdb_lc_lookup(db->d_lc, db->d_applied, s->de_object,
-			   (daos_iov_t *)key, value);
+			   (d_iov_t *)key, value);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -868,7 +864,7 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const daos_iov_t *key,
  */
 int
 rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
-	     const daos_iov_t *key_in, daos_iov_t *key_out, daos_iov_t *value)
+	     const d_iov_t *key_in, d_iov_t *key_out, d_iov_t *value)
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
@@ -878,7 +874,7 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 	if (rc != 0)
 		return rc;
 	rc = rdb_lc_iter_fetch(db->d_lc, db->d_applied, s->de_object, opc,
-			       (daos_iov_t *)key_in, key_out, value);
+			       (d_iov_t *)key_in, key_out, value);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }

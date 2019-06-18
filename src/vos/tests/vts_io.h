@@ -48,10 +48,14 @@
 #define UPDATE_DKEY		"dkey"
 #define UPDATE_AKEY_SIZE	32
 #define UPDATE_AKEY		"akey"
-#define UPDATE_AKEY_FIXED	"akey.fixed"
+#define UPDATE_AKEY_SV		"akey.sv"
+#define UPDATE_AKEY_ARRAY	"akey.array"
 #define	UPDATE_BUF_SIZE		64
 #define UPDATE_REC_SIZE		16
 #define UPDATE_CSUM_SIZE	32
+#define UPDATE_CSUM_MAX_COUNT	2
+#define UPDATE_CSUM_BUF_SIZE	(UPDATE_CSUM_SIZE * UPDATE_CSUM_MAX_COUNT +  \
+					2 * UPDATE_CSUM_SIZE)
 #define VTS_IO_OIDS		1
 #define VTS_IO_KEYS		100000
 
@@ -103,17 +107,31 @@ void			inc_cntr(unsigned long op_flags);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
-					   int epoch, daos_key_t *dkey,
+					   daos_epoch_t epoch, daos_key_t *dkey,
 					   daos_iod_t *iod,
-					   daos_sg_list_t *sgl,
+					   d_sg_list_t *sgl,
+					   struct dtx_handle *dth,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
-					  int epoch, daos_key_t *dkey,
+					  daos_epoch_t epoch, daos_key_t *dkey,
 					  daos_iod_t *iod,
-					  daos_sg_list_t *sgl,
+					  d_sg_list_t *sgl,
 					  bool verbose);
 int			setup_io(void **state);
 int			teardown_io(void **state);
+void			set_iov(d_iov_t *iov, char *buf, int int_flag);
+
+void			vts_key_gen(char *dest, size_t len, bool is_dkey,
+				    struct io_test_args *arg);
+
+static inline uint32_t
+hash_key(d_iov_t *key, int flag)
+{
+	if (flag)
+		return *(uint64_t *)key->iov_buf;
+
+	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
+}
 
 #endif
 

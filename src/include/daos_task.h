@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ typedef enum {
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
+	DAOS_OPC_CONT_AGGREGATE,
 	DAOS_OPC_CONT_ROLLBACK,
 	DAOS_OPC_CONT_SUBSCRIBE,
 	DAOS_OPC_CONT_LIST_ATTR,
@@ -119,6 +120,7 @@ typedef enum {
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
+	DAOS_OPC_KV_LIST,
 	DAOS_OPC_OBJ_FETCH_MULTI,
 	DAOS_OPC_OBJ_UPDATE_MULTI,
 
@@ -243,6 +245,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		poh;
 	const uuid_t		uuid;
+	daos_prop_t		*prop;
 } daos_cont_create_t;
 
 typedef struct {
@@ -266,7 +269,13 @@ typedef struct {
 typedef struct {
 	daos_handle_t		coh;
 	daos_cont_info_t	*info;
+	daos_prop_t		*prop;
 } daos_cont_query_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_epoch_t		epoch;
+} daos_cont_aggregate_t;
 
 typedef struct {
 	daos_handle_t		coh;
@@ -413,75 +422,99 @@ typedef struct {
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
-	daos_sg_list_t		*sgls;
-	daos_iom_t		*maps;
-} daos_obj_fetch_t;
+	d_sg_list_t		*sgls;
+	daos_iom_t		*maps; /* only valid for fetch */
+} daos_obj_rw_t;
 
-typedef struct {
-	daos_handle_t		oh;
-	daos_handle_t		th;
-	daos_key_t		*dkey;
-	unsigned int		nr;
-	daos_iod_t		*iods;
-	daos_sg_list_t		*sgls;
-} daos_obj_update_t;
-
-typedef struct {
-	daos_handle_t		oh;
-	daos_handle_t		th;
-	uint32_t		*nr;
-	daos_key_desc_t		*kds;
-	daos_sg_list_t		*sgl;
-	daos_anchor_t		*anchor;
-} daos_obj_list_dkey_t;
-
-typedef struct {
-	daos_handle_t		oh;
-	daos_handle_t		th;
-	daos_key_t		*dkey;
-	uint32_t		*nr;
-	daos_key_desc_t		*kds;
-	daos_sg_list_t		*sgl;
-	daos_anchor_t		*anchor;
-} daos_obj_list_akey_t;
+typedef daos_obj_rw_t		daos_obj_fetch_t;
+typedef daos_obj_rw_t		daos_obj_update_t;
 
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
-	daos_size_t		*size;
-	daos_iod_type_t		type;
-	uint32_t		*nr;
-	daos_recx_t		*recxs;
-	daos_epoch_range_t	*eprs;
-	daos_anchor_t		*anchor;
-	uint32_t		*versions;
-	bool			incr_order;
-} daos_obj_list_recx_t;
-
-/* argument structure for object internal task */
-typedef struct {
-	daos_handle_t		oh;
-	daos_handle_t		th;
-	daos_key_t		*dkey;
-	daos_key_t		*akey;
+	uint32_t		*nr;	/* number of dkeys/akeys/kds entries */
+	daos_key_desc_t		*kds;
+	d_sg_list_t		*sgl;
 	daos_size_t		*size;	/*total buf size for sgl buf, in case
 					 *it uses bulk transfer
 					 */
-	uint32_t		*nr;	/* number of kds entries, please refer
-					 * daos_obj_list_recx() for other
-					 * parameters
-					 */
-	daos_key_desc_t		*kds;
+	daos_iod_type_t		type;
+	daos_recx_t		*recxs;
 	daos_epoch_range_t	*eprs;
-	daos_sg_list_t		*sgl;
+	/* anchors for obj list -
+	 * list_dkey uses dkey_anchor,
+	 * list_akey uses akey_anchor,
+	 * list_recx uses anchor,
+	 * list_obj uses all the 3 anchors.
+	 */
 	daos_anchor_t		*anchor;
 	daos_anchor_t		*dkey_anchor;
 	daos_anchor_t		*akey_anchor;
 	uint32_t		*versions;
 	bool			incr_order;
-} daos_obj_list_obj_t;
+} daos_obj_list_t;
+
+/**
+ * parameter subset for list_dkey -
+ * daos_handle_t	oh;
+ * daos_handle_t	th;
+ * uint32_t		*nr;
+ * daos_key_desc_t	*kds;
+ * d_sg_list_t		*sgl;
+ * daos_anchor_t	*dkey_anchor;
+*/
+typedef daos_obj_list_t		daos_obj_list_dkey_t;
+
+/**
+ * parameter subset for list_akey -
+ * daos_handle_t	oh;
+ * daos_handle_t	th;
+ * daos_key_t		*dkey;
+ * uint32_t		*nr;
+ * daos_key_desc_t	*kds;
+ * d_sg_list_t		*sgl;
+ * daos_anchor_t	*akey_anchor;
+*/
+typedef daos_obj_list_t		daos_obj_list_akey_t;
+
+/**
+ * parameter subset for list_recx -
+ * daos_handle_t	oh;
+ * daos_handle_t	th;
+ * daos_key_t		*dkey;
+ * daos_key_t		*akey;
+ * daos_size_t		*size;
+ * daos_iod_type_t	type;
+ * uint32_t		*nr;
+ * daos_recx_t		*recxs;
+ * daos_epoch_range_t	*eprs;
+ * daos_anchor_t	*anchor;
+ * uint32_t		*versions;
+ * bool			incr_order;
+*/
+typedef daos_obj_list_t		daos_obj_list_recx_t;
+
+/**
+ * parameter subset for list_obj -
+ * daos_handle_t	oh;
+ * daos_handle_t	th;
+ * daos_key_t		*dkey;
+ * daos_key_t		*akey;
+ * daos_size_t		*size;
+ * uint32_t		*nr;
+ * daos_key_desc_t	*kds;
+ * daos_recx_t		*recxs;
+ * daos_epoch_range_t	*eprs;
+ * d_sg_list_t		*sgl;
+ * daos_anchor_t	*anchor;
+ * daos_anchor_t	*dkey_anchor;
+ * daos_anchor_t	*akey_anchor;
+ * uint32_t		*versions;
+ * bool			incr_order;
+*/
+typedef daos_obj_list_t		daos_obj_list_obj_t;
 
 typedef struct {
 	daos_handle_t		coh;
@@ -510,7 +543,7 @@ typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
 	daos_array_iod_t	*iod;
-	daos_sg_list_t		*sgl;
+	d_sg_list_t		*sgl;
 	daos_csum_buf_t		*csums;
 } daos_array_io_t;
 
@@ -552,6 +585,15 @@ typedef struct {
 	daos_handle_t		th;
 	const char		*key;
 } daos_kv_remove_t;
+
+typedef struct {
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	uint32_t		*nr;
+	daos_key_desc_t		*kds;
+	d_sg_list_t		*sgl;
+	daos_anchor_t		*anchor;
+} daos_kv_list_t;
 
 typedef struct {
 	daos_handle_t		oh;

@@ -47,6 +47,8 @@ import (
 type NVME interface {
 	// Discover NVMe controllers and namespaces
 	Discover() ([]Controller, []Namespace, error)
+	// Format NVMe controller namespaces
+	Format(ctrlrPciAddr string) ([]Controller, []Namespace, error)
 	// Update NVMe controller firmware
 	Update(ctrlrPciAddr string, path string, slot int32) (
 		[]Controller, []Namespace, error)
@@ -63,7 +65,6 @@ type Nvme struct{}
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ctrlr_t
 type Controller struct {
-	ID      int32
 	Model   string
 	Serial  string
 	PCIAddr string
@@ -88,6 +89,22 @@ func (n *Nvme) Discover() ([]Controller, []Namespace, error) {
 	failLocation := "NVMe Discover(): C.nvme_discover"
 
 	if retPtr := C.nvme_discover(); retPtr != nil {
+		return processReturn(retPtr, failLocation)
+	}
+
+	return nil, nil, fmt.Errorf(
+		"%s unexpectedly returned NULL", failLocation)
+}
+
+// Format device at given pci address, destructive operation!
+func (n *Nvme) Format(ctrlrPciAddr string) ([]Controller, []Namespace, error) {
+	csPci := C.CString(ctrlrPciAddr)
+	defer C.free(unsafe.Pointer(csPci))
+
+	failLocation := "NVMe Format(): C.nvme_format"
+
+	retPtr := C.nvme_format(csPci)
+	if retPtr != nil {
 		return processReturn(retPtr, failLocation)
 	}
 
@@ -125,10 +142,9 @@ func (n *Nvme) Cleanup() {
 // c2GoController is a private translation function
 func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	return Controller{
-		ID:      int32(ctrlr.id),
 		Model:   C.GoString(&ctrlr.model[0]),
 		Serial:  C.GoString(&ctrlr.serial[0]),
-		PCIAddr: C.GoString(&ctrlr.tr_addr[0]),
+		PCIAddr: C.GoString(&ctrlr.pci_addr[0]),
 		FWRev:   C.GoString(&ctrlr.fw_rev[0]),
 	}
 }

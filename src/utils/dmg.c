@@ -182,14 +182,14 @@ create_hdlr(int argc, char *argv[])
 		fprintf(stderr, "--svcn must be in [1, %lu]\n",
 			ARRAY_SIZE(ranks));
 		if (targets != NULL)
-			daos_rank_list_free(targets);
+			d_rank_list_free(targets);
 		return 2;
 	}
 
 	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", scm_size,
 			      nvme_size, NULL, &svc, pool_uuid, NULL /* ev */);
 	if (targets != NULL)
-		daos_rank_list_free(targets);
+		d_rank_list_free(targets);
 	if (rc != 0) {
 		fprintf(stderr, "failed to create pool: %d\n", rc);
 		return rc;
@@ -289,6 +289,7 @@ pool_op_hdlr(int argc, char *argv[])
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
 		{"svc",		required_argument,	NULL,	'v'},
+		{"rank",	required_argument,	NULL,	'r'},
 		{"target",	required_argument,	NULL,	't'},
 		{NULL,		0,			NULL,	0}
 	};
@@ -297,8 +298,10 @@ pool_op_hdlr(int argc, char *argv[])
 	daos_handle_t		pool;
 	const char	       *svc_str = NULL;
 	d_rank_list_t	       *svc;
+	const char	       *rank_str = NULL;
 	const char	       *tgt_str = NULL;
-	d_rank_list_t	       *targets;
+	d_rank_list_t	       *ranks = NULL;
+	d_rank_list_t	       *targets = NULL;
 	enum pool_op		op = pool_op_parse(argv[1]);
 	struct d_tgt_list	tgt_list = { 0 };
 	int			tgt = -1;
@@ -306,13 +309,11 @@ pool_op_hdlr(int argc, char *argv[])
 
 	uuid_clear(pool_uuid);
 
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "G:p:r:t:v:", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'G':
 			group = optarg;
-			break;
-		case 't':
-			tgt_str = optarg;
 			break;
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -321,6 +322,12 @@ pool_op_hdlr(int argc, char *argv[])
 					optarg);
 				return 2;
 			}
+			break;
+		case 't':
+			tgt_str = optarg;
+			break;
+		case 'r':
+			rank_str = optarg;
 			break;
 		case 'v':
 			svc_str = optarg;
@@ -345,27 +352,29 @@ pool_op_hdlr(int argc, char *argv[])
 		fprintf(stderr, "failed to parse service ranks\n");
 		return 2;
 	}
-	if (svc->rl_nr == 0) {
-		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
-		return 2;
-	}
 
-	targets = NULL;
-	if (tgt_str != NULL) {
-		targets = daos_rank_list_parse(tgt_str, ":");
-		if (targets != NULL && targets->rl_nr == 0) {
-			daos_rank_list_free(targets);
-			targets = NULL;
+	if (rank_str != NULL) {
+		ranks = daos_rank_list_parse(rank_str, ":");
+		if (ranks == NULL) {
+			fprintf(stderr, "failed to parse ranks\n");
+			return 2;
 		}
 	}
 
-	/* Check the targets for POOL_EXCLUDE, REPLICA_ADD & REPLICA_DEL. */
-	if (targets == NULL &&
+	/* Check the ranks for POOL_EXCLUDE, REPLICA_ADD & REPLICA_DEL. */
+	if (ranks == NULL &&
 	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL)) {
 		fprintf(stderr, "valid target ranks required\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
+	}
+
+	if (tgt_str != NULL) {
+		targets = daos_rank_list_parse(tgt_str, ":");
+		if (targets == NULL) {
+			fprintf(stderr, "failed to parse target ranks\n");
+			return 2;
+		}
 	}
 
 	switch (op) {
@@ -378,10 +387,16 @@ pool_op_hdlr(int argc, char *argv[])
 
 	case POOL_EXCLUDE:
 		/* Only support exclude single target XXX */
-		D_ASSERT(targets->rl_nr == 1);
+		D_ASSERT(ranks->rl_nr == 1);
 		tgt_list.tl_nr = 1;
-		tgt_list.tl_ranks = targets->rl_ranks;
-		tgt_list.tl_tgts = &tgt;
+		tgt_list.tl_ranks = ranks->rl_ranks;
+		if (targets != NULL) {
+			D_ASSERT(targets->rl_nr == 1);
+			tgt_list.tl_tgts = (int *)targets->rl_ranks;
+		} else {
+			tgt_list.tl_tgts = &tgt;
+		}
+
 		rc = daos_pool_tgt_exclude(pool_uuid, group, svc, &tgt_list,
 				       NULL /* ev */);
 		if (rc != 0)
@@ -390,7 +405,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case REPLICA_ADD:
-		rc = daos_pool_add_replicas(pool_uuid, group, svc, targets,
+		rc = daos_pool_add_replicas(pool_uuid, group, svc, ranks,
 					    NULL /* failed */, NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to add replicas: "
@@ -398,7 +413,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case REPLICA_DEL:
-		rc = daos_pool_remove_replicas(pool_uuid, group, svc, targets,
+		rc = daos_pool_remove_replicas(pool_uuid, group, svc, ranks,
 					       NULL /* failed */,
 					       NULL /* ev */);
 		if (rc != 0)
@@ -413,8 +428,9 @@ pool_op_hdlr(int argc, char *argv[])
 			fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		break;
 	}
-	daos_rank_list_free(svc);
-	daos_rank_list_free(targets);
+	d_rank_list_free(svc);
+	d_rank_list_free(ranks);
+	d_rank_list_free(targets);
 	if (rc != 0)
 		return rc;
 
@@ -424,6 +440,7 @@ pool_op_hdlr(int argc, char *argv[])
 		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 		int				 i;
 
+		pinfo.pi_bits = DPI_ALL;
 		rc = daos_pool_query(pool, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
@@ -566,7 +583,8 @@ obj_op_hdlr(int argc, char *argv[])
 	int			rc;
 	int			ret;
 
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "c:o:s:p:", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -621,13 +639,13 @@ obj_op_hdlr(int argc, char *argv[])
 	}
 	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
 	rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO,
 			       &poh, NULL /* info */, NULL /* ev */);
-	daos_rank_list_free(svc);
+	d_rank_list_free(svc);
 	if (rc) {
 		fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		return rc;
@@ -679,6 +697,142 @@ disconnect:
 }
 
 static int
+module_str2id(const char *name, int name_len)
+{
+	if (strncmp(name, "object", name_len) == 0)
+		return DAOS_OBJ_MODULE;
+	else if (strncmp(name, "rebuild", name_len) == 0)
+		return DAOS_REBUILD_MODULE;
+	else if (strncmp(name, "vos", name_len) == 0)
+		return DAOS_VOS_MODULE;
+	else if (strncmp(name, "pool", name_len) == 0)
+		return DAOS_VOS_MODULE;
+	else
+		return -DER_INVAL;
+}
+
+static int
+module_opt_parse(char *opt_str, uint64_t *module_p)
+{
+	char *ptr = opt_str;
+	uint64_t module = 0;
+	int rc = 0;
+
+	while (1) {
+		char *end;
+		int mod_id;
+
+		/* skip the space & , to locate the start */
+		while (*ptr && (*ptr == ' ' || *ptr == ','))
+			ptr++;
+
+		if (!*ptr)
+			break;
+
+		/* find the word end */
+		end = ptr;
+		while (*end && *end != ' ' && *end != ',')
+			end++;
+
+		mod_id = module_str2id(ptr, end - ptr);
+		if (mod_id < 0)
+			return mod_id;
+
+		if (mod_id > 64) {
+			fprintf(stderr, "wrong module %s id %d\n", ptr, mod_id);
+			return -DER_INVAL;
+		}
+		module |= 1 << mod_id;
+
+		ptr = end;
+	}
+
+	if (module > 0)
+		*module_p = module;
+
+	return rc;
+}
+
+int
+file_path_copy(char *opt_str, char **path)
+{
+	int len = strlen(opt_str) + 1;
+
+	*path = calloc(len, 1);
+	if (*path == NULL)
+		return -DER_NOMEM;
+
+	memcpy(*path, opt_str, len);
+	return 0;
+}
+
+static int
+profile_op_hdlr(int argc, char *argv[])
+{
+	uint64_t		modules = -1;
+	char			*path = NULL;
+	bool			start = false;
+	bool			stop = false;
+	int			rc;
+	struct option		options[] = {
+		{"start",	no_argument,		NULL,	's'},
+		{"end",		no_argument,		NULL,	'e'},
+		{"path",	required_argument,	NULL,	'p'},
+		{"module",	required_argument,	NULL,	'm'},
+		{NULL,		0,			NULL,	0}
+	};
+
+	while ((rc = getopt_long(argc, argv, "em:p:s", options, NULL)) != -1) {
+		switch (rc) {
+		case 'm':
+			rc = module_opt_parse(optarg, &modules);
+			if (rc != 0) {
+				fprintf(stderr, "failed to parse module: %s\n",
+					optarg);
+				goto out;
+			}
+
+			break;
+		case 'p':
+			rc = file_path_copy(optarg, &path);
+			if (rc != 0) {
+				fprintf(stderr, "failed to parse path: %s\n",
+					optarg);
+				goto out;
+			}
+			break;
+		case 's':
+			start = true;
+			break;
+		case 'e':
+			stop = true;
+			break;
+		default:
+			rc = -DER_INVAL;
+			goto out;
+		}
+	}
+
+	if (start == stop) {
+		fprintf(stderr, "Indicate start or stop profile.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (start && (modules == (uint64_t)(-1))) {
+		fprintf(stderr, "module option and path are needed\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = dc_mgmt_profile(modules, path, start);
+out:
+	if (path)
+		free(path);
+	return rc;
+}
+
+static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
@@ -703,8 +857,7 @@ create options:\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
   --nvme=BYTES	target NVMe size in bytes (%s)\n\
   --svcn=N	number of pool service replicas (\"%u\")\n\
-  --target=RANKS\n\
-		pool targets like 0:1:2:3:4 (whole group)\n\
+  --target=N	pool targets on server like 0:1:2:3:4 (whole group)\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
 	       default_scm_size, default_nvme_size, default_svc_nreplicas);
 	printf("\
@@ -722,6 +875,7 @@ exclude options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
+  --rank=N	storage server rank \n\
   --target=RANK	target rank\n", default_group);
 	printf("\
 add options:\n\
@@ -779,7 +933,8 @@ main(int argc, char *argv[])
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "layout") == 0)
 		hdlr = obj_op_hdlr;
-
+	else if (strcmp(argv[1], "profile") == 0)
+		hdlr = profile_op_hdlr;
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);
 		return hdlr == NULL ? 2 : 0;

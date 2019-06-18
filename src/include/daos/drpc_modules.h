@@ -36,8 +36,27 @@
 enum drpc_module {
 	DRPC_MODULE_TEST		= 0,	/* Reserved for testing */
 	DRPC_MODULE_SECURITY_AGENT	= 1,
+	DRPC_MODULE_MGMT		= 2,	/* daos_server mgmt */
+	DRPC_MODULE_SRV			= 3,	/* daos_server */
 
 	NUM_DRPC_MODULES			/* Must be last */
+};
+
+enum drpc_mgmt_method {
+	DRPC_METHOD_MGMT_KILL_RANK		= 201,
+	DRPC_METHOD_MGMT_SET_RANK		= 202,
+	DRPC_METHOD_MGMT_CREATE_MS		= 203,
+	DRPC_METHOD_MGMT_START_MS		= 204,
+	DRPC_METHOD_MGMT_JOIN			= 205,
+	DRPC_METHOD_MGMT_GET_ATTACH_INFO	= 206,
+
+	NUM_DRPC_MGMT_METHODS			/* Must be last */
+};
+
+enum drpc_srv_method {
+	DRPC_METHOD_SRV_NOTIFY_READY	= 301,
+
+	NUM_DRPC_SRV_METHODS			/* Must be last */
 };
 
 #endif /* __DAOS_DRPC_MODULES_H__ */

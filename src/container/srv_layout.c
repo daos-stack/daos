@@ -29,14 +29,64 @@
 #include "srv_layout.h"
 
 /* Root KVS */
-RDB_STRING_KEY(ds_cont_attr_, conts);
-RDB_STRING_KEY(ds_cont_attr_, cont_handles);
+RDB_STRING_KEY(ds_cont_prop_, conts);
+RDB_STRING_KEY(ds_cont_prop_, cont_handles);
 
-/* Container attribute KVS */
-RDB_STRING_KEY(ds_cont_attr_, ghce);
-RDB_STRING_KEY(ds_cont_attr_, ghpce);
-RDB_STRING_KEY(ds_cont_attr_, max_oid);
-RDB_STRING_KEY(ds_cont_attr_, lres);
-RDB_STRING_KEY(ds_cont_attr_, lhes);
-RDB_STRING_KEY(ds_cont_attr_, snapshots);
+/* Container properties KVS */
+RDB_STRING_KEY(ds_cont_prop_, ghce);
+RDB_STRING_KEY(ds_cont_prop_, ghpce);
+RDB_STRING_KEY(ds_cont_prop_, max_oid);
+RDB_STRING_KEY(ds_cont_prop_, label);
+RDB_STRING_KEY(ds_cont_prop_, layout_type);
+RDB_STRING_KEY(ds_cont_prop_, layout_ver);
+RDB_STRING_KEY(ds_cont_prop_, csum);
+RDB_STRING_KEY(ds_cont_prop_, redun_fac);
+RDB_STRING_KEY(ds_cont_prop_, redun_lvl);
+RDB_STRING_KEY(ds_cont_prop_, snapshot_max);
+RDB_STRING_KEY(ds_cont_prop_, compress);
+RDB_STRING_KEY(ds_cont_prop_, encrypt);
+RDB_STRING_KEY(ds_cont_prop_, lres);
+RDB_STRING_KEY(ds_cont_prop_, lhes);
+RDB_STRING_KEY(ds_cont_prop_, snapshots);
 RDB_STRING_KEY(ds_cont_attr_, user);
+
+/** default properties, should cover all optional container properties */
+#define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
+struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
+	{
+		.dpe_type	= DAOS_PROP_CO_LABEL,
+		.dpe_str	= "container label not set",
+	}, {
+		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
+		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKOWN,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_LAYOUT_VER,
+		.dpe_val	= 1,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_CSUM,
+		.dpe_val	= DAOS_PROP_CO_CSUM_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF1,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RACK,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_SNAPSHOT_MAX,
+		.dpe_val	= 0, /* No limitation */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ACL,
+		.dpe_val_ptr	= NULL,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_COMPRESS,
+		.dpe_val	= DAOS_PROP_CO_COMPRESS_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ENCRYPT,
+		.dpe_val	= DAOS_PROP_CO_ENCRYPT_OFF,
+	}
+};
+
+daos_prop_t cont_prop_default = {
+	.dpp_nr		= CONT_PROP_NUM,
+	.dpp_entries	= cont_prop_entries_default,
+};

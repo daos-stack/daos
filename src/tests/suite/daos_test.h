@@ -63,6 +63,7 @@
 	} while  (0)
 
 #include <mpi.h>
+#include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>
@@ -190,7 +191,8 @@ int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool);
 int
-test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop);
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
+		     daos_prop_t *co_prop);
 
 static inline int
 async_enable(void **state)
@@ -295,7 +297,7 @@ static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	     int verbose)
 {
-	daos_iov_t	ghdl = { NULL, 0, 0 };
+	d_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
 
 	if (rank == 0) {
@@ -363,32 +365,9 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-static inline void
-daos_sync_ranks(MPI_Comm comm)
-{
-	daos_epoch_t e = daos_ts2epoch();
-	daos_epoch_t ge;
-
-	MPI_Allreduce(&e, &ge, 1, MPI_UINT64_T, MPI_MAX, comm);
-
-	e = daos_ts2epoch();
-	if (ge > e) {
-		struct timespec ts;
-
-		ts.tv_sec = 0;
-		ts.tv_nsec = ge - e;
-		nanosleep(&ts, NULL);
-	}
-}
-
 #define MAX_KILLS	3
 extern d_rank_t ranks_to_kill[MAX_KILLS];
-bool test_runable(test_arg_t *arg, unsigned int required_tgts);
-int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
-int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 d_rank_t test_get_last_svr_rank(test_arg_t *arg);
-bool test_rebuild_query(test_arg_t **args, int args_cnt);
-void test_rebuild_wait(test_arg_t **args, int args_cnt);
 
 /* make dir including its parent dir */
 static inline int

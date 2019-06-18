@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,9 +40,8 @@
 #include "common_utils.h"
 #include <daos.h>
 #include <daos_api.h>
-#include <daos_mgmt.h>
 #include <daos/common.h>
-#include <gurt/common.h>
+#include <daos_mgmt.h>
 
 /**
  * This file contains the pool related user commands.

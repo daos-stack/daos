@@ -59,7 +59,7 @@ func Rc2err(label string, rc C.int) error {
 			rc = -rc
 		}
 		// e := errors.Error(rc)
-		return fmt.Errorf("%s: %s", label, rc) // e
+		return fmt.Errorf("%s: %d", label, rc) // e
 	}
 	return nil
 }

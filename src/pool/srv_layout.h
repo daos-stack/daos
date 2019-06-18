@@ -53,23 +53,26 @@
  *                       v       v     v      v      v
  *   ds_pool_prop_mode:  [padding][user][group][other]
  */
-extern daos_iov_t ds_pool_prop_uid;		/* uint32_t */
-extern daos_iov_t ds_pool_prop_gid;		/* uint32_t */
-extern daos_iov_t ds_pool_prop_mode;		/* uint32_t */
-extern daos_iov_t ds_pool_prop_map_version;	/* uint32_t */
-extern daos_iov_t ds_pool_prop_map_buffer;	/* pool_buf */
-extern daos_iov_t ds_pool_prop_map_uuids;	/* uuid_t[] (unused now) */
-extern daos_iov_t ds_pool_prop_label;		/* string */
-extern daos_iov_t ds_pool_prop_space_rb;	/* uint64_t */
-extern daos_iov_t ds_pool_prop_self_heal;	/* uint64_t */
-extern daos_iov_t ds_pool_prop_reclaim;		/*  uint64_t */
-extern daos_iov_t ds_pool_prop_nhandles;	/* uint32_t */
+extern d_iov_t ds_pool_prop_uid;		/* uint32_t */
+extern d_iov_t ds_pool_prop_gid;		/* uint32_t */
+extern d_iov_t ds_pool_prop_mode;		/* uint32_t */
+extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
+extern d_iov_t ds_pool_prop_map_buffer;	/* pool_buf */
+extern d_iov_t ds_pool_prop_map_uuids;	/* uuid_t[] (unused now) */
+extern d_iov_t ds_pool_prop_label;		/* string */
+extern d_iov_t ds_pool_prop_acl;		/* daos_acl */
+extern d_iov_t ds_pool_prop_space_rb;	/* uint64_t */
+extern d_iov_t ds_pool_prop_self_heal;	/* uint64_t */
+extern d_iov_t ds_pool_prop_reclaim;		/*  uint64_t */
+extern d_iov_t ds_pool_prop_owner;		/* string */
+extern d_iov_t ds_pool_prop_owner_group;	/* string */
+extern d_iov_t ds_pool_prop_nhandles;	/* uint32_t */
 
 /** pool handle KVS */
-extern daos_iov_t ds_pool_prop_handles;		/* pool handle KVS */
+extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
 
 /** user-defined attributes KVS */
-extern daos_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 
 /** value of key (handle uuid) in pool handle KVS (RDB_KVS_GENERIC) */
 struct pool_hdl {
@@ -77,5 +80,19 @@ struct pool_hdl {
 };
 
 extern daos_prop_t pool_prop_default;
+
+/**
+ * Initializes the default pool properties.
+ *
+ * \return	0		Success
+ *		-DER_NOMEM	Could not allocate
+ */
+int ds_pool_prop_default_init(void);
+
+/**
+ * Finalizes the default pool properties.
+ * Frees any properties that were dynamically allocated.
+ */
+void ds_pool_prop_default_fini(void);
 
 #endif /* __POOL_SRV_LAYOUT_H__ */

@@ -1,0 +1,24 @@
+hosts:
+    test_servers:
+        - boro-A
+timeout: 40
+server_config:
+    name: daos_server
+pool:
+    createmode:
+        mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 1073741
+container:
+    container_handle: !mux
+        goodcoh:
+            coh:
+                - GOOD
+                - 'PASS'
+        badcoh:
+            coh:
+                - BAD
+                - 'FAIL'
+

@@ -31,7 +31,7 @@
 #include "rdb_internal.h"
 
 /* Key for the root KVS */
-daos_iov_t rdb_path_root_key;
+d_iov_t rdb_path_root_key;
 
 static inline void
 rdb_path_assert(const rdb_path_t *path)
@@ -52,7 +52,7 @@ rdb_path_assert(const rdb_path_t *path)
 int
 rdb_path_init(rdb_path_t *path)
 {
-	daos_iov_t p = {};
+	d_iov_t p = {};
 
 	p.iov_buf_len = 128;
 	D_ALLOC(p.iov_buf, p.iov_buf_len);
@@ -110,7 +110,7 @@ rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path)
  * \retval -DER_OVERFLOW	path would become too large
  */
 int
-rdb_path_push(rdb_path_t *path, const daos_iov_t *key)
+rdb_path_push(rdb_path_t *path, const d_iov_t *key)
 {
 	size_t	len;
 	size_t	n;
@@ -153,7 +153,7 @@ rdb_path_push(rdb_path_t *path, const daos_iov_t *key)
 int
 rdb_path_pop(rdb_path_t *path)
 {
-	daos_iov_t	key;
+	d_iov_t	key;
 	ssize_t		n;
 
 	rdb_path_assert(path);
@@ -175,7 +175,7 @@ rdb_path_iterate(const rdb_path_t *path, rdb_path_iterate_cb_t cb, void *arg)
 	rdb_path_assert(path);
 	while (p < path->iov_buf + path->iov_len) {
 		ssize_t		n;
-		daos_iov_t	key;
+		d_iov_t	key;
 		int		rc;
 
 		n = rdb_decode_iov(p, path->iov_buf + path->iov_len - p, &key);

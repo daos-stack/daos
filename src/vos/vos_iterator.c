@@ -70,6 +70,11 @@ static struct vos_iter_dict vos_iterators[] = {
 		.id_ops		= &vos_obj_iter_ops,
 	},
 	{
+		.id_type	= VOS_ITER_DTX,
+		.id_name	= "dtx",
+		.id_ops		= &vos_dtx_iter_ops,
+	},
+	{
 		.id_type	= VOS_ITER_NONE,
 		.id_name	= "unknown",
 		.id_ops		= NULL,
@@ -128,7 +133,13 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	rc = iter->it_ops->iop_nested_tree_fetch(iter, type, &info);
 
 	if (rc != 0) {
-		D_ERROR("Problem fetching nested tree from iterator: %d", rc);
+		if ((type == VOS_ITER_RECX || type == VOS_ITER_SINGLE) &&
+		    rc == -DER_NONEXIST)
+			D_DEBUG(DB_TRACE, "%s iterator does not exist\n",
+				dict->id_name);
+		else
+			D_ERROR("Problem fetching nested tree from iterator:"
+				" %d", rc);
 		return rc;
 	}
 
@@ -164,6 +175,13 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	struct vos_iterator	*iter;
 	int			 rc;
 
+	if (ih == NULL) {
+		D_ERROR("Argument 'ih' is invalid to vos_iter_param\n");
+		return -DER_INVAL;
+	}
+
+	*ih = DAOS_HDL_INVAL;
+
 	if (daos_handle_is_inval(param->ip_hdl) &&
 	    daos_handle_is_inval(param->ip_ih)) {
 		D_ERROR("No valid handle specified in vos_iter_param\n");
@@ -198,7 +216,8 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return rc;
 	}
 
-	iter->it_type		= type;
+	D_ASSERT(iter->it_type == type);
+
 	iter->it_ops		= dict->id_ops;
 	iter->it_state		= VOS_ITS_NONE;
 	iter->it_ref_cnt	= 1;
@@ -227,10 +246,16 @@ iter_decref(struct vos_iterator *iter)
 int
 vos_iter_finish(daos_handle_t ih)
 {
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	struct vos_iterator	*parent = iter->it_parent;
+	struct vos_iterator	*iter;
+	struct vos_iterator	*parent;
 	int			 rc = 0;
 	int			 prc = 0;
+
+	if (daos_handle_is_inval(ih))
+		return -DER_INVAL;
+
+	iter = vos_hdl2iter(ih);
+	parent = iter->it_parent;
 
 	iter->it_parent = NULL;
 	rc = iter_decref(iter);
@@ -312,7 +337,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 
 int
 vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int rc;
@@ -422,7 +447,7 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 
 static inline void
 set_reprobe(vos_iter_type_t type, unsigned int acts,
-	    struct vos_iter_anchors *anchors)
+	    struct vos_iter_anchors *anchors, bool unsorted)
 {
 	bool yield = (acts & VOS_ITER_CB_YIELD);
 	bool delete = (acts & VOS_ITER_CB_DELETE);
@@ -433,7 +458,9 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_sv = 1;
 		/* fallthrough */
 	case VOS_ITER_RECX:
-		/* evtree doesn't need reprobe on deletion or yield */
+		/* evtree only need reprobe on yield for unsorted iteration */
+		if (unsorted && yield && (type == VOS_ITER_RECX))
+			anchors->ia_reprobe_ev = 1;
 		/* fallthrough */
 	case VOS_ITER_AKEY:
 		if (yield || (delete && (type == VOS_ITER_AKEY)))
@@ -499,6 +526,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	vos_iter_entry_t	iter_ent;
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
+	bool			skipped;
 	int			rc;
 
 	D_ASSERT(type >= VOS_ITER_OBJ && type <= VOS_ITER_RECX);
@@ -546,7 +574,9 @@ probe:
 		if (rc != 0)
 			break;
 
-		set_reprobe(type, acts, anchors);
+		set_reprobe(type, acts, anchors,
+			    param->ip_flags == VOS_IT_RECX_ALL);
+		skipped = (acts & VOS_ITER_CB_SKIP);
 		acts = 0;
 
 		if (need_reprobe(type, anchors)) {
@@ -555,23 +585,19 @@ probe:
 			goto probe;
 		}
 
-		if (recursive && !is_last_level(type)) {
+		if (recursive && !is_last_level(type) && !skipped) {
 			vos_iter_param_t	child_param = *param;
-			vos_iter_type_t		child_type;
 
 			child_param.ip_ih = ih;
 
 			switch (type) {
 			case VOS_ITER_OBJ:
-				child_type = VOS_ITER_DKEY;
 				child_param.ip_oid = iter_ent.ie_oid;
 				break;
 			case VOS_ITER_DKEY:
-				child_type = VOS_ITER_AKEY;
 				child_param.ip_dkey = iter_ent.ie_key;
 				break;
 			case VOS_ITER_AKEY:
-				child_type = VOS_ITER_RECX;
 				child_param.ip_akey = iter_ent.ie_key;
 				break;
 			default:
@@ -581,23 +607,12 @@ probe:
 				goto out;
 			}
 
-			rc = vos_iterate(&child_param, child_type, recursive,
-					 anchors, cb, arg);
+			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
+					 recursive, anchors, cb, arg);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
-			reset_anchors(child_type, anchors);
-
-			if (child_type == VOS_ITER_RECX) {
-				child_type = VOS_ITER_SINGLE;
-
-				rc = vos_iterate(&child_param, child_type,
-						 recursive, anchors, cb, arg);
-				if (rc != 0)
-					D_GOTO(out, rc);
-
-				reset_anchors(child_type, anchors);
-			}
+			reset_anchors(iter_ent.ie_child_type, anchors);
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&

@@ -171,6 +171,21 @@ smd_store_ptr2pop(struct smd_store *sms_obj)
 	return sms_obj->sms_uma.uma_pool;
 }
 
+static inline int
+smd_tx_begin(struct smd_store *sms_obj)
+{
+	return umem_tx_begin(&sms_obj->sms_umm, NULL);
+}
+
+static inline int
+smd_tx_end(struct smd_store *sms_obj, int rc)
+{
+	if (rc != 0)
+		return umem_tx_abort(&sms_obj->sms_umm, rc);
+
+	return umem_tx_commit(&sms_obj->sms_umm);
+}
+
 static inline struct smd_df *
 smd_store_ptr2df(struct smd_store *sms_obj)
 {

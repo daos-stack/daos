@@ -70,26 +70,15 @@ The API is currently tested with daos_addons_test.
 ## DAOS High Level (HL) API
 
 The HL API simplifies the DAOS Object API and exposes a simple API to manipulate
-a Key-Value object with simple put/get/remove operations. The API exposes only a
-single Key (no multi-level keys) and a value associated with that key which is
-overwritten entirely anytime the key is updated. So internally the mapping of a
-the HL KV object looks like:
+a Key-Value object with simple put/get/remove/list operations. The API exposes
+only a single Key (no multi-level keys) and a value associated with that key
+which is overwritten entirely anytime the key is updated. So internally the
+mapping of a the HL KV object looks like:
 
 ~~~~~~
 Key -> DKey
 NULL AKEY
 Value -> Single Value
-~~~~~~
-
-The API provides three functions to access the DAOS object:
-
-~~~~~~
-int daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
-    	        daos_size_t size, const void *buf, daos_event_t *ev);
-int daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
-  	        daos_size_t *size, void *buf, daos_event_t *ev);
-int daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
-	           daos_event_t *ev);
 ~~~~~~
 
 The API is currently tested with daos_addons_test.

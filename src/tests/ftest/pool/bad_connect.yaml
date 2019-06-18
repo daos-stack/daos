@@ -1,0 +1,72 @@
+# Note that stuff that is commented out represents tests that presently
+# cause issues and will be uncommented as the daos code is fixed
+server_config:
+   name: scott_server
+hosts:
+  test_machines:
+    - boro-A
+timeout: 700
+connecttests:
+   createmode:
+     mode: 511
+   connectmode: !mux
+     testmode1:
+          mode:
+             - 0
+             - PASS
+     testmode2:
+           mode:
+             - 1
+             - PASS
+     testmode3:
+           mode:
+             - 2
+             - PASS
+     badmode1:
+          mode:
+             - 512
+             - FAIL
+   svrlist: !mux
+     goodlist:
+          ranklist:
+             - VALID
+             - PASS
+     badlist:
+          ranklist:
+             - NULLPTR
+             - FAIL
+   connectsetnames: !mux
+     goodname:
+          setname:
+             - scott_server
+             - PASS
+     badname:
+          setname:
+             - NULLPTR
+             - FAIL
+   UUID: !mux
+     gooduuid:
+          uuid:
+             - VALID
+             - PASS
+     nulluuid:
+          uuid:
+             - NULLPTR
+             - FAIL
+     baduuid:
+          uuid:
+             - JUNK
+             - FAIL
+   uids:
+     createuid:
+         uid: 11374638
+   gids:
+     creategid:
+         gid: 11374638
+   setnames:
+     createset:
+          setname: scott_server
+   psize:
+     createsize:
+         size: 1073741824
+

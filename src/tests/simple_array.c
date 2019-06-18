@@ -104,8 +104,8 @@ struct ioreq {
 	daos_recx_t	recx;
 	daos_iod_t	iod;
 
-	daos_iov_t	iov;
-	daos_sg_list_t	sg;
+	d_iov_t	iov;
+	d_sg_list_t	sg;
 
 	daos_event_t	ev;
 };
@@ -202,7 +202,7 @@ ioreqs_init(struct ioreq *reqs) {
 		req->iod.iod_recxs	= &req->recx;
 
 		/** initialize scatter/gather */
-		req->iov = (daos_iov_t) {
+		req->iov = (d_iov_t) {
 			.iov_buf	= &data,
 			.iov_buf_len	= SLICE_SIZE * sizeof(data[0]),
 			.iov_len	= SLICE_SIZE * sizeof(data[0]),

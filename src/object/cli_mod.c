@@ -32,7 +32,6 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-bool	cli_bypass_rpc;
 bool	srv_io_dispatch = true;
 
 /**
@@ -41,26 +40,29 @@ bool	srv_io_dispatch = true;
 int
 dc_obj_init(void)
 {
-	char	*env;
-	int	 rc;
+	uint32_t	mode = DIM_DTX_FULL_ENABLED;
+	int		rc;
 
-	env = getenv(IO_BYPASS_ENV);
-	if (env && !strcasecmp(env, "cli_rpc")) {
-		D_DEBUG(DB_IO, "All client I/O RPCs will be dropped\n");
-		cli_bypass_rpc = true;
-	}
-
-	d_getenv_bool("DAOS_IO_SRV_DISPATCH", &srv_io_dispatch);
-	if (srv_io_dispatch)
-		D_DEBUG(DB_IO, "Server IO dispatch enabled.\n");
-	else
+	d_getenv_int("DAOS_IO_MODE", &mode);
+	if (mode == DIM_CLIENT_DISPATCH) {
+		srv_io_dispatch = false;
 		D_DEBUG(DB_IO, "Server IO dispatch disabled.\n");
+	} else {
+		D_DEBUG(DB_IO, "Server IO dispatch enabled.\n");
+	}
 
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
 				NULL, DAOS_OBJ_MODULE);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to register daos obj RPCs: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
+	rc = obj_ec_codec_init();
+	if (rc != 0)
+		D_ERROR("failed to obj_ec_codec_init: %d\n", rc);
+
+out:
 	return rc;
 }
 
@@ -71,4 +73,5 @@ void
 dc_obj_fini(void)
 {
 	daos_rpc_unregister(&obj_proto_fmt);
+	obj_ec_codec_fini();
 }

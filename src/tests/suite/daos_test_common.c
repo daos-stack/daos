@@ -172,7 +172,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 }
 
 static int
-test_setup_cont_create(void **state)
+test_setup_cont_create(void **state, daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
 	int rc;
@@ -181,7 +181,8 @@ test_setup_cont_create(void **state)
 		uuid_generate(arg->co_uuid);
 		print_message("setup: creating container "DF_UUIDF"\n",
 			      DP_UUID(arg->co_uuid));
-		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, co_prop,
+				      NULL);
 		if (rc)
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 	}
@@ -222,7 +223,8 @@ test_setup_cont_open(void **state)
 }
 
 int
-test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop)
+test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
+		     daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
 
@@ -232,13 +234,13 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *prop)
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, prop);
+		return test_setup_pool_create(state, pool, po_prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
 	case SETUP_POOL_CONNECT:
 		arg->setup_state = SETUP_CONT_CREATE;
-		return test_setup_cont_create(state);
+		return test_setup_cont_create(state, co_prop);
 	case SETUP_CONT_CREATE:
 		arg->setup_state = SETUP_CONT_CONNECT;
 		return test_setup_cont_open(state);
@@ -292,7 +294,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool, NULL);
+		rc = test_setup_next_step(state, pool, NULL, NULL);
 
 	 if (rc) {
 		D_FREE(arg);
@@ -306,7 +308,6 @@ pool_destroy_safe(test_arg_t *arg)
 {
 	daos_pool_info_t		 pinfo;
 	daos_handle_t			 poh = arg->pool.poh;
-	bool				 connected = false;
 	int				 rc;
 
 	if (daos_handle_is_inval(poh)) {
@@ -317,8 +318,6 @@ pool_destroy_safe(test_arg_t *arg)
 		if (rc != 0) { /* destory straightaway */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
-		} else {
-			connected = true;
 		}
 	}
 
@@ -326,6 +325,7 @@ pool_destroy_safe(test_arg_t *arg)
 		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
 
 		memset(&pinfo, 0, sizeof(pinfo));
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
 		rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "pool query failed: %d\n", rc);
@@ -339,10 +339,10 @@ pool_destroy_safe(test_arg_t *arg)
 		}
 
 		/* no rebuild */
-		if (connected)
-			daos_pool_disconnect(poh, NULL);
 		break;
 	}
+
+	daos_pool_disconnect(poh, NULL);
 
 	rc = daos_pool_destroy(arg->pool.pool_uuid, arg->group, 1, NULL);
 	if (rc && rc != -DER_TIMEDOUT)
@@ -395,25 +395,18 @@ test_teardown(void **state)
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc) {
+			/* The container might be left some reference count
+			 * during rebuild test due to "hacky"exclude triggering
+			 * rebuild mechanism(REBUILD24/25), so even the
+			 * container is not closed, then delete will fail
+			 * here, but if we do not free the arg, then next
+			 * subtest might fail, expecially for rebuild test.
+			 * so let's destory the arg anyway. Though some pool
+			 * might be left here. XXX
+			 */
 			print_message("failed to destroy container "DF_UUIDF
 				      ": %d\n", DP_UUID(arg->co_uuid), rc);
-			return rc;
-		}
-	}
-
-	if (!daos_handle_is_inval(arg->pool.poh) && !arg->pool.slave) {
-		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-		arg->pool.poh = DAOS_HDL_INVAL;
-		if (arg->multi_rank) {
-			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-				      MPI_COMM_WORLD);
-			rc = rc_reduce;
-		}
-		if (rc) {
-			print_message("failed to disconnect pool "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->pool.pool_uuid),
-				      rc);
-			return rc;
+			goto free;
 		}
 	}
 
@@ -435,7 +428,9 @@ test_teardown(void **state)
 		}
 	}
 
+free:
 	D_FREE(arg);
+	*state = NULL;
 	return 0;
 }
 
@@ -547,6 +542,7 @@ rebuild_pool_wait(test_arg_t *arg)
 	int			   rc;
 	bool			   done = false;
 
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
 	if (rst->rs_done || rc != 0) {
@@ -647,17 +643,19 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 
 	for (i = 0; i < sub_tests_size; i++) {
 		int idx = sub_tests ? sub_tests[i] : i;
-		test_arg_t	*arg = state;
+		test_arg_t	*arg;
 
 		if (idx >= tests_size) {
 			print_message("No test %d\n", idx);
 			continue;
 		}
 
-		arg->index = idx;
 		print_message("%s\n", tests[idx].name);
 		if (tests[idx].setup_func)
 			tests[idx].setup_func(&state);
+
+		arg = state;
+		arg->index = idx;
 
 		tests[idx].test_func(&state);
 		if (tests[idx].teardown_func)

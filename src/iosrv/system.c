@@ -24,6 +24,8 @@
  * \file
  *
  * System functionalities
+ *
+ * TODO: Remove this file once the MS-based bootstrapping works.
  */
 
 #define D_LOGFAC DD_FAC(server)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,6 +166,7 @@ dc_cont_create(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_op.ci_uuid, args->uuid);
+	in->cci_prop = args->prop;
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -313,7 +314,7 @@ dc_cont_put(struct dc_cont *dc)
 static void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
-	daos_hhash_link_insert(&dc->dc_hlink, D_HTYPE_CO);
+	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
 }
 
 static void
@@ -743,6 +744,7 @@ struct cont_query_args {
 	struct dc_pool		*cqa_pool;
 	struct dc_cont		*cqa_cont;
 	daos_cont_info_t	*cqa_info;
+	daos_prop_t		*cqa_prop;
 	crt_rpc_t		*rpc;
 	daos_handle_t		hdl;
 };
@@ -769,6 +771,9 @@ cont_query_complete(tse_task_t *task, void *data)
 	}
 
 	rc = out->cqo_op.co_rc;
+	if (rc == 0 && arg->cqa_prop != NULL)
+		rc = daos_prop_copy(arg->cqa_prop, out->cqo_prop);
+
 	if (rc != 0) {
 		D_DEBUG(DF_DSMC, DF_CONT": failed to query container: %d\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
@@ -796,6 +801,57 @@ out:
 	return rc;
 }
 
+static uint64_t
+cont_query_bits(daos_prop_t *prop)
+{
+	uint64_t		 bits = 0;
+	int			 i;
+
+	if (prop == NULL)
+		return 0;
+	if (prop->dpp_entries == NULL)
+		return DAOS_CO_QUERY_PROP_ALL;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		struct daos_prop_entry	*entry;
+
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_CO_LABEL:
+			bits |= DAOS_CO_QUERY_PROP_LABEL;
+			break;
+		case DAOS_PROP_CO_LAYOUT_TYPE:
+			bits |= DAOS_CO_QUERY_PROP_LAYOUT_TYPE;
+			break;
+		case DAOS_PROP_CO_LAYOUT_VER:
+			bits |= DAOS_CO_QUERY_PROP_LAYOUT_VER;
+			break;
+		case DAOS_PROP_CO_CSUM:
+			bits |= DAOS_CO_QUERY_PROP_CSUM;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
+			break;
+		case DAOS_PROP_CO_REDUN_LVL:
+			bits |= DAOS_CO_QUERY_PROP_REDUN_LVL;
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
+			bits |= DAOS_CO_QUERY_PROP_SNAPSHOT_MAX;
+			break;
+		case DAOS_PROP_CO_COMPRESS:
+			bits |= DAOS_CO_QUERY_PROP_COMPRESS;
+			break;
+		case DAOS_PROP_CO_ENCRYPT:
+			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
+			break;
+		default:
+			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+	return bits;
+}
+
 int
 dc_cont_query(tse_task_t *task)
 {
@@ -810,9 +866,6 @@ dc_cont_query(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
-
-	if (args->info == NULL)
-		D_GOTO(err, rc = -DER_INVAL);
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -839,10 +892,12 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
+	in->cqi_bits = cont_query_bits(args->prop);
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
 	arg.cqa_info = args->info;
+	arg.cqa_prop = args->prop;
 	arg.rpc	     = rpc;
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
@@ -862,7 +917,7 @@ err_cont:
 	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "Failed to open container: %d\n", rc);
+	D_DEBUG(DF_DSMC, "Failed to query container: %d\n", rc);
 	return rc;
 }
 
@@ -1093,7 +1148,7 @@ swap_co_glob(struct dc_cont_glob *cont_glob)
 }
 
 static int
-dc_cont_l2g(daos_handle_t coh, daos_iov_t *glob)
+dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 {
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
@@ -1143,7 +1198,7 @@ out:
 }
 
 int
-dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
+dc_cont_local2global(daos_handle_t coh, d_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -1227,7 +1282,7 @@ out:
 }
 
 int
-dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
+dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 {
 	struct dc_cont_glob	*cont_glob;
 	int			 rc = 0;
@@ -1418,17 +1473,17 @@ dc_cont_list_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->size > 0) {
-		daos_iov_t iov = {
+		d_iov_t iov = {
 			.iov_buf     = args->buf,
 			.iov_buf_len = *args->size,
 			.iov_len     = 0
 		};
-		daos_sg_list_t sgl = {
+		d_sg_list_t sgl = {
 			.sg_nr_out = 0,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->cali_bulk);
 		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_RPC, &cb_args);
@@ -1466,7 +1521,7 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 	int		rc;
 	int		i;
 	int		j;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 
 	/* Buffers = 'n' names + non-null values + 1 sizes */
 	sgl.sg_nr_out	= 0;
@@ -1481,20 +1536,20 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 
 	/* names */
 	for (j = 0, i = 0; j < n; ++j)
-		daos_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
+		d_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
 			     strlen(names[j]) + 1 /* trailing '\0' */);
 
 	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
 	/* sizes */
-	daos_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+	d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
 
 	/* values */
 	for (j = 0; j < n; ++j)
 		if (sizes[j] > 0)
-			daos_iov_set(&sgl.sg_iovs[i++],
+			d_iov_set(&sgl.sg_iovs[i++],
 				     values[j], sizes[j]);
 
-	rc = crt_bulk_create(crt_ctx, daos2crt_sg(&sgl), perm, bulk);
+	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
 	D_FREE(sgl.sg_iovs);
 out:
 	return rc;
@@ -1717,6 +1772,23 @@ out:
 }
 
 int
+dc_cont_aggregate(tse_task_t *task)
+{
+	daos_cont_aggregate_t	*args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("Invalid epoch: "DF_U64"\n", args->epoch);
+		tse_task_complete(task, -DER_INVAL);
+		return -DER_INVAL;
+	}
+
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, task);
+}
+
+int
 dc_cont_rollback(tse_task_t *task)
 {
 	D_ERROR("Unsupported API\n");
@@ -1825,17 +1897,17 @@ dc_cont_list_snap(tse_task_t *task)
 
 	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->nr > 0) {
-		daos_iov_t iov = {
+		d_iov_t iov = {
 			.iov_buf     = args->epochs,
 			.iov_buf_len = *args->nr * sizeof(*args->epochs),
 			.iov_len     = 0
 		};
-		daos_sg_list_t sgl = {
+		d_sg_list_t sgl = {
 			.sg_nr_out = 0,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->sli_bulk);
 		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_RPC, &cb_args);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,24 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/rpc.h>
+#include <daos/object.h>
 #include "obj_rpc.h"
+
+static int
+crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
+{
+	int rc;
+
+	rc = crt_proc_uuid_t(proc, &dti->dti_uuid);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
 
 static int
 crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
@@ -132,7 +149,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &csum->cs_type);
+	rc = crt_proc_uint16_t(proc, &csum->cs_type);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -140,12 +157,12 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint16_t(proc, &csum->cs_buf_len);
+	rc = crt_proc_uint32_t(proc, &csum->cs_buf_len);
 	if (rc != 0)
 		return -DER_HG;
 
 	if (csum->cs_buf_len < csum->cs_len) {
-		D_ERROR("invalid csum buf len %hu < csum len %hu\n",
+		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
 	}
@@ -304,7 +321,7 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *anchor)
 	if (crt_proc_uint16_t(proc, &anchor->da_shard) != 0)
 		return -DER_HG;
 
-	if (crt_proc_uint32_t(proc, &anchor->da_padding) != 0)
+	if (crt_proc_uint32_t(proc, &anchor->da_flags) != 0)
 		return -DER_HG;
 
 	if (crt_proc_raw(proc, anchor->da_buf, sizeof(anchor->da_buf)) != 0)
@@ -355,7 +372,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 
 
 static int
-crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *st)
+crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *st)
 {
 	int rc;
 
@@ -368,7 +385,7 @@ crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *s
 	rc = crt_proc_uint32_t(proc, &st->st_tgt_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &st->st_pad);
+	rc = crt_proc_uint32_t(proc, &st->st_tgt_id);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -414,6 +431,7 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 		((struct obj_rw_out *)reply)->orw_ret = status;
 		break;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -425,6 +443,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
@@ -442,6 +463,7 @@ obj_reply_get_status(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_ret;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -452,6 +474,9 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
@@ -468,6 +493,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		((struct obj_rw_out *)reply)->orw_map_version = map_version;
 		break;
@@ -481,6 +507,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
@@ -499,6 +528,7 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_map_version;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -509,6 +539,9 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_map_version;
@@ -516,4 +549,35 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		D_ASSERT(0);
 	}
 	return 0;
+}
+
+void
+obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
+{
+	void *reply = crt_reply_get(rpc);
+
+	switch (opc_get(rpc->cr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE: {
+		struct obj_rw_out	*orw = reply;
+
+		daos_dti_copy(&orw->orw_dti_conflict, &dce->dce_xid);
+		orw->orw_dkey_conflict = dce->dce_dkey;
+		break;
+	}
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
+		struct obj_punch_out	*opo = reply;
+
+		daos_dti_copy(&opo->opo_dti_conflict, &dce->dce_xid);
+		opo->opo_dkey_conflict = dce->dce_dkey;
+		break;
+	}
+	default:
+		D_ASSERT(0);
+	}
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *p)
 	rc = crt_proc_uint16_t(proc, &p->da_shard);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &p->da_padding);
+	rc = crt_proc_uint32_t(proc, &p->da_flags);
 	if (rc != 0)
 		return -DER_HG;
 	rc = crt_proc_memcpy(proc, &p->da_buf, sizeof(p->da_buf));
@@ -299,14 +299,13 @@ struct crt_proto_format rdb_proto_fmt = {
 int
 rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 {
-	struct rdb_raft_node   *rdb_node = raft_node_get_udata(node);
 	crt_opcode_t		opc_full;
 	crt_endpoint_t		ep;
 	struct dss_module_info *info = dss_get_module_info();
 
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
 	ep.ep_grp = NULL;
-	ep.ep_rank = rdb_node->dn_rank;
+	ep.ep_rank = raft_node_get_id(node);
 	ep.ep_tag = daos_rpc_tag(DAOS_REQ_RDB, 0);
 	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
 }
@@ -329,12 +328,11 @@ struct rdb_raft_rpc {
 	d_list_t	drc_entry;	/* in rdb::{d_requests,d_replies} */
 	crt_rpc_t      *drc_rpc;
 	struct rdb     *drc_db;
-	raft_node_t    *drc_node;
 	double		drc_sent;
 };
 
 static struct rdb_raft_rpc *
-rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc, raft_node_t *node)
+rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc)
 {
 	struct rdb_raft_rpc *rrpc;
 
@@ -346,7 +344,6 @@ rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc, raft_node_t *node)
 	rrpc->drc_rpc = rpc;
 	rdb_get(db);
 	rrpc->drc_db = db;
-	rrpc->drc_node = node;
 	return rrpc;
 }
 
@@ -396,8 +393,7 @@ rdb_recvd(void *arg)
 		 * become empty.
 		 */
 		if (!stop)
-			rdb_raft_process_reply(db, rrpc->drc_node,
-					       rrpc->drc_rpc);
+			rdb_raft_process_reply(db, rrpc->drc_rpc);
 		rdb_raft_free_request(db, rrpc->drc_rpc);
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();
@@ -439,14 +435,14 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 }
 
 int
-rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
+rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 {
 	struct rdb_raft_rpc    *rrpc;
 	int			timeout = raft_get_request_timeout(db->d_raft);
 	const int		timeout_min = 1 /* s */;
 	int			rc;
 
-	rrpc = rdb_alloc_raft_rpc(db, rpc, node);
+	rrpc = rdb_alloc_raft_rpc(db, rpc);
 	if (rrpc == NULL)
 		return -DER_NOMEM;
 

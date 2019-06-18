@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -477,39 +477,46 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 }
 
 static int
-bio_rw_iov(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov,
-	   bool update)
+bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
+	d_sg_list_t *sgl, bool update)
 {
-	struct bio_desc		*biod;
 	struct bio_sglist	*bsgl;
-	unsigned int		 iod_cnt = 1;
-	int			 rc;
+	struct bio_desc		*biod;
+	int			 i, rc;
 
 	/* allocate blob I/O descriptor */
-	biod = bio_iod_alloc(ioctxt, iod_cnt, update);
+	biod = bio_iod_alloc(ioctxt, 1 /* single bsgl */, update);
 	if (biod == NULL)
 		return -DER_NOMEM;
 
-	/* setup bio sgl in bio descriptor */
-	bsgl = bio_iod_sgl(biod, 0); /* bsgl = &biod->bd_sgls[0] */
-	rc = bio_sgl_init(bsgl, iod_cnt); /* sets up bsgl->bs_iovs */
-	if (rc)
-		goto out; /* rc = -DER_NOMEM */
+	/*
+	 * copy the passed in @bsgl_in to the bsgl attached on bio_desc,
+	 * since we don't want following bio ops change caller's bsgl.
+	 */
+	bsgl = bio_iod_sgl(biod, 0);
 
-	/* store byte offset and device type */
-	bsgl->bs_iovs[0].bi_addr = addr;
-	bsgl->bs_iovs[0].bi_data_len = iov->iov_len;
-	bsgl->bs_nr_out++;
+	rc = bio_sgl_init(bsgl, bsgl_in->bs_nr);
+	if (rc)
+		goto out;
+
+	for (i = 0; i < bsgl->bs_nr; i++) {
+		D_ASSERT(bsgl_in->bs_iovs[i].bi_buf == NULL);
+		D_ASSERT(bsgl_in->bs_iovs[i].bi_data_len != 0);
+		bsgl->bs_iovs[i] = bsgl_in->bs_iovs[i];
+	}
+	bsgl->bs_nr_out = bsgl->bs_nr;
 
 	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
 	rc = bio_iod_prep(biod);
 	if (rc)
 		goto out;
-	D_ASSERT(bsgl->bs_iovs[0].bi_buf != NULL);
 
-	/* copy data from/to iov and DMA safe buffer for write/read */
-	bio_memcpy(biod, addr.ba_type, bsgl->bs_iovs[0].bi_buf,
-		   iov->iov_buf, iov->iov_len);
+	for (i = 0; i < bsgl->bs_nr; i++)
+		D_ASSERT(bsgl->bs_iovs[i].bi_buf != NULL);
+
+	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
+	if (rc)
+		D_ERROR("Copy biod failed, rc:%d\n", rc);
 
 	/* release DMA buffer, write data back to NVMe device for write */
 	rc = bio_iod_post(biod);
@@ -521,42 +528,83 @@ out:
 }
 
 int
-bio_readv(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov)
+bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
+	  d_sg_list_t *sgl)
 {
 	int	rc;
 
-	D_DEBUG(DB_MGMT, "Reading from blob %p for xs:%p\n", ioctxt->bic_blob,
-		ioctxt->bic_xs_ctxt);
-
-	rc = bio_rw_iov(ioctxt, addr, iov, false);
-	if (rc != 0)
-		D_ERROR("Read from blob:%p failed for xs:%p rc:%d\n",
+	rc = bio_rwv(ioctxt, bsgl, sgl, false);
+	if (rc)
+		D_ERROR("Readv to blob:%p failed for xs:%p, rc:%d\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
 	else
-		D_DEBUG(DB_MGMT, "Successfully read from blob %p for xs:%p\n",
+		D_DEBUG(DB_IO, "Readv to blob %p for xs:%p successfully\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
 
 	return rc;
-
 }
 
 int
-bio_writev(struct bio_io_context *ioctxt, bio_addr_t addr, daos_iov_t *iov)
+bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
+	   d_sg_list_t *sgl)
 {
 	int	rc;
 
-	D_DEBUG(DB_MGMT, "Writing to blob %p for xs:%p\n", ioctxt->bic_blob,
-		ioctxt->bic_xs_ctxt);
-
-	rc = bio_rw_iov(ioctxt, addr, iov, true);
-	if (rc != 0)
-		D_ERROR("Write to blob:%p failed for xs:%p rc:%d\n",
+	rc = bio_rwv(ioctxt, bsgl, sgl, true);
+	if (rc)
+		D_ERROR("Writev to blob:%p failed for xs:%p, rc:%d\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
 	else
-		D_DEBUG(DB_MGMT, "Successfully wrote to blob %p for xs:%p\n",
+		D_DEBUG(DB_IO, "Writev to blob %p for xs:%p successfully\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
 
 	return rc;
+}
+
+static int
+bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov,
+	bool update)
+{
+	struct bio_sglist	bsgl;
+	struct bio_iov		biov;
+	d_sg_list_t		sgl;
+	int			rc;
+
+	biov.bi_buf = NULL;
+	biov.bi_addr = addr;
+	biov.bi_data_len = iov->iov_len;
+	bsgl.bs_iovs = &biov;
+	bsgl.bs_nr = bsgl.bs_nr_out = 1;
+
+	sgl.sg_iovs = iov;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+
+	rc = bio_rwv(ioctxt, &bsgl, &sgl, update);
+	if (rc)
+		D_ERROR("%s to blob:%p failed for xs:%p, rc:%d\n",
+			update ? "Write" : "Read", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_IO, "%s to blob %p for xs:%p successfully\n",
+			update ? "Write" : "Read", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt);
+
+	return rc;
+}
+
+int
+bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
+{
+	return bio_rw(ioctxt, addr, iov, false);
+}
+
+
+int
+bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
+{
+
+	return bio_rw(ioctxt, addr, iov, true);
 }
 
 int
@@ -564,7 +612,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 {
 	struct smd_nvme_pool_info	smd_pool;
 	struct smd_nvme_stream_bond	smd_xs_mapping;
-	daos_iov_t			iov;
+	d_iov_t			iov;
 	bio_addr_t			addr;
 	uint64_t			off = 0; /* byte offset in SPDK blob */
 	uint16_t			dev_type = DAOS_MEDIA_NVME;
@@ -606,9 +654,9 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	uuid_copy(bio_bh->bbh_blobstore, smd_xs_mapping.nsm_dev_id);
 
 	/* Create an iov to store blob header structure */
-	daos_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
+	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
 
-	rc = bio_writev(ioctxt, addr, &iov);
+	rc = bio_write(ioctxt, addr, &iov);
 
 	return rc;
 }

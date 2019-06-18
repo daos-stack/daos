@@ -157,7 +157,6 @@ cmd+=" -b -2 -D"
 echo "$cmd"
 
 $cmd -t
-
-result=$?
-echo Test returned $result
-exit $result
+result="${PIPESTATUS[0]}"
+echo "Test returned $result"
+exit "$result"

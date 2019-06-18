@@ -1,0 +1,153 @@
+hosts:
+   test_machines:
+        daos_servers:
+            - boro-A
+        # either compute or partition can be used, not both
+        #compute:
+        #    - boro-A
+        partition: tp
+        gateway: []
+timeout: 1000
+server_config:
+    name: daos_server
+
+pool1:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 10000000000
+    createsvc:
+        svcn: 1
+
+job1:
+    name: soak_job_1
+    nodes: 1
+    process_per_node: 1
+    time: 10:00
+    mem: 100
+    jobspec: ior1
+
+job2:
+    name: soak_job_2
+    nodes: 2
+    process_per_node: 2
+    time: 10:00
+    mem: 100
+    jobspec: ior2
+
+job3:
+    name: soak_job_3
+    nodes: 1
+    process_per_node: 1
+    time: 10:00
+    mem: 100
+    jobspec: dmg1
+
+ior1:
+    iteration:
+        iter: 1
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize:
+        recordsize_8b:
+            r: '8b'
+    stripesize:
+        stripesize_1m:
+            s: '1m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"
+ior2:
+    iteration:
+        iter: 1
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize:
+        recordsize_1k:
+            r: '1k'
+    stripesize:
+        stripesize_1m:
+            s: '1m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"
+ior3:
+    iteration:
+        iter: 1
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize:
+        recordsize_4k:
+            r: '4k'
+    stripesize:
+        stripesize_1m:
+            s: '1m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"
+ior4:
+    iteration:
+        iter: 1
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize:
+        recordsize_4k:
+            r: '4k'
+    stripesize:
+        stripesize_8m:
+            s: '8m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"
+ior5:
+    iteration:
+        iter: 1
+    iorflags:
+        F: "-v -W -w -r -R"
+    transfersize:
+        t: '1m'
+    recordsize:
+        recordsize_8b:
+            r: '8b'
+    stripesize:
+        stripesize_8m:
+            s: '8m'
+    stripecount:
+        c: 1024
+    asyncio:
+        a: 16
+    objectclass:
+        o: "LARGE"
+dmg1:
+    commands:
+        - cmd: "create"
+          params: "--size 10M"
+        - cmd: "create"
+          params: "--size 11M"
+        - cmd: "create"
+          params: "--size 14M"
+        - cmd: "create"
+          params: "--size 15M"

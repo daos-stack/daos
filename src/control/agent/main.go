@@ -24,55 +24,118 @@
 package main
 
 import (
-	"flag"
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/jessevdk/go-flags"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
-
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
-var (
-	runtimeDir = flag.String("runtime_dir", "/var/run/daos_agent", "The path to runtime socket directory for daos_agent")
+const (
+	agentSockName        = "agent.sock"
+	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
 )
+
+type cliOptions struct {
+	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+}
+
+var opts = new(cliOptions)
 
 func main() {
-	var err error
-	defer func() {
-		status := 0
-		if err != nil {
-			status = 1
-		}
-		os.Exit(status)
-	}()
+	if agentMain() != nil {
+		os.Exit(1)
+	}
+}
 
+// applyCmdLineOverrides will overwrite Configuration values with any non empty
+// data provided, usually from the commandline.
+func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
+
+	if opts.RuntimeDir != "" {
+		log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
+		c.RuntimeDir = opts.RuntimeDir
+	}
+
+	if opts.LogFile != "" {
+		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
+		c.LogFile = opts.LogFile
+	}
+
+}
+
+func agentMain() error {
 	// Set default global logger for application.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
-	flag.Parse()
+	log.Debugf("Starting daos_agent:")
+
+	p := flags.NewParser(opts, flags.Default)
+
+	_, err := p.Parse()
+	if err != nil {
+		return err
+	}
+
+	// Load the configuration file using the supplied path or the
+	// default path if none provided.
+	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	if err != nil {
+		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
+		return err
+	}
+
+	// Override configuration with any commandline values given
+	applyCmdLineOverrides(&config, opts)
+
+	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
+	if env != config.RuntimeDir {
+		log.Debugf("Environment variable '%s' has value '%s' which does not "+
+			"match '%s'", daosAgentDrpcSockEnv, env, config.RuntimeDir)
+	}
+
+	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
+	log.Debugf("Full socket path is now: %s", sockPath)
+
+	f, err := common.AppendFile(config.LogFile)
+	if err != nil {
+		log.Errorf("Failure creating log file: %s", err)
+		return err
+	}
+	log.Debugf("Using logfile: %s", config.LogFile)
+
+	defer f.Close()
+	log.SetOutput(f)
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	sockPath := filepath.Join(*runtimeDir, "agent.sock")
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
-		return
+		return err
 	}
 
 	module := &SecurityModule{}
+	module.InitModule(nil)
 	drpcServer.RegisterRPCModule(module)
+	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0]})
 
 	err = drpcServer.Start()
 	if err != nil {
 		log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return
+		return err
 	}
+
+	log.Debugf("Listening on %s", sockPath)
 
 	// Anonymous goroutine to wait on the signals channel and tell the
 	// program to finish when it receives a signal. Since we only notify on
@@ -85,4 +148,6 @@ func main() {
 	}()
 	<-finish
 	drpcServer.Shutdown()
+
+	return nil
 }

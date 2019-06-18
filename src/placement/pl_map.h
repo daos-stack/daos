@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,26 +33,6 @@
 
 struct pl_map_ops;
 
-/** common header of all placement map */
-struct pl_map {
-	/** correpsonding pool uuid */
-	uuid_t			 pl_uuid;
-	/** link chain on hash */
-	d_list_t		 pl_link;
-	/** protect refcount */
-	pthread_spinlock_t	 pl_lock;
-	/** refcount */
-	int			 pl_ref;
-	/** pool connections, protected by pl_rwlock */
-	int			 pl_connects;
-	/** type of placement map */
-	pl_map_type_t		 pl_type;
-	/** reference to pool map */
-	struct pool_map		*pl_poolmap;
-	/** placement map operations */
-	struct pl_map_ops       *pl_ops;
-};
-
 /**
  * Function table for placement map.
  */
@@ -79,7 +59,7 @@ struct pl_map_ops {
 				      uint32_t rebuild_ver,
 				      uint32_t *tgt_rank,
 				      uint32_t *shard_id,
-				      unsigned int array_size);
+				      unsigned int array_size, int myrank);
 	int	(*o_obj_find_reint)(struct pl_map *map,
 				    struct daos_obj_md *md,
 				    struct daos_obj_shard_md *shard_md,

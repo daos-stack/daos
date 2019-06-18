@@ -29,13 +29,29 @@
 #define NVMECONTROL_GBYTE_BYTES 1000000000
 
 /**
+ * @brief NVMECONTROL return codes
+ */
+typedef enum _NvmeControlStatusCode {
+	NVMEC_SUCCESS			= 0,
+	NVMEC_ERR_CHK_SIZE		= 1,
+	NVMEC_ERR_GET_PCI_DEV		= 2,
+	NVMEC_ERR_PCI_ADDR_FMT		= 3,
+	NVMEC_ERR_PCI_ADDR_PARSE	= 4,
+	NVMEC_ERR_CTRLR_NOT_FOUND	= 5,
+	NVMEC_ERR_NS_NOT_FOUND		= 6,
+	NVMEC_ERR_NOT_SUPPORTED		= 7,
+	NVMEC_ERR_BAD_LBA		= 8,
+	NVMEC_LAST_STATUS_VALUE
+} NvmeControlStatusCode;
+
+
+/**
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	int		id;
 	char		model[1024];
 	char		serial[1024];
-	char		tr_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1];
+	char		pci_addr[1024];
 	char		fw_rev[1024];
 	struct ctrlr_t	*next;
 };
@@ -78,6 +94,15 @@ struct ret_t *nvme_discover(void);
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
+
+/**
+ * Format NVMe controller namespace.
+ *
+ * \param ctrlr_pci_addr PCI address of NVMe controller.
+ *
+ * \return a pointer to a return struct (ret_t).
+ */
+struct ret_t *nvme_format(char *ctrlr_pci_addr);
 
 /**
  * Cleanup structs held in memory.

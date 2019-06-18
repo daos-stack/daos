@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
-	daos_iov_t	value;
+	d_iov_t	value;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
@@ -79,7 +79,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	 * Mark this replica as fully initialized by storing its UUID.
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
-	daos_iov_set(&value, (void *)uuid, sizeof(uuid_t));
+	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
 
 out_mc_hdl:
@@ -224,7 +224,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	  struct rdb **dbp)
 {
 	struct rdb     *db;
-	daos_iov_t	value;
+	d_iov_t	value;
 	uuid_t		uuid_persist;
 	int		rc;
 
@@ -276,7 +276,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	}
 
 	/* Check if this replica is fully initialized. See rdb_create(). */
-	daos_iov_set(&value, uuid_persist, sizeof(uuid_t));
+	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
 	if (rc == -DER_NONEXIST) {
 		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
@@ -351,42 +351,15 @@ rdb_stop(struct rdb *db)
 int
 rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	msg_entry_t	 entry = {};
-	int		 i;
-	int		 result;
-	int		 rc = -DER_INVAL;
+	int i;
+	int rc = -DER_INVAL;
 
 	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
-
 	for (i = 0; i < replicas->rl_nr; ++i) {
-		D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n",
-			DP_DB(db), replicas->rl_ranks[i]);
-
-		/* TODO: Check if rank exists and not a replica before adding */
-		/* Phase 1: Add non voting rank */
-		entry.type = RAFT_LOGTYPE_ADD_NONVOTING_NODE;
-		entry.data.buf = &replicas->rl_ranks[i];
-		entry.data.len = sizeof(d_rank_t);
-		rc = rdb_raft_append_apply(db, &entry, &result);
-		rc = (rc != 0) ? rc : result;
+		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
 		if (rc != 0)
 			break;
-
-		/* Phase 2: Promote to voting rank */
-		entry.type = RAFT_LOGTYPE_ADD_NODE;
-		rc = rdb_raft_append_apply(db, &entry, NULL);
-		if (rc != 0) {
-			/*
-			 * Rank was successfully added, and will get promoted
-			 * automatically when a new leader steps up.
-			 */
-			++i;
-			break;
-		}
-
-		/* Can't make voting cfg change before applying previous one */
-		raft_apply_all(db->d_raft);
 	}
 
 	/* Update list to only contain ranks which could not be added. */
@@ -400,29 +373,15 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 int
 rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	msg_entry_t	 entry = {};
-	int		 i;
-	int		 result;
-	int		 rc = -DER_INVAL;
+	int i;
+	int rc = -DER_INVAL;
 
 	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
-
 	for (i = 0; i < replicas->rl_nr; ++i) {
-		D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n",
-			DP_DB(db), replicas->rl_ranks[i]);
-
-		/* TODO: Check if replica with rank exists before removing */
-		entry.type = RAFT_LOGTYPE_REMOVE_NODE;
-		entry.data.buf = &replicas->rl_ranks[i];
-		entry.data.len = sizeof(d_rank_t);
-		rc = rdb_raft_append_apply(db, &entry, &result);
-		rc = (rc != 0) ? rc : result;
+		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
 		if (rc != 0)
 			break;
-
-		/* Can't make voting cfg change before applying previous one */
-		raft_apply_all(db->d_raft);
 	}
 
 	/* Update list to only contain ranks which could not be removed. */
@@ -489,7 +448,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 
 /**
  * Get the list of replica ranks. Callers are responsible for
- * daos_rank_list_free(*ranksp).
+ * d_rank_list_free(*ranksp).
  *
  * \param[in]	db	database
  * \param[out]	ranksp	list of replica ranks

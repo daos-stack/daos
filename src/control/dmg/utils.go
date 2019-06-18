@@ -28,45 +28,60 @@ import (
 	"sort"
 
 	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/common"
 )
 
-func hasConnections(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
-	out string) {
-
-	out = sprintConns(addrs, eMap)
-	if len(addrs) == 0 {
-		out = fmt.Sprintf("%sNo active connections!", out)
+func hasConns(results client.ResultMap) (bool, string) {
+	out := sprintConns(results)
+	for _, res := range results {
+		if res.Err == nil {
+			return true, out
+		}
 	}
-	return
+
+	// notify if there have been no successful connections
+	return false, fmt.Sprintf("%sNo active connections!", out)
 }
 
-func sprintConns(addrs mgmtclient.Addresses, eMap mgmtclient.ErrorMap) (
-	out string) {
-
+func sprintConns(results client.ResultMap) (out string) {
 	// map keys always processed in order
-	var keys []string
-	for k := range eMap {
-		keys = append(keys, k)
+	var addrs []string
+	for addr := range results {
+		addrs = append(addrs, addr)
 	}
-	sort.Strings(keys)
+	sort.Strings(addrs)
 
-	for _, key := range keys {
-		out = fmt.Sprintf(
-			"%sfailed to connect to %s (%s)\n", out, key, eMap[key])
+	i := 0
+	for _, addr := range addrs {
+		if results[addr].Err != nil {
+			out = fmt.Sprintf(
+				"%sfailed to connect to %s (%s)\n",
+				out, addr, results[addr].Err)
+			continue
+		}
+		addrs[i] = addr
+		i++
 	}
+	addrs = addrs[:i]
+
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
 
-func checkAndFormat(i interface{}, err error) string {
+// getConsent scans stdin for yes/no
+func getConsent() bool {
+	var response string
+
+	_, err := fmt.Scanln(&response)
 	if err != nil {
-		return fmt.Sprintf("Unable to retrieve %%[1]ss (%s)\n", err)
+		fmt.Printf("Error reading input: %s\n", err)
+		return false
 	}
-	s, err := common.StructsToString(i)
-	if err != nil {
-		return fmt.Sprintf(
-			"Unable to YAML encode response for %%[1]ss! (%s)\n", err)
+
+	if response == "no" {
+		return false
+	} else if response != "yes" {
+		fmt.Println("Please type yes or no and then press enter:")
+		return getConsent()
 	}
-	out := "Listing %[1]ss on connected storage servers:\n"
-	return fmt.Sprintf("%s%s\n", out, s)
+
+	return true
 }

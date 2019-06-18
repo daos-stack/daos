@@ -171,4 +171,10 @@ daos_lru_ref_evicted(struct daos_llink *llink)
 	return llink->ll_evicted;
 }
 
+static inline void
+daos_lru_ref_add(struct daos_llink *llink)
+{
+	llink->ll_ref++;
+}
+
 #endif

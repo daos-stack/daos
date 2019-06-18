@@ -9,7 +9,7 @@ def scons():
 
     libraries = ['daos_common', 'gurt', 'cart', 'vos_srv', 'daos']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
-    libraries += ['hwloc', 'pmemobj', 'yaml']
+    libraries += ['hwloc', 'pmemobj', 'yaml', 'protobuf-c']
 
     prereqs.require(denv, 'hwloc', 'cart', 'argobots')
 

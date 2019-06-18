@@ -141,7 +141,6 @@ struct bio_desc {
 };
 
 /* bio_xstream.c */
-extern bool		nvme_io_bypass;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);

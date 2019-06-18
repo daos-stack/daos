@@ -182,6 +182,13 @@ daos_eq_free(struct d_hlink *hlink)
 	D_FREE(eq);
 }
 
+crt_context_t
+daos_get_crt_ctx()
+{
+	D_ASSERT(eq_ref > 0);
+	return daos_eq_ctx;
+}
+
 struct d_hlink_ops	eq_h_ops = {
 	.hop_free	= daos_eq_free,
 };
@@ -243,7 +250,7 @@ daos_eq_delete(struct daos_eq_private *eqx)
 static void
 daos_eq_insert(struct daos_eq_private *eqx)
 {
-	daos_hhash_link_insert(&eqx->eqx_hlink, D_HTYPE_EQ);
+	daos_hhash_link_insert(&eqx->eqx_hlink, DAOS_HTYPE_EQ);
 }
 
 static void

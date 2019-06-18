@@ -34,26 +34,26 @@ D-key: "/"
 // rest of akey entries for root are same as in directory entry described below.
 ~~~~~~
 
-## DFS Directories:
+## DFS Directories
 
 A POSIX directory will map to a DAOS object with multiple dkeys, where each dkey
 will correspond to an entry in that directory (for another subdirectory, regular
 file, or symbolic link). The dkey value will be the entry name in that
-directory. The dkey will contain several akeys of type DAOS_IOD_SINGLE (single
-value), where each akey contains an attribute of that entry. The mapping table
-will look like this (includes two extended attributes: xattr1, xattr2):
+directory. The dkey will contain several akeys of type `DAOS_IOD_SINGLE`
+(single value), where each akey contains an attribute of that entry. The mapping
+table will look like this (includes two extended attributes: xattr1, xattr2):
 
 ~~~~~~
 Directory Object
-  D-key “entry1_name”
-    A-key “mode”	// mode_t (permission bit mask + type of entry)
-    A-key “oid”		// object id of entry (bogus if symlink)
-    A-key “syml”	// symlink value (akey does not exist if not a symlink)
-    A-key “atime”	// access time
-    A-key “mtime”	// modify time
-    A-key “ctime”	// change time
-    A-key “x:xattr1”	// extended attribute name (if any)
-    A-key “x:xattr2”	// extended attribute name (if any)
+  D-key "entry1_name"
+    A-key "mode"	// mode_t (permission bit mask + type of entry)
+    A-key "oid"		// object id of entry (akey does not exist if symlink)
+    A-key "syml"	// symlink value (akey does not exist if not a symlink)
+    A-key "atime"	// access time
+    A-key "mtime"	// modify time
+    A-key "ctime"	// change time
+    A-key "x:xattr1"	// extended attribute name (if any)
+    A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
 
 The extended attributes are all prefixed with "x:".
@@ -68,31 +68,31 @@ file1
 syml1 -> dir1
 
 Object testdir
-  D-key “dir1”
-    A-key “mode” , permission bits + S_IFDIR
-    A-key “oid” , object id of dir1
-    …
-  D-key “file1”
-    A-key “mode” , permission bits + S_IFREG
-    A-key “oid” , object id of file1
-    …
-  D-key “syml1”
-    A-key “mode” , permission bits + S_IFLNK
-    A-key “oid” , empty
-    A-key “syml”, dir1
-    …
+  D-key "dir1"
+    A-key "mode" , permission bits + S_IFDIR
+    A-key "oid" , object id of dir1
+    ...
+  D-key "file1"
+    A-key "mode" , permission bits + S_IFREG
+    A-key "oid" , object id of file1
+    ...
+  D-key "syml1"
+    A-key "mode" , permission bits + S_IFLNK
+    A-key "oid" , empty
+    A-key "syml", dir1
+    ...
 ~~~~~~
 
 For files, we will have an optimization in the entry by storing the first 4K of
-data in the entry itself under another akey “file_data” for the file entry. In
+data in the entry itself under another akey "file_data" for the file entry. In
 this case, if the file size is less than or equal to 4K, the object ID akey will
 be empty, and the file data will be in the akey with array type of file_size
-records. Otherwise the “oid” akey will contain a valid object ID for the file
+records. Otherwise the "oid" akey will contain a valid object ID for the file
 data.
 
 Note that with this mapping, the inode information is stored with the entry that
-it corresponds to in the parent directory object. Thus, hard links won’t be
-supported, since it won’t be possible to create a different entry (dkey) that
+it corresponds to in the parent directory object. Thus, hard links won"t be
+supported, since it won"t be possible to create a different entry (dkey) that
 actually points to the same set of akeys that the current ones are stored
 within. This limitation was agreed upon, and makes the representation simple as
 described above.
@@ -131,7 +131,7 @@ set/get_size functions. Increasing the file size however in this case, does not
 guarantee that space is allocated. Since DAOS logs I/Os across different epoch,
 space allocation cannot be supported by a naïve set size operation.
 
-## Symbolic Links:
+## Symbolic Links
 
 As mentioned in the directory section, symbolic links will not have an object
 for the symlink itself, but will have a value in the entry itself of the parent
@@ -146,35 +146,14 @@ compared against those of the pool's uid and gid that are obtained when
 connecting to the pool. The check then is done with the stored object mode and
 depending on the type of access being requested (R, W, X) and the object mode,
 access permission is determined. In the source code, this is implemented in the
-function check_access().
+function `check_access()`.
 
 setuid(), setgid() programs, supplementary groups, ACLs are not supported at the
 moment.
 
-## DFUSE
+## DFUSE_HL
 
-A simple high level fuse plugin (dfuse) is implemented to test the DFS API and
-functionality with existing POSIX tests and benchmarks (IOR, mdtest, etc.). The
-DFS fuse exposes one mounpoint as a single DFS namespace with a single pool and
-container. To test dfuse, the following steps need to be done:
-
-1) Launch DAOS server(s):
-   orterun --mca mtl ^psm2,ofi --enable-recovery -np 1 --report-uri ~/uri.txt daos_server -c 8
-
-2) Create a DAOS Pool with dmg tool:
-   this will return a pool uuid "puuid" and service rank list "svcl"
-
-3) Create an empty directory for the fuse mountpoint. For example let's use /tmp/dfs_test
-
-4) Mount dfuse with the following command:
-   orterun -np 1 --ompi-server file:~/uri.txt dfuse /tmp/dfs_test -s -f -p puuid -l svcl
-   -p specifies the pool uuid and -l specifies the service rank list (from dmg).
-
-5) Other arguments to dfuse:
-   -r: option to destroy the container associated with the namespace when you umount.
-   -d: prints debug messages at the fuse mount terminal
-
-6) Now /tmp/dfs_test can be used as a POSIX file system (can run things like IOR/mdtest on it)
-
-7) when you are done, unmount the file system:
-   fusermount -u /tmp/dfs_test
+A simple high level fuse plugin (dfuse_hl) is implemented to test the DFS API
+and functionality with existing POSIX tests and benchmarks (IOR, mdtest,
+etc.). The DFS high level fuse exposes one mounpoint as a single DFS namespace
+with a single pool and container.

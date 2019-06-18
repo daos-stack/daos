@@ -143,7 +143,7 @@ unload_space_info(struct vea_space_info *vsi)
 }
 
 static int
-load_free_entry(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *arg)
+load_free_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 {
 	struct vea_free_extent *vfe;
 	struct vea_space_info *vsi;
@@ -162,7 +162,7 @@ load_free_entry(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *arg)
 }
 
 static int
-load_vec_entry(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *arg)
+load_vec_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 {
 	struct vea_ext_vector *vec;
 	struct vea_space_info *vsi;

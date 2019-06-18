@@ -1,0 +1,48 @@
+//
+// (C) Copyright 2019 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package mgmt;
+
+import "srv.proto";
+
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS pools.
+
+message CreatePoolReq {
+	uint64 scmbytes = 1;
+	uint64 nvmebytes = 2;
+	repeated uint32 ranks = 3; // colon separated integers
+	uint32 numsvcreps = 4; // desired number of pool service replicas
+	string user = 5; // formatted user e.g. "bob@"
+	string usergroup = 6; // formatted group e.g. "builders@"
+	string procgroup = 7; // DAOS process group identifier
+}
+
+// CreatePoolResp returns created pool uuid and ranks.
+message CreatePoolResp {
+	DaosRequestStatus status = 1;
+	string uuid = 2; // new pool's uuid
+	string ranklist = 3; // colon separated integers
+}
+

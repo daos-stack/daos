@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #include <daos_api.h>
 #include <daos_mgmt.h>
 #include <daos/common.h>
-#include <gurt/common.h>
 
 int parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list);
 int parse_size(char *arg, uint64_t *size);

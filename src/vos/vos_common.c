@@ -60,7 +60,7 @@ vos_csum_enabled(void)
 }
 
 int
-vos_csum_compute(daos_sg_list_t *sgl, daos_csum_buf_t *csum)
+vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum)
 {
 	int	rc;
 #ifdef VOS_STANDALONE
@@ -180,6 +180,8 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 	}
 
+	tls->vtl_dth = NULL;
+
 	return tls;
 }
 
@@ -204,17 +206,7 @@ struct dss_module_key vos_module_key = {
 static int
 vos_mod_init(void)
 {
-	char	*env;
 	int	 rc = 0;
-
-	/* This is for performance evaluation only, all data will be stored
-	 * in DRAM by setting this.
-	 */
-	env = getenv("VOS_MEM_CLASS");
-	if (env && strcasecmp(env, "DRAM") == 0) {
-		D_WARN("Running in DRAM mode, all data are volatile.\n");
-		vos_mem_class = UMEM_CLASS_VMEM;
-	}
 
 	rc = vos_cont_tab_register();
 	if (rc) {
@@ -348,12 +340,13 @@ vos_init(void)
 		return rc;
 	}
 
+	vsa_dth = NULL;
 	vsa_xsctxt_inst = NULL;
 	vsa_nvme_init = false;
 
 	D_ALLOC_PTR(vsa_imems_inst);
 	if (vsa_imems_inst == NULL)
-		D_GOTO(exit, rc);
+		D_GOTO(exit, rc = -DER_NOMEM);
 
 	rc = vos_imem_strts_create(vsa_imems_inst);
 	if (rc)
