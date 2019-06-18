@@ -106,27 +106,34 @@ func (e *ext) writeToFile(contents string, path string) error {
 // createEmpty creates a file (if it doesn't exist) of specified size in bytes
 // at the given path.
 // If Fallocate not supported by kernel or backing fs, fall back to Truncate.
-func (e *ext) createEmpty(path string, size int64) (err error) {
+func (e *ext) createEmpty(path string, size int64) error {
 	if !filepath.IsAbs(path) {
 		return errors.Errorf("please specify absolute path (%s)", path)
 	}
-	if _, err = os.Stat(path); !os.IsNotExist(err) {
-		return
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		return err
 	}
+
 	file, err := common.TruncFile(path)
 	if err != nil {
-		return
+		return err
 	}
 	defer file.Close()
+
 	if err := syscall.Fallocate(int(file.Fd()), 0, 0, size); err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
 			log.Debugf(
 				"Warning: Fallocate not supported, attempting Truncate: ", e)
-			_ = file.Truncate(size)
+
+			if err := file.Truncate(size); err != nil {
+				return err
+			}
 		}
 	}
-	return
+
+	return nil
 }
 
 // NOTE: requires elevated privileges

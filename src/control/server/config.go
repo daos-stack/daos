@@ -148,7 +148,9 @@ func saveActiveConfig(config *configuration) {
 // hash produces unique int from string, mask MSB on conversion to signed int
 func hash(s string) int {
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(s)) // ignore return values
+	if _, err := h.Write([]byte(s)); err != nil {
+		panic(err) // should never happen
+	}
 
 	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
 }
