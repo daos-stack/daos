@@ -40,14 +40,16 @@ def unittest_runner(self, unit_testname):
     bin_path = get_file_path(name, "install/bin")
 
     cmd = ("{0}".format(bin_path[0]))
-    return_code = process.system(cmd)
+    return_code = process.system(cmd, ignore_status=True,
+                                 allow_output_check="both")
     if return_code is not 0:
         self.fail("{0} unittest failed with return code={1}.\n"
                   .format(unit_testname, return_code))
 
 class UnitTestWithoutServers(Test):
     """
-    Avocado Unit Test class for tests which don't need servers.
+    Test Class Description: Avocado Unit Test class for tests which don't
+                            need servers.
     :avocado: recursive
     """
     def tearDown(self):
@@ -55,49 +57,63 @@ class UnitTestWithoutServers(Test):
 
     def test_smd_ut(self):
         """
-        Test smd unittest.
+        Test Description: Test smd unittest.
+        Use Case: This tests smd's following functions: nvme_list_streams,
+                  nvme_get_pool, nvme_set_pool_info, nvme_add_pool,
+                  nvme_get_device, nvme_set_device_status,
+                  nvme_add_stream_bond, nvme_get_stream_bond
         :avocado: tags=unittest,nvme,smd_ut
         """
         unittest_runner(self, "smd_ut")
 
     def test_vea_ut(self):
         """
-        Test vea unittest.
+        Test Description: Test vea unittest.
+        Use Case: This tests vea's following functions: load, format,
+                  query, hint_load, reserve, cancel, tx_publish,
+                  free, unload, hint_unload
         :avocado: tags=unittest,nvme,vea_ut
         """
         unittest_runner(self, "vea_ut")
 
     def test_pl_map(self):
         """
-        Test pl_map unittest.
+        Test Description: Test pl_map unittest.
+        Use Case: This tests placement map
         :avocado: tags=unittest,pl_map
         """
         unittest_runner(self, "pl_map")
 
     def test_eq_tests(self):
         """
-        Test eq_tests unittest.
+        Test Description: Test eq_tests unittest.
+        Use Case: This tests Daos Event queue
         :avocado: tags=unittest,eq_tests
         """
         unittest_runner(self, "eq_tests")
 
     def test_vos_tests(self):
         """
-        Test eq_tests unittest.
+        Test Description: Test vos_tests unittest.
+        Use Cases: Performs following set of tests - pool_tests,
+                   container_tests, io_tests, dtx_tests, aggregate-tests
         :avocado: tags=unittest,vos_tests
         """
         unittest_runner(self, "vos_tests")
 
 class UnittestWithServers(TestWithServers):
     """
-    Avocado Unit Test class for tests which need servers.
+    Test Class Description: Avocado Unit Test class for tests which
+                            need servers.
     :avocado: recursive
     """
 
     def test_daos_addons(self):
         """
         Jira ID: DAOS-2326
-        Test daos_addons unittest.
-        :avocado: tags=unittest,daos_addons_test
+        Test Description: Test daos_addons unittest.
+        Use Case: This tests Daos Addons Array unit tests
+                  and Daos Addons HL tests.
+        :avocado: tags=all,unittest,pr,tiny,hw,daos_addons_test
         """
         unittest_runner(self, "daos_addons_test")
