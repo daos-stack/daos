@@ -26,12 +26,8 @@ from __future__ import print_function
 import os
 import traceback
 
-from avocado.utils import process
 from apricot import TestWithServers
 
-import agent_utils
-import server_utils
-import write_host_file
 from daos_api import DaosPool, DaosServer, DaosApiError
 
 class PoolSvc(TestWithServers):
@@ -39,20 +35,6 @@ class PoolSvc(TestWithServers):
     Tests svc argument while pool create.
     :avocado: recursive
     """
-    #def setUp(self):
-    #    super(PoolSvc, self).setUp()
-        #self.pool = None
-
-        #self.hostfile_servers = None
-        #self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
-        #self.hostfile_servers = write_host_file.write_host_file(
-        #    self.hostlist_servers, self.workdir)
-        #print("Host file is: {}".format(self.hostfile_servers))
-
-        #self.agent_sessions = agent_utils.run_agent(self.basepath,
-        #                                            self.hostlist_servers)
-        #server_utils.run_server(self.hostfile_servers, self.server_group,
-        #                        self.basepath)
 
     def tearDown(self):
         try:
@@ -109,14 +91,14 @@ class PoolSvc(TestWithServers):
                 # kill pool leader and exclude it
                 self.pool.pool_svc_stop()
                 self.pool.exclude([leader])
-                # perform pool disconnect,connect and disconnect
+                # perform pool disconnect, try connect again and disconnect
                 self.pool.disconnect()
                 self.pool.connect(1 << 1)
                 self.pool.disconnect()
                 # kill another server which is not a leader and exclude it
-                server = DaosServer(self.context, self.server_group, 2)
+                server = DaosServer(self.context, self.server_group, leader - 1)
                 server.kill(1)
-                self.pool.exclude([2])
+                self.pool.exclude([leader - 1])
                 # perform pool connect
                 self.pool.connect(1 << 1)
 
