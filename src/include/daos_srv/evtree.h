@@ -191,8 +191,13 @@ struct evt_root {
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
 	EVT_FEAT_SORT_SOFF		= (1 << 0),
-	/** rectangles are sorted by distance to sides of MBR */
-	EVT_FEAT_SORT_DIST		= (2 << 0),
+	/** rectangles split by closest side of MBR
+	 */
+	EVT_FEAT_SORT_DIST		= (1 << 1),
+	/** rectangles are sorted by distance to sides of MBR and split
+	 *  evenly
+	 */
+	EVT_FEAT_SORT_DIST_EVEN		= (1 << 2),
 };
 
 #define EVT_FEAT_DEFAULT EVT_FEAT_SORT_DIST

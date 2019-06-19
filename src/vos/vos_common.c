@@ -363,12 +363,22 @@ vos_init(void)
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
-		if (strcasecmp("soff", evt_mode) == 0) {
+		if (strcasecmp("soff", evt_mode) == 0)
 			vos_evt_feats = EVT_FEAT_SORT_SOFF;
-			D_INFO("Using start offset sort for evtree\n");
-		} else {
-			D_INFO("Using distance sort for evtree (default)\n");
-		}
+		else if (strcasecmp("dist_even", evt_mode) == 0)
+			vos_evt_feats = EVT_FEAT_SORT_DIST_EVEN;
+	}
+	switch (vos_evt_feats) {
+	case EVT_FEAT_SORT_SOFF:
+		D_INFO("Using start offset sort for evtree\n");
+		break;
+	case EVT_FEAT_SORT_DIST_EVEN:
+		D_INFO("Using distance sort sort for evtree with even split\n");
+		break;
+	default:
+		D_ASSERT(vos_evt_feats == EVT_FEAT_SORT_DIST);
+		D_INFO("Using distance with closest side split for evtree "
+		       "(default)\n");
 	}
 	is_init = 1;
 exit:

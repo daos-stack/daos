@@ -50,6 +50,7 @@ enum {
 
 static struct evt_policy_ops evt_ssof_pol_ops;
 static struct evt_policy_ops evt_sdist_pol_ops;
+static struct evt_policy_ops evt_sdist_even_pol_ops;
 /**
  * Tree policy table.
  * - Sorted by Start Offset(SSOF): it is the only policy for now.
@@ -57,6 +58,7 @@ static struct evt_policy_ops evt_sdist_pol_ops;
 static struct evt_policy_ops *evt_policies[] = {
 	&evt_ssof_pol_ops,
 	&evt_sdist_pol_ops,
+	&evt_sdist_even_pol_ops,
 	NULL,
 };
 
@@ -846,6 +848,7 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 	struct evt_context	*tcx;
 	int			 depth;
 	int			 rc;
+	int			 policy;
 
 	D_ALLOC_PTR(tcx);
 	if (tcx == NULL)
@@ -854,11 +857,6 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 	tcx->tc_ref = 1; /* for the caller */
 	tcx->tc_magic = EVT_HDL_ALIVE;
 	tcx->tc_root_off = UMOFF_NULL;
-
-	if (feats & EVT_FEAT_SORT_DIST)
-		tcx->tc_ops = evt_policies[1];
-	else
-		tcx->tc_ops = evt_policies[0];
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -895,6 +893,26 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 		V_TRACE(DB_TRACE, "Load tree context from "DF_U64"\n",
 			root_off);
 	}
+
+	policy = tcx->tc_feats & (EVT_FEAT_SORT_SOFF |
+				  EVT_FEAT_SORT_DIST |
+				  EVT_FEAT_SORT_DIST_EVEN);
+	switch (policy) {
+	case EVT_FEAT_SORT_SOFF:
+		tcx->tc_ops = evt_policies[0];
+		break;
+	case EVT_FEAT_SORT_DIST:
+		tcx->tc_ops = evt_policies[1];
+		break;
+	case EVT_FEAT_SORT_DIST_EVEN:
+		tcx->tc_ops = evt_policies[2];
+		break;
+	default:
+		D_ERROR("Bad sort policy specified: 0x%x\n", policy);
+		D_GOTO(failed, rc = -DER_INVAL);
+	}
+	D_DEBUG(DB_IO, "EVTree sort policy is 0x%x\n", policy);
+
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
@@ -2160,7 +2178,9 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & (EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_SOFF))) {
+	if (!(feats & (EVT_FEAT_SORT_DIST_EVEN |
+		       EVT_FEAT_SORT_DIST |
+		       EVT_FEAT_SORT_SOFF))) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -2433,8 +2453,8 @@ evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 }
 
 static int
-evt_common_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
-		 struct evt_node *nd_dst)
+evt_even_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
+	       struct evt_node *nd_dst)
 {
 	struct evt_node_entry	*entry_src;
 	struct evt_node_entry	*entry_dst;
@@ -2552,7 +2572,7 @@ evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
 static struct evt_policy_ops evt_ssof_pol_ops = {
 	.po_insert		= evt_ssof_insert,
 	.po_adjust		= evt_ssof_adjust,
-	.po_split		= evt_common_split,
+	.po_split		= evt_even_split,
 	.po_rect_weight		= evt_common_rect_weight,
 };
 
@@ -2589,6 +2609,50 @@ evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
 }
 
 static int
+evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
+		struct evt_node *nd_dst)
+{
+	struct evt_node_entry	*entry_src;
+	struct evt_node_entry	*entry_dst;
+	int			 nr;
+	int64_t			 dist;
+
+	D_ASSERT(nd_src->tn_nr == tcx->tc_order);
+	nr = nd_src->tn_nr / 2;
+
+	nr += (nd_src->tn_nr % 2 != 0);
+
+	entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
+	dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src), &entry_src->ne_rect);
+	if (dist > 0) {
+		do {
+			nr--;
+			if (nr == 1)
+				break;
+			entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
+			dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
+					    &entry_src->ne_rect);
+		} while (dist > 0);
+	} else if (dist < 0) {
+		do {
+			nr++;
+			if (nr == nd_src->tn_nr - 1)
+				break;
+			entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
+			dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
+					    &entry_src->ne_rect);
+		} while (dist < 0);
+	}
+	entry_src = evt_node_entry_at(tcx, nd_src, nr);
+	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
+	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
+
+	nd_dst->tn_nr = nd_src->tn_nr - nr;
+	nd_src->tn_nr = nr;
+	return 0;
+}
+
+static int
 evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent)
 {
@@ -2605,7 +2669,14 @@ evt_sdist_adjust(struct evt_context *tcx, struct evt_node *nd,
 static struct evt_policy_ops evt_sdist_pol_ops = {
 	.po_insert		= evt_sdist_insert,
 	.po_adjust		= evt_sdist_adjust,
-	.po_split		= evt_common_split,
+	.po_split		= evt_sdist_split,
+	.po_rect_weight		= evt_common_rect_weight,
+};
+
+static struct evt_policy_ops evt_sdist_even_pol_ops = {
+	.po_insert		= evt_sdist_insert,
+	.po_adjust		= evt_sdist_adjust,
+	.po_split		= evt_even_split,
 	.po_rect_weight		= evt_common_rect_weight,
 };
 
