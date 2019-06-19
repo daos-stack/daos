@@ -58,9 +58,6 @@ type (
 	// and comprises command line arguments as well
 	// as environment variables
 	Config struct {
-		SystemName               string
-		ShouldReformatSuperblock bool
-
 		SettableOptions map[string]SettableOption
 
 		setCmdLineArgs   []*CmdLineArg
