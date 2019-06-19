@@ -558,7 +558,8 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "HDF5");
 		break;
 	default:
-		D_ASSERT(0);
+		strcpy(string, "unknown");
+		break;
 	}
 }
 
