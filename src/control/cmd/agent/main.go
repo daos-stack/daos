@@ -29,7 +29,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/jessevdk/go-flags"
+	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
@@ -43,7 +44,8 @@ const (
 )
 
 type cliOptions struct {
-	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
+	Insecure   bool   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
 	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 }
@@ -69,7 +71,10 @@ func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
 		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
 		c.LogFile = opts.LogFile
 	}
-
+	if opts.Insecure == true {
+		log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
+		c.TransportConfig.AllowInsecure = true
+	}
 }
 
 func agentMain() error {
@@ -115,6 +120,11 @@ func agentMain() error {
 	defer f.Close()
 	log.SetOutput(f)
 
+	err = config.TransportConfig.PreLoadCertData()
+	if err != nil {
+		return errors.Wrap(err, "Unable to load Cerificate Data")
+	}
+
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
 	finish := make(chan bool, 1)
@@ -129,7 +139,7 @@ func agentMain() error {
 	module := &SecurityModule{}
 	module.InitModule(nil)
 	drpcServer.RegisterRPCModule(module)
-	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0]})
+	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0], config.TransportConfig})
 
 	err = drpcServer.Start()
 	if err != nil {
