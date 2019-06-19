@@ -134,9 +134,7 @@ func setupShell() *ishell.Shell {
 		Func: func(c *ishell.Context) {
 			_, out := hasConns(conns.GetActiveConns(nil))
 			c.Println(out)
-			c.Printf(
-				unpackClientMap(conns.ListFeatures()),
-				"management feature")
+			c.Printf("management features: %s", conns.ListFeatures())
 		},
 	})
 

@@ -128,7 +128,9 @@ func serverMain() error {
 		acl.RegisterAccessControlServer(grpcServer, secServer)
 	}
 
-	go grpcServer.Serve(lis)
+	go func() {
+		_ = grpcServer.Serve(lis)
+	}()
 	defer grpcServer.GracefulStop()
 
 	// If running as root, wait for storage to be formatted if necessary and

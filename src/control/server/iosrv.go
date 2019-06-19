@@ -241,7 +241,7 @@ func (srv *iosrv) start(logFile io.Writer) (err error) {
 	}
 	defer func() {
 		if err != nil {
-			srv.stopCmd()
+			_ = srv.stopCmd()
 		}
 	}()
 
@@ -321,7 +321,7 @@ func (srv *iosrv) startCmd(logFile io.Writer) error {
 
 func (srv *iosrv) stopCmd() error {
 	// Ignore potential errors, as the I/O server may have already died.
-	srv.cmd.Process.Kill()
+	_ = srv.cmd.Process.Kill()
 
 	if err := srv.cmd.Wait(); err != nil {
 		return errors.WithStack(err)

@@ -52,8 +52,8 @@ func processValidateCredentials(body []byte) ([]byte, error) {
 	}
 
 	// Check our verifier
-	hash, err := security.HashFromToken(credential.Token)
-	if bytes.Compare(hash, credential.Verifier.Data) != 0 {
+	hash, _ := security.HashFromToken(credential.Token)
+	if !bytes.Equal(hash, credential.Verifier.Data) {
 		return nil, errors.Errorf("Verifier does not match token")
 	}
 

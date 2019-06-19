@@ -36,33 +36,34 @@ import (
 )
 
 var (
-	addresses    = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features     = []*pb.Feature{common.MockFeaturePB()}
-	ctrlrs       = NvmeControllers{common.MockControllerPB("")}
-	exampleState = pb.ResponseState{
+	MockServers  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
+	MockFeatures = []*pb.Feature{common.MockFeaturePB()}
+	MockCtrlrs   = NvmeControllers{common.MockControllerPB("")}
+	MockState    = pb.ResponseState{
 		Status: pb.ResponseStatus_CTRL_ERR_APP,
 		Error:  "example application error",
 	}
-	ctrlrResults = NvmeControllerResults{
+	MockCtrlrResults = NvmeControllerResults{
 		&pb.NvmeControllerResult{
 			Pciaddr: "0000:81:00.0",
-			State:   &exampleState,
+			State:   &MockState,
 		},
 	}
-	modules       = ScmModules{common.MockModulePB()}
-	moduleResults = ScmModuleResults{
+	MockModules       = ScmModules{common.MockModulePB()}
+	MockModuleResults = ScmModuleResults{
 		&pb.ScmModuleResult{
 			Loc:   &pb.ScmModule_Location{},
-			State: &exampleState,
+			State: &MockState,
 		},
 	}
-	mountResults = ScmMountResults{
+	MockMounts       = ScmMounts{common.MockMountPB()}
+	MockMountResults = ScmMountResults{
 		&pb.ScmMountResult{
 			Mntpoint: "/mnt/daos",
-			State:    &exampleState,
+			State:    &MockState,
 		},
 	}
-	errExample = errors.New("unknown failure")
+	MockErr = errors.New("unknown failure")
 )
 
 type mgmtCtlListFeaturesClient struct {
@@ -233,7 +234,7 @@ func newMockMgmtCtlClient(
 	killRet error) pb.MgmtCtlClient {
 
 	return &mockMgmtCtlClient{
-		features, ctrlrs, ctrlrResults, modules, moduleResults,
+		MockFeatures, ctrlrs, ctrlrResults, modules, moduleResults,
 		mountResults, scanRet, formatRet, updateRet, burninRet, killRet,
 	}
 }
@@ -254,6 +255,10 @@ func (m *mockMgmtSvcClient) Join(
 	*pb.JoinResp, error) {
 
 	return &pb.JoinResp{}, nil
+}
+
+func (c *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *pb.GetAttachInfoReq, opts ...grpc.CallOption) (*pb.GetAttachInfoResp, error) {
+	return &pb.GetAttachInfoResp{}, nil
 }
 
 func newMockMgmtSvcClient() pb.MgmtSvcClient {
@@ -343,7 +348,7 @@ func newMockConnect(
 
 	return &connList{
 		factory: &mockControllerFactory{
-			state, features, ctrlrs, ctrlrResults, modules,
+			state, MockFeatures, ctrlrs, ctrlrResults, modules,
 			moduleResults, mountResults, scanRet, formatRet,
 			updateRet, burninRet, killRet, connectRet,
 		},
@@ -352,8 +357,8 @@ func newMockConnect(
 
 func defaultMockConnect() Connect {
 	return newMockConnect(
-		connectivity.Ready, features, ctrlrs, ctrlrResults, modules,
-		moduleResults, mountResults, nil, nil, nil, nil, nil, nil)
+		connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+		MockModuleResults, MockMountResults, nil, nil, nil, nil, nil, nil)
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.
@@ -370,6 +375,15 @@ func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
 	return cf
 }
 
+// NewClientNvme provides a mock ClientCtrlrMap populated with ctrlr details
+func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientCtrlrMap {
+	cMap := make(ClientCtrlrMap)
+	for _, addr := range addrs {
+		cMap[addr] = CtrlrResults{Ctrlrs: ctrlrs}
+	}
+	return cMap
+}
+
 // NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
 // operation responses
 func NewClientNvmeResults(
@@ -378,15 +392,6 @@ func NewClientNvmeResults(
 	cMap := make(ClientCtrlrMap)
 	for _, addr := range addrs {
 		cMap[addr] = CtrlrResults{Responses: results}
-	}
-	return cMap
-}
-
-// NewClientNvme provides a mock ClientCtrlrMap populated with ctrlr details
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientCtrlrMap {
-	cMap := make(ClientCtrlrMap)
-	for _, addr := range addrs {
-		cMap[addr] = CtrlrResults{Ctrlrs: ctrlrs}
 	}
 	return cMap
 }
@@ -400,26 +405,35 @@ func NewClientScm(mms ScmModules, addrs Addresses) ClientModuleMap {
 	return cMap
 }
 
-// NewClientMountResults provides a mock ClientMountMap populated with scm mount
-// operation responses
-func NewClientMountResults(
-	results []*pb.ScmMountResult, addrs Addresses) ClientMountMap {
-
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Responses: results}
-	}
-	return cMap
-}
-
-// NewClientModuleResults provides a mock ClientModuleMap populated with scm
+// NewClientScmResults provides a mock ClientModuleMap populated with scm
 // module operation responses
-func NewClientModuleResults(
+func NewClientScmResults(
 	results []*pb.ScmModuleResult, addrs Addresses) ClientModuleMap {
 
 	cMap := make(ClientModuleMap)
 	for _, addr := range addrs {
 		cMap[addr] = ModuleResults{Responses: results}
+	}
+	return cMap
+}
+
+// NewClientScmMount provides a mock ClientMountMap populated with scm mount details
+func NewClientScmMount(mounts ScmMounts, addrs Addresses) ClientMountMap {
+	cMap := make(ClientMountMap)
+	for _, addr := range addrs {
+		cMap[addr] = MountResults{Mounts: mounts}
+	}
+	return cMap
+}
+
+// NewClientScmMountResults provides a mock ClientMountMap populated with scm mount
+// operation responses
+func NewClientScmMountResults(
+	results []*pb.ScmMountResult, addrs Addresses) ClientMountMap {
+
+	cMap := make(ClientMountMap)
+	for _, addr := range addrs {
+		cMap[addr] = MountResults{Responses: results}
 	}
 	return cMap
 }

@@ -148,9 +148,11 @@ func saveActiveConfig(config *configuration) {
 // hash produces unique int from string, mask MSB on conversion to signed int
 func hash(s string) int {
 	h := fnv.New32a()
-	h.Write([]byte(s))
-	// mask MSB of uint32 as this will be sign bit
-	return int(h.Sum32() & 0x7FFFFFFF)
+	if _, err := h.Write([]byte(s)); err != nil {
+		panic(err) // should never happen
+	}
+
+	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
 }
 
 // populateCliOpts populates options string slice for single I/O service
@@ -266,8 +268,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	if opts.Map != nil {
 		c.SystemMap = *opts.Map
 	}
-
-	return
 }
 
 // validateConfig asserts that config meets minimum requirements

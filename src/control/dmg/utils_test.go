@@ -24,7 +24,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"testing"
 
@@ -32,14 +31,6 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-)
-
-var (
-	addresses  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features   = []*pb.Feature{MockFeaturePB()}
-	ctrlrs     = NvmeControllers{MockControllerPB("")}
-	modules    = ScmModules{MockModulePB()}
-	errExample = errors.New("something went wrong")
 )
 
 func init() {
@@ -60,24 +51,24 @@ func TestHasConnection(t *testing.T) {
 			"Active connections: [1.2.3.4:10000]\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: []\nNo active connections!",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}},
+			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: []\nNo active connections!",
 		},
 		{
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\nNo active connections!",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
+			"failed to connect to 1.2.3.4:10000 (unknown failure)\nfailed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: []\nNo active connections!",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
+			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"failed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: [1.2.3.4:10000]\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
+			"failed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: [1.2.3.4:10000]\n",
 		},
 	}
 
@@ -94,27 +85,57 @@ func marshal(i interface{}) string {
 
 func TestCheckSprint(t *testing.T) {
 	var shelltests = []struct {
-		m   interface{}
+		m   string
 		out string
 	}{
 		{
-			NewClientFM(features, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n  burn-name: category nvme, run workloads on device to test\n1.2.3.5:10001:\n  burn-name: category nvme, run workloads on device to test\n\n\n",
+			NewClientFM(MockFeatures, MockServers).String(),
+			"1.2.3.4:10000:\nburn-name: category nvme, run workloads on device to test\n\n1.2.3.5:10001:\nburn-name: category nvme, run workloads on device to test\n\n",
 		},
 		{
-			NewClientNvme(ctrlrs, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- model: ABC\n  serial: 123ABC\n  pciaddr: 0000:81:00.0\n  fwrev: \"\"\n  namespaces:\n  - id: 12345\n    capacity: 99999\n1.2.3.5:10001:\n- model: ABC\n  serial: 123ABC\n  pciaddr: 0000:81:00.0\n  fwrev: \"\"\n  namespaces:\n  - id: 12345\n    capacity: 99999\n\n\n",
+			NewClientNvme(MockCtrlrs, MockServers).String(),
+			"1.2.3.4:10000:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n",
 		},
 		{
-			NewClientScm(modules, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- physicalid: 12345\n  capacity: 12345\n  loc:\n    channel: 1\n    channelpos: 2\n    memctrlr: 3\n    socket: 4\n1.2.3.5:10001:\n- physicalid: 12345\n  capacity: 12345\n  loc:\n    channel: 1\n    channelpos: 2\n    memctrlr: 3\n    socket: 4\n\n\n",
+			NewClientScm(MockModules, MockServers).String(),
+			"1.2.3.4:10000:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n1.2.3.5:10001:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000: something went wrong\n1.2.3.5:10001: something went wrong\n\n\n",
+			NewClientScmMount(MockMounts, MockServers).String(),
+			"1.2.3.4:10000:\n\tmntpoint:\"/mnt/daos\" \n\n1.2.3.5:10001:\n\tmntpoint:\"/mnt/daos\" \n\n",
 		},
 		{
-			NewClientMountResults(
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}}.String(),
+			"1.2.3.4:10000:\nerror: unknown failure\n1.2.3.5:10001:\nerror: unknown failure\n",
+		},
+		{
+			NewClientNvmeResults(
+				[]*pb.NvmeControllerResult{
+					{
+						Pciaddr: "0000:81:00.0",
+						State: &pb.ResponseState{
+							Status: pb.ResponseStatus_CTRL_ERR_APP,
+							Error:  "example application error",
+						},
+					},
+				}, MockServers).String(),
+			"1.2.3.4:10000:\n\tpci-address 0000:81:00.0: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tpci-address 0000:81:00.0: status CTRL_ERR_APP error: example application error\n\n",
+		},
+		{
+			NewClientScmResults(
+				[]*pb.ScmModuleResult{
+					{
+						Loc: MockModulePB().Loc,
+						State: &pb.ResponseState{
+							Status: pb.ResponseStatus_CTRL_ERR_APP,
+							Error:  "example application error",
+						},
+					},
+				}, MockServers).String(),
+			"1.2.3.4:10000:\n\tmodule location channel:1 channelpos:2 memctrlr:3 socket:4 : status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmodule location channel:1 channelpos:2 memctrlr:3 socket:4 : status CTRL_ERR_APP error: example application error\n\n",
+		},
+		{
+			NewClientScmMountResults(
 				[]*pb.ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",
@@ -123,11 +144,11 @@ func TestCheckSprint(t *testing.T) {
 							Error:  "example application error",
 						},
 					},
-				}, addresses),
-			"Listing %[1]ss on connected storage servers:\n1.2.3.4:10000:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n1.2.3.5:10001:\n- mntpoint: /mnt/daos\n  state:\n    status: -4\n    error: example application error\n    info: status=CTRL_ERR_APP\n\n\n",
+				}, MockServers).String(),
+			"1.2.3.4:10000:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n",
 		},
 	}
 	for _, tt := range shelltests {
-		AssertEqual(t, unpackClientMap(tt.m), tt.out, "bad output")
+		AssertEqual(t, tt.m, tt.out, "bad output")
 	}
 }

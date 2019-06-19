@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include <daos_security.h>
 
 /**
@@ -83,10 +84,12 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 	for (i = 0; i < src_nr; i++) {
 		int num;
 
-		if (by_out)
+		if (by_out) {
 			num = src_sgl[i].sg_nr_out;
-		else
+			dst_sgl[i].sg_nr_out = num;
+		} else {
 			num = src_sgl[i].sg_nr;
+		}
 
 		if (num == 0)
 			continue;
@@ -99,9 +102,6 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
 			return -DER_INVAL;
 		}
-
-		if (by_out)
-			dst_sgl[i].sg_nr_out = num;
 
 		if (copy_data) {
 			int j;
@@ -1070,4 +1070,20 @@ out:
 		}
 	}
 	return rc;
+}
+
+void
+daos_dti_gen(struct dtx_id *dti, bool zero)
+{
+	static __thread uuid_t uuid;
+
+	if (zero) {
+		memset(dti, 0, sizeof(*dti));
+	} else {
+		if (uuid_is_null(uuid))
+			uuid_generate(uuid);
+
+		uuid_copy(dti->dti_uuid, uuid);
+		dti->dti_hlc = crt_hlc_get();
+	}
 }

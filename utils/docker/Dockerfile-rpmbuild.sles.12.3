@@ -106,13 +106,18 @@ RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/d
                                                         cart fio                                                                                                                                \
                                                         'The Go Programming Language (SLE_12_SP3_Backports)'                                                                                    \
                                                         'home:jhli (SLE_15)'
+ARG go_version=1.10
+ENV go_version=${go_version}
+# Note the need to erase old go packages: CORCI-697
 RUN zypper --non-interactive rm libpmem1;                                      \
     zypper --non-interactive install spdk-devel spdk-tools libisa-l-devel      \
                                      protobuf-c-devel fuse-devel libpmem-devel \
                                      libpmemobj-devel raft-devel               \
                                      argobots-devel cart-devel                 \
                                      ipmctl-devel readline-devel               \
-                                     go1.10 fio\ \<\ 3.4
+                                     go${go_version} fio\ \<\ 3.4;             \
+    rpm -qa | grep ^go\[1-9\]\* | grep -v ^go${go_version/\./\\.} |            \
+        xargs zypper --non-interactive rm
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
