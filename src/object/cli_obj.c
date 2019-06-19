@@ -1360,7 +1360,7 @@ out:
 
 /* Query the obj request's targets */
 static int
-obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, uint32_t *shard,
+obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 		 uint64_t dkey_hash, uint64_t tgt_set, uint32_t map_ver,
 		 bool to_leader, struct obj_req_tgts *req_tgts)
 {
@@ -1408,13 +1408,14 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, uint32_t *shard,
 	case DAOS_OBJ_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
+		D_ASSERT(shard != NULL);
 		if (*shard != -1) {
 			if (to_leader)
 				*shard = obj_grp_leader_get(obj, *shard,
 							    map_ver);
 			else
 				*shard = obj_grp_valid_shard_get(obj, *shard,
-								map_ver, opc);
+								 map_ver, opc);
 			if (*shard < 0)
 				D_GOTO(out, rc = *shard);
 		} else {
@@ -2100,7 +2101,7 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	struct obj_list_arg	 list_args;
 	uint64_t		 dkey_hash;
 	bool			 to_leader = false;
-	uint32_t		 shard = -1;
+	int			 shard = -1;
 	daos_epoch_t		 epoch;
 	int			 rc;
 
