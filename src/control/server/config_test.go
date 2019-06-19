@@ -49,8 +49,6 @@ const (
 
 // init gets called once per package, don't call in other test files
 func init() {
-	log.NewDefaultLogger(log.Error, "server_tests: ", ioutil.Discard)
-
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()
 }
@@ -110,6 +108,9 @@ func mockConfigFromFile(t *testing.T, e External, path string) configuration {
 // from 2 files with multiple entries.
 // Write input to file, loadConfig (decode), saveConf (encode) and compare written yaml.
 func TestParseConfigSucceed(t *testing.T) {
+	var tBuf strings.Builder
+	log.NewDefaultLogger(log.Error, "server_tests: ", tBuf)
+
 	inputYamls, outputYamls, err := LoadTestFiles(
 		"testdata/input_good.txt", "testdata/output_success.txt")
 	if err != nil {
@@ -145,7 +146,8 @@ func TestParseConfigSucceed(t *testing.T) {
 				t, outputs[0][x], line,
 				fmt.Sprintf(
 					"line %d parsed input %s doesn't match expected output:\n\thave %#v\n\twant %#v\n from input %#v\n",
-					x, outputs[0], outputs[0][x], line, y))
+					x, outputs[0], outputs[0][x], line, y),
+				tBuf)
 		}
 	}
 }
