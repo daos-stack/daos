@@ -47,6 +47,8 @@ link_hdlr(int argc, char *argv[])
 		{"chunk_size",	required_argument,	NULL,	'c'},
 		{NULL,		0,			NULL,	0}
 	};
+	char			*svcl_str, *group;
+	d_rank_list_t		*svcl = NULL;
 	const char		*path = NULL;
 	struct duns_attr_t	attr = {0};
 	int			rc;
@@ -77,7 +79,25 @@ link_hdlr(int argc, char *argv[])
 		}
 	}
 
-	rc = duns_link_path(path, attr);
+	/*
+	 * MSC - for now SVCL and group need to be passed through env
+	 * variable. they shouldn't be required later.
+	 */
+	svcl_str = getenv("DAOS_SVCL");
+	if (svcl_str == NULL) {
+		D_ERROR("missing pool service rank list\n");
+		return -DER_INVAL;
+	}
+
+	svcl = daos_rank_list_parse(svcl_str, ":");
+	if (svcl == NULL) {
+		D_ERROR("Invalid pool service rank list\n");
+		return -DER_INVAL;
+	}
+
+	group = getenv("DAOS_GROUP");
+
+	rc = duns_link_path(path, group, svcl, &attr);
 	if (rc)
 		fprintf(stderr, "Failed to link path %s\n", path);
 	return rc;
