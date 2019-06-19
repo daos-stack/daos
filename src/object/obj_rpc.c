@@ -557,7 +557,6 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 	void *reply = crt_reply_get(rpc);
 
 	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE: {
 		struct obj_rw_out	*orw = reply;
 
@@ -565,9 +564,6 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 		orw->orw_dkey_conflict = dce->dce_dkey;
 		break;
 	}
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {

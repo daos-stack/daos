@@ -181,7 +181,6 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
 	D_INIT_LIST_HEAD(&dth->dth_shares);
-	dth->dth_handled_time = crt_hlc_get();
 	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
