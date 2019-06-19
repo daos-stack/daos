@@ -325,6 +325,6 @@ def clustershell_execute(cmd, hosts, timeout=60):
         if rc_code is not 0:
             rc_err[keys[0]] = 'RC={}, output={}'.format(rc_code,
                                                         local_task.
-                                                        node_buffer(_keys[0]))
+                                                        node_buffer(keys[0]))
     if rc_err:
         raise ClusterCommandFailed(rc_err)
