@@ -26,6 +26,8 @@ from __future__ import print_function
 import os
 import traceback
 import json
+from grp import getgrnam
+from pwd import getpwnam
 
 from avocado.utils import process
 from apricot import Test
@@ -85,6 +87,8 @@ class MultiServerCreateDeleteTest(Test):
         uidlist = self.params.get("uid", '/run/tests/uids/*')
         if uidlist[0] == 'valid':
             uid = os.geteuid()
+        elif uidlist[0] == 'other_user':
+            uid = getpwnam('nfsnobody')[2]
         else:
             uid = uidlist[0]
         expected_for_param.append(uidlist[1])
@@ -92,6 +96,8 @@ class MultiServerCreateDeleteTest(Test):
         gidlist = self.params.get("gid", '/run/tests/gids/*')
         if gidlist[0] == 'valid':
             gid = os.getegid()
+        elif gidlist[0] == 'other_group':
+            gid = getgrnam('nfsnobody')[2]
         else:
             gid = gidlist[0]
         expected_for_param.append(gidlist[1])
