@@ -545,7 +545,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 *                          (currently c_uuid null / clear).
 	 * 4) neither specified   : create a UUID in c_uuid.
 	 */
-	if ((op == CONT_CREATE) && (ap->path == NULL) && (uuid_is_null(ap->c_uuid)))
+	if ((op == CONT_CREATE) && (ap->path == NULL) &&
+	    (uuid_is_null(ap->c_uuid)))
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
