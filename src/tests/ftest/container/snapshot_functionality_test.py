@@ -105,18 +105,25 @@ class Snapshot(TestWithServers):
         tear down method
         """
         try:
-            self.container.close()
+            if self.container:
+                self.container.close()
+
             # wait a few seconds and then destroy
-            time.sleep(2)
-            self.container.destroy()
+            time.sleep(5)
+            if self.container:
+                self.container.destroy()
+
+            # cleanup the pool
+            if self.pool:
+                self.pool.disconnect()
+                self.pool.destroy(1)
+
         except DaosApiError as excep:
             self.log.info(excep)
             self.log.info(traceback.format_exc())
             self.fail("##Snapshot test failed on cleanUp.")
+
         finally:
-            # cleanup the pool
-            self.pool.disconnect()
-            self.pool.destroy(1)
             super(Snapshot, self).tearDown()
 
     def display_daoscontainer(self):
