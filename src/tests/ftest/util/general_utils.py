@@ -321,10 +321,10 @@ def clustershell_execute(cmd, hosts, timeout=60):
     rc_err = {}
     local_task = task_self()
     local_task.run(cmd, nodes=','.join(hosts), timeout=timeout)
-    for rc_code, _keys in local_task.iter_retcodes():
+    for rc_code, keys in local_task.iter_retcodes():
         if rc_code is not 0:
-            rc_err[_keys[0]] = 'RC={}, output={}'.format(rc_code,
-                                                         local_task.
-                                                         node_buffer(_keys[0]))
+            rc_err[keys[0]] = 'RC={}, output={}'.format(rc_code,
+                                                        local_task.
+                                                        node_buffer(_keys[0]))
     if rc_err:
         raise ClusterCommandFailed(rc_err)
