@@ -180,8 +180,7 @@ func (s *scmStorage) reFormat(devPath string) (err error) {
 func (s *scmStorage) makeMount(
 	devPath string, mntPoint string, devType string, mntOpts string) (err error) {
 
-	var flags uintptr
-	flags = syscall.MS_NOATIME | syscall.MS_SILENT
+	flags := uintptr(syscall.MS_NOATIME | syscall.MS_SILENT)
 	flags |= syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_NOSUID
 
 	if err = s.config.ext.mkdir(mntPoint); err != nil {
@@ -312,7 +311,6 @@ func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
 
 	log.Debugf("SCM device reset, format and mount completed")
 	s.formatted = true
-	return
 }
 
 // Update is currently a placeholder method stubbing SCM module fw update.

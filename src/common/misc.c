@@ -84,10 +84,12 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 	for (i = 0; i < src_nr; i++) {
 		int num;
 
-		if (by_out)
+		if (by_out) {
 			num = src_sgl[i].sg_nr_out;
-		else
+			dst_sgl[i].sg_nr_out = num;
+		} else {
 			num = src_sgl[i].sg_nr;
+		}
 
 		if (num == 0)
 			continue;
@@ -100,9 +102,6 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
 			return -DER_INVAL;
 		}
-
-		if (by_out)
-			dst_sgl[i].sg_nr_out = num;
 
 		if (copy_data) {
 			int j;
