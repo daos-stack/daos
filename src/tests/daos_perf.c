@@ -970,20 +970,18 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	double		then;
 	double		now;
-	int		rc;
 	int		i;
 	bool		pause = false;
+	unsigned	seed = 0;
+	int		rc;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
-
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nASs:ztf:hUFRBvIiuw",
+				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1071,6 +1069,9 @@ main(int argc, char **argv)
 		case 'S':
 			ts_shuffle = true;
 			break;
+		case 'G':
+			seed = atoi(optarg);
+			break;
 		case 's':
 			vsize = strtoul(optarg, &endp, 0);
 			vsize = ts_val_factor(vsize, *endp);
@@ -1122,10 +1123,9 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (ts_verify_fetch && ts_shuffle) {
-		fprintf(stderr, "data verification (-v) incompatible with"
-			" shuffled offsets (-S).\n");
-		return -1;
+	if (seed == 0) {
+		gettimeofday(&tv, NULL);
+		seed = tv.tv_usec;
 	}
 
 	/* Convert object classes for echo mode.
@@ -1264,6 +1264,8 @@ main(int argc, char **argv)
 	for (i = 0; i < TEST_SIZE; i++) {
 		if (perf_tests[i] == NULL)
 			continue;
+
+		srand(seed);
 
 		rc = perf_tests[i](&then, &now);
 		if (ts_ctx.tsc_mpi_size > 1) {
