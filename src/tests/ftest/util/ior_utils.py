@@ -72,42 +72,48 @@ def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
 # pylint: disable=too-many-arguments
 def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                  pool_uuid, svc_list, object_class, basepath, client_processes,
-                 cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
-                 display_output=True):
+                 mpichinstall, cont_uuid="`uuidgen`", seg_count=1,
+                 chunk_size=1048576, display_output=True):
 
     """ Running Ior tests
         Function Arguments
-        client_file    --client file holding client hostname and slots
-        ior_flags      --all ior specific flags
-        iteration      --number of iterations for ior run
-        block_size     --contiguous bytes to write per task
-        transfer_size  --size of transfer in bytes
-        pool_uuid      --Daos Pool UUID
-        svc_list       --Daos Pool SVCL
-        object_class   --object class
-        basepath       --Daos basepath
-        client_processes          --number of client processes
-        cont_uuid       -- Container UUID
-        seg_count      --segment count
-        chunk_size      --chunk size
-        display_output --print IOR output on console.
+        client_file      --client file holding client hostname and slots
+        ior_flags        --all ior specific flags
+        iteration        --number of iterations for ior run
+        block_size       --contiguous bytes to write per task
+        transfer_size    --size of transfer in bytes
+        pool_uuid        --Daos Pool UUID
+        svc_list         --Daos Pool SVCL
+        object_class     --object class
+        basepath         --Daos basepath
+        client_processes --number of client processes
+        mpichinstall     --location of installed mpich
+        cont_uuid        -- Container UUID
+        seg_count        --segment count
+        chunk_size       --chunk size
+        display_output   --print IOR output on console.
     """
-    with open(os.path.join(basepath, ".build_vars.json")) as afile:
-        build_paths = json.load(afile)
-    orterun_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun")
-    attach_info_path = basepath + "/install/tmp"
     try:
+        env_variables = [
+            "CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
+            "DAOS_SINGLETON_CLI=1",
+            "OFI_INTERFACE={}".format(os.getenv('OFI_INTERFACE', "")),
+            "CRT_PHY_ADDR_STR={}".format(os.getenv('CRT_PHY_ADDR_STR', "")),
+            "D_LOG_FILE={}".format(os.getenv('D_LOG_FILE',
+                                             '/tmp/client_daos.log'))]
 
-        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node"      \
-                  " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={}"    \
-                  " -x D_LOG_FILE -x OFI_INTERFACE -x CRT_PHY_ADDR_STR"    \
-                  " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {}" \
-                  " --daos.svcl {} --daos.cont {} --daos.destroy"          \
-                  " --daos.chunk_size {} --daos.oclass {} "                \
-                  .format(client_processes, client_file, attach_info_path,
-                          ior_flags, seg_count, iteration, block_size,
-                          transfer_size, pool_uuid, svc_list, cont_uuid,
-                          chunk_size, object_class)
+        ior_cmd = ('export ' + '; export '.join(env_variables) + '; ' +
+                   mpichinstall + "bin/mpirun -np {0} --hostfile {1} " +
+                   " ior {2} -a DAOS -s {3} -i {4} -b {5} -t {6}" +
+                   " --daos.pool {7} --daos.svcl {8} --daos.cont {9}" +
+                   " --daos.destroy --daos.chunk_size {10}" +
+                   " --daos.oclass {11}").format(client_processes, client_file,
+                                                 ior_flags, seg_count,
+                                                 iteration, block_size,
+                                                 transfer_size, pool_uuid,
+                                                 svc_list, cont_uuid,
+                                                 chunk_size, object_class)
+
         if display_output:
             print("ior_cmd: {}".format(ior_cmd))
 
@@ -148,19 +154,18 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
     """
     try:
         env_variables = [
-            "export CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
-            "export DAOS_POOL={}".format(pool_uuid),
-            "export MPI_LIB=''",
-            "export DAOS_SVCL={}".format(svcl),
-            "export DAOS_SINGLETON_CLI=1",
-            "export FI_PSM2_DISCONNECT=1",
-            "export D_LOG_FILE={}".format(os.getenv('D_LOG_FILE',
-                                                    '/tmp/client_daos.log'))]
+            "CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
+            "DAOS_POOL={}".format(pool_uuid),
+            "MPI_LIB=''",
+            "DAOS_SVCL={}".format(svcl),
+            "DAOS_SINGLETON_CLI=1",
+            "FI_PSM2_DISCONNECT=1",
+            "D_LOG_FILE={}".format(os.getenv('D_LOG_FILE',
+                                             '/tmp/client_daos.log'))]
 
-        run_cmd = ('; '.join(env_variables) + '; ' +
-                   mpichinstall + "/mpirun -np {0} --hostfile {1} " +
-                   "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} " +
-                   "-i {3} -t {4} -b {5} " +
+        run_cmd = ('export ' + '; export '.join(env_variables) + '; ' +
+                   mpichinstall + "bin/mpirun -np {0} --hostfile {1} " +
+                   "ior -a MPIIO {2} -i {3} -t {4} -b {5} " +
                    "-o daos:testFile").format(numprocs, hostfile, ior_flags,
                                               iteration, transfer_size,
                                               block_size)

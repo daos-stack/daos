@@ -43,23 +43,14 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
+def daos_repos = "openpa libfabric pmix ompi mercury spdk isa-l fio dpdk protobuf-c fuse pmdk argobots raft cart@daos_devel daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+def ior_repos = "mpich ior-hpc"
+
 def rpm_test_pre = '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                       nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
-				    jenkins@${nodelist[0]}:/tmp
-                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex
-                      repo_file_base=\"*_job_\${JOB_NAME%%/*}_job_\"
-                      for repo in openpa libfabric pmix   \
-                                  ompi mercury spdk isa-l \
-                                  fio dpdk protobuf-c     \
-                                  fuse pmdk argobots raft \
-                                  cart@daos_devel; do     \
-                          if [[ \\\$repo = *@* ]]; then
-                              branch=\"\\\${repo#*@}\"
-                              repo=\"\\\${repo%@*}\"
-                          else
-                              branch=\"master\"
-                          fi\n'''
+                                    jenkins@${nodelist[0]}:/tmp
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
 def rpm_test_daos_test = '''me=\\\$(whoami)
                             for dir in server agent; do
@@ -104,7 +95,10 @@ pipeline {
         BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
         BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
         UID=sh(script: "id -u", returnStdout: true)
-        BUILDARGS = "--build-arg NOBUILD=1 --build-arg UID=$env.UID $env.BAHTTP_PROXY $env.BAHTTPS_PROXY"
+        BUILDARGS = "$env.BAHTTP_PROXY $env.BAHTTPS_PROXY "                   +
+                    "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
+                    "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
+                    "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
     }
 
     options {
@@ -979,7 +973,9 @@ pipeline {
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-i ci_key"
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
@@ -1038,11 +1034,15 @@ pipeline {
                         // First snapshot provision the VM at beginning of list
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
-                                       power_only: true
+                                       power_only: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-i ci_key"
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
@@ -1101,17 +1101,11 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        distro: 'el7.6',
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         runTest script: "${rpm_test_pre}" +
-                                    '''     sudo yum-config-manager --add-repo=\${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/centos7/
-                                            sudo bash -c \\\"echo \\\\\\"gpgcheck = False\\\\\\" >> /etc/yum.repos.d/\\\${repo_file_base}\\\${repo}_job_\\\${branch}_lastSuccessfulBuild_artifact_artifacts_centos7_.repo\\\"
-
-                                        done
-                                        sudo yum-config-manager --add-repo=\${BUILD_URL}artifact/artifacts/centos7/
-                                        sudo bash -c \\\"echo \\\\\\"gpgcheck = False\\\\\\" >> /etc/yum.repos.d/\\\${repo_file_base}daos_job_\${JOB_BASE_NAME}_\${BUILD_ID}_artifact_artifacts_centos7_.repo\\\"
-                                        # work around openmpi -> ompi
-                                        sudo yum -y erase metabench mdtest simul IOR
-                                        sudo yum -y install daos-client
+                                     '''sudo yum -y install daos-client
                                         sudo yum -y history rollback last-1
                                         sudo yum -y install daos-server
                                         sudo yum -y install daos-tests\n''' +
@@ -1128,13 +1122,11 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        distro: 'sles12sp3',
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + " python-pathlib"
                         runTest script: "${rpm_test_pre}" +
-                                     '''    sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/sles12.3/ \\\$repo
-                                        done
-                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/python-pathlib/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ python-pathlib
-                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${BUILD_URL}artifact/artifacts/sles12.3/ daos
-                                        sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
+                                     '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
+                                        # for libcmocka
                                         sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
                                         sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
                                         sudo zypper --non-interactive --gpg-auto-import-keys ref

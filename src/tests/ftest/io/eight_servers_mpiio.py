@@ -134,7 +134,7 @@ class EightServers(Test):
                 svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
             svc_list = svc_list[:-1]
 
-            print ("svc_list: {}".format(svc_list))
+            print("svc_list: {}".format(svc_list))
 
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
                                     pool_uuid, svc_list, self.num_procs,
