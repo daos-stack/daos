@@ -285,7 +285,7 @@ def storage_prepare(hosts):
                .format(getpass.getuser()))
         clustershell_execute(cmd, hosts, timeout=120)
     except ClusterCommandFailed as error:
-        raise ServerFailed(error)
+        raise ServerFailed("Error preparing NVMe storage:\n{}".format(error))
 
 def storage_reset(hosts):
     """
@@ -298,4 +298,4 @@ def storage_reset(hosts):
         cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
         clustershell_execute(cmd, hosts)
     except ClusterCommandFailed as error:
-        raise ServerFailed(error)
+        raise ServerFailed("Error resetting NVMe storage:\n{}".format(error))

@@ -315,7 +315,7 @@ def clustershell_execute(cmd, hosts, timeout=60):
         hosts (list):  a list of host names
         timeout (int): command timeout in seconds
     Raise:
-        ClusterCommandFailed: raied in case of command failed on any host
+        ClusterCommandFailed: raised in case of command failed on any host
                               return dictionary with hostname,rc,output.
     """
     rc_err = {}
