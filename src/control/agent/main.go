@@ -24,15 +24,19 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/jessevdk/go-flags"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
+	flags "github.com/jessevdk/go-flags"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -41,7 +45,8 @@ const (
 )
 
 type cliOptions struct {
-	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
+	Insecure   bool   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
 	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 }
@@ -52,6 +57,16 @@ func main() {
 	if agentMain() != nil {
 		os.Exit(1)
 	}
+}
+
+func loadCredentials(config *client.Configuration) (credentials.TransportCredentials, error) {
+	if opts.Insecure {
+		fmt.Println("Using Insecure connection")
+		return nil, nil
+	}
+	creds, err := security.LoadClientCreds(config.CACert, config.Cert, config.Key, "server")
+
+	return creds, err
 }
 
 // applyCmdLineOverrides will overwrite Configuration values with any non empty
@@ -113,6 +128,12 @@ func agentMain() error {
 	defer f.Close()
 	log.SetOutput(f)
 
+	creds, err := loadCredentials(&config)
+	if err != nil {
+		log.Errorf("Unable to load gRPC Certificates: %s", err)
+		return err
+	}
+
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
 	finish := make(chan bool, 1)
@@ -127,7 +148,7 @@ func agentMain() error {
 	module := &SecurityModule{}
 	module.InitModule(nil)
 	drpcServer.RegisterRPCModule(module)
-	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0]})
+	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0], creds})
 
 	err = drpcServer.Start()
 	if err != nil {

@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -48,7 +49,8 @@ const (
 // to MS.
 type mgmtModule struct {
 	// The access point
-	ap string
+	ap   string
+	cred credentials.TransportCredentials
 }
 
 func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
@@ -74,6 +76,12 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 
 	log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
 
+	var opts []grpc.DialOption
+	if mod.cred != nil {
+		opts = append(opts, grpc.WithTransportCredentials(mod.cred))
+	} else {
+		opts = append(opts, grpc.WithInsecure())
+	}
 	conn, err := grpc.Dial(mod.ap, grpc.WithInsecure())
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", mod.ap)
