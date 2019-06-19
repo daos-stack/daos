@@ -84,12 +84,16 @@ class NvmeIo(TestWithServers):
     @avocado.fail_on(DaosApiError)
     def test_nvme_io(self):
         """
-        Test ID: DAOS-2082
-        Test Description: Test will run IOR with standard and non standard
-        sizes.IOR will be run for all Object type supported. Purpose is to
-        verify pool size (SCM and NVMe) for IOR file.
-        This test is running multiple IOR on same server start instance.
-        :avocado: tags=all,daosio,full_regression,hw,nvme_io
+        Jira ID: DAOS-2082
+        Test Description:
+            Test will run IOR with standard and non standard
+            sizes.IOR will be run for all Object type supported. Purpose is to
+            verify pool size (SCM and NVMe) for IOR file.
+
+        Use Cases:
+            This test is running multiple IOR with NVMe.
+
+        :avocado: tags=all,daosio,full_regression,hw,nvme_io,nvme
         """
         ior_args = {}
 
