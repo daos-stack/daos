@@ -1,4 +1,8 @@
 # Unittests Name and Paramter to be mention in this file.
+hosts:
+  test_machines:
+    - boro-A
+timeout: 600
 UnitTest:
   smd_ut:
     testname: smd_ut

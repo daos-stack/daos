@@ -25,7 +25,7 @@
 
 from avocado.utils import process
 from general_utils import get_file_path
-from apricot import Test
+from apricot import Test, skipForTicket
 
 class UnitTest(Test):
     """
@@ -45,9 +45,10 @@ class UnitTest(Test):
         """
         name = self.params.get("testname", '/run/UnitTest/{0}/'
                                .format(unit_testname))
+        server = self.params.get("test_machines", "/run/hosts/*")
         bin_path = get_file_path(name, "install/bin")
 
-        cmd = ("{0}".format(bin_path[0]))
+        cmd = ("ssh {} {}".format(server[0], bin_path[0]))
         return_code = process.system(cmd)
         if return_code is not 0:
             self.fail("{0} unittest failed with return code={1}.\n"
@@ -56,34 +57,36 @@ class UnitTest(Test):
     def test_smd_ut(self):
         """
         Test smd unittest.
-        :avocado: tags=unittest,nvme,smd_ut
+        :avocado: tags=all,unittest,pr,tiny,hw,smd_ut
         """
         self.unittest_runner("smd_ut")
 
     def test_vea_ut(self):
         """
         Test vea unittest.
-        :avocado: tags=unittest,nvme,vea_ut
+        :avocado: tags=all,unittest,pr,tiny,hw,vea_ut
         """
         self.unittest_runner("vea_ut")
 
+    @skipForTicket("DAOS-1766")
     def test_pl_map(self):
         """
         Test pl_map unittest.
-        :avocado: tags=unittest,pl_map
+        :avocado: tags=all,unittest,pr,tiny,hw,pl_map
         """
         self.unittest_runner("pl_map")
 
+    @skipForTicket("DAOS-1763")
     def test_eq_tests(self):
         """
         Test eq_tests unittest.
-        :avocado: tags=unittest,eq_tests
+        :avocado: tags=all,unittest,pr,tiny,hw,eq_tests
         """
         self.unittest_runner("eq_tests")
 
     def test_vos_tests(self):
         """
         Test eq_tests unittest.
-        :avocado: tags=unittest,vos_tests
+        :avocado: tags=all,unittest,pr,tiny,hw,vos_tests
         """
         self.unittest_runner("vos_tests")
