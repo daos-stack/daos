@@ -153,6 +153,21 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	 const char *value, dfs_obj_t **obj);
 
 /**
+ * Duplicate the DFS object without any RPCs (locally) by using the existing
+ * open handles. This is used mostly for low-level fuse to avoid re-opening. The
+ * duplicated object must be released with dfs_release().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Object to dup.
+ * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
+ * \param[out]	new_obj	DFS object that is duplicated/opened.
+ *
+ * \return		0 on Success. Negative errno on Failure.
+ */
+int
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
+
+/**
  * Close/release open object.
  *
  * \param[in]	obj	Object to release.
@@ -252,6 +267,36 @@ dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks);
 int
 dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, struct dirent *dirs);
+
+/**
+ * User callback defined for dfs_readdir_size.
+ */
+typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
+			       void *_udata);
+
+/**
+ * Same as dfs_readdir, but this also adds a buffer size limitation when
+ * enumerating. On every entry, it issues a user defined callback. If size
+ * limitation is reached, function returns -DER_KEY2BIG.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: MAX number of entries to enumerate.
+ *			[out]: Actual number of entries enumerated.
+ * \param[in]	size	Max buffer size to be used internally before breaking.
+ * \param[in]	op	Optional callback to be issued on every entry.
+ * \param[in]	udata	Pointer to user data to be passed to \a op.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
 
 /**
  * Create a directory.

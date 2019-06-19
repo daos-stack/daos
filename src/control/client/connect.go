@@ -24,7 +24,9 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -46,8 +48,34 @@ type ClientResult struct {
 	Err     error
 }
 
+func (cr ClientResult) String() string {
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+	return fmt.Sprintf("%+v", cr.Value)
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
+
+func (rm ResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+// ScmModules is an alias for protobuf ScmModule message slice representing
+// a number of SCM modules installed on a storage node.
 
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {
@@ -66,25 +94,24 @@ func (c *controllerFactory) create(address string) (Control, error) {
 	return controller, err
 }
 
-// Connect is an interface providing functionality across multiple
+// Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states and removes inactive conns
-	GetActiveConns(ResultMap) ResultMap
+	ConnectClients(Addresses) ResultMap // connect addresses
+	GetActiveConns(ResultMap) ResultMap // remove inactive conns
 	ClearConns() ResultMap
 	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
 	FormatStorage() (ClientCtrlrMap, ClientMountMap)
-	UpdateStorage(*pb.UpdateStorageParams) (ClientCtrlrMap, ClientModuleMap)
+	UpdateStorage(*pb.UpdateStorageReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
+	CreatePool(*pb.CreatePoolReq) ResultMap
 }
 
 // connList is an implementation of Connect and stores controllers
-// (connections to clients, one per target server).
+// (connections to clients, one per DAOS server).
 type connList struct {
 	factory     ControllerFactory
 	controllers []Control
@@ -185,7 +212,7 @@ func (c *connList) ClearConns() ResultMap {
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
 func (c *connList) makeRequests(
-	params interface{},
+	req interface{},
 	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
@@ -194,7 +221,7 @@ func (c *connList) makeRequests(
 	addrs := []string{}
 	for _, mc := range c.controllers {
 		addrs = append(addrs, mc.getAddress())
-		go requestFn(mc, params, ch)
+		go requestFn(mc, req, ch)
 	}
 
 	for {

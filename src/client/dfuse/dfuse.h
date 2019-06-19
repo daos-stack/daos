@@ -80,6 +80,20 @@ struct dfuse_projection_info {
 	ATOMIC uint64_t			dfpi_ino_next;
 };
 
+/** what is returned as the handle for fuse fuse_file_info on create/open */
+struct dfuse_obj_hdl {
+	/** pointer to dfs_t */
+	dfs_t		*doh_dfs;
+	/** the DFS object handle */
+	dfs_obj_t	*doh_obj;
+	/** an anchor to track listing in readdir */
+	daos_anchor_t	doh_anchor;
+	/** enumeration buffer to store missed entries from readdir */
+	void		*doh_buf;
+	/** offset to start from of doh_buffer */
+	off_t		doh_offset;
+};
+
 struct dfuse_inode_entry;
 
 struct dfuse_inode_ops {
@@ -94,8 +108,12 @@ struct dfuse_inode_ops {
 	bool (*mkdir)(fuse_req_t req,
 		      struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
+	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			struct fuse_file_info *fi);
+	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			   struct fuse_file_info *fi);
 	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
-			size_t size, off_t offset);
+			size_t size, off_t offset, struct fuse_file_info *fi);
 	void (*unlink)(fuse_req_t req,
 		       struct dfuse_inode_entry *parent,
 		       const char *name);
@@ -276,16 +294,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_OPEN(dfuse_req, fi)					\
+#define DFUSE_REPLY_OPEN(req, fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning open");		\
-		__rc = fuse_reply_open((dfuse_req)->req, &fi);		\
+		DFUSE_TRA_DEBUG(req, "Returning open");			\
+		__rc = fuse_reply_open(req, fi);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
 #define DFUSE_REPLY_CREATE(req, entry, fi)				\
@@ -569,9 +586,23 @@ bool
 dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
+void
+dfuse_cb_opendir(fuse_req_t, struct dfuse_inode_entry *,
+		 struct fuse_file_info *fi);
+
+void
+dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
+		    struct fuse_file_info *fi);
+
 bool
 dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
 		const char *, mode_t, struct fuse_file_info *);
+
+void
+dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
+
+void
+dfuse_cb_release(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
 
 void
 dfuse_cb_read(fuse_req_t, fuse_ino_t, size_t, off_t,
@@ -582,7 +613,8 @@ dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
 void
-dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t);
+dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
+		 struct fuse_file_info *);
 
 void
 dfuse_cb_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,

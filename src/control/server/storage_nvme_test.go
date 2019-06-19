@@ -118,7 +118,7 @@ func (m *mockSpdkNvme) Update(pciAddr string, path string, slot int32) (
 	return m.initCtrlrs, m.initNss, m.updateRet
 }
 
-func (m *mockSpdkNvme) Cleanup() { return }
+func (m *mockSpdkNvme) Cleanup() {}
 
 func newMockSpdkNvme(
 	fwBefore string, fwAfter string, ctrlrs []Controller, nss []Namespace,
@@ -778,18 +778,17 @@ func TestUpdateNvme(t *testing.T) {
 		}
 
 		// create parameters message with desired model name & starting fwrev
-		params := &pb.UpdateNvmeParams{
+		req := &pb.UpdateNvmeReq{
 			Startrev: startRev, Model: model, Path: "", Slot: 0,
 		}
-		// call with io_server index, params and results list to populate
-		sn.Update(srvIdx, params, &results)
+		// call with io_server index, req and results list to populate
+		sn.Update(srvIdx, req, &results)
 
 		// verify expected response results have been populated
 		AssertEqual(
 			t, len(results), len(tt.expResults),
 			"unexpected number of response results, "+tt.desc)
 
-		successPciaddrs := []string{}
 		for i, result := range results {
 			AssertEqual(
 				t, result.State.Error, tt.expResults[i].State.Error,
@@ -800,10 +799,6 @@ func TestUpdateNvme(t *testing.T) {
 			AssertEqual(
 				t, result.Pciaddr, tt.expResults[i].Pciaddr,
 				"unexpected pciaddr, "+tt.desc)
-
-			if result.State.Status == pb.ResponseStatus_CTRL_SUCCESS {
-				successPciaddrs = append(successPciaddrs, result.Pciaddr)
-			}
 		}
 
 		// verify controller details have been updated

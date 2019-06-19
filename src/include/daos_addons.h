@@ -330,7 +330,9 @@ daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
  * \param[in]	coh	Container open handle the array belongs to
  * \param[in]	glob	Global (shared) representation of a collective handle
  *			to be extracted
- * \param[out]	coh	Returned local array open handle
+ * \param[in]	mode	Option to change the object open mode.
+ *			Pass 0 to inherit the global mode.
+ * \param[out]	oh	Returned local array open handle
  *
  * \return		These values will be returned:
  *			non-blocking mode:
@@ -339,7 +341,8 @@ daos_array_local2global(daos_handle_t oh, d_iov_t *glob);
  *			-DER_NO_HDL	Container handle is nonexistent
  */
 int
-daos_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh);
+daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
+			daos_handle_t *oh);
 
 /**
  * Close an opened array object.

@@ -336,7 +336,6 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 
 	log.Debugf("device format on NVMe controllers completed")
 	n.formatted = true
-	return
 }
 
 // Update attempts to update firmware on NVMe controllers attached to a
@@ -353,7 +352,7 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
 func (n *nvmeStorage) Update(
-	i int, req *pb.UpdateNvmeParams, results *([]*pb.NvmeControllerResult)) {
+	i int, req *pb.UpdateNvmeReq, results *([]*pb.NvmeControllerResult)) {
 
 	var pciAddr string
 	srv := n.config.Servers[i]
@@ -467,7 +466,6 @@ func (n *nvmeStorage) Update(
 	}
 
 	log.Debugf("device fwupdates on specified NVMe controllers completed\n")
-	return
 }
 
 // BurnIn method implementation for nvmeStorage

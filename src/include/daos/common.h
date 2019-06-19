@@ -319,9 +319,9 @@ daos_der2errno(int err)
 	case -DER_NOTYPE:
 	case -DER_NOSCHEMA:
 	case -DER_NOLOCAL:
-	case -DER_KEY2BIG:
-	case -DER_REC2BIG:
 	case -DER_IO_INVAL:	return EINVAL;
+	case -DER_KEY2BIG:
+	case -DER_REC2BIG:	return E2BIG;
 	case -DER_EXIST:	return EEXIST;
 	case -DER_UNREACH:	return EHOSTUNREACH;
 	case -DER_NOSPACE:	return ENOSPC;
@@ -579,7 +579,8 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "HDF5");
 		break;
 	default:
-		D_ASSERT(0);
+		strcpy(string, "unknown");
+		break;
 	}
 }
 

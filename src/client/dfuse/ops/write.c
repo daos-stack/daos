@@ -28,32 +28,18 @@ void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie;
-	d_list_t			*rlink;
-	int				rc;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	d_iov_t			iov = {};
-	d_sg_list_t			sgl = {};
-
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				ino);
-		DFUSE_REPLY_ERR_RAW(NULL, req, ENOENT);
-		return;
-	}
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	d_sg_list_t		sgl = {};
+	int			rc;
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_write(ie->ie_dfs->dffs_dfs, ie->ie_obj, sgl, position);
-	if (rc == 0) {
-		DFUSE_REPLY_WRITE(ie, req, len);
-	} else {
-		DFUSE_REPLY_ERR_RAW(ie, req, -rc);
-	}
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, sgl, position);
+	if (rc == 0)
+		DFUSE_REPLY_WRITE(NULL, req, len);
+	else
+		DFUSE_REPLY_ERR_RAW(NULL, req, -rc);
 }

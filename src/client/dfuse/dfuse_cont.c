@@ -146,7 +146,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				&ie->ie_stat.st_ino);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
-		D_GOTO(release, rc);
+		D_GOTO(release, rc = -rc);
 	}
 
 	dfs->dffs_root = ie->ie_stat.st_ino;

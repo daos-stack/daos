@@ -44,7 +44,7 @@ func (x DaosRequestStatus) String() string {
 	return proto.EnumName(DaosRequestStatus_name, int32(x))
 }
 func (DaosRequestStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{0}
+	return fileDescriptor_srv_025a8931fc3fb174, []int{0}
 }
 
 // Identifier for server rank within DAOS pool
@@ -60,7 +60,7 @@ func (m *DaosRank) Reset()         { *m = DaosRank{} }
 func (m *DaosRank) String() string { return proto.CompactTextString(m) }
 func (*DaosRank) ProtoMessage()    {}
 func (*DaosRank) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{0}
+	return fileDescriptor_srv_025a8931fc3fb174, []int{0}
 }
 func (m *DaosRank) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosRank.Unmarshal(m, b)
@@ -105,7 +105,7 @@ func (m *DaosResponse) Reset()         { *m = DaosResponse{} }
 func (m *DaosResponse) String() string { return proto.CompactTextString(m) }
 func (*DaosResponse) ProtoMessage()    {}
 func (*DaosResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{1}
+	return fileDescriptor_srv_025a8931fc3fb174, []int{1}
 }
 func (m *DaosResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosResponse.Unmarshal(m, b)
@@ -143,7 +143,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{2}
+	return fileDescriptor_srv_025a8931fc3fb174, []int{2}
 }
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRankReq.Unmarshal(m, b)
@@ -171,8 +171,10 @@ func (m *SetRankReq) GetRank() uint32 {
 }
 
 type CreateMsReq struct {
-	Bootstrap            bool     `protobuf:"varint,1,opt,name=bootstrap,proto3" json:"bootstrap,omitempty"`
-	Uuid                 string   `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Bootstrap bool `protobuf:"varint,1,opt,name=bootstrap,proto3" json:"bootstrap,omitempty"`
+	// Server UUID of this MS replica.
+	Uuid string `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	// Server management address of this MS replica.
 	Addr                 string   `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -183,7 +185,7 @@ func (m *CreateMsReq) Reset()         { *m = CreateMsReq{} }
 func (m *CreateMsReq) String() string { return proto.CompactTextString(m) }
 func (*CreateMsReq) ProtoMessage()    {}
 func (*CreateMsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{3}
+	return fileDescriptor_srv_025a8931fc3fb174, []int{3}
 }
 func (m *CreateMsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateMsReq.Unmarshal(m, b)
@@ -232,9 +234,9 @@ func init() {
 	proto.RegisterEnum("mgmt.DaosRequestStatus", DaosRequestStatus_name, DaosRequestStatus_value)
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_4a8657ce0239cb25) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_025a8931fc3fb174) }
 
-var fileDescriptor_srv_4a8657ce0239cb25 = []byte{
+var fileDescriptor_srv_025a8931fc3fb174 = []byte{
 	// 276 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x50, 0xcd, 0x4b, 0xc3, 0x30,
 	0x1c, 0xb5, 0x73, 0xcc, 0xf6, 0x57, 0x95, 0x9a, 0x8b, 0x05, 0x15, 0x4a, 0x4f, 0xc3, 0x43, 0x05,
