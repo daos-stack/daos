@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include <daos_security.h>
 
 /**
@@ -1070,4 +1071,20 @@ out:
 		}
 	}
 	return rc;
+}
+
+void
+daos_dti_gen(struct dtx_id *dti, bool zero)
+{
+	static __thread uuid_t uuid;
+
+	if (zero) {
+		memset(dti, 0, sizeof(*dti));
+	} else {
+		if (uuid_is_null(uuid))
+			uuid_generate(uuid);
+
+		uuid_copy(dti->dti_uuid, uuid);
+		dti->dti_hlc = crt_hlc_get();
+	}
 }

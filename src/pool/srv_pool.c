@@ -471,7 +471,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	/* fill domains */
 	for (i = 0; i < ndomains; i++) {
 		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
-		map_comp.co_status = PO_COMP_ST_UP;
+		map_comp.co_status = PO_COMP_ST_UPIN;
 		map_comp.co_index = i;
 		map_comp.co_id = i;
 		map_comp.co_rank = 0;
@@ -490,7 +490,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 				    sizeof(uuid_t), uuid_compare_cb);
 
 		map_comp.co_type = PO_COMP_TP_NODE;
-		map_comp.co_status = PO_COMP_ST_UP;
+		map_comp.co_status = PO_COMP_ST_UPIN;
 		map_comp.co_index = i;
 		map_comp.co_id = p - uuids;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
@@ -509,7 +509,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = PO_COMP_ST_UP;
+			map_comp.co_status = PO_COMP_ST_UPIN;
 			map_comp.co_index = j;
 			map_comp.co_id = i * dss_tgt_nr + j;
 			map_comp.co_rank = target_addrs->rl_ranks[i];

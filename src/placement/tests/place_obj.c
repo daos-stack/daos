@@ -131,7 +131,7 @@ static void
 plt_add_tgt(uint32_t id)
 {
 	po_ver++;
-	plt_set_tgt_status(id, PO_COMP_ST_UP, po_ver);
+	plt_set_tgt_status(id, PO_COMP_ST_UPIN, po_ver);
 }
 
 static void
@@ -199,7 +199,7 @@ main(int argc, char **argv)
 	/* fake the pool map */
 	for (i = 0; i < DOM_NR; i++, comp++) {
 		comp->co_type   = PO_COMP_TP_RACK;
-		comp->co_status = PO_COMP_ST_UP;
+		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id	= i;
 		comp->co_rank   = i;
 		comp->co_ver    = 1;
@@ -208,7 +208,7 @@ main(int argc, char **argv)
 
 	for (i = 0; i < DOM_NR * TARGET_PER_DOM; i++, comp++) {
 		comp->co_type   = PO_COMP_TP_TARGET;
-		comp->co_status = PO_COMP_ST_UP;
+		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id	= i;
 		comp->co_rank   = i;
 		comp->co_ver    = 1;

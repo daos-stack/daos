@@ -337,10 +337,10 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is added.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			target->ta_comp.co_status = PO_COMP_ST_UP;
+			target->ta_comp.co_status = PO_COMP_ST_UPIN;
 			target->ta_comp.co_fseq = 1;
 			nchanges++;
-			dom->do_comp.co_status = PO_COMP_ST_UP;
+			dom->do_comp.co_status = PO_COMP_ST_UPIN;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
