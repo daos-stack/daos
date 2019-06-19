@@ -198,7 +198,7 @@ int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			    unsigned int *tgt_cnt);
 int pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			      unsigned int *tgt_cnt);
-int pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+int pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			  unsigned int *tgt_cnt);
 int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 				 uint32_t tgt_idx, struct pool_target **tgts);
