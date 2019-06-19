@@ -356,7 +356,7 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 			targets, pb_req->scmbytes, pb_req->nvmebytes,
 			NULL /* props */, pb_req->numsvcreps, &svc_p);
 	if (targets != NULL)
-	     d_rank_list_free(targets);
+		d_rank_list_free(targets);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: %d\n", rc);
 		goto out;
@@ -373,9 +373,9 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 	snprintf(buf, buflen, "%u", svc_p->rl_ranks[0]);
 
 	for (i = 1; i < svc_p->rl_nr; i++) {
-		if ((len = snprintf(svc_str, buflen, "%s,%u", svc_str,
-				svc_p->rl_ranks[i])) >= buflen) {
-
+		len = snprintf(svc_str, buflen, "%s,%u", svc_str,
+			svc_p->rl_ranks[i]);
+		if (len >= buflen) {
 			buflen *= 2;
 
 			extra = malloc(buflen * sizeof(char));

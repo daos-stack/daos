@@ -121,19 +121,6 @@ func calcStorage(scmSize string, nvmeSize string) (
 	return scmBytes, nvmeBytes, nil
 }
 
-//func parseRanks(ranksStr string) (ranks []uint32, err error) {
-//	for i, rankStr := range strings.Split(ranksStr, ",") {
-//		rank, err := strconv.ParseUint(rankStr, 10, 32)
-//		if err != nil {
-//			return ranks, errors.WithMessagef(err, "element %d", i)
-//		}
-//
-//		ranks = append(ranks, uint32(rank))
-//	}
-//
-//	return
-//}
-
 // createPool with specified parameters on all connected servers
 func createPool(
 	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
