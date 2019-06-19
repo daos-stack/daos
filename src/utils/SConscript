@@ -4,16 +4,19 @@ import daos_build
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
-
-    libs = ['daos', 'gurt', 'cart', 'daos_common', 'uuid']
+    libs = ['daos', 'gurt', 'cart', 'daos_common', 'uuid', 'dfs', 'duns']
 
     denv = env.Clone()
+    denv.AppendUnique(LIBPATH=["../client/dfs"])
 
     prereqs.require(denv, 'ompi')
 
+    daos_extra_files = denv.Object('daos_hdlr.c')
+
     dmg = daos_build.program(denv, 'dmg', 'dmg.c', LIBS=libs)
     dcont = daos_build.program(denv, 'dcont', 'dcont.c', LIBS=libs)
-    daos = daos_build.program(denv, 'daos', 'daos.c', LIBS=libs)
+    daos = daos_build.program(denv, 'daos',
+                              ['daos.c', daos_extra_files], LIBS=libs)
     denv.Install('$PREFIX/bin/', dmg)
     denv.Install('$PREFIX/bin/', dcont)
     denv.Install('$PREFIX/bin/', daos)
