@@ -24,7 +24,6 @@
 package main
 
 import (
-	"errors"
 	"io/ioutil"
 	"testing"
 
@@ -32,14 +31,6 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-)
-
-var (
-	addresses  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features   = []*pb.Feature{MockFeaturePB()}
-	ctrlrs     = NvmeControllers{MockControllerPB("")}
-	modules    = ScmModules{MockModulePB()}
-	errExample = errors.New("something went wrong")
 )
 
 func init() {
@@ -60,24 +51,24 @@ func TestHasConnection(t *testing.T) {
 			"Active connections: [1.2.3.4:10000]\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: []\nNo active connections!",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}},
+			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: []\nNo active connections!",
 		},
 		{
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
 			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nfailed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: []\nNo active connections!",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
+			"failed to connect to 1.2.3.4:10000 (unknown failure)\nfailed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: []\nNo active connections!",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
-			"failed to connect to 1.2.3.4:10000 (something went wrong)\nActive connections: [1.2.3.5:10001]\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
+			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: [1.2.3.5:10001]\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}},
-			"failed to connect to 1.2.3.5:10001 (something went wrong)\nActive connections: [1.2.3.4:10000]\n",
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
+			"failed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: [1.2.3.4:10000]\n",
 		},
 	}
 
@@ -98,23 +89,53 @@ func TestCheckSprint(t *testing.T) {
 		out string
 	}{
 		{
-			NewClientFM(features, addresses).String(),
+			NewClientFM(MockFeatures, MockServers).String(),
 			"1.2.3.4:10000:\nburn-name: category nvme, run workloads on device to test\n\n1.2.3.5:10001:\nburn-name: category nvme, run workloads on device to test\n\n",
 		},
 		{
-			NewClientNvme(ctrlrs, addresses).String(),
+			NewClientNvme(MockCtrlrs, MockServers).String(),
 			"1.2.3.4:10000:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n",
 		},
 		{
-			NewClientScm(modules, addresses).String(),
+			NewClientScm(MockModules, MockServers).String(),
 			"1.2.3.4:10000:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n1.2.3.5:10001:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n",
 		},
 		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, errExample}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, errExample}}.String(),
-			"1.2.3.4:10000:\nerror: something went wrong\n1.2.3.5:10001:\nerror: something went wrong\n",
+			NewClientScmMount(MockMounts, MockServers).String(),
+			"1.2.3.4:10000:\n\tmntpoint:\"/mnt/daos\" \n\n1.2.3.5:10001:\n\tmntpoint:\"/mnt/daos\" \n\n",
 		},
 		{
-			NewClientMountResults(
+			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}}.String(),
+			"1.2.3.4:10000:\nerror: unknown failure\n1.2.3.5:10001:\nerror: unknown failure\n",
+		},
+		{
+			NewClientNvmeResults(
+				[]*pb.NvmeControllerResult{
+					{
+						Pciaddr: "0000:81:00.0",
+						State: &pb.ResponseState{
+							Status: pb.ResponseStatus_CTRL_ERR_APP,
+							Error:  "example application error",
+						},
+					},
+				}, MockServers).String(),
+			"1.2.3.4:10000:\n\tpci-address 0000:81:00.0: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tpci-address 0000:81:00.0: status CTRL_ERR_APP error: example application error\n\n",
+		},
+		{
+			NewClientScmResults(
+				[]*pb.ScmModuleResult{
+					{
+						Loc: MockModulePB().Loc,
+						State: &pb.ResponseState{
+							Status: pb.ResponseStatus_CTRL_ERR_APP,
+							Error:  "example application error",
+						},
+					},
+				}, MockServers).String(),
+			"1.2.3.4:10000:\n\tmodule location channel:1 channelpos:2 memctrlr:3 socket:4 : status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmodule location channel:1 channelpos:2 memctrlr:3 socket:4 : status CTRL_ERR_APP error: example application error\n\n",
+		},
+		{
+			NewClientScmMountResults(
 				[]*pb.ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",
@@ -123,10 +144,9 @@ func TestCheckSprint(t *testing.T) {
 							Error:  "example application error",
 						},
 					},
-				}, addresses).String(),
+				}, MockServers).String(),
 			"1.2.3.4:10000:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n",
 		},
-		// TODO: add test cases for feature/mount, ctrlr/module results
 	}
 	for _, tt := range shelltests {
 		AssertEqual(t, tt.m, tt.out, "bad output")
