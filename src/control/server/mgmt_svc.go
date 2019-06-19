@@ -50,7 +50,7 @@ func CheckReplica(
 	isReplica, bootstrap, err := checkMgmtSvcReplica(
 		lis.Addr().(*net.TCPAddr), accessPoints)
 	if err != nil {
-		srv.Process.Kill()
+		_ = srv.Process.Kill()
 		return
 	}
 	if isReplica {
@@ -197,7 +197,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 func (svc *mgmtSvc) CreatePool(
 	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
 
-	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
+	log.Debugf("MgmtSvc.CreatePool dispatch, req:%+v\n", *req)
 	// TODO: implement lock and drpc IDs & handler in iosrv
 	// svc.mutex.Lock()
 	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, poolCreate, req)
