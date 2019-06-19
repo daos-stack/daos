@@ -62,37 +62,9 @@ struct mpls_obj_placement {
 struct pl_mapless_map {
 	/** placement map interface */
 	struct pl_map   mmp_map;
-	/** the total length of the array used for bookkeeping */
-	uint32_t        dom_used_length;
 	/* Total size of domain type specified during map creation*/
 	unsigned int    mmp_domain_nr;
 };
-
-/**
- * This function returns the number of non-leaf domains in the pool map
- * It's used to determine the size of the arrays for storing the
- * bitmaps used for collision resolution.
- *
- * \param[in]	dom	The pool map used for this placement map.
- *
- * \return		The number of non-leaf nodes in the pool, not including
- *			the root.
- */
-uint64_t get_dom_cnt(struct pool_domain *dom)
-{
-	uint64_t count = 0;
-
-	if (dom->do_children != NULL) {
-		int i;
-
-		count += dom->do_child_nr;
-
-		for (i = 0; i < dom->do_child_nr; ++i)
-			count += get_dom_cnt(&(dom->do_children[i]));
-	}
-
-	return count;
-}
 
 /**
  * Jump Consistent Hash Algorithm that provides a bucket location
@@ -943,6 +915,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	uint64_t                key;
 	daos_obj_id_t		oid;
 	struct pool_domain      *root;
+	uint32_t 		dom_used_length;
 	int i, j, k, rc;
 
 	/* Set the pool map version */
@@ -956,7 +929,17 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	rc = 0;
 	target = NULL;
 
-	D_ALLOC_ARRAY(dom_used, mmap->dom_used_length);
+
+	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+				  PO_COMP_ID_ALL, &root);
+	if (rc == 0) {
+		D_ERROR("Could not find root node in pool map.");
+		return -DER_NONEXIST;
+	}
+
+	dom_used_length = (struct pool_domain*)(root->do_targets) - (root) + 1;
+
+	D_ALLOC_ARRAY(dom_used, dom_used_length);
 	D_ALLOC_ARRAY(used_targets, layout->ol_nr + 1);
 
 	if (dom_used == NULL)
@@ -974,7 +957,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK) {
 
 		rc = mapless_obj_spec_place_get(mmap, oid, &target, dom_used,
-						mmap->dom_used_length);
+						dom_used_length);
 
 		if (rc) {
 			D_ERROR("special oid "DF_OID" failed: rc %d\n",
@@ -999,13 +982,6 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 		k = 1;
 	}
 
-	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
-				  PO_COMP_ID_ALL, &root);
-	if (rc == 0) {
-		D_ERROR("Could not find root node in pool map.");
-		rc = -DER_NONEXIST;
-		goto out;
-	}
 
 	for (i = 0; i < mop->mop_grp_nr; i++) {
 		for (; j < mop->mop_grp_size; j++, k++) {
@@ -1106,7 +1082,6 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	}
 
 	mmap->mmp_domain_nr = rc;
-	mmap->dom_used_length = (get_dom_cnt(root) / 8) + 1;
 	*mapp = &mmap->mmp_map;
 
 	return DER_SUCCESS;
