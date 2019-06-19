@@ -25,7 +25,7 @@ package client
 
 import (
 	"fmt"
-	"os"
+	"io/ioutil"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
@@ -36,7 +36,7 @@ import (
 )
 
 func init() {
-	log.NewDefaultLogger(log.Error, "connect_test: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "connect_test: ", ioutil.Discard)
 }
 
 func TestConnectClients(t *testing.T) {

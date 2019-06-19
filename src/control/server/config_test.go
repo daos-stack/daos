@@ -49,7 +49,7 @@ const (
 
 // init gets called once per package, don't call in other test files
 func init() {
-	log.NewDefaultLogger(log.Error, "server_tests: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "server_tests: ", ioutil.Discard)
 
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()

@@ -25,7 +25,7 @@ package main
 
 import (
 	"errors"
-	"os"
+	"io/ioutil"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/client"
@@ -43,7 +43,7 @@ var (
 )
 
 func init() {
-	log.NewDefaultLogger(log.Error, "dmg_tests: ", os.Stderr)
+	log.NewDefaultLogger(log.Error, "dmg_tests: ", ioutil.Discard)
 }
 
 func TestHasConnection(t *testing.T) {
