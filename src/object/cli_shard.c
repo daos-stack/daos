@@ -297,7 +297,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					  DAOS_FAIL_ONCE);
 		}
 	}
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE) && !srv_io_dispatch) {
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE) &&
+	    srv_io_mode == DIM_CLIENT_DISPATCH) {
 		/* to trigger retry on all other shards */
 		if (args->auxi.shard != daos_fail_value_get()) {
 			D_INFO("complete shard %d update as -DER_TIMEDOUT.\n",

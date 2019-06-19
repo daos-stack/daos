@@ -548,7 +548,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 	D_ASSERT(shard_cnt >= 1);
 	grp_size = shard_cnt / grp_nr;
 	D_ASSERT(grp_size * grp_nr == shard_cnt);
-	req_tgts->ort_srv_disp = srv_io_dispatch && grp_size > 1;
+	req_tgts->ort_srv_disp = (srv_io_mode != DIM_CLIENT_DISPATCH) &&
+				  grp_size > 1;
 
 	if (tgt_set != 0) {
 		D_ASSERT(grp_nr == 1);
@@ -1260,7 +1261,8 @@ obj_iod_valid(unsigned int nr, daos_iod_t *iods, bool update)
 static daos_epoch_t
 dc_io_epoch()
 {
-	return srv_io_dispatch ? DAOS_EPOCH_MAX : daos_ts2epoch();
+	return (srv_io_mode != DIM_CLIENT_DISPATCH) ?
+			DAOS_EPOCH_MAX : daos_ts2epoch();
 }
 
 /* check if the obj request is valid */
@@ -1939,7 +1941,8 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg = container_of(shard_auxi, struct shard_rw_args, auxi);
 	shard_arg->api_args		= obj_args;
 	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
-		daos_dti_gen(&shard_arg->dti, !srv_io_dispatch);
+		daos_dti_gen(&shard_arg->dti,
+			     srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->epoch		= epoch;
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
@@ -2229,7 +2232,7 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg = container_of(shard_auxi, struct shard_punch_args, pa_auxi);
 	shard_arg->pa_epoch		= epoch;
 	shard_arg->pa_api_args		= obj_args;
-	daos_dti_gen(&shard_arg->pa_dti, !srv_io_dispatch);
+	daos_dti_gen(&shard_arg->pa_dti, srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->pa_opc		= obj_auxi->opc;
 	shard_arg->pa_dkey_hash		= dkey_hash;
 	uuid_copy(shard_arg->pa_coh_uuid, coh_uuid);
@@ -2550,7 +2553,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry) {
 		/* The RPC may need to be resent to (new) leader. */
-		if (srv_io_dispatch) {
+		if (srv_io_mode != DIM_CLIENT_DISPATCH) {
 			struct shard_task_reset_query_target_args	arg;
 
 			arg.shard = shard_first;

@@ -61,8 +61,7 @@
  */
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
-extern bool	srv_io_dispatch;
-extern bool	srv_enable_dtx;
+extern unsigned int	srv_io_mode;
 
 /** client object shard */
 struct dc_obj_shard {
