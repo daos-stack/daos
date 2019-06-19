@@ -120,7 +120,9 @@ func serverMain() error {
 	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 	acl.RegisterAccessControlServer(grpcServer, secServer)
 
-	go grpcServer.Serve(lis)
+	go func() {
+		_ = grpcServer.Serve(lis)
+	}()
 	defer grpcServer.GracefulStop()
 
 	// Wait for storage to be formatted if necessary and subsequently drop
