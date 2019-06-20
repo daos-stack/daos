@@ -222,7 +222,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #define DFUSE_REPLY_ERR(dfuse_req, status)				\
 	do {								\
-		DFUSE_REPLY_ERR_RAW(dfuse_req, (dfuse_req)->req, status); \
+		DFUSE_REPLY_ERR_RAW(dfuse_req, (dfuse_req)->ir_req, status); \
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
@@ -242,7 +242,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(dfuse_req, "Returning 0");		\
-		__rc = fuse_reply_err((dfuse_req)->req, 0);		\
+		__rc = fuse_reply_err((dfuse_req)->ir_req, 0);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_err returned %d:%s", \
@@ -265,7 +265,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(dfuse_req, "Returning path '%s'", path); \
-		__rc = fuse_reply_readlink((dfuse_req)->req, path);	\
+		__rc = fuse_reply_readlink((dfuse_req)->ir_req, path);	\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(dfuse_req,			\
 					"fuse_reply_readlink returned %d:%s", \
@@ -365,9 +365,9 @@ enum dfuse_request_htype {
  */
 struct dfuse_request {
 	/** Pointer to projection for this request. */
-	struct dfuse_projection_info	*fsh;
+	struct dfuse_projection_info	*ir_fsh;
 	/** Fuse request for this DFUSE request, may be 0 */
-	fuse_req_t			req;
+	fuse_req_t			ir_req;
 	/** Callbacks to use for this request */
 	const struct dfuse_request_api	*ir_api;
 
@@ -380,10 +380,10 @@ struct dfuse_request {
 	 * This is a libc error number and is set before a call to
 	 *  on_result
 	 */
-	int				rc;
+	int				ir_rc;
 
 	/** Request handle type */
-	enum dfuse_request_htype		ir_ht;
+	enum dfuse_request_htype	ir_ht;
 
 	union {
 		/** Optional pointer to handle.
@@ -391,7 +391,7 @@ struct dfuse_request {
 		 */
 		struct dfuse_inode_entry	*ir_inode;
 		struct dfuse_file_handle	*ir_file;
-		fuse_ino_t		ir_inode_num;
+		fuse_ino_t			ir_inode_num;
 	};
 	/** List of requests.
 	 *
@@ -404,7 +404,7 @@ struct dfuse_request {
 /** Initialise a request.  To be called once per request */
 #define DFUSE_REQUEST_INIT(REQUEST, FSH)		\
 	do {						\
-		(REQUEST)->fsh = FSH;			\
+		(REQUEST)->ir_fsh = FSH;		\
 		D_INIT_LIST_HEAD(&(REQUEST)->ir_list);	\
 	} while (0)
 
@@ -413,7 +413,7 @@ struct dfuse_request {
 	do {							\
 		(REQUEST)->ir_ht = RHS_NONE;			\
 		(REQUEST)->ir_inode = NULL;			\
-		(REQUEST)->rc = 0;				\
+		(REQUEST)->ir_rc = 0;				\
 	} while (0)
 
 /**
@@ -426,16 +426,16 @@ struct dfuse_request {
  */
 #define DFUSE_REQUEST_RESOLVE(REQUEST, OUT)				\
 	do {								\
-		if (((OUT) != NULL) && (!(REQUEST)->rc)) {		\
-			(REQUEST)->rc = (OUT)->rc;			\
+		if (((OUT) != NULL) && (!(REQUEST)->ir_rc)) {		\
+			(REQUEST)->ir_rc = (OUT)->rc;			\
 			if ((OUT)->err)	{				\
 				if ((OUT)->rc == -DER_NOMEM)		\
-					(REQUEST)->rc = ENOMEM;		\
+					(REQUEST)->ir_rc = ENOMEM;	\
 				else					\
-					(REQUEST)->rc = EIO;		\
+					(REQUEST)->ir_rc = EIO;		\
 				DFUSE_TRA_INFO((REQUEST),		\
 					"Returning '%s' from -%s",	\
-					strerror((REQUEST)->rc),	\
+					strerror((REQUEST)->ir_rc),	\
 					d_errstr((OUT)->err));		\
 			}						\
 		}							\

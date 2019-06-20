@@ -114,7 +114,7 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 int
 find_inode(struct dfuse_request *request)
 {
-	struct dfuse_projection_info *fs_handle = request->fsh;
+	struct dfuse_projection_info *fs_handle = request->ir_fsh;
 	struct dfuse_inode_entry *ie;
 	d_list_t *rlink;
 

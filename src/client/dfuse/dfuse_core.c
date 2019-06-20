@@ -211,7 +211,7 @@ common_reset(void *arg)
 {
 	struct common_req *req = arg;
 
-	req->request.req = NULL;
+	req->request.ir_req = NULL;
 
 	DFUSE_REQUEST_RESET(&req->request);
 
