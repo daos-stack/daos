@@ -2257,9 +2257,8 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 				       ds_rsvc_get_md_cap());
 	if (failed_ranks.rl_nr > 0)
 		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed_ranks);
+	/** `replace_ranks.rl_ranks` is not allocated and shouldn't be freed **/
 	D_FREE(failed_ranks.rl_ranks);
-	memset(&failed_ranks, 0, sizeof(failed_ranks));
-	memset(&replace_ranks, 0, sizeof(replace_ranks));
 
 	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
 		daos_rank_list_sort(replicas);
