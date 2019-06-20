@@ -157,6 +157,7 @@ def write_single_objects(
         dkey_size (int): the dkey length
         data_size (int): the length of data to write in each record
         rank (int): the server rank to which to write the records
+        object_class (int|str): the classification for the object data
         log (DaosLog|None): object for logging messages
 
     Returns:
@@ -247,6 +248,7 @@ def write_array_objects(
         dkey_size (int): the dkey length
         data_size (int): the length of data to write in each record
         rank (int): the server rank to which to write the records
+        object_class (int|str): the classification for the object data
         log (DaosLog|None): object for logging messages
 
     Returns:
@@ -325,6 +327,61 @@ def read_array_objects(container, size, items, dkey, akey, obj, txn):
             "from the container: {}".format(
                 dkey, akey, size, items, error))
     return [item[:-1] for item in data]
+
+
+def write_during_rebuild(container, pool, log, size, chunk, rank, obj_class):
+    """Write a specified amount of data while rebuild is still in progress.
+
+    Args:
+        container (DaosContainer): the container in which to write objects
+        pool (DaosPool): pool for which to determine if rebuild is complete
+        log (logging): logging object used to report the pool status
+        size (int): the number of bytes to write to the container
+        chunk (int): incremental number of bytes to write to reach size
+        rank (int): the server rank to which to write the records
+        obj_class (int|str): the classification for the object data
+
+    Returns:
+        list: a list of dictionaries containing the object, transaction
+            number, and data written to the container
+
+    Raises:
+        DaosTestError: if the rebuild completes before the read is complete
+            or read errors are detected
+
+    """
+    object_list = []
+    written = 0
+    chunk = 2048
+
+    while not is_pool_rebuild_complete(pool, log) and written < size:
+        object_list.append({"obj": None, "txn": None, "record": []})
+
+        # Write 2048 bytes to the container
+        dkey = get_random_string(5)
+        akey = get_random_string(5)
+        data = get_random_string(chunk)
+        try:
+            # Keep track of each object and transaction number used to write
+            # the data as a tuple in a list
+            object_list.append(
+                container.write_an_obj(
+                    data, chunk, dkey, akey, rank=rank, obj_cls=obj_class))
+
+        except DaosApiError as error:
+            raise DaosTestError(
+                "Error writing data (dkey={}, akey={}, data={}) to the "
+                "container after writing {}/{} bytes: {}".format(
+                    dkey, akey, data, written, chunk, error))
+
+        # Update the number of bytes written to the container
+        written += chunk
+
+    if written < size:
+        raise DaosTestError(
+            "Rebuild completed before all the data could be written")
+
+    return object_list
 
 
 def read_during_rebuild(
@@ -430,3 +487,39 @@ def get_target_rank_list(daos_object):
     except DaosApiError as error:
         raise DaosTestError(
             "Error obtaining target list for the object: {}".format(error))
+
+
+def verify_data(container, data_list, log):
+    """Verify the data provided can be read and matches what was written.
+
+    Args:
+        container (DaosContainer): [description]
+        data_list (list): [description]
+        log (logging): [description]
+
+    Returns:
+        bool: True if all the data was read successfully and matched
+
+    Raises:
+        DaosTestError: if there is an DAOS API error reading data
+
+    """
+    status = True
+    for obj_index, obj_data in enumerate(data_list):
+        for rec_index, rec_data in enumerate(obj_data["record"]):
+            # Verify the written data
+            read_data = read_single_objects(
+                container, len(rec_data["data"]), rec_data["dkey"],
+                rec_data["akey"], obj_data["obj"], obj_data["txn"])
+
+            if rec_data["data"] != read_data:
+                log.warning(
+                    "Data verification failed for obj index {}, record "
+                    "index {}:\n  wrote: {}\n  read:  {}".format(
+                        obj_index, rec_index, rec_data["data"], read_data))
+                status = False
+            else:
+                log.info(
+                    "Data verification passed for obj index {}, record "
+                    "index {}".format(obj_index, rec_index))
+    return status

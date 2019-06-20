@@ -1,22 +1,44 @@
 hosts:
   test_machines:
-    - boro-A
-    - boro-B
-    - boro-C
-timeout: 180
+    test_servers:
+      - boro-A
+      - boro-B
+      - boro-C
+      - boro-D
+    test_clients:
+      - boro-E
+timeout: 360
 server_config:
-  server_name: daos_server
+  name: daos_server
+  targets: 2
 pool:
-  pool_mode: 511
-  pool_size: 1073741824
-  pool_group: daos_server
+  createmode:
+    mode: 511
+  createset:
+    setname: daos_server
+  createsize:
+    size: 8589934592
+  createsvc:
+    svcn: 3
+  createqty: !mux
+    one_pool:
+      qty: 1
+    two_pools:
+      qty: 2
 container:
-  akey_size: 5
-  dkey_size: 5
-  data_size: 5
-  objects:
-    object_qty: 10
-  records:
-    record_qty: 10
-  class:
-    obj_class: 16
+  container_qty: 100
+ior:
+  api: DAOS
+  block_size: 16m
+  segment_count: 16
+  transfer_size: 16m
+  daos_oclass: R3S
+test:
+  target_rank:
+    first_rank:
+      rank: 0
+  loop_quantity: !mux
+    one_loop:
+      loops: 1
+    three_loops:
+      loops: 3

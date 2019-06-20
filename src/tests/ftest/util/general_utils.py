@@ -101,6 +101,7 @@ def process_host_list(hoststr):
 
     return host_list
 
+
 def get_random_string(length, exclude=None):
     """Create a specified length string of random ascii letters and numbers.
 
@@ -122,8 +123,9 @@ def get_random_string(length, exclude=None):
             for _ in range(length))
     return random_string
 
+
 @fail_on(DaosApiError)
-def get_pool(context, mode, size, name, svcn=1, log=None):
+def get_pool(context, mode, size, name, svcn=1, log=None, connect=True):
     """Return a DAOS pool that has been created an connected.
 
     Args:
@@ -132,7 +134,8 @@ def get_pool(context, mode, size, name, svcn=1, log=None):
         size (int): the size of the pool
         name (str): the name of the pool
         svcn (int): the pool service leader quantity
-        log (DaosLog|None): object for logging messages
+        log (DaosLog, optional): object for logging messages. Defaults to None.
+        connect (bool, optional): connect to the new pool. Defaults to True.
 
     Returns:
         DaosPool: an object representing a DAOS pool
@@ -142,20 +145,22 @@ def get_pool(context, mode, size, name, svcn=1, log=None):
         log.info("Creating a pool")
     pool = DaosPool(context)
     pool.create(mode, os.geteuid(), os.getegid(), size, name, svcn=svcn)
-    if log:
-        log.info("Connecting to the pool")
-    pool.connect(1 << 1)
+    if connect:
+        if log:
+            log.info("Connecting to the pool")
+        pool.connect(1 << 1)
     return pool
 
 
 @fail_on(DaosApiError)
-def get_container(context, pool, log=None):
+def get_container(context, pool, log=None, open=True):
     """Retrun a DAOS a container that has been created an opened.
 
     Args:
         context (DaosContext): the context to use to create the container
         pool (DaosPool): pool in which to create the container
-        log (DaosLog|None): object for logging messages
+        log (DaosLog, optional): object for logging messages. Defaults to None.
+        open (bool, optional): open the new container. Defaults to True.
 
     Returns:
         DaosContainer: an object representing a DAOS container
@@ -165,9 +170,10 @@ def get_container(context, pool, log=None):
         log.info("Creating a container")
     container = DaosContainer(context)
     container.create(pool.handle)
-    if log:
-        log.info("Opening a container")
-    container.open()
+    if open:
+        if log:
+            log.info("Opening a container")
+        container.open()
     return container
 
 
