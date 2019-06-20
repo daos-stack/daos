@@ -336,7 +336,6 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 
 	log.Debugf("device format on NVMe controllers completed")
 	n.formatted = true
-	return
 }
 
 // Update attempts to update firmware on NVMe controllers attached to a
@@ -467,7 +466,6 @@ func (n *nvmeStorage) Update(
 	}
 
 	log.Debugf("device fwupdates on specified NVMe controllers completed\n")
-	return
 }
 
 // BurnIn method implementation for nvmeStorage

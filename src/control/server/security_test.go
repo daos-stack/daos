@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
@@ -113,7 +114,7 @@ func TestNewSecurityService(t *testing.T) {
 func TestSetPermissions_NilPermissions(t *testing.T) {
 	service := newTestSecurityService(newMockDrpcClient())
 
-	result, err := service.SetPermissions(nil, nil)
+	result, err := service.SetPermissions(context.TODO(), nil)
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "requested permissions were nil",
@@ -173,7 +174,7 @@ func TestSetPermissions_Success(t *testing.T) {
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(expectedResp))
 
-	result, err := service.SetPermissions(nil, perms)
+	result, err := service.SetPermissions(context.TODO(), perms)
 
 	// Check the results
 	expectAclResponse(t, result, err, expectedResp)
@@ -189,7 +190,7 @@ func TestSetPermissions_SendMsgFailed(t *testing.T) {
 	client.SendMsgOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
-	result, err := service.SetPermissions(nil,
+	result, err := service.SetPermissions(context.TODO(),
 		newValidAclEntryPermissions())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
@@ -201,7 +202,7 @@ func TestSetPermissions_SendMsgResponseStatusFailed(t *testing.T) {
 	service := newTestSecurityService(client)
 	client.setSendMsgResponse(drpc.Status_FAILURE, nil)
 
-	result, err := service.SetPermissions(nil,
+	result, err := service.SetPermissions(context.TODO(),
 		newValidAclEntryPermissions())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
@@ -218,7 +219,7 @@ func TestSetPermissions_SendMsgResponseBodyInvalid(t *testing.T) {
 	}
 	client.setSendMsgResponse(drpc.Status_SUCCESS, badResp)
 
-	result, err := service.SetPermissions(nil,
+	result, err := service.SetPermissions(context.TODO(),
 		newValidAclEntryPermissions())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
@@ -230,7 +231,7 @@ func TestSetPermissions_SendMsgResponseNil(t *testing.T) {
 	client := newMockDrpcClient()
 	service := newTestSecurityService(client)
 
-	result, err := service.SetPermissions(nil,
+	result, err := service.SetPermissions(context.TODO(),
 		newValidAclEntryPermissions())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
@@ -244,7 +245,7 @@ func TestSetPermissions_ConnectFailed(t *testing.T) {
 	client.ConnectOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
-	result, err := service.SetPermissions(nil,
+	result, err := service.SetPermissions(context.TODO(),
 		newValidAclEntryPermissions())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
@@ -259,7 +260,7 @@ func TestSetPermissions_CloseFailed(t *testing.T) {
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(&acl.Response{}))
 
-	result, err := service.SetPermissions(nil,
+	result, err := service.SetPermissions(context.TODO(),
 		newValidAclEntryPermissions())
 
 	// We ignore Close errors - not useful to us if we got a good message
@@ -273,7 +274,7 @@ func TestSetPermissions_CloseFailed(t *testing.T) {
 func TestGetPermissions_NilEntry(t *testing.T) {
 	service := newTestSecurityService(newMockDrpcClient())
 
-	result, err := service.GetPermissions(nil, nil)
+	result, err := service.GetPermissions(context.TODO(), nil)
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "requested entry was nil",
@@ -297,7 +298,7 @@ func TestGetPermissions_Success(t *testing.T) {
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(expectedResp))
 
-	result, err := service.GetPermissions(nil, entry)
+	result, err := service.GetPermissions(context.TODO(), entry)
 
 	// Check the results
 	expectAclResponse(t, result, err, expectedResp)
@@ -313,7 +314,7 @@ func TestGetPermissions_SendMsgFailed(t *testing.T) {
 	client.SendMsgOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
-	result, err := service.GetPermissions(nil, newValidAclEntry())
+	result, err := service.GetPermissions(context.TODO(), newValidAclEntry())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, expectedError, "Should pass up the dRPC call error")
@@ -325,7 +326,7 @@ func TestGetPermissions_ConnectFailed(t *testing.T) {
 	client.ConnectOutputError = errors.Errorf(expectedError)
 	service := newTestSecurityService(client)
 
-	result, err := service.GetPermissions(nil, newValidAclEntry())
+	result, err := service.GetPermissions(context.TODO(), newValidAclEntry())
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, expectedError, "Should pass up the dRPC call error")
@@ -339,7 +340,7 @@ func TestGetPermissions_CloseFailed(t *testing.T) {
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(&acl.Response{}))
 
-	result, err := service.GetPermissions(nil, newValidAclEntry())
+	result, err := service.GetPermissions(context.TODO(), newValidAclEntry())
 
 	// We ignore Close errors - not useful to us if we got a good message
 	AssertEqual(t, err, (error)(nil), "Expected no error")
@@ -352,7 +353,7 @@ func TestGetPermissions_CloseFailed(t *testing.T) {
 func TestDestroyAclEntry_NilEntry(t *testing.T) {
 	service := newTestSecurityService(newMockDrpcClient())
 
-	result, err := service.DestroyAclEntry(nil, nil)
+	result, err := service.DestroyAclEntry(context.TODO(), nil)
 
 	AssertEqual(t, result, (*acl.Response)(nil), "Expected no response")
 	ExpectError(t, err, "requested entry was nil",
@@ -371,7 +372,7 @@ func TestDestroyAclEntry_Success(t *testing.T) {
 	client.setSendMsgResponse(drpc.Status_SUCCESS,
 		aclResponseToBytes(expectedResp))
 
-	result, err := service.DestroyAclEntry(nil, entry)
+	result, err := service.DestroyAclEntry(context.TODO(), entry)
 
 	// Check the results
 	expectAclResponse(t, result, err, expectedResp)
