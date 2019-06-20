@@ -1,0 +1,23 @@
+version: '2'
+
+tasks:
+  main-task:
+    cmds:
+      - task: run-unit-tests
+      - task: build-ipmctl
+
+  run-unit-tests:
+    dir: ipmctl
+    cmds:
+      - go test -v
+
+  build-go-ipmctl:
+    dir: ipmctl
+    deps: [lint]
+    cmds:
+      - sudo go build -v -i
+
+  lint:
+    dir: ipmctl
+    cmds:
+      - gofmt -l -s -w . && go tool vet -all . && golint && goimports .

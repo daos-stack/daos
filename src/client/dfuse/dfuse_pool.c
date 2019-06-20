@@ -86,7 +86,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			       NULL);
 	if (rc) {
 		DFUSE_LOG_ERROR("daos_pool_connect() failed: (%d)", rc);
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = daos_der2errno(rc));
 	}
 
 	D_ALLOC_PTR(ie);
@@ -109,7 +109,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = daos_pool_query(dfs->dfs_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "daos_pool_query() failed: (%d)", rc);
-		D_GOTO(close, rc);
+		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
 	/* Convert the owner information to uid/gid */
@@ -142,9 +142,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
-	if (rc != -DER_SUCCESS) {
+	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
-		D_GOTO(close, rc = EIO);
+		D_GOTO(close, rc = -rc);
 	}
 
 	dfs->dfs_root = ie->ie_stat.st_ino;

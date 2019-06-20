@@ -166,14 +166,6 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
-## Format override when true will continue to format and start data plane
-## without waiting for client API storage format call (which formats
-## NVMe and SCM storage devices.
-#
-## default: true
-#format_override: false
-#
-#
 ## Username used to lookup user uid/gid to drop privileges to if started
 ## as root. After control plane start-up and configuration, before starting
 ## data plane, process ownership will be dropped to those of supplied user.
