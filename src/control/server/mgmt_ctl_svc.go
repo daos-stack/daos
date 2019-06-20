@@ -31,6 +31,9 @@ import (
 	"golang.org/x/net/context"
 )
 
+// ControlService mgmt methods forward gRPC request from management tool to
+// iosrv via dRPC channel. Usually on host identified as first access point.
+
 // callDrpcMethodWithMessage create a new drpc Call instance, open a
 // drpc connection, send a message with the protobuf message marshalled
 // in the body, and closes the connection. Returns unmarshalled response.
@@ -56,7 +59,7 @@ func (c *controlService) callDrpcMethodWithMessage(
 func (c *controlService) KillRank(
 	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResponse, error) {
 
-	log.Debugf("ControlService.KillRank dispatch")
+	log.Debugf("ControlService.KillRank dispatch\n")
 
 	return c.callDrpcMethodWithMessage(killRank, rank)
 }

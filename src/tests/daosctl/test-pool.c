@@ -350,11 +350,6 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 			       pool_info.pi_ndisabled);
 			return 1;
 		}
-		if (pool_info.pi_mode != cp_options.mode) {
-			printf("mode is %i but should be: %i\n",
-			       pool_info.pi_mode, cp_options.mode);
-			return 1;
-		}
 		/* seems to not be implemented yet */
 		/* if (pool_info.pi_space.foo != pool_size) {
 		 * printf("space is %i, shoud be: %i\n",

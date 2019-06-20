@@ -46,12 +46,12 @@ const (
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciWhiteListEnv    = "_PCI_WHITELIST"
-)
 
-var (
 	msgBdevAlreadyFormatted = "nvme storage has already been formatted and " +
 		"reformat not implemented"
-	msgBdevNotFound           = "controller at pci addr not found"
+	msgBdevNotFound = "controller at pci addr not found, check device exists " +
+		"and can be discovered, you may need to run `sudo daos_server " +
+		"storage prep-nvme` to setup SPDK to access SSDs"
 	msgBdevNotInited          = "nvme storage not initialized"
 	msgBdevClassNotSupported  = "operation unsupported on bdev class"
 	msgSpdkInitFail           = "SPDK env init, has setup been run?"
@@ -59,6 +59,7 @@ var (
 	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
+	msgBdevNoDevs             = "no controllers specified"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -269,12 +270,6 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 				common.UtilLogDepth+1))
 	}
 
-	if !n.initialized {
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited)
-		return
-	}
-
 	if n.formatted {
 		addCretFormat(
 			pb.ResponseStatus_CTRL_ERR_APP,
@@ -325,9 +320,22 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 		return
 	}
 
+	// add info to result if no controllers have been formatted
+	if len(*results) == 0 && len(srv.BdevList) == 0 {
+		*results = append(
+			*results,
+			&pb.NvmeControllerResult{
+				Pciaddr: "",
+				State: addState(
+					pb.ResponseStatus_CTRL_SUCCESS,
+					"", "no controllers specified",
+					common.UtilLogDepth,
+					"nvme controller format"),
+			})
+	}
+
 	log.Debugf("device format on NVMe controllers completed")
 	n.formatted = true
-	return
 }
 
 // Update attempts to update firmware on NVMe controllers attached to a
@@ -344,7 +352,7 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
 func (n *nvmeStorage) Update(
-	i int, req *pb.UpdateNvmeParams, results *([]*pb.NvmeControllerResult)) {
+	i int, req *pb.UpdateNvmeReq, results *([]*pb.NvmeControllerResult)) {
 
 	var pciAddr string
 	srv := n.config.Servers[i]
@@ -458,7 +466,6 @@ func (n *nvmeStorage) Update(
 	}
 
 	log.Debugf("device fwupdates on specified NVMe controllers completed\n")
-	return
 }
 
 // BurnIn method implementation for nvmeStorage

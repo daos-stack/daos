@@ -148,8 +148,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		rc = dtx_check(dra->po_uuid, cont->sc_uuid,
 			       &dre->dre_dte, layout);
-		if (rc != DTX_ST_COMMITTED && rc != DTX_ST_PREPARED &&
-		    rc != DTX_ST_INIT) {
+		if (rc != DTX_ST_COMMITTED && rc != DTX_ST_PREPARED) {
 			/* We are not sure about whether the DTX can be
 			 * committed or not, then we have to skip it.
 			 */
@@ -189,8 +188,6 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			if (rc == DTX_ST_PREPARED)
 				goto commit;
 
-			/* Fall through. */
-		case DTX_ST_INIT:
 			/* If we abort multiple non-ready DTXs together, then
 			 * there is race that one DTX may become committable
 			 * when we abort some other DTX(s). To avoid complex

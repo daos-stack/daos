@@ -24,8 +24,10 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -36,35 +38,63 @@ import (
 // FeatureMap is an alias for mgmt features supported by gRPC server.
 type FeatureMap map[string]string
 
+func (fm FeatureMap) String() string {
+	var buf bytes.Buffer
+
+	for k, v := range fm {
+		fmt.Fprintf(&buf, "%s: %s\n", k, v)
+	}
+
+	return buf.String()
+}
+
 // FeatureResult contains results and error of a request
 type FeatureResult struct {
 	Fm  FeatureMap
 	Err error
 }
 
+func (fr FeatureResult) String() string {
+	if fr.Err != nil {
+		return fr.Err.Error()
+	}
+	return fr.Fm.String()
+}
+
 // ClientFeatureMap is an alias for management features supported on server
 // connected to given client.
 type ClientFeatureMap map[string]FeatureResult
 
-// getFeature returns a feature from a requested name.
-func (c *control) getFeature(name string) (*pb.Feature, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func (cfm ClientFeatureMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(cfm))
 
-	return c.client.GetFeature(ctx, &pb.FeatureName{Name: name})
+	for server := range cfm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cfm[server])
+	}
+
+	return buf.String()
 }
 
 // listAllFeatures returns map of all supported management features.
-func (c *control) listAllFeatures() (fm FeatureMap, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// listFeaturesRequest is to be called as a goroutine and returns result
+// containing supported server features over channel.
+func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := c.client.ListAllFeatures(ctx, &pb.EmptyParams{})
+	stream, err := mc.getCtlClient().ListFeatures(ctx, &pb.EmptyReq{})
 	if err != nil {
+		ch <- ClientResult{mc.getAddress(), nil, err}
 		return
 	}
 
-	fm = make(FeatureMap)
+	fm := make(FeatureMap)
 	var f *pb.Feature
 	for {
 		f, err = stream.Recv()
@@ -72,47 +102,14 @@ func (c *control) listAllFeatures() (fm FeatureMap, err error) {
 			err = nil
 			break
 		} else if err != nil {
+			ch <- ClientResult{mc.getAddress(), nil, err}
 			return
 		}
 		fm[f.Fname.Name] = fmt.Sprintf(
 			"category %s, %s", f.Category.Category, f.Description)
 	}
 
-	return
-}
-
-// listFeatures returns supported management features for a given category.
-func (c *control) listFeatures(category string) (
-	fm FeatureMap, err error) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := c.client.ListFeatures(ctx, &pb.Category{Category: category})
-	if err != nil {
-		return
-	}
-
-	fm = make(FeatureMap)
-	var f *pb.Feature
-	for {
-		f, err = stream.Recv()
-		if err == io.EOF {
-			err = nil
-			break
-		} else if err != nil {
-			return
-		}
-		fm[f.Fname.Name] = f.Description
-	}
-	return
-}
-
-// listFeaturesRequest is to be called as a goroutine and returns result
-// containing supported server features over channel.
-func listFeaturesRequest(controller Control, i interface{}, ch chan ClientResult) {
-	fMap, err := controller.listAllFeatures()
-	ch <- ClientResult{controller.getAddress(), fMap, err}
+	ch <- ClientResult{mc.getAddress(), fm, nil}
 }
 
 // ListFeatures returns supported management features for each server connected.

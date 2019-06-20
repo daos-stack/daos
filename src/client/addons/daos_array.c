@@ -91,9 +91,10 @@ daos_array_local2global(daos_handle_t oh, d_iov_t *glob)
 }
 
 int
-daos_array_global2local(daos_handle_t coh, d_iov_t glob, daos_handle_t *oh)
+daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
+			daos_handle_t *oh)
 {
-	return dac_array_global2local(coh, glob, oh);
+	return dac_array_global2local(coh, glob, mode, oh);
 }
 
 int

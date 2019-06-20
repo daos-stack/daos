@@ -437,8 +437,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 }
 
 static int
-init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
-		   uint32_t gid, uint32_t mode,
+init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
 		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
 		   uint32_t ndomains, const int32_t *domains)
@@ -472,7 +471,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 	/* fill domains */
 	for (i = 0; i < ndomains; i++) {
 		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
-		map_comp.co_status = PO_COMP_ST_UP;
+		map_comp.co_status = PO_COMP_ST_UPIN;
 		map_comp.co_index = i;
 		map_comp.co_id = i;
 		map_comp.co_rank = 0;
@@ -491,7 +490,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 				    sizeof(uuid_t), uuid_compare_cb);
 
 		map_comp.co_type = PO_COMP_TP_NODE;
-		map_comp.co_status = PO_COMP_ST_UP;
+		map_comp.co_status = PO_COMP_ST_UPIN;
 		map_comp.co_index = i;
 		map_comp.co_id = p - uuids;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
@@ -510,7 +509,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 
 		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = PO_COMP_ST_UP;
+			map_comp.co_status = PO_COMP_ST_UPIN;
 			map_comp.co_index = j;
 			map_comp.co_id = i * dss_tgt_nr + j;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
@@ -523,20 +522,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t uid,
 				D_GOTO(out_uuids, rc);
 		}
 	}
-
-	/* Initialize the UID, GID, and mode properties. */
-	d_iov_set(&value, &uid, sizeof(uid));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_uid, &value);
-	if (rc != 0)
-		D_GOTO(out_uuids, rc);
-	d_iov_set(&value, &gid, sizeof(gid));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_gid, &value);
-	if (rc != 0)
-		D_GOTO(out_uuids, rc);
-	d_iov_set(&value, &mode, sizeof(mode));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_mode, &value);
-	if (rc != 0)
-		D_GOTO(out_uuids, rc);
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
@@ -636,9 +621,6 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
  * target UUIDs returned by the ds_pool_create() calls.
  *
  * \param[in]		pool_uuid	pool UUID
- * \param[in]		uid		pool UID
- * \param[in]		gid		pool GID
- * \param[in]		mode		pool mode
  * \param[in]		ntargets	number of targets in the pool
  * \param[in]		target_uuids	array of \a ntargets target UUIDs
  * \param[in]		group		crt group ID (unused now)
@@ -651,8 +633,7 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
  *					list of pool service replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-		   unsigned int mode, int ntargets, uuid_t target_uuids[],
+ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const char *group, const d_rank_list_t *target_addrs,
 		   int ndomains, const int *domains, daos_prop_t *prop,
 		   d_rank_list_t *svc_addrs)
@@ -701,9 +682,6 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pri_op.pi_hdl);
-	in->pri_uid = uid;
-	in->pri_gid = gid;
-	in->pri_mode = mode;
 	in->pri_ntgts = ntargets;
 	in->pri_tgt_uuids.ca_count = ntargets;
 	in->pri_tgt_uuids.ca_arrays = target_uuids;
@@ -1115,7 +1093,6 @@ static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_locate	= pool_svc_locate_cb,
 	.sc_alloc	= pool_svc_alloc_cb,
 	.sc_free	= pool_svc_free_cb,
-	.sc_bootstrap	= NULL,
 	.sc_step_up	= pool_svc_step_up_cb,
 	.sc_step_down	= pool_svc_step_down_cb,
 	.sc_drain	= pool_svc_drain_cb
@@ -1293,34 +1270,6 @@ ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint)
 	hint->sh_flags |= RSVC_HINT_VALID;
 }
 
-/* read uid/gid/mode properties */
-static int
-pool_ugm_read(struct rdb_tx *tx, const struct pool_svc *svc,
-	      struct pool_prop_ugm *ugm)
-{
-	d_iov_t	value;
-	int		rc;
-
-	d_iov_set(&value, &ugm->pp_uid, sizeof(ugm->pp_uid));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_uid, &value);
-	if (rc != 0)
-		return rc;
-
-	d_iov_set(&value, &ugm->pp_gid, sizeof(ugm->pp_gid));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_gid, &value);
-	if (rc != 0)
-		return rc;
-
-	d_iov_set(&value, &ugm->pp_mode, sizeof(ugm->pp_mode));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_mode, &value);
-	if (rc != 0)
-		return rc;
-
-	D_DEBUG(DF_DSMS, "uid=%u gid=%u mode=%u\n", ugm->pp_uid, ugm->pp_gid,
-		ugm->pp_mode);
-	return 0;
-}
-
 static int
 pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	       daos_prop_t **prop_out)
@@ -1470,12 +1419,14 @@ pool_map_update(crt_context_t ctx, struct pool_svc *svc,
 	int			rc;
 
 	/* If iv_ns is NULL, it means the pool is not connected,
-	 * then we do not need distribute pool map to all other
-	 * servers. NB: rebuild will redistribute the pool map
-	 * by itself anyway.
+	 * then it only update its own(leader's) pool map, instead
+	 * of distributing pool map to all other servers. offline
+	 * rebuild will redistribute the pool map by itself anyway.
 	 */
-	if (svc->ps_pool->sp_iv_ns == NULL)
-		return 0;
+	if (svc->ps_pool->sp_iv_ns == NULL) {
+		rc = ds_pool_tgt_map_update(svc->ps_pool, buf, map_version);
+		return rc;
+	}
 
 	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
 		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
@@ -1585,8 +1536,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_create_root(&tx, &attr);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_uid, in->pri_gid,
-				in->pri_mode, in->pri_ntgts,
+	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_tgt_uuids.ca_count,
 				in->pri_tgt_uuids.ca_arrays, NULL /* group */,
 				in->pri_tgt_ranks, prop_dup,
 				in->pri_ndomains, in->pri_domains.ca_arrays);
@@ -1804,18 +1754,20 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_buf			*map_buf;
 	uint32_t			map_version;
 	struct rdb_tx			tx;
-	d_iov_t			key;
-	d_iov_t			value;
-	struct pool_prop_ugm		ugm;
+	daos_iov_t			key;
+	daos_iov_t			value;
 	struct pool_hdl			hdl;
-	d_iov_t			iv_iov;
+	d_iov_t				iv_iov;
 	unsigned int			iv_ns_id;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
 	daos_prop_t		       *prop;
+	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
 	struct pool_owner		owner;
+	struct daos_prop_entry	       *owner_entry;
+	struct daos_prop_entry	       *owner_grp_entry;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -1872,14 +1824,12 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = pool_ugm_read(&tx, svc, &ugm);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
-	/* Fetch ACL for access check */
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	/* Fetch ACL and ownership info for access check */
+	prop_bits = DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |
+		    DAOS_PO_QUERY_PROP_OWNER_GROUP;
+	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get ACL for pool, rc=%d\n",
+		D_ERROR(DF_UUID": cannot get access data for pool, rc=%d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
 		D_GOTO(out_map_version, rc);
 	}
@@ -1889,34 +1839,25 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	D_ASSERT(acl_entry != NULL);
 	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
 
-	/*
-	 * TODO DAOS-2370: Switch to using pool props for owner/group once
-	 * they are set properly on pool create;
-	 */
-	rc = daos_acl_uid_to_principal(ugm.pp_uid, &owner.user);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
 
-	rc = daos_acl_gid_to_principal(ugm.pp_gid, &owner.group);
-	if (rc != 0) {
-		D_FREE(owner.user);
-		D_GOTO(out_map_version, rc);
-	}
+	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner.user = owner_entry->dpe_str;
+	owner.group = owner_grp_entry->dpe_str;
 
 	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &owner,
 			&in->pci_cred, in->pci_capas);
-	D_FREE(owner.user);
-	D_FREE(owner.group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
 			in->pci_capas, rc);
 		D_GOTO(out_pool_prop, rc = -DER_NO_PERM);
 	}
-
-	out->pco_uid = ugm.pp_uid;
-	out->pco_gid = ugm.pp_gid;
-	out->pco_mode = ugm.pp_mode;
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
@@ -2215,7 +2156,6 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	d_iov_t		key;
 	d_iov_t		value;
 	struct pool_hdl		hdl;
-	struct pool_prop_ugm	ugm;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
@@ -2252,14 +2192,6 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			D_GOTO(out_lock, rc);
 		}
 	}
-
-	/* read uid/gid/mode */
-	rc = pool_ugm_read(&tx, svc, &ugm);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-	out->pqo_uid = ugm.pp_uid;
-	out->pqo_gid = ugm.pp_gid;
-	out->pqo_mode = ugm.pp_mode;
 
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
@@ -2909,64 +2841,32 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 {
 	struct pool_membership_in	*in = crt_req_get(rpc);
 	struct pool_membership_out	*out = crt_reply_get(rpc);
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	struct pool_svc			*svc;
-	struct rdb			*db;
 	d_rank_list_t			*ranks;
-	uuid_t				 db_uuid;
-	uuid_t				 pool_uuid;
-	d_iov_t			 psid;
+	d_iov_t				 id;
 	int				 rc;
-
-	D_DEBUG(DB_MD, DF_UUID": Replica Rank: %u\n", DP_UUID(in->pmi_uuid),
-				 in->pmi_targets->rl_ranks[0]);
 
 	rc = daos_rank_list_dup(&ranks, in->pmi_targets);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
+	d_iov_set(&id, in->pmi_uuid, sizeof(uuid_t));
 
-	/*
-	 * Do this locally and release immediately; otherwise if we try to
-	 * remove the leader replica, the call never returns since the service
-	 * won't stop until all references have been released
-	 */
-	rc = pool_svc_lookup_leader(in->pmi_uuid, &svc, &out->pmo_hint);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	/* TODO: Use rdb_get() to track references? */
-	db = svc->ps_rsvc.s_db;
-	rdb_get_uuid(db, db_uuid);
-	uuid_copy(pool_uuid, svc->ps_uuid);
-	pool_svc_put_leader(svc);
-	d_iov_set(&psid, pool_uuid, sizeof(uuid_t));
-
-	switch (opc) {
+	switch (opc_get(rpc->cr_opc)) {
 	case POOL_REPLICAS_ADD:
-		rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, db_uuid,
-					in->pmi_targets, true /* create */,
-					false /* bootstrap */,
-					ds_rsvc_get_md_cap());
-		if (rc != 0)
-			break;
-		rc = rdb_add_replicas(db, ranks);
+		rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
+					  ds_rsvc_get_md_cap(), &out->pmo_hint);
 		break;
 
 	case POOL_REPLICAS_REMOVE:
-		rc = rdb_remove_replicas(db, ranks);
-		if (rc != 0)
-			break;
-		/* ignore return code */
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, in->pmi_targets,
-				  true /*destroy*/);
+		rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
+					     &out->pmo_hint);
 		break;
 
 	default:
 		D_ASSERT(0);
 	}
 
-	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pmo_hint);
-out:
 	out->pmo_failed = ranks;
+out:
 	out->pmo_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -3024,6 +2924,7 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 		D_GOTO(out, rc = leader);
 	}
 
+	D_DEBUG(DB_TRACE, "get new leader tgt id %d\n", leader);
 	rc = pool_map_find_target(pool->sp_map, leader, &target);
 	if (rc < 0)
 		goto out;

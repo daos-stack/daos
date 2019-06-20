@@ -4,27 +4,28 @@ tasks:
   main-task:
     cmds:
       - task: build-nvme-libs
-      - task: unit-tests
+      - task: run-unit-tests
       - task: build-spdk
 
   build-nvme-libs:
     dir: spdk
     cmds:
       - rm -f *.o *.so
-      - gcc -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk
-      - gcc -shared -o libnvme_control.so *.o
+      - gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk
+      - gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -shared -o libnvme_control.so *.o
 
-  unit-tests:
+  run-unit-tests:
     dir: spdk
     cmds:
-      - LD_LIBRARY_PATH=. go test
+      - go test -v
 
   build-spdk:
     dir: spdk
     deps: [lint]
     cmds:
-      - go build -v -i
+      - sudo CGO_LDFLAGS=${CGO_LDFLAGS} CGO_CFLAGS=${CGO_CFLAGS} go build -v -i
 
   lint:
+    dir: spdk
     cmds:
       - gofmt -l -s -w . && go tool vet -all . && golint && goimports .

@@ -168,6 +168,8 @@ enum vos_dtx_entry_flags {
 	DTX_EF_EXCHANGE_PENDING		= (1 << 0),
 	/* The DTX shares something with other DTX(s). */
 	DTX_EF_SHARES			= (1 << 1),
+	/* The DTX is the leader */
+	DTX_EF_LEADER			= (1 << 2),
 };
 
 /**

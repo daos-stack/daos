@@ -40,6 +40,7 @@
 enum ds_rsvc_class_id {
 	DS_RSVC_CLASS_MGMT,
 	DS_RSVC_CLASS_POOL,
+	DS_RSVC_CLASS_TEST,
 	DS_RSVC_CLASS_COUNT
 };
 
@@ -142,6 +143,11 @@ int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		       bool create, bool bootstrap, size_t size);
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		      const d_rank_list_t *ranks, bool destroy);
+int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
+			 d_rank_list_t *ranks, size_t size,
+			 struct rsvc_hint *hint);
+int ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
+			    d_rank_list_t *ranks, struct rsvc_hint *hint);
 int ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 		   struct ds_rsvc **svc);
 int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,

@@ -43,17 +43,13 @@ type ScanStorCmd struct{}
 // run NVMe and SCM storage query on all connected servers
 func scanStor() {
 	cCtrlrs, cModules := conns.ScanStorage()
-
-	fmt.Printf(
-		unpackClientMap(cCtrlrs),
-		"NVMe SSD controller and constituent namespace")
-
-	fmt.Printf(unpackClientMap(cModules), "SCM module")
+	fmt.Printf("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
+	fmt.Printf("SCM modules:\n%s", cModules)
 }
 
 // Execute is run when ScanStorCmd activates
 func (s *ScanStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		return err
 	}
 
@@ -66,31 +62,33 @@ func (s *ScanStorCmd) Execute(args []string) error {
 }
 
 // FormatStorCmd is the struct representing the format storage subcommand.
-type FormatStorCmd struct{}
+type FormatStorCmd struct {
+	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+}
 
 // run NVMe and SCM storage format on all connected servers
-func formatStor() {
+func formatStor(force bool) {
 	fmt.Println(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
 			"Please be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	if getConsent() {
+	if force || getConsent() {
 		fmt.Println("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
-		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage format result")
-		fmt.Printf(unpackClientMap(cMountResults), "SCM storage format result")
+		fmt.Printf("NVMe storage format results:\n%s", cCtrlrResults)
+		fmt.Printf("SCM storage format results:\n%s", cMountResults)
 	}
 }
 
 // Execute is run when FormatStorCmd activates
 func (s *FormatStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		return err
 	}
 
-	formatStor()
+	formatStor(s.Force)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)
@@ -100,14 +98,15 @@ func (s *FormatStorCmd) Execute(args []string) error {
 
 // UpdateStorCmd is the struct representing the update storage subcommand.
 type UpdateStorCmd struct {
+	Force        bool   `short:"f" long:"force" description:"Perform update without prompting for confirmation"`
 	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`
-	NVMeStartRev string `short:"f" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
+	NVMeStartRev string `short:"r" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
 	NVMeFwPath   string `short:"p" long:"nvme-fw-path" description:"Update firmware on NVMe SSDs with image file at this path (path must be accessible on all servers)." required:"1"`
 	NVMeFwSlot   int    `short:"s" default:"0" long:"nvme-fw-slot" description:"Update firmware on NVMe SSDs to this firmware register."`
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(params *pb.UpdateStorageParams) {
+func updateStor(req *pb.UpdateStorageReq, force bool) {
 	fmt.Println(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -115,29 +114,29 @@ func updateStor(params *pb.UpdateStorageParams) {
 			"and be patient as it may take several minutes.\n" +
 			"Are you sure you want to continue? (yes/no)")
 
-	if getConsent() {
+	if force || getConsent() {
 		fmt.Println("")
-		cCtrlrResults, cModuleResults := conns.UpdateStorage(params)
-		fmt.Printf(unpackClientMap(cCtrlrResults), "NVMe storage update result")
-		fmt.Printf(unpackClientMap(cModuleResults), "SCM storage update result")
+		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
+		fmt.Printf("NVMe storage update results:\n%s", cCtrlrResults)
+		fmt.Printf("SCM storage update results:\n%s", cModuleResults)
 	}
 }
 
 // Execute is run when UpdateStorCmd activates
 func (u *UpdateStorCmd) Execute(args []string) error {
-	if err := appSetup(); err != nil {
+	if err := appSetup(true /* broadcast */); err != nil {
 		fmt.Printf("app setup returned %s", err)
 		return err
 	}
 
 	// only populate nvme fwupdate params for the moment
 	updateStor(
-		&pb.UpdateStorageParams{
-			Nvme: &pb.UpdateNvmeParams{
+		&pb.UpdateStorageReq{
+			Nvme: &pb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},
-		})
+		}, u.Force)
 
 	// exit immediately to avoid continuation of main
 	os.Exit(0)

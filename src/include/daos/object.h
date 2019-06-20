@@ -69,6 +69,15 @@ struct daos_obj_layout {
 	struct daos_obj_shard	*ol_shards[0];
 };
 
+#define TGTS_IGNORE		((d_rank_t)-1)
+/** to identify each obj shard's target */
+struct daos_shard_tgt {
+	uint32_t		st_rank;	/* rank of the shard */
+	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_tgt_idx;	/* target xstream index */
+	uint32_t		st_tgt_id;	/* target id */
+};
+
 static inline bool
 daos_obj_id_equal(daos_obj_id_t oid1, daos_obj_id_t oid2)
 {
