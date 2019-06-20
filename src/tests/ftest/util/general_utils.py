@@ -153,14 +153,14 @@ def get_pool(context, mode, size, name, svcn=1, log=None, connect=True):
 
 
 @fail_on(DaosApiError)
-def get_container(context, pool, log=None, open=True):
+def get_container(context, pool, log=None, connect=True):
     """Retrun a DAOS a container that has been created an opened.
 
     Args:
         context (DaosContext): the context to use to create the container
         pool (DaosPool): pool in which to create the container
         log (DaosLog, optional): object for logging messages. Defaults to None.
-        open (bool, optional): open the new container. Defaults to True.
+        connect (bool, optional): open the new container. Defaults to True.
 
     Returns:
         DaosContainer: an object representing a DAOS container
@@ -170,7 +170,7 @@ def get_container(context, pool, log=None, open=True):
         log.info("Creating a container")
     container = DaosContainer(context)
     container.create(pool.handle)
-    if open:
+    if connect:
         if log:
             log.info("Opening a container")
         container.open()

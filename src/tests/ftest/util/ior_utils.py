@@ -33,6 +33,7 @@ class IorFailed(Exception):
     """Raise if Ior failed."""
 
 
+# pylint: disable too-few-public-methods
 class IorParam(object):
     """Defines a object representing a single IOR command line parameter."""
 
@@ -72,6 +73,7 @@ class IorParam(object):
 
         """
         self.value = test.params.get(name, path, self.default)
+# pylint: enable too-few-public-methods
 
 
 class IorCommand(object):

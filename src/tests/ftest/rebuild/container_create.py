@@ -62,7 +62,7 @@ class ContainerCreate(TestWithServers):
                 "%s: Creating container %s/%s in pool %s during rebuild",
                 loop_id, index + 1, qty, pool2.get_uuid_str())
             containers.append(
-                    get_container(self.context, pool2, self.d_log, False))
+                get_container(self.context, pool2, self.d_log, False))
 
             # Create the next container
             index += 1
