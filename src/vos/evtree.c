@@ -1421,7 +1421,7 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	int			rc;
 
 	evt_node_weight_diff(tcx, nd1, rect, &wt1);
-	evt_node_weight_diff(tcx, nd1, rect, &wt2);
+	evt_node_weight_diff(tcx, nd2, rect, &wt2);
 
 	rc = evt_weight_cmp(&wt1, &wt2);
 	return rc < 0 ? nd1 : nd2;
