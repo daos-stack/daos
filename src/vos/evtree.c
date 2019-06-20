@@ -1218,17 +1218,10 @@ evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"\n",
 		DP_RECT(&ent->ei_rect), DP_RECT(evt_node_mbr_get(tcx, nd)));
 
-	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent);
-	if (rc == 0) {
-		if (nd->tn_nr == 1) {
-			nd->tn_mbr = ent->ei_rect;
-			changed = true;
-		} else {
-			changed = evt_rect_merge(&nd->tn_mbr, &ent->ei_rect);
-		}
+	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed);
+	if (rc == 0)
 		V_TRACE(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
 			DP_RECT(evt_node_mbr_get(tcx, nd)), nd->tn_nr);
-	}
 
 	if (mbr_changed)
 		*mbr_changed = changed;
@@ -2325,7 +2318,7 @@ typedef int (cmp_rect_cb)(struct evt_context *tcx, const struct evt_rect *mbr,
 static int
 evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		  umem_off_t in_off, const struct evt_entry_in *ent,
-		  cmp_rect_cb cb)
+		  bool *changed, cmp_rect_cb cb)
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
@@ -2339,6 +2332,12 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 	leaf = evt_node_is_leaf(tcx, nd);
 	mbr = evt_node_mbr_get(tcx, nd);
+	if (nd->tn_nr == 0) {
+		*mbr = ent->ei_rect;
+		*changed = true;
+	} else {
+		*changed = evt_rect_merge(mbr, &ent->ei_rect);
+	}
 
 	/* NB: can use binary search to optimize */
 	for (i = 0; i < nd->tn_nr; i++) {
@@ -2557,9 +2556,11 @@ evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
 
 static int
 evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent)
+		umem_off_t in_off, const struct evt_entry_in *ent,
+		bool *changed)
 {
-	return evt_common_insert(tcx, nd, in_off, ent, evt_ssof_cmp_rect);
+	return evt_common_insert(tcx, nd, in_off, ent, changed,
+				 evt_ssof_cmp_rect);
 }
 
 static int
@@ -2584,8 +2585,8 @@ static struct evt_policy_ops evt_ssof_pol_ops = {
 static int64_t
 evt_mbr_dist(const struct evt_rect *mbr, const struct evt_rect *rect)
 {
-	int64_t ldist = rect->rc_ex.ex_lo - mbr->rc_ex.ex_hi + 1;
-	int64_t rdist = mbr->rc_ex.ex_lo - rect->rc_ex.ex_hi + 1;
+	int64_t ldist = rect->rc_ex.ex_lo - mbr->rc_ex.ex_lo;
+	int64_t rdist = mbr->rc_ex.ex_hi - rect->rc_ex.ex_hi;
 
 	return ldist - rdist;
 }
@@ -2654,9 +2655,11 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 
 static int
 evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent)
+		umem_off_t in_off, const struct evt_entry_in *ent,
+		bool *changed)
 {
-	return evt_common_insert(tcx, nd, in_off, ent, evt_sdist_cmp_rect);
+	return evt_common_insert(tcx, nd, in_off, ent, changed,
+				 evt_sdist_cmp_rect);
 }
 
 static int
