@@ -82,7 +82,6 @@ def scons():
 
     denv = env.Clone()
     prereqs.require(denv, 'spdk')
-    prereqs.require(denv, 'daos')
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
@@ -182,7 +181,8 @@ int main(int argc, char **argv)
     agentbin = get_bin_path(gopath, "agent")
     denv.Depends(agentbin, env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'))
     serverbin = get_bin_path(gopath, "server")
-    denv.Depends(agentbin, env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'))
+    denv.Depends(serverbin, env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'))
+    denv.Depends(serverbin, denv.subst('$PREFIX/lib/pkgconfig/spdk.pc'))
     shellbin = get_bin_path(gopath, "dmg")
     drpcbin = get_bin_path(gopath, "drpc_test")
     AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
