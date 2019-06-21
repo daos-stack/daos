@@ -69,7 +69,7 @@ class IorSingleServer(Test):
 
         # set ior_flags to be used by test
         self.ior_flags = self.params.get("F", '/run/ior/iorflags/')
-        
+
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers,
                                                     self.hostlist_clients)
@@ -128,10 +128,10 @@ class IorSingleServer(Test):
                 svc_list += str(tmp_rank_list[item]) + ":"
             svc_list = svc_list[:-1]
 
-            ior_utils.run_ior_daos(self.hostfile_clients, self.ior_flags, iteration,
-                                   block_size, transfer_size, pool_uuid,
-                                   svc_list, object_class, self.basepath,
-                                   client_processes)
+            ior_utils.run_ior_daos(self.hostfile_clients, self.ior_flags,
+                                   iteration, block_size, transfer_size,
+                                   pool_uuid, svc_list, object_class,
+                                   self.basepath, client_processes)
 
         except (DaosApiError, ior_utils.IorFailed) as excep:
             self.fail("<Single Server Test FAILED>\n {}".format(excep))
