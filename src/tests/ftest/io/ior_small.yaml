@@ -1,0 +1,42 @@
+hosts:
+   test_machines:
+        test_servers:
+            - boro-A
+        test_clients:
+            - boro-B
+            - boro-C
+timeout: 600
+server_config:
+    name: daos_server
+createtests:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 3000000000
+    createsvc:
+        svcn: 1
+ior:
+    client_processes: !mux
+        np_1:
+            np: 1
+        np_8:
+            np: 8
+    iteration:
+        iter: 3
+    iorflags: !mux
+        ssf:
+          F: "-v -W -w -r -R"
+        fpp:
+          F: "-v -W -w -r -R -F"
+# Uncomment when DAOS-1733 is resolved
+#        random:
+#          F: "-v -W -w -r -z"
+    transfersize_blocksize:
+        1M:
+            t: '1M'
+            b: '64M'
+    objectclass:
+            o: "LARGE"
