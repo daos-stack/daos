@@ -149,11 +149,13 @@ int main(int argc, char **argv)
 
     conf = Configure(denv, custom_tests={'CheckSPDKVersion': CheckSPDKVersion})
     if not conf.CheckSPDKVersion():
-        print 'Can\'t check SPDK version'
-        Exit(1)
+        print('Can\'t check SPDK version')
     denv = conf.Finish()
-    
-    denv.Substfile('spdk.pc.in', SUBST_DICT={'\@PREFIX\@': env.get('PREFIX'), '\@VERSION\@': denv.get('SPDK_VERSION')})
+
+    denv.Substfile('spdk.pc.in', SUBST_DICT={
+        '@PREFIX@': env.get('PREFIX'),
+        '@VERSION@': denv.get('SPDK_VERSION'),
+    })
     denv.Install('$PREFIX/lib/pkgconfig', ['spdk.pc', 'spdk.pc'])
     denv.Depends(env.subst('$PREFIX/lib/pkgconfig/spdk.pc'), 'spdk.pc')
     denv.Depends(nvmecontrol, denv.subst('$PREFIX/lib/pkgconfig/spdk.pc'))

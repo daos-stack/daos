@@ -15,7 +15,8 @@ def scons():
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
-    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/drpc_modules.h')
+    env.Install(os.path.join('$PREFIX', 'include/daos'),
+                'include/daos/drpc_modules.h')
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])

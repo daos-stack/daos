@@ -8,7 +8,10 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    env.Substfile('libdaos.pc.in', SUBST_DICT={'\@VERSION\@': DAOS_VERSION, '\@PREFIX\@': env.get('PREFIX')})
+    env.Substfile('libdaos.pc.in', SUBST_DICT={
+        '@VERSION@': DAOS_VERSION,
+        '@PREFIX@': env.get('PREFIX'),
+    })
     env.Install('$PREFIX/lib/pkgconfig', ['libdaos.pc', 'libdaos.pc'])
     env.Depends(env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'), 'libdaos.pc')
 
