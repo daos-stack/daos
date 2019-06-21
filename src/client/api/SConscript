@@ -8,6 +8,10 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
+    env.Substfile('libdaos.pc.in', SUBST_DICT={'\@VERSION\@': DAOS_VERSION, '\@PREFIX\@': env.get('PREFIX')})
+    env.Install('$PREFIX/lib/pkgconfig', ['libdaos.pc', 'libdaos.pc'])
+    env.Depends(env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'), 'libdaos.pc')
+
     dc_tgts = denv.SharedObject(Glob('*.c'))
 
     Import('dc_pool_tgts', 'dc_co_tgts', 'dc_obj_tgts', 'dc_placement_tgts')

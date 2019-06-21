@@ -1,0 +1,12 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libdaos
+Description: DAOS Client Library
+Version: @VERSION@
+URL: https://github.com/daos-stack/
+Requires:
+Libs: -L${libdir} -ldaos
+Cflags: -I${includedir}

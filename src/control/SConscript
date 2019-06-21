@@ -112,14 +112,13 @@ def scons():
     denv.Append(GOPATH=[gopath])
     denv.AppendENVPath('GOPATH', denv['GOPATH'])
     denv['ENV']['GOBIN'] = join(gopath, "bin")
+    denv['ENV']['PKG_CONFIG_PATH'] = denv.subst('$PREFIX/lib/pkgconfig')
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
 
     gospdkpath = join(gosrc, "vendor", "github.com", "daos-stack", "go-spdk",
                       "spdk")
 
-    # CGO prerequisite libs for go-spdk bindings
-    denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
     # hack to avoid building this library with cov compiler for the moment
     compiler = denv.get('COMPILER').lower()
     if compiler == "covc":
@@ -130,15 +129,36 @@ def scons():
         join(gospdkpath, "src", "nvme_control.c"),
         CC=compiler, LIBS=['spdk'])
 
-    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
+    # short-term hack to generate spdk.pc until the project generates it
+    spdk_version_src = """
+#include <stdio.h>
+#include <spdk/version.h>
+int main(int argc, char **argv)
+{
+    printf("%d.%d.%d", SPDK_VERSION_MAJOR, SPDK_VERSION_MINOR, SPDK_VERSION_PATCH);
+    return 0;
+}
+"""
+    def CheckSPDKVersion(context):
+        context.Message('Checking SPDK version... ')
+        result = context.TryRun(spdk_version_src, '.c')
+        if result[0]:
+              context.env.Append(SPDK_VERSION = result[1])
+        context.Result(result[1])
+        return result[1]
 
-    # CGO shell env vars.
-    denv.AppendENVPath(
-        "CGO_LDFLAGS",
-        denv.subst("-L%s -L$SPDK_PREFIX/lib $_RPATH" % gopath))
-    denv.AppendENVPath(
-        "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include"))
+    conf = Configure(denv, custom_tests={'CheckSPDKVersion': CheckSPDKVersion})
+    if not conf.CheckSPDKVersion():
+        print 'Can\'t check SPDK version'
+        Exit(1)
+    denv = conf.Finish()
+    
+    denv.Substfile('spdk.pc.in', SUBST_DICT={'\@PREFIX\@': env.get('PREFIX'), '\@VERSION\@': denv.get('SPDK_VERSION')})
+    denv.Install('$PREFIX/lib/pkgconfig', ['spdk.pc', 'spdk.pc'])
+    denv.Depends(env.subst('$PREFIX/lib/pkgconfig/spdk.pc'), 'spdk.pc')
+    denv.Depends(nvmecontrol, denv.subst('$PREFIX/lib/pkgconfig/spdk.pc'))
+
+    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
 
     # copy server init files to be used at runtime, explicitly
     # remove first because recursive Delete() on dir fails.
@@ -157,7 +177,9 @@ def scons():
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 
     agentbin = get_bin_path(gopath, "agent")
+    denv.Depends(agentbin, env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'))
     serverbin = get_bin_path(gopath, "server")
+    denv.Depends(agentbin, env.subst('$PREFIX/lib/pkgconfig/libdaos.pc'))
     shellbin = get_bin_path(gopath, "dmg")
     drpcbin = get_bin_path(gopath, "drpc_test")
     AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])

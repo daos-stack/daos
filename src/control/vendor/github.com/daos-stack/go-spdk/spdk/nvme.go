@@ -23,12 +23,10 @@
 
 package spdk
 
-// CGO_CFLAGS & CGO_LDFLAGS env vars can be used
-// to specify additional dirs.
-
 /*
+#cgo pkg-config: spdk
 #cgo CFLAGS: -I .
-#cgo LDFLAGS: -L . -lnvme_control -lspdk
+#cgo LDFLAGS: -L . -lnvme_control
 
 #include "stdlib.h"
 #include "spdk/stdinc.h"

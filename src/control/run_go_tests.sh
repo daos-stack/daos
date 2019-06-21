@@ -24,13 +24,6 @@ function check_environment()
 		echo "false" && return
 	fi
 
-	if [ -z "$CGO_LDFLAGS" ]; then
-		echo "false" && return
-	fi
-
-	if [ -z "$CGO_CFLAGS" ]; then
-		echo "false" && return
-	fi
 	echo "true" && return
 }
 
@@ -46,8 +39,6 @@ function setup_environment()
 
 	LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
 	export LD_LIBRARY_PATH
-	export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
-	export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
 }
 
 check=$(check_environment)

@@ -25,8 +25,7 @@
 
 package netdetect
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../include
-#cgo LDFLAGS: -lhwloc
+#cgo pkg-config: hwloc
 #include <stdlib.h>
 #include <hwloc.h>
 #include <stdio.h>

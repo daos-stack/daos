@@ -1,0 +1,12 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: spdk
+Version: @VERSION@
+Description: Intel® Storage Performance Development Kit
+URL: https://spdk.io/
+Requires:
+Libs: -L${libdir} -Wl,-rpath -Wl,${libdir} -lspdk 
+Cflags: -I${includedir}
