@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 import os
-import time
 import traceback
 import random
 import string
@@ -316,7 +315,7 @@ class Snapshot(TestWithServers):
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         snapshot_loop = self.params.get("num_of_snapshot",
-                                    '/run/snapshot/*', default=10)
+                                        '/run/snapshot/*', default=10)
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
                                       for i in xrange(n)])
         #
