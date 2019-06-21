@@ -50,9 +50,6 @@ class Snapshot(TestWithServers):
           information, list, creation and destroy.
     :avocado: recursive
     """
-    DAOS_PC_RO = int(1 << 0)
-    DAOS_PC_RW = int(1 << 1)
-    DAOS_PC_EX = int(1 << 2)
 
     def setUp(self):
         """
@@ -77,7 +74,10 @@ class Snapshot(TestWithServers):
                              createsize, createsetid, None)
 
             # need a connection to the pool with rw permission
-            self.pool.connect(self.DAOS_PC_RW)
+            #    DAOS_PC_RO = int(1 << 0)
+            #    DAOS_PC_RW = int(1 << 1)
+            #    DAOS_PC_EX = int(1 << 2)
+            self.pool.connect(1 << 1)
 
             # create a container
             self.container = DaosContainer(self.context)
@@ -108,8 +108,6 @@ class Snapshot(TestWithServers):
             if self.container:
                 self.container.close()
 
-            # wait a few seconds and then destroy
-            time.sleep(5)
             if self.container:
                 self.container.destroy()
 
@@ -126,56 +124,11 @@ class Snapshot(TestWithServers):
         finally:
             super(Snapshot, self).tearDown()
 
-    def display_daoscontainer(self):
-        """
-        To display current container information.
-        """
-        self.log.info("==display_daoscontainer===========")
-        self.log.info("self.container OBJ=                %s"
-                      , self.container)
-        self.log.info("self.container.context obj=        %s"
-                      , self.container.context)
-        self.log.info("self.container.context.libdaos=    %s"
-                      , self.container.context.libdaos)
-        self.log.info("self.container.context.libtest=    %s"
-                      , self.container.context.libtest)
-        self.log.info("self.container.context.ftable=     %s"
-                      , self.container.context.ftable)
-        self.log.info("self.container.uuid obj=           %s"
-                      , self.container.uuid)
-        self.log.info("self.container.coh=                %s"
-                      , self.container.coh)
-        self.log.info("self.container.poh=                %s"
-                      , self.container.poh)
-        self.log.info("self.container.info obj=           %s"
-                      , self.container.info)
-        self.log.info("self.container.info.ci_uuid=       %s"
-                      , self.container.info.ci_uuid)
-        self.log.info("self.container.info.es_hce=        %s"
-                      , self.container.info.es_hce)
-        self.log.info("self.container.info.es_lre=        %s"
-                      , self.container.info.es_lre)
-        self.log.info("self.container.info.es_lhe=        %s"
-                      , self.container.info.es_lhe)
-        self.log.info("self.container.info.es_ghce=       %s"
-                      , self.container.info.es_ghce)
-        self.log.info("self.container.info.es_glre=       %s"
-                      , self.container.info.es_glre)
-        self.log.info("self.container.info.es_ghpce=      %s"
-                      , self.container.info.es_ghpce)
-        self.log.info("self.container.info.ci_nsnapshots= %s"
-                      , self.container.info.ci_nsnapshots)
-        self.log.info("self.container.info.ci_snapshots=  %s"
-                      , self.container.info.ci_snapshots)
-        self.log.info("self.container.info.ci_min_slipped_epoch= %s"
-                      , self.container.info.ci_min_slipped_epoch)
-        self.log.info("==================================")
-
     def display_snapshot(self, snapshot):
         """
         To display the snapshot information.
         Args:
-            snapshot: snapshot handler to be displayed.
+            snapshot: snapshot handle to be displayed.
         Return:
             none.
         """
@@ -216,7 +169,7 @@ class Snapshot(TestWithServers):
 
     def invalid_snapshot_test(self, coh, epoch):
         """
-        Negative snapshot test with invalid container handler or epoch.
+        Negative snapshot test with invalid container handle or epoch.
 
         Args:
             container: container for the snapshot
@@ -242,8 +195,8 @@ class Snapshot(TestWithServers):
                 (1)Create an object, write random data into it, and take
                    a snapshot.
                 (2)Verify the snapshot is working properly.
-                (3)Test snapshot with an invalid container handler
-                (4)Test snapshot with a NULL container handler
+                (3)Test snapshot with an invalid container handle
+                (4)Test snapshot with a NULL container handle
                 (5)Test snapshot with an invalid epoch
 
         Use Cases: Combinations with minimun 1 client and 1 server.
@@ -254,10 +207,12 @@ class Snapshot(TestWithServers):
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
+        data_size = self.params.get("test_datasize",
+                                    '/run/snapshot/*', default=150)
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
                                       for i in xrange(n)])
         thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  "<<<---" + rand_str(random.randint(1, 100) + 1)
+                  "<<<---" + rand_str(random.randint(1, data_size))
         try:
             obj, epoch = self.container.write_an_obj(
                 thedata, len(thedata)+1, dkey, akey, obj_cls=obj_cls)
@@ -292,8 +247,8 @@ class Snapshot(TestWithServers):
         self.log.info("==Snapshot data matches the data originally "
                       "written.")
 
-        #(3)Test snapshot with an invalid container handler
-        self.log.info("==(3)Snapshot with an invalid container handler.")
+        #(3)Test snapshot with an invalid container handle
+        self.log.info("==(3)Snapshot with an invalid container handle.")
         if self.invalid_snapshot_test(self.container, epoch):
             self.log.info("==>Negative test 1, expecting failed on taking "
                           "snapshot with an invalid container.coh: %s"
@@ -304,8 +259,8 @@ class Snapshot(TestWithServers):
                 " taking snapshot with an invalid container.coh: %s"
                 , self.container)
 
-        #(4)Test snapshot with a NULL container handler
-        self.log.info("==(4)Snapshot with a NULL container handler.")
+        #(4)Test snapshot with a NULL container handle
+        self.log.info("==(4)Snapshot with a NULL container handle.")
         if self.invalid_snapshot_test(None, epoch):
             self.log.info("==>Negative test 2, expecting failed on taking "
                           "snapshot on a NULL container.coh.")
@@ -323,7 +278,7 @@ class Snapshot(TestWithServers):
                       "taking snapshot with a NULL epoch.")
 
 
-    def test_snapshot_info(self):
+    def test_snapshots(self):
         """
         Test ID: DAOS-1386 Test container SnapShot information
                  DAOS-1371 Test list snapshots
@@ -344,30 +299,36 @@ class Snapshot(TestWithServers):
                 (6)Destroy the snapshot.
                 (7)Check if still able to Open the destroyed snapshot and
                    Verify the snapshot removed from the snapshot list.
-        Use Cases: Combinations with minimun 1 client and 1 server.
-        :avocado: tags=snap,snapshotinfo
+        Use Cases: Require 1 client and 1 server to run snapshot test.
+                   1 pool and 1 container is used, num_of_snapshot defined
+                   in the snapshot.yaml will be performed and verified.
+        :avocado: tags=snap,snapshots
         """
 
         coh_list = []
         container_epoch_list = []
         snapshot_list = []
         test_data = []
-        snapshot_index = 1
-        snapshot_loop = 10
+        snapshot_index = 0
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
+        data_size = self.params.get("test_datasize",
+                                    '/run/snapshot/*', default=150)
+        snapshot_loop = self.params.get("num_of_snapshot",
+                                    '/run/snapshot/*', default=10)
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
                                       for i in xrange(n)])
         #
         #Test loop for creat, modify and snapshot object in the DAOS container.
         #
-        while snapshot_index <= snapshot_loop:
+        while snapshot_index < snapshot_loop:
             #(1)Create an object, write some data into it, and take a snapshot
             #size = random.randint(1, 100) + 1
+            snapshot_index += 1
             thedata = "--->>>Happy Daos Snapshot Testing " + \
                 str(snapshot_index) + \
-                "<<<---" + rand_str(random.randint(1, 100)+1)
+                "<<<---" + rand_str(random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
                 obj, epoch = self.container.write_an_obj(
@@ -395,7 +356,6 @@ class Snapshot(TestWithServers):
             container_epoch_list.append(epoch)
             snapshot_list.append(snapshot)
             test_data.append(thedata)
-            snapshot_index += 1
 
             #(2)Make changes to the data object. The write_an_obj function does
             #   a commit when the update is complete
@@ -478,7 +438,7 @@ class Snapshot(TestWithServers):
                 self.fail(
                     "##Error when retrieving the snapshot data: %s"
                     , str(error))
-            ##self.log.info("tickets already assigned DAOS-2484")
+            ##self.log.info("tickets already assigned DAOS-2484 and DAOS-2557")
             #thedata3 = self.container.read_an_obj(datasize, dkey, akey, obj,
             #                                  snap_handle.value)
             #self.log.info("==(5)snapshot test list %s:".format(ind+1))

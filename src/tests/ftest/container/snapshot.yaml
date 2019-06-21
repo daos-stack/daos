@@ -21,6 +21,8 @@ poolparams:
 snapshot:
     dkey: "dkey"
     akey: "akey"
+    test_datasize: 200
+    num_of_snapshot: 10
 object_class: !mux
     DAOS_OC_TINY_RW:
         obj_class: 1
