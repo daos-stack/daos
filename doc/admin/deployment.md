@@ -95,16 +95,21 @@ by the DAOS server require elevated permissions on the storage nodes
 
 ### Storage Preparation
 
-#### SCM
+#### SCM prep
 
 This section addresses how to verify that Optane DC Persistent memory
 (DCPM) is correctly installed on the storage nodes and how to configure
 it in interleaved mode to be used by DAOS in AppDirect mode.
 Instructions for other type of SCM may be covered in the future.
 
-DCPM can be configured and managed through the IpmCtl[^1] library and
-associated tool. The ipmctl command just be run as root and has pretty
-detailed man pages and help output (use “ipmctl help” to display it).
+Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions 
+(interleaved mode) in groups of modules local to a specific socket (NUMA) and
+resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
+
+DCPM can be configured and managed through the
+[ipmctl](https://github.com/intel/ipmctl) library and associated tool. The
+ipmctl command just be run as root and has pretty detailed man pages and
+help output (use “ipmctl help” to display it).
 
 The list of NVDIMMs can be displayed as follows:
 
@@ -160,7 +165,7 @@ This can be done manually via the following commands:
 
 A reboot is required after those changes.
 
-#### NVMe SSDs
+#### NVMe prep
 
 DAOS supports only NVMe-capable SSDs that are accessed directly from
 userspace through the SPDK library.
@@ -895,24 +900,37 @@ starts the data plane.
 ![Server format diagram](/doc/graph/server_format_flow.png)
 
 Typically an administrator will perform the following tasks:
-- Start DAOS control plane
-[details](#-parallel-launcher)
+1. Prepare NVMe and SCM Storage
+    - `sudo daos_server storage prep-nvme ...`
+    [NVMe details](#-nvme-prep)
+    - [SCM details](#-scm-prep)
 
-- Scan Storage
-`sudo daos_server storage scan`
-[details](#-storage-detection-&-selection)
+2. Scan Storage
+    - `sudo daos_server storage scan`
+    [details](#-storage-detection-&-selection)
 
-- Provision Storage
-  - firmware update [details](#-firmware-upgrade)
-  - burn-in testing [details](#-storage-burn-in)
+3. Add device identifiers to Server config file
+    - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
+    [details](#-server-configuration)
 
-- Amend Server config file (optional, requires subsequent restart of
+4. Start DAOS control plane
+    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    [details](#-parallel-launcher) 
+
+5. Provision Storage
+    - firmware update [details](#-firmware-upgrade)
+    - burn-in testing [details](#-storage-burn-in)
+
+6. Amend Server config file (optional, requires subsequent restart of
 `daos_server`)
-[details](#-server-configuration)
+    - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
+    [details](#-server-configuration)
 
-- Format Storage (from any node)
-`daos_shell -l <host:port>,... storage format -f`
-[details](../../src/control/dmg/README.md#-storage-format)
+7. Format Storage (from any node)
+    - `daos_shell -l <host:port>,... storage format -f`
+    [management tool details](/src/control/dmg/README.md#-storage-format)
+    - [SCM specific details](/src/control/server/README.md#-scm-format)
+    - [NVMe specific details](/src/control/server/README.md#-nvme-format)
 
 <div style="margin-left: 4em;">
 <details>
@@ -950,8 +968,19 @@ boro-45:10001:
 </details>
 </div>
 
-- Create Pool (DAOS I/O - data plane - should now be running)
+8. Create Pool (DAOS I/O - data plane - should now be running)
 TODO: add instructions
+
+#### Prep demo (steps 1,2 & 3 above)
+
+Demo of storage preparation and populating explicit device identifiers in config file.
+![Demo: Preparing storage and updating config file](/doc/admin/media/ds_prep1.svg)
+
+#### Format demo (steps 4 & 7 above)
+
+Demo of starting DAOS for the first time and formatting the storage through
+the management tool, `daos_shell`.
+![Demo: Starting DAOS and formatting storage](/doc/admin/media/ds_format1.svg)
 
 ### Systemd Integration
 
