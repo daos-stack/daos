@@ -106,8 +106,9 @@ main(int argc, char **argv)
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
 	char			*svcl = NULL;
-	bool			cont_open = false;
 	bool			pool_open = false;
+	bool			cont_open = false;
+	bool			dfs_open = false;
 	struct dfuse_dfs	*dfs = NULL;
 	char			c;
 	int			ret = -DER_SUCCESS;
@@ -125,7 +126,7 @@ main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	rc = daos_debug_init(NULL);
+	rc = daos_init();
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(out, ret = rc);
 	}
@@ -204,11 +205,6 @@ main(int argc, char **argv)
 		D_GOTO(out, ret = -DER_INVAL);
 	}
 
-	rc = daos_init();
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(out, ret = rc);
-	}
-
 	D_ALLOC_PTR(dfs);
 	if (!dfs) {
 		D_GOTO(out, 0);
@@ -221,6 +217,7 @@ main(int argc, char **argv)
 				       &dfs->dfs_poh, &dfs->dfs_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
+			D_FREE(dfs);
 			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
 			D_GOTO(out, 0);
 		}
@@ -246,9 +243,8 @@ main(int argc, char **argv)
 				DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
 				D_GOTO(out_open, 0);
 			}
-
+			dfs_open = true;
 			dfs->dfs_ns = ddfs;
-
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		} else {
 			dfs->dfs_ops = &dfuse_cont_ops;
@@ -268,18 +264,20 @@ main(int argc, char **argv)
 
 out_open:
 	if (dfs) {
-		if (pool_open) {
-			daos_pool_disconnect(dfs->dfs_poh, NULL);
-		}
-		if (cont_open) {
+		if (dfs_open)
+			dfs_umount(dfs->dfs_ns);
+		if (cont_open)
 			daos_cont_close(dfs->dfs_coh, NULL);
-		}
+		if (pool_open)
+			daos_pool_disconnect(dfs->dfs_poh, NULL);
+		D_FREE(dfs);
 	}
 out:
-
+	daos_rank_list_free(dfuse_info->di_svcl);
 	DFUSE_TRA_DOWN(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	D_FREE(dfuse_info);
+	daos_fini();
 
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not

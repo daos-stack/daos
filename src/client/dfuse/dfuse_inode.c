@@ -61,7 +61,6 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 	}
 
 	*_ino = dfir->ir_ino;
-
 out:
 	return rc;
 };
