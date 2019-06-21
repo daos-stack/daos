@@ -123,6 +123,7 @@ class DaosPool(object):
 
         c_flags = ctypes.c_uint(flags)
         c_info = PoolInfo()
+        c_info.pi_bits = ctypes.c_ulong(-1)
         func = self.context.get_function('connect-pool')
 
         # the callback function is optional, if not supplied then run the
