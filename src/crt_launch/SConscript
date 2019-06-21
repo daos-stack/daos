@@ -50,12 +50,13 @@ def scons():
 
     tenv.AppendUnique(CPPPATH=['#/src/cart'])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'mpi'])
-    prereqs.require(tenv, 'mercury')
+    prereqs.require(tenv, 'mercury', 'ompi')
     tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
     tenv.AppendUnique(FLAGS='-pthread')
 
     crt_launch = tenv.Program(CRT_LAUNCH)
+
     tenv.Requires(crt_launch, [cart_lib, gurt_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
 
