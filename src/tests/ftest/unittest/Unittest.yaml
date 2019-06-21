@@ -1,4 +1,10 @@
 # Unittests Name and Paramter to be mention in this file.
+hosts:
+  test_machines:
+    - boro-A
+timeout: 600
+server_config:
+  name: daos_server
 UnitTest:
   smd_ut:
     testname: smd_ut
@@ -10,3 +16,5 @@ UnitTest:
     testname: eq_tests
   vos_tests:
     testname: vos_tests
+  daos_addons_test:
+    testname: daos_addons_test
