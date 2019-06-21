@@ -128,9 +128,8 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	keep_ref = parent_inode->ie_dfs->dfs_ops->create(req, parent_inode,
 							  name, mode, fi);
-	if (1 || !keep_ref) {
+	if (!keep_ref)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	}
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -194,9 +193,8 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	keep_ref = parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode,
 							 name);
 
-	if (1 || !keep_ref) {
+	if (!keep_ref)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	}
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -225,10 +223,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	keep_ref = parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,
 							name, mode);
-
-	if (1 || !keep_ref) {
+	if (!keep_ref)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	}
 	return;
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
