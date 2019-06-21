@@ -881,7 +881,9 @@ pipeline {
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload spdk-devel hwloc-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-i ci_key"
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"

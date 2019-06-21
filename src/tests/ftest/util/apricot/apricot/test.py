@@ -112,10 +112,9 @@ class TestWithoutServers(Test):
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
-        self.daos_test = os.path.join(self.basepath, 'install', 'bin',
-                                      'daos_test')
+        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
-        self.daosctl = os.path.join(self.basepath, 'install', 'bin', 'daosctl')
+        self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')
