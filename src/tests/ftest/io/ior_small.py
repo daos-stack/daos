@@ -44,4 +44,3 @@ class IorSmall(IorSingleServer):
         """
         self.ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
         IorSingleServer.test_singleserver(self)
-
