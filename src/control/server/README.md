@@ -127,14 +127,14 @@ linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 
 See `daos_server storage prep-nvme --help` for usage.
 
-### storage list
+### storage scan
 
 <details>
 <summary>List NVMe SSDs and SCM modules locally attached to the host.</summary>
 <p>
 
 ```bash
-[tanabarr@boro-45 daos_m]$ daos_server storage list
+[tanabarr@boro-45 daos_m]$ daos_server storage scan
 Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 [ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk_pid29193 ]
 EAL: Detected 72 lcore(s)
@@ -186,7 +186,7 @@ SCM:
 </p>
 </details>
 
-See `daos_server show-storage --help` for usage.
+See `daos_server storage scan --help` for usage.
 
 ## Management Tool (client) Usage
 
@@ -225,7 +225,7 @@ The DAOS control plane will provide SCM storage management capabilities enabling
 
 #### SCM module discovery
 
-Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage list` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 TODO: return details of AppDirect memory regions
 
@@ -403,7 +403,7 @@ The DAOS control plane will provide NVMe storage management capabilities enablin
 
 #### NVMe Controller and Namespace Discovery
 
-Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage list` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
