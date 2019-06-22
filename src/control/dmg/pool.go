@@ -55,7 +55,7 @@ type CreatePoolCmd struct {
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
-	Sys        string `short:"G" long:"sys" default:"daos_server" description:"Pool system (process) group name"`
+	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
 }
 
 // getSize retrieves number of bytes from human readable string representation
