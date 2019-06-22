@@ -28,6 +28,10 @@
 
 #include <getopt.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <errno.h>
+#include <stdint.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -234,17 +238,37 @@ static int
 daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 {
 	const char *ptr = oid_str;
+	char *end;
+	uint64_t hi = 0;
+	uint64_t lo = 0;
 
-	/* parse hi */
-	oid->hi = atoll(ptr);
-
-	/* find 2nd . to parse lo */
-	ptr = strchr(ptr, '.');
-	if (ptr == NULL)
+	/* parse hi
+	 * errors if: negative numbers, no digits, exceeds maximum value
+	 */
+	hi = strtoull(ptr, &end, 10);
+	if (ptr[0] == '-')
 		return -1;
-	ptr++;
+	if ((hi == 0) && (end == ptr))
+		return -1;
+	if ((hi == ULLONG_MAX) && (errno == ERANGE))
+		return -1;
 
-	oid->lo = atoll(ptr);
+	/* parse lo after the '.' */
+	if (*end != '.')
+		return -1;
+
+	ptr = end+1;
+
+	lo = strtoull(ptr, &end, 10);
+	if (ptr[0] == '-')
+		return -1;
+	if ((lo == 0) && (end == ptr))
+		return -1;
+	if ((lo == ULLONG_MAX) && (errno == ERANGE))
+		return -1;
+
+	oid->hi = hi;
+	oid->lo = lo;
 
 	return 0;
 }
