@@ -55,7 +55,7 @@ type CreatePoolCmd struct {
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
-	SysGroup   string `short:"G" long:"sys-group" default:"daos_server" description:"Pool system (process) group name"`
+	Sys        string `short:"G" long:"sys" default:"daos_server" description:"Pool system (process) group name"`
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -124,7 +124,7 @@ func calcStorage(scmSize string, nvmeSize string) (
 // createPool with specified parameters on all connected servers
 func createPool(
 	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
-	groupName string, userName string, sysGroup string,
+	groupName string, userName string, sys string,
 	aclFile string) error {
 
 	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
@@ -146,7 +146,7 @@ func createPool(
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
 		Ranks: rankList, Numsvcreps: numSvcReps,
 		// TODO: format and populate user/group
-		Sys: sysGroup,
+		Sys: sys,
 	}
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)
@@ -165,7 +165,7 @@ func (c *CreatePoolCmd) Execute(args []string) error {
 
 	if err := createPool(
 		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
-		c.GroupName, c.UserName, c.SysGroup, c.ACLFile); err != nil {
+		c.GroupName, c.UserName, c.Sys, c.ACLFile); err != nil {
 
 		return err
 	}
