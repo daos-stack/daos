@@ -34,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	log "github.com/daos-stack/daos/src/control/logging"
+	uuid "github.com/satori/go.uuid"
 )
 
 const (
@@ -196,10 +197,15 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return errors.Wrap(err, "generating pool uuid")
+	}
+
 	req := &pb.CreatePoolReq{
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
 		Ranks: rankList, Numsvcreps: numSvcReps, Sys: sys,
-		User: usr, Usergroup: grp,
+		User: usr, Usergroup: grp, Uuid: u,
 	}
 
 	log.Infof("Creating DAOS pool: %+v\n", req)
