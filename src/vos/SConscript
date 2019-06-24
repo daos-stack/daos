@@ -41,10 +41,7 @@ def scons():
 
     # Compiler options
     denv.Append(CPPPATH=[Dir('.').srcnode()])
-
-    # VEA
-    SConscript('vea/SConscript')
-    denv.AppendUnique(LIBPATH=['vea'])
+    denv.AppendUnique(LIBPATH=['../vea'])
 
     build_vos(denv, False)
     build_vos(denv, True)
