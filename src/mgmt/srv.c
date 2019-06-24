@@ -337,7 +337,8 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 		targets = daos_rank_list_parse(pb_req->ranks, ",");
 		if (targets == NULL) {
 			D_ERROR("failed to parse target ranks\n");
-			D_GOTO(out, rc = -1);
+			rc = -1;
+			goto out;
 		}
 		D_DEBUG(DB_MGMT, "ranks in: %s\n", pb_req->ranks);
 	}
@@ -378,7 +379,8 @@ process_create_pool_request(Drpc__Call *drpc_req, Mgmt__CreatePoolResp *resp)
 				buf = extra;
 			} else {
 				D_ERROR("failed to allocate buffer");
-				D_GOTO(out, rc = -1);
+				rc = -1;
+				goto out;
 			}
 		}
 	}
