@@ -51,6 +51,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(err, rc = -rc);
 
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
+
 	fi->direct_io = 1;
 	fi->fh = (uint64_t)oh;
 
@@ -67,12 +68,21 @@ err:
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int				rc;
+	struct dfuse_obj_hdl	*oh;
+	int			rc;
+
+	if (fi == NULL || fi->fh == 0) {
+		fuse_reply_err(req, 0);
+		return;
+	}
+
+	oh = (struct dfuse_obj_hdl *)((uint64_t)(fi->fh));
 
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
 		D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, -rc);
+	fi->fh = 0;
+
+	fuse_reply_err(req, -rc);
 }
