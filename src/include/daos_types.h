@@ -785,9 +785,9 @@ typedef struct {
 	 */
 	uint32_t	kd_val_types;
 	/** Checksum type */
-	unsigned int	kd_csum_type;
+	uint16_t	kd_csum_type;
 	/** Checksum length */
-	unsigned short	kd_csum_len;
+	uint16_t	kd_csum_len;
 } daos_key_desc_t;
 
 /**
