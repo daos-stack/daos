@@ -144,8 +144,6 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_shard_tgts.ca_count	= 0;
 	orw->orw_shard_tgts.ca_arrays	= NULL;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
-	if (!srv_enable_dtx)
-		orw->orw_flags |= ORF_DTX_DISABLED;
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
 
@@ -266,8 +264,6 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi->opi_shard_tgts.ca_count = 0;
 	opi->opi_shard_tgts.ca_arrays = NULL;
 	opi->opi_flags |= obj_exec_arg->flags;
-	if (!srv_enable_dtx)
-		opi->opi_flags |= ORF_DTX_DISABLED;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
 
