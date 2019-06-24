@@ -81,7 +81,7 @@ func (c *CreatePoolCmd) Execute(args []string) error {
 
 // DestroyPoolCmd is the struct representing the command to destroy a DAOS pool.
 type DestroyPoolCmd struct {
-	Uuid  string `short:"u" long:"uuid" description:"UUID of DAOS pool to destroy"`
+	Uuid  string `short:"u" long:"uuid" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
