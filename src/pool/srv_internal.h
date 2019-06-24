@@ -29,6 +29,7 @@
 
 #include <gurt/list.h>
 #include <daos_srv/daos_server.h>
+#include <daos_security.h>
 
 /**
  * DSM server thread local storage structure
@@ -51,14 +52,31 @@ pool_tls_get()
 	return tls;
 }
 
-struct pool_iv_entry {
-	uuid_t		piv_pool_uuid;
-	uint32_t	piv_pool_map_ver;
-	uint32_t	piv_master_rank;
+struct pool_iv_map {
 	struct pool_buf	piv_pool_buf;
 };
 
-struct pool_iv_refresh_ult_arg {
+struct pool_iv_prop {
+	char		pip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	uint64_t	pip_space_rb;
+	uint64_t	pip_self_heal;
+	uint64_t	pip_reclaim;
+	struct daos_acl	pip_acl;
+};
+
+struct pool_iv_entry {
+	uuid_t				piv_pool_uuid;
+	uint32_t			piv_master_rank;
+	uint32_t			piv_pool_map_ver;
+	union	{
+		struct pool_iv_map	piv_map;
+		struct pool_iv_prop	piv_prop;
+	};
+};
+
+struct pool_map_refresh_ult_arg {
 	uint32_t	iua_pool_version;
 	uuid_t		iua_pool_uuid;
 	ABT_eventual	iua_eventual;
@@ -116,11 +134,13 @@ int ds_pool_map_tgts_update(struct pool_map *map,
 /*
  * srv_iv.c
  */
-uint32_t pool_iv_ent_size(int nr);
+uint32_t pool_iv_map_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
-int pool_iv_update(void *ns, struct pool_iv_entry *pool_iv,
-		   unsigned int shortcut, unsigned int sync_mode);
-int pool_iv_fetch(void *ns, struct pool_iv_entry *pool_iv);
-void ds_pool_iv_refresh_ult(void *arg);
+int pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
+int pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
+int pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
+		       uint32_t map_ver);
+int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
+void ds_pool_map_refresh_ult(void *arg);
 #endif /* __POOL_SRV_INTERNAL_H__ */
