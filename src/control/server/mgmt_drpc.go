@@ -44,6 +44,7 @@ const (
 	join          = C.DRPC_METHOD_MGMT_JOIN
 	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 	createPool    = C.DRPC_METHOD_MGMT_CREATE_POOL
+	destroyPool   = C.DRPC_METHOD_MGMT_DESTROY_POOL
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
