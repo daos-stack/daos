@@ -267,14 +267,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			int opc)
 {
 	uint32_t	version;
-	int		nchanges = 0;
 	int		i;
 	int		rc;
 
 	D_ASSERT(tgts != NULL);
 
-	version = pool_map_get_version(map) + 1;
-
+	version = pool_map_get_version(map);
 	for (i = 0; i < tgts->pti_number; i++) {
 		struct pool_target	*target = NULL;
 		struct pool_domain	*dom = NULL;
@@ -306,8 +304,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
-			target->ta_comp.co_fseq = version++;
-			nchanges++;
+			target->ta_comp.co_fseq = ++version;
 
 			D_PRINT("Target (rank %u idx %u) is down.\n",
 				target->ta_comp.co_rank,
@@ -339,7 +336,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_index);
 			target->ta_comp.co_status = PO_COMP_ST_UPIN;
 			target->ta_comp.co_fseq = 1;
-			nchanges++;
+			version++;
 			dom->do_comp.co_status = PO_COMP_ST_UPIN;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
@@ -347,7 +344,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			nchanges++;
+			version++;
 			D_PRINT("Target (rank %u idx %u) is excluded.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
@@ -361,13 +358,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	}
 
 	/* Set the version only if actual changes have been made. */
-	if (nchanges > 0) {
-		D_DEBUG(DF_DSMS, "generating map %p version %u: nchanges=%d\n",
-			map, version, nchanges);
+	if (version > pool_map_get_version(map)) {
+		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
+			map, version);
 		rc = pool_map_set_version(map, version);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
 
 	return 0;
 }
-
