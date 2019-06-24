@@ -15,9 +15,8 @@ ARG UID=1000
 #Nothing to do for CentOS
 
 # Install basic tools
-RUN yum install -y epel-release
-RUN yum install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
-                   git
+RUN yum -y install epel-release
+RUN yum -y install mock make rpm-build curl createrepo rpmlint git
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build
@@ -28,20 +27,18 @@ RUN echo "$USER:$PASSWD" | chpasswd
 RUN usermod -a -G mock $USER
 
 # mock in Docker needs to use the old-chroot option
-RUN grep use_nspawn || \
-    echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
+RUN echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
 
 ARG JENKINS_URL=""
 
 RUN echo -e "config_opts['yum.conf'] += \"\"\"\n" >> /etc/mock/default.cfg;  \
     for repo in openpa libfabric pmix ompi mercury; do                       \
-        if [[ $repo = *:* ]]; then                                           \
-            branch="${repo#*:}";                                             \
-            repo="${repo%:*}";                                               \
+        if [[ $repo = *@* ]]; then                                           \
+            branch="${repo#*@}";                                             \
+            repo="${repo%@*}";                                               \
         else                                                                 \
             branch="master";                                                 \
         fi;                                                                  \
-        JENKINS_URL=$JENKINS_URL;                                            \
         echo -e "[$repo:$branch:lastSuccessful]\n\
 name=$repo:$branch:lastSuccessful\n\
 baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/lastSuccessfulBuild/artifact/artifacts/centos7/\n\
@@ -49,3 +46,5 @@ enabled=1\n\
 gpgcheck = False\n" >> /etc/mock/default.cfg;                           \
     done;                                                               \
     echo "\"\"\"" >> /etc/mock/default.cfg
+
+RUN yum -y install redhat-lsb-core

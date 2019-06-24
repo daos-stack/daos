@@ -2,7 +2,7 @@
 
 Name:          cart
 Version:       0.0.1
-Release:       4%{?dist}
+Release:       5%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -57,6 +57,7 @@ Summary: CaRT devel
 Requires: %{name} = %{version}-%{release}
 
 Requires: libuuid-devel
+Requires: libyaml-devel
 Requires: boost-devel
 
 %description devel
@@ -121,6 +122,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Fri Jun 21 2019 Brian J. Murrell <brian.murrell@intel.com>
+- add Requires: libyaml-devel to the -devel package
+
 * Wed Jun 12 2019 Vikram Chhabra  <vikram.chhabra@intel.com>
 - added versioning for libcart and libgurt
 
