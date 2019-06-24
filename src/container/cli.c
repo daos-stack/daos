@@ -844,6 +844,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ENCRYPT:
 			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
 			break;
+		case DAOS_PROP_CO_ACL:
+			bits |= DAOS_CO_QUERY_PROP_ACL;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
