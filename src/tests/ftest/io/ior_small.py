@@ -45,4 +45,5 @@ class IorSmall(IorSingleServer):
         # override ior flags and object class
         self.ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
         self.object_class = self.params.get("o", '/run/ior/objectclass/*/')
+
         IorSingleServer.test_singleserver(self)
