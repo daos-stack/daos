@@ -30,7 +30,7 @@ def scons():
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
-
+    SConscript('vea/SConscript')
     SConscript('vos/SConscript')
 
     # Build each DAOS component

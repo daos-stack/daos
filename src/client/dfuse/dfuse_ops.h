@@ -42,7 +42,7 @@
 			DFUSE_TRA_UP(src, fsh, TRACE_TYPE);		\
 		}							\
 		(src)->REQ_NAME.ir_api = &(api);			\
-		(src)->REQ_NAME.req = fuse_req;				\
+		(src)->REQ_NAME.ir_req = fuse_req;			\
 	} while (0)
 
 #define CONTAINER(req) container_of(req, struct TYPE_NAME, REQ_NAME)

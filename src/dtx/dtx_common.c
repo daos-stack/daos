@@ -263,24 +263,27 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	 *	replicas can commit them before real modifications
 	 *	to avoid availability trouble.
 	 */
-	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
-			intent == DAOS_INTENT_UPDATE ?
-			DCLT_PUNCH : DCLT_PUNCH | DCLT_UPDATE,
-			DTX_THRESHOLD_COUNT, &dti_cos);
-	if (dti_cos_count < 0)
-		return dti_cos_count;
+	if (!daos_is_zero_dti(dti)) {
+		dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
+				intent == DAOS_INTENT_UPDATE ?
+				DCLT_PUNCH : DCLT_PUNCH | DCLT_UPDATE,
+				DTX_THRESHOLD_COUNT, &dti_cos);
+		if (dti_cos_count < 0)
+			return dti_cos_count;
 
-	if (dti_cos_count > 0 && dti_cos == NULL) {
-		/* There are too many conflict DTXs to be committed,
-		 * as to cannot be taken via the normal IO RPC. The
-		 * background dedicated DTXs batched commit ULT has
-		 * not committed them in time. Let's retry later.
-		 */
-		D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs "
-			"for the given "DF_DTI", let's retry later.\n",
-			DP_DTI(dti));
-		return -DER_INPROGRESS;
+		if (dti_cos_count > 0 && dti_cos == NULL) {
+			/* There are too many conflict DTXs to be committed,
+			 * as to cannot be taken via the normal IO RPC. The
+			 * background dedicated DTXs batched commit ULT has
+			 * not committed them in time. Let's retry later.
+			 */
+			D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
+				" for the given "DF_DTI", let's retry later.\n",
+				DP_DTI(dti));
+			return -DER_INPROGRESS;
+		}
 	}
+
 	dlh->dlh_handled_time = crt_hlc_get();
 	dlh->dlh_future = ABT_FUTURE_NULL;
 	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
@@ -293,8 +296,9 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		dlh->dlh_subs[i].dss_tgt = tgts[i];
 	dlh->dlh_sub_cnt = tgts_cnt;
 
-	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			NULL, dti_cos, dti_cos_count, true, dth);
+	if (!daos_is_zero_dti(dti))
+		dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
+				NULL, dti_cos, dti_cos_count, true, dth);
 
 	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
@@ -544,7 +548,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 			result = rc;
 
 		D_GOTO(fail, rc);
-	} else  if (rc < 0) {
+	} else if (rc < 0 || daos_is_zero_dti(&dth->dth_xid)) {
 		if (result == 0)
 			result = rc;
 		D_GOTO(fail, rc);
@@ -636,6 +640,9 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
 	  struct dtx_handle *dth)
 {
+	if (dth == NULL || daos_is_zero_dti(dti))
+		return 0;
+
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
 			conflict, dti_cos, dti_cos_cnt, false, dth);
 
@@ -654,7 +661,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 {
 	int rc = 0;
 
-	if (dth == NULL)
+	if (dth == NULL || daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, rc);
 
 	if (result < 0 && dth->dth_dti_cos_count > 0) {
@@ -799,6 +806,9 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 		  struct dtx_id *dti, uint64_t dkey_hash, bool punch)
 {
 	int	rc;
+
+	if (daos_is_zero_dti(dti))
+		return 0;
 
 	rc = vos_dtx_check_committable(coh, oid, dti, dkey_hash, punch);
 	switch (rc) {

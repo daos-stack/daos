@@ -726,12 +726,18 @@ daos_acl_validate(struct daos_acl *acl)
 		return -DER_INVAL;
 	}
 
-	if (acl->dal_len > 0 && acl->dal_len < sizeof(struct daos_ace)) {
+	if (acl->dal_len > 0 && (acl->dal_len < sizeof(struct daos_ace) ||
+				(acl->dal_len > DAOS_ACL_MAX_ACE_LEN))) {
+		D_ERROR("invalid dal_len %d, should with in [%zu, %d].\n",
+			acl->dal_len, sizeof(struct daos_ace),
+			DAOS_ACL_MAX_ACE_LEN);
 		return -DER_INVAL;
 	}
 
 	/* overall structure must be 64-bit aligned */
 	if (acl->dal_len % 8 != 0) {
+		D_ERROR("invalid dal_len %d, not 8 bytes aligned.\n",
+			acl->dal_len);
 		return -DER_INVAL;
 	}
 

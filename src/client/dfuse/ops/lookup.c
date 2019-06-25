@@ -53,7 +53,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.ino = entry.attr.st_ino;
 	DFUSE_TRA_INFO(ie, "Inserting inode %lu", entry.ino);
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dfpi_iet,
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
 				       sizeof(ie->ie_stat.st_ino),
 				       &ie->ie_htl);
@@ -104,7 +104,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
-	rc = dfs_lookup_rel(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, &mode);
 	if (rc) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
@@ -116,7 +116,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
+	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc)
 		D_GOTO(err, rc = -rc);
 
