@@ -22,71 +22,100 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+from general_utils import get_file_path, clustershell_execute
+from general_utils import ClusterCommandFailed
+from apricot import Test, TestWithServers, skipForTicket
 
-from avocado.utils import process
-from general_utils import get_file_path
-from apricot import Test, skipForTicket
-
-class UnitTest(Test):
+def unittest_runner(self, unit_testname):
     """
-    Avocado Unit Test class.
+    Common unitetest runner function.
+    Args:
+        unit_testname: unittest name.
+    return:
+        None
+    """
+    name = self.params.get("testname", '/run/UnitTest/{0}/'
+                           .format(unit_testname))
+    server = self.params.get("test_machines", "/run/hosts/*")
+    timeout = self.params.get("timeout", "/run/*")
+    bin_path = get_file_path(name, "install/bin")
+
+    try:
+        cmd = ("{}".format(bin_path[0]))
+        clustershell_execute(cmd, server, timeout, debug=True)
+    except ClusterCommandFailed as error:
+        self.fail("{0} unittest failed with, Error info:\n{1}\n"
+                  .format(unit_testname, error))
+    finally:
+        #Cleanup the unit test data from /mnt/daos
+        clustershell_execute("rm -rf /mnt/daos/*", server)
+
+class UnitTestWithoutServers(Test):
+    """
+    Test Class Description: Avocado Unit Test class for tests which don't
+                            need servers.
     :avocado: recursive
     """
-    def tearDown(self):
-        process.system("rm -f /mnt/daos/*")
-
-    def unittest_runner(self, unit_testname):
-        """
-        Common unitetest runner function.
-        Args:
-            unit_testname: unittest name.
-        return:
-            None
-        """
-        name = self.params.get("testname", '/run/UnitTest/{0}/'
-                               .format(unit_testname))
-        server = self.params.get("test_machines", "/run/hosts/*")
-        bin_path = get_file_path(name, "install/bin")
-
-        cmd = ("ssh {} {}".format(server[0], bin_path[0]))
-        return_code = process.system(cmd)
-        if return_code is not 0:
-            self.fail("{0} unittest failed with return code={1}.\n"
-                      .format(unit_testname, return_code))
 
     def test_smd_ut(self):
         """
-        Test smd unittest.
+        Test Description: Test smd unittest.
+        Use Case: This tests smd's following functions: nvme_list_streams,
+                  nvme_get_pool, nvme_set_pool_info, nvme_add_pool,
+                  nvme_get_device, nvme_set_device_status,
+                  nvme_add_stream_bond, nvme_get_stream_bond
         :avocado: tags=all,unittest,pr,tiny,hw,smd_ut
         """
-        self.unittest_runner("smd_ut")
+        unittest_runner(self, "smd_ut")
 
     def test_vea_ut(self):
         """
-        Test vea unittest.
+        Test Description: Test vea unittest.
+        Use Case: This tests vea's following functions: load, format,
+                  query, hint_load, reserve, cancel, tx_publish,
+                  free, unload, hint_unload
         :avocado: tags=all,unittest,pr,tiny,hw,vea_ut
         """
-        self.unittest_runner("vea_ut")
+        unittest_runner(self, "vea_ut")
 
-    @skipForTicket("DAOS-1766")
     def test_pl_map(self):
         """
-        Test pl_map unittest.
+        Test Description: Test pl_map unittest.
+        Use Case: This tests placement map
         :avocado: tags=all,unittest,pr,tiny,hw,pl_map
         """
-        self.unittest_runner("pl_map")
+        unittest_runner(self, "pl_map")
 
     @skipForTicket("DAOS-1763")
     def test_eq_tests(self):
         """
-        Test eq_tests unittest.
+        Test Description: Test eq_tests unittest.
+        Use Case: This tests Daos Event queue
         :avocado: tags=all,unittest,pr,tiny,hw,eq_tests
         """
-        self.unittest_runner("eq_tests")
+        unittest_runner(self, "eq_tests")
 
     def test_vos_tests(self):
         """
-        Test eq_tests unittest.
+        Test Description: Test vos_tests unittest.
+        Use Cases: Performs following set of tests - pool_tests,
+                   container_tests, io_tests, dtx_tests, aggregate-tests
         :avocado: tags=all,unittest,pr,tiny,hw,vos_tests
         """
-        self.unittest_runner("vos_tests")
+        unittest_runner(self, "vos_tests")
+
+class UnittestWithServers(TestWithServers):
+    """
+    Test Class Description: Avocado Unit Test class for tests which
+                            need servers.
+    :avocado: recursive
+    """
+    def test_daos_addons(self):
+        """
+        Jira ID: DAOS-2326
+        Test Description: Test daos_addons unittest.
+        Use Case: This tests Daos Addons Array unit tests
+                  and Daos Addons HL tests.
+        :avocado: tags=all,unittest,pr,tiny,hw,daos_addons_test
+        """
+        unittest_runner(self, "daos_addons_test")

@@ -81,12 +81,14 @@ Help Options:
 
 ## Subcommands
 
+### storage scan
+
 <details>
-<summary>Example output from invoking "storage list" subcommand on a single host</summary>
+<summary>Example output from invoking "storage scan" subcommand on a single host</summary>
 <p>
 
 ```bash
-[root@wolf-72 ~]# /root/daos_m/install/bin/daos_shell storage list
+[root@wolf-72 ~]# /root/daos_m/install/bin/daos_shell storage scan
 Active connections: [localhost:10001]
 
 Listing NVMe SSD controller and constituent namespaces on connected storage servers:
@@ -149,11 +151,11 @@ localhost:10001:
 </details>
 
 <details>
-<summary>Example output from invoking "storage list" subcommand on multiple hosts</summary>
+<summary>Example output from invoking "storage scan" subcommand on multiple hosts</summary>
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-44:10001,boro-45:10001 storage list
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-44:10001,boro-45:10001 storage scan
 Active connections: [boro-45:10001 boro-44:10001]
 
 
@@ -186,19 +188,37 @@ boro-45:10001: []
 </p>
 </details>
 
+### storage format
+
 <details>
 <summary>Example output from invoking "storage format" subcommand</summary>
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-45:10001 storage format
+[tanabarr@ssh-1 ~]$ daos_shell storage format -f
+2019/06/19 15:51:44 config.go:122: debug: DAOS Client config read from /home/tanabarr/projects/daos_m/install/etc/daos.yml
 Active connections: [boro-45:10001]
 
-This is a destructive operation and storage devices specified in the server
-config file will be erased. Are you sure you want to continue? (yes/no)
-yes
-Listing Format Storage command results on connected storage servers:
-boro-45:10001: 'Success!'
+This is a destructive operation and storage devices specified in the server config file will be erased.
+Please be patient as it may take several minutes.
+
+
+Listing NVMe storage format results on connected storage servers:
+boro-45:10001:
+- pciaddr: ""
+  state:
+    status: 0
+    error: ""
+    info: no controllers specified
+
+
+Listing SCM storage format results on connected storage servers:
+boro-45:10001:
+- mntpoint: /mnt/daos
+  state:
+    status: 0
+    error: ""
+    info: status=CTRL_SUCCESS
 ```
 
 </p>

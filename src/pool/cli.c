@@ -425,6 +425,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
+	daos_iov_free(&pci->pci_cred);
 	if (put_pool)
 		dc_pool_put(pool);
 	return rc;
