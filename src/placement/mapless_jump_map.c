@@ -29,22 +29,9 @@
 #define D_LOGFAC        DD_FAC(placement)
 
 #include "pl_map.h"
+#include "pl_map_common.h"
 #include <inttypes.h>
 #include <daos/pool_map.h>
-
-/**
- * This struct is used to to hold information while
- * finding rebuild targets for shards located on unavailable
- * targets.
- */
-struct failed_shard {
-	d_list_t        fs_list;
-	uint32_t        fs_shard_idx;
-	uint32_t        fs_fseq;
-	uint32_t        fs_tgt_id;
-	uint8_t         fs_status;
-};
-
 /**
  * Contains information related to object layout size.
  */
@@ -140,87 +127,6 @@ crc(uint64_t data, uint32_t init_val)
 }
 
 /**
- * Add a new failed shard into remap list
- *
- * \param[in] remap_list	List for the failed shard to be added onto.
- * \param[in] f_new		Failed shard to be added.
- */
-static void
-remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
-{
-	struct failed_shard	*f_shard;
-
-	d_list_t		*tmp;
-
-	D_DEBUG(DB_PL, "fnew: %u", f_new->fs_shard_idx);
-
-	/* All failed shards are sorted by fseq in ascending order */
-	d_list_for_each_prev(tmp, remap_list) {
-		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
-		/*
-		* Since we can only reuild one target at a time, the
-		* target fseq should be assigned uniquely, even if all
-		* the targets of the same domain failed at same time.
-		*/
-		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
-			f_shard->fs_shard_idx);
-		D_ASSERTF(f_new->fs_fseq != f_shard->fs_fseq,
-			  "same fseq %u!\n", f_new->fs_fseq);
-
-		if (f_new->fs_fseq < f_shard->fs_fseq)
-			continue;
-		d_list_add(&f_new->fs_list, tmp);
-		return;
-	}
-	d_list_add(&f_new->fs_list, remap_list);
-}
-
-/**
- * Allocate a new failed shard then add it into remap list
- *
- * \param[in] remap_list	List for the failed shard to be added onto.
- * \param[in] shard_idx		The shard number of the failed shard.
- * \paramp[in] tgt		The failed target that will be added to the
- *				remap list.
- */
-static int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt)
-{
-	struct failed_shard *f_new;
-
-	D_ALLOC_PTR(f_new);
-	if (f_new == NULL)
-		return -DER_NOMEM;
-
-	D_INIT_LIST_HEAD(&f_new->fs_list);
-	f_new->fs_shard_idx = shard_idx;
-	f_new->fs_fseq = tgt->ta_comp.co_fseq;
-	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_tgt_id = -1;
-
-	remap_add_one(remap_list, f_new);
-	return 0;
-}
-
-
-/**
- * Free all elements in the remap list
- *
- * \param[in] The remap list to be freed.
- */
-static void
-mapless_remap_free_all(d_list_t *remap_list)
-{
-	struct failed_shard *f_shard, *f_tmp;
-
-	d_list_for_each_entry_safe(f_shard, f_tmp, remap_list, fs_list) {
-		d_list_del_init(&f_shard->fs_list);
-		D_FREE(f_shard);
-	}
-}
-
-/**
  * This function gets the replication and size requirements and then
  * stores those requirements into a obj_placement  struct for usage during
  * layout creation.
@@ -255,28 +161,14 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		return -DER_INVAL;
 	}
 
-	/* Retrieve group size and count */
-	mop->mop_grp_size = daos_oclass_grp_size(oc_attr);
-
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 			     PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 
-	/**
-	 * If replication max use all available domains as specified
-	 * in map initialization.
-	 */
-	if (mop->mop_grp_size == DAOS_OBJ_REPL_MAX)
-		mop->mop_grp_size = mmap->mmp_domain_nr;
+	rc = op_get_grp_size(mmap->mmp_domain_nr,&mop->mop_grp_size,oid);
+	if(rc)
+		return rc;
 
-	if (mop->mop_grp_size > mmap->mmp_domain_nr) {
-		D_ERROR("obj="DF_OID": grp size (%u) (%u) is larger than "
-			"domain nr (%u)\n", DP_OID(oid), mop->mop_grp_size,
-			DAOS_OBJ_REPL_MAX, mmap->mmp_domain_nr);
-		return -DER_INVAL;
-	}
-
-	D_ASSERT(root->do_target_nr > 0);
 	if (shard_md == NULL) {
 		unsigned int grp_max = root->do_target_nr / mop->mop_grp_size;
 
@@ -284,10 +176,8 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 			grp_max = 1;
 
 		mop->mop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
-
 		if (mop->mop_grp_nr > grp_max)
 			mop->mop_grp_nr = grp_max;
-
 	} else {
 		mop->mop_grp_nr = 1;
 	}
@@ -309,13 +199,12 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
  *
  * \param[in] mmap	The currently used placement map.
  * \param[in] mop	Struct containing layout group size and number.
- * \param[in] target	The target for a failed shard.
  *
  * \return		True if there exists a spare, false otherwise.
  */
 static bool
 mapless_remap_next_spare(struct pl_mapless_map *mmap,
-		struct mpls_obj_placement *mop, struct pool_target *target)
+		struct mpls_obj_placement *mop)
 {
 	D_ASSERTF(mop->mop_grp_size <= mmap->mmp_domain_nr,
 		  "grp_size: %u > domain_nr: %u\n",
@@ -545,17 +434,6 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		child_pos = child_pos / sizeof(struct pool_domain);
 
 		/*
-		 * If all of the nodes have been used for shards but we
-		 * still have shards to place mark all nodes as unused
-		 * so duplicates can be chosen
-		 */
-		if (isset_range(dom_used, child_pos, child_pos +
-				 num_doms - 1)) {
-			clrbit_range(dom_used, child_pos,
-				(child_pos + (num_doms - 1)));
-		}
-
-		/*
 		 * Choose domains using jump consistent hash until we find a
 		 * suitable domains that has not already been used.
 		 */
@@ -582,27 +460,28 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		 * targets.
 		 */
 		int i;
-		uint64_t start_pos;
-		uint64_t end_pos;
+		struct pool_target *start_pos;
+		struct pool_target *end_pos;
 
-		start_pos = (uint64_t)(&((target_selection->do_targets[0])));
-		end_pos = start_pos + (num_doms * sizeof(**target));
+		start_pos = (&((target_selection->do_targets[0])));
+		end_pos = start_pos + num_doms;
 
 		for (i = 0; i < layout->ol_nr; ++i) {
 			int id = layout->ol_shards[i].po_target;
-			uint64_t position;
+			struct pool_target *position;
+
+			if(id == -1)
+				continue;
 
 			pool_map_find_target(pmap, id, target);
-			position = (uint64_t)(*target);
+			position = *target;
 
 
 			if (position >= start_pos && position < end_pos) {
-				setbit(used_tgts, ((position - start_pos)
-				/ sizeof(**target)));
+				setbit(used_tgts, position - start_pos);
 				skiped_targets++;
 			}
 		}
-
 
 		/*
 		 * Attempt to choose a fallback target from all targets found
@@ -620,9 +499,6 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			 */
 			if (isclr(used_tgts, selected_dom))
 				skiped_targets++;
-
-			if (pool_target_unavail(*target))
-				setbit(used_tgts, selected_dom);
 
 		} while ((isset(used_tgts, selected_dom)) &&
 			 skiped_targets < num_doms);
@@ -645,43 +521,6 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 	return DER_INVAL;
 }
 
-/** Dump layout for debugging purposes*/
-void
-mapless_obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
-{
-	int i;
-
-	D_DEBUG(DB_PL, "dump layout for "DF_OID", ver %d\n",
-		DP_OID(oid), layout->ol_ver);
-
-	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s\n",
-			i, layout->ol_shards[i].po_shard,
-			layout->ol_shards[i].po_target,
-			layout->ol_shards[i].po_fseq,
-			layout->ol_shards[i].po_rebuilding ?
-			"rebuilding" : "healthy");
-}
-
-
-/** dump remap list, for debug only */
-static void
-mapless_remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
-		   char *comment)
-{
-	struct failed_shard *f_shard;
-
-	D_DEBUG(DB_PL, "remap list for "DF_OID", %s, ver %d\n",
-		DP_OID(md->omd_id), comment, md->omd_ver);
-
-	d_list_for_each_entry(f_shard, remap_list, fs_list) {
-		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u rank %d\n",
-			f_shard->fs_fseq, f_shard->fs_shard_idx,
-			f_shard->fs_status, f_shard->fs_tgt_id);
-	}
-}
-
-
 /**
 * Try to remap all the failed shards in the @remap_list to proper
 * targets respectively. The new target id will be updated in the
@@ -701,22 +540,22 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct mpls_obj_placement *mop,
 		 d_list_t *remap_list, uint8_t *dom_used)
 {
-	struct failed_shard	*f_shard, *f_tmp;
+	struct failed_shard	*f_shard;
 	struct pl_obj_shard	*l_shard;
 	struct pool_target	*spare_tgt;
 	d_list_t		*current;
 	bool			spare_avail = true;
-	int			fail_count;
 	daos_obj_id_t		oid;
 	uint64_t		key;
 
 
-	mapless_remap_dump(remap_list, md, "before remap:");
+	remap_dump(remap_list, md, "before remap:");
+
 	current = remap_list->next;
 	spare_tgt = NULL;
-	fail_count = 0;
 	oid = md->omd_id;
 	key = oid.lo;
+
 	while (current != remap_list) {
 		uint64_t rebuild_key;
 
@@ -724,98 +563,20 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 				       fs_list);
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
-		spare_avail = mapless_remap_next_spare(mmap, mop, spare_tgt);
+		spare_avail = mapless_remap_next_spare(mmap, mop);
 
-		if (!spare_avail)
-			goto next_fail;
+		rebuild_key = (f_shard->fs_shard_idx * 10) + f_shard->fs_fseq;
 
-		rebuild_key = (f_shard->fs_shard_idx * 10) + fail_count++;
-		get_rebuild_target(mmap->mmp_map.pl_poolmap, &spare_tgt,
-				crc(key, rebuild_key), dom_used, layout,
-				md);
+		if (spare_avail)
+			get_rebuild_target(mmap->mmp_map.pl_poolmap, &spare_tgt,
+				crc(key, rebuild_key), dom_used, layout, md);
 
-		/* The selected spare target is down as well */
-		if (pool_target_unavail(spare_tgt)) {
-			D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
-				  f_shard->fs_fseq, "same fseq %u!\n",
-				  f_shard->fs_fseq);
+		determine_valid_spares(spare_tgt, md, spare_avail, &current,
+				remap_list, f_shard, l_shard);
 
-			/* If the spare target fseq > the current object pool
-			* version, the current failure shard will be handled
-			* by the following rebuild.
-			*/
-			if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
-				D_DEBUG(DB_PL, DF_OID", fseq %d rank %d"
-					" ver %d\n", DP_OID(md->omd_id),
-					spare_tgt->ta_comp.co_fseq,
-					spare_tgt->ta_comp.co_rank,
-					md->omd_ver);
-				spare_avail = false;
-				goto next_fail;
-			}
-
-			/*
-			* The selected spare is down prior to current failed
-			* one, then it can't be a valid spare, let's skip it
-			* and try next spare.
-			*/
-			if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq)
-				continue; /* try next spare */
-
-			/*
-			* If both failed target and spare target are down, then
-			* add the spare target to the fail list for remap, and
-			* try next spare..
-			*/
-			if (f_shard->fs_status == PO_COMP_ST_DOWN)
-				D_ASSERTF(spare_tgt->ta_comp.co_status !=
-					  PO_COMP_ST_DOWNOUT,
-					  "down fseq(%u) < downout fseq(%u)\n",
-					  f_shard->fs_fseq,
-					  spare_tgt->ta_comp.co_fseq);
-
-			f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
-			f_shard->fs_status = spare_tgt->ta_comp.co_status;
-
-			current = current->next;
-			d_list_del_init(&f_shard->fs_list);
-			remap_add_one(remap_list, f_shard);
-
-			/* Continue with the failed shard has minimal fseq */
-			if (current == remap_list) {
-				current = &f_shard->fs_list;
-			} else {
-				f_tmp = d_list_entry(current,
-						     struct failed_shard,
-						     fs_list);
-				if (f_shard->fs_fseq < f_tmp->fs_fseq)
-					current = &f_shard->fs_list;
-			}
-			continue; /* try next spare */
 		}
-next_fail:
-		fail_count = 0;
-		if (spare_avail) {
-			/* The selected spare target is up and ready */
-			l_shard->po_target = spare_tgt->ta_comp.co_id;
-			l_shard->po_fseq = f_shard->fs_fseq;
 
-			/*
-			* Mark the shard as 'rebuilding' so that read will
-			* skip this shard.
-			*/
-			if (f_shard->fs_status == PO_COMP_ST_DOWN) {
-				l_shard->po_rebuilding = 1;
-				f_shard->fs_tgt_id = spare_tgt->ta_comp.co_id;
-			}
-		} else {
-			l_shard->po_shard = -1;
-			l_shard->po_target = -1;
-		}
-		current = current->next;
-	}
-
-	mapless_remap_dump(remap_list, md, "after remap:");
+	remap_dump(remap_list, md, "after remap:");
 	return 0;
 }
 
@@ -825,58 +586,45 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 			   uint32_t dom_bytes)
 {
 	struct pool_target      *tgts;
-	unsigned int            tgts_nr;
-	d_rank_t                rank;
-	int                     tgt;
-	unsigned int            pos;
+	struct pool_domain 	*current_dom;
+	struct pool_domain 	*root;
+	unsigned int		pos;
 	int rc;
 
-	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
-
-	/* locate rank in the pool map targets */
 	tgts = pool_map_targets(mmap->mmp_map.pl_poolmap);
-	tgts_nr = pool_map_target_nr(mmap->mmp_map.pl_poolmap);
-	/* locate rank in the pool map targets */
-	rank = daos_oclass_sr_get_rank(oid);
-	tgt = daos_oclass_st_get_tgt(oid);
 
-	for (pos = 0; pos < tgts_nr; pos++) {
-		if (rank == tgts[pos].ta_comp.co_rank &&
-		    (tgt == tgts[pos].ta_comp.co_index))
-			break;
-	}
-	if (pos == tgts_nr)
-		return -DER_INVAL;
+	rc = spec_place_rank_get(&pos, oid, (mmap->mmp_map.pl_poolmap));
+	if(rc)
+		return rc;
 
 	*target = &(tgts[pos]);
 
 
-	struct pool_domain *current_dom;
-	struct pool_domain *root;
-
 	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
-	if (rc == 0) {
-		D_ERROR("Could not find root node in pool map.");
-		return -DER_NONEXIST;
-	}
+	D_ASSERT(rc == 1);
 	current_dom = root;
 
+	/* Update collision map to account for this shard. */
 	while (current_dom->do_children != NULL) {
-		struct pool_domain *temp_dom;
 		int index;
 		uint64_t child_pos;
 
 		child_pos = (current_dom->do_children) - root;
 
 		for (index = 0; index < current_dom->do_child_nr; ++index) {
+			struct pool_domain *temp_dom;
+			int num_children;
+			int last;
+			struct pool_target *start;
+			struct pool_target *end;
+
 			temp_dom = &(current_dom->do_children[index]);
-			int num_children = temp_dom->do_target_nr;
-			int last = num_children - 1;
-			struct pool_target *start = &(temp_dom->do_targets[0]);
-			struct pool_target *end = &(temp_dom->do_targets[last]);
+			num_children = temp_dom->do_target_nr;
+			last = num_children - 1;
+
+			start = &(temp_dom->do_targets[0]);
+			end = &(temp_dom->do_targets[last]);
 
 			if ((start <= (*target)) && ((*target) <= end)) {
 				current_dom = temp_dom;
@@ -942,10 +690,8 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	D_ALLOC_ARRAY(dom_used, dom_used_length);
 	D_ALLOC_ARRAY(used_targets, layout->ol_nr + 1);
 
-	if (dom_used == NULL)
-		return -DER_NOMEM;
-	if (used_targets == NULL)
-		return -DER_NOMEM;
+	if (dom_used == NULL || used_targets == NULL)
+		D_GOTO(out, rc);
 
 	/**
 	 * If the object class is a special class then the first shard must be
@@ -962,7 +708,8 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 		if (rc) {
 			D_ERROR("special oid "DF_OID" failed: rc %d\n",
 				DP_OID(oid), rc);
-			return rc;
+			D_GOTO(out, rc);
+
 		}
 
 		layout->ol_shards[0].po_target = target->ta_comp.co_id;
@@ -1012,11 +759,14 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 out:
 	if (rc) {
 		D_ERROR("mapless_obj_layout_fill failed, rc %d.\n", rc);
-		mapless_remap_free_all(remap_list);
+		remap_list_free_all(remap_list);
 	}
 
-	D_FREE(used_targets);
-	D_FREE(dom_used);
+	if(used_targets)
+		D_FREE(used_targets);
+	if(dom_used)
+		D_FREE(dom_used);
+
 	return rc;
 }
 
@@ -1149,14 +899,15 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
 		pl_obj_layout_free(layout);
-		mapless_remap_free_all(&remap_list);
+		remap_list_free_all(&remap_list);
 		return rc;
 	}
 
 	*layout_pp = layout;
-	mapless_obj_layout_dump(oid, layout);
+	obj_layout_dump(oid, layout);
 
-	mapless_remap_free_all(&remap_list);
+	remap_list_free_all(&remap_list);
+
 	return DER_SUCCESS;
 }
 
@@ -1192,9 +943,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_mapless_map           *mmap;
 	struct pl_obj_layout            *layout;
 	d_list_t                        remap_list;
-	struct failed_shard             *f_shard;
-	struct pl_obj_shard             *l_shard;
-	struct mpls_obj_placement    mop;
+	struct mpls_obj_placement    	mop;
 	daos_obj_id_t                   oid;
 	int                             rc;
 
@@ -1239,94 +988,13 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		goto out;
 	}
 
-	mapless_obj_layout_dump(oid, layout);
+	obj_layout_dump(oid, layout);
 
-	d_list_for_each_entry(f_shard, &remap_list, fs_list) {
-		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
-
-		if (f_shard->fs_fseq > rebuild_ver)
-			break;
-
-		if (f_shard->fs_status == PO_COMP_ST_DOWN) {
-			/*
-			* Target id is used for rw, but rank is used
-			* for rebuild, perhaps they should be unified.
-			*/
-			if (l_shard->po_shard != -1) {
-				struct pool_target      *target;
-				int                      leader;
-
-				D_ASSERT(f_shard->fs_tgt_id != -1);
-				D_ASSERT(idx < array_size);
-
-				/* If the caller does not care about DTX related
-				* things (myrank == -1), then fill it directly.
-				*/
-				if (myrank == -1)
-					goto fill;
-
-				leader = pl_select_leader(md->omd_id,
-					l_shard->po_shard, layout->ol_nr,
-					true, pl_obj_get_shard, layout);
-
-				if (leader < 0) {
-					D_WARN("Not sure whether current shard "
-					       "is leader or not for obj "
-					       DF_OID" , fseq:%d, status:%d, "
-					       "ver:%d, shard:%d, rc = %d\n",
-					       DP_OID(md->omd_id),
-					       f_shard->fs_fseq,
-					       f_shard->fs_status, rebuild_ver,
-					       l_shard->po_shard, leader);
-					goto fill;
-				}
-
-				rc = pool_map_find_target(map->pl_poolmap,
-							  leader, &target);
-				D_ASSERT(rc == 1);
-
-				if (myrank != target->ta_comp.co_rank) {
-					/* The leader shard is not on current
-					* server, then current server cannot
-					* know whether DTXs for current shard
-					* have been re-synced or not. So skip
-					* the shard that will be handled by
-					* the leader on another server.
-					*/
-					D_DEBUG(DB_PL, "Current replica (%d)"
-						"isn't the leader (%d) for obj "
-						DF_OID", fseq:%d, status:%d, "
-						"ver:%d, shard:%d, skip it\n",
-						myrank, target->ta_comp.co_rank,
-						DP_OID(md->omd_id),
-						f_shard->fs_fseq,
-						f_shard->fs_status,
-						rebuild_ver, l_shard->po_shard);
-					continue;
-				}
-
-fill:
-				D_DEBUG(DB_PL, "Current replica (%d) is the "
-					"leader for obj "DF_OID", fseq:%d, "
-					"ver:%d, shard:%d, to be rebuilt.\n",
-					myrank, DP_OID(md->omd_id),
-					f_shard->fs_fseq,
-					rebuild_ver, l_shard->po_shard);
-				tgt_id[idx] = f_shard->fs_tgt_id;
-				shard_idx[idx] = l_shard->po_shard;
-				idx++;
-			}
-		} else if (f_shard->fs_tgt_id != -1) {
-			rc = -DER_ALREADY;
-			D_ERROR(""DF_OID" rebuild is done for "
-				"fseq:%d(status:%d)? rbd_ver:%d rc %d\n",
-				DP_OID(md->omd_id), f_shard->fs_fseq,
-				f_shard->fs_status, rebuild_ver, rc);
-		}
-	}
+	rc = remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
+                          array_size, myrank, &idx, layout, &remap_list);
 
 out:
-	mapless_remap_free_all(&remap_list);
+	remap_list_free_all(&remap_list);
 	pl_obj_layout_free(layout);
 	return rc < 0 ? rc : idx;
 }
