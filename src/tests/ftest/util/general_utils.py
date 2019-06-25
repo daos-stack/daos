@@ -326,6 +326,7 @@ def clustershell_execute(cmd, hosts, timeout=60, debug=False):
         cmd (str): command in string format to run on cluster
         hosts (list):  a list of host names
         timeout (int): command timeout in seconds
+        debug (bool): To pring the stdout while command is in progress
     Raise:
         ClusterCommandFailed: raised in case of command failed on any host
                               return dictionary with hostname,rc,output.
