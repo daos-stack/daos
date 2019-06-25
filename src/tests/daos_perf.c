@@ -74,6 +74,8 @@ bool			 ts_overwrite;
 bool			 ts_zero_copy;
 /* verify the output of fetch */
 bool			 ts_verify_fetch;
+/* shuffle the offsets of the array */
+bool			 ts_shuffle	= false;
 
 daos_handle_t		*ts_ohs;		/* all opened objects */
 daos_obj_id_t		 ts_oid;		/* object ID */
@@ -270,7 +272,7 @@ dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 	int		 j;
 	int		 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
@@ -343,7 +345,7 @@ dkey_verify(daos_handle_t oh, char *dkey, daos_epoch_t *epoch)
 	char	 akey[DTS_KEY_LEN];
 	int	 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
@@ -968,20 +970,18 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	double		then;
 	double		now;
-	int		rc;
 	int		i;
 	bool		pause = false;
+	unsigned	seed = 0;
+	int		rc;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
-
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiuw",
+				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1066,6 +1066,12 @@ main(int argc, char **argv)
 		case 'A':
 			ts_single = false;
 			break;
+		case 'S':
+			ts_shuffle = true;
+			break;
+		case 'G':
+			seed = atoi(optarg);
+			break;
 		case 's':
 			vsize = strtoul(optarg, &endp, 0);
 			vsize = ts_val_factor(vsize, *endp);
@@ -1115,6 +1121,11 @@ main(int argc, char **argv)
 				ts_print_usage();
 			return 0;
 		}
+	}
+
+	if (seed == 0) {
+		gettimeofday(&tv, NULL);
+		seed = tv.tv_usec;
 	}
 
 	/* Convert object classes for echo mode.
@@ -1253,6 +1264,8 @@ main(int argc, char **argv)
 	for (i = 0; i < TEST_SIZE; i++) {
 		if (perf_tests[i] == NULL)
 			continue;
+
+		srand(seed);
 
 		rc = perf_tests[i](&then, &now);
 		if (ts_ctx.tsc_mpi_size > 1) {
