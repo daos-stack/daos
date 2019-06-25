@@ -74,6 +74,20 @@ struct dfuse_projection_info {
 	ATOMIC uint64_t			dpi_ino_next;
 };
 
+/*
+ * Max number of 4k (fuse buffer size for readdir) blocks that need offset
+ * tracking in the readdir implementation. Since in readdir implementation we
+ * specify a larger buffer size (16k) to fetch the dir entries, the buffer we
+ * track those entries on the OH needs to know where fuse_add_direntry() exceeds
+ * the 4k size of a block that we return to readdir. In the next call to
+ * readdir, we need to resume from that last offset before we exceeded that 4k
+ * size. We define this max number of blocks to 8 (not 4 - 16k/4k) to account
+ * for the possibility that we need to re-alloc that buffer on OH since
+ * fuse_add_direntry() adds more metadata (the fuse direntry attributes) in
+ * addition to the entry name, which could exceed 16K in some cases. We just
+ * double the buffer size inthis case to 32k, and so we need a max of 8 offsets
+ * to track in this case.
+ */
 #define READDIR_BLOCKS 8
 
 /** what is returned as the handle for fuse fuse_file_info on create/open */

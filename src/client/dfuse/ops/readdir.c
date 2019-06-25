@@ -69,9 +69,12 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	if (rc)
 		D_GOTO(out, rc);
 
-	/** if we have not run out of space on the fuse buffer */
+	/*
+	 * If we are still within the fuse size limit (less than 4k - we have
+	 * not gone beyond 4k and cur_off is still 0).
+	 */
 	if (oh->doh_cur_off == 0) {
-		/** add the entry to the buffer to return to fuse first */
+		/** try to add the entry within the 4k size limit. */
 		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
 				       udata->fuse_size - udata->b_off, name,
 				       &stbuf, (off_t)(&oh->doh_anchor));
@@ -83,9 +86,11 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 		}
 
 		/*
-		 * If entry does not fit within the readdir buff size, save
-		 * state in oh and re-add it to the buf. this will not be
-		 * returned for current readdir call.
+		 * If entry does not fit within the 4k fuse imposed size, we now
+		 * add the entry, but within the larger size limitation of the
+		 * OH buffer (16k). But we also need to save the state of the
+		 * current offset since this will not be returned in the current
+		 * readdir call but will be consumed in subsequent calls.
 		 */
 		oh->doh_start_off[oh->doh_idx] = udata->b_off;
 		oh->doh_cur_off = udata->b_off;
@@ -98,19 +103,23 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 		D_ASSERT(ns <= udata->size - udata->b_off);
 		oh->doh_cur_off += ns;
 
-		/** no need to issue futher dfs_iterate() calls */
+		/** no need to issue futher dfs_iterate() calls. */
 		udata->stop = 1;
 		D_GOTO(out, rc = 0);
 	}
 
 insert:
-	/** fuse size exceeded so add entry & update the oh counters */
+	/*
+	 * At this point, we are already adding to the buffer within the large
+	 * size limitation where it will be consumed in future readdir calls.
+	 */
 	ns = fuse_add_direntry(udata->req, oh->doh_buf + oh->doh_cur_off,
 			       udata->size - oh->doh_cur_off, name, &stbuf,
 			       (off_t)(&oh->doh_anchor));
 	/*
-	 * If entry does not fit, realloc to fit the entries that were already
-	 * enumerated and insert again.
+	 * In the case where the OH handle does not fit, we still need to add
+	 * the entry since DFS already enumerated it. So, realloc to fit the
+	 * entries that were already enumerated and insert again.
 	 */
 	if (ns > udata->size - oh->doh_cur_off) {
 		udata->size = udata->size * 2;
@@ -120,12 +129,15 @@ insert:
 		goto insert;
 	}
 
-	/** update the offset in the OH buffer */
+	/** update the end offset in the OH buffer */
 	oh->doh_cur_off += ns;
 
 	/*
-	 * we need to keep track of offsets where we exceed 4k in the buffer
-	 * size for further calls to readdir.
+	 * Since fuse can process a max of 4k size of entries, it's mostly the
+	 * case that the offset where the last entry that can fit in a 4k buf
+	 * size is not aligned at the 4k bnoundary. So we need to keep track of
+	 * offsets before the last entry that exceeds 4k in the buffer size for
+	 * further calls to readdir to consume.
 	 */
 	if (oh->doh_cur_off - oh->doh_start_off[oh->doh_idx] >
 	    udata->fuse_size) {
@@ -155,15 +167,31 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	D_ASSERT(oh);
 
 	if (offset == 0) {
+		/*
+		 * if starting from the begnning, reset the anchor attached to
+		 * the open handle.
+		 */
 		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
 	} else {
+		/*
+		 * otherwise the offset itself should be the anchor that was
+		 * returned from the last call on the OH, otherwise the offset
+		 * was corrupted.
+		 */
 		if (offset != (off_t)&oh->doh_anchor)
 			D_GOTO(err, rc = EIO);
 	}
 
-	/** if there was anything left in the old buffer */
+	/* On a subsequent calls to readdir, if there was anything to consume on
+	 * the buffer attached to the dir handle from the previous call, either
+	 * consume a 4k block or whatever remains.
+	 */
 	if (offset && oh->doh_cur_off) {
-		/** if remaining does not fit in the fuse buf, return a block */
+		/*
+		 * if remaining does not fit in the fuse buf, return a 4k (or
+		 * less block) and advance the idx tracking number of blocks
+		 * consumed.
+		 */
 		if (size < oh->doh_cur_off - oh->doh_start_off[oh->doh_idx]) {
 			fuse_reply_buf(req, oh->doh_buf +
 				       oh->doh_start_off[oh->doh_idx],
@@ -173,7 +201,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			return;
 		}
 
-		/** otherwise return everything left */
+		/** otherwise return everything left since it should fit. */
 		fuse_reply_buf(req,
 			       oh->doh_buf + oh->doh_start_off[oh->doh_idx],
 			       oh->doh_cur_off -
@@ -187,7 +215,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	/*
 	 * the DFS size should be less than what we want in fuse to account for
-	 * the fuse metadata for each entry, so just use 1/2 for now
+	 * the fuse metadata for each entry, so just use 1/2 for now.
 	 */
 	buf_size = size * READDIR_BLOCKS / 2;
 
