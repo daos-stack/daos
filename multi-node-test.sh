@@ -192,9 +192,6 @@ sed -i.dist -e \"s/- boro-A/- ${nodes[0]}/g\" \
 rm -rf \"$TESTDIR/avocado\" \"./*_results.xml\"
 mkdir -p \"$LOGDIR\"
 
-# remove test_runner dir until scons_local is updated
-rm -rf \"$TESTDIR/test_runner\"
-
 # shellcheck disable=SC2154
 trap 'set +e restore_dist_files \"\${yaml_files[@]}\"' EXIT
 

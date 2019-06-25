@@ -124,7 +124,6 @@ def scons():
     VariantDir(arch_dir, '.', duplicate=0)
     SConscript('%s/src/SConscript' % arch_dir)
     SConscript('%s/test/SConscript' % arch_dir)
-    SConscript('%s/scons_local/test_runner/SConscript' % arch_dir)
 
     env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
                                 'utils/fault-inject-cart.yaml'])

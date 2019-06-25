@@ -106,10 +106,6 @@ if __name__ == "__main__":
     else:
         printhelp()
 
-    # remove test_runner in install dir
-    # need patch in scons_local to exclude test_runner install
-    os.system("rm -rf test_runner")
-
     # make it easy to specify a directory as a parameter later
     test_directory = os.getcwd()
 

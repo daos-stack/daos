@@ -939,6 +939,7 @@ pipeline {
                                 unstableThresholdInvalidReadWrite: '',
                                 unstableThresholdTotal: ''
                                 )
+                            junit env.STAGE_NAME + '/*/results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
