@@ -30,8 +30,8 @@ import json
 class IorFailed(Exception):
     """Raise if Ior failed"""
 
-# pylint: disable=too-many-arguments # we probably need to introduce an IOR
-                                     # "object"
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
 def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
                 svc_list, record_size, stripe_size, stripe_count, async_io,
                 object_class, basepath, hostfile, proc_per_node=1, seg_count=1,
@@ -68,8 +68,8 @@ def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
     return ior_cmd
 
 
-# pylint: disable=too-many-arguments # we probably need to introduce an IOR
-                                     # "object"
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
 def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                  pool_uuid, svc_list, object_class, basepath, client_processes,
                  cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
@@ -127,6 +127,8 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
         raise IorFailed("IOR Run process Failed")
 
 
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
 def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
                   ior_flags, iteration, transfer_size, block_size,
                   display_output=True):
