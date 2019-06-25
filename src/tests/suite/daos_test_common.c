@@ -416,15 +416,19 @@ test_teardown(void **state)
 
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if (rc)
-			return rc;
+		if (rc) {
+			print_message("failed to destroy pool "DF_UUIDF
+				      ": %d\n", DP_UUID(arg->pool.pool_uuid),
+				      rc);
+			goto free;
+		}
 	}
 
 	if (!daos_handle_is_inval(arg->eq)) {
 		rc = daos_eq_destroy(arg->eq, 0);
 		if (rc) {
 			print_message("failed to destroy eq: %d\n", rc);
-			return rc;
+			goto free;
 		}
 	}
 
