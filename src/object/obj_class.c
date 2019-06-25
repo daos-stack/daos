@@ -402,7 +402,7 @@ obj_ec_codec_fini(void)
 		  oc_ec_codec_nr, ocnr);
 
 	for (i = 0; i < ocnr; i++) {
-		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		ec_codec = &oc_ec_codecs[i].ec_codec;
 		if (ec_codec->ec_en_matrix != NULL)
 			D_FREE(ec_codec->ec_en_matrix);
 		if (ec_codec->ec_gftbls != NULL)
