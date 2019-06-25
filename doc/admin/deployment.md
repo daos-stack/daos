@@ -102,7 +102,7 @@ This section addresses how to verify that Optane DC Persistent memory
 it in interleaved mode to be used by DAOS in AppDirect mode.
 Instructions for other type of SCM may be covered in the future.
 
-Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions 
+Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions
 (interleaved mode) in groups of modules local to a specific socket (NUMA) and
 resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
 
@@ -915,7 +915,7 @@ Typically an administrator will perform the following tasks:
 
 4. Start DAOS control plane
     - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -o <daos>/utils/config/examples/daos_server_sockets.yml`
-    [details](#-parallel-launcher) 
+    [details](#-parallel-launcher)
 
 5. Provision Storage
     - firmware update [details](#-firmware-upgrade)
