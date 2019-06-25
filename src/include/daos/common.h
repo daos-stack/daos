@@ -438,6 +438,7 @@ enum {
 #define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
 
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
+#define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -558,7 +559,8 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "HDF5");
 		break;
 	default:
-		D_ASSERT(0);
+		strcpy(string, "unknown");
+		break;
 	}
 }
 

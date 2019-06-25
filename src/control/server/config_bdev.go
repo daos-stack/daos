@@ -192,6 +192,10 @@ func (c *configuration) parseNvme(i int) (err error) {
 		return
 	}
 
+	if msg := bdev.isValid(srv); msg != "" {
+		log.Debugf("spdk %s: %s (server %d)\n", srv.BdevClass, msg, i)
+	}
+
 	if err = bdev.prep(i, c); err != nil {
 		return
 	}

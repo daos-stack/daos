@@ -1006,6 +1006,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		D_GOTO(err_prop, rc = -daos_der2errno(rc));
 	}
 
+	daos_prop_free(prop);
+
 	/** if mount RW, create TX */
 	if (amode == O_RDWR) {
 		rc = daos_tx_open(coh, &th, NULL);

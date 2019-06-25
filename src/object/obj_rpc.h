@@ -114,8 +114,6 @@ enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
 	/** It is a resent RPC. */
 	ORF_RESEND		= (1 << 1),
-	/** Disable DTX or not. */
-	ORF_DTX_DISABLED	= (1 << 3),
 };
 
 /* common for update/fetch */

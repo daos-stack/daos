@@ -1885,7 +1885,7 @@ next_step:
 	buf_len = step == 1 ? STACK_BUF_LEN : TEST_BULK_BUF_LEN;
 	d_iov_set(&sg_iov[0], buf, buf_len);
 	sgl.sg_nr	= 1;
-	sgl.sg_nr_out	= 0;
+	sgl.sg_nr_out	= 1;
 	sgl.sg_iovs	= sg_iov;
 
 	/** init I/O descriptor */

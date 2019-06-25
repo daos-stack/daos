@@ -398,7 +398,7 @@ is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt)
 	rc = pool_map_find_target_by_rank_idx(rpt->rt_pool->sp_map, rank,
 					      idx, &tgt);
 	D_ASSERT(rc == 1);
-	if (tgt->ta_comp.co_status != PO_COMP_ST_UP) {
+	if (tgt->ta_comp.co_status != PO_COMP_ST_UPIN) {
 		D_DEBUG(DB_REBUILD, "%d/%d target status %d\n",
 			rank, idx, tgt->ta_comp.co_status);
 		return false;
@@ -752,7 +752,7 @@ rebuild_pool_group_prepare(struct ds_pool *pool)
 		return 0;
 	}
 
-	rc = pool_map_find_up_tgts(pool->sp_map, &tgts, &tgt_cnt);
+	rc = pool_map_find_upin_tgts(pool->sp_map, &tgts, &tgt_cnt);
 	if (rc)
 		return rc;
 
@@ -1069,6 +1069,53 @@ rebuild_task_destroy(struct rebuild_task *task)
 	D_FREE(task);
 }
 
+/* Try merge the tasks to the current task.
+ *
+ * return 1 means merging the rebuild target to other task.
+ * return 0 means these targets can not merge.
+ *
+ **/
+static int
+rebuild_try_merge_tgts(const uuid_t pool_uuid, uint32_t map_ver,
+		       struct pool_target_id_list *tgts_failed)
+{
+	struct rebuild_task *task;
+	struct rebuild_task *found = NULL;
+	int		    rc;
+
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
+			      dst_list) {
+		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
+			found = task;
+			break;
+		}
+	}
+
+	if (found == NULL)
+		return 0;
+
+	D_DEBUG(DB_REBUILD, "("DF_UUID" ver=%u) id %u merge to task %p\n",
+		DP_UUID(pool_uuid), map_ver,
+		tgts_failed->pti_ids[0].pti_id, task);
+
+	/* Merge the failed ranks to existing rebuild task */
+	rc = pool_target_id_list_merge(&task->dst_tgts, tgts_failed);
+	if (rc)
+		return rc;
+
+	if (task->dst_map_ver < map_ver) {
+		D_DEBUG(DB_REBUILD, "rebuild task ver %u --> %u\n",
+			found->dst_map_ver, map_ver);
+		found->dst_map_ver = map_ver;
+	}
+
+	D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u\n",
+		DP_UUID(pool_uuid), map_ver, tgts_failed->pti_ids[0].pti_id);
+
+	return 1;
+}
+
+
 /**
  * Initiate the rebuild process, i.e. sending rebuild requests to every target
  * to find out the impacted objects.
@@ -1161,15 +1208,31 @@ rebuild_task_ult(void *arg)
 		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
 
-		D_GOTO(out, rc);
+		D_GOTO(done, rc);
 	}
 
 	/* Wait until rebuild finished */
 	rebuild_leader_status_check(pool, task->dst_map_ver, rgt);
+done:
 	if (!rgt->rgt_done) {
+		int ret;
+
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
 			DP_UUID(task->dst_pool_uuid));
-		D_GOTO(out, rc);
+
+		/* Merge the targets to following rebuild task, try again */
+		ret = rebuild_try_merge_tgts(task->dst_pool_uuid,
+					     task->dst_map_ver,
+					     &task->dst_tgts);
+		if (ret == 1)
+			D_GOTO(out, rc);
+
+		/* Otherwise let's exclude the targets to avoid blocking
+		 * following rebuild. Probably we should do better job
+		 * here XXX.
+		 */
+		D_WARN("Rebuild does not finish by %d\n",
+		       rgt->rgt_status.rs_errno);
 	}
 
 	rc = ds_pool_tgt_exclude_out(pool->sp_uuid, &task->dst_tgts);
@@ -1358,32 +1421,12 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		    d_rank_list_t *svc_list)
 {
 	struct rebuild_task	*task;
-	struct rebuild_task	*found = NULL;
 	int			rc;
 
 	/* Check if the pool already in the queue list */
-	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
-			      dst_list) {
-		if (uuid_compare(task->dst_pool_uuid, uuid) == 0) {
-			found = task;
-			break;
-		}
-	}
-
-	if (found) {
-		/* Merge the failed ranks to existing rebuild task */
-		rc = pool_target_id_list_merge(&task->dst_tgts, tgts_failed);
-		if (rc)
-			return rc;
-
-		if (task->dst_map_ver < map_ver)
-			found->dst_map_ver = map_ver;
-
-		D_PRINT("Rebuild [queued] ("DF_UUID" ver=%u) id %u\n",
-			DP_UUID(uuid), map_ver, tgts_failed->pti_ids[0].pti_id);
-
-		return 0;
-	}
+	rc = rebuild_try_merge_tgts(uuid, map_ver, tgts_failed);
+	if (rc)
+		return rc == 1 ? 0 : rc;
 
 	D_ALLOC_PTR(task);
 	if (task == NULL)

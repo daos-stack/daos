@@ -61,8 +61,7 @@
  */
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
-extern bool	srv_io_dispatch;
-extern bool	srv_enable_dtx;
+extern unsigned int	srv_io_mode;
 
 /** client object shard */
 struct dc_obj_shard {
@@ -258,11 +257,11 @@ struct ds_obj_exec_arg {
 };
 
 int
-ds_obj_remote_update(struct dtx_handle *dth, void *arg, int idx,
-		     dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
+ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
+		     dtx_sub_comp_cb_t comp_cb);
 int
-ds_obj_remote_punch(struct dtx_handle *dth, void *arg, int idx,
-		    dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
+ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
+		    dtx_sub_comp_cb_t comp_cb);
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);

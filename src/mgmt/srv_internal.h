@@ -65,6 +65,11 @@ int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
 int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp);
 
 /** srv_pool.c */
+int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
+			d_rank_list_t *targets, size_t scm_size,
+			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
+			d_rank_list_t **svcp);
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 
