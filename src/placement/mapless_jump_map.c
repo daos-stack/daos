@@ -165,8 +165,8 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 			     PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 
-	rc = op_get_grp_size(mmap->mmp_domain_nr,&mop->mop_grp_size,oid);
-	if(rc)
+	rc = op_get_grp_size(mmap->mmp_domain_nr, &mop->mop_grp_size, oid);
+	if (rc)
 		return rc;
 
 	if (shard_md == NULL) {
@@ -470,7 +470,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 			int id = layout->ol_shards[i].po_target;
 			struct pool_target *position;
 
-			if(id == -1)
+			if (id == -1)
 				continue;
 
 			pool_map_find_target(pmap, id, target);
@@ -585,16 +585,16 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 			   struct pool_target **target, uint8_t *dom_used,
 			   uint32_t dom_bytes)
 {
-	struct pool_target      *tgts;
-	struct pool_domain 	*current_dom;
-	struct pool_domain 	*root;
+	struct pool_target	*tgts;
+	struct pool_domain	*current_dom;
+	struct pool_domain	*root;
 	unsigned int		pos;
-	int rc;
+	int			rc;
 
 	tgts = pool_map_targets(mmap->mmp_map.pl_poolmap);
 
 	rc = spec_place_rank_get(&pos, oid, (mmap->mmp_map.pl_poolmap));
-	if(rc)
+	if (rc)
 		return rc;
 
 	*target = &(tgts[pos]);
@@ -663,7 +663,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	uint64_t                key;
 	daos_obj_id_t		oid;
 	struct pool_domain      *root;
-	uint32_t 		dom_used_length;
+	uint32_t		dom_used_length;
 	int i, j, k, rc;
 
 	/* Set the pool map version */
@@ -685,7 +685,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 		return -DER_NONEXIST;
 	}
 
-	dom_used_length = (struct pool_domain*)(root->do_targets) - (root) + 1;
+	dom_used_length = (struct pool_domain *)(root->do_targets) - (root) + 1;
 
 	D_ALLOC_ARRAY(dom_used, dom_used_length);
 	D_ALLOC_ARRAY(used_targets, layout->ol_nr + 1);
@@ -762,9 +762,9 @@ out:
 		remap_list_free_all(remap_list);
 	}
 
-	if(used_targets)
+	if (used_targets)
 		D_FREE(used_targets);
-	if(dom_used)
+	if (dom_used)
 		D_FREE(dom_used);
 
 	return rc;
@@ -943,7 +943,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_mapless_map           *mmap;
 	struct pl_obj_layout            *layout;
 	d_list_t                        remap_list;
-	struct mpls_obj_placement    	mop;
+	struct mpls_obj_placement	mop;
 	daos_obj_id_t                   oid;
 	int                             rc;
 
@@ -991,7 +991,7 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	obj_layout_dump(oid, layout);
 
 	rc = remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
-                          array_size, myrank, &idx, layout, &remap_list);
+			array_size, myrank, &idx, layout, &remap_list);
 
 out:
 	remap_list_free_all(&remap_list);

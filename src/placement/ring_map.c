@@ -122,7 +122,7 @@ pl_map2rimap(struct pl_map *map)
 static int
 ring_comp_shuff_cmp(struct pool_component *comp_a,
 		    struct pool_component *comp_b,
-		    unsigned seed, unsigned int prime)
+		    unsigned int seed, unsigned int prime)
 {
 	uint64_t	key_a = comp_a->co_id;
 	uint64_t	key_b = comp_b->co_id;
@@ -334,9 +334,8 @@ ring_buf_destroy(struct ring_buf *buf)
 		for (i = 0; i < buf->rb_domain_nr; i++) {
 			struct ring_domain *rdom = &buf->rb_domains[i];
 
-			if (rdom->rd_targets != NULL) {
+			if (rdom->rd_targets != NULL)
 				D_FREE(rdom->rd_targets);
-			}
 		}
 		D_FREE(buf->rb_domains);
 	}
@@ -511,9 +510,8 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 static void
 ring_free(struct pl_ring_map *rimap, struct pl_ring *ring)
 {
-	if (ring->ri_targets != NULL) {
+	if (ring->ri_targets != NULL)
 		D_FREE(ring->ri_targets);
-	}
 }
 
 static void
@@ -600,7 +598,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 	double		stride;
 	double		hash;
 	int		i;
-	unsigned	tg_per_dom;
+	unsigned int	tg_per_dom;
 
 	D_DEBUG(DB_PL, "Build consistent hash for ring map\n");
 	D_ALLOC_ARRAY(rimap->rmp_target_hashes, rimap->rmp_target_nr);
@@ -690,13 +688,11 @@ ring_map_destroy(struct pl_map *map)
 	struct pl_ring_map *rimap = pl_map2rimap(map);
 	int		    i;
 
-	if (rimap->rmp_ring_hashes != NULL) {
+	if (rimap->rmp_ring_hashes != NULL)
 		D_FREE(rimap->rmp_ring_hashes);
-	}
 
-	if (rimap->rmp_target_hashes != NULL) {
+	if (rimap->rmp_target_hashes != NULL)
 		D_FREE(rimap->rmp_target_hashes);
-	}
 
 	if (rimap->rmp_rings != NULL) {
 		for (i = 0; i < rimap->rmp_ring_nr; i++)
@@ -788,7 +784,7 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid,
 	int rc;
 
 	rc = spec_place_rank_get(&pos, oid, rimap->rmp_map.pl_poolmap);
-        if(rc != 0)
+	if (rc != 0)
 		return rc;
 
 	/* locate the target in the ring */
@@ -845,7 +841,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	rop->rop_dist = ring_obj_place_dist(rimap, oid);
 
 	rc = op_get_grp_size(rimap->rmp_domain_nr, &(rop->rop_grp_size), oid);
-	if(rc != 0)
+	if (rc != 0)
 		return rc;
 
 	grp_dist = rop->rop_grp_size * rop->rop_dist;
@@ -1015,9 +1011,8 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 			spare_avail ?
 			tgts[plts[spare_idx].pt_pos].ta_comp.co_id : -1);
 
-		if (!spare_avail) {
+		if (!spare_avail)
 			ring_map_dump(&rimap->rmp_map, true);
-		}
 
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 
