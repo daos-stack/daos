@@ -618,7 +618,7 @@ ts_many_add(void **state)
 	if (!buf)
 		fail();
 
-	seq = dts_rand_iarr_alloc(nr, 0);
+	seq = dts_rand_iarr_alloc(nr, 0, true);
 	if (!seq) {
 		D_FREE(buf);
 		fail();
