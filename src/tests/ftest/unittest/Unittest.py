@@ -21,9 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
-from general_utils import get_file_path, clustershell_execute
-from general_utils import ClusterCommandFailed
+from avocado.utils import process
+from general_utils import get_file_path
 from apricot import Test, TestWithServers, skipForTicket
 
 def unittest_runner(self, unit_testname):
@@ -37,18 +36,13 @@ def unittest_runner(self, unit_testname):
     name = self.params.get("testname", '/run/UnitTest/{0}/'
                            .format(unit_testname))
     server = self.params.get("test_machines", "/run/hosts/*")
-    timeout = self.params.get("timeout", "/run/*")
     bin_path = get_file_path(name, "install/bin")
 
-    try:
-        cmd = ("{}".format(bin_path[0]))
-        clustershell_execute(cmd, server, timeout, debug=True)
-    except ClusterCommandFailed as error:
-        self.fail("{0} unittest failed with, Error info:\n{1}\n"
-                  .format(unit_testname, error))
-    finally:
-        #Cleanup the unit test data from /mnt/daos
-        clustershell_execute("rm -rf /mnt/daos/*", server)
+    cmd = ("ssh {} {}".format(server[0], bin_path[0]))
+    return_code = process.system(cmd)
+    if return_code is not 0:
+        self.fail("{0} unittest failed with return code={1}.\n"
+                  .format(unit_testname, return_code))
 
 class UnitTestWithoutServers(Test):
     """
