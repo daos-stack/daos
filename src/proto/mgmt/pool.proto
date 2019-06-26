@@ -54,4 +54,4 @@ message DestroyPoolReq {
 	bool force = 3; // destroy regardless of active connections
 }
 
-// DestroyPoolResp is identical to DaosResponse.
+// DestroyPoolResp is identical to DaosResp.

@@ -220,7 +220,7 @@ func (svc *mgmtSvc) CreatePool(
 func (svc *mgmtSvc) DestroyPool(
 	ctx context.Context,
 	req *pb.DestroyPoolReq,
-) (*pb.DestroyPoolResp, error) {
+) (*pb.DaosResp, error) {
 
 	log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
 
@@ -231,7 +231,7 @@ func (svc *mgmtSvc) DestroyPool(
 		return nil, err
 	}
 
-	resp := &pb.DestroyPoolResp{}
+	resp := &pb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
 	}

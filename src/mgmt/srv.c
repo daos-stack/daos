@@ -72,12 +72,12 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 #undef X
 
 static void
-process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 {
 	Mgmt__DaosRank	*pb_rank = NULL;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_response__init(daos_resp);
+	mgmt__daos_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
 	pb_rank = mgmt__daos_rank__unpack(
@@ -99,13 +99,13 @@ process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
 }
 
 static void
-process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 {
 	Mgmt__SetRankReq	*daos_req = NULL;
 	int			rc;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_response__init(daos_resp);
+	mgmt__daos_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
 	daos_req = mgmt__set_rank_req__unpack(
@@ -137,14 +137,14 @@ process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
  * See also process_startms_request.
  */
 static void
-process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 {
 	Mgmt__CreateMsReq	*daos_req = NULL;
 	uuid_t			uuid;
 	int			rc;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_response__init(daos_resp);
+	mgmt__daos_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
 	daos_req = mgmt__create_ms_req__unpack(
@@ -186,12 +186,12 @@ out:
  * See also process_createms_request, which already starts the MS.
  */
 static void
-process_startms_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+process_startms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 {
 	int rc;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_response__init(daos_resp);
+	mgmt__daos_resp__init(daos_resp);
 
 	D_DEBUG(DB_MGMT, "Received request to start MS\n");
 
@@ -414,14 +414,14 @@ out:
 }
 
 static void
-process_destroypool_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+process_destroypool_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 {
 	Mgmt__DestroyPoolReq	*daos_req = NULL;
 	uuid_t			uuid;
 	int			rc = 0;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_response__init(daos_resp);
+	mgmt__daos_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
 	daos_req = mgmt__destroy_pool_req__unpack(
@@ -458,12 +458,12 @@ out:
 }
 
 static void
-pack_daos_response(Mgmt__DaosResponse *daos_resp, Drpc__Response *drpc_resp)
+pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
 	uint8_t	*body;
 	size_t	len;
 
-	len = mgmt__daos_response__get_packed_size(daos_resp);
+	len = mgmt__daos_resp__get_packed_size(daos_resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -471,7 +471,7 @@ pack_daos_response(Mgmt__DaosResponse *daos_resp, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	if (mgmt__daos_response__pack(daos_resp, body) != len) {
+	if (mgmt__daos_resp__pack(daos_resp, body) != len) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Unexpected num bytes for daos resp\n");
 		return;
@@ -485,7 +485,7 @@ pack_daos_response(Mgmt__DaosResponse *daos_resp, Drpc__Response *drpc_resp)
 static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosResponse	*daos_resp = NULL;
+	Mgmt__DaosResp	*daos_resp = NULL;
 	Mgmt__JoinResp		*join_resp;
 	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
 	Mgmt__CreatePoolResp	*create_pool_resp;

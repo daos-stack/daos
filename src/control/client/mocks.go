@@ -221,9 +221,9 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(
 
 func (m *mockMgmtCtlClient) KillRank(
 	ctx context.Context, req *pb.DaosRank, o ...grpc.CallOption) (
-	*pb.DaosResponse, error) {
+	*pb.DaosResp, error) {
 
-	return &pb.DaosResponse{}, m.killRet
+	return &pb.DaosResp{}, m.killRet
 }
 
 func newMockMgmtCtlClient(
@@ -256,11 +256,11 @@ func (m *mockMgmtSvcClient) DestroyPool(
 	ctx context.Context,
 	req *pb.DestroyPoolReq,
 	o ...grpc.CallOption,
-) (*pb.DestroyPoolResp, error) {
+) (*pb.DaosResp, error) {
 
 	// return successful pool destroy results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.DestroyPoolResp{}, nil
+	return &pb.DaosResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(

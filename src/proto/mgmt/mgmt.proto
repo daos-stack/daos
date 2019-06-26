@@ -36,7 +36,7 @@ service MgmtSvc {
 	// Create a DAOS pool allocated across a number of ranks
 	rpc CreatePool(CreatePoolReq) returns (CreatePoolResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks
-	rpc DestroyPool(DestroyPoolReq) returns (DaosResponse) {}
+	rpc DestroyPool(DestroyPoolReq) returns (DaosResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 }
