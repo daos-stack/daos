@@ -41,7 +41,7 @@ def unittest_runner(self, unit_testname):
     cmd = ("ssh {} {}".format(server[0], bin_path[0]))
     return_code = process.system(cmd, ignore_status=True,
                                  allow_output_check="both")
-    
+
     if return_code is not 0:
         self.fail("{0} unittest failed with return code={1}.\n"
                   .format(unit_testname, return_code))
