@@ -564,7 +564,8 @@ def main():
     test_files = get_test_files(test_list)
 
     # Run all the tests
-    exit(run_tests(test_files, tag_filter, args))
+    run_tests(test_files, tag_filter, args)
+    exit(0)
 
 
 if __name__ == "__main__":
