@@ -23,8 +23,9 @@
 '''
 
 from ior_single_server import IorSingleServer
+from eight_servers_mpiio import EightServers
 
-class IorSmall(IorSingleServer):
+class IorSmallDaos(IorSingleServer):
     """
     Running Ior for smaller configuration
     :avocado: recursive
@@ -33,17 +34,41 @@ class IorSmall(IorSingleServer):
         """
         Jira ID: DAOS-2715
         Test Description: Purpose of this test is to have small ior test
-                          to check basic functionality.
+                          using daos api to check basic functionality.
         Use case: Run ior with read, write, CheckWrite, CheckRead in ssf mode.
                   Run ior with read, write, CheckWrite, CheckRead in fpp mode.
                   Run ior with read, write, CheckWrite and access to random
                   offset instead of sequential.
-                  All above three cases to be run with single client and
-                  multiple client processes in two separate nodes.
-        :avocado: tags=all,daosio,small,iorsmall
+                  All above three cases to be run with different combination of
+                  transfer sizes and object classes.
+        :avocado: tags=all,daosio,small,iorsmall,iorsmalldaos
         """
         # override ior flags and object class
         self.ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
         self.object_class = self.params.get("o", '/run/ior/objectclass/*/')
-
+        # run test
         IorSingleServer.test_singleserver(self)
+
+
+class IorSmallMpiio(EightServers):
+    """
+    Running Ior for smaller configuration using MPIIO
+    :avocado: recursive
+    """
+    def test_ior_small_mpiio(self):
+        """
+        Jira ID: DAOS-2732
+        Test Description: Purpose of this test is to have small ior test
+                          using mpiio api to check basic functionality.
+        Use case: Run ior with read, write, CheckWrite, CheckRead in ssf mode.
+                  Run ior with read, write, CheckWrite, CheckRead in fpp mode.
+                  Run ior with read, write, CheckWrite and access to random
+                  offset instead of sequential.
+                  All above three cases to be run with different combination of
+                  transfer sizes and object classes.
+        :avocado: tags=all,daosio,small,iorsmall,iorsmallmpiio
+        """
+        # override ior flags
+        ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
+        # run test
+        self.executable(ior_flags)

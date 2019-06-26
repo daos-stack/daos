@@ -87,6 +87,7 @@ class Test(avocadoTest):
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
+        self.number_of_slots = 1
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -206,7 +207,7 @@ class TestWithServers(TestWithoutServers):
             self.hostlist_servers, self.workdir)
         if self.hostlist_clients:
             self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir)
+                self.hostlist_clients, self.workdir, self.number_of_slots)
 
         self.agent_sessions = agent_utils.run_agent(
             self.basepath, self.hostlist_servers, self.hostlist_clients)

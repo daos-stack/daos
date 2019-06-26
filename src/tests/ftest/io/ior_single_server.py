@@ -102,12 +102,12 @@ class IorSingleServer(Test):
         """
 
         # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
+        createmode = self.params.get("mode", '/run/pool/createmode/*/')
         createuid = os.geteuid()
         creategid = os.getegid()
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
-        createsvc = self.params.get("svcn", '/run/createtests/createsvc/')
+        createsetid = self.params.get("setname", '/run/pool/createset/')
+        createsize = self.params.get("size", '/run/pool/createsize/scm/')
+        createsvc = self.params.get("svcn", '/run/pool/createsvc/')
 
         # ior parameters
         client_processes = self.params.get("np", '/run/ior/client_processes/*/')

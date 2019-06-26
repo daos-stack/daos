@@ -28,8 +28,10 @@ pool:
     createset:
         setname: daos_server
     createsize:
-        scm_size: 8000000000
-        nvme_size: 30000000000
+        scm:
+            size: 8000000000
+        nvme:
+            size: 30000000000
     createsvc:
         svcn: 5
 ior:
