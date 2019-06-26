@@ -340,6 +340,7 @@ daos_crt_network_error(int err)
 #define daos_rank_list_identical	d_rank_list_identical
 #define daos_rank_in_rank_list		d_rank_in_rank_list
 #define daos_rank_list_append		d_rank_list_append
+#define daos_rank_list_del		d_rank_list_del
 
 /* the key of various type of parameters, used by DAOS client to set
  * different parameters globally on all servers.
