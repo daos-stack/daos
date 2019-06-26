@@ -571,17 +571,18 @@ def main():
     ret_code = 0
     if status == 0:
         print("All avocado tests passed!")
-    if status & 1 == 1:
-        print("Detected an avocado test failure!")
-    if status & 2 == 2:
-        print("ERROR: Detected an avocado job failure!")
-        ret_code = 1
-    if status & 4 == 4:
-        print("ERROR: Detected an failed avocado command!")
-        ret_code = 1
-    if status & 8 == 8:
-        print("Detected an interrupted avocado job (Ctrl-C or timeout)!")
-    return(ret_code)
+    else:
+        if status & 1 == 1:
+            print("Detected one or more avocado test failures!")
+        if status & 8 == 8:
+            print("Detected one or more interrupted avocado jobs!")
+        if status & 2 == 2:
+            print("ERROR: Detected one or more avocado job failures!")
+            ret_code = 1
+        if status & 4 == 4:
+            print("ERROR: Detected one or more failed avocado commands!")
+            ret_code = 1
+    exit(ret_code)
 
 
 if __name__ == "__main__":
