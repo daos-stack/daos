@@ -14,13 +14,9 @@ hosts: !mux
         - boro-F
 server_config:
    name: daos_server
-conttests:
+pool:
    createmode:
      mode: 511
-   createuid:
-     uid: 11374638
-   creategid:
-     gid: 11374638
    createset:
      setname: daos_server
    createsize:
