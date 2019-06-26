@@ -26,11 +26,9 @@ from __future__ import print_function
 import time
 import traceback
 from avocado import main
-from apricot import TestWithoutServers
+from apricot import TestWithServers
 
 import write_host_file
-from agent_utils import run_agent, stop_agent
-from server_utils import run_server, stop_server
 from general_utils import get_pool, get_container
 from daos_api import DaosPool, DaosContainer, DaosApiError
 from conversion import c_uuid_to_str
@@ -70,7 +68,7 @@ class SimpleCreateDeleteTest(TestWithServers):
             self.container.query()
 
             if self.container.get_uuid_str() != c_uuid_to_str(
-                container.info.ci_uuid):
+                    self.container.info.ci_uuid):
                 self.fail("Container UUID did not match the one in info'n")
 
             self.container.close()
