@@ -29,9 +29,9 @@ from avocado import main
 from apricot import TestWithoutServers
 
 
-import agent_utils import run_agent, stop_agent
-import server_utils import run_server, stop_server
-import general_utils import get_pool, get_container
+from agent_utils import run_agent, stop_agent
+from server_utils import run_server, stop_server
+from general_utils import get_pool, get_container
 import write_host_file
 from daos_api import DaosPool, DaosContainer, DaosApiError
 from conversion import c_uuid_to_str
