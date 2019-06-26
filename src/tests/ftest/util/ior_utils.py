@@ -155,7 +155,7 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
             env_variables[2] + ";" + env_variables[3] + ";" +
             env_variables[4] + ";" + env_variables[5] + ";" +
             mpichinstall + "/mpirun -np {0} --hostfile {1} "
-            "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} -i {3} "
+            "ior -a MPIIO {2} -i {3} "
             "-t {4} -b {5} -o daos:testFile".format(np, hostfile, ior_flags,
                                                     iteration,
                                                     transfer_size,

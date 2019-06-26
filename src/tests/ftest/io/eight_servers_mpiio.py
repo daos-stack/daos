@@ -106,8 +106,8 @@ class EightServers(Test):
         createuid = os.geteuid()
         creategid = os.getegid()
         createsetid = self.params.get("setname", '/run/pool/createset/')
-        createscm_size = self.params.get("scm_size", '/run/pool/createsize/')
-        createnvme_size = self.params.get("nvme_size", '/run/pool/createsize/')
+        createscm_size = self.params.get("size", '/run/pool/createsize/scm/')
+        createnvme_size = self.params.get("size", '/run/pool/createsize/nvme/')
         createsvc = self.params.get("svcn", '/run/pool/createsvc/')
         iteration = self.params.get("iter", '/run/ior/iteration/')
         block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
@@ -120,7 +120,6 @@ class EightServers(Test):
             if self.mpio.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
 
-            #print self.mpio.mpichinstall
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)

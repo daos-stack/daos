@@ -13,14 +13,18 @@ hosts:
 timeout: 300
 server_config:
     name: daos_server
-createtests:
+#createtests:
+pool:
     createmode:
         mode_RW:
              mode: 146
     createset:
         setname: daos_server
     createsize:
-        size: 3000000000
+        scm:
+            size: 3000000000
+        nvme:
+            size: 0
     createsvc:
         svcn: 1
 ior:
@@ -50,3 +54,4 @@ ior:
 # Uncomment when DAOS-2305 is resolved
 #        oclass_R2:
 #            o: "R2"
+
