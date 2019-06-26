@@ -59,7 +59,7 @@ class IorSmallMpiio(EightServers):
         """
         Jira ID: DAOS-2732
         Test Description: Purpose of this test is to have small ior test
-                          using mpiio api to check basic functionality. 
+                          using mpiio api to check basic functionality.
         Use case: Run ior with read, write, CheckWrite, CheckRead in ssf mode.
                   Run ior with read, write, CheckWrite, CheckRead in fpp mode.
                   Run ior with read, write, CheckWrite and access to random
