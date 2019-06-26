@@ -61,10 +61,24 @@ struct bio_dma_buffer {
  * blobstore for certain NVMe device.
  */
 struct bio_blobstore {
-	ABT_mutex		 bb_mutex;
-	struct spdk_blob_store	*bb_bs;
-	struct bio_xs_context	*bb_ctxt; /*Device owner xstream */
-	int			 bb_ref;
+	ABT_mutex			 bb_mutex;
+	struct spdk_blob_store		*bb_bs;
+	struct bio_xs_context		*bb_ctxt; /*Device owner xstream */
+	struct bio_health_monitoring	*bb_dev_health;
+	int				 bb_ref;
+};
+
+/*
+ * SPDK device health monitoring.
+ */
+struct bio_health_monitoring {
+	/* writable open descriptor for health info polling */
+	struct spdk_bdev_desc	*bhm_desc;
+	void			*bhm_health_buf; /* device health info logs */
+	void			*bhm_ctrlr_buf; /* controller data */
+	void			*bhm_error_buf; /* device error logs */
+	uint64_t		 bhm_stat_age;
+	int			 bhm_elpe; /* device supported error log pages*/
 };
 
 /* Per-xstream NVMe context */
@@ -78,10 +92,7 @@ struct bio_xs_context {
 	struct bio_dma_buffer	*bxc_dma_buf;
 	/* generic read only descriptor, currently used for io stat only */
 	struct spdk_bdev_desc	*bxc_desc;
-	/* writable open descriptor for health info polling */
-	struct spdk_bdev_desc	*bxc_health_desc;
 	uint64_t		 bxc_io_stat_age;
-	uint64_t		 bxc_health_stat_age;
 };
 
 /* Per VOS instance I/O context */
