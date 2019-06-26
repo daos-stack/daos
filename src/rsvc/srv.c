@@ -896,8 +896,17 @@ enum rdb_stop_flag {
 	RDB_OF_DESTROY		= 0x1
 };
 
+static inline void
+rsvc_corpc_incr_cb(d_rank_list_t *ranks, d_rank_t target, int rpc_rc,
+		   int *nsuccess)
+{
+	if (nsuccess != NULL && rpc_rc == 0 &&
+	    (ranks == NULL || d_rank_in_rank_list(ranks, target)))
+		++(*nsuccess);
+}
+
 static int
-bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
+bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc, void *priv)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
@@ -905,8 +914,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, DAOS_RSVC_VERSION);
 	return crt_corpc_req_create(info->dmi_ctx, group,
 				    NULL /* excluded_ranks */, opc_full,
-				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    0 /* flags */,
+				    NULL /* co_bulk_hdl */, priv, 0 /* flags */,
 				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
 }
 
@@ -931,6 +939,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	crt_rpc_t		*rpc;
 	struct rsvc_start_in	*in;
 	struct rsvc_start_out	*out;
+	int			 nstarted = 0;
 	int			 rc;
 
 	D_ASSERT(!create || ranks != NULL);
@@ -941,7 +950,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_START, NULL /* group */, &rpc);
+	rc = bcast_create(RSVC_START, NULL /* group */, &rpc, &nstarted);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -956,21 +965,17 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		in->sai_flags |= RDB_AF_BOOTSTRAP;
 	in->sai_size = size;
 	in->sai_ranks = (d_rank_list_t *)ranks;
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		goto out_mem;
-
+	dss_rpc_send(rpc); /* Ignore return code; errors are detected below. */
 	out = crt_reply_get(rpc);
-	rc = out->sao_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s %d replicas\n",
-			DP_UUID(dbid), create ? "/create" : "", rc);
-		ds_rsvc_dist_stop(class, id, ranks, create);
+	rsvc_corpc_incr_cb(in->sai_ranks, rpc->cr_ep.ep_rank, out->sao_rc,
+			   &nstarted);
+
+	if (!nstarted || (ranks && nstarted < ranks->rl_nr)) {
+		D_ERROR(DF_UUID": failed to start%s some replicas\n",
+			DP_UUID(dbid), create ? "/create" : "");
 		rc = -DER_IO;
 	}
 
-out_mem:
 	daos_iov_free(&in->sai_svc_id);
 out_rpc:
 	crt_req_decref(rpc);
@@ -1007,19 +1012,18 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 			   (in->sai_flags & RDB_AF_BOOTSTRAP) ?
 			   in->sai_ranks : NULL, NULL /* arg */);
 out:
-	out->sao_rc = (rc == 0 ? 0 : 1);
+	out->sao_rc = rc;
 	crt_reply_send(rpc);
 }
 
 static int
 ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct rsvc_start_out   *out_source;
-	struct rsvc_start_out   *out_result;
+	struct rsvc_start_in	*in_source	= crt_req_get(source);
+	struct rsvc_start_out   *out_source	= crt_reply_get(source);
 
-	out_source = crt_reply_get(source);
-	out_result = crt_reply_get(result);
-	out_result->sao_rc += out_source->sao_rc;
+	rsvc_corpc_incr_cb(in_source->sai_ranks, source->cr_ep.ep_rank,
+			   out_source->sao_rc, (int *)priv);
 	return 0;
 }
 
@@ -1040,13 +1044,14 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	crt_rpc_t		*rpc;
 	struct rsvc_stop_in	*in;
 	struct rsvc_stop_out	*out;
+	int			 nstopped = 0;
 	int			 rc;
 
 	/*
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_STOP, NULL /* group */, &rpc);
+	rc = bcast_create(RSVC_STOP, NULL /* group */, &rpc, &nstopped);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -1058,18 +1063,17 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		in->soi_flags |= RDB_OF_DESTROY;
 	in->soi_ranks = (d_rank_list_t *)ranks;
 
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		goto out_mem;
-
+	dss_rpc_send(rpc); /* Ignore return code; errors are detected below. */
 	out = crt_reply_get(rpc);
-	rc = out->soo_rc;
-	if (rc != 0) {
-		D_ERROR("failed to stop%s %d replicas\n",
-			destroy ? "/destroy" : "", rc);
+	rsvc_corpc_incr_cb(in->soi_ranks, rpc->cr_ep.ep_rank, out->soo_rc,
+			   &nstopped);
+
+	if (!nstopped || (ranks && nstopped < ranks->rl_nr)) {
+		D_ERROR("failed to stop%s some replicas\n",
+			destroy ? "/destroy" : "");
 		rc = -DER_IO;
 	}
-out_mem:
+
 	daos_iov_free(&in->soi_svc_id);
 out_rpc:
 	crt_req_decref(rpc);
@@ -1098,19 +1102,18 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
 out:
-	out->soo_rc = (rc == 0 || rc == -DER_ALREADY ? 0 : 1);
+	out->soo_rc = rc;
 	crt_reply_send(rpc);
 }
 
 static int
 ds_rsvc_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct rsvc_stop_out   *out_source;
-	struct rsvc_stop_out   *out_result;
+	struct rsvc_stop_in	*in_source	= crt_req_get(source);
+	struct rsvc_stop_out	*out_source	= crt_reply_get(source);
 
-	out_source = crt_reply_get(source);
-	out_result = crt_reply_get(result);
-	out_result->soo_rc += out_source->soo_rc;
+	rsvc_corpc_incr_cb(in_source->soi_ranks, source->cr_ep.ep_rank,
+			   out_source->soo_rc, (int *)priv);
 	return 0;
 }
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,8 +104,22 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 {
 	int leader_index = client->sc_leader_index;
 
-	if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
-	    ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
+	if (rc == -DER_NONEXIST) {
+		int rc_tmp;
+
+		rc_tmp = daos_rank_list_del(client->sc_ranks, ep->ep_rank);
+		if (rc_tmp == -DER_NOMEM)
+			client->sc_ranks = NULL;
+		client->sc_leader_aliveness = 0;
+		if (client->sc_ranks == NULL)
+			client->sc_next = 0;
+		else
+			client->sc_next %= client->sc_ranks->rl_nr;
+
+		/** TODO: Request list of replicas from management service.  **/
+
+	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
+		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
 		if (rc == -DER_NOTLEADER)
 			client->sc_leader_aliveness = 0;
 		else
@@ -221,6 +235,13 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		rsvc_client_process_hint(client, hint, false /* !from_leader */,
 					 ep);
 		return RSVC_CLIENT_RECHOOSE;
+	} else if (rc_svc == -DER_NONEXIST) {
+		/* This may happen when a service replica was destroyed. */
+		D_DEBUG(DB_MD, "service not found reply from rank %u: ",
+			ep->ep_rank);
+		rsvc_client_process_error(client, rc_svc, ep);
+		return client->sc_ranks == NULL ?
+			RSVC_CLIENT_PROCEED : RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
 		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
