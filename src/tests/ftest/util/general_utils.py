@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
 from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
 
 import os
@@ -34,8 +33,10 @@ from errno import ENOENT
 from avocado import fail_on
 from time import sleep
 
+
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
 
 def get_file_path(bin_name, dir_path=""):
     """
@@ -303,4 +304,3 @@ def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
                 "Unexpected {} value: expected={}, detected={}".format(
                     key, expected, detected))
     return messages
-
