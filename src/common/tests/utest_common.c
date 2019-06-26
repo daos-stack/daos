@@ -77,7 +77,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	struct utest_context	*ctx;
 	struct utest_root	*root;
 	PMEMoid			 root_oid;
-	int			 rc;
+	int			 rc, enabled = 1;
 
 	if (strnlen(name, UTEST_POOL_NAME_MAX + 1) > UTEST_POOL_NAME_MAX)
 		return -DER_INVAL;
@@ -94,6 +94,12 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	if (ctx->uc_uma.uma_pool == NULL) {
 		perror("Utest pmem pool couldn't be created");
 		rc = -DER_NOMEM;
+		goto free_ctx;
+	}
+
+	rc = pmemobj_ctl_set(ctx->uc_uma.uma_pool, "stats.enabled", &enabled);
+	if (rc) {
+		perror("Enable SCM usage statistics failed. rc:%d\n");
 		goto free_ctx;
 	}
 
@@ -285,4 +291,16 @@ struct umem_attr *
 utest_utx2uma(struct utest_context *utx)
 {
 	return &utx->uc_uma;
+}
+
+int
+utest_get_scm_used_space(struct umem_instance *um_ins,
+						daos_size_t *used_space)
+{
+	int	rc;
+
+	rc = pmemobj_ctl_get(um_ins->umm_pool,
+		"stats.heap.curr_allocated",
+		used_space);
+	return rc;
 }

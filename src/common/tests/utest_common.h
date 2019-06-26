@@ -153,3 +153,14 @@ int utest_tx_begin(struct utest_context *utx);
  *  \return 0 on success
  */
 int utest_tx_end(struct utest_context *utx, int rc);
+
+
+/** Get the SCM used space information.
+ *  \param	um_ins[IN]		umem_instance
+ *	\param	used_space[OUT]		SCM current allocated space
+ *
+ *  \return 0 on success
+ */
+int
+utest_get_scm_used_space(struct umem_instance *um_ins,
+						daos_size_t *used_space);
