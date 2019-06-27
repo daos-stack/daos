@@ -55,17 +55,22 @@ void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 		    struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int				rc;
+	struct dfuse_obj_hdl	*oh;
+	int			rc;
 
 	if (fi == NULL || fi->fh == 0) {
 		fuse_reply_err(req, 0);
 		return;
 	}
 
+	oh = (struct dfuse_obj_hdl *)fi->fh;
+
 	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
+	if (rc == 0) {
+		D_FREE(oh->doh_buf);
 		D_FREE(oh);
-	fi->fh = 0;
+		fi->fh = 0;
+	}
+
 	fuse_reply_err(req, -rc);
 }
