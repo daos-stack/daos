@@ -25,11 +25,11 @@ package server
 
 import (
 	"fmt"
-	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/pkg/errors"
 )
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
@@ -62,14 +62,12 @@ type ScanStorCmd struct{}
 
 // Execute is run when ScanStorCmd activates
 //
-// Perform task then exit immediately. No config parsing performed.
+// Perform task then return immediately. No config parsing performed.
 func (s *ScanStorCmd) Execute(args []string) (errs error) {
-	var isErrored bool
 	config := newConfiguration()
 	resp := new(pb.ScanStorageResp)
 
-	srv, err := newControlService(
-		&config, getDrpcClientConnection(config.SocketDir))
+	srv, err := newControlService(&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -79,25 +77,16 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 	srv.scm.Discover(resp)
 
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		fmt.Fprintln(os.Stderr, "nvme scan: "+resp.Nvmestate.Error)
-		isErrored = true
-	} else {
-		common.PrintStructs("NVMe", srv.nvme.controllers)
+		return fmt.Errorf("nvme scan: %s", resp.Nvmestate.Error)
 	}
-	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		fmt.Fprintln(os.Stderr, "scm scan: "+resp.Scmstate.Error)
-		isErrored = true
-	} else {
-		common.PrintStructs("SCM", srv.scm.modules)
-	}
+	common.PrintStructs("NVMe", srv.nvme.controllers)
 
-	if isErrored {
-		os.Exit(1)
+	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		return fmt.Errorf("scm scan: %s", resp.Scmstate.Error)
 	}
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
-	return
+	common.PrintStructs("SCM", srv.scm.modules)
+
+	return nil
 }
 
 // PrepNvmeCmd is the struct representing the command to prep NVMe SSDs
@@ -126,8 +115,7 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 
 	config := newConfiguration()
 
-	server, err := newControlService(
-		&config, getDrpcClientConnection(config.SocketDir))
+	server, err := newControlService(&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
@@ -142,8 +130,5 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 		}
 	}
 
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
 	return nil
 }

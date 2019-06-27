@@ -28,17 +28,34 @@ import (
 	"net"
 	"os"
 
+	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security/acl"
-	flags "github.com/jessevdk/go-flags"
-	"google.golang.org/grpc"
 )
 
 func parseCliOpts(opts *cliOptions) error {
 	p := flags.NewParser(opts, flags.Default)
 	// Continue with main if no subcommand is executed.
 	p.SubcommandsOptional = true
+	p.CommandHandler = func(cmd flags.Commander, args []string) error {
+		if cmd == nil {
+			return nil
+		}
+
+		if err := cmd.Execute(args); err != nil {
+			return errors.Wrap(err, "command execution failed")
+		}
+
+		// If the command succeeded, exit now
+		os.Exit(0)
+
+		// not reached
+		return nil
+	}
 
 	// Parse commandline flags which override options loaded from config.
 	_, err := p.Parse()
