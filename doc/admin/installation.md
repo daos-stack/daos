@@ -1,12 +1,10 @@
-DAOS Software Installation
-==========================
+# DAOS Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been
 successfully tested on CentOS7, OpenSUSE 42.2 and Ubuntu 18.04
 distributions.
 
-Software Dependencies
----------------------
+## Software Dependencies
 
 DAOS requires a C99-capable compiler, a golang compiler, and the scons
 build tool. Moreover, the DAOS stack leverages the following open source
@@ -39,31 +37,26 @@ projects:
 The DAOS build system can be configured to download and build any
 missing dependencies automatically.
 
-Distribution Packages
----------------------
+## Distribution Packages
 
 DAOS RPM packaging is under development and will be available for DAOS
 v1.0. Integration with the [Spack](https://spack.io/) package manager is
 also under consideration.
 
-DAOS Source Code
-----------------
+## DAOS Source Code
 
 To check out the DAOS source code, run the following command:
 
-git clone https://github.com/daos-stack/daos.git
+    git clone https://github.com/daos-stack/daos.git
 
 This command clones the DAOS git repository (path referred as
-\${daospath} below). Then initialize the submodules with:
+${daospath} below). Then initialize the submodules with:
 
-cd \${daospath}
+    cd ${daospath}
+    git submodule init
+    git submodule update
 
-git submodule init
-
-git submodule update
-
-Building DAOS from Scratch
---------------------------
+## Building DAOS from Scratch
 
 The below instructions have been verified with CentOS. Installations on
 other Linux distributions might be similar with some variations.
@@ -93,15 +86,15 @@ distros):
 
     yum install -y ninja-build meson libyaml-devel
 
-    \# Required SPDK packages for managing NVMe SSDs
+    # Required SPDK packages for managing NVMe SSDs
 
     yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
 
-    yum install -y python clang-analyzer sg3\_utils libiscsi-devel
+    yum install -y python clang-analyzer sg3_utils libiscsi-devel
 
     yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
 
-    \# Required IpmCtl packages for managing SCM Modules
+    # Required IpmCtl packages for managing SCM Modules
 
     yum install -y yum-plugin-copr epel-release
 
@@ -125,14 +118,14 @@ distros):
 
     apt-get install -y ninja-build meson libyaml-dev python2.7-dev
 
-    \# Required SPDK packages for managing NVMe SSDs
+    # Required SPDK packages for managing NVMe SSDs
 
     apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
 
     apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
     libnuma-dev
 
-    \# Required IpmCtl packages for managing SCM Modules
+    # Required IpmCtl packages for managing SCM Modules
 
     apt-get install -y software-properties-common
 
@@ -164,12 +157,12 @@ serialization format for its RPC requests. The DAOS proto files use
 protobuf 3 syntax which is not supported by the platform protobuf
 compiler in all cases. Not all developers will need to build the proto
 files into the various source files. However, if changes are made to the
-proto files, they will need to be regenerated with a protobuf 3.\* or
+proto files, they will need to be regenerated with a protobuf 3.* or
 higher compiler. To set up support for compiling protobuf files,
 download the following precompiled package for Linux and install it
 somewhere accessible by your PATH variable.
 
-https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86\_64.zip
+https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
 
 ### Building DAOS & Dependencies
 
@@ -185,10 +178,10 @@ in Section 4.4.4 below.
 Otherwise, the missing dependencies can be built automatically by
 invoking scons with the following parameters:
 
-    scons --config=force --build-deps=yes USE\_INSTALLED=all install
+    scons --config=force --build-deps=yes USE_INSTALLED=all install
 
 By default, DAOS and its dependencies are installed under
-\${daospath}/install. The installation path can be modified by adding
+${daospath}/install. The installation path can be modified by adding
 the PREFIX= option to the above command line (e.g., PREFIX=/usr/local).
 
 ### Environment setup
@@ -197,23 +190,19 @@ Once built, the environment must be modified to search for binaries and
 header files in the installation path. This step is not required if
 standard locations (e.g. /bin, /sbin, /usr/lib, ...) are used.
 
-    CPATH=\${daospath}/install/include/:\$CPATH
-
-    PATH=\${daospath}/install/bin/:\${daospath}/install/sbin:\$PATH
-
+    CPATH=${daospath}/install/include/:$CPATH
+    PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
     export CPATH PATH
 
 If using bash, PATH can be set up for you after a build by sourcing the
-script scons\_local/utils/setup\_local.sh from the daos root. This
+script scons_local/utils/setup_local.sh from the daos root. This
 script utilizes a file generated by the build to determine the location
 of daos and its dependencies.
 
-If required, \${daospath}/install must be replaced with the alternative
+If required, ${daospath}/install must be replaced with the alternative
 path specified through PREFIX. The network type to use as well the debug
 log location can be selected as follows:
 
-export CRT\_PHY\_ADDR\_STR="ofi+sockets",
-
-OFI\_INTERFACE=eth0, where eth0 is the network device you want to use.
-
+    export CRT_PHY_ADDR_STR="ofi+sockets",
+    OFI_INTERFACE=eth0, where eth0 is the network device you want to use.
 For infiniband you could use ib0 or whichever label points to IB device.
