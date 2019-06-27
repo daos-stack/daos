@@ -516,7 +516,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_ERROR("Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
 		return;
 	}
 
@@ -711,7 +711,8 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = pool_tgt_query(pool, &out->tco_space);
+	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_tgt_query(pool, &out->tco_space);
 out:
 	if (rc != 0 && map != NULL)
 		pool_map_decref(map);
