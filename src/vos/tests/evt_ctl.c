@@ -1114,9 +1114,7 @@ test_evt_iter_delete(void **state)
 	assert_int_equal(rc, 0);
 	um_inst = utest_utx2umm(arg->ta_utx);
 	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_init_mem_status();
-		assert_int_equal(rc, 0);
-		rc = utest_sync_mem_status(um_inst);
+		rc = utest_sync_mem_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
 	}
 	/* Insert a bunch of entries */
@@ -1136,9 +1134,9 @@ test_evt_iter_delete(void **state)
 			rc = evt_insert(toh, &entry);
 			assert_int_equal(rc, 0);
 			if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-				rc = utest_check_mem_increase(um_inst);
+				rc = utest_check_mem_increase(arg->ta_utx);
 				assert_int_equal(rc, 0);
-				rc = utest_sync_mem_status(um_inst);
+				rc = utest_sync_mem_status(arg->ta_utx);
 				assert_int_equal(rc, 0);
 			}
 		}
@@ -1226,9 +1224,9 @@ test_evt_iter_delete(void **state)
 		sum += *value;
 		utest_free(arg->ta_utx, addr.ba_off);
 		if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-			rc = utest_check_mem_decrease(um_inst);
+			rc = utest_check_mem_decrease(arg->ta_utx);
 			assert_int_equal(rc, 0);
-			rc = utest_sync_mem_status(um_inst);
+			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -1238,9 +1236,7 @@ test_evt_iter_delete(void **state)
 	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
 	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_check_mem_initial_status(um_inst);
-		assert_int_equal(rc, 0);
-		rc = utest_free_mem_status();
+		rc = utest_check_mem_initial_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
 	}
 	rc = evt_destroy(toh);
@@ -1271,9 +1267,7 @@ test_evt_find_internal(void **state)
 	assert_int_equal(rc, 0);
 	um_inst = utest_utx2umm(arg->ta_utx);
 	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_init_mem_status();
-		assert_int_equal(rc, 0);
-		rc = utest_sync_mem_status(um_inst);
+		rc = utest_sync_mem_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
 	}
 	srand(time(0));
@@ -1307,9 +1301,9 @@ test_evt_find_internal(void **state)
 			rc = evt_insert(toh, &entry);
 			assert_int_equal(rc, 0);
 			if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-				rc = utest_check_mem_increase(um_inst);
+				rc = utest_check_mem_increase(arg->ta_utx);
 				assert_int_equal(rc, 0);
-				rc = utest_sync_mem_status(um_inst);
+				rc = utest_sync_mem_status(arg->ta_utx);
 				assert_int_equal(rc, 0);
 			}
 		}
@@ -1373,17 +1367,15 @@ test_evt_find_internal(void **state)
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
 		if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-			rc = utest_check_mem_decrease(um_inst);
+			rc = utest_check_mem_decrease(arg->ta_utx);
 			assert_int_equal(rc, 0);
-			rc = utest_sync_mem_status(um_inst);
+			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 		}
 		evt_ent_array_fini(&ent_array);
 	}
 	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_check_mem_initial_status(um_inst);
-		assert_int_equal(rc, 0);
-		rc = utest_free_mem_status();
+		rc = utest_check_mem_initial_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
 	}
 	/* Destroy the tree */
