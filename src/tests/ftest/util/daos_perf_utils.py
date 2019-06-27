@@ -77,7 +77,7 @@ class DaosPerfCommand(object):
                                                          # size
         self.pool_size_nvme = DaosPerfParam("-N {}")     # Pool NVMe partition
                                                          # size
-        self.test_type = DaosPerfParam("-T {}", "vos")   # Tyes of test, it can
+        self.test_mode = DaosPerfParam("-T {}", "vos")   # Type of test, it can
                                                          # be 'vos', 'echo' and
                                                          # 'daos'
         self.credits = DaosPerfParam("-C {}")            # Credits for
@@ -97,7 +97,11 @@ class DaosPerfCommand(object):
         self.records = DaosPerfParam("-r {}")            # Number of records per
                                                          # akey
         self.single_value_size = DaosPerfParam("-s {}")  # Size of single value
-        self.pathname = DaosPerfParam("-f {}")          # Full path name of the
+        self.specify_seed = DaosPerfParam("-G {}")       # -G x to specify a
+                                                         # seed vs using a
+                                                         # random one if not 
+                                                         # specified
+        self.pathname = DaosPerfParam("-f {}")           # Full path name of the
                                                          # VOS file
         #self.num_tasks = DaosPerfParam("-N {}")          # number of processes
 

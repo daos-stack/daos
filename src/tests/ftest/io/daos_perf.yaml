@@ -29,31 +29,116 @@ server_config:
 #        size: 60000000000
 #    createsvc:
 #        svcn: 1
+
+#daos_perf:
+#    client_processes: !mux
+#        np_1:
+#            np: 1
+##        np_64:
+##            np: 64
+##        np_128:
+##            np: 128
+#    pool_size_scm:
+#        size: '10G'
+##    daosperflags:
+##        F: " "
+#    single_value_size:
+#        value_size: 256
+#    number_of_objects:
+#        obj: 8
+#    value_type: !mux
+#        single_value:
+#            dkeys: 64
+#            akeys: '2k'
+#            records: 1
+##        array_value:
+##            dkeys: 32
+##            akeys: 64
+##            records: 64
+##            flags: '-A'
+#    objectclass:
+#        o: "LARGE"
+
 daos_perf:
-    client_processes: !mux
-        np_1:
-            np: 2
-#        np_64:
-#            np: 64
-#        np_128:
-#            np: 128
-    pool_size_scm:
-        size: '10G'
-#    daosperflags:
-#        F: " "
-    single_value_size:
-        value_size: 256
-    number_of_objects:
-        obj: 8
-    value_type: !mux
-        single_value:
-            dkeys: 64
-            akeys: '2k'
-            records: 1
+  pool_size:
+    scm:
+      size: '10G'
+  client_processes: !mux
+#    np_1:
+#      np: 1
+#      mode: 'vos'
+#      value_size: 256
+#      value_type: !mux
+#        single_value:
+#          obj: 8
+#          dkeys: '1k'
+#          akeys: '2k'
+#          records: 1
+#          flags: !mux
+#            with_shuffle:
+#              F: "-S"
+#            without_shuffle:
+#              F: " "
 #        array_value:
-#            dkeys: 32
-#            akeys: 64
-#            records: 64
-#            flags: '-A'
-    objectclass:
-        o: "LARGE"
+#          obj: 1
+#          dkeys: 1
+#          akeys: 1
+#          records: '16m'
+#          flags: !mux
+#            with_shuffle:
+#              F: "-A -S"
+#            without_shuffle:
+#              F: "-A"
+    np_16:
+      np: 16
+      mode: 'daos'
+      value_size: 256
+      value_type:
+        single_value:
+          obj: 8
+          dkeys: '1k'
+          akeys: 128
+          records: 1
+          flags:
+            for_singlevalue:
+              F: ' '
+      oclass: !mux
+        large:
+          o: 'LARGE'
+        r2:
+          o: 'R2'
+
+daos_perf_performance:
+  pool_size:
+    scm:
+      size: '10G'
+    nvme:
+      size: '40G'
+  client_processes:
+    np_64:
+      np: 64
+      mode: 'daos'
+      value_size: !mux
+        size_256:
+          size: 256
+        size_4k:
+          size: '4k'
+      value_type:
+        single_value:
+          objects: !mux
+            obj_1:
+              obj: 1
+            obj_8:
+              obj: 8
+          dkeys: '4k'
+          akeys: '1k'
+          records: 1
+          flags:
+            for_singlevalue:
+              F: ' '
+      oclass: !mux
+        large:
+          o: 'Large'
+        r2:
+          o: 'R2'
+      

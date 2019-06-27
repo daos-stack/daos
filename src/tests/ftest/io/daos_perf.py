@@ -94,11 +94,9 @@ class DaosPerf(TestWithServers):
 #                                       self.hostlist_clients)
 #            server_utils.stop_server(hosts=self.hostlist_servers)
 #
-    def test_daos_perf(self):
+    def runner(self):
         """
         Test daosPerf with different config.
-
-        :avocado: tags=daosperf
         """
 
         # parameters used in pool create
@@ -110,16 +108,17 @@ class DaosPerf(TestWithServers):
         #createsvc = self.params.get("svcn", '/run/createtests/createsvc/')
 
         # daos_perf parameters
-        client_processes = self.params.get("np", '/run/daos_perf/client_processes/*/')
-        pool_size_scm = self.params.get("size", '/run/daos_perf/pool_size_scm/')
-        daos_perf_flags = self.params.get("flags", '/run/daos_perf/value_type/*/')
+        pool_size_scm = self.params.get("size", '/run/daos_perf/pool_size/scm/')
+        client_processes = self.params.get("np", '/run/daos_perf/client_processes/*')
+        mode = self.params.get("mode", '/run/daos_perf/client_processes/*')
         single_value_size = self.params.get("value_size",
-                                        '/run/daos_perf/single_value_size/')
-        num_of_obj = self.params.get("obj", '/run/daos_perf/number_of_objects/')
-        num_of_dkeys = self.params.get("dkeys", '/run/daos_perf/value_type/*/')
-        num_of_akeys = self.params.get("akeys", '/run/daos_perf/value_type/*/')
-        num_of_recs = self.params.get("records", '/run/daos_perf/value_type/*/')
-        object_class = self.params.get("o", '/run/daos_perf/objectclass/')
+                                        '/run/daos_perf/client_processes/*')
+        num_of_obj = self.params.get("obj", '/run/daos_perf/client_processes/*/value_type/*')
+        num_of_dkeys = self.params.get("dkeys", '/run/daos_perf/client_processes/*/value_type/*')
+        num_of_akeys = self.params.get("akeys", '/run/daos_perf/client_processes/*/value_type/*')
+        num_of_recs = self.params.get("records", '/run/daos_perf/client_processes/*/value_type/*')
+        daos_perf_flags = self.params.get("F", '/run/daos_perf/client_processes/*/value_type/*/flags/*')
+        object_class = self.params.get("o", '/run/daos_perf/client_processes/np_16/*')
 
         try:
             # initialize a python pool object then create the underlying
@@ -168,3 +167,20 @@ class DaosPerf(TestWithServers):
                                   "{}".format(line))
         except (daos_perf_utils.DaosPerfFailed) as excep:
             self.fail("<DaosPerf Test FAILED>\n {}".format(excep))
+
+    def test_small(self):
+        """
+        Small daos_perf test for quick run
+        :avocado: tags=daosperf,daosperfsmall
+        """
+
+        self.runner()
+
+    def test_performance(self):
+        """
+        Test to run daos_perf using single value type for
+        performance purpose
+        :avocado: tags=daosperf,daosperf_performance
+        """
+
+        self.runner()
