@@ -38,6 +38,13 @@ struct utest_root {
 	uint64_t	ur_root[0];
 };
 
+struct utest_mem_status {
+	daos_size_t		initial_value;
+	daos_size_t		prev_value;
+};
+
+struct utest_mem_status *ut_mem_status;
+
 int
 utest_tx_begin(struct utest_context *utx)
 {
@@ -303,4 +310,92 @@ utest_get_scm_used_space(struct umem_instance *um_ins,
 		"stats.heap.curr_allocated",
 		used_space);
 	return rc;
+}
+
+int
+utest_init_mem_status(void)
+{
+	int		rc = 0;
+
+	D_ALLOC_PTR(ut_mem_status);
+	if (ut_mem_status == NULL)
+		return -DER_NOMEM;
+
+	ut_mem_status->initial_value = 0;
+	ut_mem_status->prev_value = 0;
+	return rc;
+}
+
+int
+utest_free_mem_status(void)
+{
+	D_FREE(ut_mem_status);
+	return 0;
+}
+
+int
+utest_sync_mem_status(struct umem_instance *um_ins)
+{
+	int		rc;
+	daos_size_t		scm_used;
+
+	rc = utest_get_scm_used_space(um_ins, &scm_used);
+	if (ut_mem_status->initial_value == 0)
+		ut_mem_status->initial_value = scm_used;
+	ut_mem_status->prev_value = scm_used;
+	return rc;
+}
+
+int
+utest_check_mem_increase(struct umem_instance *um_ins)
+{
+	int		rc;
+	daos_size_t		scm_used;
+
+	rc = utest_get_scm_used_space(um_ins, &scm_used);
+	if (rc) {
+		D_ERROR("Get SCM Usage failed\n");
+		return rc;
+	}
+	if (ut_mem_status->prev_value > scm_used) {
+		D_ERROR("SCM Usage not increased\n");
+		return 1;
+	}
+	return 0;
+}
+
+int
+utest_check_mem_decrease(struct umem_instance *um_ins)
+{
+	int		rc;
+	daos_size_t		scm_used;
+
+	rc = utest_get_scm_used_space(um_ins, &scm_used);
+	if (rc) {
+		D_ERROR("Get SCM Usage failed\n");
+		return rc;
+	}
+	if (ut_mem_status->prev_value < scm_used) {
+		D_ERROR("SCM Usage not decreased\n");
+		return 1;
+	}
+	return 0;
+}
+
+int
+utest_check_mem_initial_status(struct umem_instance *um_ins)
+{
+	int		rc;
+	daos_size_t		scm_used;
+
+	rc = utest_get_scm_used_space(um_ins, &scm_used);
+	if (rc) {
+		D_ERROR("Get SCM Usage failed\n");
+		return rc;
+	}
+	if (ut_mem_status->initial_value != scm_used) {
+		D_ERROR("SCM not freed up in full\n");
+		return 1;
+	}
+	return 0;
 }

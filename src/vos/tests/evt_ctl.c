@@ -1107,21 +1107,17 @@ test_evt_iter_delete(void **state)
 	int			 sum, expected_sum;
 	struct evt_filter	 filter;
 	uint32_t		 inob;
-	daos_size_t		 scm_used = 0, prev_value = 0;
-	struct umem_instance *um_inst;
-	daos_size_t		initial_value = 0;
-	int		check_um_instance;
+	struct	umem_instance		*um_inst;
 
 	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	um_inst = utest_utx2umm(arg->ta_utx);
-	check_um_instance = strcmp(um_inst->umm_name, "pmem");
-	if (check_um_instance == 0) {
-		rc = utest_get_scm_used_space(um_inst, &scm_used);
+	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+		rc = utest_init_mem_status();
 		assert_int_equal(rc, 0);
-		initial_value = scm_used;
-		prev_value = scm_used;
+		rc = utest_sync_mem_status(um_inst);
+		assert_int_equal(rc, 0);
 	}
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
@@ -1139,13 +1135,11 @@ test_evt_iter_delete(void **state)
 
 			rc = evt_insert(toh, &entry);
 			assert_int_equal(rc, 0);
-			if (check_um_instance == 0) {
-				rc = utest_get_scm_used_space(um_inst,
-					&scm_used);
+			if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+				rc = utest_check_mem_increase(um_inst);
 				assert_int_equal(rc, 0);
-				if (prev_value > scm_used)
-					fail_msg("SCM Usage count error\n");
-				prev_value = scm_used;
+				rc = utest_sync_mem_status(um_inst);
+				assert_int_equal(rc, 0);
 			}
 		}
 	}
@@ -1231,12 +1225,11 @@ test_evt_iter_delete(void **state)
 
 		sum += *value;
 		utest_free(arg->ta_utx, addr.ba_off);
-		if (check_um_instance == 0) {
-			rc = utest_get_scm_used_space(um_inst, &scm_used);
+		if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+			rc = utest_check_mem_decrease(um_inst);
 			assert_int_equal(rc, 0);
-			if (prev_value < scm_used)
-				fail_msg("SCM Usage count error\n");
-			prev_value = scm_used;
+			rc = utest_sync_mem_status(um_inst);
+			assert_int_equal(rc, 0);
 		}
 	}
 	rc = evt_iter_finish(ih);
@@ -1244,11 +1237,11 @@ test_evt_iter_delete(void **state)
 
 	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
-	if (check_um_instance == 0) {
-		rc = utest_get_scm_used_space(um_inst, &scm_used);
+	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+		rc = utest_check_mem_initial_status(um_inst);
 		assert_int_equal(rc, 0);
-		if (initial_value != scm_used)
-			fail_msg("SCM not freed up in full\n");
+		rc = utest_free_mem_status();
+		assert_int_equal(rc, 0);
 	}
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
@@ -1270,22 +1263,18 @@ test_evt_find_internal(void **state)
 	int			 offset;
 	int			 hole_epoch;
 	char testdata[] = "deadbeef";
-	daos_size_t		 scm_used = 0, prev_value = 0;
-	struct umem_instance *um_inst;
-	daos_size_t		initial_value = 0;
-	int		check_um_instance;
+	struct umem_instance	*um_inst;
 
 	/* Create a evtree */
 	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	um_inst = utest_utx2umm(arg->ta_utx);
-	check_um_instance = strcmp(um_inst->umm_name, "pmem");
-	if (check_um_instance == 0) {
-		rc = utest_get_scm_used_space(um_inst, &scm_used);
+	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+		rc = utest_init_mem_status();
 		assert_int_equal(rc, 0);
-		initial_value = scm_used;
-		prev_value = scm_used;
+		rc = utest_sync_mem_status(um_inst);
+		assert_int_equal(rc, 0);
 	}
 	srand(time(0));
 	hole_epoch = (rand() % 98) + 1;
@@ -1317,13 +1306,11 @@ test_evt_find_internal(void **state)
 			}
 			rc = evt_insert(toh, &entry);
 			assert_int_equal(rc, 0);
-			if (check_um_instance == 0) {
-				rc = utest_get_scm_used_space(um_inst,
-					&scm_used);
+			if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+				rc = utest_check_mem_increase(um_inst);
 				assert_int_equal(rc, 0);
-				if (prev_value > scm_used)
-					fail_msg("SCM Usage count error\n");
-				prev_value = scm_used;
+				rc = utest_sync_mem_status(um_inst);
+				assert_int_equal(rc, 0);
 			}
 		}
 	}
@@ -1385,20 +1372,19 @@ test_evt_find_internal(void **state)
 		entry.ei_rect.rc_epc = rect.rc_epc;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
-		if (check_um_instance == 0) {
-			rc = utest_get_scm_used_space(um_inst, &scm_used);
+		if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+			rc = utest_check_mem_decrease(um_inst);
 			assert_int_equal(rc, 0);
-			if (prev_value < scm_used)
-				fail_msg("SCM Usage count error\n");
-			prev_value = scm_used;
+			rc = utest_sync_mem_status(um_inst);
+			assert_int_equal(rc, 0);
 		}
 		evt_ent_array_fini(&ent_array);
 	}
-	if (check_um_instance == 0) {
-		rc = utest_get_scm_used_space(um_inst, &scm_used);
+	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
+		rc = utest_check_mem_initial_status(um_inst);
 		assert_int_equal(rc, 0);
-		if (initial_value != scm_used)
-			fail_msg("SCM not freed up in full\n");
+		rc = utest_free_mem_status();
+		assert_int_equal(rc, 0);
 	}
 	/* Destroy the tree */
 	rc = evt_destroy(toh);

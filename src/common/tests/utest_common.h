@@ -161,6 +161,48 @@ int utest_tx_end(struct utest_context *utx, int rc);
  *
  *  \return 0 on success
  */
-int
-utest_get_scm_used_space(struct umem_instance *um_ins,
-						daos_size_t *used_space);
+int utest_get_scm_used_space(struct umem_instance *um_ins,
+		daos_size_t *used_space);
+
+/** Initialize the internal mem status variables.
+ *  \param	None
+ *
+ *  \return 0 on success
+ */
+int utest_init_mem_status(void);
+
+/** Free the mem status pointer
+ *  \param	None
+ *
+ *  \return 0 on success
+ */
+int utest_free_mem_status(void);
+
+/** Sync the SCM usage memory status
+ *  \param	um_ins[IN]	umem_instance
+ *
+ *  \return 0 on success
+ */
+int utest_sync_mem_status(struct umem_instance *um_ins);
+
+/** Check whether SCM usage decrease
+ *  \param	um_ins[IN]	umem_instance
+ *
+ *  \return 0 on success
+ */
+int utest_check_mem_decrease(struct umem_instance *um_ins);
+
+/** Check whether SCM usage increase
+ *  \param	um_ins[IN]	umem_instance
+ *
+ *  \return 0 on success
+ */
+int utest_check_mem_increase(struct umem_instance *um_ins);
+
+/** Check initial SCM usage with current value
+ *  \param	um_ins[IN]	umem_instance
+ *
+ *  \return 0 on success
+ */
+int utest_check_mem_initial_status(struct umem_instance *um_ins);
+
