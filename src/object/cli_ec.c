@@ -442,3 +442,12 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 	return rc;
 }
 
+bool
+ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid)
+{
+        struct daos_oclass_attr *oca = daos_oclass_attr_find(oid);
+
+        if (oca->ca_resil == DAOS_RES_EC && fw_cnt > oca->u.ec.e_p)
+                return true;
+        return false;
+}

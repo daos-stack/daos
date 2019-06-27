@@ -1137,7 +1137,9 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	 */
 	data_size = sgls_size;
 
-	if (data_size >= OBJ_BULK_LIMIT) {
+	if (data_size >= OBJ_BULK_LIMIT ||
+		ec_mult_data_targets(obj_auxi->req_tgts.ort_grp_size,
+				     obj->cob_md.omd_id)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   obj_auxi);

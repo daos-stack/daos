@@ -292,5 +292,7 @@ struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
+bool
+ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
