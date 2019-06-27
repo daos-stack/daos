@@ -65,7 +65,7 @@ def scons():
 
     env = Environment(TOOLS=['extra', 'default'])
 
-    opts_file = os.path.join(Dir('#').abspath, 'daos_m.conf')
+    opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
     commits_file = os.path.join(Dir('#').abspath, 'utils/build.config')
