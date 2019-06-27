@@ -28,6 +28,11 @@ from apricot import Test, TestWithServers, skipForTicket
 def unittest_runner(self, unit_testname):
     """
     Common unitetest runner function.
+
+    Unit tests needs to be run on local machine incase of server start required
+    For other unit tests, which does not required to start server,it needs to be
+    run on server where /mnt/daos mounted.
+
     Args:
         unit_testname: unittest name.
     return:
@@ -38,7 +43,11 @@ def unittest_runner(self, unit_testname):
     server = self.params.get("test_machines", "/run/hosts/*")
     bin_path = get_file_path(name, "install/bin")
 
-    cmd = ("ssh {} {}".format(server[0], bin_path[0]))
+    if type(self).__name__ == "UnittestWithServers":
+        cmd = ("{}".format(bin_path[0]))
+    else:
+        cmd = ("ssh {} {}".format(server[0], bin_path[0]))
+
     return_code = process.system(cmd, ignore_status=True,
                                  allow_output_check="both")
 
