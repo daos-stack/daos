@@ -866,8 +866,9 @@ pipeline {
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       mv install/Linux/TESTING/avocado/job-results/CART_1node/* \
-                                         install/Linux/TESTING/testLogs-1_node \
-                                         "$STAGE_NAME/"
+                                         "$STAGE_NAME/" || true
+                                      mv install/Linux/TESTING/testLogs-1_node \
+                                         "$STAGE_NAME/" || true
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
@@ -919,8 +920,9 @@ pipeline {
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       mv install/Linux/TESTING/avocado/job-results/CART_1vgdnode/* \
-                                         install/Linux/TESTING/testLogs-1vgd_node \
-                                         "$STAGE_NAME/"
+                                         "$STAGE_NAME/" || true
+                                      mv install/Linux/TESTING/testLogs-1vgd_node \
+                                         "$STAGE_NAME/" || true
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
@@ -986,8 +988,9 @@ pipeline {
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       mv install/Linux/TESTING/avocado/job-results/CART_2node/* \
-                                         install/Linux/TESTING/testLogs-2_node \
-                                         "$STAGE_NAME/"
+                                         "$STAGE_NAME/" || true
+                                      mv install/Linux/TESTING/testLogs-2_node \
+                                         "$STAGE_NAME/" || true
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
@@ -1039,8 +1042,9 @@ pipeline {
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       mv install/Linux/TESTING/avocado/job-results/CART_3node/* \
-                                         install/Linux/TESTING/testLogs-3_node \
-                                         "$STAGE_NAME/"
+                                         "$STAGE_NAME/" || true
+                                      mv install/Linux/TESTING/testLogs-3_node \
+                                         "$STAGE_NAME/" || true
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
@@ -1092,8 +1096,9 @@ pipeline {
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       mv install/Linux/TESTING/avocado/job-results/CART_5node/* \
-                                         install/Linux/TESTING/testLogs-5_node \
-                                         "$STAGE_NAME/"
+                                         "$STAGE_NAME/" || true
+                                      mv install/Linux/TESTING/testLogs-5_node \
+                                         "$STAGE_NAME/" || true
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
