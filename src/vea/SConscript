@@ -1,9 +1,16 @@
-"""Build versioned extent allocator lib"""
+"""Build versioned extent allocator"""
+import os
+import daos_build
+
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
+    prereqs.require(denv, 'pmdk')
+
     denv.Library('vea', Glob('*.c'), LIBS=['daos_common', 'gurt'])
 
     SConscript('tests/SConscript', exports='denv')
