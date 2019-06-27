@@ -78,11 +78,14 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	oh = (struct dfuse_obj_hdl *)((uint64_t)(fi->fh));
 
-	/** duplicate the file handle for the fuse handle */
+	/** Files should not have readdir buffers */
+	D_ASSERT(oh->doh_buf == NULL);
+
 	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
+	if (rc == 0) {
 		D_FREE(oh);
-	fi->fh = 0;
+		fi->fh = 0;
+	}
 
 	fuse_reply_err(req, -rc);
 }
