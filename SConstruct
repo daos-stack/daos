@@ -65,6 +65,9 @@ def scons():
 
     env = Environment(TOOLS=['extra', 'default'])
 
+    if os.path.exists("daos_m.conf"):
+        os.rename("daos_m.conf", "daos.conf")
+
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
