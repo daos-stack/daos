@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -652,7 +652,7 @@ func TestUpdateNvme(t *testing.T) {
 					State: &pb.ResponseState{
 						Status: pb.ResponseStatus_CTRL_ERR_NVME,
 						Error: pciAddr + ": " +
-							"*main.mockSpdkNvme: " +
+							"*server.mockSpdkNvme: " +
 							"spdk format failed",
 					},
 				},
