@@ -50,7 +50,7 @@ tc_load_group_from_file(const char *grp_cfg_file, crt_group_t *grp,
 	int		parsed_rank;
 	char		parsed_addr[255];
 	int		parsed_port;
-	char		full_uri[255];
+	char		full_uri[511];
 	crt_node_info_t node_info;
 	int		i;
 	int		rc = 0;
