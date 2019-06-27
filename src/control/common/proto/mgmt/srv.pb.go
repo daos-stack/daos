@@ -44,7 +44,7 @@ func (x DaosRequestStatus) String() string {
 	return proto.EnumName(DaosRequestStatus_name, int32(x))
 }
 func (DaosRequestStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_srv_8088d16e88e78cff, []int{0}
+	return fileDescriptor_srv_47e113c2c230f536, []int{0}
 }
 
 // Identifier for server rank within DAOS pool
@@ -60,7 +60,7 @@ func (m *DaosRank) Reset()         { *m = DaosRank{} }
 func (m *DaosRank) String() string { return proto.CompactTextString(m) }
 func (*DaosRank) ProtoMessage()    {}
 func (*DaosRank) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_8088d16e88e78cff, []int{0}
+	return fileDescriptor_srv_47e113c2c230f536, []int{0}
 }
 func (m *DaosRank) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosRank.Unmarshal(m, b)
@@ -105,7 +105,7 @@ func (m *DaosResp) Reset()         { *m = DaosResp{} }
 func (m *DaosResp) String() string { return proto.CompactTextString(m) }
 func (*DaosResp) ProtoMessage()    {}
 func (*DaosResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_8088d16e88e78cff, []int{1}
+	return fileDescriptor_srv_47e113c2c230f536, []int{1}
 }
 func (m *DaosResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosResp.Unmarshal(m, b)
@@ -143,7 +143,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_8088d16e88e78cff, []int{2}
+	return fileDescriptor_srv_47e113c2c230f536, []int{2}
 }
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRankReq.Unmarshal(m, b)
@@ -185,7 +185,7 @@ func (m *CreateMsReq) Reset()         { *m = CreateMsReq{} }
 func (m *CreateMsReq) String() string { return proto.CompactTextString(m) }
 func (*CreateMsReq) ProtoMessage()    {}
 func (*CreateMsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_8088d16e88e78cff, []int{3}
+	return fileDescriptor_srv_47e113c2c230f536, []int{3}
 }
 func (m *CreateMsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateMsReq.Unmarshal(m, b)
@@ -234,9 +234,9 @@ func init() {
 	proto.RegisterEnum("mgmt.DaosRequestStatus", DaosRequestStatus_name, DaosRequestStatus_value)
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_8088d16e88e78cff) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_47e113c2c230f536) }
 
-var fileDescriptor_srv_8088d16e88e78cff = []byte{
+var fileDescriptor_srv_47e113c2c230f536 = []byte{
 	// 270 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x90, 0xcd, 0x4b, 0xc3, 0x30,
 	0x18, 0xc6, 0xed, 0x1c, 0xb3, 0x7d, 0x8b, 0x12, 0x73, 0xb1, 0xa0, 0x42, 0xd9, 0x69, 0x78, 0xa8,

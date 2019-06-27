@@ -256,11 +256,11 @@ func (m *mockMgmtSvcClient) DestroyPool(
 	ctx context.Context,
 	req *pb.DestroyPoolReq,
 	o ...grpc.CallOption,
-) (*pb.DaosResp, error) {
+) (*pb.DestroyPoolResp, error) {
 
 	// return successful pool destroy results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.DaosResp{}, nil
+	return &pb.DestroyPoolResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(

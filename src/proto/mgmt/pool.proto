@@ -54,4 +54,7 @@ message DestroyPoolReq {
 	bool force = 3; // destroy regardless of active connections
 }
 
-// DestroyPoolResp is identical to DaosResp.
+// DestroyPoolResp returns resultant state of destroy operation.
+message DestroyPoolResp {
+	DaosRequestStatus status = 1;
+}

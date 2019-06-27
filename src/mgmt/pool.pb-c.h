@@ -19,6 +19,7 @@ PROTOBUF_C__BEGIN_DECLS
 typedef struct _Mgmt__CreatePoolReq Mgmt__CreatePoolReq;
 typedef struct _Mgmt__CreatePoolResp Mgmt__CreatePoolResp;
 typedef struct _Mgmt__DestroyPoolReq Mgmt__DestroyPoolReq;
+typedef struct _Mgmt__DestroyPoolResp Mgmt__DestroyPoolResp;
 
 
 /* --- enums --- */
@@ -105,6 +106,19 @@ struct  _Mgmt__DestroyPoolReq
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
 
 
+/*
+ * DestroyPoolResp returns resultant state of destroy operation.
+ */
+struct  _Mgmt__DestroyPoolResp
+{
+  ProtobufCMessage base;
+  Mgmt__DaosRequestStatus status;
+};
+#define MGMT__DESTROY_POOL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__destroy_pool_resp__descriptor) \
+    , MGMT__DAOS_REQUEST_STATUS__SUCCESS }
+
+
 /* Mgmt__CreatePoolReq methods */
 void   mgmt__create_pool_req__init
                      (Mgmt__CreatePoolReq         *message);
@@ -162,6 +176,25 @@ Mgmt__DestroyPoolReq *
 void   mgmt__destroy_pool_req__free_unpacked
                      (Mgmt__DestroyPoolReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__DestroyPoolResp methods */
+void   mgmt__destroy_pool_resp__init
+                     (Mgmt__DestroyPoolResp         *message);
+size_t mgmt__destroy_pool_resp__get_packed_size
+                     (const Mgmt__DestroyPoolResp   *message);
+size_t mgmt__destroy_pool_resp__pack
+                     (const Mgmt__DestroyPoolResp   *message,
+                      uint8_t             *out);
+size_t mgmt__destroy_pool_resp__pack_to_buffer
+                     (const Mgmt__DestroyPoolResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DestroyPoolResp *
+       mgmt__destroy_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__destroy_pool_resp__free_unpacked
+                     (Mgmt__DestroyPoolResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__CreatePoolReq_Closure)
@@ -173,6 +206,9 @@ typedef void (*Mgmt__CreatePoolResp_Closure)
 typedef void (*Mgmt__DestroyPoolReq_Closure)
                  (const Mgmt__DestroyPoolReq *message,
                   void *closure_data);
+typedef void (*Mgmt__DestroyPoolResp_Closure)
+                 (const Mgmt__DestroyPoolResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -182,6 +218,7 @@ typedef void (*Mgmt__DestroyPoolReq_Closure)
 extern const ProtobufCMessageDescriptor mgmt__create_pool_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__create_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__destroy_pool_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__destroy_pool_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 
