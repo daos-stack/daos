@@ -29,6 +29,7 @@ import uuid
 import os
 import inspect
 import sys
+import enum
 
 from daos_cref import *
 from conversion import *
@@ -588,6 +589,132 @@ class DaosPool(object):
 
         return (ctypes.c_uint32 * len(pylist))(*pylist)
 
+class DaosObjClassOld(enum.IntEnum):
+    DAOS_OC_TINY_RW       = 1
+    DAOS_OC_SMALL_RW      = 2
+    DAOS_OC_LARGE_RW      = 3
+    DAOS_OC_R2S_RW        = 4
+    DAOS_OC_R2_RW         = 5
+    DAOS_OC_R2_MAX_RW     = 6
+    DAOS_OC_R3S_RW        = 7
+    DAOS_OC_R3_RW         = 8
+    DAOS_OC_R3_MAX_RW     = 9
+    DAOS_OC_R4S_RW        = 10
+    DAOS_OC_R4_RW         = 11
+    DAOS_OC_R4_MAX_RW     = 12
+    DAOS_OC_REPL_MAX_RW   = 13
+    DAOS_OC_ECHO_TINY_RW  = 14
+    DAOS_OC_ECHO_R2S_RW   = 15
+    DAOS_OC_ECHO_R3S_RW   = 16
+    DAOS_OC_ECHO_R4S_RW   = 17
+    DAOS_OC_R1S_SPEC_RANK = 19
+    DAOS_OC_R2S_SPEC_RANK = 20
+    DAOS_OC_R3S_SPEC_RANK = 21
+    DAOS_OC_EC_K2P1_L32K  = 22
+    DAOS_OC_EC_K2P2_L32K  = 23
+    DAOS_OC_EC_K8P2_L1M   = 24
+
+class DaosObjClass(enum.IntEnum):
+    OC_BACK_COMPAT = 50
+    OC_TINY        = 51
+    OC_SMALL       = 52
+    OC_LARGE       = 53
+    OC_MAX         = 54
+    OC_RP_TINY     = 60
+    OC_RP_SMALL    = 61
+    OC_RP_LARGE    = 62
+    OC_RP_MAX      = 63
+    OC_RP_SF_TINY  = 70
+    OC_RP_SF_SMALL = 71
+    OC_RP_SF_LARGE = 72
+    OC_RP_SF_MAX   = 73
+    OC_RP_XSF      = 80
+    OC_EC_TINY     = 100
+    OC_EC_SMALL    = 101
+    OC_EC_LARGE    = 102
+    OC_EC_MAX      = 103
+    OC_S1          = 200
+    OC_S2          = 201
+    OC_S4          = 202
+    OC_S8          = 203
+    OC_S16         = 204
+    OC_S32         = 205
+    OC_S64         = 206
+    OC_S128        = 207
+    OC_S256        = 208
+    OC_S512        = 209
+    OC_S1K         = 210
+    OC_S2K         = 211
+    OC_S4K         = 212
+    OC_S8K         = 213
+    OC_SX          = 214
+    OC_RP_2G1      = 220
+    OC_RP_2G2      = 221
+    OC_RP_2G4      = 222
+    OC_RP_2G8      = 223
+    OC_RP_2G16     = 224
+    OC_RP_2G32     = 225
+    OC_RP_2G64     = 226
+    OC_RP_2G128    = 227
+    OC_RP_2G256    = 228
+    OC_RP_2G512    = 229
+    OC_RP_2G1K     = 230
+    OC_RP_2G2K     = 231
+    OC_RP_2G4K     = 232
+    OC_RP_2G8K     = 233
+    OC_RP_2GX      = 234
+    OC_RP_3G1      = 240
+    OC_RP_3G2      = 241
+    OC_RP_3G4      = 242
+    OC_RP_3G8      = 243
+    OC_RP_3G16     = 244
+    OC_RP_3G32     = 245
+    OC_RP_3G64     = 246
+    OC_RP_3G128    = 247
+    OC_RP_3G256    = 248
+    OC_RP_3G512    = 249
+    OC_RP_3G1K     = 250
+    OC_RP_3G2K     = 251
+    OC_RP_3G4K     = 252
+    OC_RP_3G8K     = 253
+    OC_RP_3GX      = 254
+    OC_RP_8G1      = 260
+    OC_RP_8G2      = 261
+    OC_RP_8G4      = 262
+    OC_RP_8G8      = 263
+    OC_RP_8G16     = 264
+    OC_RP_8G32     = 265
+    OC_RP_8G64     = 266
+    OC_RP_8G128    = 267
+    OC_RP_8G256    = 268
+    OC_RP_8G512    = 269
+    OC_RP_8G1K     = 270
+    OC_RP_8G2K     = 271
+    OC_RP_8G4K     = 272
+    OC_RP_8G8K     = 273
+    OC_RP_8GX      = 274
+    OC_RESERVED    = 1024
+    OC_RP_4G1      = 1025
+    OC_RP_4G2      = 1026
+    OC_RP_4G4      = 1027
+    OC_RP_4GX      = 1028
+
+ConvertObjClass = {
+    DaosObjClassOld.DAOS_OC_TINY_RW     : DaosObjClass.OC_S1,
+    DaosObjClassOld.DAOS_OC_SMALL_RW    : DaosObjClass.OC_S4,
+    DaosObjClassOld.DAOS_OC_LARGE_RW    : DaosObjClass.OC_SX,
+    DaosObjClassOld.DAOS_OC_R2S_RW      : DaosObjClass.OC_RP_2G1,
+    DaosObjClassOld.DAOS_OC_R2_RW       : DaosObjClass.OC_RP_2G2,
+    DaosObjClassOld.DAOS_OC_R2_MAX_RW   : DaosObjClass.OC_RP_2GX,
+    DaosObjClassOld.DAOS_OC_R3S_RW      : DaosObjClass.OC_RP_3G1,
+    DaosObjClassOld.DAOS_OC_R3_RW       : DaosObjClass.OC_RP_3G2,
+    DaosObjClassOld.DAOS_OC_R3_MAX_RW   : DaosObjClass.OC_RP_3GX,
+    DaosObjClassOld.DAOS_OC_R4S_RW      : DaosObjClass.OC_RP_4G1,
+    DaosObjClassOld.DAOS_OC_R4_RW       : DaosObjClass.OC_RP_4G2,
+    DaosObjClassOld.DAOS_OC_R4_MAX_RW   : DaosObjClass.OC_RP_4GX,
+    DaosObjClassOld.DAOS_OC_REPL_MAX_RW : DaosObjClass.OC_RP_XSF
+}
+
 class DaosObj(object):
     """ A class representing an object stored in a DAOS container.  """
 
@@ -614,8 +741,11 @@ class DaosObj(object):
         """ generate a random oid """
         func = self.context.get_function('generate-oid')
 
+        # XXX convert object class
+	cls = int(ConvertObjClass[DaosObjClassOld(objcls)])
+
         func.restype = DaosObjId
-        self.c_oid = func(objcls, 0, 0)
+        self.c_oid = func(cls, 0, 0)
 
         if rank is not None:
             self.c_oid.hi |= rank << 24

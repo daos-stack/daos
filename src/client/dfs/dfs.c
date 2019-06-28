@@ -32,7 +32,7 @@
 #include <daos/container.h>
 
 #include "daos_types.h"
-#include "daos_api.h"
+#include "daos.h"
 #include "daos_addons.h"
 #include "daos_fs.h"
 #include "daos_security.h"
@@ -223,7 +223,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 	int		rc;
 
 	if (oclass == 0)
-		oclass = DAOS_OC_REPL_MAX_RW;
+		oclass = OC_RP_XSF;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -245,10 +245,10 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
+		feat = DAOS_OF_DKEY_UINT64;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_generate_id(oid, feat, oclass);
+	daos_obj_generate_id(oid, feat, oclass, 0);
 
 	return 0;
 }
@@ -1028,7 +1028,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	/** Open special object on container for SB info */
 	dfs->super_oid.lo = RESERVED_LO;
 	dfs->super_oid.hi = SB_HI;
-	daos_obj_generate_id(&dfs->super_oid, 0, DAOS_OC_REPL_MAX_RW);
+	daos_obj_generate_id(&dfs->super_oid, 0, OC_RP_XSF, 0);
 
 	rc = daos_obj_open(coh, dfs->super_oid, obj_mode, &dfs->super_oh, NULL);
 	if (rc) {
@@ -1096,7 +1096,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		dfs->root.mode = S_IFDIR | 0777;
 		dfs->root.oid.lo = RESERVED_LO;
 		dfs->root.oid.hi = ROOT_HI;
-		daos_obj_generate_id(&dfs->root.oid, 0, DAOS_OC_REPL_MAX_RW);
+		daos_obj_generate_id(&dfs->root.oid, 0, OC_RP_XSF, 0);
 
 		rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh,
 				   NULL);

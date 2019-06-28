@@ -40,10 +40,18 @@ obj_mod_init(void)
 {
 	int	rc;
 
-	rc = obj_ec_codec_init();
-	if (rc != 0)
-		D_ERROR("failed to obj_ec_codec_init: %d\n", rc);
+	rc = obj_utils_init();
+	if (rc)
+		goto out;
 
+	rc = obj_ec_codec_init();
+	if (rc != 0) {
+		D_ERROR("failed to obj_ec_codec_init\n");
+		goto out;
+	}
+	return 0;
+out:
+	D_ERROR("Object module init error: %s\n", d_errstr(rc));
 	return rc;
 }
 
@@ -51,6 +59,7 @@ static int
 obj_mod_fini(void)
 {
 	obj_ec_codec_fini();
+	obj_utils_fini();
 	return 0;
 }
 

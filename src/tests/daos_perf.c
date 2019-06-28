@@ -42,7 +42,7 @@
 #include "dts_common.h"
 
 /* unused object class to identify VOS (storage only) test mode */
-#define DAOS_OC_RAW	(0xBEEF)
+#define DAOS_OC_RAW	(0xBEE)
 #define RANK_ZERO	(0)
 #define TEST_VAL_SIZE	(3)
 
@@ -741,15 +741,15 @@ ts_class_name(void)
 		return "ECHO R3S (network only, 3-replica)";
 	case DAOS_OC_ECHO_R4S_RW:
 		return "ECHO R4S (network only, 4-replica)";
-	case DAOS_OC_TINY_RW:
+	case OC_S1:
 		return "DAOS TINY (full stack, non-replica)";
-	case DAOS_OC_LARGE_RW:
+	case OC_SX:
 		return "DAOS LARGE (full stack, non-replica)";
-	case DAOS_OC_R2S_RW:
+	case OC_RP_2G1:
 		return "DAOS R2S (full stack, 2 replica)";
-	case DAOS_OC_R3S_RW:
+	case OC_RP_3G1:
 		return "DAOS R3S (full stack, 3 replica)";
-	case DAOS_OC_R4S_RW:
+	case OC_RP_4G1:
 		return "DAOS R4S (full stack, 4 replics)";
 	}
 }
@@ -1016,7 +1016,7 @@ main(int argc, char **argv)
 					ts_class = DAOS_OC_RAW;
 			} else { /* no RAW for other modes */
 				if (ts_class == DAOS_OC_RAW)
-					ts_class = DAOS_OC_LARGE_RW;
+					ts_class = OC_SX;
 			}
 			break;
 		case 'C':
@@ -1024,15 +1024,15 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			if (!strcasecmp(optarg, "R4S")) {
-				ts_class = DAOS_OC_R4S_RW;
+				ts_class = OC_RP_4G1;
 			} else if (!strcasecmp(optarg, "R3S")) {
-				ts_class = DAOS_OC_R3S_RW;
+				ts_class = OC_RP_3G1;
 			} else if (!strcasecmp(optarg, "R2S")) {
-				ts_class = DAOS_OC_R2S_RW;
+				ts_class = OC_RP_2G1;
 			} else if (!strcasecmp(optarg, "TINY")) {
-				ts_class = DAOS_OC_TINY_RW;
+				ts_class = OC_S1;
 			} else if (!strcasecmp(optarg, "LARGE")) {
-				ts_class = DAOS_OC_LARGE_RW;
+				ts_class = OC_SX;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();
@@ -1133,11 +1133,11 @@ main(int argc, char **argv)
 	 * setting DAOS_IO_BYPASS="target" while starting server.
 	 */
 	if (ts_mode == TS_MODE_ECHO) {
-		if (ts_class == DAOS_OC_R4S_RW)
+		if (ts_class == OC_RP_4G1)
 			ts_class = DAOS_OC_ECHO_R4S_RW;
-		else if (ts_class == DAOS_OC_R3S_RW)
+		else if (ts_class == OC_RP_3G1)
 			ts_class = DAOS_OC_ECHO_R3S_RW;
-		else if (ts_class == DAOS_OC_R2S_RW)
+		else if (ts_class == OC_RP_2G1)
 			ts_class = DAOS_OC_ECHO_R2S_RW;
 		else
 			ts_class = DAOS_OC_ECHO_TINY_RW;
@@ -1158,7 +1158,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	if (perf_tests[REBUILD_TEST] && ts_class != DAOS_OC_TINY_RW) {
+	if (perf_tests[REBUILD_TEST] && ts_class != OC_S1) {
 		fprintf(stderr, "rebuild can only run with -T \"daos\"\n");
 		if (ts_ctx.tsc_mpi_rank == 0)
 			ts_print_usage();

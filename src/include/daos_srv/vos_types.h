@@ -27,6 +27,7 @@
 #include <daos_types.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
+#include <daos/object.h>
 #include <daos/dtx.h>
 
 enum vos_oi_attr {
