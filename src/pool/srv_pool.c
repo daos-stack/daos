@@ -1602,6 +1602,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tci_iv_ctxt.iov_buf_len = global_ns->iov_buf_len;
 	in->tci_iv_ctxt.iov_len = global_ns->iov_len;
 	in->tci_master_rank = rank;
+	if (ps != NULL)
+		in->tci_query_bits = DAOS_PO_QUERY_SPACE;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1614,8 +1616,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 			DP_UUID(svc->ps_uuid), rc);
 		rc = -DER_IO;
 	} else {
-		D_ASSERT(ps != NULL);
-		*ps = out->tco_space;
+		if (ps != NULL)
+			*ps = out->tco_space;
 	}
 
 out_rpc:
@@ -1773,9 +1775,11 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			D_GOTO(out_svc, rc);
 	}
 
-	rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
+	if (in->pci_query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -1891,8 +1895,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas, &iv_iov, &out->pco_space,
-				CRT_BULK_NULL);
+		in->pci_capas, &iv_iov,
+		(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
+		&out->pco_space : NULL,
+		CRT_BULK_NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
@@ -2283,6 +2289,47 @@ out:
 	daos_prop_free(prop);
 }
 
+
+static int
+replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
+{
+	d_rank_list_t	*replicas;
+	d_rank_list_t	*tmp_replicas;
+	d_rank_list_t	 failed_ranks;
+	d_rank_list_t	 replace_ranks;
+	int		 rc;
+
+	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
+					   &replace_ranks);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out, rc);
+	}
+	if (replace_ranks.rl_nr > 0)
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replace_ranks,
+				       ds_rsvc_get_md_cap());
+	if (failed_ranks.rl_nr > 0)
+		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed_ranks);
+	/** `replace_ranks.rl_ranks` is not allocated and shouldn't be freed **/
+	D_FREE(failed_ranks.rl_ranks);
+
+	if (rdb_get_ranks(svc->ps_rsvc.s_db, &tmp_replicas) == 0) {
+		daos_rank_list_sort(replicas);
+		daos_rank_list_sort(tmp_replicas);
+		if (!daos_rank_list_identical(replicas, tmp_replicas))
+			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
+				DP_UUID(svc->ps_uuid));
+		daos_rank_list_free(tmp_replicas);
+	}
+	daos_rank_list_free(replicas);
+out:
+	return rc;
+}
+
 /* Callers are responsible for d_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
@@ -2308,12 +2355,6 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 	ABT_rwlock_wrlock(svc->ps_lock);
-
-	if (replicasp != NULL) {
-		rc = rdb_get_ranks(svc->ps_rsvc.s_db, replicasp);
-		if (rc != 0)
-			D_GOTO(out_map_version, rc);
-	}
 
 	/* Create a temporary pool map based on the last committed version. */
 	rc = read_map(&tx, &svc->ps_root, &map);
@@ -2352,12 +2393,17 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 
 	updated = true;
 
+	/** TODO: Call disabled; enable along with `rsvc_client` changes **/
+	(void) replace_failed_replicas;
+
 out_replicas:
-	if (rc) {
-		d_rank_list_free(*replicasp);
-		*replicasp = NULL;
+	if (replicasp != NULL) {
+		if (rc == 0)
+			rc = rdb_get_ranks(svc->ps_rsvc.s_db, replicasp);
+		else
+			*replicasp = NULL;
 	}
-out_map_version:
+
 	if (map_version_p != NULL)
 		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
 						      svc->ps_pool->sp_map :
