@@ -29,11 +29,11 @@
 
 #include <daos/btree.h>
 #include <daos/mem.h>
+#include <daos/object.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
 
-int vos_evt_feats = EVT_FEAT_SORT_DIST;
+int vos_evt_feats = EVT_FEAT_SORT_SOFF;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
