@@ -297,7 +297,7 @@ utest_utx2uma(struct utest_context *utx)
 
 int
 utest_get_scm_used_space(struct utest_context *utx,
- daos_size_t *used_space)
+	daos_size_t *used_space)
 {
 	int	rc;
 	struct umem_instance	*um_ins;
