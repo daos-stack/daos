@@ -158,12 +158,12 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
                                                     '/tmp/client_daos.log'))]
 
         run_cmd = ('; '.join(env_variables) + '; ' +
-                   mpichinstall + "/mpirun -np {0} --hostfile {1} " +
-                   "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} " +
+                   mpichinstall + "bin/mpirun -np {0} --hostfile {1} " +
+                   "/home/standan/mpiio/ior_mpiio/build/src/ior -a MPIIO {2} " +
                    "-i {3} -t {4} -b {5} " +
-                   "-o daos:testFile").format(numprocs, hostfile, ior_flags,
+                   "-o daos:{6}").format(numprocs, hostfile, ior_flags,
                                               iteration, transfer_size,
-                                              block_size)
+                                              block_size, test_file)
 
         if display_output:
             print("run_cmd: {}".format(run_cmd))
