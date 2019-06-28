@@ -299,7 +299,7 @@ int
 utest_get_scm_used_space(struct utest_context *utx,
 	daos_size_t *used_space)
 {
-	int	rc;
+	int			rc;
 	struct umem_instance	*um_ins;
 
 	um_ins = utest_utx2umm(utx);
@@ -317,7 +317,7 @@ utest_get_scm_used_space(struct utest_context *utx,
 int
 utest_sync_mem_status(struct utest_context	*utx)
 {
-	int	rc;
+	int			rc;
 	daos_size_t		scm_used;
 	struct umem_instance	*um_ins;
 
@@ -334,7 +334,7 @@ utest_sync_mem_status(struct utest_context	*utx)
 int
 utest_check_mem_increase(struct utest_context *utx)
 {
-	int	rc;
+	int			rc;
 	daos_size_t		scm_used;
 	struct umem_instance	*um_ins;
 
@@ -356,7 +356,7 @@ utest_check_mem_increase(struct utest_context *utx)
 int
 utest_check_mem_decrease(struct utest_context *utx)
 {
-	int	rc;
+	int			rc;
 	daos_size_t		scm_used;
 	struct umem_instance	*um_ins;
 
@@ -378,7 +378,7 @@ utest_check_mem_decrease(struct utest_context *utx)
 int
 utest_check_mem_initial_status(struct utest_context *utx)
 {
-	int	rc;
+	int			rc;
 	daos_size_t		scm_used;
 	struct umem_instance	*um_ins;
 
