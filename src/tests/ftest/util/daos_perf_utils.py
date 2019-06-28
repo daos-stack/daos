@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,18 +21,20 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+
 from __future__ import print_function
 import os
 import subprocess
 import json
 
-import time
-
 class DaosPerfFailed(Exception):
     """Raise if daos_perf failed"""
 
+#pylint: disable=R0903
 class DaosPerfParam(object):
-    """Defines a object representing a single daos_perf command line parameter."""
+    """
+    Defines a object representing a single daos_perf command line parameter.
+    """
 
     def __init__(self, str_format, default=None):
         """Create a DaosPerfParam object.
@@ -62,7 +64,7 @@ class DaosPerfParam(object):
         Args:
             name (str): name associated with the value in the yaml file
             test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*".
+            path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*"
         """
         self.value = test.params.get(name, path, self.default)
 
@@ -77,7 +79,7 @@ class DaosPerfCommand(object):
                                                          # size
         self.pool_size_nvme = DaosPerfParam("-N {}")     # Pool NVMe partition
                                                          # size
-        self.test_mode = DaosPerfParam("-T {}", "vos")   # Type of test, it can
+        self.test_mode = DaosPerfParam("-T {}")          # Type of test, it can
                                                          # be 'vos', 'echo' and
                                                          # 'daos'
         self.credits = DaosPerfParam("-C {}")            # Credits for
@@ -99,11 +101,10 @@ class DaosPerfCommand(object):
         self.single_value_size = DaosPerfParam("-s {}")  # Size of single value
         self.specify_seed = DaosPerfParam("-G {}")       # -G x to specify a
                                                          # seed vs using a
-                                                         # random one if not 
+                                                         # random one if not
                                                          # specified
         self.pathname = DaosPerfParam("-f {}")           # Full path name of the
                                                          # VOS file
-        #self.num_tasks = DaosPerfParam("-N {}")          # number of processes
 
     def __str__(self):
         """Return a DaosPerfCommand object as a string.
@@ -121,7 +122,7 @@ class DaosPerfCommand(object):
         """Set values for all of the daos_perf command params using a yaml file.
         Args:
             test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*".
+            path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*"
         """
         for name, daos_perf_param in self.__dict__.items():
             daos_perf_param.set_yaml_value(name, test, path)
@@ -132,18 +133,12 @@ class DaosPerfCommand(object):
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
-        Raises:
-            DaosPerfFailed: if an error occured building the daos_perf command
+        Returns:
+            str: returns daos_perf command
         """
         with open(os.path.join(basepath, ".build_vars.json")) as afile:
             build_paths = json.load(afile)
         attach_info_path = os.path.join(basepath, "install/tmp")
-
-        # # Verify required params are defined
-        # for name in ("daos_pool", "daos_cont", "daos_svcl"):
-        #     value = getattr(self, name)
-        #     if str(value) == "":
-        #         raise IorFailed("Missing required {} param".format(name))
 
         orterun_cmd = [
             os.path.join(runpath if runpath else build_paths[
@@ -164,7 +159,7 @@ class DaosPerfCommand(object):
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
-            display (bool, optional): print IOR output to the console.
+            display (bool, optional): print daos_perf output to the console.
                 Defaults to True.
         Raises:
             DaosPerfFailed: if an error occured runnig the daos_perf command
@@ -191,5 +186,7 @@ class DaosPerfCommand(object):
                         process.poll()))
 
         except (OSError, ValueError) as error:
-            print("<DaosPerfRunFailed> Exception occurred: {0}".format(str(error)))
-            raise IorFailed("Daos_Perf Run process Failed: {}".format(error))
+            print("<DaosPerfRunFailed> Exception occurred: {0}".
+                  format(str(error)))
+            raise DaosPerfFailed("Daos_Perf Run process Failed: {}".
+                                 format(error))
