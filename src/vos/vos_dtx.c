@@ -820,7 +820,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 
 	dtx_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_entry_df));
 	if (dtx_is_null(dtx_umoff))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	dtx = umem_off2ptr(umm, dtx_umoff);
 	dtx->te_xid = dth->dth_xid;
@@ -914,7 +914,7 @@ vos_dtx_append_share(struct umem_instance *umm, struct vos_dtx_entry_df *dtx,
 
 	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
 	if (dtx_is_null(rec_umoff))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	rec = umem_off2ptr(umm, rec_umoff);
 	rec->tr_type = vds->vds_type;
@@ -1345,7 +1345,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 
 	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
 	if (dtx_is_null(rec_umoff))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	rec = umem_off2ptr(umm, rec_umoff);
 	rec->tr_type = type;
