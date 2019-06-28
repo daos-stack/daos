@@ -1107,16 +1107,12 @@ test_evt_iter_delete(void **state)
 	int			 sum, expected_sum;
 	struct evt_filter	 filter;
 	uint32_t		 inob;
-	struct	umem_instance		*um_inst;
 
 	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
-	um_inst = utest_utx2umm(arg->ta_utx);
-	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_sync_mem_status(arg->ta_utx);
-		assert_int_equal(rc, 0);
-	}
+	rc = utest_sync_mem_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
@@ -1133,12 +1129,10 @@ test_evt_iter_delete(void **state)
 
 			rc = evt_insert(toh, &entry);
 			assert_int_equal(rc, 0);
-			if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-				rc = utest_check_mem_increase(arg->ta_utx);
-				assert_int_equal(rc, 0);
-				rc = utest_sync_mem_status(arg->ta_utx);
-				assert_int_equal(rc, 0);
-			}
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
+			assert_int_equal(rc, 0);
 		}
 	}
 
@@ -1223,22 +1217,18 @@ test_evt_iter_delete(void **state)
 
 		sum += *value;
 		utest_free(arg->ta_utx, addr.ba_off);
-		if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-			rc = utest_check_mem_decrease(arg->ta_utx);
-			assert_int_equal(rc, 0);
-			rc = utest_sync_mem_status(arg->ta_utx);
-			assert_int_equal(rc, 0);
-		}
+		rc = utest_check_mem_decrease(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
 	}
 	rc = evt_iter_finish(ih);
 	assert_int_equal(rc, 0);
 
 	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
-	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_check_mem_initial_status(arg->ta_utx);
-		assert_int_equal(rc, 0);
-	}
+	rc = utest_check_mem_initial_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
@@ -1259,17 +1249,13 @@ test_evt_find_internal(void **state)
 	int			 offset;
 	int			 hole_epoch;
 	char testdata[] = "deadbeef";
-	struct umem_instance	*um_inst;
 
 	/* Create a evtree */
 	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
-	um_inst = utest_utx2umm(arg->ta_utx);
-	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_sync_mem_status(arg->ta_utx);
-		assert_int_equal(rc, 0);
-	}
+	rc = utest_sync_mem_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	srand(time(0));
 	hole_epoch = (rand() % 98) + 1;
 	print_message("Hole inserted %d epoch.\n", hole_epoch);
@@ -1300,12 +1286,10 @@ test_evt_find_internal(void **state)
 			}
 			rc = evt_insert(toh, &entry);
 			assert_int_equal(rc, 0);
-			if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-				rc = utest_check_mem_increase(arg->ta_utx);
-				assert_int_equal(rc, 0);
-				rc = utest_sync_mem_status(arg->ta_utx);
-				assert_int_equal(rc, 0);
-			}
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
+			assert_int_equal(rc, 0);
 		}
 	}
 	/*Prepare and Probe the tree. Iteration flags not set */
@@ -1366,18 +1350,14 @@ test_evt_find_internal(void **state)
 		entry.ei_rect.rc_epc = rect.rc_epc;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
-		if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-			rc = utest_check_mem_decrease(arg->ta_utx);
-			assert_int_equal(rc, 0);
-			rc = utest_sync_mem_status(arg->ta_utx);
-			assert_int_equal(rc, 0);
-		}
+		rc = utest_check_mem_decrease(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
 		evt_ent_array_fini(&ent_array);
 	}
-	if (um_inst->umm_id != UMEM_CLASS_VMEM) {
-		rc = utest_check_mem_initial_status(arg->ta_utx);
-		assert_int_equal(rc, 0);
-	}
+	rc = utest_check_mem_initial_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	/* Destroy the tree */
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);

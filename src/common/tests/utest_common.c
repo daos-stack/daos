@@ -319,7 +319,11 @@ utest_sync_mem_status(struct utest_context	*utx)
 {
 	int		rc;
 	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
 
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (utx->initial_value == 0)
 		utx->initial_value = scm_used;
@@ -332,7 +336,11 @@ utest_check_mem_increase(struct utest_context *utx)
 {
 	int		rc;
 	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
 
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (rc) {
 		D_ERROR("Get SCM Usage failed\n");
@@ -350,7 +358,11 @@ utest_check_mem_decrease(struct utest_context *utx)
 {
 	int		rc;
 	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
 
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (rc) {
 		D_ERROR("Get SCM Usage failed\n");
@@ -368,7 +380,11 @@ utest_check_mem_initial_status(struct utest_context *utx)
 {
 	int		rc;
 	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
 
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (rc) {
 		D_ERROR("Get SCM Usage failed\n");
