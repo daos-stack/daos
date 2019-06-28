@@ -242,12 +242,25 @@ func newMockMgmtCtlClient(
 type mockMgmtSvcClient struct{}
 
 func (m *mockMgmtSvcClient) CreatePool(
-	ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (
-	*pb.CreatePoolResp, error) {
+	ctx context.Context,
+	req *pb.CreatePoolReq,
+	o ...grpc.CallOption,
+) (*pb.CreatePoolResp, error) {
 
 	// return successful pool creation results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
 	return &pb.CreatePoolResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) DestroyPool(
+	ctx context.Context,
+	req *pb.DestroyPoolReq,
+	o ...grpc.CallOption,
+) (*pb.DestroyPoolResp, error) {
+
+	// return successful pool destroy results
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.DestroyPoolResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(

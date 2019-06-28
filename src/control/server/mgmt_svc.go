@@ -195,7 +195,9 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 
 // CreatePool implements the method defined for the Management Service.
 func (svc *mgmtSvc) CreatePool(
-	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
+	ctx context.Context,
+	req *pb.CreatePoolReq,
+) (*pb.CreatePoolResp, error) {
 
 	log.Debugf("MgmtSvc.CreatePool dispatch, req:%+v\n", *req)
 
@@ -209,6 +211,29 @@ func (svc *mgmtSvc) CreatePool(
 	resp := &pb.CreatePoolResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal CreatePool response")
+	}
+
+	return resp, nil
+}
+
+// DestroyPool implements the method defined for the Management Service.
+func (svc *mgmtSvc) DestroyPool(
+	ctx context.Context,
+	req *pb.DestroyPoolReq,
+) (*pb.DestroyPoolResp, error) {
+
+	log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, destroyPool, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.DestroyPoolResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
 	}
 
 	return resp, nil
