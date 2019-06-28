@@ -8,7 +8,7 @@ distributions.
 Software Dependencies
 ---------------------
 
-DAOS requires a C99-capable compiler, a golang compiler, and the scons
+DAOS requires a C99-capable compiler, a Go compiler, and the scons
 build tool. Moreover, the DAOS stack leverages the following open source
 projects:
 

@@ -1915,7 +1915,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 /* register the completion cb for obj IO request */
 static int
-obj_comp_cb_reg(tse_task_t *task, int opc, uint32_t map_ver,
+obj_reg_comp_cb(tse_task_t *task, int opc, uint32_t map_ver,
 		struct obj_auxi_args **auxi, void *cb_arg, daos_size_t arg_sz)
 {
 	struct obj_auxi_args	*obj_auxi;
@@ -1975,7 +1975,7 @@ dc_obj_fetch(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
-	rc = obj_comp_cb_reg(task, DAOS_OBJ_RPC_FETCH, map_ver, &obj_auxi,
+	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_FETCH, map_ver, &obj_auxi,
 			     &obj, sizeof(obj));
 	if (rc != 0) {
 		obj_decref(obj);
@@ -2046,7 +2046,7 @@ dc_obj_update(tse_task_t *task)
 		}
 	}
 
-	rc = obj_comp_cb_reg(task, DAOS_OBJ_RPC_UPDATE, map_ver, &obj_auxi,
+	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_UPDATE, map_ver, &obj_auxi,
 			     &obj, sizeof(obj));
 	if (rc != 0) {
 		obj_decref(obj);
@@ -2128,7 +2128,7 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	list_args.anchor = args->anchor;
 	list_args.dkey_anchor = args->dkey_anchor;
 	list_args.akey_anchor = args->akey_anchor;
-	rc = obj_comp_cb_reg(task, opc, map_ver, &obj_auxi, &list_args,
+	rc = obj_reg_comp_cb(task, opc, map_ver, &obj_auxi, &list_args,
 			     sizeof(list_args));
 	if (rc != 0) {
 		obj_decref(obj);
@@ -2268,7 +2268,7 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 		goto out_task;
 	}
 
-	rc = obj_comp_cb_reg(task, opc, map_ver, &obj_auxi, &obj, sizeof(obj));
+	rc = obj_reg_comp_cb(task, opc, map_ver, &obj_auxi, &obj, sizeof(obj));
 	if (rc) {
 		obj_decref(obj);
 		goto out_task;

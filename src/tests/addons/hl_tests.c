@@ -37,8 +37,6 @@
 #include "daos_test.h"
 #include "daos_addons_test.h"
 
-#define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
-
 static void simple_put_get(void **state);
 
 #define NUM_KEYS 1000
@@ -113,7 +111,7 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -252,7 +250,7 @@ simple_multi_io(void **state)
 	int		i;
 	int		rc;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);

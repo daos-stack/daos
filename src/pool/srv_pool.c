@@ -1602,6 +1602,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tci_iv_ctxt.iov_buf_len = global_ns->iov_buf_len;
 	in->tci_iv_ctxt.iov_len = global_ns->iov_len;
 	in->tci_master_rank = rank;
+	if (ps != NULL)
+		in->tci_query_bits = DAOS_PO_QUERY_SPACE;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1614,8 +1616,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 			DP_UUID(svc->ps_uuid), rc);
 		rc = -DER_IO;
 	} else {
-		D_ASSERT(ps != NULL);
-		*ps = out->tco_space;
+		if (ps != NULL)
+			*ps = out->tco_space;
 	}
 
 out_rpc:
@@ -1773,9 +1775,11 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			D_GOTO(out_svc, rc);
 	}
 
-	rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
+	if (in->pci_query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
+	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -1891,8 +1895,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas, &iv_iov, &out->pco_space,
-				CRT_BULK_NULL);
+		in->pci_capas, &iv_iov,
+		(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
+		&out->pco_space : NULL,
+		CRT_BULK_NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
@@ -2386,7 +2392,9 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	}
 
 	updated = true;
-	replace_failed_replicas(svc, map);
+
+	/** TODO: Call disabled; enable along with `rsvc_client` changes **/
+	(void) replace_failed_replicas;
 
 out_replicas:
 	if (replicasp != NULL) {
