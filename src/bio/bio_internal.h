@@ -158,6 +158,7 @@ struct bio_desc {
 /* bio_xstream.c */
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
+extern uint64_t		io_stat_period;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
 
 /* bio_buffer.c */
@@ -165,5 +166,9 @@ void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
+
+/* bio_dev_monitor.c */
+void print_io_stat(struct bio_xs_context *ctxt, uint64_t now);
+void query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now);
 
 #endif /* __BIO_INTERNAL_H__ */
