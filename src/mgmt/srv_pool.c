@@ -32,19 +32,38 @@
 static int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 {
+	struct ds_pool			*pool;
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
+	d_rank_list_t			excluded = { 0 };
 	struct mgmt_tgt_destroy_out	*td_out;
 	unsigned int			opc;
 	int				topo;
 	int				rc;
 
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool != NULL) {
+		/* This may not be the pool leader node, so down targets
+		 * may not be updated, then the following collective RPC
+		 * might be timeout. XXX
+		 */
+		ABT_rwlock_rdlock(pool->sp_lock);
+		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
+		ABT_rwlock_unlock(pool->sp_lock);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create rank list: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			return rc;
+		}
+	}
+
 	/* Collective RPC to destroy the pool on all of targets */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp, NULL,
-				  opc, NULL, NULL, 0, topo, &td_req);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp,
+				  &excluded, opc, NULL, NULL, 0, topo,
+				  &td_req);
 	if (rc)
 		return rc;
 
@@ -63,6 +82,7 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 			DP_UUID(pool_uuid), rc);
 out_rpc:
 	crt_req_decref(td_req);
+	map_ranks_fini(&excluded);
 
 	return rc;
 }
