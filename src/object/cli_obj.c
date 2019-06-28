@@ -253,6 +253,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	}
 	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", layout->ol_nr,
 		layout->ol_ver);
+	D_ASSERT(layout->ol_nr == layout->ol_grp_size * layout->ol_grp_nr);
 
 	if (refresh)
 		obj_layout_dump(obj->cob_md.omd_id, layout);
@@ -266,6 +267,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	obj->cob_shards_nr = layout->ol_nr;
+	obj->cob_grp_size = layout->ol_grp_size;
 	for (i = 0; i < layout->ol_nr; i++) {
 		struct dc_obj_shard *obj_shard;
 
@@ -306,7 +308,7 @@ obj_get_replicas(struct dc_object *obj)
 		return 1;
 
 	if (oc_attr->u.repl.r_num == DAOS_OBJ_REPL_MAX)
-		return obj->cob_shards_nr;
+		return obj->cob_grp_size;
 
 	return oc_attr->u.repl.r_num;
 }
@@ -314,15 +316,7 @@ obj_get_replicas(struct dc_object *obj)
 int
 obj_get_grp_size(struct dc_object *obj)
 {
-	struct daos_oclass_attr *oc_attr;
-	unsigned int grp_size;
-
-	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
-	D_ASSERT(oc_attr != NULL);
-	grp_size = daos_oclass_grp_size(oc_attr);
-	if (grp_size == DAOS_OBJ_REPL_MAX)
-		grp_size = obj->cob_shards_nr;
-	return grp_size;
+	return obj->cob_grp_size;
 }
 
 static int
@@ -423,7 +417,7 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj->cob_version == map_ver)
 		rc = pl_select_leader(obj->cob_md.omd_id, idx,
-				      obj->cob_shards_nr, false,
+				      obj->cob_grp_size, false,
 				      obj_get_shard, obj);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
