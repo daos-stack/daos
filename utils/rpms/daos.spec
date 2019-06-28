@@ -186,7 +186,6 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont
-%{_bindir}/duns
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/dmg
