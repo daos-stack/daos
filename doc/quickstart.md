@@ -123,7 +123,7 @@ If you are a developer of DAOS, we recommend following the instructions in [DAOS
 Otherwise, the missing dependencies can be built automatically by invoking scons with the following parameters:
 
 ```
-    scons --config=force --build-deps=yes USE_INSTALLED=all install
+    scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under \${daospath}/install. The installation path can be modified by adding the PREFIX= option to the above command line (e.g., PREFIX=/usr/local).
