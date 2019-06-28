@@ -52,7 +52,7 @@ var (
 
 // appSetup loads config file, processes cli overrides and connects clients.
 func appSetup(broadcast bool) error {
-	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	config, err := client.GetConfig(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
 	}
