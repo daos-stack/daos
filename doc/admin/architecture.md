@@ -1,5 +1,4 @@
-DAOS Architecture 
-=================
+# DAOS Architecture 
 
 DAOS is an open source software-defined scale-out object store that
 provides high bandwidth and high IOPS storage containers to applications
@@ -18,8 +17,7 @@ Unlike traditional Burst Buffers, DAOS is a high-performant independent
 and fault-tolerant storage tier that does not rely on a third-party tier
 to manage metadata and data resilience.
 
-DAOS Features
--------------
+## DAOS Features
 
 DAOS relies on OFI for low-latency communications and stores data on
 both storage-class memory and NVMe storage. DAOS presents a native
@@ -93,8 +91,7 @@ DAOS aims at delivering:
 -   Mover agent to migrate datasets among DAOS pools and from parallel
     filesystems to DAOS and vice versa
 
-DAOS Components
----------------
+## DAOS Components
 
 A datacenter may have hundreds of thousands of compute nodes
 interconnected via a scalable high-performance fabric, where all, or a
@@ -166,8 +163,7 @@ trusted entity that can sign the DAOS Client credentials using
 certificates. The agent can support different authentication frameworks
 and uses a Unix Domain Socket to communicate with the client library.
 
-Storage Model
--------------
+## Storage Model
 
 A DAOS pool is a storage reservation distributed across a collection of
 targets. The actual space allocated to the pool on each target is called
@@ -198,14 +194,14 @@ Table 2‑1 shows the targeted level of scalability for each DAOS
 abstraction.
 
 
-Table 2‑1, DAOS
+Table 2‑1. DAOS
 Scalability
 
 |DAOS Concept|Component Order of Magnitude Limit|
-|----|----|
-|System|10^2^ Pools (hundreds)|
-|Pool|10^2^ Containers (hundreds)|
-|Container|10^9^ Objects (billions)|
+|-|-|
+|System|10<sup>2</sup> Pools (hundreds)|
+|Pool|10<sup>2</sup> Containers (hundreds)|
+|Container|10<sup>9</sup> Objects (billions)|
 
 ### DAOS Pool
 
@@ -294,14 +290,14 @@ Table 2‑2.
 Table 2‑2. Sample of
 Pre-defined Object Classes
 
-  Object Class (RW = read/write, RM = read-mostly   Redundancy     Metadata in OIT, (SC = stripe count, RC = replica count, PC = parity count, TGT = target
-  ------------------------------------------------- -------------- ------------------------------------------------------------------------------------------
-  Small size & RW                                   Replication    No (static SCxRC, e.g. 1x4)
-  Small size & RM                                   Erasure code   No (static SC+PC, e.g. 4+2)
-  Large size & RW                                   Replication    No (static SCxRC over max \#targets)
-  Large size & RM                                   Erasure code   No (static SCx(SC+PC) w/ max \#TGT)
-  Unknown size & RW                                 Replication    SCxRC (e.g. 1x4 initially and grows)
-  Unknown size & RM                                 Erasure code   SC+PC (e.g. 4+2 initially and grows)
+|Object Class (RW = read/write, RM = read-mostly|   Redundancy     |Metadata in OIT, (SC = stripe count, RC = replica count, PC = parity count, TGT = target
+|-|-|-|  
+|Small size & RW|Replication|No (static SCxRC, e.g. 1x4)
+|Small size & RM|Erasure code|No (static SC+PC, e.g. 4+2)
+|Large size & RW|Replication|No (static SCxRC over max \#targets)
+|Large size & RM|Erasure code|No (static SCx(SC+PC) w/ max \#TGT)
+|Unknown size & RW|Replication|SCxRC (e.g. 1x4 initially and grows)
+|Unknown size & RM|Erasure code|SC+PC (e.g. 4+2 initially and grows)
 
 A container is the unit of transaction and snapshot. Container metadata
 (i.e. list of snapshots, container open handles, object class, user
