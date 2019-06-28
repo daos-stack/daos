@@ -2621,6 +2621,8 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 							trace->tr_at);
 				width = tcx->tc_inob * evt_rect_width(rect);
 				desc = evt_off2desc(tcx, ne->ne_child);
+				vos_dtx_deregister_record(evt_umm(tcx),
+					desc->dc_dtx, ne->ne_child, DTX_RT_EVT);
 				rc = evt_desc_free(tcx, desc, width);
 				if (rc != 0)
 					return rc;
