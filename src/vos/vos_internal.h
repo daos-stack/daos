@@ -141,6 +141,7 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
+	unsigned int		vc_open_count;
 };
 
 struct vos_imem_strts {

@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -381,8 +381,8 @@ func TestUpdateScm(t *testing.T) {
 
 		results := []*pb.ScmModuleResult{}
 
-		params := &pb.UpdateScmParams{}
-		ss.Update(srvIdx, params, &results)
+		req := &pb.UpdateScmReq{}
+		ss.Update(srvIdx, req, &results)
 
 		// only ocm result in response for the moment
 		AssertEqual(

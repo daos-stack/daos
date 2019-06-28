@@ -21,13 +21,11 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
 	"os/user"
-
-	"github.com/pkg/errors"
 )
 
 // mockExt implements the External interface.
@@ -155,8 +153,4 @@ func newMockExt(
 
 func defaultMockExt() External {
 	return &mockExt{}
-}
-
-func cmdFailMockExt() External {
-	return &mockExt{cmdRet: errors.New("exit status 1")}
 }

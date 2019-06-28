@@ -77,7 +77,7 @@ dtx_inprogress(struct vos_dtx_entry_df *dtx, int pos)
 static inline void
 dtx_record_conflict(struct dtx_handle *dth, struct vos_dtx_entry_df *dtx)
 {
-	if (dth != NULL && dtx != NULL) {
+	if (dth != NULL && dth->dth_conflict != NULL && dtx != NULL) {
 		daos_dti_copy(&dth->dth_conflict->dce_xid, &dtx->te_xid);
 		dth->dth_conflict->dce_dkey = dtx->te_dkey_hash;
 	}

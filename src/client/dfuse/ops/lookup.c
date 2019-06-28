@@ -40,16 +40,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(err, rc = EIO);
-		}
-		rc = dfuse_lookup_inode(fs_handle,
-					ie->ie_dfs,
-					&oid,
+		if (rc)
+			D_GOTO(err, rc = -rc);
+		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &oid,
 					&ie->ie_stat.st_ino);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(err, rc = EIO);
-		}
+		if (rc)
+			D_GOTO(err, rc = -rc);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -57,7 +53,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.ino = entry.attr.st_ino;
 	DFUSE_TRA_INFO(ie, "Inserting inode %lu", entry.ino);
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dfpi_iet,
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
 				       sizeof(ie->ie_stat.st_ino),
 				       &ie->ie_htl);
@@ -102,28 +98,27 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	D_ALLOC_PTR(ie);
 	if (!ie) {
-		D_GOTO(err, rc = ENOMEM);
+		D_GOTO(err, rc = -ENOMEM);
 	}
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
-	rc = dfs_lookup_rel(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, &mode);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: %d",
-			       rc);
-		D_GOTO(err, 0);
+	if (rc) {
+		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
+			       strerror(-rc));
+		D_GOTO(err, rc = -rc);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
-	}
+	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
+	if (rc)
+		D_GOTO(err, rc = -rc);
 
 	dfuse_reply_entry(fs_handle, ie, false, req);
 	return true;

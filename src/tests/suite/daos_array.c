@@ -48,7 +48,7 @@ byte_array_simple_stack(void **state)
 	dts_buf_render(buf, STACK_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -122,7 +122,7 @@ array_simple(void **state)
 	dts_buf_render(buf, arg->size * arg->nr);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -205,7 +205,7 @@ array_partial(void **state)
 	dts_buf_render(buf, arg->size * NUM_RECORDS);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -359,7 +359,7 @@ replicator(void **state)
 	dts_buf_render(buf, 192);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -437,7 +437,7 @@ read_empty(void **state)
 	D_ASSERT(buf != NULL);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -474,7 +474,6 @@ read_empty(void **state)
 	D_FREE(buf);
 }
 
-#define ENUM_KEY_BUF	32
 #define ENUM_DESC_BUF	512
 #define ENUM_DESC_NR	5
 
@@ -488,11 +487,10 @@ enumerate_key(daos_handle_t oh, int *total_nr, daos_key_t *dkey, int key_type)
 {
 	char		*buf;
 	daos_key_desc_t  kds[ENUM_DESC_NR];
-	daos_anchor_t	 anchor;
+	daos_anchor_t	 anchor = {0};
 	d_sg_list_t	 sgl;
-	d_iov_t       sg_iov;
-	uint32_t	 nr;
-	int		 key_nr;
+	d_iov_t		 sg_iov;
+	int		 key_nr = 0;
 	int		 rc;
 
 	buf = malloc(ENUM_DESC_BUF);
@@ -501,9 +499,8 @@ enumerate_key(daos_handle_t oh, int *total_nr, daos_key_t *dkey, int key_type)
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 
-	memset(&anchor, 0, sizeof(anchor));
-	for (nr = ENUM_DESC_NR, key_nr = 0; !daos_anchor_is_eof(&anchor);
-	     nr = ENUM_DESC_NR) {
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t nr = ENUM_DESC_NR;
 
 		memset(buf, 0, ENUM_DESC_BUF);
 		if (key_type == OBJ_DKEY)
@@ -542,7 +539,7 @@ array_dkey_punch_enumerate(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -625,7 +622,7 @@ array_akey_punch_enumerate(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -728,7 +725,7 @@ array_recx_punch_enumerate(void **state)
 	dts_buf_render(buf, SM_BUF_LEN);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 

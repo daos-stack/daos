@@ -35,8 +35,6 @@
 #define NUM_ELEMS	64
 /** num of mem segments for strided access - Must evenly divide NUM_ELEMS */
 #define NUM_SEGS	4
-/** Object class to use in tests */
-#define DTS_OCLASS_DEF	DAOS_OC_REPL_MAX_RW
 
 static daos_size_t chunk_size = 16;
 static daos_ofeat_t feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
@@ -79,7 +77,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 
 	if (rank != 0) {
 		/** unpack global handle */
-		rc = daos_array_global2local(coh, ghdl, oh);
+		rc = daos_array_global2local(coh, ghdl, 0, oh);
 		assert_int_equal(rc, 0);
 	}
 
@@ -99,19 +97,19 @@ simple_array_mgmt(void **state)
 	int		rc;
 
 	/** create the array with HASHED DKEY, should FAIL */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, 0, arg->myrank);
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** create the array with LEXICAL DKEY, should FAIL */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, DAOS_OF_DKEY_LEXICAL,
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, DAOS_OF_DKEY_LEXICAL,
 			  arg->myrank);
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
@@ -325,7 +323,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
+		oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
@@ -480,7 +478,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
+		oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
@@ -634,7 +632,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, 0);
+		oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_int_equal(rc, 0);
@@ -785,7 +783,7 @@ read_empty_records(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, feat, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, feat, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);

@@ -844,6 +844,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ENCRYPT:
 			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
 			break;
+		case DAOS_PROP_CO_ACL:
+			bits |= DAOS_CO_QUERY_PROP_ACL;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -1024,7 +1027,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	unsigned int		tgt_cnt;
 	int			rc;
 
-	rc = pool_map_find_up_tgts(pool->dp_map, &tgts, &tgt_cnt);
+	rc = pool_map_find_upin_tgts(pool->dp_map, &tgts, &tgt_cnt);
 	if (rc)
 		return rc;
 
