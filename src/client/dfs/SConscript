@@ -29,9 +29,5 @@ def scons():
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib/', duns)
 
-    libraries = libraries + ['duns']
-    duns_tool = daos_build.program(denv, 'duns', 'duns_tool.c', LIBS=libraries)
-    denv.Install('$PREFIX/bin/', duns_tool)
-
 if __name__ == "SCons.Script":
     scons()
