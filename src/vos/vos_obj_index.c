@@ -123,7 +123,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	/* Allocate a PMEM value of type vos_obj_df */
 	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
 	if (UMOFF_IS_NULL(obj_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	rc = vos_dtx_register_record(&tins->ti_umm, obj_off, DTX_RT_OBJ, 0);
 	if (rc != 0)

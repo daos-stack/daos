@@ -1064,7 +1064,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 
 	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx));
 	if (UMOFF_IS_NULL(nd_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	V_TRACE(DB_TRACE, "Allocate new node "DF_U64" %d bytes\n",
 		nd_off, evt_node_size(tcx));
@@ -1421,7 +1421,7 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	int			rc;
 
 	evt_node_weight_diff(tcx, nd1, rect, &wt1);
-	evt_node_weight_diff(tcx, nd1, rect, &wt2);
+	evt_node_weight_diff(tcx, nd2, rect, &wt2);
 
 	rc = evt_weight_cmp(&wt1, &wt2);
 	return rc < 0 ? nd1 : nd2;
@@ -2397,7 +2397,7 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 
 		desc_off = umem_zalloc(evt_umm(tcx), allocation_size);
 		if (UMOFF_IS_NULL(desc_off))
-			return -DER_NOMEM;
+			return -DER_NOSPACE;
 		ne->ne_child = desc_off;
 		desc = evt_off2ptr(tcx, desc_off);
 		rc = vos_dtx_register_record(evt_umm(tcx), desc_off,

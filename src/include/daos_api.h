@@ -56,7 +56,8 @@ daos_fini(void);
  *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
- * \param[out]	info	Returned pool info.
+ * \param[out]	info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -178,7 +179,8 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  *
  * \param[in]	poh	Pool connection handle.
  * \param[out]	tgts	Optional, returned storage targets in this pool.
- * \param[out]	info	Optional, returned pool information.
+ * \param[out]	info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
  * \param[out]	pool_prop
  *			Optional, returned pool properties.
  *			If it is NULL, then needs not query the properties.

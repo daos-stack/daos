@@ -544,12 +544,15 @@ enum {
 	DAOS_OC_TINY_RW,
 	DAOS_OC_SMALL_RW,
 	DAOS_OC_LARGE_RW,
-	DAOS_OC_R2S_RW,
-	DAOS_OC_R2_RW,
-	DAOS_OC_R3S_RW,		/* temporary class for testing */
-	DAOS_OC_R3_RW,		/* temporary class for testing */
-	DAOS_OC_R4S_RW,		/* temporary class for testing */
-	DAOS_OC_R4_RW,		/* temporary class for testing */
+	DAOS_OC_R2S_RW,		/* class for testing */
+	DAOS_OC_R2_RW,		/* class for testing */
+	DAOS_OC_R2_MAX_RW,	/* class for testing */
+	DAOS_OC_R3S_RW,		/* class for testing */
+	DAOS_OC_R3_RW,		/* class for testing */
+	DAOS_OC_R3_MAX_RW,	/* class for testing */
+	DAOS_OC_R4S_RW,		/* class for testing */
+	DAOS_OC_R4_RW,		/* class for testing */
+	DAOS_OC_R4_MAX_RW,	/* class for testing */
 	DAOS_OC_REPL_MAX_RW,
 	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
 	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
@@ -785,9 +788,9 @@ typedef struct {
 	 */
 	uint32_t	kd_val_types;
 	/** Checksum type */
-	unsigned int	kd_csum_type;
+	uint16_t	kd_csum_type;
 	/** Checksum length */
-	unsigned short	kd_csum_len;
+	uint16_t	kd_csum_len;
 } daos_key_desc_t;
 
 /**

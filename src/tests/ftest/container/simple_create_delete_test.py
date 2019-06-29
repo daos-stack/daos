@@ -26,16 +26,14 @@ from __future__ import print_function
 import time
 import traceback
 from avocado import main
-from apricot import TestWithoutServers
+from apricot import TestWithServers
 
-
-import agent_utils
-import server_utils
 import write_host_file
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosApiError
 from conversion import c_uuid_to_str
+from general_utils import get_pool, get_container
 
-class SimpleCreateDeleteTest(TestWithoutServers):
+class SimpleCreateDeleteTest(TestWithServers):
     """
     Tests DAOS container basics including create, destroy, open, query
     and close.
@@ -48,63 +46,36 @@ class SimpleCreateDeleteTest(TestWithoutServers):
 
     def test_container_basics(self):
         """
-        Test basic container create/destroy/open/close/query.  Nothing fancy
-        just making sure they work at a rudimentary level
+        Test basic container create/destroy/open/close/query.
 
-        :avocado: tags=container,containercreate,containerdestroy,basecont
+        :avocado:tags=all,pr,container,containercreate,containerdestroy,basecont
         """
-
-        pool = None
-        hostlist = None
-
         try:
-            hostlist = self.params.get("test_machines", '/run/hosts/*')
-            hostfile = write_host_file.write_host_file(hostlist,
-                                                       self.workdir)
+            # Parameters used in pool create
+            pool_mode = self.params.get("mode", '/run/pool/createmode/')
+            pool_name = self.params.get("setname", '/run/pool/createset/')
+            pool_size = self.params.get("size", '/run/pool/createsize/')
 
-            self.agent_sessions = agent_utils.run_agent(self.basepath, hostlist)
-            server_utils.run_server(hostfile, self.server_group, self.basepath)
+            # Create pool and connect
+            self.pool = get_pool(
+                self.context, pool_mode, pool_size, pool_name, 1, self.d_log)
 
-            # give it time to start
-            time.sleep(2)
+            # Create a container and open
+            self.container = get_container(self.context, self.pool, self.d_log)
 
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/conttests/createmode/')
-            createuid = self.params.get("uid", '/run/conttests/createuid/')
-            creategid = self.params.get("gid", '/run/conttests/creategid/')
-            createsetid = self.params.get("setname",
-                                          '/run/conttests/createset/')
-            createsize = self.params.get("size", '/run/conttests/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            # need a connection to create container
-            pool.connect(1 << 1)
-
-            # create a container
-            container = DaosContainer(self.context)
-            container.create(pool.handle)
-
-            # now open it
-            container.open()
-
-            # do a query and compare the UUID returned from create with
+            # Query and compare the UUID returned from create with
             # that returned by query
-            container.query()
+            self.container.query()
 
-            if container.get_uuid_str() != c_uuid_to_str(
-                    container.info.ci_uuid):
+            if self.container.get_uuid_str() != c_uuid_to_str(
+                    self.container.info.ci_uuid):
                 self.fail("Container UUID did not match the one in info'n")
 
-            container.close()
+            self.container.close()
 
-            # wait a few seconds and then destroy
+            # Wait and destroy
             time.sleep(5)
-            container.destroy()
+            self.container.destroy()
 
         except DaosApiError as excep:
             print(excep)
@@ -113,13 +84,10 @@ class SimpleCreateDeleteTest(TestWithoutServers):
         except Exception as excep:
             self.fail("Daos code segfaulted most likely, error: %s" % excep)
         finally:
-            # cleanup the pool
-            if pool is not None:
-                pool.disconnect()
-                pool.destroy(1)
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=hostlist)
+            self.log.info("Clean up pool")
+            if self.pool is not None:
+                self.pool.disconnect()
+                self.pool.destroy(1)
 
 if __name__ == "__main__":
     main()

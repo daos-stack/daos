@@ -90,6 +90,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 2,
+			.u.repl			= {
+				.r_num		= 2,
+			},
+		},
+	},
+	{
+		.oc_name	= "repl_2_max_rw",
+		.oc_id		= DAOS_OC_R2_MAX_RW,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 2,
@@ -121,6 +133,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "repl_3_max_rw",
+		.oc_id		= DAOS_OC_R3_MAX_RW,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
+			.u.repl			= {
+				.r_num		= 3,
+			},
+		},
+	},
+	{
 		.oc_name	= "repl_4_small_rw",
 		.oc_id		= DAOS_OC_R4S_RW,
 		{
@@ -139,6 +163,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 2,
+			.u.repl			= {
+				.r_num		= 4,
+			},
+		},
+	},
+	{
+		.oc_name	= "repl_4_max_rw",
+		.oc_id		= DAOS_OC_R4_MAX_RW,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 4,
 			},
@@ -402,7 +438,7 @@ obj_ec_codec_fini(void)
 		  oc_ec_codec_nr, ocnr);
 
 	for (i = 0; i < ocnr; i++) {
-		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		ec_codec = &oc_ec_codecs[i].ec_codec;
 		if (ec_codec->ec_en_matrix != NULL)
 			D_FREE(ec_codec->ec_en_matrix);
 		if (ec_codec->ec_gftbls != NULL)

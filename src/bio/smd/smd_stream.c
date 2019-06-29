@@ -77,7 +77,7 @@ stab_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	nstream_off = umem_zalloc(&tins->ti_umm,
 				  sizeof(struct smd_nvme_stream_df));
 	if (UMOFF_IS_NULL(nstream_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	nstream_df = umem_off2ptr(&tins->ti_umm, nstream_off);
 	nstream_df->ns_map.nsm_stream_id = *ukey;

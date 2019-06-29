@@ -95,7 +95,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	args = (struct cont_df_args *)(val_iov->iov_buf);
 	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
 	if (UMOFF_IS_NULL(offset))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
@@ -194,6 +194,8 @@ cont_free(struct d_ulink *ulink)
 	int			 i;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	D_ASSERT(cont->vc_open_count == 0);
+
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
 		dbtree_destroy(cont->vc_dtx_cos_hdl);
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
@@ -261,13 +263,6 @@ static void
 cont_addref(struct vos_container *cont)
 {
 	d_uhash_link_addref(vos_cont_hhash_get(), &cont->vc_uhlink);
-}
-
-static int
-cont_close(struct vos_container *cont)
-{
-	d_uhash_link_delete(vos_cont_hhash_get(), &cont->vc_uhlink);
-	return 0;
 }
 
 /**
@@ -345,7 +340,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	 */
 	rc = cont_lookup(&ukey, &pkey, &cont);
 	if (rc == 0) {
-		D_DEBUG(DB_TRACE, "Found handle in DRAM UUID hash\n");
+		cont->vc_open_count++;
+		D_DEBUG(DB_TRACE, "Found handle for cont "DF_UUID
+			" in DRAM hash table, open count: %d\n",
+			DP_UUID(co_uuid), cont->vc_open_count);
 		*coh = vos_cont2hdl(cont);
 		D_GOTO(exit, rc);
 	}
@@ -425,9 +423,14 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	}
 
 	rc = cont_insert(cont, &ukey, &pkey, coh);
-	if (rc) {
+	if (rc != 0) {
 		D_ERROR("Error inserting vos container handle to uuid hash\n");
-		D_GOTO(exit, rc);
+	} else {
+		cont->vc_open_count = 1;
+
+		D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
+			DP_UUID(cont->vc_id));
+
 	}
 
 exit:
@@ -451,8 +454,16 @@ vos_cont_close(daos_handle_t coh)
 		return -DER_NO_HDL;
 	}
 
-	vos_obj_cache_evict(vos_obj_cache_current(), cont);
-	cont_close(cont);
+	D_ASSERTF(cont->vc_open_count > 0, "Invalid close, open count %d\n",
+		  cont->vc_open_count);
+
+	cont->vc_open_count--;
+	if (cont->vc_open_count == 0)
+		vos_obj_cache_evict(vos_obj_cache_current(), cont);
+
+	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
+		DP_UUID(cont->vc_id), cont->vc_open_count);
+
 	cont_decref(cont);
 
 	return 0;
@@ -507,9 +518,19 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = cont_lookup(&key, &pkey, &cont);
 	if (rc != -DER_NONEXIST) {
-		D_ERROR("Open reference exists, cannot destroy\n");
-		cont_decref(cont);
-		D_GOTO(exit, rc = -DER_BUSY);
+		D_ASSERT(rc == 0);
+
+		if (cont->vc_open_count == 0) {
+			d_uhash_link_delete(vos_cont_hhash_get(),
+					    &cont->vc_uhlink);
+			cont_decref(cont);
+		} else {
+			D_ERROR("Open reference exists for cont "DF_UUID
+				", cannot destroy, open count: %d\n",
+				DP_UUID(co_uuid), cont->vc_open_count);
+			cont_decref(cont);
+			D_GOTO(exit, rc = -DER_BUSY);
+		}
 	}
 
 	rc = cont_df_lookup(vpool, &key, &args);
