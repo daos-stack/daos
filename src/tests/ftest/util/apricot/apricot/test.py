@@ -72,6 +72,8 @@ class Test(avocadoTest):
 
         self.basepath = None
         self.orterun = None
+        self.prefix = None
+        self.ompi_prefix = None
         self.tmp = None
         self.server_group = None
         self.daosctl = None
@@ -108,10 +110,11 @@ class TestWithoutServers(Test):
         self.basepath = os.path.normpath(os.path.join(build_paths['PREFIX'],
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
+        self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
         self.daos_test = os.path.join(self.basepath, 'install', 'bin',
                                       'daos_test')
-        self.orterun = os.path.join(self.basepath, 'install', 'bin', 'orterun')
+        self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
         self.daosctl = os.path.join(self.basepath, 'install', 'bin', 'daosctl')
 
         # setup fault injection, this MUST be before API setup
@@ -150,6 +153,7 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
+        self.setup_start_servers_and_clients = True
 
     def setUp(self):
         """Set up each test case."""
@@ -196,17 +200,9 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # Create host files
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-        if self.hostlist_clients:
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir)
-
-        self.agent_sessions = agent_utils.run_agent(
-            self.basepath, self.hostlist_servers, self.hostlist_clients)
-        server_utils.run_server(
-            self.hostfile_servers, self.server_group, self.basepath)
+        # Start the servers and clients
+        if self.setup_start_servers_and_clients:
+            self.start_servers_and_clients()
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -221,3 +217,32 @@ class TestWithServers(TestWithoutServers):
                 server_utils.stop_server(hosts=self.hostlist_servers)
             finally:
                 super(TestWithServers, self).tearDown()
+
+    def start_servers_and_clients(self, server_groups=None):
+        """Start the servers and clients.
+
+        Args:
+            server_groups (dict, optional): [description]. Defaults to None.
+        """
+        if self.agent_sessions is None:
+            # Create host files
+            self.hostfile_servers = write_host_file.write_host_file(
+                self.hostlist_servers, self.workdir)
+            if self.hostlist_clients:
+                self.hostfile_clients = write_host_file.write_host_file(
+                    self.hostlist_clients, self.workdir)
+
+            self.agent_sessions = agent_utils.run_agent(
+                self.basepath, self.hostlist_servers, self.hostlist_clients)
+
+        if isinstance(server_groups, dict):
+            # Optionally start servers on a different subset of hosts with a
+            # different server group
+            for group, hosts in server_groups.items():
+                self.log.info(
+                    "Starting servers: group=%s, hosts=%s", group, hosts)
+                hostfile = write_host_file.write_host_file(hosts, self.workdir)
+                server_utils.run_server(hostfile, group, self.basepath)
+        else:
+            server_utils.run_server(
+                self.hostfile_servers, self.server_group, self.basepath)
