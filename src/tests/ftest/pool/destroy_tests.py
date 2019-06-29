@@ -24,11 +24,10 @@ portions thereof marked with this legend must also reproduce the markings.
 from __future__ import print_function
 
 import os
-import traceback
 import server_utils
 from avocado.utils import process
 from apricot import TestWithServers, skipForTicket
-from general_utils import get_pool, get_container
+from general_utils import get_pool, get_container, DaosTestError
 from general_utils import check_pool_files, TestPool, CallbackHandler
 from daos_api import DaosApiError
 
@@ -76,10 +75,12 @@ class DestroyTests(TestWithServers):
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                           .format(self.daosctl, uuid_str, setid))
             process.system(delete_cmd)
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("destroy-pool has failed with excep = {}".format(excep))
+
+        except process.CmdError as result:
+            self.fail(
+                "Detected exception while destroying a pool {}".format(
+                    str(result)))
+
         # Verify that pool was deleted
         self.assertFalse(
             check_pool_files(
@@ -105,10 +106,10 @@ class DestroyTests(TestWithServers):
 
         delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.format(
             self.daosctl, bogus_uuid, setid))
-        rc = process.system(delete_cmd)
+        ret_code = process.system(delete_cmd)
         # if return code is successful; then destroy-pool has an issue
-        print("rc = {}".format(rc))
-        if rc == 0:
+        print("Return code = {}".format(ret_code))
+        if ret_code == 0:
             self.log.info(
                 "destroy-pool PASSED when destroying a non-existent pool")
             self.fail("daosctl destroy-pool was expected to fail but PASSED")
@@ -152,17 +153,20 @@ class DestroyTests(TestWithServers):
         try:
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                           .format(self.daosctl, uuid_str, badsetid))
-            rc = process.system(delete_cmd)
-            if rc == 0:
+            ret_code = process.system(delete_cmd)
+            if ret_code == 0:
                 self.log.info(
                     "destroy-pool destroyed the wrong group: %s", badsetid)
                 self.fail(
                     "destroy-pool was expected to fail but PASSED")
-        except process.CmdError as _:
             self.log.info(
-                "destroy-pool failed as expected with group_name = {}".format(
-                    badsetid))
-            pass
+                "destroy-pool failed as expected with group_name = %s",
+                badsetid)
+
+        except process.CmdError as result:
+            self.log.info(
+                "Expected exception while destroying a pool %s", str(result))
+
         # Verify that pool was NOT deleted
         self.assertTrue(
             check_pool_files(
@@ -174,7 +178,7 @@ class DestroyTests(TestWithServers):
         # Cleanup remaining pool
         delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                       .format(self.daosctl, uuid_str, goodsetid))
-        rc = process.system(delete_cmd)
+        ret_code = process.system(delete_cmd)
         # Verify that pool was deleted
         self.assertFalse(
             check_pool_files(
@@ -218,10 +222,10 @@ class DestroyTests(TestWithServers):
             delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
                           .format(self.daosctl, uuid_str, setid))
             process.system(delete_cmd)
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("destroy-pool has failed with excep = {}".format(excep))
+        except process.CmdError as result:
+            self.fail(
+                "Detected exception while destroying a pool {}".format(
+                    str(result)))
         # Verify that pool was deleted
         self.assertFalse(
             check_pool_files(
@@ -338,8 +342,9 @@ class DestroyTests(TestWithServers):
 
         try:
             self.pool.destroy(0)
-        except Exception as error:
-            self.log.error("Caught %s", error)
+        except DaosTestError as result:
+            self.log.info(
+                "Detected exception while destroying a pool %s", str(result))
 
         self.log.info(
             "TestPool after destroy: pool=%s, uuid=%s", self.pool.pool,
@@ -361,8 +366,9 @@ class DestroyTests(TestWithServers):
             self.pool.uuid, self.pool.pool.group)
         try:
             self.pool.destroy(0)
-        except Exception as error:
-            self.log.error("Caught %s", error)
+        except DaosTestError as result:
+            self.fail("Detected exception while destroying a pool {}".format(
+                str(result)))
         self.assertFalse(
             self.pool.check_files(group_hosts[group_names[0]]),
             "Pool UUID {} not removed from the right server group {}".format(
@@ -401,8 +407,9 @@ class DestroyTests(TestWithServers):
         try:
             self.log.info("Attempting to destroy pool")
             self.pool.pool.destroy(0)
-        except Exception as error:
-            self.log.error("Caught %s", error)
+        except DaosTestError as result:
+            self.log.info(
+                "Detected exception while destroying a pool %s", str(result))
 
         self.log.info("Check if files still exist")
         self.assertTrue(
@@ -439,9 +446,10 @@ class DestroyTests(TestWithServers):
             try:
                 self.log.info("Attempting to destroy pool")
                 self.pool.pool.destroy(0)
-            except Exception as error:
-                self.log.error("Caught %s", error)
-
+            except DaosTestError as result:
+                self.fail(
+                    "Detected exception while destroying a pool {}".format(
+                        str(result)))
             self.log.info("Check if files still exist")
             self.assertFalse(
                 self.pool.check_files(hostlist_servers),
@@ -478,8 +486,8 @@ class DestroyTests(TestWithServers):
             try:
                 self.log.info("Attempting to destroy pool")
                 self.pool.pool.destroy(0)
-            except Exception as error:
-                self.log.error("Caught %s", error)
+            except DaosTestError as result:
+                self.fail("Caught {}".format(result))
 
             self.log.info("Check if files still exist")
             self.assertFalse(
@@ -522,32 +530,26 @@ class DestroyTests(TestWithServers):
             check_pool_files(
                 self.log, hostlist_servers, pool_uuid.lower()),
             "Pool data not detected on servers before destroy")
-
+        self.log.info("Attempting to destroy a connected pool %s",
+                      self.pool.get_uuid_str())
         try:
             # destroy pool with connection open
+            ret_code = self.pool.destroy(0)
+        except DaosApiError as result:
             self.log.info(
-                "Attempting to destroy a connected pool %s",
-                self.pool.get_uuid_str())
-            self.pool.destroy(0)
+                "Detected exception that was expected %s", str(result))
+        if ret_code == 0:
+            self.log.info(
+                "destroy-pool destroyed a connected pool")
+            self.fail(
+                "destroy-pool was expected to fail but PASSED")
+        self.log.info(
+            "destroy-pool failed as expected ")
 
-            self.assertFalse(
-                check_pool_files(
-                    self.log, hostlist_servers, pool_uuid.lower()),
-                "Pool data detected on servers after destroy")
-
-            # should throw an exception and not hit this
-            self.fail("Shouldn't hit this line.\n")
-
-        except DaosApiError as excep:
-            print("got exception which is expected so long as it is BUSY")
-            print(excep)
-            # print(traceback.format_exc())
-            # pool should still be there
-
-            self.assertTrue(
-                check_pool_files(
-                    self.log, hostlist_servers, pool_uuid.lower()),
-                "Pool data not detected on servers after failed destroy")
+        self.assertTrue(
+            check_pool_files(
+                self.log, hostlist_servers, pool_uuid.lower()),
+            "Pool data not detected on servers after destroy")
 
     @skipForTicket("DAOS-2742")
     def test_destroy_async(self):
@@ -584,14 +586,14 @@ class DestroyTests(TestWithServers):
             "Pool data detected on servers before destroy")
 
         # Create callback handler
-        self.cb_handler = CallbackHandler()
+        cb_handler = CallbackHandler()
 
         # Destroy pool on server_group_a with callback
 
         self.log.info("Attempting to destroy pool")
-        self.pool.pool.destroy(0, self.cb_handler.callback)
-        self.cb_handler.wait()
-        if self.cb_handler.rc != 0:
+        self.pool.pool.destroy(0, cb_handler.callback)
+        cb_handler.wait()
+        if cb_handler.ret_code != 0:
             self.fail("destroy-pool was expected to PASS")
 
         self.assertFalse(
@@ -621,9 +623,9 @@ class DestroyTests(TestWithServers):
         server_utils.stop_server(hosts=group_hosts[group_names[1]])
 
         self.log.info("Attempting to destroy pool")
-        self.pool.pool.destroy(0, self.cb_handler.callback)
-        self.cb_handler.wait()
-        if self.cb_handler.rc != 0:
+        self.pool.pool.destroy(0, cb_handler.callback)
+        cb_handler.wait()
+        if cb_handler.ret_code != 0:
             self.fail("destroy-pool was expected to PASS")
 
         self.assertFalse(

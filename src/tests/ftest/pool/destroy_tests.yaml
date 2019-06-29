@@ -10,7 +10,7 @@ hosts:
     - boro-G
 server_config:
    name: daos_server
-timeout: 120
+timeout: 400
 pool:
    createmode:
      mode: 146

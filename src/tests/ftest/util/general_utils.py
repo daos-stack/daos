@@ -332,15 +332,15 @@ def check_pool_files(log, hosts, uuid):
     task = task_self()
 
     log.info("Checking for pool data on %s", nodeset)
-    for file in file_list:
+    for fname in file_list:
         task.run(
-            "test -e /mnt/daos/{}; echo $?".format(file), nodes=nodeset)
-        for buffer, node_list in task.iter_buffers():
-            if buffer == "0":
+            "test -e /mnt/daos/{}; echo $?".format(fname), nodes=nodeset)
+        for output, node_list in task.iter_buffers():
+            if output == "0":
                 actual += len(node_list)
             else:
                 nodes = NodeSet.fromlist(node_list)
-                log.error("%s: /mnt/daos/%s not found", nodes, file)
+                log.error("%s: /mnt/daos/%s not found", nodes, fname)
     return expect == actual
 
 
@@ -356,7 +356,7 @@ class CallbackHandler(object):
                 Defaults to 1.
         """
         self.delay = delay
-        self.rc = None
+        self.ret_code = None
         self.obj = None
         self._called = False
 
@@ -367,7 +367,7 @@ class CallbackHandler(object):
             event (CallbackEvent): event returned by the DaosApi class method
         """
         # Get the return code and calling object from the event
-        self.rc = event.event.ev_error
+        self.ret_code = event.event.ev_error
         self.obj = event.obj
 
         # Indicate that this method has being called
@@ -376,7 +376,7 @@ class CallbackHandler(object):
     def wait(self):
         """Wait for this object's callback() method to be called."""
         # Reset the event return code and calling object
-        self.rc = None
+        self.ret_code = None
         self.obj = None
 
         # Wait for the callback() method to be called
@@ -1058,7 +1058,7 @@ class TestContainer(TestDaosApiBase):
             self.close()
             self.log.info("Destroying container %s", self.uuid)
             self.container.destroy(force)
-            self.contaier = None
+            self.container = None
             self.written_data = []
             return True
         return False
