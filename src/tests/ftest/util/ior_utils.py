@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,166 +20,317 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
 import subprocess
 import json
+import re
+
 
 class IorFailed(Exception):
-    """Raise if Ior failed"""
-
-# we probably need to introduce an IOR "object"
-# pylint: disable=too-many-arguments
-def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
-                svc_list, record_size, stripe_size, stripe_count, async_io,
-                object_class, basepath, hostfile, proc_per_node=1, seg_count=1,
-                filename="`uuidgen`"):
-    """
-    Builds an IOR command given a set of input parameters, returns the command
-    as a string.  Some refactoring with run_ior will be done at a later date.
-    Consider this a WIP.
-    """
-    # some path wrangling
-    with open(os.path.join(basepath, ".build_vars.json")) as afile:
-        build_paths = json.load(afile)
-    orterun_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun")
-    attach_info_path = basepath + "/install/tmp"
-    ior_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin", "ior")
-    lib_path = os.path.join(build_paths["OMPI_PREFIX"], "lib")
-
-    # create the string containing the command
-    ior_cmd = (
-        orterun_bin + " --oversubscribe --mca mtl ^psm2,ofi "
-        "-x DAOS_SINGLETON_CLI -x OFI_INTERFACE -x LD_LIBRARY_PATH "
-        "-x CRT_ATTACH_INFO_PATH={1} -x CRT_PHY_ADDR_STR -x CRT_CTX_NUM "
-        "-x CRT_CTX_SHARE_ADDR {16} {2} -s {3} -i {4} -a DAOS -o {5} -b {6} "
-        "-t {7} --daos.pool={8} --daos.svcl={9} --daos.recordSize={10} "
-        "--daos.stripeSize={11} --daos.stripeCount={12} --daos.aios={13} "
-        "--daos.objectClass={14}").format(proc_per_node, attach_info_path,
-                                          ior_flags, seg_count, iteration,
-                                          filename, block_size, transfer_size,
-                                          pool_uuid, svc_list, record_size,
-                                          stripe_size, stripe_count, async_io,
-                                          object_class, hostfile, ior_bin,
-                                          lib_path)
-
-    return ior_cmd
+    """Raise if Ior failed."""
 
 
-# we probably need to introduce an IOR "object"
-# pylint: disable=too-many-arguments
+# pylint: disable=too-few-public-methods
+class IorParam(object):
+    """Defines a object representing a single IOR command line parameter."""
+
+    def __init__(self, str_format, default=None):
+        """Create a IorParam object.
+
+        Args:
+            str_format (str): format string used to convert the value into an
+                ior command line argument string
+            default (object): default value for the param
+        """
+        self.str_format = str_format
+        self.default = default
+        self.value = default
+
+    def __str__(self):
+        """Return a IorParam object as a string.
+
+        Returns:
+            str: if defined, the IOR parameter, otherwise an empty string
+
+        """
+        if isinstance(self.default, bool) and self.value:
+            return self.str_format
+        elif not isinstance(self.default, bool) and self.value:
+            return self.str_format.format(self.value)
+        else:
+            return ""
+
+    def set_yaml_value(self, name, test, path="/run/ior/*"):
+        """Set the value of the parameter using the test's yaml file value.
+
+        Args:
+            name (str): name associated with the value in the yaml file
+            test (Test): avocado Test object
+            path (str, optional): yaml namespace. Defaults to "/run/ior/*".
+
+        """
+        self.value = test.params.get(name, path, self.default)
+# pylint: enable=too-few-public-methods
+
+
+class IorCommand(object):
+    """Defines a object representing a IOR command."""
+
+    def __init__(self):
+        """Create an IorCommand object."""
+        self.flags = IorParam("{}")                 # IOR flags
+        self.api = IorParam("-a {}", "DAOS")        # API for I/O
+        self.block_size = IorParam("-b {}")         # bytes to write per task
+        self.test_delay = IorParam("-d {}")         # sec delay between reps
+        self.script = IorParam("-f {}")             # test script name
+        self.signatute = IorParam("-G {}")          # set value for rand seed
+        self.repetitions = IorParam("-i {}")        # number of repetitions
+        self.outlier_threshold = IorParam("-j {}")  # warn if N sec from mean
+        self.alignment = IorParam("-J {}")          # HDF5 alignment in bytes
+        self.data_packet_type = IorParam("-l {}")   # type of packet created
+        self.memory_per_node = IorParam("-M {}")    # hog memory on the node
+        self.num_tasks = IorParam("-N {}")          # number of tasks
+        self.test_file = IorParam("-o {}")          # full name for test
+        self.directives = IorParam("-O {}")         # IOR directives
+        self.task_offset = IorParam("-Q {}")        # for -C & -Z read tests
+        self.segment_count = IorParam("-s {}")      # number of segments
+        self.transfer_size = IorParam("-t {}")      # bytes to transfer
+        self.max_duration = IorParam("-T {}")       # max mins executing test
+        self.daos_pool = IorParam("--daos.pool {}")             # pool uuid
+        self.daos_svcl = IorParam("--daos.svcl {}")             # pool SVCL
+        self.daos_cont = IorParam("--daos.cont {}")             # cont uuid
+        self.daos_destroy = IorParam("--daos.destroy", True)    # destroy cont
+        self.daos_group = IorParam("--daos.group {}")           # server group
+        self.daos_chunk = IorParam("--daos.chunk_size {}", 1048576)
+        self.daos_oclass = IorParam("--daos.oclass {}")         # object class
+
+    def __str__(self):
+        """Return a IorCommand object as a string.
+
+        Returns:
+            str: the ior command with all the defined parameters
+
+        """
+        params = []
+        for value in self.__dict__.values():
+            value_str = str(value)
+            if value_str != "":
+                params.append(value_str)
+        return " ".join(["ior"] + sorted(params))
+
+    def set_params(self, test, path="/run/ior/*"):
+        """Set values for all of the ior command params using a yaml file.
+
+        Args:
+            test (Test): avocado Test object
+            path (str, optional): yaml namespace. Defaults to "/run/ior/*".
+
+        """
+        for name, ior_param in self.__dict__.items():
+            ior_param.set_yaml_value(name, test, path)
+
+    def get_aggregate_total(self, processes):
+        """Get the total bytes expected to be written by ior.
+
+        Args:
+            processes (int): number of processes running the ior command
+
+        Returns:
+            int: total number of bytes written
+
+        """
+        power = {"k": 1, "m": 2, "g": 3, "t": 4}
+        total = processes
+        for name in ("block_size", "segment_count"):
+            item = getattr(self, name).value
+            if item:
+                sub_item = re.split(r"([^\d])", str(item))
+                if len(sub_item) > 0:
+                    total *= int(sub_item[0])
+                    if len(sub_item) > 1:
+                        key = sub_item[1].lower()
+                        if key in power:
+                            total *= 1024**power[key]
+                        else:
+                            raise IorFailed(
+                                "Error obtaining the IOR aggregate total from "
+                                "the {} - bad key: value: {}, split: {}, "
+                                "key: {}".format(name, item, sub_item, key))
+                else:
+                    raise IorFailed(
+                        "Error obtaining the IOR aggregate total from the {}: "
+                        "value: {}, split: {}".format(name, item, sub_item))
+        return total
+
+    def get_launch_command(self, basepath, processes, hostfile, runpath=None):
+        """Get the process launch command used to run IOR.
+
+        Args:
+            basepath (str): DAOS base path
+            processes (int): number of host processes
+            hostfile (str): file defining host names and slots
+            runpath (str, optional): Optional path to the mpirun/oretrun
+                command. Defaults to None.
+
+        Raises:
+            IorFailed: if an error occured building the IOR command
+
+        Returns:
+            str: ior launch command
+
+        """
+        with open(os.path.join(basepath, ".build_vars.json")) as afile:
+            build_paths = json.load(afile)
+        attach_info_path = os.path.join(basepath, "install/tmp")
+
+        if self.api.value == "MPIIO":
+            env = {
+                "CRT_ATTACH_INFO_PATH": attach_info_path,
+                "DAOS_POOL": str(self.daos_pool),
+                "MPI_LIB": "",
+                "DAOS_SVCL": str(self.daos_svcl),
+                "DAOS_SINGLETON_CLI": 1,
+                "FI_PSM2_DISCONNECT": 1,
+            }
+            export_cmd = [
+                "export {}={}".format(key, val) for key, val in env.items()]
+            mpirun_cmd = [
+                os.path.join(
+                    runpath if runpath else build_paths["OMPI_PREFIX"],
+                    "bin/mpirun"),
+                "-np {}".format(processes),
+                "--hostfile {}".format(hostfile),
+            ]
+            command = " ".join(mpirun_cmd + [self.__str__()])
+            command = "; ".join(export_cmd + command)
+
+        elif self.api.value == "DAOS":
+            orterun_cmd = [
+                os.path.join(
+                    runpath if runpath else build_paths["OMPI_PREFIX"],
+                    "bin/orterun"),
+                "-np {}".format(processes),
+                "--hostfile {}".format(hostfile),
+                "--map-by node",
+                "-x DAOS_SINGLETON_CLI=1",
+                "-x CRT_ATTACH_INFO_PATH={}".format(attach_info_path),
+            ]
+            command = " ".join(orterun_cmd + [self.__str__()])
+
+        else:
+            raise IorFailed("Unsupported IOR API: {}".format(self.api))
+
+        return command
+
+    def run(self, basepath, processes, hostfile, display=True, path=None):
+        """Run the IOR command.
+
+        Args:
+            basepath (str): DAOS base path
+            processes (int): number of host processes
+            hostfile (str): file defining host names and slots
+            display (bool, optional): print IOR output to the console.
+                Defaults to True.
+            path (str, optional): Optional path to the mpirun/oretrun command.
+                Defaults to None.
+
+        Raises:
+            IorFailed: if an error occured runnig the IOR command
+
+        """
+        command = self.get_launch_command(basepath, processes, hostfile, path)
+        if display:
+            print("<IOR CMD>: {}".format(command))
+
+        # Run IOR
+        try:
+            process = subprocess.Popen(
+                command, stdout=subprocess.PIPE, shell=True)
+            while True:
+                output = process.stdout.readline()
+                if output == "" and process.poll() is not None:
+                    break
+                if output and display:
+                    print(output.strip())
+            if process.poll() != 0:
+                raise IorFailed(
+                    "IOR Run process Failed with non zero exit code:{}".format(
+                        process.poll()))
+
+        except (OSError, ValueError) as error:
+            print("<IorRunFailed> Exception occurred: {0}".format(str(error)))
+            raise IorFailed("IOR Run process Failed: {}".format(error))
+
+
 def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                  pool_uuid, svc_list, object_class, basepath, client_processes,
                  cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
                  display_output=True):
+    """Run IOR test.
 
-    """ Running Ior tests
-        Function Arguments
-        client_file    --client file holding client hostname and slots
-        ior_flags      --all ior specific flags
-        iteration      --number of iterations for ior run
-        block_size     --contiguous bytes to write per task
-        transfer_size  --size of transfer in bytes
-        pool_uuid      --Daos Pool UUID
-        svc_list       --Daos Pool SVCL
-        object_class   --object class
-        basepath       --Daos basepath
-        client_processes          --number of client processes
-        cont_uuid       -- Container UUID
-        seg_count      --segment count
-        chunk_size      --chunk size
-        display_output --print IOR output on console.
+    Args:
+        client_file (str): file holding client hostname and slots
+        ior_flags (str): all ior specific flags
+        iteration (int): number of iterations for ior run
+        block_size (int): contiguous bytes to write per task
+        transfer_size (int): size of transfer in bytes
+        pool_uuid (str): DAOS pool uuid
+        svc_list (str): DAOS pool svcl
+        object_class (str): DAOS object class designation
+        basepath (str): DAOS base path
+        client_processes (int): number of client processes
+        cont_uuid (str, optional): container uuid. Defaults to "`uuidgen`".
+        seg_count (int, optional): segment count. Defaults to 1.
+        chunk_size (int, optional): chunk size in bytes. Defaults to 1048576.
+        display_output (bool, optional): print IOR output. Defaults to True.
     """
-    with open(os.path.join(basepath, ".build_vars.json")) as afile:
-        build_paths = json.load(afile)
-    orterun_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun")
-    attach_info_path = basepath + "/install/tmp"
-    try:
+    ior_cmd = IorCommand()
+    ior_cmd.api.value = "DAOS"
+    ior_cmd.flags.value = ior_flags
+    ior_cmd.repetitions.value = iteration
+    ior_cmd.block_size.value = block_size
+    ior_cmd.transfer_size.value = transfer_size
+    ior_cmd.daos_pool.value = pool_uuid
+    ior_cmd.daos_svcl.value = svc_list
+    ior_cmd.daos_oclass.value = object_class
+    ior_cmd.daos_cont.value = cont_uuid
+    ior_cmd.segment_count.value = seg_count
+    ior_cmd.daos_chunk.value = chunk_size
 
-        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node"      \
-                  " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={}"    \
-                  " -x D_LOG_FILE -x OFI_INTERFACE -x CRT_PHY_ADDR_STR"    \
-                  " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {}" \
-                  " --daos.svcl {} --daos.cont {} --daos.destroy"          \
-                  " --daos.chunk_size {} --daos.oclass {} "                \
-                  .format(client_processes, client_file, attach_info_path,
-                          ior_flags, seg_count, iteration, block_size,
-                          transfer_size, pool_uuid, svc_list, cont_uuid,
-                          chunk_size, object_class)
-        if display_output:
-            print("ior_cmd: {}".format(ior_cmd))
-
-        process = subprocess.Popen(ior_cmd, stdout=subprocess.PIPE, shell=True)
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output and display_output:
-                print(output.strip())
-        if process.poll() != 0:
-            raise IorFailed("IOR Run process Failed with non zero exit code:{}"
-                            .format(process.poll()))
-
-    except (OSError, ValueError) as error:
-        print("<IorRunFailed> Exception occurred: {0}".format(str(error)))
-        raise IorFailed("IOR Run process Failed")
+    ior_cmd.run(
+        basepath, client_processes, client_file, display_output)
 
 
-# we probably need to introduce an IOR "object"
-# pylint: disable=too-many-arguments
-def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
+def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
                   ior_flags, iteration, transfer_size, block_size,
                   display_output=True):
+    """Run IOR over mpich.
+
+    Args:
+        basepath (str): DAOS base path
+        mpichinstall (str): location of installed mpich
+        pool_uuid (str): DAOS pool uuid
+        svcl (str): DAOS pool svcl
+        np (int): number of client processes
+        hostfile (str): file holding client hostname and slots
+        ior_flags (str): all ior specific flags
+        iteration (int): number of iterations for ior run
+        transfer_size (int): size of transfer in bytes
+        block_size (int): contiguous bytes to write per task
+        display_output (bool, optional): print IOR output. Defaults to True.
     """
-        Running IOR over mpich
-        basepath       --Daos basepath
-        mpichinstall   --location of installed mpich
-        pool_uuid      --Daos Pool UUID
-        svcl           --Daos Pool SVCL
-        numprocs       --number of client processes
-        hostfile       --client file holding client hostname and slots
-        ior_flags      --all ior specific flags
-        iteration      --number of iterations for ior run
-        block_size     --contiguous bytes to write per task
-        transfer_size  --size of transfer in bytes
-        display_output --print IOR output on console.
-    """
-    try:
-        env_variables = [
-            "export CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
-            "export DAOS_POOL={}".format(pool_uuid),
-            "export MPI_LIB=''",
-            "export DAOS_SVCL={}".format(svcl),
-            "export DAOS_SINGLETON_CLI=1",
-            "export FI_PSM2_DISCONNECT=1",
-            "export D_LOG_FILE={}".format(os.getenv('D_LOG_FILE',
-                                                    '/tmp/client_daos.log'))]
+    ior_cmd = IorCommand()
+    ior_cmd.api.value = "MPIIO"
+    ior_cmd.flags.value = ior_flags
+    ior_cmd.repetitions.value = iteration
+    ior_cmd.block_size.value = block_size
+    ior_cmd.transfer_size.value = transfer_size
+    ior_cmd.daos_pool.value = pool_uuid
+    ior_cmd.daos_svcl.value = svcl
+    ior_cmd.test_file.value = "daos:testFile"
 
-        run_cmd = ('; '.join(env_variables) + '; ' +
-                   mpichinstall + "/mpirun -np {0} --hostfile {1} " +
-                   "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} " +
-                   "-i {3} -t {4} -b {5} " +
-                   "-o daos:testFile").format(numprocs, hostfile, ior_flags,
-                                              iteration, transfer_size,
-                                              block_size)
-
-        if display_output:
-            print("run_cmd: {}".format(run_cmd))
-
-        process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE,
-                                   shell=True)
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output and display_output:
-                print(output.strip())
-        if process.poll() != 0:
-            raise IorFailed("IOR Run process failed with non zero exit "
-                            "code: {}".format(process.poll()))
-
-    except (OSError, ValueError) as excep:
-        print("<IorRunFailed> Exception occurred: {0}".format(str(excep)))
-        raise IorFailed("IOR Run process Failed")
+    ior_cmd.run(
+        basepath, np, hostfile, display_output, mpichinstall)
