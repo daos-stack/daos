@@ -131,7 +131,7 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
 # pylint: disable=too-many-arguments
 def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
                   ior_flags, iteration, transfer_size, block_size,
-                  display_output=True, oclass=None, test_file="testFile"):
+                  display_output=True, oclass=3, test_file="testFile"):
     """
         Running IOR over mpich
         basepath       --Daos basepath
@@ -154,6 +154,7 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
             "export DAOS_SVCL={}".format(svcl),
             "export DAOS_SINGLETON_CLI=1",
             "export FI_PSM2_DISCONNECT=1",
+            "export IOR_HINT__MPI__romio_daos_obj_class={}".format(oclass),
             "export D_LOG_FILE={}".format(os.getenv('D_LOG_FILE',
                                                     '/tmp/client_daos.log'))]
 
