@@ -34,7 +34,7 @@ from daos_api import DaosPool, DaosApiError
 class EightServers(TestWithServers):
     """
     Test class Description: Runs IOR with 8 servers.
-
+    :avocado: recursive
     """
 
     def setUp(self):
