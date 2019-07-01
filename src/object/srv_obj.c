@@ -910,6 +910,7 @@ next:
 		daos_sgl_fini(sgl, false);
 		if (rc)
 			break;
+		D_FREE(skip_list[i]);
 	}
 
 	if (arg.bulks_inflight == 0)
