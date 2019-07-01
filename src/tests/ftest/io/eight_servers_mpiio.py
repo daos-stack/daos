@@ -49,7 +49,9 @@ class EightServers(TestWithServers):
 
     def tearDown(self):
         try:
-            if self.pool is not None and self.pool.attached:
+            if self.hostfile_clients is not None:
+                os.remove(self.hostfile_clients)
+            if self.pool is not None:
                 self.pool.destroy(1)
         finally:
             super(EightServers, self).tearDown()
