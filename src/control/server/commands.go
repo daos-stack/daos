@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -76,16 +77,22 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 	srv.nvme.Discover(resp)
 	srv.scm.Discover(resp)
 
+	scanErrors := make([]string, 0, 2)
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		return fmt.Errorf("nvme scan: %s", resp.Nvmestate.Error)
+		scanErrors = append(scanErrors, fmt.Sprintf("nvme scan: %s", resp.Nvmestate.Error))
+	} else {
+		common.PrintStructs("NVMe", srv.nvme.controllers)
 	}
-	common.PrintStructs("NVMe", srv.nvme.controllers)
 
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		return fmt.Errorf("scm scan: %s", resp.Scmstate.Error)
+		scanErrors = append(scanErrors, fmt.Sprintf("scm scan: %s", resp.Scmstate.Error))
+	} else {
+		common.PrintStructs("SCM", srv.scm.modules)
 	}
-	common.PrintStructs("SCM", srv.scm.modules)
 
+	if len(scanErrors) > 0 {
+		return fmt.Errorf("scan error(s):\n  %s", strings.Join(scanErrors, "\n  "))
+	}
 	return nil
 }
 
