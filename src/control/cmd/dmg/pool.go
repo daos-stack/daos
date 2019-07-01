@@ -36,7 +36,6 @@ import (
 
 const (
 	msgSizeNoNumber = "size string doesn't specify a number"
-	msgSizeBad      = "size string illegal, %s"
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
 )
