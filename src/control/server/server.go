@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -34,12 +34,6 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
 )
-
-func main() {
-	if serverMain() != nil {
-		os.Exit(1)
-	}
-}
 
 func parseCliOpts(opts *cliOptions) error {
 	p := flags.NewParser(opts, flags.Default)
@@ -55,7 +49,10 @@ func parseCliOpts(opts *cliOptions) error {
 	return nil
 }
 
-func serverMain() error {
+// Main is the current entry point into daos_server functionality
+// TODO: Refactor this to decouple CLI functionality from core
+// server logic and allow for easier testing.
+func Main() error {
 	// Bootstrap default logger before config options get set.
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
