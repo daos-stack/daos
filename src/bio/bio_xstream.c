@@ -27,7 +27,6 @@
 #include <fcntl.h>
 #include <uuid/uuid.h>
 #include <abt.h>
-#include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -47,9 +46,6 @@
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
-
-/* Used to preallocate buffer to query error log pages from SPDK health info */
-#define DAOS_MAX_ERROR_LOG_PAGES 256
 
 enum {
 	BDEV_CLASS_NVME = 0,
@@ -310,7 +306,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	}
 
 	/* Print SPDK I/O stats for each xstream */
-	print_io_stat(ctxt, now);
+	bio_xs_io_stat(ctxt, now);
 
 	/*
 	 * Query and print the SPDK device health stats for only the device
@@ -318,7 +314,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 */
 	if (ctxt->bxc_blobstore != NULL) {
 		if (ctxt->bxc_blobstore->bb_ctxt->bxc_xs_id == ctxt->bxc_xs_id)
-			query_spdk_health_stats(ctxt, now);
+			bio_bs_monitor(ctxt, now);
 	}
 
 	return count;
@@ -556,12 +552,8 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 static void
 free_bio_blobstore(struct bio_blobstore *bb)
 {
-
 	/* Free all device health monitoring info as well */
-	spdk_dma_free(bb->bb_dev_health->bhm_health_buf);
-	spdk_dma_free(bb->bb_dev_health->bhm_ctrlr_buf);
-	spdk_dma_free(bb->bb_dev_health->bhm_error_buf);
-	D_FREE(bb->bb_dev_health);
+	free_bio_health_monitoring(bb);
 
 	D_FREE(bb);
 }
@@ -616,10 +608,6 @@ static struct bio_blobstore *
 alloc_bio_blobstore(struct bio_xs_context *ctxt)
 {
 	struct bio_blobstore *bb;
-	struct bio_health_monitoring *dev_health;
-	uint32_t health_pg_sz;
-	uint32_t ctrlr_pg_sz;
-	uint32_t error_pg_sz, error_pg_buf_sz;
 	int rc;
 
 	D_ASSERT(ctxt != NULL);
@@ -635,28 +623,6 @@ alloc_bio_blobstore(struct bio_xs_context *ctxt)
 
 	bb->bb_ref = 1;
 	bb->bb_ctxt = ctxt;
-
-	/*
-	 * In addition, allocate device monitoring health data struct and
-	 * preallocate all SPDK DMA-safe buffers for querying log entries.
-	 */
-	D_ALLOC_PTR(dev_health);
-	if (dev_health == NULL) {
-		D_FREE(bb);
-		return NULL;
-	}
-
-	health_pg_sz = sizeof(struct spdk_nvme_health_information_page);
-	dev_health->bhm_health_buf = spdk_dma_zmalloc(health_pg_sz, 0, NULL);
-
-	ctrlr_pg_sz = sizeof(struct spdk_nvme_ctrlr_data);
-	dev_health->bhm_ctrlr_buf = spdk_dma_zmalloc(ctrlr_pg_sz, 0, NULL);
-
-	error_pg_sz = sizeof(struct spdk_nvme_error_information_entry);
-	error_pg_buf_sz = error_pg_sz * DAOS_MAX_ERROR_LOG_PAGES;
-	dev_health->bhm_error_buf = spdk_dma_zmalloc(error_pg_buf_sz, 0, NULL);
-
-	bb->bb_dev_health = dev_health;
 
 	return bb;
 }
@@ -722,6 +688,8 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 	struct bio_bdev			*d_bdev;
 	struct spdk_blob_store		*bs;
 	struct smd_nvme_stream_bond	 xs_bond;
+	struct spdk_io_channel		*channel;
+	struct spdk_bdev_desc		*health_desc;
 	int				 rc;
 	bool				 found = false;
 
@@ -799,6 +767,12 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
 
+		rc = alloc_bio_health_monitoring(d_bdev->bb_blobstore);
+		if (rc != 0) {
+			D_ERROR("BIO health monitoring not allocated\n");
+			return rc;
+		}
+
 		/* Load blobstore with bstype specified for sanity check */
 		bs = load_blobstore(ctxt, d_bdev->bb_bdev, &d_bdev->bb_uuid,
 				    false);
@@ -820,7 +794,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		return -DER_NOMEM;
 	}
 
-	/* writable descriptor required to query SMART/health info */
+	/* Writable descriptor required for device health monitoring */
 	rc = spdk_bdev_open(d_bdev->bb_bdev, true, NULL, NULL,
 			    &ctxt->bxc_blobstore->bb_dev_health->bhm_desc);
 	if (rc != 0) {
@@ -828,7 +802,12 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
 		return daos_errno2der(-rc);
 	}
+	health_desc = ctxt->bxc_blobstore->bb_dev_health->bhm_desc;
 
+	/* Get and hold I/O channel for device health monitoring */
+	channel = spdk_bdev_get_io_channel(health_desc);
+	D_ASSERT(channel != NULL);
+	ctxt->bxc_blobstore->bb_dev_health->bhm_io_channel = channel;
 
 	return 0;
 }

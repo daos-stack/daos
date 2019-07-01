@@ -74,11 +74,12 @@ struct bio_blobstore {
 struct bio_health_monitoring {
 	/* writable open descriptor for health info polling */
 	struct spdk_bdev_desc	*bhm_desc;
+	struct spdk_io_channel	*bhm_io_channel;
 	void			*bhm_health_buf; /* device health info logs */
 	void			*bhm_ctrlr_buf; /* controller data */
 	void			*bhm_error_buf; /* device error logs */
 	uint64_t		 bhm_stat_age;
-	int			 bhm_elpe; /* device supported error log pages*/
+	unsigned int		 bhm_inflights;
 };
 
 /* Per-xstream NVMe context */
@@ -167,8 +168,10 @@ struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 
-/* bio_dev_monitor.c */
-void print_io_stat(struct bio_xs_context *ctxt, uint64_t now);
-void query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now);
+/* bio_monitor.c */
+int alloc_bio_health_monitoring(struct bio_blobstore *bb);
+void free_bio_health_monitoring(struct bio_blobstore *bb);
+void bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
 
 #endif /* __BIO_INTERNAL_H__ */

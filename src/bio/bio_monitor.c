@@ -30,6 +30,8 @@
 
 /* Period to query SPDK device health stats (1 min period) */
 #define DAOS_SPDK_STATS_PERIOD	(60 * (NSEC_PER_SEC / NSEC_PER_USEC))
+/* Used to preallocate buffer to query error log pages from SPDK health info */
+#define DAOS_MAX_ERROR_LOG_PAGES 256
 
 uint64_t io_stat_period;
 
@@ -81,32 +83,36 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	struct bio_health_monitoring			*dev_health = cb_arg;
 	struct spdk_nvme_error_information_entry	*error_entries;
 	struct spdk_nvme_error_information_entry	*error_entry;
+	struct spdk_nvme_ctrlr_data			*cdata;
 	struct spdk_bdev				*bdev;
 	uint32_t					 i;
 	int						 sc, sct;
 
+	D_ASSERT(dev_health->bhm_inflights == 1);
+
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
-	if (sc)
+	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
-
-	/* Free I/O request in the competion callback */
-	spdk_bdev_free_io(bdev_io);
+		goto out;
+	}
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bhm_desc);
+	D_ASSERT(bdev != NULL);
+
+	cdata = dev_health->bhm_ctrlr_buf;
 
 	D_PRINT("==========================================================\n");
-	D_PRINT("SPDK Device Error Logs [%s]:\n",
-		bdev != NULL ? spdk_bdev_get_name(bdev) : "");
+	D_PRINT("SPDK Device Error Logs [%s]:\n", spdk_bdev_get_name(bdev));
 	D_PRINT("==========================================================\n");
 
 	error_entries = dev_health->bhm_error_buf;
 
-	for (i = 0; i < dev_health->bhm_elpe; i++) {
+	for (i = 0; i < cdata->elpe; i++) {
 		error_entry = &error_entries[i];
 		if (error_entry->error_count == 0) {
 			D_PRINT("No errors found!\n");
-			return;
+			goto out;
 		}
 		if (i != 0)
 			D_PRINT("-------------\n");
@@ -128,6 +134,12 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			error_entry->vendor_specific);
 		D_PRINT("\n");
 	}
+
+out:
+	/* Free I/O request in the competion callback */
+	spdk_bdev_free_io(bdev_io);
+	/*Decrease inflights on error or successful callback completion chain*/
+	dev_health->bhm_inflights--;
 }
 
 static void
@@ -136,7 +148,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 {
 	struct bio_health_monitoring			*dev_health = cb_arg;
 	struct spdk_nvme_ctrlr_data			*cdata;
-	struct spdk_io_channel				*channel;
 	struct spdk_bdev				*bdev;
 	struct spdk_bdev_desc				*health_desc;
 	struct spdk_nvme_cmd				 cmd;
@@ -146,31 +157,26 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int						 rc;
 	int						 sc, sct;
 
+	D_ASSERT(dev_health->bhm_inflights == 1);
+
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
-	if (sc)
+	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
-
-	/* Free I/O request in the competion callback */
-	spdk_bdev_free_io(bdev_io);
-
-	health_desc = dev_health->bhm_desc;
-	channel = spdk_bdev_get_io_channel(health_desc);
-	if (!channel) {
-		D_ERROR("Failed to get bdev I/O channel for health desc\n");
-		return;
+		dev_health->bhm_inflights--;
+		goto out;
 	}
 
+	health_desc = dev_health->bhm_desc;
+	D_ASSERT(dev_health->bhm_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(health_desc);
+	D_ASSERT(bdev != NULL);
 	cdata = dev_health->bhm_ctrlr_buf;
-	/* set the number of error log page entries supported by device */
-	dev_health->bhm_elpe = cdata->elpe;
-
 
 	/*TODO Add additional relevant controller data */
 	D_PRINT("==========================================================\n");
 	D_PRINT("SPDK Device Controller Data [%s]:\n",
-		bdev != NULL ? spdk_bdev_get_name(bdev) : "");
+		spdk_bdev_get_name(bdev));
 	D_PRINT("==========================================================\n");
 	D_PRINT("Vendor ID: %04x\n", cdata->vid);
 	D_PRINT("Serial Number: ");
@@ -195,19 +201,32 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 = numdl << 16;
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
-	error_page_buf_sz = error_page_sz * (dev_health->bhm_elpe + 1);
+	if (cdata->elpe >= DAOS_MAX_ERROR_LOG_PAGES) {
+		D_ERROR("Device error log page size exceeds buffer size\n");
+		dev_health->bhm_inflights--;
+		goto out;
+	}
+	error_page_buf_sz = error_page_sz * (cdata->elpe + 1);
 
 	/*
 	 * Submit an NVMe Admin command to get device error log page
 	 * to the bdev.
 	 */
-	rc = spdk_bdev_nvme_admin_passthru(health_desc, channel, &cmd,
+	rc = spdk_bdev_nvme_admin_passthru(health_desc,
+					   dev_health->bhm_io_channel,
+					   &cmd,
 					   dev_health->bhm_error_buf,
 					   error_page_buf_sz,
 					   get_spdk_err_log_page_completion,
 					   dev_health);
-	if (rc)
+	if (rc) {
 		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
+		dev_health->bhm_inflights--;
+	}
+
+out:
+	/* Free I/O request in the competion callback */
+	spdk_bdev_free_io(bdev_io);
 }
 
 static void
@@ -216,7 +235,6 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 {
 	struct bio_health_monitoring			*dev_health = cb_arg;
 	struct spdk_nvme_health_information_page	*health_page;
-	struct spdk_io_channel				*channel;
 	struct spdk_bdev				*bdev;
 	struct spdk_bdev_desc				*health_desc;
 	struct spdk_nvme_cmd				 cmd;
@@ -224,22 +242,20 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int						 rc;
 	int						 sc, sct;
 
+	D_ASSERT(dev_health->bhm_inflights == 1);
+
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
-	if (sc)
+	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
-
-	/* Free I/O request in the competion callback */
-	spdk_bdev_free_io(bdev_io);
-
-	health_desc = dev_health->bhm_desc;
-	channel = spdk_bdev_get_io_channel(health_desc);
-	if (!channel) {
-		D_ERROR("Failed to get bdev I/O channel for health desc\n");
-		return;
+		dev_health->bhm_inflights--;
+		goto out;
 	}
 
+	health_desc = dev_health->bhm_desc;
+	D_ASSERT(dev_health->bhm_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(health_desc);
+	D_ASSERT(bdev != NULL);
 	health_page = dev_health->bhm_health_buf;
 
 	/*
@@ -247,7 +263,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	 */
 	D_PRINT("==========================================================\n");
 	D_PRINT("SPDK Device Health Information [%s]:\n",
-		bdev != NULL ? spdk_bdev_get_name(bdev) : "");
+		spdk_bdev_get_name(bdev));
 	D_PRINT("==========================================================\n");
 	D_PRINT("Critical Warnings:\n");
 	D_PRINT("  Available Spare Space:     %s\n",
@@ -317,22 +333,29 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	 * Submit an NVMe Admin command to get controller data
 	 * to the bdev.
 	 */
-	rc = spdk_bdev_nvme_admin_passthru(health_desc, channel, &cmd,
+	rc = spdk_bdev_nvme_admin_passthru(health_desc,
+					   dev_health->bhm_io_channel,
+					   &cmd,
 					   dev_health->bhm_ctrlr_buf,
 					   ctrlr_page_sz,
 					   get_spdk_identify_ctrlr_completion,
 					   dev_health);
-	if (rc)
+	if (rc) {
 		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
+		dev_health->bhm_inflights--;
+	}
+
+out:
+	/* Free I/O request in the competion callback */
+	spdk_bdev_free_io(bdev_io);
 }
 
 /* Get the SPDK device health state log and print all useful stats */
 void
-query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now)
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_health_monitoring	*dev_health;
 	struct spdk_bdev		*bdev;
-	struct spdk_io_channel		*channel;
 	struct spdk_bdev_desc		*health_desc;
 	struct spdk_nvme_cmd		 cmd;
 	uint64_t			 health_stat_age;
@@ -342,8 +365,14 @@ query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now)
 
 	D_ASSERT(ctxt != NULL);
 	D_ASSERT(ctxt->bxc_blobstore != NULL);
-
 	dev_health = ctxt->bxc_blobstore->bb_dev_health;
+
+	/* Check to avoid parallel SPDK device health query calls */
+	if (dev_health->bhm_inflights)
+		return;
+
+	dev_health->bhm_inflights++;
+
 	health_stat_age = dev_health->bhm_stat_age;
 	/*
 	 * TODO Decide on an appropriate period to query device health
@@ -353,29 +382,19 @@ query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now)
 		return;
 	dev_health->bhm_stat_age = now;
 
-
 	if (!dev_health->bhm_desc)
 		return;
 	health_desc = dev_health->bhm_desc;
 
 	bdev = spdk_bdev_desc_get_bdev(health_desc);
-	if (bdev == NULL) {
-		D_ERROR("Failed to get bdev from health desc:%p\n",
-			health_desc);
-		return;
-	}
+	D_ASSERT(bdev != NULL);
 
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
-		D_ERROR("Bdev NVMe admin passthru not supported!\n");
+		D_INFO("Bdev NVMe admin passthru not supported!\n");
 		return;
 	}
 
-	channel = spdk_bdev_get_io_channel(health_desc);
-	if (channel == NULL) {
-		D_ERROR("Failed to get bdev I/O channel from health desc:%p\n",
-			health_desc);
-		return;
-	}
+	D_ASSERT(dev_health->bhm_io_channel != NULL);
 
 	/* Prep NVMe command to get SPDK device health data */
 	health_page_sz = sizeof(struct spdk_nvme_health_information_page);
@@ -393,21 +412,20 @@ query_spdk_health_stats(struct bio_xs_context *ctxt, uint64_t now)
 	 * Submit an NVMe Admin command to get device health log page
 	 * to the bdev.
 	 */
-	rc = spdk_bdev_nvme_admin_passthru(health_desc, channel, &cmd,
+	rc = spdk_bdev_nvme_admin_passthru(health_desc,
+					   dev_health->bhm_io_channel,
+					   &cmd,
 					   dev_health->bhm_health_buf,
 					   health_page_sz,
 					   get_spdk_log_page_completion,
 					   dev_health);
 	if (rc)
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
-
-	/* Release I/O channel reference */
-	spdk_put_io_channel(channel);
 }
 
 /* Print the io stat every few seconds, for debug only */
 void
-print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
+bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct spdk_bdev_io_stat	 stat;
 	struct spdk_bdev		*bdev;
@@ -427,6 +445,7 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 		spdk_put_io_channel(channel);
 
 		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
+		D_ASSERT(bdev != NULL);
 
 		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
@@ -439,4 +458,68 @@ print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 	}
 
 	ctxt->bxc_io_stat_age = now;
+}
+
+/* Free all device health monitoring info */
+void
+free_bio_health_monitoring(struct bio_blobstore *bb)
+{
+	/* Free NVMe admin passthru DMA buffers */
+	spdk_dma_free(bb->bb_dev_health->bhm_health_buf);
+	spdk_dma_free(bb->bb_dev_health->bhm_ctrlr_buf);
+	spdk_dma_free(bb->bb_dev_health->bhm_error_buf);
+
+	/* Release I/O channel reference */
+	spdk_put_io_channel(bb->bb_dev_health->bhm_io_channel);
+
+	D_FREE(bb->bb_dev_health);
+}
+
+/*
+ * Allocate device monitoring health data struct and preallocate
+ * all SPDK DMA-safe buffers for querying log entries.
+ */
+int
+alloc_bio_health_monitoring(struct bio_blobstore *bb)
+{
+	struct bio_health_monitoring	*dev_health;
+	uint32_t			 health_pg_sz;
+	uint32_t			 ctrlr_pg_sz;
+	uint32_t			 error_pg_sz;
+	uint32_t			 error_pg_buf_sz;
+
+	D_ASSERT(bb != NULL);
+
+	D_ALLOC_PTR(dev_health);
+	if (dev_health == NULL)
+		return -DER_NOMEM;
+
+	health_pg_sz = sizeof(struct spdk_nvme_health_information_page);
+	dev_health->bhm_health_buf = spdk_dma_zmalloc(health_pg_sz, 0, NULL);
+	if (dev_health->bhm_health_buf == NULL) {
+		D_FREE(dev_health);
+		return -DER_NOMEM;
+	}
+
+	ctrlr_pg_sz = sizeof(struct spdk_nvme_ctrlr_data);
+	dev_health->bhm_ctrlr_buf = spdk_dma_zmalloc(ctrlr_pg_sz, 0, NULL);
+	if (dev_health->bhm_ctrlr_buf == NULL) {
+		spdk_dma_free(dev_health->bhm_health_buf);
+		D_FREE(dev_health);
+		return -DER_NOMEM;
+	}
+
+	error_pg_sz = sizeof(struct spdk_nvme_error_information_entry);
+	error_pg_buf_sz = error_pg_sz * DAOS_MAX_ERROR_LOG_PAGES;
+	dev_health->bhm_error_buf = spdk_dma_zmalloc(error_pg_buf_sz, 0, NULL);
+	if (dev_health->bhm_error_buf == NULL) {
+		spdk_dma_free(dev_health->bhm_health_buf);
+		spdk_dma_free(dev_health->bhm_ctrlr_buf);
+		D_FREE(dev_health);
+		return -DER_NOMEM;
+	}
+
+	bb->bb_dev_health = dev_health;
+
+	return 0;
 }
