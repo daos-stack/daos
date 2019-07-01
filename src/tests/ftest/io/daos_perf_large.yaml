@@ -48,4 +48,3 @@ daos_perf_large:
           o: 'Large'
         r2:
           o: 'R2'
-      
