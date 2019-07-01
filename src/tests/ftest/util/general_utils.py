@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+from __future__ import print_function
+
 import os
 import re
 import json
@@ -389,6 +391,7 @@ class CallbackHandler(object):
 
 
 class TestParameter(object):
+    # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, value, default=None):
@@ -422,6 +425,7 @@ class TestParameter(object):
 
 
 class TestDaosApiBase(object):
+    # pylint: disable=too-few-public-methods
     """A base class for functional testing of DaosPools objects."""
 
     def __init__(self, cb_handler=None):
@@ -593,6 +597,7 @@ class TestPool(TestDaosApiBase):
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
                         pi_bits=None):
+        # pylint: disable=unused-argument
         """Check the pool info attributes.
 
         Args:
@@ -621,6 +626,7 @@ class TestPool(TestDaosApiBase):
 
     def check_pool_space(self, ps_free_min=None, ps_free_max=None,
                          ps_free_mean=None, ps_ntargets=None, ps_padding=None):
+        # pylint: disable=unused-argument
         """Check the pool info space attributes.
 
         Args:
@@ -655,6 +661,7 @@ class TestPool(TestDaosApiBase):
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
+        # pylint: disable=unused-argument
         """Check the pool info daos space attributes.
 
         Args:
@@ -680,6 +687,7 @@ class TestPool(TestDaosApiBase):
                              rs_errno=None, rs_done=None,
                              rs_toberb_obj_nr=None, rs_obj_nr=None,
                              rs_rec_nr=None):
+        # pylint: disable=unused-argument
         """Check the pool info rebuild attributes.
 
         Args:
