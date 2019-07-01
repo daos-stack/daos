@@ -2346,6 +2346,8 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 			nr = nd->tn_nr - i;
 			memmove(ne + 1, ne, nr * sizeof(*ne));
 		} else {
+			umem_off_t	off = ne->ne_child;
+
 			/* We do not know whether the former @desc has checksum
 			 * buffer or not, and do not know whether such buffer
 			 * is large enough or not even if it had. So we have to
@@ -2356,6 +2358,9 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 				return rc;
 
 			reuse = true;
+			D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
+				"off "UMOFF_PF" (1)\n",
+				i, nd->tn_nr, UMOFF_P(off));
 		}
 
 		break;
@@ -2369,11 +2374,16 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
 							DAOS_INTENT_CHECK);
 			if (rc == ALB_UNAVAILABLE) {
+				umem_off_t	off = ne->ne_child;
+
 				rc = evt_node_entry_free(tcx, ne);
 				if (rc != 0)
 					return rc;
 
 				reuse = true;
+				D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
+					"off "UMOFF_PF" (2)\n",
+					i, nd->tn_nr, UMOFF_P(off));
 			}
 		}
 
