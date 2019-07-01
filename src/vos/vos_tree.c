@@ -357,7 +357,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
 	if (UMOFF_IS_NULL(rec->rec_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	krec = vos_rec2krec(tins, rec);
 	if (kbund->kb_epoch == DAOS_EPOCH_MAX) {
@@ -646,7 +646,7 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		rec->rec_off = umem_alloc(&tins->ti_umm,
 					   vos_irec_size(rbund));
 		if (UMOFF_IS_NULL(rec->rec_off))
-			return -DER_NOMEM;
+			return -DER_NOSPACE;
 	} else {
 		umem_tx_add(&tins->ti_umm, rbund->rb_off,
 			    vos_irec_msize(rbund));

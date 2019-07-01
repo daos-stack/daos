@@ -35,6 +35,8 @@ service MgmtSvc {
 	rpc Join(JoinReq) returns (JoinResp) {}
 	// Create a DAOS pool allocated across a number of ranks
 	rpc CreatePool(CreatePoolReq) returns (CreatePoolResp) {}
+	// Destroy a DAOS pool allocated across a number of ranks
+	rpc DestroyPool(DestroyPoolReq) returns (DestroyPoolResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 }

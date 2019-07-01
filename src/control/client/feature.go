@@ -99,7 +99,6 @@ func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
 	for {
 		f, err = stream.Recv()
 		if err == io.EOF {
-			err = nil
 			break
 		} else if err != nil {
 			ch <- ClientResult{mc.getAddress(), nil, err}
