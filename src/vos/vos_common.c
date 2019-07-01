@@ -376,7 +376,6 @@ vos_init(void)
 		D_INFO("Using distance sort sort for evtree with even split\n");
 		break;
 	default:
-		D_ASSERT(vos_evt_feats == EVT_FEAT_SORT_DIST);
 		D_INFO("Using distance with closest side split for evtree "
 		       "(default)\n");
 	}

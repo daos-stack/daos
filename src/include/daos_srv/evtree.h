@@ -201,6 +201,8 @@ enum evt_feats {
 };
 
 #define EVT_FEAT_DEFAULT EVT_FEAT_SORT_DIST
+#define EVT_FEATS_SUPPORTED	\
+	(EVT_FEAT_SORT_SOFF | EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN)
 
 /* Information about record to insert */
 struct evt_entry_in {

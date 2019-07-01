@@ -894,9 +894,7 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 			root_off);
 	}
 
-	policy = tcx->tc_feats & (EVT_FEAT_SORT_SOFF |
-				  EVT_FEAT_SORT_DIST |
-				  EVT_FEAT_SORT_DIST_EVEN);
+	policy = tcx->tc_feats & EVT_FEATS_SUPPORTED;
 	switch (policy) {
 	case EVT_FEAT_SORT_SOFF:
 		tcx->tc_ops = evt_policies[0];
@@ -1219,14 +1217,15 @@ evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 		DP_RECT(&ent->ei_rect), DP_RECT(evt_node_mbr_get(tcx, nd)));
 
 	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed);
-	if (rc == 0)
-		V_TRACE(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
-			DP_RECT(evt_node_mbr_get(tcx, nd)), nd->tn_nr);
+	if (rc != 0)
+		return rc;
 
+	V_TRACE(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
+		DP_RECT(evt_node_mbr_get(tcx, nd)), nd->tn_nr);
 	if (mbr_changed)
 		*mbr_changed = changed;
 
-	return rc;
+	return 0;
 }
 
 /**
@@ -2171,9 +2170,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & (EVT_FEAT_SORT_DIST_EVEN |
-		       EVT_FEAT_SORT_DIST |
-		       EVT_FEAT_SORT_SOFF))) {
+	if (!(feats & EVT_FEATS_SUPPORTED)) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -2616,34 +2613,31 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	struct evt_node_entry	*entry_src;
 	struct evt_node_entry	*entry_dst;
 	int			 nr;
+	int			 delta;
+	int			 boundary;
+	bool			 cond;
 	int64_t			 dist;
 
 	D_ASSERT(nd_src->tn_nr == tcx->tc_order);
 	nr = nd_src->tn_nr / 2;
 
-	nr += (nd_src->tn_nr % 2 != 0);
+	nr += nd_src->tn_nr % 2;
 
 	entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
 	dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src), &entry_src->ne_rect);
-	if (dist > 0) {
-		do {
-			nr--;
-			if (nr == 1)
-				break;
-			entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
-			dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
-					    &entry_src->ne_rect);
-		} while (dist > 0);
-	} else if (dist < 0) {
-		do {
-			nr++;
-			if (nr == nd_src->tn_nr - 1)
-				break;
-			entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
-			dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
-					    &entry_src->ne_rect);
-		} while (dist < 0);
-	}
+
+	cond = dist > 0;
+	delta = cond ? -1 : 1;
+	boundary = cond ? 1 : nd_src->tn_nr - 1;
+	do {
+		nr += delta;
+		if (nr == boundary)
+			break;
+		entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
+		dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
+				    &entry_src->ne_rect);
+	} while ((dist > 0) == cond);
+
 	entry_src = evt_node_entry_at(tcx, nd_src, nr);
 	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
 	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
