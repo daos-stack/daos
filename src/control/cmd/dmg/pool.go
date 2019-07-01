@@ -36,14 +36,14 @@ import (
 
 const (
 	msgSizeNoNumber = "size string doesn't specify a number"
-	msgSizeBad      = "size string illegal, %s"
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create CreatePoolCmd `command:"create" alias:"c" description:"Create a DAOS pool"`
+	Create  CreatePoolCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
+	Destroy DestroyPoolCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 }
 
 // CreatePoolCmd is the struct representing the command to create a DAOS pool.
@@ -56,6 +56,49 @@ type CreatePoolCmd struct {
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
+}
+
+// Execute is run when CreatePoolCmd subcommand is activated
+func (c *CreatePoolCmd) Execute(args []string) error {
+	// broadcast == false to connect to mgmt svc access point
+	if err := appSetup(false); err != nil {
+		return err
+	}
+
+	if err := createPool(
+		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
+		c.GroupName, c.UserName, c.Sys, c.ACLFile); err != nil {
+
+		return err
+	}
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
+// DestroyPoolCmd is the struct representing the command to destroy a DAOS pool.
+type DestroyPoolCmd struct {
+	Uuid  string `short:"u" long:"uuid" required:"1" description:"UUID of DAOS pool to destroy"`
+	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
+}
+
+// Execute is run when DestroyPoolCmd subcommand is activated
+func (d *DestroyPoolCmd) Execute(args []string) error {
+	// broadcast == false to connect to mgmt svc access point
+	if err := appSetup(false); err != nil {
+		return err
+	}
+
+	if err := destroyPool(d.Uuid, d.Force); err != nil {
+		return err
+	}
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -121,7 +164,7 @@ func calcStorage(scmSize string, nvmeSize string) (
 	return scmBytes, nvmeBytes, nil
 }
 
-// createPool with specified parameters on all connected servers
+// createPool with specified parameters.
 func createPool(
 	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
 	groupName string, userName string, sys string,
@@ -156,22 +199,13 @@ func createPool(
 	return nil
 }
 
-// Execute is run when CreatePoolCmd subcommand is activated
-func (c *CreatePoolCmd) Execute(args []string) error {
-	// broadcast == false to connect to mgmt svc access point
-	if err := appSetup(false); err != nil {
-		return err
-	}
+// destroyPool identified by UUID.
+func destroyPool(uuid string, force bool) error {
+	req := &pb.DestroyPoolReq{Uuid: uuid, Force: force}
 
-	if err := createPool(
-		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
-		c.GroupName, c.UserName, c.Sys, c.ACLFile); err != nil {
+	fmt.Printf("Destroying DAOS pool: %+v\n", req)
 
-		return err
-	}
+	fmt.Printf("pool destroy command results:\n%s\n", conns.DestroyPool(req))
 
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
 	return nil
 }

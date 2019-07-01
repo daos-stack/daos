@@ -43,6 +43,9 @@ struct rsvc_client_state {
 	crt_group_t	   *scs_group;
 };
 
+static uint64_t
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);
+
 /**
  * Initialize pool interface
  */
@@ -588,6 +591,7 @@ dc_pool_connect(tse_task_t *task)
 	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_capas = args->flags;
+	pci->pci_query_bits = pool_query_bits(args->info, NULL);
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));

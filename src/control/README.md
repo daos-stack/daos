@@ -2,7 +2,7 @@
 
 DAOS operates over two, closely integrated planes, Control and Data. The Data plane handles the heavy lifting transport operations while the Control plane orchestrates process and storage management, facilitating the operation of the Data plane.
 
-[DAOS Server](server) implements the DAOS Control Plane and is written in Golang. It is tasked with network and storage hardware provisioning and allocation in addition to instantiation and management of the DAOS IO Servers (Data Plane written in C) running on the same host. Users of DAOS will interact directly only with the Control Plane in the form of the DAOS Server and associated tools.
+[DAOS Server](server) implements the DAOS Control Plane and is written in Go. It is tasked with network and storage hardware provisioning and allocation in addition to instantiation and management of the DAOS IO Servers (Data Plane written in C) running on the same host. Users of DAOS will interact directly only with the Control Plane in the form of the DAOS Server and associated tools.
 
 The DAOS Server implements the [gRPC protocol](https://grpc.io/) to communicate with client gRPC applications and interacts with DAOS IO Servers through Unix domain sockets.
 
@@ -32,7 +32,7 @@ First a view of software component architecture:
 
 ## Development Requirements
 
-- [Golang](https://golang.org/) 1.9 or higher
+- [Go](https://golang.org/) 1.10 or higher
 - [gRPC](https://grpc.io/)
 - [Protocol Buffers](https://developers.google.com/protocol-buffers/)
 - [Dep](https://github.com/golang/dep/) for managing dependencies in vendor directory.

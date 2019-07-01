@@ -108,6 +108,7 @@ type Connect interface {
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
 	CreatePool(*pb.CreatePoolReq) ResultMap
+	DestroyPool(*pb.DestroyPoolReq) ResultMap
 }
 
 // connList is an implementation of Connect and stores controllers
