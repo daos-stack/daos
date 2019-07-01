@@ -42,6 +42,10 @@
 #include "srv_layout.h"
 
 static int
+cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
+	       daos_prop_t **prop_out);
+
+static int
 cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	      struct ds_rsvc *rsvc)
 {
@@ -700,8 +704,9 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc)
 {
 	struct cont_open_in    *in = crt_req_get(rpc);
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
+	daos_prop_t	       *prop = NULL;
 	struct container_hdl	chdl;
 	int			rc;
 
@@ -730,11 +735,31 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
+	/* query the container properties from RDB and update to IV */
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	D_ASSERT(prop != NULL);
+	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
+				 in->coi_op.ci_hdl, in->coi_op.ci_uuid,
+				 prop);
+	daos_prop_free(prop);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cont_iv_prop_update failed %d.\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	/* update container capa to IV */
 	rc = cont_iv_capability_update(pool_hdl->sph_pool->sp_iv_ns,
 				       in->coi_op.ci_hdl, in->coi_op.ci_uuid,
 				       in->coi_capas);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cont_iv_capability_update failed %d.\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out, rc);
+	}
 
 	/* TODO: Rollback cont_iv_capability_update() on errors from now on. */
 
@@ -1104,6 +1129,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ENCRYPT;
 		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ACL) {
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ACL;
+		prop->dpp_entries[idx].dpe_val_ptr = NULL;
 	}
 
 out:
@@ -1137,6 +1168,67 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	 */
 	rc = cont_prop_read(tx, cont, in->cqi_bits, &prop);
 	out->cqo_prop = prop;
+
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY)) {
+		daos_prop_t		*iv_prop = NULL;
+		struct daos_prop_entry	*entry, *iv_entry;
+		int			i;
+
+		D_ALLOC_PTR(iv_prop);
+		if (iv_prop == NULL)
+			return -DER_NOMEM;
+
+		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
+					in->cqi_op.ci_hdl, iv_prop);
+		if (rc) {
+			D_ERROR("cont_iv_prop_fetch failed %d.\n", rc);
+			return rc;
+		}
+
+		for (i = 0; i < prop->dpp_nr; i++) {
+			entry = &prop->dpp_entries[i];
+			iv_entry = daos_prop_entry_get(iv_prop,
+						       entry->dpe_type);
+			D_ASSERT(iv_entry != NULL);
+			switch (entry->dpe_type) {
+			case DAOS_PROP_CO_LABEL:
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_PROP_LABEL_MAX_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_PROP_LABEL_MAX_LEN) != 0) {
+					D_ERROR("label mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
+					rc = -DER_IO;
+				}
+				break;
+			case DAOS_PROP_CO_LAYOUT_TYPE:
+			case DAOS_PROP_CO_LAYOUT_VER:
+			case DAOS_PROP_CO_CSUM:
+			case DAOS_PROP_CO_REDUN_FAC:
+			case DAOS_PROP_CO_REDUN_LVL:
+			case DAOS_PROP_CO_SNAPSHOT_MAX:
+			case DAOS_PROP_CO_COMPRESS:
+			case DAOS_PROP_CO_ENCRYPT:
+				if (entry->dpe_val != iv_entry->dpe_val) {
+					D_ERROR("type %d mismatch "DF_U64" - "
+						DF_U64".\n", entry->dpe_type,
+						entry->dpe_val,
+						iv_entry->dpe_val);
+					rc = -DER_IO;
+				}
+				break;
+			case DAOS_PROP_CO_ACL:
+				/* no container ACL now */
+				break;
+			default:
+				D_ASSERTF(0, "bad dpe_type %d\n",
+					  entry->dpe_type);
+				break;
+			};
+		}
+		daos_prop_free(iv_prop);
+	}
 
 	return rc;
 }

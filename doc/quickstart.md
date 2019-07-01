@@ -12,7 +12,7 @@ Storage-class memory (SCM) can be emulated with DRAM by creating tmpfs mountpoin
 
 ## Software Dependencies
 
-DAOS requires a C99-capable compiler, a golang compiler, and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
+DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
 - [CaRT](https://github.com/daos-stack/cart) that relies on both [Mercury](https://mercury-hpc.github.io) and [Libfabric](https://ofiwg.github.io/libfabric/) for lightweight network transport and [PMIx](https://github.com/pmix/master) for process set management. See the CaRT repository for more information on how to build the CaRT library.
 - [PMDK](https://github.com/pmem/pmdk.git) for persistent memory programming.
 - [SPDK](http://spdk.io) for userspace NVMe device access and management.
@@ -123,7 +123,7 @@ If you are a developer of DAOS, we recommend following the instructions in [DAOS
 Otherwise, the missing dependencies can be built automatically by invoking scons with the following parameters:
 
 ```
-    scons --config=force --build-deps=yes USE_INSTALLED=all install
+    scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under \${daospath}/install. The installation path can be modified by adding the PREFIX= option to the above command line (e.g., PREFIX=/usr/local).

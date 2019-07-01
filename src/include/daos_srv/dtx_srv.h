@@ -116,6 +116,15 @@ struct dtx_leader_handle {
 	struct dtx_sub_status		*dlh_subs;
 };
 
+struct dtx_share {
+	/** Link into the dtx_handle::dth_shares */
+	d_list_t		dts_link;
+	/** The DTX record type. */
+	uint32_t		dts_type;
+	/** The record in the related tree in SCM. */
+	umem_off_t		dts_record;
+};
+
 struct dtx_stat {
 	uint64_t	dtx_committable_count;
 	uint64_t	dtx_oldest_committable_time;

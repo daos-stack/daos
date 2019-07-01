@@ -77,7 +77,7 @@ dtx_inprogress(struct vos_dtx_entry_df *dtx, int pos)
 static inline void
 dtx_record_conflict(struct dtx_handle *dth, struct vos_dtx_entry_df *dtx)
 {
-	if (dth != NULL && dtx != NULL) {
+	if (dth != NULL && dth->dth_conflict != NULL && dtx != NULL) {
 		daos_dti_copy(&dth->dth_conflict->dce_xid, &dtx->te_xid);
 		dth->dth_conflict->dce_dkey = dtx->te_dkey_hash;
 	}
@@ -784,15 +784,6 @@ vos_dtx_abort_one(struct vos_container *cont, struct dtx_id *dti,
 	return rc;
 }
 
-struct vos_dtx_share {
-	/** Link into the dtx_handle::dth_shares */
-	d_list_t		vds_link;
-	/** The DTX record type, see enum vos_dtx_record_types. */
-	uint32_t		vds_type;
-	/** The record in the related tree in SCM. */
-	umem_off_t		vds_record;
-};
-
 static bool
 vos_dtx_is_normal_entry(struct umem_instance *umm, umem_off_t entry)
 {
@@ -820,7 +811,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 
 	dtx_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_entry_df));
 	if (dtx_is_null(dtx_umoff))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	dtx = umem_off2ptr(umm, dtx_umoff);
 	dtx->te_xid = dth->dth_xid;
@@ -907,19 +898,19 @@ vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
 
 static int
 vos_dtx_append_share(struct umem_instance *umm, struct vos_dtx_entry_df *dtx,
-		     struct vos_dtx_share *vds)
+		     struct dtx_share *dts)
 {
 	struct vos_dtx_record_df	*rec;
 	umem_off_t			 rec_umoff;
 
 	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
 	if (dtx_is_null(rec_umoff))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	rec = umem_off2ptr(umm, rec_umoff);
-	rec->tr_type = vds->vds_type;
+	rec->tr_type = dts->dts_type;
 	rec->tr_flags = 0;
-	rec->tr_record = vds->vds_record;
+	rec->tr_record = dts->dts_record;
 
 	rec->tr_next = dtx->te_records;
 	dtx->te_records = rec_umoff;
@@ -929,20 +920,20 @@ vos_dtx_append_share(struct umem_instance *umm, struct vos_dtx_entry_df *dtx,
 
 static int
 vos_dtx_share_obj(struct umem_instance *umm, struct dtx_handle *dth,
-		  struct vos_dtx_entry_df *dtx, struct vos_dtx_share *vds,
+		  struct vos_dtx_entry_df *dtx, struct dtx_share *dts,
 		  bool *shared)
 {
 	struct vos_obj_df	*obj;
 	struct vos_dtx_entry_df	*sh_dtx;
 	int			 rc;
 
-	obj = umem_off2ptr(umm, vds->vds_record);
-	dth->dth_obj = vds->vds_record;
+	obj = umem_off2ptr(umm, dts->dts_record);
+	dth->dth_obj = dts->dts_record;
 	/* The to be shared obj has been committed. */
 	if (dtx_is_null(obj->vo_dtx))
 		return 0;
 
-	rc = vos_dtx_append_share(umm, dtx, vds);
+	rc = vos_dtx_append_share(umm, dtx, dts);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "The DTX "DF_DTI" failed to shares obj "
 			"with others:: rc = %d\n",
@@ -988,7 +979,7 @@ vos_dtx_share_obj(struct umem_instance *umm, struct dtx_handle *dth,
 
 	D_DEBUG(DB_TRACE, "The DTX "DF_DTI" try to shares obj "DF_X64
 		" with other DTX "DF_DTI", the shares count %u\n",
-		DP_DTI(&dth->dth_xid), vds->vds_record,
+		DP_DTI(&dth->dth_xid), dts->dts_record,
 		DP_DTI(&sh_dtx->te_xid), obj->vo_dtx_shares);
 
 	return 0;
@@ -996,14 +987,14 @@ vos_dtx_share_obj(struct umem_instance *umm, struct dtx_handle *dth,
 
 static int
 vos_dtx_share_key(struct umem_instance *umm, struct dtx_handle *dth,
-		  struct vos_dtx_entry_df *dtx, struct vos_dtx_share *vds,
+		  struct vos_dtx_entry_df *dtx, struct dtx_share *dts,
 		  bool *shared)
 {
 	struct vos_krec_df	*key;
 	struct vos_dtx_entry_df	*sh_dtx;
 	int			 rc;
 
-	rc = vos_dtx_append_share(umm, dtx, vds);
+	rc = vos_dtx_append_share(umm, dtx, dts);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "The DTX "DF_DTI" failed to shares key "
 			"with others:: rc = %d\n",
@@ -1011,7 +1002,7 @@ vos_dtx_share_key(struct umem_instance *umm, struct dtx_handle *dth,
 		return rc;
 	}
 
-	key = umem_off2ptr(umm, vds->vds_record);
+	key = umem_off2ptr(umm, dts->dts_record);
 	umem_tx_add_ptr(umm, key, sizeof(*key));
 	key->kr_dtx_shares++;
 	*shared = true;
@@ -1040,7 +1031,7 @@ vos_dtx_share_key(struct umem_instance *umm, struct dtx_handle *dth,
 
 	D_DEBUG(DB_TRACE, "The DTX "DF_DTI" try to shares key "DF_X64
 		" with other DTX "DF_DTI", the shares count %u\n",
-		DP_DTI(&dth->dth_xid), vds->vds_record,
+		DP_DTI(&dth->dth_xid), dts->dts_record,
 		DP_DTI(&sh_dtx->te_xid), key->kr_dtx_shares);
 
 	return 0;
@@ -1050,7 +1041,7 @@ static int
 vos_dtx_check_shares(struct dtx_handle *dth, struct vos_dtx_entry_df *dtx,
 		     umem_off_t record, uint32_t intent, uint32_t type)
 {
-	struct vos_dtx_share	*vds;
+	struct dtx_share	*dts;
 
 	if (dtx != NULL)
 		D_ASSERT(dtx->te_intent == DAOS_INTENT_UPDATE);
@@ -1081,13 +1072,13 @@ vos_dtx_check_shares(struct dtx_handle *dth, struct vos_dtx_entry_df *dtx,
 	if (dth == NULL)
 		return dtx_inprogress(dtx, 6);
 
-	D_ALLOC_PTR(vds);
-	if (vds == NULL)
+	D_ALLOC_PTR(dts);
+	if (dts == NULL)
 		return -DER_NOMEM;
 
-	vds->vds_type = type;
-	vds->vds_record = record;
-	d_list_add_tail(&vds->vds_link, &dth->dth_shares);
+	dts->dts_type = type;
+	dts->dts_record = record;
+	d_list_add_tail(&dts->dts_link, &dth->dth_shares);
 
 	return ALB_AVAILABLE_CLEAN;
 }
@@ -1278,8 +1269,8 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct dtx_handle		*dth = vos_dth_get();
 	struct vos_dtx_entry_df		*dtx;
 	struct vos_dtx_record_df	*rec;
-	struct vos_dtx_share		*vds;
-	struct vos_dtx_share		*next;
+	struct dtx_share		*dts;
+	struct dtx_share		*next;
 	umem_off_t			 rec_umoff = UMOFF_NULL;
 	umem_off_t			*entry = NULL;
 	uint32_t			*shares = NULL;
@@ -1345,7 +1336,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 
 	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
 	if (dtx_is_null(rec_umoff))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	rec = umem_off2ptr(umm, rec_umoff);
 	rec->tr_type = type;
@@ -1370,16 +1361,16 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	if (d_list_empty(&dth->dth_shares))
 		return 0;
 
-	d_list_for_each_entry_safe(vds, next, &dth->dth_shares, vds_link) {
-		if (vds->vds_type == DTX_RT_OBJ)
-			rc = vos_dtx_share_obj(umm, dth, dtx, vds, &shared);
+	d_list_for_each_entry_safe(dts, next, &dth->dth_shares, dts_link) {
+		if (dts->dts_type == DTX_RT_OBJ)
+			rc = vos_dtx_share_obj(umm, dth, dtx, dts, &shared);
 		else
-			rc = vos_dtx_share_key(umm, dth, dtx, vds, &shared);
+			rc = vos_dtx_share_key(umm, dth, dtx, dts, &shared);
 		if (rc != 0)
 			return rc;
 
-		d_list_del(&vds->vds_link);
-		D_FREE_PTR(vds);
+		d_list_del(&dts->dts_link);
+		D_FREE_PTR(dts);
 	}
 
 	if (rc == 0 && shared)
@@ -1405,23 +1396,25 @@ vos_dtx_deregister_record(struct umem_instance *umm,
 	rec_umoff = dtx->te_records;
 	while (!dtx_is_null(rec_umoff)) {
 		rec = umem_off2ptr(umm, rec_umoff);
-		if (record != rec->tr_record) {
-			prev = rec;
-			rec_umoff = rec->tr_next;
-			continue;
+		if (record == rec->tr_record) {
+			if (prev == NULL) {
+				umem_tx_add_ptr(umm, dtx, sizeof(*dtx));
+				dtx->te_records = rec->tr_next;
+			} else {
+				umem_tx_add_ptr(umm, prev, sizeof(*prev));
+				prev->tr_next = rec->tr_next;
+			}
+
+			umem_free(umm, rec_umoff);
+			break;
 		}
 
-		if (prev == NULL) {
-			umem_tx_add_ptr(umm, dtx, sizeof(*dtx));
-			dtx->te_records = rec->tr_next;
-		} else {
-			umem_tx_add_ptr(umm, prev, sizeof(*prev));
-			prev->tr_next = rec->tr_next;
-		}
+		prev = rec;
+		rec_umoff = rec->tr_next;
+	}
 
-		umem_free(umm, rec_umoff);
-		break;
-	};
+	if (dtx_is_null(rec_umoff))
+		return;
 
 	/* The caller will destroy related OBJ/KEY/SVT/EVT record after
 	 * deregistered the DTX record. So not reset DTX reference inside

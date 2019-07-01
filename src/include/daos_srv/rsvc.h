@@ -143,9 +143,12 @@ int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		       bool create, bool bootstrap, size_t size);
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		      const d_rank_list_t *ranks, bool destroy);
+int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks,
+			   size_t size);
 int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 			 d_rank_list_t *ranks, size_t size,
 			 struct rsvc_hint *hint);
+int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks);
 int ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 			    d_rank_list_t *ranks, struct rsvc_hint *hint);
 int ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,

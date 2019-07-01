@@ -74,7 +74,7 @@ dtab_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	ndev_off = umem_zalloc(&tins->ti_umm, sizeof(struct smd_nvme_dev_df));
 	if (UMOFF_IS_NULL(ndev_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 	ndev_df = umem_off2ptr(&tins->ti_umm, ndev_off);
 	uuid_copy(ndev_df->nd_dev_id, ukey->uuid);
 	memcpy(ndev_df, val_iov->iov_buf, sizeof(*ndev_df));

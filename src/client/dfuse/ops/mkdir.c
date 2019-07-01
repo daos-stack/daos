@@ -42,7 +42,7 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
 
-	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
 	if (rc) {
 		D_GOTO(err, rc = -rc);
@@ -54,7 +54,7 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
+	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc) {
 		D_GOTO(release, rc = -rc);
 	}

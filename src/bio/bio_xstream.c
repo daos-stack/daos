@@ -331,7 +331,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 
 	/* Call all registered poller one by one */
 	d_list_for_each_entry(poller, &ctxt->bxc_pollers, bnp_link) {
-		if (poller->bnp_period_us != 0 && poller->bnp_expire_us < now)
+		if (poller->bnp_period_us != 0 && poller->bnp_expire_us > now)
 			continue;
 
 		poller->bnp_fn(poller->bnp_arg);

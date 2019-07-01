@@ -104,7 +104,7 @@ ptab_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	npool_off = umem_zalloc(&tins->ti_umm, sizeof(struct smd_nvme_pool_df));
 	if (UMOFF_IS_NULL(npool_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 	npool_df = umem_off2ptr(&tins->ti_umm, npool_off);
 	uuid_copy(npool_df->np_info.npi_pool_uuid, pkey->ptk_pid);
 	npool_df->np_info.npi_stream_id = pkey->ptk_sid;
