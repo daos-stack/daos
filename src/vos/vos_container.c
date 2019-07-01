@@ -95,7 +95,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	args = (struct cont_df_args *)(val_iov->iov_buf);
 	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
 	if (UMOFF_IS_NULL(offset))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);

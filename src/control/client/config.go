@@ -36,12 +36,11 @@ import (
 )
 
 const (
-	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultRuntimeDir    = "/var/run/daos_agent"
-	defaultLogFile       = "/tmp/daos_agent.log"
-	defaultConfigPath    = "etc/daos.yml"
-	defaultSystemName    = "daos_server"
-	defaultPort          = 10000
+	defaultRuntimeDir = "/var/run/daos_agent"
+	defaultLogFile    = "/tmp/daos_agent.log"
+	defaultConfigPath = "etc/daos.yml"
+	defaultSystemName = "daos_server"
+	defaultPort       = 10000
 )
 
 // External interface provides methods to support various os operations.
