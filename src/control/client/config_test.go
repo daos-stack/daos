@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"reflect"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/client"
@@ -44,9 +43,8 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(cfg, defaultConfig) {
-		t.Fatalf("%v != %v", cfg, defaultConfig)
-	}
+	common.AssertEqual(t, cfg, defaultConfig,
+		"loaded config doesn't match default config")
 }
 
 func TestLoadConfigFromDefaultFile(t *testing.T) {
@@ -58,7 +56,8 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(defaultConfig.Path)
+	defer os.RemoveAll(path.Dir(defaultConfig.Path))
+	defaultConfig.SystemName = t.Name()
 
 	_, err = f.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
 	if err != nil {
@@ -71,9 +70,8 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cfg.SystemName != t.Name() {
-		t.Fatalf("expected %q, got %q", t.Name(), cfg.SystemName)
-	}
+	common.AssertEqual(t, cfg, defaultConfig,
+		"loaded config doesn't match written config")
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
@@ -91,9 +89,8 @@ func TestLoadConfigFromFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cfg.SystemName != t.Name() {
-		t.Fatalf("expected %q, got %q", t.Name(), cfg.SystemName)
-	}
+	common.AssertEqual(t, cfg.SystemName, t.Name(),
+		"loaded config doesn't match written config")
 }
 
 func TestLoadConfigFailures(t *testing.T) {
