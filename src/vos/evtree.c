@@ -831,8 +831,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
 /**
  * Create a evtree context for create or open
  *
- * \param root_off	[IN]	Optional, root memory offset for open
- * \param root		[IN]	Optional, root address for inplace open
+ * \param root		[IN]	root address for inplace open
  * \param feats		[IN]	Optional, feature bits for create
  * \param order		[IN]	Optional, tree order for create
  * \param uma		[IN]	Memory attribute for the tree
@@ -841,14 +840,16 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param tcx_pp	[OUT]	The returned tree context
  */
 static int
-evt_tcx_create(umem_off_t root_off, struct evt_root *root,
-	       uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       daos_handle_t coh, void *info, struct evt_context **tcx_pp)
+evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
+	       struct umem_attr *uma, daos_handle_t coh, void *info,
+	       struct evt_context **tcx_pp)
 {
 	struct evt_context	*tcx;
 	int			 depth;
 	int			 rc;
 	int			 policy;
+
+	D_ASSERT(root != NULL);
 
 	D_ALLOC_PTR(tcx);
 	if (tcx == NULL)
@@ -856,7 +857,6 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	tcx->tc_magic = EVT_HDL_ALIVE;
-	tcx->tc_root_off = UMOFF_NULL;
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -865,15 +865,10 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 	}
 	tcx->tc_blks_info = info;
 
-	if (!UMOFF_IS_NULL(root_off)) { /* non-inplace tree open */
-		tcx->tc_root_off = root_off;
-		if (root == NULL)
-			root = umem_off2ptr(&tcx->tc_umm, root_off);
-	}
 	tcx->tc_root = root;
 	tcx->tc_coh = coh;
 
-	if (root == NULL || feats != -1) { /* tree creation */
+	if (feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
 		tcx->tc_order	= order;
 		depth		= 0;
@@ -890,8 +885,7 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 		tcx->tc_order	= root->tr_order;
 		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
-		V_TRACE(DB_TRACE, "Load tree context from "DF_U64"\n",
-			root_off);
+		V_TRACE(DB_TRACE, "Load tree context from %p\n", root);
 	}
 
 	policy = tcx->tc_feats & EVT_FEATS_SUPPORTED;
@@ -936,8 +930,8 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 	if (!tcx->tc_root || tcx->tc_root->tr_feats == 0)
 		return -DER_INVAL;
 
-	rc = evt_tcx_create(tcx->tc_root_off, tcx->tc_root, -1, -1, &uma,
-			    tcx->tc_coh, tcx->tc_blks_info, tcx_pp);
+	rc = evt_tcx_create(tcx->tc_root, -1, -1, &uma, tcx->tc_coh,
+			    tcx->tc_blks_info, tcx_pp);
 	return rc;
 }
 
@@ -1287,12 +1281,8 @@ evt_root_tx_add(struct evt_context *tcx)
 	if (!evt_has_tx(tcx))
 		return 0;
 
-	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
-		root = evt_off2ptr(tcx, tcx->tc_root_off);
-	} else {
-		D_ASSERT(tcx->tc_root != NULL);
-		root = tcx->tc_root;
-	}
+	D_ASSERT(tcx->tc_root != NULL);
+	root = tcx->tc_root;
 
 	return umem_tx_add_ptr(umm, root, sizeof(*tcx->tc_root));
 }
@@ -1322,15 +1312,11 @@ static int
 evt_root_free(struct evt_context *tcx)
 {
 	int	rc;
-	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
-		rc = umem_free(evt_umm(tcx), tcx->tc_root_off);
-		tcx->tc_root_off = EVT_ROOT_NULL;
-	} else {
-		rc = evt_root_tx_add(tcx);
-		if (rc != 0)
-			goto out;
-		memset(tcx->tc_root, 0, sizeof(*tcx->tc_root));
-	}
+
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		goto out;
+	memset(tcx->tc_root, 0, sizeof(*tcx->tc_root));
 out:
 	tcx->tc_root = NULL;
 	return rc;
@@ -2133,7 +2119,7 @@ evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, -1, -1, uma, coh, info, &tcx);
+	rc = evt_tcx_create(root, -1, -1, uma, coh, info, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2180,7 +2166,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, feats, order, uma,
+	rc = evt_tcx_create(root, feats, order, uma,
 			    coh, NULL, &tcx);
 	if (rc != 0)
 		return rc;

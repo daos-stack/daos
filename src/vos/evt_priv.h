@@ -70,8 +70,6 @@ struct evt_trace {
 struct evt_context {
 	/** mapped address of the tree root */
 	struct evt_root			*tc_root;
-	/** memory offset of the tree root */
-	umem_off_t			 tc_root_off;
 	/** magic number to identify invalid tree open handle */
 	unsigned int			 tc_magic;
 	/** refcount on the context */
