@@ -401,7 +401,7 @@ dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 
 	replicas = oc_attr->u.repl.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = layout->ol_nr;
+		replicas = layout->ol_grp_size;
 
 	if (replicas < 1)
 		return -DER_INVAL;
