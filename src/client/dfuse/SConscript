@@ -23,10 +23,6 @@ OPS_SRC = ['create',
            'opendir',
            'read',
            'readdir',
-           'readlink',
-           'rename',
-           'setattr',
-           'symlink',
            'unlink',
            'write']
 
