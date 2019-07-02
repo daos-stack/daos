@@ -886,7 +886,7 @@ DAOS I/O server (v0.0.2) process 23680 started on rank 0 (out of 2) with 1 targe
 ### Basic Workflow
 
 Control plane server ([daos_server](/src/control/server)) instances will
-listen for requests from the management tool ([daos_shell](/src/control/dmg)),
+listen for requests from the management tool ([daos_shell](/src/control/cmd/dmg)),
 enabling users to perform provisioning operations on network and storage
 hardware remotely on storage nodes (from for example a login node).
 
@@ -928,7 +928,7 @@ Typically an administrator will perform the following tasks:
 
 7. Format Storage (from any node)
     - `daos_shell -l <host:port>,... storage format -f`
-    [management tool details](/src/control/dmg/README.md#-storage-format)
+    [management tool details](/src/control/cmd/dmg/README.md#-storage-format)
     - [SCM specific details](/src/control/server/README.md#-scm-format)
     - [NVMe specific details](/src/control/server/README.md#-nvme-format)
 
