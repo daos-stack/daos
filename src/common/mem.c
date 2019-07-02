@@ -348,11 +348,8 @@ static umem_ops_t	pmem_ops = {
 int
 umem_tx_errno(int err)
 {
-	if (err == 0) {
+	if (err == 0)
 		err = pmemobj_tx_errno();
-		if (err == ENOMEM) /* pmdk returns ENOMEM for out of space */
-			err = ENOSPC;
-	}
 
 	if (err == 0) {
 		D_ERROR("Transaction aborted for unknown reason\n");
@@ -366,6 +363,10 @@ umem_tx_errno(int err)
 		D_ERROR("pmdk returned negative errno %d\n", err);
 		err = -err;
 	}
+
+	if (err == ENOMEM) /* pmdk returns ENOMEM for out of space */
+		err = ENOSPC;
+
 	return daos_errno2der(err);
 }
 

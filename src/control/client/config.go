@@ -36,12 +36,11 @@ import (
 )
 
 const (
-	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
-	defaultRuntimeDir    = "/var/run/daos_agent"
-	defaultLogFile       = "/tmp/daos_agent.log"
-	defaultConfigPath    = "etc/daos.yml"
-	defaultSystemName    = "daos_server"
-	defaultPort          = 10000
+	defaultRuntimeDir = "/var/run/daos_agent"
+	defaultLogFile    = "/tmp/daos_agent.log"
+	defaultConfigPath = "etc/daos.yml"
+	defaultSystemName = "daos_server"
+	defaultPort       = 10000
 )
 
 // External interface provides methods to support various os operations.
@@ -81,10 +80,10 @@ type Configuration struct {
 
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func newDefaultConfiguration(ext External) Configuration {
-	return Configuration{
+func newDefaultConfiguration(ext External) *Configuration {
+	return &Configuration{
 		SystemName:   defaultSystemName,
-		AccessPoints: []string{"localhost"},
+		AccessPoints: []string{"localhost:10001"},
 		Port:         defaultPort,
 		HostList:     []string{"localhost:10001"},
 		RuntimeDir:   defaultRuntimeDir,
@@ -94,10 +93,10 @@ func newDefaultConfiguration(ext External) Configuration {
 	}
 }
 
-// ProcessConfigFile loads a configuration file from the path given,
+// GetConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func ProcessConfigFile(ConfigPath string) (Configuration, error) {
+func GetConfig(ConfigPath string) (*Configuration, error) {
 	config := NewConfiguration()
 	if ConfigPath != "" {
 		log.Debugf("Overriding default config path with: %s", ConfigPath)
@@ -107,17 +106,23 @@ func ProcessConfigFile(ConfigPath string) (Configuration, error) {
 	if !filepath.IsAbs(config.Path) {
 		newPath, err := common.GetAbsInstallPath(config.Path)
 		if err != nil {
-			return config, errors.WithMessage(
-				err, "resolving install path")
+			return nil, errors.Wrap(err, "resolving install path")
 		}
 
 		config.Path = newPath
 	}
 
-	err := config.LoadConfig()
+	_, err := os.Stat(config.Path)
 	if err != nil {
-		return config, errors.WithMessagef(
-			err, "parsing config file %s", config.Path)
+		if os.IsNotExist(err) && ConfigPath == "" {
+			log.Debugf("No configuration file found; using default values")
+			return config, nil
+		}
+		return nil, errors.Wrapf(err, "failed to stat config file %s", config.Path)
+	}
+
+	if err := config.LoadConfig(); err != nil {
+		return nil, errors.Wrapf(err, "parsing config file %s", config.Path)
 	}
 	log.Debugf("DAOS Client config read from %s", config.Path)
 
@@ -146,6 +151,6 @@ func (c *Configuration) parse(data []byte) error {
 
 // NewConfiguration creates a new instance of the Configuration struct
 // populated with defaults and default external interface.
-func NewConfiguration() Configuration {
+func NewConfiguration() *Configuration {
 	return newDefaultConfiguration(&ext{})
 }

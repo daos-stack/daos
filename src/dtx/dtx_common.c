@@ -227,6 +227,16 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_obj = UMOFF_NULL;
 }
 
+static inline void
+dtx_clean_shares(struct dtx_handle *dth)
+{
+	struct dtx_share	*dts;
+
+	while ((dts = d_list_pop_entry(&dth->dth_shares, struct dtx_share,
+				       dts_link)) != NULL)
+		D_FREE(dts);
+}
+
 /**
  * Prepare the leader DTX handle in DRAM.
  *
@@ -296,9 +306,11 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		dlh->dlh_subs[i].dss_tgt = tgts[i];
 	dlh->dlh_sub_cnt = tgts_cnt;
 
-	if (!daos_is_zero_dti(dti))
-		dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-				NULL, dti_cos, dti_cos_count, true, dth);
+	if (daos_is_zero_dti(dti))
+		return 0;
+
+	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
+			NULL, dti_cos, dti_cos_count, true, dth);
 
 	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
@@ -597,6 +609,11 @@ fail:
 			  &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);
 out_free:
+	if (daos_is_zero_dti(&dth->dth_xid))
+		goto out;
+
+	dtx_clean_shares(dth);
+
 	D_DEBUG(DB_TRACE,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
 		"%s, %s: rc = %d\n",
@@ -680,6 +697,8 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 			D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
 				DP_UUID(cont->sc_uuid), rc);
 	}
+
+	dtx_clean_shares(dth);
 
 	D_DEBUG(DB_TRACE,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "

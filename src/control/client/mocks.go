@@ -221,9 +221,9 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(
 
 func (m *mockMgmtCtlClient) KillRank(
 	ctx context.Context, req *pb.DaosRank, o ...grpc.CallOption) (
-	*pb.DaosResponse, error) {
+	*pb.DaosResp, error) {
 
-	return &pb.DaosResponse{}, m.killRet
+	return &pb.DaosResp{}, m.killRet
 }
 
 func newMockMgmtCtlClient(
