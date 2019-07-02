@@ -58,6 +58,13 @@ def define_mercury(reqs):
     retriever = \
         GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
                          True)
+    reqs.define('stdatomic', headers=['stdatomic.h'])
+
+    if reqs.check_component('stdatomic'):
+        atomic = 'stdatomic'
+    else:
+        atomic = 'openpa'
+
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
@@ -80,7 +87,7 @@ def define_mercury(reqs):
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
                           'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
-                requires=['openpa', 'boost', 'ofi'] + libs,
+                requires=[atomic, 'boost', 'ofi'] + libs,
                 extra_include_path=[os.path.join('include', 'na')],
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None)
