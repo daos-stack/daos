@@ -268,7 +268,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		}
 
 		for (i = 0; i < failed_tgts_cnt; i++) {
-			if (targets[i].ta_comp.co_rank == tgt_id) {
+			if (targets[i].ta_comp.co_id == tgt_id) {
 				target_failed = true;
 				break;
 			}

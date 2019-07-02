@@ -24,14 +24,14 @@
 from __future__ import print_function
 
 import os
-import shutil
 import subprocess
 import json
-import sys
 
 class IorFailed(Exception):
     """Raise if Ior failed"""
 
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
 def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
                 svc_list, record_size, stripe_size, stripe_count, async_io,
                 object_class, basepath, hostfile, proc_per_node=1, seg_count=1,
@@ -57,17 +57,19 @@ def get_ior_cmd(ior_flags, iteration, block_size, transfer_size, pool_uuid,
         "-x CRT_CTX_SHARE_ADDR {16} {2} -s {3} -i {4} -a DAOS -o {5} -b {6} "
         "-t {7} --daos.pool={8} --daos.svcl={9} --daos.recordSize={10} "
         "--daos.stripeSize={11} --daos.stripeCount={12} --daos.aios={13} "
-        "--daos.objectClass={14}".format(proc_per_node, attach_info_path,
-                                         ior_flags, seg_count, iteration,
-                                         filename, block_size, transfer_size,
-                                         pool_uuid, svc_list, record_size,
-                                         stripe_size, stripe_count, async_io,
-                                         object_class, hostfile, ior_bin,
-                                         lib_path))
+        "--daos.objectClass={14}").format(proc_per_node, attach_info_path,
+                                          ior_flags, seg_count, iteration,
+                                          filename, block_size, transfer_size,
+                                          pool_uuid, svc_list, record_size,
+                                          stripe_size, stripe_count, async_io,
+                                          object_class, hostfile, ior_bin,
+                                          lib_path)
 
     return ior_cmd
 
 
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
 def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                  pool_uuid, svc_list, object_class, basepath, client_processes,
                  cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
@@ -96,11 +98,12 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
     attach_info_path = basepath + "/install/tmp"
     try:
 
-        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node " \
-                  " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={} " \
-                  " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {} " \
-                  " --daos.svcl {} --daos.cont {} --daos.destroy " \
-                  "--daos.chunk_size {} --daos.oclass {} " \
+        ior_cmd = orterun_bin + " -np {} --hostfile {} --map-by node"      \
+                  " -x DAOS_SINGLETON_CLI=1 -x CRT_ATTACH_INFO_PATH={}"    \
+                  " -x D_LOG_FILE -x OFI_INTERFACE -x CRT_PHY_ADDR_STR"    \
+                  " ior {} -s {} -i {} -a DAOS -b {} -t {} --daos.pool {}" \
+                  " --daos.svcl {} --daos.cont {} --daos.destroy"          \
+                  " --daos.chunk_size {} --daos.oclass {} "                \
                   .format(client_processes, client_file, attach_info_path,
                           ior_flags, seg_count, iteration, block_size,
                           transfer_size, pool_uuid, svc_list, cont_uuid,
@@ -124,7 +127,9 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
         raise IorFailed("IOR Run process Failed")
 
 
-def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
+def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
                   ior_flags, iteration, transfer_size, block_size,
                   display_output=True):
     """
@@ -133,7 +138,7 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
         mpichinstall   --location of installed mpich
         pool_uuid      --Daos Pool UUID
         svcl           --Daos Pool SVCL
-        np             --number of client processes
+        numprocs       --number of client processes
         hostfile       --client file holding client hostname and slots
         ior_flags      --all ior specific flags
         iteration      --number of iterations for ior run
@@ -148,21 +153,20 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
             "export MPI_LIB=''",
             "export DAOS_SVCL={}".format(svcl),
             "export DAOS_SINGLETON_CLI=1",
-            "export FI_PSM2_DISCONNECT=1"]
+            "export FI_PSM2_DISCONNECT=1",
+            "export D_LOG_FILE={}".format(os.getenv('D_LOG_FILE',
+                                                    '/tmp/client_daos.log'))]
 
-        run_cmd = (
-            env_variables[0] + ";" + env_variables[1] + ";" +
-            env_variables[2] + ";" + env_variables[3] + ";" +
-            env_variables[4] + ";" + env_variables[5] + ";" +
-            mpichinstall + "/mpirun -np {0} --hostfile {1} "
-            "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} -i {3} "
-            "-t {4} -b {5} -o daos:testFile".format(np, hostfile, ior_flags,
-                                                    iteration,
-                                                    transfer_size,
-                                                    block_size))
+        run_cmd = ('; '.join(env_variables) + '; ' +
+                   mpichinstall + "/mpirun -np {0} --hostfile {1} " +
+                   "/home/standan/mpiio/ior/build/src/ior -a MPIIO {2} " +
+                   "-i {3} -t {4} -b {5} " +
+                   "-o daos:testFile").format(numprocs, hostfile, ior_flags,
+                                              iteration, transfer_size,
+                                              block_size)
 
         if display_output:
-            print ("run_cmd: {}".format(run_cmd))
+            print("run_cmd: {}".format(run_cmd))
 
         process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE,
                                    shell=True)
@@ -179,8 +183,3 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
     except (OSError, ValueError) as excep:
         print("<IorRunFailed> Exception occurred: {0}".format(str(excep)))
         raise IorFailed("IOR Run process Failed")
-
-# Enable this whenever needs to check
-# if the script is functioning normally.
-#if __name__ == "__main__":
-#    IorBuild()

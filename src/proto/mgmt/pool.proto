@@ -29,20 +29,32 @@ import "srv.proto";
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS pools.
 
+// CreatePoolReq supplies new pool parameters.
 message CreatePoolReq {
 	uint64 scmbytes = 1;
 	uint64 nvmebytes = 2;
-	repeated uint32 ranks = 3; // colon separated integers
+	string ranks = 3; // comma separated integers
 	uint32 numsvcreps = 4; // desired number of pool service replicas
 	string user = 5; // formatted user e.g. "bob@"
 	string usergroup = 6; // formatted group e.g. "builders@"
-	string procgroup = 7; // DAOS process group identifier
+	string sys = 7; // DAOS system identifier
 }
 
 // CreatePoolResp returns created pool uuid and ranks.
 message CreatePoolResp {
 	DaosRequestStatus status = 1;
 	string uuid = 2; // new pool's uuid
-	string ranklist = 3; // colon separated integers
+	string svcreps = 3; // comma separated integers
 }
 
+// DestroyPoolReq supplies pool identifier and force flag.
+message DestroyPoolReq {
+	string uuid = 1; // uuid of pool to destroy
+	string sys = 2; // DAOS system identifier
+	bool force = 3; // destroy regardless of active connections
+}
+
+// DestroyPoolResp returns resultant state of destroy operation.
+message DestroyPoolResp {
+	DaosRequestStatus status = 1;
+}

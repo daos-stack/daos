@@ -28,10 +28,13 @@
 #define __CONTAINER_SRV_INTERNAL_H__
 
 #include <daos/lru.h>
+#include <daos_security.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/container.h>
+
+#include "srv_layout.h"
 
 /* To avoid including srv_layout.h for everybody. */
 struct container_hdl;
@@ -112,16 +115,33 @@ struct cont_iv_capa {
 	uint64_t	capas;
 };
 
+/* flattened container properties */
+struct cont_iv_prop {
+	char		cip_label[DAOS_PROP_LABEL_MAX_LEN];
+	uint64_t	cip_layout_type;
+	uint64_t	cip_layout_ver;
+	uint64_t	cip_csum;
+	uint64_t	cip_redun_fac;
+	uint64_t	cip_redun_lvl;
+	uint64_t	cip_snap_max;
+	uint64_t	cip_compress;
+	uint64_t	cip_encrypt;
+	struct daos_acl	cip_acl;
+};
+
 struct cont_iv_entry {
 	uuid_t	cont_uuid;
 	union {
 		struct cont_iv_snapshot iv_snap;
 		struct cont_iv_capa	iv_capa;
+		struct cont_iv_prop	iv_prop;
 	};
 };
 
 struct cont_iv_key {
-	uuid_t	cont_uuid;
+	uuid_t		cont_uuid;
+	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
+	uint32_t	class_id;
 };
 
 /*
@@ -213,4 +233,7 @@ int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			      uint64_t capas);
+int cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+			daos_prop_t *prop);
+
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

@@ -51,6 +51,11 @@ extern "C" {
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
+ * Maximum length of daos_acl::dal_ace (dal_len's value).
+ */
+#define DAOS_ACL_MAX_ACE_LEN		(8192)
+
+/**
  * Header for the Access Control List, followed by the table of variable-length
  * Access Control Entries.
  * The entry list may be walked by inspecting the principal length and
