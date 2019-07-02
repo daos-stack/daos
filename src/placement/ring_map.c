@@ -28,7 +28,6 @@
 #define D_LOGFAC	DD_FAC(placement)
 
 #include "pl_map.h"
-#include "pl_map_common.h"
 
 /** placement ring */
 struct pl_ring {

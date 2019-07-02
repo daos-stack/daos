@@ -21,13 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_sr
- *
- * src/placement/pl_map.c
+ * src/placement/pl_map_common.c
  */
 #define D_LOGFAC        DD_FAC(placement)
 
-#include "pl_map_common.h"
+#include "pl_map.h"
 
 /**
  * Add a new failed shard into remap list
