@@ -21,17 +21,17 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package security
+package auth
 
 import (
-	"crypto/sha512"
+	"crypto"
 	"os"
 	"os/user"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/security/auth"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 // User is an interface wrapping a representation of a specific system user
@@ -46,19 +46,39 @@ type UserExt interface {
 	LookupGroupID(gid uint32) (*user.Group, error)
 }
 
-// HashFromToken will return a SHA512 hash of the token data
-func HashFromToken(token *auth.Token) ([]byte, error) {
-	// Generate our hash (not signed yet just a hash)
-	hash := sha512.New()
-
+//VerifierFromToken will return a SHA512 hash of the token data. If a signing key
+//is passed in it will additionally sign the hash of the token.
+func VerifierFromToken(signingKey crypto.PublicKey, token *Token) ([]byte, error) {
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to marshal AuthToken")
 	}
 
-	hash.Write(tokenBytes)
-	hashBytes := hash.Sum(nil)
-	return hashBytes, nil
+	signer := security.DefaultTokenSigner()
+
+	sig, err := signer.Sign(signingKey, tokenBytes)
+	if err != nil {
+		return nil, errors.Wrap(err, "Signing Verifier Filed")
+	}
+	return sig, err
+}
+
+//VerifyToken takes the auth token and the signature bytes in the verifier and
+//verifies it against the public key provided for the agent who claims to have
+//provided the token.
+func VerifyToken(pubKey crypto.PublicKey, token *Token, sig []byte) error {
+	tokenBytes, err := proto.Marshal(token)
+	if err != nil {
+		return errors.Wrap(err, "Unable to marshal AuthToken")
+	}
+
+	signer := security.DefaultTokenSigner()
+
+	err = signer.Verify(pubKey, tokenBytes, sig)
+	if err != nil {
+		return errors.Wrap(err, "Token Verification Failed")
+	}
+	return nil
 }
 
 func sysNameToPrincipalName(name string) string {
@@ -66,23 +86,23 @@ func sysNameToPrincipalName(name string) string {
 }
 
 // AuthSysRequestFromCreds takes the domain info credentials gathered
-// during the gRPC handshake and creates an AuthSys security request to obtain
+// during the dRPC request and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, error) {
+func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing crypto.PrivateKey) (*Credential, error) {
 	if creds == nil {
 		return nil, errors.New("No credentials supplied")
 	}
 
-	userInfo, err := ext.LookupUserID(creds.creds.Uid)
+	userInfo, err := ext.LookupUserID(creds.Uid())
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to lookup uid %v",
-			creds.creds.Uid)
+			creds.Uid())
 	}
 
-	groupInfo, err := ext.LookupGroupID(creds.creds.Gid)
+	groupInfo, err := ext.LookupGroupID(creds.Gid())
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to lookup gid %v",
-			creds.creds.Gid)
+			creds.Gid())
 	}
 
 	groups, err := userInfo.GroupIDs()
@@ -109,47 +129,48 @@ func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, 
 	}
 
 	// Craft AuthToken
-	sys := auth.Sys{
+	sys := Sys{
 		Stamp:       0,
 		Machinename: name,
 		User:        sysNameToPrincipalName(userInfo.Username()),
 		Group:       sysNameToPrincipalName(groupInfo.Name),
 		Groups:      groupList,
-		Secctx:      creds.ctx}
+		Secctx:      creds.Ctx()}
 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to marshal AuthSys token")
 	}
-	token := auth.Token{
-		Flavor: auth.Flavor_AUTH_SYS,
+	token := Token{
+		Flavor: Flavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	verifier, err := HashFromToken(&token)
+	verifier, err := VerifierFromToken(signing, &token)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to generate verifier")
 	}
 
-	verifierToken := auth.Token{
-		Flavor: auth.Flavor_AUTH_SYS,
+	verifierToken := Token{
+		Flavor: Flavor_AUTH_SYS,
 		Data:   verifier}
 
-	credential := auth.Credential{
+	credential := Credential{
 		Token:    &token,
-		Verifier: &verifierToken}
+		Verifier: &verifierToken,
+		Origin:   "agent"}
 
 	return &credential, nil
 }
 
 // AuthSysFromAuthToken takes an opaque AuthToken and turns it into a
 // concrete AuthSys data structure.
-func AuthSysFromAuthToken(authToken *auth.Token) (*auth.Sys, error) {
-	if authToken.GetFlavor() != auth.Flavor_AUTH_SYS {
+func AuthSysFromAuthToken(authToken *Token) (*Sys, error) {
+	if authToken.GetFlavor() != Flavor_AUTH_SYS {
 		return nil, errors.New("Attempting to convert an invalid AuthSys Token")
 	}
 
-	sysToken := &auth.Sys{}
+	sysToken := &Sys{}
 	err := proto.Unmarshal(authToken.GetData(), sysToken)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unmarshaling %s", authToken.GetFlavor())

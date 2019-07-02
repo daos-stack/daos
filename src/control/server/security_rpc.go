@@ -24,7 +24,9 @@
 package server
 
 import (
-	"bytes"
+	"encoding/hex"
+	"fmt"
+	"path/filepath"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -43,19 +45,36 @@ const (
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
+	clientCertDir string
 }
 
-func processValidateCredentials(body []byte) ([]byte, error) {
+// NewSecurityModule creates a new security module with a given client
+// certificate directory
+func NewSecurityModule(certDir string) *SecurityModule {
+	mod := &SecurityModule{
+		clientCertDir: certDir,
+	}
+	return mod
+}
+
+func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
 	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
 		return nil, err
 	}
 
+	certName := fmt.Sprintf("%s.%s", credential.Origin, "crt")
+	certPath := filepath.Join(m.clientCertDir, certName)
+	cert, err := security.LoadCertificate(certPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Loading certificate %s failes:", certPath)
+	}
+
 	// Check our verifier
-	hash, _ := security.HashFromToken(credential.Token)
-	if !bytes.Equal(hash, credential.Verifier.Data) {
-		return nil, errors.Errorf("Verifier does not match token")
+	err = auth.VerifyToken(cert.PublicKey, credential.GetToken(), credential.GetVerifier().GetData())
+	if err != nil {
+		return nil, errors.Wrapf(err, "Credential Verification Failed for Verifier %s", hex.Dump(credential.GetVerifier().GetData()))
 	}
 
 	responseBytes, err := proto.Marshal(credential.Token)
@@ -71,7 +90,7 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
-	responseBytes, err := processValidateCredentials(body)
+	responseBytes, err := m.processValidateCredentials(body)
 	return responseBytes, err
 }
 
