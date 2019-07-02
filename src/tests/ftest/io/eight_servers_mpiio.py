@@ -37,12 +37,11 @@ class EightServers(TestWithServers):
     """
 
     def setUp(self):
-        #super(EightServers, self).setUp()
-
         # set required variables
         self.mpio = None
         self.num_procs = self.params.get("np", '/run/ior/client_processes/*')
         self.number_of_slots = None
+
         super(EightServers, self).setUp()
 
     def tearDown(self):
