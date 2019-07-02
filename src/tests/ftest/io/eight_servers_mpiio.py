@@ -24,7 +24,6 @@
 from __future__ import print_function
 
 import os
-import write_host_file
 import ior_utils
 
 from apricot import TestWithServers
@@ -38,19 +37,16 @@ class EightServers(TestWithServers):
     """
 
     def setUp(self):
-        super(EightServers, self).setUp()
+        #super(EightServers, self).setUp()
 
         # set required variables
         self.mpio = None
         self.num_procs = self.params.get("np", '/run/ior/client_processes/*')
-        self.hostfile_clients = (
-            write_host_file.write_host_file(self.hostlist_clients, self.workdir,
-                                            None))
+        self.number_of_slots = None
+        super(EightServers, self).setUp()
 
     def tearDown(self):
         try:
-            if self.hostfile_clients is not None:
-                os.remove(self.hostfile_clients)
             if self.pool is not None:
                 self.pool.destroy(1)
         finally:
