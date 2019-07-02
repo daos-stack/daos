@@ -30,8 +30,8 @@ dfuse_rename_cb(struct dfuse_request *request)
 	struct dfuse_status_out *out = request->out;
 
 	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc) {
-		DFUSE_REPLY_ERR(request, request->rc);
+	if (request->ir_rc) {
+		DFUSE_REPLY_ERR(request, request->ir_rc);
 		D_GOTO(out, 0);
 	}
 
@@ -67,7 +67,7 @@ dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	DFUSE_TRA_UP(request, fs_handle, "rename");
 	DFUSE_TRA_DEBUG(request, "renaming %s to %s", name, newname);
 
-	request->req = req;
+	request->ir_req = req;
 	request->ir_api = &api;
 
 	request->ir_inode_num = parent;

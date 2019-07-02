@@ -40,3 +40,16 @@ func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
 
 	return results
 }
+
+// DestroyPool will Destroy a DAOS pool identified by its UUID.
+func (c *connList) DestroyPool(req *pb.DestroyPoolReq) ResultMap {
+	results := make(ResultMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	resp, err := mc.getSvcClient().DestroyPool(context.Background(), req)
+
+	result := ClientResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
+}

@@ -43,7 +43,7 @@ service MgmtCtl {
 	// Fetch FIO configuration file specifying burn-in jobs/workloads
 	rpc FetchFioConfigPaths(EmptyReq) returns (stream FilePath) {};
 	// Kill a given rank associated with a given pool
-	rpc KillRank(DaosRank) returns (DaosResponse) {};
+	rpc KillRank(DaosRank) returns (DaosResp) {};
 	// List features supported on remote storage server/DAOS system
 	rpc ListFeatures(EmptyReq) returns (stream Feature) {};
 }

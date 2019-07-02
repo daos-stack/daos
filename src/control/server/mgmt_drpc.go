@@ -21,9 +21,9 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
-// #cgo CFLAGS: -I${SRCDIR}/../../include
+// #cgo CFLAGS: -I${SRCDIR}/../../../include
 // #include <daos/drpc_modules.h>
 import "C"
 
@@ -43,6 +43,8 @@ const (
 	startMS       = C.DRPC_METHOD_MGMT_START_MS
 	join          = C.DRPC_METHOD_MGMT_JOIN
 	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
+	createPool    = C.DRPC_METHOD_MGMT_CREATE_POOL
+	destroyPool   = C.DRPC_METHOD_MGMT_DESTROY_POOL
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY

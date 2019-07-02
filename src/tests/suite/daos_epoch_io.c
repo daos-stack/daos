@@ -267,7 +267,8 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		D_GOTO(out, rc = -DER_NOMEM);
 	if (op->or_op == TEST_OP_UPDATE)
 		test_buf_init(buf, buf_size, uf_arg->ua_recxs,
-			      uf_arg->ua_values, uf_arg->ua_recx_num,
+			      uf_arg->ua_values ?: &uf_arg->ua_single_value,
+			      uf_arg->ua_values ? uf_arg->ua_recx_num : 1,
 			      iod_size);
 	fd = array ? key_rec->or_fd_array : key_rec->or_fd_single;
 	D_ASSERT(fd != 0);

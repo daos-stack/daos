@@ -105,4 +105,6 @@ struct container_hdl {
 
 extern daos_prop_t cont_prop_default;
 
+#define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
+
 #endif /* __CONTAINER_SRV_LAYOUT_H__ */
