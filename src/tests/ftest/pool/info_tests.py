@@ -21,12 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-# import os
-
 from apricot import TestWithServers
-# from conversion import c_uuid_to_str
-# from daos_api import DaosPool
-# from general_utils import get_pool
 from general_utils import TestPool
 
 
@@ -83,60 +78,3 @@ class InfoTests(TestWithServers):
         status = self.pool.check_pool_daos_space(**checks)
         self.assertTrue(status, "Invlaid pool space information detected")
         self.log.info("Test Passed")
-
-        # mode = self.params.get("mode", "/run/pool/*")
-        # size = self.params.get("size", "/run/pool/*")
-        # permissions = self.params.get("permissions", "/run/pool/*")
-        # targets = self.params.get("targets", "/run/server_config/*")
-        # uid = os.geteuid()
-        # gid = os.getegid()
-        # connect_flags = 1 << permissions
-        # pool_nodes = len(self.hostlist_servers)
-        # pool_targets = targets * pool_nodes
-
-        # # Expected pool total and free space.
-        # # For tmpfs space is only reported for one media type
-        # total = (size, 0)
-        # free = (size - (256 * pool_targets), 0)
-
-        # # Create a pool
-        # self.log.info("Creating a pool with mode %s", mode)
-        # self.pool = get_pool(
-        #     self.context, mode, size, self.server_group, log=self.log,
-        #     connect=False)
-        # pool_uuid = self.pool.get_uuid_str()
-
-        # # Connect to the pool
-        # self.log.info(
-        #     "Connecting to pool %s with flags %s", pool_uuid, connect_flags)
-        # self.pool.connect(connect_flags)
-
-        # # Verif the pool query information
-        # self.log.info("Querying the pool information")
-        # pool_info = self.pool.pool_query()
-        # check_list = (
-        #     ("UUID", c_uuid_to_str(pool_info.pi_uuid), pool_uuid),
-        #     ("number of targets", pool_info.pi_ntargets, pool_targets),
-        #     ("number of nodes", pool_info.pi_nnodes, pool_nodes),
-        #     ("number of disabled targets", pool_info.pi_ndisabled, 0),
-        #     ("map version", pool_info.pi_map_ver, 1),
-        #     ("leader", pool_info.pi_leader, 0),
-        #     ("bits", pool_info.pi_bits, 0xFFFFFFFFFFFFFFFF),
-        #     ("total space", pool_info.pi_space.ps_space.s_total[0], total[0]),
-        #     ("total space", pool_info.pi_space.ps_space.s_total[1], total[1]),
-        #     ("free space", pool_info.pi_space.ps_space.s_free[0], free[0]),
-        #     ("free space", pool_info.pi_space.ps_space.s_free[1], free[1]),
-        # )
-        # check_status = True
-        # for check, actual, expect in check_list:
-        #     self.log.info(
-        #         "Verifying the pool %s: %s ?= %s", check, actual, expect)
-        #     if actual != expect:
-        #         msg = "The {} does not match: actual: {}, expected: {}".format(
-        #             check, actual, expect)
-        #         self.d_log.error(msg)
-        #         self.log.error(msg)
-        #         check_status = False
-
-        # self.assertTrue(check_status, "Error validating the pool information")
-        # self.log.info("Test Passed")
