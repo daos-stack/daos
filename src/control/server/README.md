@@ -190,7 +190,7 @@ See `daos_server storage scan --help` for usage.
 
 ## Management Tool (client) Usage
 
-[`daos_shell`](../dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
+[`daos_shell`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
 The tool is lightweight and doesn't depend on storage libraries.
 Implemented as a gRPC client application it connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
