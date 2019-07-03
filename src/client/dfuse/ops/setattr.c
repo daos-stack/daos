@@ -27,7 +27,6 @@
 #define REQ_NAME request
 #define POOL_NAME dpi_fsh
 #define TYPE_NAME common_req
-#include "dfuse_ops.h"
 
 static bool
 dfuse_setattr_result_fn(struct dfuse_request *request)
