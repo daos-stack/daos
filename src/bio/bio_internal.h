@@ -27,9 +27,9 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
 
-#define BIO_DMA_PAGE_SHIFT	12		/* 4K */
+#define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
-#define BIO_XS_CNT_MAX		48
+#define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
 
 /* DMA buffer is managed in chunks */
 struct bio_dma_chunk {
@@ -60,15 +60,15 @@ struct bio_dma_buffer {
 enum bio_bs_state {
 	/* Healthy and fully functional */
 	BIO_BS_STATE_NORMAL	= 0,
-	/* Being marked as faulty by monitor, rebuilding pool targets */
+	/* Being detected as faulty */
 	BIO_BS_STATE_FAULTY,
-	/* Rebuild triggered, tearing down SPDK resources */
+	/* Affected targets are marked as DOWN, safe to tear down blobstore */
 	BIO_BS_STATE_TEARDOWN,
-	/* SPDK blobs, blobstore and bdev are torn down */
+	/* Blobstore is torn down */
 	BIO_BS_STATE_OUT,
-	/* New device hotplugged, initializing SPDK resources */
+	/* New device hotplugged, start to initialize blobstore & blobs */
 	BIO_BS_STATE_REPLACED,
-	/* SPDK blobstore, blobs initialized, reintegrating pool targets */
+	/* Blobstore & blobs initialized, start to reint affected targets */
 	BIO_BS_STATE_REINT
 };
 
@@ -197,5 +197,12 @@ void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
+
+/* bio_context.c */
+int bio_blob_close(struct bio_io_context *ctxt, bool async);
+
+/* bio_recovery.c */
+extern struct bio_reaction_ops *ract_ops;
+int bio_bs_state_transit(struct bio_blobstore *bbs);
 
 #endif /* __BIO_INTERNAL_H__ */

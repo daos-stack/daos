@@ -76,14 +76,14 @@ blob_cp_arg_fini(struct blob_cp_arg *ba)
 }
 
 static void
-free_blob_msg_arg(struct blob_msg_arg *bma)
+blob_msg_arg_free(struct blob_msg_arg *bma)
 {
 	blob_cp_arg_fini(&bma->bma_cp_arg);
 	D_FREE(bma);
 }
 
 static struct blob_msg_arg *
-alloc_blob_msg_arg()
+blob_msg_arg_alloc()
 {
 	struct blob_msg_arg	*bma;
 	int			 rc;
@@ -154,7 +154,7 @@ blob_open_cb(void *arg, struct spdk_blob *blob, int rc)
 		ioc->bic_opening = 0;
 		if (rc == 0)
 			ioc->bic_blob = blob;
-		free_blob_msg_arg(bma);
+		blob_msg_arg_free(bma);
 	}
 }
 
@@ -172,7 +172,7 @@ blob_close_cb(void *arg, int rc)
 		ioc->bic_closing = 0;
 		if (rc == 0)
 			ioc->bic_blob = NULL;
-		free_blob_msg_arg(bma);
+		blob_msg_arg_free(bma);
 	}
 }
 
@@ -261,7 +261,7 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	    bbs->bb_state == BIO_BS_STATE_OUT) {
 		D_ERROR("Blobstore %p is in %d state, reject request.\n",
 			bbs, bbs->bb_state);
-		rc = -DER_STALE;
+		rc = -DER_DOS;
 		goto out;
 	}
 
@@ -472,7 +472,7 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 	}
 	blob_id = smd_pool.npi_blob_id;
 
-	bma = alloc_blob_msg_arg();
+	bma = blob_msg_arg_alloc();
 	if (bma == NULL)
 		return -DER_NOMEM;
 	ba = &bma->bma_cp_arg;
@@ -506,7 +506,7 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 		ctxt->bic_blob = ba->bca_blob;
 	}
 
-	free_blob_msg_arg(bma);
+	blob_msg_arg_free(bma);
 	return rc;
 }
 
@@ -550,7 +550,7 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	return rc;
 }
 
-static int
+int
 bio_blob_close(struct bio_io_context *ctxt, bool async)
 {
 	struct blob_msg_arg	*bma;
@@ -571,7 +571,7 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 		return -DER_BUSY;
 	}
 
-	bma = alloc_blob_msg_arg();
+	bma = blob_msg_arg_alloc();
 	if (bma == NULL)
 		return -DER_NOMEM;
 	ba = &bma->bma_cp_arg;
@@ -605,7 +605,7 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 		ctxt->bic_blob = NULL;
 	}
 
-	free_blob_msg_arg(bma);
+	blob_msg_arg_free(bma);
 	return rc;
 }
 
