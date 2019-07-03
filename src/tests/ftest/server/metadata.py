@@ -88,7 +88,7 @@ class ObjectMetadata(TestWithServers):
 
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
-                self.hostlist_clients, self.workdir, None)
+            self.hostlist_clients, self.workdir, None)
 
         # Create a pool
         self.pool = DaosPool(self.context)

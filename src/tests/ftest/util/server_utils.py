@@ -148,7 +148,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         ServerFailed: if there is an error starting the servers
 
     """
-    global SESSIONS
+    global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
         servers = (
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
@@ -265,7 +265,7 @@ def stop_server(setname=None, hosts=None):
         ServerFailed: if there is an error stopping the servers
 
     """
-    global SESSIONS
+    global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
         if setname is None:
             for _key, val in SESSIONS.items():

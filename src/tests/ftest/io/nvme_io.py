@@ -54,7 +54,7 @@ class NvmeIo(TestWithServers):
 
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir, None)
+            self.hostlist_clients, self.workdir, None)
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
