@@ -51,7 +51,7 @@ class IorTestBase(TestWithServers):
 
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir, None)
+            self.hostlist_clients, self.workdir, None)
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
@@ -94,10 +94,10 @@ class IorTestBase(TestWithServers):
 
         # Initialize MpioUtils if IOR is running in MPIIO mode
         if self.ior_cmd.api.value == "MPIIO":
-            self.mpio = MpioUtils()
-            if self.mpio.mpich_installed(self.hostlist_clients) is False:
+            mpio_util = MpioUtils()
+            if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            path = self.mpio.mpichinstall
+            path = mpio_util.mpichinstall
         else:
             path = None
 
