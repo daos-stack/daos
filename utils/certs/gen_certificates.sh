@@ -87,24 +87,24 @@ function generate_agent_cert () {
 	$CERTS/agent.crt"
 }
 
-function generate_shell_cert () {
-	echo "Generating Shell Certificate"
+function generate_admin_cert () {
+	echo "Generating Admin Certificate"
 	# Generate Private key and set its permissions
-	openssl genrsa -out $CERTS/shell.key 4096
-	chmod 400 $CERTS/shell.key
+	openssl genrsa -out $CERTS/admin.key 4096
+	chmod 400 $CERTS/admin.key
 	# Generate a Certificate Signing Request (CRS)
-	openssl req -new -config shell.cnf -key $CERTS/shell.key \
-		-out shell.csr -batch
+	openssl req -new -config admin.cnf -key $CERTS/admin.key \
+		-out admin.csr -batch
 	# Create Certificate from request
 	openssl ca -config ca.cnf -keyfile $PRIVATE/daosCA.key \
 		-cert $CERTS/daosCA.crt -policy signing_policy \
-		-extensions signing_shell -out $CERTS/shell.crt \
-		-outdir $CERTS -in shell.csr -batch
+		-extensions signing_admin -out $CERTS/admin.crt \
+		-outdir $CERTS -in admin.csr -batch
 
-	echo "Required Shell Certificate Files:
+	echo "Required Admin Certificate Files:
 	$CERTS/daosCA.crt
-	$CERTS/shell.key
-	$CERTS/shell.crt"
+	$CERTS/admin.key
+	$CERTS/admin.crt"
 }
 
 function generate_server_cert () {
@@ -130,7 +130,7 @@ function generate_server_cert () {
 function cleanup () {
 	rm -f $CERTS/*pem
 	rm -f agent.csr
-	rm -f shell.csr
+	rm -f admin.csr
 	rm -f server.csr
 }
 
@@ -138,7 +138,7 @@ function main () {
 	setup_directories
 	generate_ca_cert
 	generate_agent_cert
-	generate_shell_cert
+	generate_admin_cert
 	generate_server_cert
 	cleanup
 }

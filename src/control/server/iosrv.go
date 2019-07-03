@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -381,7 +381,7 @@ func (srv *iosrv) callCreateMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
@@ -398,7 +398,7 @@ func (srv *iosrv) callStartMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
@@ -415,7 +415,7 @@ func (srv *iosrv) callSetRank(rank rank) error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}

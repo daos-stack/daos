@@ -732,7 +732,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 	arg->srv_disabled_ntgts += tgts_per_node;
 	if (d_rank_in_rank_list(svc, rank))
 		svc->rl_nr--;
-	print_message("\tKilling target %d (total of %d with %d already "
+	print_message("\tKilling rank %d (total of %d with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 

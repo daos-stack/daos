@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"encoding/json"
@@ -39,7 +39,8 @@ import (
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
-// controlService type is the data container for the service.
+// controlService implements the control plane control service, satisfying
+// pb.MgmtCtlServer, and is the data container for the service.
 type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage

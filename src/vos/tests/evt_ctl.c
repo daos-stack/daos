@@ -64,6 +64,7 @@ struct test_input_value tst_fn_val;
 
 static struct utest_context	*ts_utx;
 static struct umem_attr		*ts_uma;
+static int			 ts_feats = EVT_FEAT_DEFAULT;
 
 #define ORDER_DEF		16
 
@@ -108,7 +109,7 @@ ts_open_create(void **state)
 
 	if (create) {
 		D_PRINT("Create evtree with order %d\n", ts_order);
-		rc = evt_create(EVT_FEAT_DEFAULT, ts_order, ts_uma, ts_root,
+		rc = evt_create(ts_feats, ts_order, ts_uma, ts_root,
 				DAOS_HDL_INVAL, &ts_toh);
 	} else {
 		D_PRINT("Open evtree\n");
@@ -618,7 +619,7 @@ ts_many_add(void **state)
 	if (!buf)
 		fail();
 
-	seq = dts_rand_iarr_alloc(nr, 0);
+	seq = dts_rand_iarr_alloc(nr, 0, true);
 	if (!seq) {
 		D_FREE(buf);
 		fail();
@@ -943,7 +944,7 @@ test_evt_iter_flags(void **state)
 	int		t_repeats;
 
 	/* Create a evtree */
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	D_ALLOC_ARRAY(data, (NUM_EPOCHS+1));
@@ -1108,10 +1109,11 @@ test_evt_iter_delete(void **state)
 	struct evt_filter	 filter;
 	uint32_t		 inob;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
-
+	rc = utest_sync_mem_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
@@ -1127,6 +1129,10 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -1212,13 +1218,18 @@ test_evt_iter_delete(void **state)
 
 		sum += *value;
 		utest_free(arg->ta_utx, addr.ba_off);
+		rc = utest_check_mem_decrease(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
 	}
 	rc = evt_iter_finish(ih);
 	assert_int_equal(rc, 0);
 
 	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
-
+	rc = utest_check_mem_initial_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
@@ -1241,8 +1252,10 @@ test_evt_find_internal(void **state)
 	char testdata[] = "deadbeef";
 
 	/* Create a evtree */
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
+	assert_int_equal(rc, 0);
+	rc = utest_sync_mem_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
 	srand(time(0));
 	hole_epoch = (rand() % 98) + 1;
@@ -1273,6 +1286,10 @@ test_evt_find_internal(void **state)
 				assert_int_equal(rc, 0);
 			}
 			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -1334,8 +1351,14 @@ test_evt_find_internal(void **state)
 		entry.ei_rect.rc_epc = rect.rc_epc;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
+		rc = utest_check_mem_decrease(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
 		evt_ent_array_fini(&ent_array);
 	}
+	rc = utest_check_mem_initial_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	/* Destroy the tree */
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
@@ -1364,7 +1387,7 @@ test_evt_iter_delete_internal(void **state)
 	int			 val[] = {10, 26, 2, 18, 4, 20, 6, 22, 0};
 	int			 iter_count;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1442,7 +1465,7 @@ test_evt_ent_alloc_bug(void **state)
 	int			 last = 0;
 	int			 idx1, nr1, idx2, nr2, idx3, nr3;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1512,7 +1535,7 @@ test_evt_root_deactivate_bug(void **state)
 	struct evt_entry_in	 entry_in = {0};
 	int			 rc;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1670,13 +1693,14 @@ static struct option ts_ops[] = {
 	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ "test",	required_argument,	NULL,	't'	},
+	{ "sort",	required_argument,	NULL,	's'	},
 	{ NULL,		0,			NULL,	0	},
 };
 
 static int
 ts_cmd_run(char opc, char *args)
 {
-	int	rc;
+	int	rc = 0;
 
 	tst_fn_val.optval = args;
 	tst_fn_val.input = true;
@@ -1717,6 +1741,12 @@ ts_cmd_run(char opc, char *args)
 		break;
 	case 't':
 		rc = run_internal_tests();
+		break;
+	case 's':
+		if (strcasecmp(args, "soff") == 0)
+			ts_feats = EVT_FEAT_SORT_SOFF;
+		else if (strcasecmp(args, "dist_even") == 0)
+			ts_feats = EVT_FEAT_SORT_DIST_EVEN;
 		break;
 	default:
 		D_PRINT("Unsupported command %c\n", opc);
@@ -1764,7 +1794,7 @@ main(int argc, char **argv)
 		goto out;
 	}
 
-	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::t",
+	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::ts:",
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)

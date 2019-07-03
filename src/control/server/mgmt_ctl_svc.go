@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -38,7 +38,7 @@ import (
 // drpc connection, send a message with the protobuf message marshalled
 // in the body, and closes the connection. Returns unmarshalled response.
 func (c *controlService) callDrpcMethodWithMessage(
-	methodID int32, body proto.Message) (resp *pb.DaosResponse, err error) {
+	methodID int32, body proto.Message) (resp *pb.DaosResp, err error) {
 
 	drpcResp, err := makeDrpcCall(c.drpc, mgmtModuleID, methodID, body)
 	if err != nil {
@@ -46,7 +46,7 @@ func (c *controlService) callDrpcMethodWithMessage(
 	}
 
 	// unmarshal daos response message returned in drpc response body
-	resp = &pb.DaosResponse{}
+	resp = &pb.DaosResp{}
 	err = proto.Unmarshal(drpcResp.Body, resp)
 	if err != nil {
 		return nil, errors.Errorf("invalid dRPC response body: %v", err)
@@ -57,7 +57,7 @@ func (c *controlService) callDrpcMethodWithMessage(
 
 // KillRank implements the method defined for the MgmtControl protobuf service.
 func (c *controlService) KillRank(
-	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResponse, error) {
+	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResp, error) {
 
 	log.Debugf("ControlService.KillRank dispatch\n")
 

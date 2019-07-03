@@ -264,7 +264,7 @@ static daos_sort_ops_t rand_iarr_ops = {
 };
 
 int *
-dts_rand_iarr_alloc(int nr, int base)
+dts_rand_iarr_alloc(int nr, int base, bool shuffle)
 {
 	int	*array;
 	int	 i;
@@ -276,7 +276,9 @@ dts_rand_iarr_alloc(int nr, int base)
 	for (i = 0; i < nr; i++)
 		array[i] = base + i;
 
-	daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+	if (shuffle)
+		daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+
 	return array;
 }
 

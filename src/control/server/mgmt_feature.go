@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"

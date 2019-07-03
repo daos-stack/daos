@@ -70,18 +70,18 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	struct dfuse_projection_info *fs_handle = arg;
 
 	DFUSE_TRA_INFO(fs_handle,
-		       "Fuse configuration for projection srv:%d cli:%d",
-		       fs_handle->fs_id, fs_handle->proj.cli_fs_id);
+		       "Fuse configuration for projection id:%d",
+		       fs_handle->dpi_proj.cli_fs_id);
 
-	DFUSE_TRA_INFO(fs_handle, "Proto %d %d",
-		       conn->proto_major, conn->proto_minor);
+	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
+		       conn->proto_minor);
 
 	/* This value has to be set here to the same value passed to
 	 * register_fuse().  Fuse always sets this value to zero so
 	 * set it before reporting the value.
 	 */
-	conn->max_read = fs_handle->max_read;
-	conn->max_write = fs_handle->proj.max_write;
+	conn->max_read = fs_handle->dpi_max_read;
+	conn->max_write = fs_handle->dpi_proj.max_write;
 
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
@@ -113,7 +113,7 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	bool				keep_ref;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &parent, sizeof(parent));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
 				parent);
@@ -122,15 +122,14 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dffs_ops->create) {
+	if (!parent_inode->ie_dfs->dfs_ops->create) {
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
-	keep_ref = parent_inode->ie_dfs->dffs_ops->create(req, parent_inode,
+	keep_ref = parent_inode->ie_dfs->dfs_ops->create(req, parent_inode,
 							  name, mode, fi);
-	if (!keep_ref) {
-		d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
-	}
+	if (!keep_ref)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -151,7 +150,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		D_GOTO(err, rc = ENOTSUP);
 	} else {
-		rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino,
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino,
 					sizeof(ino));
 		if (!rlink) {
 			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
@@ -160,16 +159,16 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		if (!inode->ie_dfs->dffs_ops->getattr) {
+		if (!inode->ie_dfs->dfs_ops->getattr) {
 			D_GOTO(decref, rc = ENOTSUP);
 		}
 
-		inode->ie_dfs->dffs_ops->getattr(req, inode);
-		d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+		inode->ie_dfs->dfs_ops->getattr(req, inode);
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	}
 	return;
 decref:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -183,21 +182,19 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	bool				keep_ref;
 	int rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &parent, sizeof(parent));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				parent);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", parent);
 		D_GOTO(err, rc = ENOENT);
 	}
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	keep_ref = parent_inode->ie_dfs->dffs_ops->lookup(req,
-							  parent_inode, name);
+	keep_ref = parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode,
+							 name);
 
-	if (!keep_ref) {
-		d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
-	}
+	if (!keep_ref)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -212,28 +209,25 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	bool				keep_ref;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &parent, sizeof(parent));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				parent);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", parent);
 		D_GOTO(err, rc = ENOENT);
 	}
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dffs_ops->mkdir) {
+	if (!parent_inode->ie_dfs->dfs_ops->mkdir) {
 		D_GOTO(decref, rc = ENOTSUP);
 	}
 
-	keep_ref = parent_inode->ie_dfs->dffs_ops->mkdir(req, parent_inode,
-							 name, mode);
-
-	if (!keep_ref) {
-		d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
-	}
+	keep_ref = parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,
+							name, mode);
+	if (!keep_ref)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 decref:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -246,7 +240,7 @@ df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	d_list_t			*rlink;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
 		D_GOTO(err, rc = ENOENT);
@@ -254,14 +248,15 @@ df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dffs_ops->opendir)
+	if (!inode->ie_dfs->dfs_ops->opendir)
 		D_GOTO(decref, rc = ENOTSUP);
 
-	inode->ie_dfs->dffs_ops->opendir(req, inode, fi);
+	inode->ie_dfs->dfs_ops->opendir(req, inode, fi);
 
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 decref:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -274,7 +269,7 @@ df_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	d_list_t			*rlink;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
 		D_GOTO(err, rc = ENOENT);
@@ -282,14 +277,15 @@ df_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dffs_ops->releasedir)
+	if (!inode->ie_dfs->dfs_ops->releasedir)
 		D_GOTO(decref, rc = ENOTSUP);
 
-	inode->ie_dfs->dffs_ops->releasedir(req, inode, fi);
+	inode->ie_dfs->dfs_ops->releasedir(req, inode, fi);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 
 	return;
 decref:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -303,7 +299,7 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	d_list_t			*rlink;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &parent, sizeof(parent));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
 				parent);
@@ -312,15 +308,15 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dffs_ops->unlink) {
+	if (!parent_inode->ie_dfs->dfs_ops->unlink) {
 		D_GOTO(decref, rc = ENOTSUP);
 	}
-	parent_inode->ie_dfs->dffs_ops->unlink(req, parent_inode, name);
+	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 decref:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -341,24 +337,23 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	d_list_t			*rlink;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
-				ino);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
 		D_GOTO(err, rc = ENOENT);
 	}
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dffs_ops->readdir) {
+	if (!inode->ie_dfs->dfs_ops->readdir) {
 		D_GOTO(decref, rc = ENOTSUP);
 	}
-	inode->ie_dfs->dffs_ops->readdir(req, inode, size, offset, fi);
+	inode->ie_dfs->dfs_ops->readdir(req, inode, size, offset, fi);
 
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 decref:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

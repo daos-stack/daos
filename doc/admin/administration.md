@@ -1,14 +1,11 @@
-DAOS System Administration
-==========================
+# DAOS System Administration
 
-System Monitoring
------------------
+## System Monitoring
 
 System monitoring and telemetry data will be provided as part of the
 control plane and will be documented in a future revision.
 
-System Operations
------------------
+## System Operations
 
 ### Full Shutdown and Restart
 
@@ -26,8 +23,7 @@ will be provided in future revision.
 Ability to add new DAOS server instances to a pre-existing DAOS system
 will be documented in future revision.
 
-Fault Management
-----------------
+## Fault Management
 
 DAOS relies on massively distributed single-ported storage. Each target
 is thus effectively a single point of failure. DAOS achieves
@@ -72,11 +68,10 @@ rebuild will not use more resource than the user setting. The user can
 only set the CPU cycle for now. For example, if the user set the
 throttle to 50, then the rebuild will at most use 50% of CPU cycle to do
 rebuild job. The default rebuild throttle for CPU cycle is 30. This
-parameter can be changed via the daos\_mgmt\_set\_params() API call and
+parameter can be changed via the daos_mgmt_set_params() API call and
 will be eventually available through the management tools.
 
-Software Upgrade
-----------------
+## Software Upgrade
 
 Interoperability in DAOS is handled via protocol and schema versioning
 for persistent data structures. Further instructions on how to manage
@@ -118,8 +113,7 @@ formatted with the latest version. This versioning schema only applies
 to a data structure stored in persistent memory and not to block storage
 that only stores user data with no metadata.
 
-Storage Scrubbing
------------------
+## Storage Scrubbing
 
 Support for end-to-end data integrity is planned for DAOS v1.2 and
 background checksum scrubbing for v2.2. Once available, those

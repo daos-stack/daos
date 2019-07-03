@@ -593,7 +593,7 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 
 	nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
 	if (UMOFF_IS_NULL(nd_off))
-		return -DER_NOMEM;
+		return btr_umm(tcx)->umm_nospc_rc;
 
 	D_DEBUG(DB_TRACE, "Allocate new node "DF_X64"\n", nd_off);
 	nd = btr_off2ptr(tcx, nd_off);
@@ -782,7 +782,7 @@ btr_root_alloc(struct btr_context *tcx)
 	tins->ti_root_off = umem_zalloc(btr_umm(tcx),
 					sizeof(struct btr_root));
 	if (UMOFF_IS_NULL(tins->ti_root_off))
-		return -DER_NOMEM;
+		return btr_umm(tcx)->umm_nospc_rc;
 
 	root = btr_off2ptr(tcx, tins->ti_root_off);
 	return btr_root_init(tcx, root, false);

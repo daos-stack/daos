@@ -24,15 +24,17 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/jessevdk/go-flags"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+
+	"github.com/jessevdk/go-flags"
+
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -85,14 +87,14 @@ func agentMain() error {
 
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.
-	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	config, err := client.GetConfig(opts.ConfigPath)
 	if err != nil {
 		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
 		return err
 	}
 
 	// Override configuration with any commandline values given
-	applyCmdLineOverrides(&config, opts)
+	applyCmdLineOverrides(config, opts)
 
 	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
 	if env != config.RuntimeDir {
