@@ -792,7 +792,7 @@ individually (e.g. independently on each storage node via systemd) or
 collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
 
 For further details on building and running DAOS see the
-[Quickstart guide](../doc/quickstart.md).
+[Quickstart guide](../quickstart.md).
 
 ### Parallel Launcher
 
