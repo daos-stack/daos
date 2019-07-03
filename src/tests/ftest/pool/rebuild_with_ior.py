@@ -27,16 +27,12 @@ import os
 import time
 import traceback
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 
-import agent_utils
-import server_utils
 import write_host_file
-import check_for_pool
 import ior_utils
 from mpio_utils import MpioUtils, MpioFailed
-import io_utilities
-from daos_api import DaosPool, DaosServer, DaosContainer, DaosApiError
+from daos_api import DaosPool, DaosServer, DaosApiError
 
 class RebuildWithIOR(TestWithServers):
     """
@@ -48,17 +44,12 @@ class RebuildWithIOR(TestWithServers):
     def setUp(self):
         super(RebuildWithIOR, self).setUp()
 
+        self.mpio = None
         self.hostfile_clients = (
-          write_host_file.write_host_file(self.hostlist_clients, self.workdir,
-                                          None))
-    
-#    def tearDown(self):
-#        try:
-#            if self.pool is not None:
-#                self.pool.destroy(1)
-#        finally:
-#            super(RebuildWithIOR, self).tearDown()
+            write_host_file.write_host_file(self.hostlist_clients,
+                                            self.workdir, None))
 
+    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """
         Jira ID: DAOS-951
@@ -92,20 +83,22 @@ class RebuildWithIOR(TestWithServers):
             createsvc = self.params.get("svcn", '/run/testparams/createsvc/')
 
             # ior parameters
-            client_processes = self.params.get("np", '/run/ior/client_processes/*/')
+            client_processes = self.params.get("np",
+                                               '/run/ior/client_processes/*/')
             iteration = self.params.get("iter", '/run/ior/iteration/')
             iorflags_write = self.params.get("write", '/run/ior/iorflags/')
             iorflags_read = self.params.get("read", '/run/ior/iorflags/')
-            transfer_size = self.params.get("t",
-                                            '/run/ior/transfersize_blocksize/*/')
-            block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
+            transfer_size = self.params.get(
+                "t", '/run/ior/transfersize_blocksize/*/')
+            block_size = self.params.get(
+                "b", '/run/ior/transfersize_blocksize/*/')
             oclass = self.params.get("oclass", '/run/ior/object_class/')
 
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None, None, createsvc)
+                             createsize, createsetid, None, None, createsvc)
 
             pool_uuid = self.pool.get_uuid_str()
             svc_list = ""
@@ -130,14 +123,12 @@ class RebuildWithIOR(TestWithServers):
                 self.fail("Rebuilt recs not zero.\n")
             dummy_pool_version = self.pool.pool_info.pi_rebuild_st.rs_version
 
-            self.pool.disconnect()
             # perform first set of io using IOR
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
                                     pool_uuid, svc_list, client_processes,
-                                    self.hostfile_clients, iorflags_write, iteration,
-                                    transfer_size, block_size, True, oclass)
-
-            self.pool.connect(1 << 1)
+                                    self.hostfile_clients, iorflags_write,
+                                    iteration, transfer_size, block_size, True,
+                                    oclass)
 
             # trigger the rebuild
             rank = self.params.get("rank", '/run/testparams/ranks/*')
@@ -156,10 +147,11 @@ class RebuildWithIOR(TestWithServers):
                     time.sleep(2)
 
             # perform second set of io using IOR
-#            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-#                                    pool_uuid, svc_list, client_processes,
-#                                    self.hostfile_clients, iorflags_write, iteration,
-#                                    transfer_size, block_size, True, oclass, "testFile2")
+            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
+                                    pool_uuid, svc_list, client_processes,
+                                    self.hostfile_clients, iorflags_write,
+                                    iteration, transfer_size, block_size, True,
+                                    oclass, "testFile2")
 
             # check rebuild statistics
             if self.pool.pool_info.pi_ndisabled != 8:
@@ -173,26 +165,19 @@ class RebuildWithIOR(TestWithServers):
             if self.pool.pool_info.pi_rebuild_st.rs_rec_nr <= 0:
                 self.fail("No records have been rebuilt.")
 
-            self.pool.disconnect()
-
-            # perform second set of io using IOR
-            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                    pool_uuid, svc_list, client_processes,
-                                    self.hostfile_clients, iorflags_write, iteration,
-                                    transfer_size, block_size, True, oclass, "testFile2")
-
             # check data intergrity using ior for both ior runs
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                     pool_uuid, svc_list, client_processes,
-                                     self.hostfile_clients, iorflags_read, iteration,
-                                     transfer_size, block_size, True, oclass)
+                                    pool_uuid, svc_list, client_processes,
+                                    self.hostfile_clients, iorflags_read,
+                                    iteration, transfer_size, block_size, True,
+                                    oclass)
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                     pool_uuid, svc_list, client_processes,
-                                     self.hostfile_clients, iorflags_read, iteration,
-                                     transfer_size, block_size, True, oclass, "testFile2")
+                                    pool_uuid, svc_list, client_processes,
+                                    self.hostfile_clients, iorflags_read,
+                                    iteration, transfer_size, block_size, True,
+                                    oclass, "testFile2")
 
         except (ValueError, DaosApiError, MpioFailed) as excep:
             print(excep)
             print(traceback.format_exc())
             self.fail("Expecting to pass but test has failed.\n")
-
