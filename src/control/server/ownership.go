@@ -24,7 +24,10 @@
 package server
 
 import (
+	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -62,9 +65,9 @@ func getGroup(
 	return group, errors.Errorf("user %s not member of group %s", usr.Username, tgtGroup)
 }
 
-// chownAll changes ownership of required directories (recursive) and
+// chownR changes ownership of required directories (recursive) and
 // files using user/group derived from config file parameters.
-func chownAll(config *configuration, usr *user.User, grp *user.Group) error {
+func chownR(config *configuration, usr *user.User, grp *user.Group) error {
 	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
 	if err != nil {
 		return errors.Wrap(err, "parsing uid to int")
@@ -129,7 +132,36 @@ func changeFileOwnership(config *configuration) error {
 		return errors.WithMessage(err, "group lookup")
 	}
 
-	if err := chownAll(config, usr, grp); err != nil {
+	if err := chownR(config, usr, grp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// respawnProc builds and executes command chain to respawn process under new ownership.
+func respawnProc(config *configuration) error {
+	var buf bytes.Buffer // build command string
+
+	// Wait for this proc to exit and make NVMe storage accessible to new user.
+	fmt.Fprintf(
+		&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
+		os.Args[0], config.UserName, config.ControlLogFile)
+
+	// Run daos_server from within a subshell of target user with the same args.
+	fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
+
+	for _, arg := range os.Args {
+		fmt.Fprintf(&buf, arg+" ")
+	}
+
+	// Redirect output of new proc to existing log file.
+	fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)
+
+	msg := fmt.Sprintf("dropping privileges: re-spawning (%s)\n", buf.String())
+	log.Debugf(msg)
+
+	if err := exec.Command("bash", "-c", buf.String()).Start(); err != nil {
 		return err
 	}
 

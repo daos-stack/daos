@@ -93,37 +93,35 @@ func (c *configuration) setPath(path string) error {
 
 // loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions, host string) (
-	config configuration, err error) {
-
-	config = newConfiguration()
+func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
+	config := newConfiguration()
 
 	if err := config.setPath(cliOpts.ConfigPath); err != nil {
-		return config, errors.WithMessage(err, "set path")
+		return &config, errors.WithMessage(err, "set path")
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return config, errors.Wrap(err, "read config file")
+		return &config, errors.Wrap(err, "read config file")
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
 
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
-	if err = config.getIOParams(cliOpts); err != nil {
-		return config, errors.Wrap(
+	if err := config.getIOParams(cliOpts); err != nil {
+		return &config, errors.Wrap(
 			err, "failed to retrieve I/O service params")
 	}
 
 	if len(config.Servers) == 0 {
-		return config, errors.New("missing I/O service params")
+		return &config, errors.New("missing I/O service params")
 	}
 
 	for idx := range config.Servers {
 		config.Servers[idx].Hostname = host
 	}
 
-	return config, nil
+	return &config, nil
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/

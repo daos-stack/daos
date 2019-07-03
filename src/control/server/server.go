@@ -24,11 +24,9 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"syscall"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -78,7 +76,7 @@ func Main() error {
 	}
 
 	// Backup active config.
-	saveActiveConfig(&config)
+	saveActiveConfig(config)
 
 	ctlLogFile, err := config.setLogging(host)
 	if err != nil {
@@ -91,7 +89,7 @@ func Main() error {
 
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
-		&config, getDrpcClientConnection(config.SocketDir))
+		config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		log.Errorf("Failed to init ControlService: %+v", err)
 		return err
@@ -122,7 +120,7 @@ func Main() error {
 	// Only provide IO/Agent communication if not attempting to respawn after format,
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
 	if !respawn {
-		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
+		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(config))
 		secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 		acl.RegisterAccessControlServer(grpcServer, secServer)
 	}
@@ -134,7 +132,7 @@ func Main() error {
 
 	// If running as root, wait for storage format call over client API (mgmt tool).
 	if syscall.Getuid() == 0 {
-		if err = awaitStorageFormat(&config); err != nil {
+		if err = awaitStorageFormat(config); err != nil {
 			log.Errorf("Failed to format storage: %+v", err)
 			return err
 		}
@@ -142,33 +140,13 @@ func Main() error {
 
 	if respawn {
 		// Chown required files and respawn process under new user.
-		if err := changeFileOwnership(&config); err != nil {
+		if err := changeFileOwnership(config); err != nil {
 			log.Errorf("Failed to change file ownership: %+v", err)
 			return err
 		}
 
-		var buf bytes.Buffer // build command string
-
-		// Wait for this proc to exit and make NVMe storage accessible to new user.
-		fmt.Fprintf(
-			&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
-			os.Args[0], config.UserName, config.ControlLogFile)
-
-		// Run daos_server from within a subshell of target user with the same args.
-		fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
-
-		for _, arg := range os.Args {
-			fmt.Fprintf(&buf, arg+" ")
-		}
-
-		// Redirect output of new proc to existing log file.
-		fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)
-
-		msg := fmt.Sprintf("dropping privileges: re-spawning (%s)\n", buf.String())
-		log.Debugf(msg)
-
-		if err := exec.Command("bash", "-c", buf.String()).Start(); err != nil {
-			log.Errorf("Failed to respawn: %+v", err)
+		if err := respawnProc(config); err != nil {
+			log.Errorf("Failed to respawn process: %+v", err)
 			return err
 		}
 
@@ -176,14 +154,14 @@ func Main() error {
 	}
 
 	// Format the unformatted servers by writing persistant superblock.
-	if err = formatIosrvs(&config, false); err != nil {
+	if err = formatIosrvs(config, false); err != nil {
 		log.Errorf("Failed to format servers: %+v", err)
 		return err
 	}
 
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
-	iosrv, err := newIosrv(&config, 0)
+	iosrv, err := newIosrv(config, 0)
 	if err != nil {
 		log.Errorf("Failed to load server: %+v", err)
 		return err
