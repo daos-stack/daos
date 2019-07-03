@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
 
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
@@ -137,16 +138,13 @@ func respawnProc(config *configuration) error {
 	var buf bytes.Buffer // build command string
 
 	// Wait for this proc to exit and make NVMe storage accessible to new user.
-	fmt.Fprintf(
-		&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
+	fmt.Fprintf(&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
 		os.Args[0], config.UserName, config.ControlLogFile)
 
 	// Run daos_server from within a subshell of target user with the same args.
 	fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
 
-	for _, arg := range os.Args {
-		fmt.Fprintf(&buf, arg+" ")
-	}
+	fmt.Fprintf(&buf, strings.Join(os.Args, " "))
 
 	// Redirect output of new proc to existing log file.
 	fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)

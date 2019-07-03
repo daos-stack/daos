@@ -97,11 +97,11 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
 	config := newConfiguration()
 
 	if err := config.setPath(cliOpts.ConfigPath); err != nil {
-		return &config, errors.WithMessage(err, "set path")
+		return nil, errors.WithMessage(err, "set path")
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return &config, errors.Wrap(err, "read config file")
+		return nil, errors.Wrap(err, "read config file")
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
 
@@ -109,12 +109,12 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
 	if err := config.getIOParams(cliOpts); err != nil {
-		return &config, errors.Wrap(
+		return nil, errors.Wrap(
 			err, "failed to retrieve I/O service params")
 	}
 
 	if len(config.Servers) == 0 {
-		return &config, errors.New("missing I/O service params")
+		return nil, errors.New("missing I/O service params")
 	}
 
 	for idx := range config.Servers {
