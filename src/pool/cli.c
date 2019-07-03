@@ -1372,7 +1372,7 @@ dc_pool_query(tse_task_t *task)
 	struct pool_buf		       *map_buf;
 	struct pool_query_arg		query_args;
 	int				rc;
-
+	//printf ("STARTING POOL QUERY\n");
 	args = dc_task_get_args(task);
 
 	D_ASSERT(args->tgts == NULL); /* TODO */

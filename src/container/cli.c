@@ -952,11 +952,13 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
+	//printf ("OID TASK COMPLETE rc = %d\n", rc);
 	if (daos_rpc_retryable_rc(rc)) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
 
+		//printf ("CREATING POOL QUERY TASK\n");
 		/** pool map update task */
 		rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
 		if (rc != 0)
@@ -1076,7 +1078,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 	rc = get_tgt_rank(pool, &ep.ep_rank);
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
-
+	//printf ("STARTING ALLOC OID TASK to EP rank %d\n", ep.ep_rank);
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
