@@ -463,7 +463,9 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		D_ASSERT(rc == 1);
 
 		/* skip myself. */
-		if (myrank == target->ta_comp.co_rank)
+		if (myrank == target->ta_comp.co_rank &&
+		    dss_get_module_info()->dmi_tgt_id ==
+		    target->ta_comp.co_index)
 			continue;
 
 		dcrb.dcrb_rank = target->ta_comp.co_rank;
@@ -718,7 +720,9 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		D_ASSERT(rc == 1);
 
 		/* skip myself. */
-		if (myrank == target->ta_comp.co_rank)
+		if (myrank == target->ta_comp.co_rank &&
+		    dss_get_module_info()->dmi_tgt_id ==
+		    target->ta_comp.co_index)
 			continue;
 
 		D_ALLOC_PTR(drr);

@@ -110,25 +110,6 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 	return -DER_SUCCESS;
 };
 
-int
-find_inode(struct dfuse_request *request)
-{
-	struct dfuse_projection_info *fs_handle = request->ir_fsh;
-	struct dfuse_inode_entry *ie;
-	d_list_t *rlink;
-
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
-				&request->ir_inode_num,
-				sizeof(request->ir_inode_num));
-	if (!rlink)
-		return ENOENT;
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	request->ir_inode = ie;
-	return 0;
-}
-
 static void
 drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
