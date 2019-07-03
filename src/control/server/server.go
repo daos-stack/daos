@@ -116,10 +116,12 @@ func Main() error {
 
 	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)
 
-	// Only provide IO/Agent communication if running as non-root user or if no
-	// non-root user has been specified in config (not recommended, will log error).
-	// If root, only provide gRPC mgmt control service for hardware provisioning.
-	if syscall.Getuid() != 0 || config.UserName == "" {
+	// If running as root and user name specified in config file, respawn proc.
+	respawn := syscall.Getuid() == 0 && config.UserName != ""
+
+	// Only provide IO/Agent communication if not attempting to respawn after format,
+	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
+	if !respawn {
 		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 		secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 		acl.RegisterAccessControlServer(grpcServer, secServer)
@@ -130,47 +132,47 @@ func Main() error {
 	}()
 	defer grpcServer.GracefulStop()
 
-	// If running as root, wait for storage to be formatted if necessary and
-	// respawn with ownership set to non-root user.
+	// If running as root, wait for storage format call over client API (mgmt tool).
 	if syscall.Getuid() == 0 {
 		if err = awaitStorageFormat(&config); err != nil {
 			log.Errorf("Failed to format storage: %+v", err)
 			return err
 		}
+	}
 
+	if respawn {
+		// Chown required files and respawn process under new user.
 		if err := changeFileOwnership(&config); err != nil {
-			log.Errorf(
-				"Failed to drop privileges:\n%+v\nrunning as root "+
-					"is dangerous and is not advised!", err)
-		} else {
-			var buf bytes.Buffer // build command string
-
-			// Wait for this (old) process to exit and make NVMe storage accessible
-			// to new user.
-			fmt.Fprintf(
-				&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
-				os.Args[0], config.UserName, config.ControlLogFile)
-
-			// Run daos_server from within a subshell of target user with the same args.
-			fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
-
-			for _, arg := range os.Args {
-				fmt.Fprintf(&buf, arg+" ")
-			}
-
-			// Redirect output to existing log file.
-			fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)
-
-			msg := fmt.Sprintf(
-				"dropping privileges: re-spawning (%s)\n", buf.String())
-			log.Debugf(msg)
-
-			if err := exec.Command("bash", "-c", buf.String()).Start(); err != nil {
-				log.Errorf("Failed to respawn: %+v", err)
-			}
-
+			log.Errorf("Failed to change file ownership: %+v", err)
 			return err
 		}
+
+		var buf bytes.Buffer // build command string
+
+		// Wait for this proc to exit and make NVMe storage accessible to new user.
+		fmt.Fprintf(
+			&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
+			os.Args[0], config.UserName, config.ControlLogFile)
+
+		// Run daos_server from within a subshell of target user with the same args.
+		fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
+
+		for _, arg := range os.Args {
+			fmt.Fprintf(&buf, arg+" ")
+		}
+
+		// Redirect output of new proc to existing log file.
+		fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)
+
+		msg := fmt.Sprintf("dropping privileges: re-spawning (%s)\n", buf.String())
+		log.Debugf(msg)
+
+		if err := exec.Command("bash", "-c", buf.String()).Start(); err != nil {
+			log.Errorf("Failed to respawn: %+v", err)
+			return err
+		}
+
+		return nil
 	}
 
 	// Format the unformatted servers by writing persistant superblock.
