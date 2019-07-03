@@ -22,28 +22,34 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-from ior_single_server import IorSingleServer
+from ior_single_server import IorTestBase
 
-class IorSmall(IorSingleServer):
-    """
-    Running Ior for smaller configuration
+
+class IorSmall(IorTestBase):
+    """Test class Description: Runs IOR with 1 server with basic parameters.
+
     :avocado: recursive
     """
+
     def test_ior_small(self):
-        """
-        Jira ID: DAOS-2715
-        Test Description: Purpose of this test is to have small ior test
-                          to check basic functionality.
-        Use case: Run ior with read, write, CheckWrite, CheckRead in ssf mode.
-                  Run ior with read, write, CheckWrite, CheckRead in fpp mode.
-                  Run ior with read, write, CheckWrite and access to random
-                  offset instead of sequential.
-                  All above three cases to be run with single client and
-                  multiple client processes in two separate nodes.
+        """Jira ID: DAOS-2715.
+
+        Test Description:
+            Purpose of this test is to have small ior test to check basic
+            functionality.
+
+        Use case:
+            Run ior with read, write, CheckWrite, CheckRead in ssf mode.
+            Run ior with read, write, CheckWrite, CheckRead in fpp mode.
+            Run ior with read, write, CheckWrite and access to random
+                offset instead of sequential.
+            All above three cases to be run with single client and
+                multiple client processes in two separate nodes.
+
         :avocado: tags=all,daosio,small,iorsmall
         """
         # override ior flags and object class
-        self.ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
-        self.object_class = self.params.get("o", '/run/ior/objectclass/*/')
+        ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
+        object_class = self.params.get("o", '/run/ior/objectclass/*/')
 
-        IorSingleServer.test_singleserver(self)
+        self.execute_ior(ior_flags, object_class)
