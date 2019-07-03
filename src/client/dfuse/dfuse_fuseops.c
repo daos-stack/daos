@@ -70,8 +70,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	struct dfuse_projection_info *fs_handle = arg;
 
 	DFUSE_TRA_INFO(fs_handle,
-		       "Fuse configuration for projection srv:%d cli:%d",
-		       fs_handle->dpi_id, fs_handle->dpi_proj.cli_fs_id);
+		       "Fuse configuration for projection id:%d",
+		       fs_handle->dpi_proj.cli_fs_id);
 
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);

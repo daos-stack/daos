@@ -112,8 +112,9 @@ struct dc_object {
 	/* cob_lock protects layout and shard objects ptrs */
 	pthread_rwlock_t	 cob_lock;
 
-	unsigned int		cob_version;
-	unsigned int		cob_shards_nr;
+	unsigned int		 cob_version;
+	unsigned int		 cob_shards_nr;
+	unsigned int		 cob_grp_size;
 	/** shard object ptrs */
 	struct dc_obj_layout	*cob_shards;
 };

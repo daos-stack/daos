@@ -248,7 +248,7 @@ nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + name_len);
 	if (UMOFF_IS_NULL(roff))
-		D_GOTO(err, rc);
+		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 
 	r = umem_off2ptr(&tins->ti_umm, roff);
 	r->nr_value_size = val->iov_len;
@@ -256,7 +256,7 @@ nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	r->nr_value = umem_alloc(&tins->ti_umm, r->nr_value_buf_size);
 	if (UMOFF_IS_NULL(r->nr_value))
-		D_GOTO(err_r, rc);
+		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 
 	value = umem_off2ptr(&tins->ti_umm, r->nr_value);
 	memcpy(value, val->iov_buf, r->nr_value_size);
@@ -578,7 +578,7 @@ uv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
 	if (UMOFF_IS_NULL(roff))
-		D_GOTO(err, rc);
+		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 
 	r = umem_off2ptr(&tins->ti_umm, roff);
 	r->ur_value_size = val->iov_len;
@@ -586,7 +586,7 @@ uv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	r->ur_value = umem_alloc(&tins->ti_umm, r->ur_value_buf_size);
 	if (UMOFF_IS_NULL(r->ur_value))
-		D_GOTO(err_r, rc);
+		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 
 	value = umem_off2ptr(&tins->ti_umm, r->ur_value);
 	memcpy(value, val->iov_buf, r->ur_value_size);
@@ -890,7 +890,7 @@ ec_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
 	if (UMOFF_IS_NULL(roff))
-		return rc;
+		return tins->ti_umm.umm_nospc_rc;
 
 	r = umem_off2ptr(&tins->ti_umm, roff);
 	r->er_counter = *(uint64_t *)val->iov_buf;

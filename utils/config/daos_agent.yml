@@ -30,16 +30,16 @@
 #hostlist: ['localhost:10001']
 
 ## Transport Credentials Specifying certificates to secure communications
-
+#
 #transport_config:
 #  # Specify to bypass loading certificates and use insecure communications channnels
 #  allow_insecure: false
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
-#  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  # Agent certificate for use in TLS handshakes
+#  cert: .daos/daos_agent.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: .daos/daos_agent.key
 #  # Name of server accodring to its certificate
 #  server_name: server
 

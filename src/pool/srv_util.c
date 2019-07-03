@@ -31,11 +31,6 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
-
 static inline int
 map_ranks_include(enum map_ranks_class class, int status)
 {
@@ -53,7 +48,7 @@ map_ranks_include(enum map_ranks_class class, int status)
 }
 
 /* Build a rank list of targets with certain status. */
-static int
+int
 map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	       d_rank_list_t *ranks)
 {
@@ -100,7 +95,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	return 0;
 }
 
-static void
+void
 map_ranks_fini(d_rank_list_t *ranks)
 {
 	if (ranks->rl_ranks != NULL) {
