@@ -564,7 +564,25 @@ def main():
     test_files = get_test_files(test_list)
 
     # Run all the tests
-    exit(run_tests(test_files, tag_filter, args))
+    status = run_tests(test_files, tag_filter, args)
+
+    # Process the avocado run return codes and only treat job and command
+    # failures as errors.
+    ret_code = 0
+    if status == 0:
+        print("All avocado tests passed!")
+    else:
+        if status & 1 == 1:
+            print("Detected one or more avocado test failures!")
+        if status & 8 == 8:
+            print("Detected one or more interrupted avocado jobs!")
+        if status & 2 == 2:
+            print("ERROR: Detected one or more avocado job failures!")
+            ret_code = 1
+        if status & 4 == 4:
+            print("ERROR: Detected one or more failed avocado commands!")
+            ret_code = 1
+    exit(ret_code)
 
 
 if __name__ == "__main__":

@@ -75,6 +75,8 @@ struct pl_obj_shard {
 
 struct pl_obj_layout {
 	uint32_t		 ol_ver;
+	uint32_t		 ol_grp_size;
+	uint32_t		 ol_grp_nr;
 	uint32_t		 ol_nr;
 	struct pl_obj_shard	*ol_shards;
 };
@@ -143,7 +145,7 @@ pl_obj_get_shard(void *data, int idx)
 	return &layout->ol_shards[idx];
 }
 
-int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
