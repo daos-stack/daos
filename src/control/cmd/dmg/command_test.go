@@ -9,6 +9,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 type dmgTestErr string
@@ -22,17 +23,17 @@ const (
 )
 
 type cmdTest struct {
-	name            string
-	cmd             string
-	expectedInvokes string
-	expectedOpts    *cliOptions
-	expectedErr     error
+	name          string
+	cmd           string
+	expectedCalls string
+	expectedOpts  *cliOptions
+	expectedErr   error
 }
 
 type testConn struct {
 	t            *testing.T
 	clientConfig *client.Configuration
-	invoked      []string
+	called       []string
 }
 
 func newTestConn(t *testing.T) *testConn {
@@ -44,7 +45,7 @@ func newTestConn(t *testing.T) *testConn {
 }
 
 func (tc *testConn) appendInvocation(name string) {
-	tc.invoked = append(tc.invoked, name)
+	tc.called = append(tc.called, name)
 }
 
 func (tc *testConn) ConnectClients(addrList client.Addresses) client.ResultMap {
@@ -107,6 +108,10 @@ func (tc *testConn) DestroyPool(req *pb.DestroyPoolReq) client.ResultMap {
 	return nil
 }
 
+func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
+	tc.appendInvocation("SetTransportConfig")
+}
+
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	t.Helper()
 
@@ -116,7 +121,8 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			t.Helper()
 
 			conn := newTestConn(t)
-			opts, err := parseOpts(strings.Split(st.cmd, " "), conn)
+			args := append([]string{"--insecure"}, strings.Split(st.cmd, " ")...)
+			opts, err := parseOpts(args, conn)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
@@ -127,8 +133,11 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 					t.Fatalf("error string %q doesn't match expected error %q", err, st.expectedErr)
 				}
 			}
-			common.AssertEqual(t, strings.Join(conn.invoked, " "), st.expectedInvokes,
-				"invoked commands do not match expected commands")
+			if st.expectedCalls != "" {
+				st.expectedCalls = fmt.Sprintf("SetTransportConfig %s", st.expectedCalls)
+			}
+			common.AssertEqual(t, strings.Join(conn.called, " "), st.expectedCalls,
+				"called functions do not match expected calls")
 			common.AssertEqual(t, opts, st.expectedOpts,
 				"parsed options do not match expected options")
 		})
