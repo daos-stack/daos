@@ -31,8 +31,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -64,32 +65,32 @@ func (e *ext) Getenv(key string) string {
 
 // Configuration contains all known configuration variables available to the client
 type Configuration struct {
-	SystemName    string   `yaml:"name"`
-	AccessPoints  []string `yaml:"access_points"`
-	Port          int      `yaml:"port"`
-	HostList      []string `yaml:"hostlist"`
-	RuntimeDir    string   `yaml:"runtime_dir"`
-	HostFile      string   `yaml:"host_file"`
-	Cert          string   `yaml:"cert"`
-	Key           string   `yaml:"key"`
-	LogFile       string   `yaml:"log_file"`
-	LogFileFormat string   `yaml:"log_file_format"`
-	Path          string
-	Ext           External
+	SystemName      string   `yaml:"name"`
+	AccessPoints    []string `yaml:"access_points"`
+	Port            int      `yaml:"port"`
+	HostList        []string `yaml:"hostlist"`
+	RuntimeDir      string   `yaml:"runtime_dir"`
+	HostFile        string   `yaml:"host_file"`
+	LogFile         string   `yaml:"log_file"`
+	LogFileFormat   string   `yaml:"log_file_format"`
+	Path            string
+	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	Ext             External
 }
 
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:   defaultSystemName,
-		AccessPoints: []string{"localhost:10001"},
-		Port:         defaultPort,
-		HostList:     []string{"localhost:10001"},
-		RuntimeDir:   defaultRuntimeDir,
-		LogFile:      defaultLogFile,
-		Path:         defaultConfigPath,
-		Ext:          ext,
+		SystemName:      defaultSystemName,
+		AccessPoints:    []string{"localhost"},
+		Port:            defaultPort,
+		HostList:        []string{"localhost:10001"},
+		RuntimeDir:      defaultRuntimeDir,
+		LogFile:         defaultLogFile,
+		Path:            defaultConfigPath,
+		TransportConfig: security.DefaultClientTransportConfig(),
+		Ext:             ext,
 	}
 }
 

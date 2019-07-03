@@ -6,7 +6,7 @@ basicConstraints = CA:FALSE
 
 [ distinguished_name ]
 organizationName = DAOS
-commonName = shell
+commonName = admin
 
 #In the future we can do username based certs for login
 #commonName = <username>
