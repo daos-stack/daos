@@ -29,7 +29,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strconv"
 
 	"github.com/daos-stack/daos/src/control/log"
@@ -65,9 +64,9 @@ func getGroup(
 	return group, errors.Errorf("user %s not member of group %s", usr.Username, tgtGroup)
 }
 
-// chownR changes ownership of required directories (recursive) and
+// chownAll changes ownership of required directories (recursive) and
 // files using user/group derived from config file parameters.
-func chownR(config *configuration, usr *user.User, grp *user.Group) error {
+func chownAll(config *configuration, usr *user.User, grp *user.Group) error {
 	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
 	if err != nil {
 		return errors.Wrap(err, "parsing uid to int")
@@ -99,15 +98,9 @@ func chownR(config *configuration, usr *user.User, grp *user.Group) error {
 			continue
 		}
 
-		err := filepath.Walk(path, func(name string, info os.FileInfo, err error) error {
-			if err != nil {
-				return errors.Wrapf(err, "accessing path %s", name)
-			}
-
-			return os.Chown(name, int(uid), int(gid)) // 32 bit int from ParseInt
-		})
+		err := config.ext.chownR(path, int(uid), int(gid)) // 32 bit ints from ParseInt
 		if err != nil && !os.IsNotExist(err) {
-			return errors.Wrapf(err, "walking path %s", path)
+			return errors.Wrapf(err, "recursive chown %s", path)
 		}
 	}
 
@@ -132,7 +125,7 @@ func changeFileOwnership(config *configuration) error {
 		return errors.WithMessage(err, "group lookup")
 	}
 
-	if err := chownR(config, usr, grp); err != nil {
+	if err := chownAll(config, usr, grp); err != nil {
 		return err
 	}
 

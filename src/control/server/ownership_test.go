@@ -51,8 +51,10 @@ func TestChangeFilePermissions(t *testing.T) {
 				Uid: "1001", Gid: "1001", Username: "bob",
 			},
 			expHistory: []string{
-				"os: chown /mnt/daos 1001 1001",
-				"C: setgid 1001", "C: setuid 1001",
+				"os: walk /tmp/daos_sockets chown 1001 1001",
+				"os: walk /tmp/daos_control.log chown 1001 1001",
+				"os: walk /mnt/daos chown 1001 1001",
+				"os: walk /tmp/server.log chown 1001 1001",
 			},
 		},
 		{
@@ -67,8 +69,10 @@ func TestChangeFilePermissions(t *testing.T) {
 			},
 			listGrpsRet: []string{"1001", "1002"},
 			expHistory: []string{
-				"os: chown /mnt/daos 1001 1002",
-				"C: setgid 1002", "C: setuid 1001",
+				"os: walk /tmp/daos_sockets chown 1001 1002",
+				"os: walk /tmp/daos_control.log chown 1001 1002",
+				"os: walk /mnt/daos chown 1001 1002",
+				"os: walk /tmp/server.log chown 1001 1002",
 			},
 		},
 		{
@@ -82,10 +86,7 @@ func TestChangeFilePermissions(t *testing.T) {
 				Gid: "1002", Name: "builders",
 			},
 			listGrpsRet: []string{"1001"},
-			expHistory: []string{
-				"os: chown /mnt/daos 1001 1001",
-				"C: setgid 1001", "C: setuid 1001",
-			},
+			errMsg:      "group lookup: user bob not member of group builders",
 		},
 	}
 
@@ -100,14 +101,13 @@ func TestChangeFilePermissions(t *testing.T) {
 		config.UserName = tt.username
 		config.GroupName = tt.groupname
 
-		// TODO: verify chownRecursive gets called and if err
 		err := changeFileOwnership(&config)
 		if err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
 				continue
 			}
-			t.Fatal(err)
+			t.Fatalf("%s: %v", tt.desc, err.Error())
 		}
 		AssertEqual(t, ext.getHistory(), tt.expHistory, tt.desc)
 	}
