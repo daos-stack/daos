@@ -34,13 +34,13 @@ ior:
         write: "-w -W -k -G 1"
         read: "-r -R -G 1 -E"
     transfersize_blocksize: !mux
-        64M: 
+        64M:
             t: '1M'
             b: '64M'
         512M:
             t: '1M'
             b: '512M'
-        1G: 
+        1G:
             t: '1M'
             b: '1G'
     object_class:
