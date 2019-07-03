@@ -1,0 +1,52 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - boro-64
+    - boro-60
+    - boro-61
+    - boro-62
+  test_clients:
+#    - boro-64
+#    - boro-61
+timeout: 5000
+server_config:
+  name: daos_server
+testparams:
+  ranks:
+    rank5:
+      rank: 3
+  createmode:
+    mode: 146
+  createset:
+    setname: daos_server
+  createsize:
+    size: 60000000000
+  createsvc:
+    svcn: 1
+  numobjects:
+    one:
+      objcount: 1
+  datasize:
+    size: 250
+ior:
+    client_processes:
+        np_1:
+            np: 1
+    iteration:
+        iter: 1
+    iorflags:
+        write: "-w -W -k -G 1"
+        read: "-r -R -G 1 -E"
+    transfersize_blocksize: !mux
+        64M: 
+            t: '1M'
+            b: '64M'
+        512M:
+            t: '1M'
+            b: '512M'
+        1G: 
+            t: '1M'
+            b: '1G'
+    object_class:
+        oclass: '5'

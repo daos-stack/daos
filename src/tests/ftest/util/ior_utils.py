@@ -160,7 +160,7 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
 
         run_cmd = ('; '.join(env_variables) + '; ' +
                    mpichinstall + "bin/mpirun -np {0} --hostfile {1} " +
-                   "/home/standan/mpiio/ior_mpiio/build/src/ior -a MPIIO {2} " +
+                   "/home/standan/mpiio/install/ior_both/bin/ior -a MPIIO {2} " +
                    "-i {3} -t {4} -b {5} " +
                    "-o daos:{6}").format(numprocs, hostfile, ior_flags,
                                               iteration, transfer_size,
