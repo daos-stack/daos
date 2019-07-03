@@ -25,7 +25,6 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -223,7 +222,7 @@ func newIosrv(config *configuration, i int) (*iosrv, error) {
 	return srv, nil
 }
 
-func (srv *iosrv) start(logFile io.Writer) (err error) {
+func (srv *iosrv) start() (err error) {
 	defer func() {
 		err = errors.WithMessagef(err, "start server %s", srv.config.Servers[srv.index].ScmMount)
 	}()
@@ -236,7 +235,7 @@ func (srv *iosrv) start(logFile io.Writer) (err error) {
 		return
 	}
 
-	if err = srv.startCmd(logFile); err != nil {
+	if err = srv.startCmd(); err != nil {
 		return
 	}
 	defer func() {
@@ -293,11 +292,11 @@ func (srv *iosrv) wait() error {
 	return nil
 }
 
-func (srv *iosrv) startCmd(logFile io.Writer) error {
+func (srv *iosrv) startCmd() error {
 	// Exec io_server with generated cli opts from config context.
 	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
-	srv.cmd.Stdout = logFile
-	srv.cmd.Stderr = logFile
+	srv.cmd.Stdout = os.Stdout
+	srv.cmd.Stderr = os.Stderr
 	srv.cmd.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.

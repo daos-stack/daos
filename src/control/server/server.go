@@ -80,13 +80,13 @@ func Main() error {
 	// Backup active config.
 	saveActiveConfig(&config)
 
-	ctrlLogFile, err := config.setLogging(host)
+	ctlLogFile, err := config.setLogging(host)
 	if err != nil {
 		log.Errorf("Failed to configure logging: %+v", err)
 		return err
 	}
-	if ctrlLogFile != nil {
-		defer ctrlLogFile.Close()
+	if ctlLogFile != nil {
+		defer ctlLogFile.Close()
 	}
 
 	// Create and setup control service.
@@ -192,8 +192,7 @@ func Main() error {
 		log.Errorf("Failed to set up dRPC: %+v", err)
 		return err
 	}
-	// Log iosrv std{err,out} (unformatted) to ctrl log to not pollute DAOS log.
-	if err = iosrv.start(ctrlLogFile); err != nil {
+	if err = iosrv.start(); err != nil {
 		log.Errorf("Failed to start server: %+v", err)
 		return err
 	}
