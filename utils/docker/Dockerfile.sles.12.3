@@ -67,9 +67,9 @@ RUN zypper --non-interactive --no-gpg-checks install \
     /tmp/go1.10-doc-1.10.4-2.2.x86_64.rpm \
     /tmp/go1.10-race-1.10.4-2.2.x86_64.rpm
 
-RUN curl -fsSL -o /tmp/jhli.key https://download.opensuse.org/repositories/home:/jhli/SLE_15/repodata/repomd.xml.key
+RUN curl -fsSL -o /tmp/jhli.key https://download.opensuse.org/repositories/home:/jhli/SLE_12_SP3/repodata/repomd.xml.key
 RUN rpm --import /tmp/jhli.key
-RUN zypper --non-interactive addrepo https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
+RUN zypper --non-interactive addrepo https://download.opensuse.org/repositories/home:/jhli/SLE_12_SP3/home:jhli.repo
 RUN zypper --non-interactive refresh
 RUN zypper --non-interactive install -y ipmctl-devel
 
