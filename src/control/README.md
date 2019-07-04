@@ -10,7 +10,7 @@ Multiple gRPC server modules are loaded by the control server. Currently include
 
 The Control Plane implements a replicated management service as part of the DAOS Server, responsible for handling distributed operations across the DAOS System.
 
-The [management tool](dmg) is an example client application which can connect to both the [agent](agent) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
+The [management tool](cmd/dmg) is an example client application which can connect to both the [agent](cmd/agent) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
 
 ## Documentation
 
@@ -20,7 +20,7 @@ The [management tool](dmg) is an example client application which can connect to
 - [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
 - [dRPC](https://godoc.org/github.com/daos-stack/daos/src/control/drpc)
 - [server package](server/README.md)
-- [management tool package](dmg/README.md)
+- [management tool package](cmd/dmg/README.md)
 - [client package](client/README.md)
 - [common package](common/README.md)
 

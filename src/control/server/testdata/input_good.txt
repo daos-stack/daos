@@ -9,9 +9,10 @@ access_points:
 - foo1.com:9999
 - bar1.com:1111
 port: 11111
-ca_cert: /tmp/ca.crt
-cert: /tmp/serv.crt
-key: /tmp/serv.key
+transport_config:
+  ca_cert: /tmp/ca.crt
+  cert: /tmp/serv.crt
+  key: /tmp/serv.key
 fault_path: /foo.com
 fault_cb: /tmp/daos_fault_cb.sh
 fabric_ifaces:
