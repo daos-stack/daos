@@ -1204,7 +1204,6 @@ pipeline {
                                         done
                                         sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/python-pathlib/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ python-pathlib
                                         sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${BUILD_URL}artifact/artifacts/leap42.3/ daos
-                                        sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
                                         sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/openSUSE_Leap_42.3/home:jhli.repo
                                         sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/openSUSE_Leap_42.3/devel:libraries:c_c++.repo
                                         sudo zypper --non-interactive --gpg-auto-import-keys ref

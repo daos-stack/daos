@@ -45,9 +45,7 @@ RUN zypper --non-interactive --no-gpg-check install openpa-devel      \
 RUN zypper --non-interactive install libevent-devel
 
 # ompi
-RUN zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc; \
-    zypper --non-interactive --gpg-auto-import-keys ref hwloc;                                                                  \
-    zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                    \
+RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                    \
     ${JENKINS_URL}job/daos-stack/job/pmix/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ pmix;                     \
     zypper --non-interactive ref pmix
 RUN zypper --non-interactive install hwloc-devel pmix-devel flex
