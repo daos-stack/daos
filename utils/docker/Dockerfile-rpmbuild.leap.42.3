@@ -5,7 +5,7 @@
 #
 
 # Pull base image
-FROM suse/sles:12.3
+FROM opensuse/leap:42.3
 MAINTAINER Brian J. Murrell <brian.murrell@intel.com>
 
 # use same UID as host and default value of 1000 if not specified
@@ -48,7 +48,7 @@ RUN zypper --non-interactive install libevent-devel
 RUN zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc; \
     zypper --non-interactive --gpg-auto-import-keys ref hwloc;                                                                  \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                    \
-    ${JENKINS_URL}job/daos-stack/job/pmix/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ pmix;                     \
+    ${JENKINS_URL}job/daos-stack/job/pmix/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ pmix;                     \
     zypper --non-interactive ref pmix
 RUN zypper --non-interactive install hwloc-devel pmix-devel flex
 
@@ -57,11 +57,11 @@ RUN zypper --non-interactive install fdupes
 
 # cart
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f \
-    ${JENKINS_URL}job/daos-stack/job/mercury/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ mercury; \
+    ${JENKINS_URL}job/daos-stack/job/mercury/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ mercury; \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                      \
-    ${JENKINS_URL}job/daos-stack/job/ompi/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ ompi;       \
+    ${JENKINS_URL}job/daos-stack/job/ompi/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ ompi;       \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                      \
-    ${JENKINS_URL}job/daos-stack/job/scons/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ scons;     \
+    ${JENKINS_URL}job/daos-stack/job/scons/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ scons;     \
     zypper --non-interactive --gpg-auto-import-keys ref mercury ompi scons
 RUN zypper --non-interactive install scons libyaml-devel mercury-devel \
                                      ompi-devel openssl-devel
@@ -79,9 +79,9 @@ RUN zypper --non-interactive install yasm
 
 # spdk
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                \
-    ${JENKINS_URL}job/daos-stack/job/dpdk/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ dpdk; \
+    ${JENKINS_URL}job/daos-stack/job/dpdk/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ dpdk; \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                \
-    ${JENKINS_URL}job/daos-stack/job/fio/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ fio;   \
+    ${JENKINS_URL}job/daos-stack/job/fio/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ fio;   \
     zypper --non-interactive --gpg-auto-import-keys ref dpdk fio
 RUN zypper --non-interactive install dpdk-devel fio-src libiscsi-devel cunit-devel
 
@@ -90,7 +90,7 @@ RUN zypper --non-interactive install python-rpm-macros python3-base
 
 # fuse
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                  \
-    ${JENKINS_URL}job/daos-stack/job/meson/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ meson; \
+    ${JENKINS_URL}job/daos-stack/job/meson/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ meson; \
     zypper --non-interactive --gpg-auto-import-keys ref meson
 RUN zypper --non-interactive install meson ninja
 
@@ -99,21 +99,21 @@ RUN zypper --non-interactive install man libunwind-devel gdb bc
 
 # daos
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/spdk/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ spdk;                                  \
+    ${JENKINS_URL}job/daos-stack/job/spdk/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ spdk;                                  \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/isa-l/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ isa-l;                                \
+    ${JENKINS_URL}job/daos-stack/job/isa-l/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ isa-l;                                \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/protobuf-c/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ protobuf-c;                      \
+    ${JENKINS_URL}job/daos-stack/job/protobuf-c/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ protobuf-c;                      \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/fuse/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ fuse;                                  \
+    ${JENKINS_URL}job/daos-stack/job/fuse/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ fuse;                                  \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/pmdk/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ pmdk;                                  \
+    ${JENKINS_URL}job/daos-stack/job/pmdk/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ pmdk;                                  \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/raft/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ raft;                                  \
+    ${JENKINS_URL}job/daos-stack/job/raft/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ raft;                                  \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/argobots/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ argbots;                           \
+    ${JENKINS_URL}job/daos-stack/job/argobots/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ argbots;                           \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                                 \
-    ${JENKINS_URL}job/daos-stack/job/cart/job/daos_devel/lastSuccessfulBuild/artifact/artifacts/sles12.3/ cart;                              \
+    ${JENKINS_URL}job/daos-stack/job/cart/job/daos_devel/lastSuccessfulBuild/artifact/artifacts/leap42.3/ cart;                              \
     zypper --non-interactive ar http://download.opensuse.org/repositories/devel:/languages:/go/SLE_12_SP3_Backports/devel:languages:go.repo; \
     zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo;                                 \
     zypper --non-interactive --gpg-auto-import-keys ref spdk isa-l protobuf-c                                                                \

@@ -227,7 +227,8 @@ pipeline {
                             filename 'Dockerfile-rpmbuild.sles.12.3'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
+                            additionalBuildArgs '--build-arg UID=$(id -u) ' +
+                                                '--build-arg JENKINS_URL=' +
                                                 env.JENKINS_URL +
                                                  " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
                         }
@@ -257,6 +258,58 @@ pipeline {
                     post {
                         always {
                             archiveArtifacts artifacts: 'artifacts/sles12.3/**'
+                        }
+                        success {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
+                    }
+                }
+                stage('Build RPM on Leap 42.3') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-rpmbuild.leap.42.3'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '--build-arg UID=$(id -u) ' +
+                                                '--build-arg JENKINS_URL=' +
+                                                env.JENKINS_URL +
+                                                " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/leap42.3/
+                              mkdir -p artifacts/leap42.3/
+                              rm -rf utils/rpms/_topdir/SRPMS
+                              if make -C utils/rpms srpm; then
+                                  rm -rf utils/rpms/_topdir/RPMS
+                                  if make -C utils/rpms rpms; then
+                                      ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/leap42.3/
+                                      createrepo artifacts/leap42.3/
+                                  else
+                                      exit \${PIPESTATUS[0]}
+                                  fi
+                              else
+                                  exit \${PIPESTATUS[0]}
+                              fi'''
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'artifacts/leap42.3/**'
                         }
                         success {
                             stepResult name: env.STAGE_NAME, context: "build",
@@ -1109,7 +1162,7 @@ pipeline {
                                 failure_artifacts: env.STAGE_NAME
                     }
                 }
-                stage('Test SLES12.3 RPMs') {
+                stage('Test SLES 12.3 RPMs') {
                     agent {
                         label 'ci_vm1'
                     }
@@ -1124,8 +1177,36 @@ pipeline {
                                         sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/python-pathlib/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ python-pathlib
                                         sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${BUILD_URL}artifact/artifacts/sles12.3/ daos
                                         sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
-                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
+                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_12_SP3/home:jhli.repo
                                         sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
+                                        sudo zypper --non-interactive --gpg-auto-import-keys ref
+                                        sudo zypper --non-interactive rm openmpi libfabric1
+                                        sudo zypper --non-interactive in daos-client
+                                        sudo zypper --non-interactive in daos-server
+                                        sudo zypper --non-interactive in daos-tests\n''' +
+                                        "${rpm_test_daos_test}" + '"',
+                                junit_files: null,
+                                failure_artifacts: env.STAGE_NAME
+                    }
+                }
+                stage('Test Leap 42.3 RPMs') {
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       // not yet distro: 'leap42.3',
+                                       distro: 'sles12sp3',
+                                       node_count: 1,
+                                       snapshot: true
+                        runTest script: "${rpm_test_pre}" +
+                                     '''    sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/leap42.3/ \\\$repo
+                                        done
+                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/python-pathlib/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ python-pathlib
+                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${BUILD_URL}artifact/artifacts/leap42.3/ daos
+                                        sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
+                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/openSUSE_Leap_42.3/home:jhli.repo
+                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/openSUSE_Leap_42.3/devel:libraries:c_c++.repo
                                         sudo zypper --non-interactive --gpg-auto-import-keys ref
                                         sudo zypper --non-interactive rm openmpi libfabric1
                                         sudo zypper --non-interactive in daos-client
