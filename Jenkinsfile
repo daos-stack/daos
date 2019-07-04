@@ -52,7 +52,7 @@ def rpm_test_pre = '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                                   ompi mercury spdk isa-l \
                                   fio dpdk protobuf-c     \
                                   fuse pmdk argobots raft \
-                                  cart@daos_devel; do     \
+                                  cart@PR-169; do     \
                           if [[ \\\$repo = *@* ]]; then
                               branch=\"\\\${repo#*@}\"
                               repo=\"\\\${repo%@*}\"
