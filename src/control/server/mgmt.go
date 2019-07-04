@@ -90,16 +90,29 @@ func awaitStorageFormat(config *configuration) error {
 
 	if syscall.Getuid() == 0 {
 		for i, srv := range config.Servers {
-			if ok, err := config.ext.exists(
-				iosrvSuperPath(srv.ScmMount)); err != nil {
 
-				return errors.WithMessage(
-					err, "checking superblock exists")
+			if ok, err := config.ext.exists(srv.ScmMount); err != nil {
+				return errors.WithMessage(err, "checking scm mount exists")
+			} else if !ok {
+				// attempt to mount SCM dir
+				mntType, devPath, mntOpts, err := getMntParams(&srv)
+				if err != nil {
+					return errors.WithMessage(err, "getting scm mount params")
+				}
+
+				log.Debugf("mounting scm dev %s at %s (%s)...",
+					devPath, srv.ScmMount, mntType)
+
+				err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
+				if err != nil {
+					return errors.WithMessage(err, "mounting existing scm dir")
+				}
+			}
+
+			if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+				return errors.WithMessage(err, "checking superblock exists")
 			} else if ok {
-				log.Debugf(
-					msgSkip+" (server already formatted)\n",
-					i)
-
+				log.Debugf(msgSkip+" (server already formatted)\n", i)
 				continue
 			}
 

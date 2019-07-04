@@ -145,6 +145,11 @@ func (e *ext) mount(
 	log.Debugf(op)
 	e.history = append(e.history, op)
 
+	if flags == 0 {
+		flags = uintptr(syscall.MS_NOATIME | syscall.MS_SILENT)
+		flags |= syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_NOSUID
+	}
+
 	if err := syscall.Mount(dev, mount, mntType, flags, opts); err != nil {
 		return errPermsAnnotate(os.NewSyscallError("mount", err))
 	}
