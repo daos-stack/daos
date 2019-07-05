@@ -41,6 +41,6 @@ extendedKeyUsage = clientAuth
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
 
-[ signing_shell ]
+[ signing_admin ]
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = clientAuth
