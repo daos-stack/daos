@@ -3,7 +3,7 @@
 Go app which can either be invoked with a subcommand to perform a specific task or without a subcommand which will launch an interactive shell.
 Command-line subcommands are implemented with the [go-flags](https://github.com/jessevdk/go-flags) package and interactive shell with [ishell](https://github.com/abiosoft/ishell).
 
-The management tool uses the [client API](../client) to interact with many [server](../server) instances as a gRPC client.
+The management tool uses the [client API](../../client) to interact with many [server](../../server) instances as a gRPC client.
 The management tool has no storage library dependencies and as such is suitable to be run from a login node to interact with storage nodes.
 
 <details>

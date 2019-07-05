@@ -175,6 +175,7 @@ struct shard_auxi_args {
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
+	uint64_t		 epoch;
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
@@ -188,7 +189,6 @@ struct shard_auxi_args {
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
 	daos_obj_rw_t		*api_args;
-	daos_epoch_t		 epoch;
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
@@ -196,11 +196,10 @@ struct shard_rw_args {
 
 struct shard_punch_args {
 	struct shard_auxi_args	 pa_auxi;
+	daos_obj_punch_t	*pa_api_args;
 	uuid_t			 pa_coh_uuid;
 	uuid_t			 pa_cont_uuid;
-	daos_obj_punch_t	*pa_api_args;
 	uint64_t		 pa_dkey_hash;
-	daos_epoch_t		 pa_epoch;
 	struct dtx_id		 pa_dti;
 	uint32_t		 pa_opc;
 };
@@ -208,7 +207,6 @@ struct shard_punch_args {
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
-	daos_epoch_t		 la_epoch;
 };
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,

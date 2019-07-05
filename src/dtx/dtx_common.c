@@ -330,7 +330,7 @@ dtx_leader_wait(struct dtx_leader_handle *dlh, struct dtx_conflict_entry **dces,
 	rc = ABT_future_wait(dlh->dlh_future);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
 	rc = dlh->dlh_result;
-	if (rc == -DER_INPROGRESS) {
+	if (rc == -DER_INPROGRESS && dces_cnt != NULL) {
 		struct dtx_conflict_entry	*conflict;
 		int				shard_cnt = dlh->dlh_sub_cnt;
 		int				i;
@@ -531,7 +531,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
-	rc = dtx_leader_wait(dlh, &dces, &dces_cnt);
+	rc = dtx_leader_wait(dlh, &dces, result >= 0 ? &dces_cnt : NULL);
 	if (rc == -DER_INPROGRESS && dces != NULL) {
 		/* XXX: The local modification has been done, but remote
 		 *	replica failed because of some uncommitted DTX,

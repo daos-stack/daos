@@ -1,6 +1,6 @@
 #!/usr/bin/python
-"""
-  (C) Copyright 2018-2019 Intel Corporation.
+'''
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,24 +20,30 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-"""
+'''
 
-from daos_core_base import DaosCoreBase
+from daos_perf import DaosPerf
 
-class DaosCoreTest(DaosCoreBase):
+class DaosPerfLarge(DaosPerf):
     """
-    Runs just the non-rebuild daos_test tests
-
+    Tests daos_perf with different config.
     :avocado: recursive
     """
-    def test_subtest(self):
+
+    def test_large(self):
         """
-        Test ID: DAOS-1568
-
-        Test Description: Run daos_test with a subtest argument
-
-        Use Cases: core tests for daos_test
-
-        :avocado: tags=all,regression,vm,unittest,medium,daos_test
+        Jira ID: DAOS-1714
+        Test Description: Large daos_perf test for performance purpose.
+        Use Case: Run daos_perf for scm and nvme.
+                  Run daos_perf for single and multiple number of objects.
+                  Run daos_perf with 'LARGE' and 'R2S' object class.
+                  Run the combination of above test cases with large number
+                  of clients on four servers.
+        :avocado: tags=daosperf,daosperflarge
         """
-        DaosCoreBase.run_subtest(self)
+        # set nvme size
+        pool_size_nvme = self.params.get(
+            "size", '/run/daos_perf_large/pool_size/nvme/')
+        self.daos_perf_cmd.pool_size_nvme.value = pool_size_nvme
+        # run test
+        self.runner("daos_perf_large")
