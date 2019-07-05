@@ -30,9 +30,9 @@ RUN zypper --non-interactive install rdma-core-devel libnl3-devel        \
 # mercury
 ARG JENKINS_URL=""
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f \
-    ${JENKINS_URL}job/daos-stack/job/openpa/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ openpa; \
+    ${JENKINS_URL}job/daos-stack/job/openpa/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ openpa; \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f \
-    ${JENKINS_URL}job/daos-stack/job/libfabric/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ libfabric; \
+    ${JENKINS_URL}job/daos-stack/job/libfabric/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ libfabric; \
     zypper --non-interactive ref openpa libfabric
 # our libfabric conflicts with libfabric1
 # TODO: consider if we should rename ours or replace libfabric1, etc.
@@ -132,7 +132,7 @@ RUN zypper --non-interactive rm libpmem1;                                      \
                                      ipmctl-devel readline-devel               \
                                      go${go_version} fio\ \<\ 3.4;             \
     rpm -qa | grep ^go\[1-9\]\* | grep -v ^go${go_version/\./\\.} |            \
-        xargs zypper --non-interactive rm
+        xargs -r zypper --non-interactive rm
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
