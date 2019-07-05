@@ -24,7 +24,6 @@
 package server
 
 import (
-	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -109,7 +108,7 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 	log.Debugf("DAOS config read from %s", config.Path)
 
 	// Override certificate support if specified in cliOpts
-	if cliOpts.Insecure == true {
+	if cliOpts.Insecure {
 		config.TransportConfig.AllowInsecure = true
 	}
 
@@ -229,7 +228,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		// global rank parameter should only apply to first I/O service
 		c.Servers[0].Rank = opts.Rank
 	}
-	if opts.Insecure == true {
+	if opts.Insecure {
 		c.TransportConfig.AllowInsecure = true
 	}
 	// override each per-server config
@@ -245,7 +244,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 			srv.ScmMount = c.ScmMountPath
 		}
 		if opts.Cores > 0 {
-			fmt.Println("-c option deprecated, please use -t instead")
+			log.Debugf("-c option deprecated, please use -t instead")
 			srv.Targets = int(opts.Cores)
 		}
 		// Targets should override Cores if specified in cmdline or
