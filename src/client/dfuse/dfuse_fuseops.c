@@ -359,6 +359,55 @@ err:
 }
 
 static void
+df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
+	     fuse_ino_t newparent, const char *newname, unsigned int flags)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	struct dfuse_inode_entry	*newparent_inode = NULL;
+	d_list_t			*rlink;
+	d_list_t			*rlink2;
+	int rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (parent != newparent) {
+		rlink2 = d_hash_rec_find(&fs_handle->dpi_iet, &newparent,
+					 sizeof(newparent));
+		if (!rlink2) {
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+					newparent);
+			D_GOTO(decref, rc = ENOENT);
+		}
+
+		newparent_inode = container_of(rlink2, struct dfuse_inode_entry,
+					       ie_htl);
+	}
+
+	if (!parent_inode->ie_dfs->dfs_ops->rename)
+		D_GOTO(decref, rc = EXDEV);
+
+	parent_inode->ie_dfs->dfs_ops->rename(req, parent_inode, name,
+					      newparent_inode, newname, flags);
+
+	if (newparent_inode)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+static void
 dfuse_fuse_destroy(void *userdata)
 {
 	DFUSE_TRA_INFO(userdata, "destroy callback");
@@ -376,6 +425,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.unlink		= dfuse_cb_unlink,
 	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
+	.rename		= dfuse_cb_rename,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
@@ -407,6 +457,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
 	fuse_ops->create	= df_ll_create;
+	fuse_ops->rename	= df_ll_rename;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;
