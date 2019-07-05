@@ -22,11 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-from daos_core_test import DaosCoreTest
+from daos_core_base import DaosCoreBase
 
-class DaosCoreTestRebuild(DaosCoreTest):
+class DaosCoreTestRebuild(DaosCoreBase):
     """
     Runs just the daos_test rebuild tests
+
     :avocado: recursive
     """
     def test_rebuild(self):
@@ -37,4 +38,4 @@ class DaosCoreTestRebuild(DaosCoreTest):
         Use case: Balance testing load betweeen hardware and VM clusters.
         :avocado: tags=all,pr,hw,unittest,medium,daos_test_rebuild
         """
-        DaosCoreTest.test_subtest(self)
+        DaosCoreBase.run_subtest(self)
