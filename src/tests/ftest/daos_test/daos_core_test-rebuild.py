@@ -1,5 +1,5 @@
 #!/usr/bin/python
-"""
+'''
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,24 +20,22 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-"""
+'''
 
 from daos_core_base import DaosCoreBase
 
-class DaosCoreTest(DaosCoreBase):
+class DaosCoreTestRebuild(DaosCoreBase):
     """
-    Runs just the non-rebuild daos_test tests
+    Runs just the daos_test rebuild tests
 
     :avocado: recursive
     """
-    def test_subtest(self):
+    def test_rebuild(self):
         """
-        Test ID: DAOS-1568
-
-        Test Description: Run daos_test with a subtest argument
-
-        Use Cases: core tests for daos_test
-
-        :avocado: tags=all,regression,vm,unittest,medium,daos_test
+        Jira ID: DAOS-2770
+        Test Description: Purpose of this test is to run just the daos_test
+                          rebuild tests.
+        Use case: Balance testing load betweeen hardware and VM clusters.
+        :avocado: tags=all,pr,hw,unittest,medium,daos_test_rebuild
         """
         DaosCoreBase.run_subtest(self)
