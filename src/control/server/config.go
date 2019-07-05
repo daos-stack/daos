@@ -55,11 +55,12 @@ func (c *configuration) loadConfig() error {
 
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "reading file")
 	}
 
 	if err = c.parse(bytes); err != nil {
-		return err
+		return errors.WithMessage(err, "parse failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples")
 	}
 
 	return nil
@@ -103,7 +104,7 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return config, errors.Wrap(err, "read config file")
+		return config, errors.WithMessagef(err, "loading %s", config.Path)
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
 

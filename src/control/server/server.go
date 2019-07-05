@@ -64,14 +64,14 @@ func Main() error {
 
 	host, err := os.Hostname()
 	if err != nil {
-		log.Errorf("Failed to get hostname: %+v", err)
+		log.Errorf("Failed to get hostname: %s", err)
 		return err
 	}
 
 	// Parse configuration file and load values.
 	config, err := loadConfigOpts(opts, host)
 	if err != nil {
-		log.Errorf("Failed to load config options: %+v", err)
+		log.Errorf("Failed to load config options: %s", err)
 		return err
 	}
 
