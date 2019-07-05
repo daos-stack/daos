@@ -174,7 +174,7 @@ main(int argc, char **argv)
 
 	if (!dfuse_info->di_mountpoint) {
 		DFUSE_LOG_ERROR("Mountpoint is required");
-		D_GOTO(out, ret = -DER_INVAL);
+		D_GOTO(out_free, ret = -DER_INVAL);
 	}
 
 	/* Is this required, or can we assume some kind of default for
@@ -182,7 +182,7 @@ main(int argc, char **argv)
 	 */
 	if (!svcl) {
 		DFUSE_LOG_ERROR("Svcl is required");
-		D_GOTO(out, ret = -DER_INVAL);
+		D_GOTO(out_free, ret = -DER_INVAL);
 	}
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
@@ -190,24 +190,24 @@ main(int argc, char **argv)
 	if (dfuse_info->di_pool &&
 	    (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0)) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
-		D_GOTO(out, ret = -DER_INVAL);
+		D_GOTO(out_free, ret = -DER_INVAL);
 	}
 
 	if (dfuse_info->di_cont &&
 	    (uuid_parse(dfuse_info->di_cont, co_uuid) < 0)) {
 		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(out, ret = -DER_INVAL);
+		D_GOTO(out_free, ret = -DER_INVAL);
 	}
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
 		DFUSE_LOG_ERROR("Invalid pool service rank list");
-		D_GOTO(out, ret = -DER_INVAL);
+		D_GOTO(out_free, ret = -DER_INVAL);
 	}
 
 	D_ALLOC_PTR(dfs);
 	if (!dfs) {
-		D_GOTO(out, 0);
+		D_GOTO(out_free, 0);
 	}
 
 	if (dfuse_info->di_pool) {
@@ -219,7 +219,7 @@ main(int argc, char **argv)
 		if (rc != -DER_SUCCESS) {
 			D_FREE(dfs);
 			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
-			D_GOTO(out, 0);
+			D_GOTO(out_free, 0);
 		}
 		pool_open = true;
 
@@ -272,11 +272,12 @@ out_open:
 			daos_pool_disconnect(dfs->dfs_poh, NULL);
 		D_FREE(dfs);
 	}
-out:
+out_free:
 	daos_rank_list_free(dfuse_info->di_svcl);
 	DFUSE_TRA_DOWN(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	D_FREE(dfuse_info);
+out:
 	daos_fini();
 
 	/* Convert CaRT error numbers to something that can be returned to the
