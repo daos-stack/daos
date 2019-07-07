@@ -94,7 +94,7 @@ uint64_t			t_wait;
 uint64_t			t_pause;
 bool				t_update_for_fetch;
 bool				t_keep_container;
-daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
+daos_oclass_id_t		obj_class = OC_SX;
 
 struct test {
 	/* Test type */
@@ -577,7 +577,7 @@ object_open(int t_id, int enum_flag, daos_handle_t *object)
 		oid.hi = t_id + 1;
 		oid.lo = t_id;
 	}
-	daos_obj_generate_id(&oid, 0, obj_class);
+	daos_obj_generate_id(&oid, 0, obj_class, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1628,27 +1628,27 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'j':
 			if (!strcasecmp(optarg, "TINY")) {
-				obj_class = DAOS_OC_TINY_RW;
+				obj_class = OC_S1;
 			} else if (!strcasecmp(optarg, "SMALL")) {
-				obj_class = DAOS_OC_SMALL_RW;
+				obj_class = OC_S4;
 			} else if (!strcasecmp(optarg, "LARGE")) {
-				obj_class = DAOS_OC_LARGE_RW;
+				obj_class = OC_SX;
 			} else if (!strcasecmp(optarg, "ECHO")) {
 				obj_class = DAOS_OC_ECHO_TINY_RW;
 			} else if (!strcasecmp(optarg, "R2")) {
-				obj_class = DAOS_OC_R2_RW;
+				obj_class = OC_RP_2G2;
 			} else if (!strcasecmp(optarg, "R2S")) {
-				obj_class = DAOS_OC_R2S_RW;
+				obj_class = OC_RP_2G1;
 			} else if (!strcasecmp(optarg, "R3")) {
-				obj_class = DAOS_OC_R3_RW;
+				obj_class = OC_RP_3G2;
 			} else if (!strcasecmp(optarg, "R3S")) {
-				obj_class = DAOS_OC_R3S_RW;
+				obj_class = OC_RP_3G1;
 			} else if (!strcasecmp(optarg, "R4")) {
-				obj_class = DAOS_OC_R4_RW;
+				obj_class = OC_RP_4G2;
 			} else if (!strcasecmp(optarg, "R4S")) {
-				obj_class = DAOS_OC_R4S_RW;
+				obj_class = OC_RP_4G1;
 			} else if (!strcasecmp(optarg, "REPL_MAX")) {
-				obj_class = DAOS_OC_REPL_MAX_RW;
+				obj_class = OC_RP_XSF;
 			} else {
 				fprintf(stderr,
 					"\ndaosbench: Unknown object class\n");
@@ -1790,8 +1790,8 @@ test_init(struct test *test, int argc, char *argv[])
 		return 2;
 	}
 
-	if (t_kill_server && obj_class != DAOS_OC_REPL_MAX_RW &&
-	    obj_class != DAOS_OC_R3_RW) {
+	if (t_kill_server && obj_class != OC_RP_XSF &&
+	    obj_class != OC_RP_3G2) {
 		if (comm_world_rank == 0)
 			fprintf(stderr,
 				"daosbench: REPL or REPL_MAX obj-class "

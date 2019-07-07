@@ -30,7 +30,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#include <daos/common.h>
+#include "daos.h"
 #include "daos_fs.h"
 
 #include "dfuse_gah.h"

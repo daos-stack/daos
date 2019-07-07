@@ -307,10 +307,10 @@ obj_get_replicas(struct dc_object *obj)
 	if (oc_attr->ca_resil != DAOS_RES_REPL)
 		return 1;
 
-	if (oc_attr->u.repl.r_num == DAOS_OBJ_REPL_MAX)
+	if (oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return obj->cob_grp_size;
 
-	return oc_attr->u.repl.r_num;
+	return oc_attr->u.rp.r_num;
 }
 
 int
@@ -2334,7 +2334,7 @@ static int
 check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 		  daos_key_t *akey, daos_recx_t *recx)
 {
-	daos_ofeat_t ofeat = (oid.hi & DAOS_OFEAT_MASK) >> DAOS_OFEAT_SHIFT;
+	daos_ofeat_t ofeat = daos_obj_id2feat(oid);
 
 	if (!(flags & (DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX))) {
 		D_ERROR("Key type or recx not specified in flags.\n");

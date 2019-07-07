@@ -571,7 +571,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		return shard->po_shard;
 	}
 
-	replicas = oc_attr->u.repl.r_num;
+	replicas = oc_attr->u.rp.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX)
 		replicas = grp_size;
 

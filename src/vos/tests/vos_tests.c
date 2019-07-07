@@ -55,16 +55,36 @@ print_usage()
 	print_message("Default <vos_tests> runs all tests\n");
 }
 
+static int dkey_feats[] = {
+	0,	/* regular opaque key */
+	DAOS_OF_DKEY_UINT64,
+	DAOS_OF_DKEY_LEXICAL,
+	-1,
+};
+
+static int akey_feats[] = {
+	0,	/* regular opaque key */
+	DAOS_OF_AKEY_UINT64,
+	DAOS_OF_AKEY_LEXICAL,
+	-1,
+};
+
 static inline int
 run_all_tests(int keys, bool nest_iterators)
 {
 	int	failed = 0;
+	int	feats;
 	int	i;
+	int	j;
 
 	failed += run_pool_test();
 	failed += run_co_test();
-	for (i = 0; i != DAOS_OF_MASK; i++)
-		failed += run_io_test(i, keys, nest_iterators);
+	for (i = 0; dkey_feats[i] >= 0; i++) {
+		for (j = 0; akey_feats[j] >= 0; j++) {
+			feats = dkey_feats[i] | akey_feats[j];
+			failed += run_io_test(feats, keys, nest_iterators);
+		}
+	}
 	failed += run_discard_tests();
 	failed += run_aggregate_tests(false);
 	failed += run_dtx_tests();

@@ -134,7 +134,7 @@ struct cmd_args_s {
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
 	do {								\
 		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
-		    ((ap)->oclass == DAOS_OC_UNKNOWN)	||		\
+		    ((ap)->oclass == OC_UNKNOWN)	||		\
 		    ((ap)->chunk_size == 0)) {				\
 			fprintf(stderr, "create by --path : must also "	\
 					"specify --type, --oclass, "	\
@@ -146,7 +146,7 @@ struct cmd_args_s {
 #define ARGS_VERIFY_PATH_NON_CREATE(ap, label, rcexpr)			\
 	do {								\
 		if (((ap)->type != DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
-		    ((ap)->oclass != DAOS_OC_UNKNOWN)	||		\
+		    ((ap)->oclass != OC_UNKNOWN)	||		\
 		    ((ap)->chunk_size != 0)) {				\
 			fprintf(stderr, "query by --path : do not "	\
 					"specify --type, --oclass, "	\
