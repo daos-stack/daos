@@ -28,8 +28,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -82,25 +80,6 @@ func (c *controlService) Teardown() {
 	}
 }
 
-func IsMountPoint(path string) (bool, error) {
-	pStat, err := os.Stat(path)
-	if err != nil {
-		return false, err
-	}
-
-	rStat, err := os.Stat(filepath.Dir(strings.TrimSuffix(path, "/")))
-	if err != nil {
-		return false, err
-	}
-
-	if pStat.Sys().(*syscall.Stat_t).Dev == rStat.Sys().(*syscall.Stat_t).Dev {
-		return false, nil
-	}
-
-	// if root dir has different parent device than path then probably a mountpoint
-	return true, nil
-}
-
 // awaitStorageFormat checks if running as root and server superblocks exist,
 // if both conditions are true, wait until storage is formatted through client
 // API calls from management tool. Then drop privileges of running process.
@@ -111,16 +90,16 @@ func awaitStorageFormat(config *configuration) error {
 
 	if syscall.Getuid() == 0 {
 		for i, srv := range config.Servers {
-			isMount, err := IsMountPoint(srv.ScmMount)
+			isMount, err := config.ext.isMountPoint(srv.ScmMount)
 			if err == nil && !isMount {
-				// attempt to mount SCM dir
+				log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
+
 				mntType, devPath, mntOpts, err := getMntParams(&srv)
 				if err != nil {
 					return errors.WithMessage(err, "getting scm mount params")
 				}
 
-				log.Debugf("mounting scm dev %s at %s (%s)...",
-					devPath, srv.ScmMount, mntType)
+				log.Debugf("mounting scm %s at %s (%s)...", devPath, srv.ScmMount, mntType)
 
 				err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
 				if err != nil {
