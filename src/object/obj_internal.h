@@ -36,9 +36,9 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
+#include <daos/object.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
-#include <daos_types.h>
 
 #include "obj_rpc.h"
 
@@ -219,7 +219,7 @@ int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int
 ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
-		     daos_oclass_attr_t *oca, uint64_t *tgt_set);
+		     struct daos_oclass_attr *oca, uint64_t *tgt_set);
 
 int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		       void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -268,8 +268,7 @@ void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
-ABT_pool
-ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
+ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t
@@ -282,6 +281,9 @@ obj_dkey2hash(daos_key_t *dkey)
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
 }
+
+int  obj_utils_init(void);
+void obj_utils_fini(void);
 
 /* obj_class.c */
 int obj_ec_codec_init(void);

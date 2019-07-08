@@ -127,7 +127,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 			    NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
 
 	/* Every rank updates timestep 1. */
 	io(UPDATE, arg, coh, oid, "timestamp 1");

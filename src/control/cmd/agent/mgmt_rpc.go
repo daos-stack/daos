@@ -36,6 +36,7 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 const (
@@ -48,7 +49,8 @@ const (
 // to MS.
 type mgmtModule struct {
 	// The access point
-	ap string
+	ap   string
+	tcfg *security.TransportConfig
 }
 
 func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
@@ -74,7 +76,13 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 
 	log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
 
-	conn, err := grpc.Dial(mod.ap, grpc.WithInsecure())
+	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
+	if err != nil {
+		return nil, err
+	}
+	opts := []grpc.DialOption{dialOpt}
+
+	conn, err := grpc.Dial(mod.ap, opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", mod.ap)
 	}
