@@ -36,6 +36,7 @@ import fcntl
 import errno
 import yaml
 
+from cmd_utils import Command, CommandParam
 from avocado.utils import genio
 
 SESSIONS = {}
@@ -45,6 +46,36 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
+
+class ServerCmdUtils(object):
+    """Defines a object representing a server command."""
+
+    def __init__(self):
+        """Create a server Command object"""
+
+        self.command = CommandParam("{}")       # i.e storage, network
+        self.action = CommandParam("{}")        # i.e scan, format, update
+
+        self.cmd = Command("daos_server", "/run/daos_server/*", self.__dict__)
+
+    def execute(self, test, basepath = ""):
+        """Run the server command
+
+        Args:
+            test (object): Avocado test object
+            basepath (str, optional): DAOS install dir. Defaults to "".
+
+        Return:
+            Command output(stdout or stderr)
+        """
+
+        # Set param values
+        self.cmd.set_param_values(test)
+
+        # Get the command string
+        command = os.path.join(basepath, 'install', 'bin', self.cmd.__str__())
+
+        return self.cmd.run(command)
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """
