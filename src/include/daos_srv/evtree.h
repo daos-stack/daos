@@ -380,6 +380,7 @@ struct evt_policy_ops {
 	 * Calculate weight of a rectangle \a rect and return it to \a weight.
 	 */
 	int	(*po_rect_weight)(struct evt_context *tcx,
+				  daos_epoch_t epoch,
 				  const struct evt_rect *rect,
 				  struct evt_weight *weight);
 
