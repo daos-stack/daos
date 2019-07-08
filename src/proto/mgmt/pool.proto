@@ -49,11 +49,12 @@ message CreatePoolResp {
 
 // DestroyPoolReq supplies pool identifier and force flag.
 message DestroyPoolReq {
-	string uuid = 1;
-	bool force = 2;
+	string uuid = 1; // uuid of pool to destroy
+	string sys = 2; // DAOS system identifier
+	bool force = 3; // destroy regardless of active connections
 }
 
-// DestroyPoolResp returns status of processed request.
+// DestroyPoolResp returns resultant state of destroy operation.
 message DestroyPoolResp {
 	DaosRequestStatus status = 1;
 }

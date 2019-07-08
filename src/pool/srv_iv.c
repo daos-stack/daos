@@ -29,13 +29,13 @@
 #include <daos/pool_map.h>
 #include "srv_internal.h"
 #include <daos_srv/iv.h>
+#include <daos_prop.h>
 
 uint32_t
 pool_iv_map_ent_size(int nr)
 {
 	return pool_buf_size(nr) +
-	       sizeof(struct pool_iv_entry) -
-	       sizeof(struct pool_buf);
+	       sizeof(struct pool_iv_entry) - sizeof(struct pool_buf);
 }
 
 static uint32_t

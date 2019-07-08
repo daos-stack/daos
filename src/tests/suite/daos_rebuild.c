@@ -36,7 +36,7 @@
 
 #define KEY_NR		100
 #define OBJ_NR		10
-#define OBJ_CLS		DAOS_OC_R3S_RW
+#define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
 #define REBUILD_POOL_SIZE	(4ULL << 30)

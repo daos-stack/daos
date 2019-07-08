@@ -24,20 +24,17 @@
 package main
 
 import (
-	"os"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
-func init() {
-	log.NewDefaultLogger(log.Error, "dmg_tests: ", os.Stderr)
-}
-
 func TestHasConnection(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	var shelltests = []struct {
 		results ResultMap
 		out     string
@@ -78,12 +75,9 @@ func TestHasConnection(t *testing.T) {
 	}
 }
 
-func marshal(i interface{}) string {
-	s, _ := StructsToString(i)
-	return s
-}
-
 func TestCheckSprint(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	var shelltests = []struct {
 		m   string
 		out string

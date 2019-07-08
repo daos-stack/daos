@@ -105,7 +105,7 @@ def start_server(binfo):
     cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
     cmd += "-o {} ".format(config_file)
-    cmd += "-d ./ -t 1 -m vos,rdb,rsvc,rdbt "
+    cmd += "-d ./ -t 1 -m vos,rdb,rsvc,rdbt -i"
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
 

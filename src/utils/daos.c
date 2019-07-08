@@ -36,6 +36,7 @@
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
+#include <daos/object.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
@@ -123,7 +124,7 @@ cmd_args_print(struct cmd_args_s *ap)
 	if (ap == NULL)
 		return;
 
-	daos_unparse_oclass(ap->oclass, oclass);
+	daos_oclass_id2str(ap->oclass, oclass);
 	daos_unparse_ctype(ap->type, type);
 
 	D_INFO("\tDAOS system name: %s\n", ap->sysname);
@@ -400,8 +401,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			}
 			break;
 		case 'o':
-			daos_parse_oclass(optarg, &ap->oclass);
-			if (ap->oclass == DAOS_OC_UNKNOWN) {
+			daos_oclass_str2id(optarg, &ap->oclass);
+			if (ap->oclass == OC_UNKNOWN) {
 				fprintf(stderr, "unknown object class: %s\n",
 						optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);

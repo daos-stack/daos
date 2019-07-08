@@ -5,9 +5,11 @@ socket_dir: /var/run/daos_server
 access_points:
 - localhost
 port: 10000
-ca_cert: ""
-cert: ./.daos/daos_server.crt
-key: ./.daos/daos_server.key
+transport_config:
+  allow_insecure: false
+  ca_cert: .daos/daosCA.crt
+  cert: .daos/daos_server.crt
+  key: .daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
@@ -23,9 +25,11 @@ socket_dir: /var/run/daos_server
 access_points:
 - localhost
 port: 10000
-ca_cert: ""
-cert: ./.daos/daos_server.crt
-key: ./.daos/daos_server.key
+transport_config:
+  allow_insecure: false
+  ca_cert: .daos/daosCA.crt
+  cert: .daos/daos_server.crt
+  key: .daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []
@@ -42,9 +46,11 @@ access_points:
 - foo1.com:9999
 - bar1.com:1111
 port: 11111
-ca_cert: /tmp/ca.crt
-cert: /tmp/serv.crt
-key: /tmp/serv.key
+transport_config:
+  allow_insecure: false
+  ca_cert: /tmp/ca.crt
+  cert: /tmp/serv.crt
+  key: /tmp/serv.key
 fault_path: /foo.com
 fault_cb: /tmp/daos_fault_cb.sh
 fabric_ifaces:
@@ -57,4 +63,3 @@ bdev_include:
 bdev_exclude:
 - pcie1000.0.0.0.7
 hyperthreads: true
-

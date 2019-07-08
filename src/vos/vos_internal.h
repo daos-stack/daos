@@ -163,6 +163,7 @@ struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
 struct dtx_handle		*vsa_dth;
 bool vsa_nvme_init;
+extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
 vos_xsctxt_get(void)

@@ -40,6 +40,9 @@ import (
 const (
 	sudoUserEnv = "SUDO_USER"
 	rootUser    = "root"
+	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
+	// log message context refers to caller not callee.
+	UtilLogDepth = 4
 )
 
 // GetAbsInstallPath retrieves absolute path of files in daos install dir
@@ -125,8 +128,8 @@ func WriteSlice(path string, slice []string) (err error) {
 			return
 		}
 	}
-	file.Sync()
-	return
+
+	return file.Sync()
 }
 
 // WriteString writes string to specified file, wrapper around WriteSlice.
