@@ -27,9 +27,6 @@
 extern "C" {
 #endif
 
-#include <daos/common.h>
-#include <daos_types.h>
-
 /**
  * Predefined object classes
  * It describes schema of data distribution & protection.

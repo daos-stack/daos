@@ -1905,9 +1905,9 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	case S_IFREG:
 	{
 		char		buf[1024];
-		daos_iov_t	ghdl;
+		d_iov_t		ghdl;
 
-		daos_iov_set(&ghdl, buf, 1024);
+		d_iov_set(&ghdl, buf, 1024);
 
 		rc = daos_array_local2global(obj->oh, &ghdl);
 		if (rc)

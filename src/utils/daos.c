@@ -505,7 +505,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	return 0;
 
 out_free:
-	daos_rank_list_free(ap->mdsrv);
+	d_rank_list_free(ap->mdsrv);
 	if (ap->sysname != NULL)
 		D_FREE(ap->sysname);
 	if (ap->mdsrv_str != NULL)
@@ -948,7 +948,7 @@ main(int argc, char *argv[])
 	rc = hdlr(&dargs);
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
-	daos_rank_list_free(dargs.mdsrv);
+	d_rank_list_free(dargs.mdsrv);
 
 	daos_fini();
 
