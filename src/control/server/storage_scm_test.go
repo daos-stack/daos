@@ -216,10 +216,7 @@ func TestFormatScm(t *testing.T) {
 				"syscall: calling unmount with /mnt/daos, MNT_DETACH",
 				"os: removeall /mnt/daos",
 				"os: mkdirall /mnt/daos, 0777",
-				// 33806 is the combination of the following
-				// syscall flags: MS_NOATIME|MS_SILENT|MS_NODEV
-				// |MS_NOEXEC|MS_NOSUID
-				"syscall: mount tmpfs, /mnt/daos, tmpfs, 33806, size=6g",
+				"syscall: mount tmpfs, /mnt/daos, tmpfs, 0, size=6g",
 			},
 			desc: "ram success",
 		},
@@ -240,10 +237,7 @@ func TestFormatScm(t *testing.T) {
 				"cmd: wipefs -a /dev/pmem0",
 				"cmd: mkfs.ext4 /dev/pmem0",
 				"os: mkdirall /mnt/daos, 0777",
-				// 33806 is the combination of the following
-				// syscall flags: MS_NOATIME|MS_SILENT|MS_NODEV
-				// |MS_NOEXEC|MS_NOSUID
-				"syscall: mount /dev/pmem0, /mnt/daos, ext4, 33806, dax",
+				"syscall: mount /dev/pmem0, /mnt/daos, ext4, 0, dax",
 			},
 			desc: "dcpm success",
 		},

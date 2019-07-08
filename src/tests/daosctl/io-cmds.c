@@ -58,7 +58,7 @@
  * at present.
  */
 
-static int dts_obj_class = DAOS_OC_TINY_RW;
+static int dts_obj_class = OC_S1;
 
 struct io_cmd_options {
 	char          *server_group;

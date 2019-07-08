@@ -52,6 +52,10 @@ dc_obj_init(void)
 		D_DEBUG(DB_IO, "Full dtx mode by default\n");
 	}
 
+	rc = obj_utils_init();
+	if (rc)
+		goto out;
+
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
 				NULL, DAOS_OBJ_MODULE);
 	if (rc != 0) {
@@ -75,4 +79,5 @@ dc_obj_fini(void)
 {
 	daos_rpc_unregister(&obj_proto_fmt);
 	obj_ec_codec_fini();
+	obj_utils_fini();
 }

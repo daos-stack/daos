@@ -64,12 +64,12 @@ func (m *mockUpdateStorageServer) Send(resp *pb.UpdateStorageResp) error {
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass ScmClass, scmDevs []string, scmSize int,
-	bdevClass BdevClass, bdevDevs []string, existsRet bool) *configuration {
+	bdevClass BdevClass, bdevDevs []string, existsRet bool,
+) *configuration {
 
-	c := newDefaultConfiguration(
-		newMockExt(
-			nil, existsRet, mountRet, unmountRet, mkdirRet,
-			removeRet))
+	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
+		true, unmountRet, mkdirRet, removeRet))
+
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount
 	c.Servers[0].ScmClass = scmClass
