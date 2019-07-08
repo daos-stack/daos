@@ -37,6 +37,7 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/dtx.h>
+#include <daos/object.h>
 
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.

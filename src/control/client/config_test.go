@@ -103,17 +103,28 @@ func TestLoadConfigFailures(t *testing.T) {
 	}
 	testFile.Close()
 
-	_, err = client.GetConfig(testFile.Name())
-	if err == nil {
-		t.Fatalf("Expected GetConfig() to fail on unparseable file")
-	}
+	t.Run("unparseable file", func(t *testing.T) {
+		_, err := client.GetConfig(testFile.Name())
+		if err == nil {
+			t.Fatal("Expected GetConfig() to fail on unparseable file")
+		}
+	})
 
 	if err := os.Chmod(testFile.Name(), 0000); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = client.GetConfig(testFile.Name())
-	if err == nil {
-		t.Fatalf("Expected GetConfig() to fail on unreadable file")
-	}
+	t.Run("unreadable file", func(t *testing.T) {
+		_, err := client.GetConfig(testFile.Name())
+		if err == nil {
+			t.Fatal("Expected GetConfig() to fail on unreadable file")
+		}
+	})
+
+	t.Run("nonexistent file", func(t *testing.T) {
+		_, err := client.GetConfig("/this/is/a/bad/path.yml")
+		if err == nil {
+			t.Fatal("Expected GetConfig() to fail on nonexistent file")
+		}
+	})
 }
