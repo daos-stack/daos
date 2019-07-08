@@ -27,7 +27,6 @@
 #define REQ_NAME request
 #define POOL_NAME dpi_symlink
 #define TYPE_NAME entry_req
-#include "dfuse_ops.h"
 
 static const struct dfuse_request_api api;
 

@@ -39,7 +39,8 @@ import (
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
-// controlService type is the data container for the service.
+// controlService implements the control plane control service, satisfying
+// pb.MgmtCtlServer, and is the data container for the service.
 type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
@@ -89,16 +90,29 @@ func awaitStorageFormat(config *configuration) error {
 
 	if syscall.Getuid() == 0 {
 		for i, srv := range config.Servers {
-			if ok, err := config.ext.exists(
-				iosrvSuperPath(srv.ScmMount)); err != nil {
+			isMount, err := config.ext.isMountPoint(srv.ScmMount)
+			if err == nil && !isMount {
+				log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
 
-				return errors.WithMessage(
-					err, "checking superblock exists")
+				mntType, devPath, mntOpts, err := getMntParams(&srv)
+				if err != nil {
+					return errors.WithMessage(err, "getting scm mount params")
+				}
+
+				log.Debugf("mounting scm %s at %s (%s)...", devPath, srv.ScmMount, mntType)
+
+				err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
+				if err != nil {
+					return errors.WithMessage(err, "mounting existing scm dir")
+				}
+			} else if !os.IsNotExist(err) {
+				return errors.WithMessage(err, "checking scm mounted")
+			}
+
+			if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+				return errors.WithMessage(err, "checking superblock exists")
 			} else if ok {
-				log.Debugf(
-					msgSkip+" (server already formatted)\n",
-					i)
-
+				log.Debugf(msgSkip+" (server already formatted)\n", i)
 				continue
 			}
 

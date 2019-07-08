@@ -163,7 +163,8 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
         server_cmd.extend(env_args)
-        server_cmd.extend([daos_srv_bin,
+	# For now run server in insecure mode until Certificate tests are in place
+        server_cmd.extend([daos_srv_bin, "-i",
                            "-a", os.path.join(basepath, "install", "tmp"),
                            "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
 

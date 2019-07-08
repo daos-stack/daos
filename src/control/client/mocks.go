@@ -29,6 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
@@ -287,7 +288,7 @@ type mockControl struct {
 	svcClient  pb.MgmtSvcClient
 }
 
-func (m *mockControl) connect(addr string) error {
+func (m *mockControl) connect(addr string, cfg *security.TransportConfig) error {
 	if m.connectRet == nil {
 		m.address = addr
 	}
@@ -335,7 +336,7 @@ type mockControllerFactory struct {
 	connectRet error
 }
 
-func (m *mockControllerFactory) create(address string) (Control, error) {
+func (m *mockControllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
 	// returns controller with mock properties specified in constructor
 	cClient := newMockMgmtCtlClient(
 		m.features, m.ctrlrs, m.ctrlrResults,
@@ -347,7 +348,7 @@ func (m *mockControllerFactory) create(address string) (Control, error) {
 	controller := newMockControl(
 		address, m.state, m.connectRet, cClient, sClient)
 
-	err := controller.connect(address)
+	err := controller.connect(address, cfg)
 
 	return controller, err
 }

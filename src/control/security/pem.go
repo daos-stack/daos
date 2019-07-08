@@ -26,12 +26,15 @@ package security
 import (
 	"crypto"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -48,6 +51,37 @@ type insecureError struct {
 func (e *insecureError) Error() string {
 	return fmt.Sprintf("%s has insecure permissions set to %#o",
 		e.filename, e.perms)
+}
+
+func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificate, *x509.CertPool, error) {
+	caPEM, err := LoadPEMData(caRootPath, SafeCertPerm)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "could not load caRoot")
+	}
+
+	certPEM, err := LoadPEMData(certPath, SafeCertPerm)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "could not load cert")
+	}
+
+	keyPEM, err := LoadPEMData(keyPath, SafeKeyPerm)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "could not load key")
+	}
+
+	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "could not create X509KeyPair")
+	}
+
+	certPool := x509.NewCertPool()
+
+	added := certPool.AppendCertsFromPEM(caPEM)
+	if !added {
+		return nil, nil, errors.Wrapf(err, "unable to append caRoot to cert pool")
+	}
+
+	return &certificate, certPool, nil
 }
 
 func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {

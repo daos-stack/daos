@@ -49,12 +49,16 @@ enum {
 };
 
 static struct evt_policy_ops evt_ssof_pol_ops;
+static struct evt_policy_ops evt_sdist_pol_ops;
+static struct evt_policy_ops evt_sdist_even_pol_ops;
 /**
  * Tree policy table.
  * - Sorted by Start Offset(SSOF): it is the only policy for now.
  */
 static struct evt_policy_ops *evt_policies[] = {
 	&evt_ssof_pol_ops,
+	&evt_sdist_pol_ops,
+	&evt_sdist_even_pol_ops,
 	NULL,
 };
 
@@ -827,8 +831,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
 /**
  * Create a evtree context for create or open
  *
- * \param root_off	[IN]	Optional, root memory offset for open
- * \param root		[IN]	Optional, root address for inplace open
+ * \param root		[IN]	root address for inplace open
  * \param feats		[IN]	Optional, feature bits for create
  * \param order		[IN]	Optional, tree order for create
  * \param uma		[IN]	Memory attribute for the tree
@@ -837,13 +840,16 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param tcx_pp	[OUT]	The returned tree context
  */
 static int
-evt_tcx_create(umem_off_t root_off, struct evt_root *root,
-	       uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       daos_handle_t coh, void *info, struct evt_context **tcx_pp)
+evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
+	       struct umem_attr *uma, daos_handle_t coh, void *info,
+	       struct evt_context **tcx_pp)
 {
 	struct evt_context	*tcx;
 	int			 depth;
 	int			 rc;
+	int			 policy;
+
+	D_ASSERT(root != NULL);
 
 	D_ALLOC_PTR(tcx);
 	if (tcx == NULL)
@@ -851,10 +857,6 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	tcx->tc_magic = EVT_HDL_ALIVE;
-	tcx->tc_root_off = UMOFF_NULL;
-
-	/* XXX choose ops based on feature bits */
-	tcx->tc_ops = evt_policies[0];
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -863,15 +865,10 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 	}
 	tcx->tc_blks_info = info;
 
-	if (!UMOFF_IS_NULL(root_off)) { /* non-inplace tree open */
-		tcx->tc_root_off = root_off;
-		if (root == NULL)
-			root = umem_off2ptr(&tcx->tc_umm, root_off);
-	}
 	tcx->tc_root = root;
 	tcx->tc_coh = coh;
 
-	if (root == NULL || feats != -1) { /* tree creation */
+	if (feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
 		tcx->tc_order	= order;
 		depth		= 0;
@@ -888,9 +885,26 @@ evt_tcx_create(umem_off_t root_off, struct evt_root *root,
 		tcx->tc_order	= root->tr_order;
 		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
-		V_TRACE(DB_TRACE, "Load tree context from "DF_U64"\n",
-			root_off);
+		V_TRACE(DB_TRACE, "Load tree context from %p\n", root);
 	}
+
+	policy = tcx->tc_feats & EVT_FEATS_SUPPORTED;
+	switch (policy) {
+	case EVT_FEAT_SORT_SOFF:
+		tcx->tc_ops = evt_policies[0];
+		break;
+	case EVT_FEAT_SORT_DIST:
+		tcx->tc_ops = evt_policies[1];
+		break;
+	case EVT_FEAT_SORT_DIST_EVEN:
+		tcx->tc_ops = evt_policies[2];
+		break;
+	default:
+		D_ERROR("Bad sort policy specified: 0x%x\n", policy);
+		D_GOTO(failed, rc = -DER_INVAL);
+	}
+	D_DEBUG(DB_IO, "EVTree sort policy is 0x%x\n", policy);
+
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
@@ -916,8 +930,8 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 	if (!tcx->tc_root || tcx->tc_root->tr_feats == 0)
 		return -DER_INVAL;
 
-	rc = evt_tcx_create(tcx->tc_root_off, tcx->tc_root, -1, -1, &uma,
-			    tcx->tc_coh, tcx->tc_blks_info, tcx_pp);
+	rc = evt_tcx_create(tcx->tc_root, -1, -1, &uma, tcx->tc_coh,
+			    tcx->tc_blks_info, tcx_pp);
 	return rc;
 }
 
@@ -1196,22 +1210,16 @@ evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"\n",
 		DP_RECT(&ent->ei_rect), DP_RECT(evt_node_mbr_get(tcx, nd)));
 
-	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent);
-	if (rc == 0) {
-		if (nd->tn_nr == 1) {
-			nd->tn_mbr = ent->ei_rect;
-			changed = true;
-		} else {
-			changed = evt_rect_merge(&nd->tn_mbr, &ent->ei_rect);
-		}
-		V_TRACE(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
-			DP_RECT(evt_node_mbr_get(tcx, nd)), nd->tn_nr);
-	}
+	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed);
+	if (rc != 0)
+		return rc;
 
+	V_TRACE(DB_TRACE, "New MBR is "DF_RECT", nr=%d\n",
+		DP_RECT(evt_node_mbr_get(tcx, nd)), nd->tn_nr);
 	if (mbr_changed)
 		*mbr_changed = changed;
 
-	return rc;
+	return 0;
 }
 
 /**
@@ -1273,12 +1281,8 @@ evt_root_tx_add(struct evt_context *tcx)
 	if (!evt_has_tx(tcx))
 		return 0;
 
-	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
-		root = evt_off2ptr(tcx, tcx->tc_root_off);
-	} else {
-		D_ASSERT(tcx->tc_root != NULL);
-		root = tcx->tc_root;
-	}
+	D_ASSERT(tcx->tc_root != NULL);
+	root = tcx->tc_root;
 
 	return umem_tx_add_ptr(umm, root, sizeof(*tcx->tc_root));
 }
@@ -1308,15 +1312,11 @@ static int
 evt_root_free(struct evt_context *tcx)
 {
 	int	rc;
-	if (!UMOFF_IS_NULL(tcx->tc_root_off)) {
-		rc = umem_free(evt_umm(tcx), tcx->tc_root_off);
-		tcx->tc_root_off = EVT_ROOT_NULL;
-	} else {
-		rc = evt_root_tx_add(tcx);
-		if (rc != 0)
-			goto out;
-		memset(tcx->tc_root, 0, sizeof(*tcx->tc_root));
-	}
+
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		goto out;
+	memset(tcx->tc_root, 0, sizeof(*tcx->tc_root));
 out:
 	tcx->tc_root = NULL;
 	return rc;
@@ -2119,7 +2119,7 @@ evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, -1, -1, uma, coh, info, &tcx);
+	rc = evt_tcx_create(root, -1, -1, uma, coh, info, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2156,7 +2156,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & EVT_FEAT_SORT_SOFF)) {
+	if (!(feats & EVT_FEATS_SUPPORTED)) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -2166,7 +2166,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(EVT_ROOT_NULL, root, feats, order, uma,
+	rc = evt_tcx_create(root, feats, order, uma,
 			    coh, NULL, &tcx);
 	if (rc != 0)
 		return rc;
@@ -2294,27 +2294,18 @@ evt_debug(daos_handle_t toh, int debug_level)
  * Only support SSOF for now (see below).
  */
 
-/**
- * Sorted by Start Offset (SSOF)
- *
- * Extents are sorted by start offset first, then high to low epoch, then end
- * offset
- */
-
-/** Rectangle comparison for sorting */
+/** Common routines */
+typedef int (cmp_rect_cb)(struct evt_context *tcx, const struct evt_rect *mbr,
+			  const struct evt_rect *rt1,
+			  const struct evt_rect *rt2);
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *rt1,
-		  const struct evt_rect *rt2)
-{
-	return evt_rect_cmp(rt1, rt2);
-}
-
-static int
-evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent)
+evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
+		  umem_off_t in_off, const struct evt_entry_in *ent,
+		  bool *changed, cmp_rect_cb cb)
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
+	struct evt_rect		*mbr;
 	int			 i;
 	int			 rc;
 	bool			 leaf;
@@ -2323,13 +2314,20 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 	D_ASSERT(!evt_node_is_full(tcx, nd));
 
 	leaf = evt_node_is_leaf(tcx, nd);
+	mbr = evt_node_mbr_get(tcx, nd);
+	if (nd->tn_nr == 0) {
+		*mbr = ent->ei_rect;
+		*changed = true;
+	} else {
+		*changed = evt_rect_merge(mbr, &ent->ei_rect);
+	}
 
 	/* NB: can use binary search to optimize */
 	for (i = 0; i < nd->tn_nr; i++) {
 		int	nr;
 
 		ne = evt_node_entry_at(tcx, nd, i);
-		rc = evt_ssof_cmp_rect(tcx, &ne->ne_rect, &ent->ei_rect);
+		rc = cb(tcx, mbr, &ne->ne_rect, &ent->ei_rect);
 		if (rc < 0)
 			continue;
 
@@ -2424,8 +2422,21 @@ evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 }
 
 static int
-evt_ssof_split(struct evt_context *tcx, bool leaf,
-	       struct evt_node *nd_src, struct evt_node *nd_dst)
+evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
+		       struct evt_weight *weight)
+{
+	memset(weight, 0, sizeof(*weight));
+	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
+	/* NB: we don't consider about high epoch for SSOF because it's based
+	 * on assumption there is no overwrite.
+	 */
+	weight->wt_minor = -rect->rc_epc;
+	return 0;
+}
+
+static int
+evt_even_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
+	       struct evt_node *nd_dst)
 {
 	struct evt_node_entry	*entry_src;
 	struct evt_node_entry	*entry_dst;
@@ -2450,22 +2461,10 @@ evt_ssof_split(struct evt_context *tcx, bool leaf,
 }
 
 static int
-evt_ssof_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
-		     struct evt_weight *weight)
+evt_common_adjust(struct evt_context *tcx, struct evt_node *nd,
+		  struct evt_node_entry *ne, int at, cmp_rect_cb cb)
 {
-	memset(weight, 0, sizeof(*weight));
-	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
-	/* NB: we don't consider about high epoch for SSOF because it's based
-	 * on assumption there is no overwrite.
-	 */
-	weight->wt_minor = -rect->rc_epc;
-	return 0;
-}
-
-static int
-evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
-		struct evt_node_entry *ne, int at)
-{
+	struct evt_rect		*mbr;
 	struct evt_node_entry	*etmp;
 	struct evt_node_entry	*dst_entry;
 	struct evt_node_entry	*src_entry;
@@ -2475,10 +2474,11 @@ evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
 	int			 offset;
 
 	D_ASSERT(!evt_node_is_leaf(tcx, nd));
+	mbr = evt_node_mbr_get(tcx, nd);
 
 	/* Check if we need to move the entry left */
 	for (i = at - 1, etmp = ne - 1; i >= 0; i--, etmp--) {
-		if (evt_ssof_cmp_rect(tcx, &etmp->ne_rect, &ne->ne_rect) <= 0)
+		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) <= 0)
 			break;
 	}
 
@@ -2497,7 +2497,7 @@ evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
 
 	/* Ok, now check if we need to move the entry right */
 	for (i = at + 1, etmp = ne + 1; i < nd->tn_nr; i++, etmp++) {
-		if (evt_ssof_cmp_rect(tcx, &etmp->ne_rect, &ne->ne_rect) >= 0)
+		if (cb(tcx, mbr, &etmp->ne_rect, &ne->ne_rect) >= 0)
 			break;
 	}
 
@@ -2522,11 +2522,145 @@ move:
 	return offset;
 }
 
+/**
+ * Sorted by Start Offset (SSOF)
+ *
+ * Extents are sorted by start offset first, then high to low epoch, then end
+ * offset
+ */
+
+/** Rectangle comparison for sorting */
+static int
+evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
+		  const struct evt_rect *rt1, const struct evt_rect *rt2)
+{
+	return evt_rect_cmp(rt1, rt2);
+}
+
+static int
+evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
+		umem_off_t in_off, const struct evt_entry_in *ent,
+		bool *changed)
+{
+	return evt_common_insert(tcx, nd, in_off, ent, changed,
+				 evt_ssof_cmp_rect);
+}
+
+static int
+evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd,
+		struct evt_node_entry *ne, int at)
+{
+	return evt_common_adjust(tcx, nd, ne, at, evt_ssof_cmp_rect);
+}
+
 static struct evt_policy_ops evt_ssof_pol_ops = {
 	.po_insert		= evt_ssof_insert,
 	.po_adjust		= evt_ssof_adjust,
-	.po_split		= evt_ssof_split,
-	.po_rect_weight		= evt_ssof_rect_weight,
+	.po_split		= evt_even_split,
+	.po_rect_weight		= evt_common_rect_weight,
+};
+
+/**
+ * Sorted by distances to sides of bounding box
+ */
+
+/** Rectangle comparison for sorting */
+static int64_t
+evt_mbr_dist(const struct evt_rect *mbr, const struct evt_rect *rect)
+{
+	int64_t ldist = rect->rc_ex.ex_lo - mbr->rc_ex.ex_lo;
+	int64_t rdist = mbr->rc_ex.ex_hi - rect->rc_ex.ex_hi;
+
+	return ldist - rdist;
+}
+
+static int
+evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
+		   const struct evt_rect *rt1, const struct evt_rect *rt2)
+{
+	int64_t	dist1, dist2;
+
+	dist1 = evt_mbr_dist(mbr, rt1);
+	dist2 = evt_mbr_dist(mbr, rt2);
+
+	if (dist1 < dist2)
+		return -1;
+	if (dist1 > dist2)
+		return 1;
+
+	/* All else being equal, revert to ssof */
+	return evt_rect_cmp(rt1, rt2);
+}
+
+static int
+evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
+		struct evt_node *nd_dst)
+{
+	struct evt_node_entry	*entry_src;
+	struct evt_node_entry	*entry_dst;
+	int			 nr;
+	int			 delta;
+	int			 boundary;
+	bool			 cond;
+	int64_t			 dist;
+
+	D_ASSERT(nd_src->tn_nr == tcx->tc_order);
+	nr = nd_src->tn_nr / 2;
+
+	nr += nd_src->tn_nr % 2;
+
+	entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
+	dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src), &entry_src->ne_rect);
+
+	cond = dist > 0;
+	delta = cond ? -1 : 1;
+	boundary = cond ? 1 : nd_src->tn_nr - 1;
+	do {
+		nr += delta;
+		if (nr == boundary)
+			break;
+		entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
+		dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
+				    &entry_src->ne_rect);
+	} while ((dist > 0) == cond);
+
+	entry_src = evt_node_entry_at(tcx, nd_src, nr);
+	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
+	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
+
+	nd_dst->tn_nr = nd_src->tn_nr - nr;
+	nd_src->tn_nr = nr;
+	return 0;
+}
+
+static int
+evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
+		umem_off_t in_off, const struct evt_entry_in *ent,
+		bool *changed)
+{
+	return evt_common_insert(tcx, nd, in_off, ent, changed,
+				 evt_sdist_cmp_rect);
+}
+
+static int
+evt_sdist_adjust(struct evt_context *tcx, struct evt_node *nd,
+		 struct evt_node_entry *ne, int at)
+{
+	return evt_common_adjust(tcx, nd, ne, at, evt_sdist_cmp_rect);
+}
+
+static struct evt_policy_ops evt_sdist_pol_ops = {
+	.po_insert		= evt_sdist_insert,
+	.po_adjust		= evt_sdist_adjust,
+	.po_split		= evt_sdist_split,
+	.po_rect_weight		= evt_common_rect_weight,
+};
+
+static struct evt_policy_ops evt_sdist_even_pol_ops = {
+	.po_insert		= evt_sdist_insert,
+	.po_adjust		= evt_sdist_adjust,
+	.po_split		= evt_even_split,
+	.po_rect_weight		= evt_common_rect_weight,
 };
 
 /** After the current cursor is deleted, the trace
