@@ -3,11 +3,15 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
+    prereqs.require(env, 'isal')
+
     denv = env.Clone()
+
+    denv.AppendUnique(LIBS=['isal'])
 
     # Common placement code
     common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
@@ -22,7 +26,7 @@ def scons():
     Export("dc_placement_tgts")
 
     # Build tests
-    SConscript('tests/SConscript', exports=['denv', 'common_tgts'])
+    SConscript('tests/SConscript', exports=['denv', 'common_tgts', 'prereqs'])
 
 if __name__ == "SCons.Script":
     scons()

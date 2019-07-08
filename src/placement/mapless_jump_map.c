@@ -22,8 +22,6 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of DSR
- *
  * src/placement/mapless_jump_map.c
  */
 #define D_LOGFAC        DD_FAC(placement)
@@ -31,6 +29,8 @@
 #include "pl_map.h"
 #include <inttypes.h>
 #include <daos/pool_map.h>
+#include <isa-l.h>
+
 /**
  * Contains information related to object layout size.
  */
@@ -82,47 +82,14 @@ jump_consistent_hash(uint64_t key, uint32_t num_buckets)
 }
 
 /**
- * Assembly instruction for fast 4-byte CRC computation on Intel X86
- * Copied from BSD-licensed Data Plane Development Kit (DPDK) rte_hash_crc.h
- *
- * \param[in] data		Primary input to hash function
- * \param[in] init_value	Acts like a seed to the CRC, useful to get
- *				different results with the same data
- *
- * \return			32 bit hash
- */
-static inline uint32_t
-crc32c_sse42_u32(uint32_t data, uint32_t init_val)
-{
-	__asm__ volatile(
-		"crc32l %[data], %[init_val];"
-		: [init_val] "+r"(init_val)
-		: [data] "rm"(data));
-	return init_val;
-}
-
-/**
- * Computes an 8-byte CRC using fast assembly instructions.
- *
  * This is useful for Mapless placement to pseudorandomly permute input keys
  * that are similar to each other. This dramatically improves the even-ness of
  * the distribution of output placements.
- *
- * Since CRC is typically a 4-byte operation, this by computes a 4-byte CRC of
- * each half of the input data and concatenates them
- *
- * \param[in] data              Primary input to hash function
- * \param[in] init_value        Acts like a seed to the CRC, useful to get
- *                              different results with the same data
- *
- * \return			64 bit hash
  */
 static inline uint64_t
 crc(uint64_t data, uint32_t init_val)
 {
-	return (uint64_t)crc32c_sse42_u32((data & 0xFFFFFFFF), init_val)
-		| ((uint64_t)crc32c_sse42_u32(((data >> 32) & 0xFFFFFFFF),
-					init_val) << 32);
+	return crc64_ecma_refl(init_val, (uint8_t*)data, sizeof(data));
 }
 
 /**
@@ -271,14 +238,13 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	uint8_t         top = 0;
 	uint32_t        fail_num = 0;
 	uint32_t        selected_dom;
-	uint64_t        root_pos;
+	struct pool_domain     *root_pos;
 
-	root_pos = (uint64_t)curr_dom;
+	root_pos = curr_dom;
 
 	do {
 		uint32_t        num_doms;
 		uint64_t        key;
-		uint64_t        curr_pos;
 
 		/* Retrieve number of nodes in this domain */
 		if (curr_dom->do_children == NULL)
@@ -288,9 +254,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 		key = obj_key;
 		/* If choosing target in lowest fault domain level */
-
-		curr_pos = (uint64_t)curr_dom - root_pos;
-		curr_pos = curr_pos / sizeof(struct pool_domain);
 
 		if (curr_dom->do_children == NULL) {
 			uint32_t dom_id;
@@ -333,25 +296,9 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			found_target = 1;
 		} else {
 
-			int             range_set;
-			uint64_t        child_pos;
+			uint64_t	child_pos;
 
-			child_pos = (uint64_t)(curr_dom->do_children)
-				    - root_pos;
-			child_pos = child_pos / sizeof(struct pool_domain);
-
-			/*
-			 * If all of the nodes have been used for shards but we
-			 * still have shards to place mark all nodes as unused
-			 * so duplicates can be chosen
-			 */
-
-			range_set = isset_range(dom_used, child_pos, child_pos
-						 + num_doms - 1);
-			if (range_set  && curr_dom->do_children != NULL) {
-				clrbit_range(dom_used, child_pos,
-						child_pos + (num_doms - 1));
-			}
+			child_pos = (curr_dom->do_children) - root_pos;
 
 			/*
 			 * Keep choosing new domains until one that has
