@@ -439,7 +439,13 @@ test_rmdir(const char *path, bool force)
 		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 			continue;   /* skips the dots */
 
-		sprintf(fullpath, "%s/%s", path, ent->d_name);
+		rc = snprintf(fullpath, PATH_MAX, "%s/%s", path, ent->d_name);
+		if (rc >= PATH_MAX) {
+			D_FREE(fullpath);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rc = 0;
+
 		switch (ent->d_type) {
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
