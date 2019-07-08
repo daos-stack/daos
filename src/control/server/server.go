@@ -30,6 +30,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"
@@ -85,7 +86,6 @@ func Main() error {
 	if f != nil {
 		defer f.Close()
 	}
-
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
@@ -108,8 +108,13 @@ func Main() error {
 	// Create new grpc server, register services and start serving (after
 	// dropping privileges).
 	var sOpts []grpc.ServerOption
-	// TODO: This will need to be extended to take certificate information for
-	// the TLS protected channel. Currently it is an "insecure" channel.
+
+	opt, err := security.ServerOptionForTransportConfig(config.TransportConfig)
+	if err != nil {
+		return err
+	}
+	sOpts = append(sOpts, opt)
+
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)

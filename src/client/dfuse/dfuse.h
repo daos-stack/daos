@@ -30,12 +30,11 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#include <daos/common.h>
+#include "daos.h"
 #include "daos_fs.h"
 
 #include "dfuse_gah.h"
 #include "dfuse_fs.h"
-#include "dfuse_da.h"
 
 #include "dfuse_common.h"
 #include "dfuse.h"
@@ -62,11 +61,6 @@ struct dfuse_projection_info {
 	struct dfuse_projection		dpi_proj;
 	struct dfuse_info		*dpi_info;
 	struct dfuse_dfs		*dpi_ddfs;
-	int				dpi_id;
-	struct dfuse_da			dpi_da;
-	struct dfuse_da_type		*dpi_fgh;
-	struct dfuse_da_type		*dpi_fsh;
-	struct dfuse_da_type		*dpi_symlink;
 	uint32_t			dpi_max_read;
 	/** Hash table of open inodes */
 	struct d_hash_table		dpi_iet;
@@ -349,118 +343,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-struct dfuse_request;
-
-/**
- * DFUSE Request API.
- *
- * Set of callbacks invoked during the lifetime of a request.
- */
-struct dfuse_request_api {
-	/** Called once, per request with the result
-	 *
-	 * Should return true if ir_ht is set to RHS_INODE_NUM, and
-	 * an open reference should be kept on the inode after on_result
-	 * returns.
-	 */
-	bool	(*on_result)(struct dfuse_request *req);
-};
-
-/** The type of any handle stored in the request.
- *
- * If set to other than RHS_NONE then the GAH from the appropriate
- * pointer type will be used, rather than the PSR.
- */
-enum dfuse_request_htype {
-	RHS_NONE,
-	RHS_ROOT,
-	RHS_INODE,
-	RHS_FILE,
-	RHS_INODE_NUM,
-};
-
-/**
- * DFUSE Request descriptor.
- *
- */
-struct dfuse_request {
-	/** Pointer to projection for this request. */
-	struct dfuse_projection_info	*ir_fsh;
-	/** Fuse request for this DFUSE request, may be 0 */
-	fuse_req_t			ir_req;
-	/** Callbacks to use for this request */
-	const struct dfuse_request_api	*ir_api;
-
-	/* Mock entry, to avoid having to call crt_req_get() in code
-	 * which doesn't have a RPC pointer.
-	 */
-	void *out;
-	/** Error status of this request.
-	 *
-	 * This is a libc error number and is set before a call to
-	 *  on_result
-	 */
-	int				ir_rc;
-
-	/** Request handle type */
-	enum dfuse_request_htype	ir_ht;
-
-	union {
-		/** Optional pointer to handle.
-		 * Which one of these to use is set by the ir_ht value
-		 */
-		struct dfuse_inode_entry	*ir_inode;
-		struct dfuse_file_handle	*ir_file;
-		fuse_ino_t			ir_inode_num;
-	};
-	/** List of requests.
-	 *
-	 * Used during failover to keep a list of requests that need to be
-	 * actioned once failover is complete.
-	 */
-	d_list_t			ir_list;
-};
-
-/** Initialise a request.  To be called once per request */
-#define DFUSE_REQUEST_INIT(REQUEST, FSH)		\
-	do {						\
-		(REQUEST)->ir_fsh = FSH;		\
-		D_INIT_LIST_HEAD(&(REQUEST)->ir_list);	\
-	} while (0)
-
-/** Reset a request for re-use.  To be called before each use */
-#define DFUSE_REQUEST_RESET(REQUEST)				\
-	do {							\
-		(REQUEST)->ir_ht = RHS_NONE;			\
-		(REQUEST)->ir_inode = NULL;			\
-		(REQUEST)->ir_rc = 0;				\
-	} while (0)
-
-/**
- * Resolve request status.
- *
- * Correctly resolve the return codes and errors from the RPC response.
- * If the error code was already non-zero, it means an error occurred on
- * the client; do nothing. A non-zero error code in the RPC response
- * denotes a server error, in which case, set the status error code to EIO.
- */
-#define DFUSE_REQUEST_RESOLVE(REQUEST, OUT)				\
-	do {								\
-		if (((OUT) != NULL) && (!(REQUEST)->ir_rc)) {		\
-			(REQUEST)->ir_rc = (OUT)->rc;			\
-			if ((OUT)->err)	{				\
-				if ((OUT)->rc == -DER_NOMEM)		\
-					(REQUEST)->ir_rc = ENOMEM;	\
-				else					\
-					(REQUEST)->ir_rc = EIO;		\
-				DFUSE_TRA_INFO((REQUEST),		\
-					"Returning '%s' from -%s",	\
-					strerror((REQUEST)->ir_rc),	\
-					d_errstr((OUT)->err));		\
-			}						\
-		}							\
-	} while (0)
-
 /**
  * Inode handle.
  *
@@ -529,28 +411,6 @@ struct dfuse_inode_record {
 	ino_t				ir_ino;
 };
 
-/** Common request type.
- *
- * Used for getattr, setattr and close only.
- *
- */
-struct common_req {
-	d_list_t			list;
-	struct dfuse_request		request;
-};
-
-/** Entry request type.
- *
- * Request for all RPC types that can return a new inode.
- */
-struct entry_req {
-	struct dfuse_inode_entry	*ie;
-	struct dfuse_request		request;
-	d_list_t			list;
-	struct dfuse_da_type		*da;
-	char				*dest;
-};
-
 /* dfuse_inode.c */
 
 int
@@ -564,16 +424,8 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 		      struct dfuse_dfs *dfs,
 		      struct dfuse_inode_entry **_entry);
 
-int
-find_inode(struct dfuse_request *);
-
 void
 ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
-
-/* dfuse_core.c */
-
-int
-dfuse_fs_send(struct dfuse_request *request);
 
 /* ops/...c */
 

@@ -30,12 +30,14 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/log"
+
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 
 type cliOptions struct {
 	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Insecure bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
 	// TODO: implement host file parsing
 	HostFile   string  `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
@@ -52,7 +54,7 @@ var (
 
 // appSetup loads config file, processes cli overrides and connects clients.
 func appSetup(broadcast bool) error {
-	config, err := client.ProcessConfigFile(opts.ConfigPath)
+	config, err := client.GetConfig(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
 	}
@@ -64,6 +66,16 @@ func appSetup(broadcast bool) error {
 	if opts.HostFile != "" {
 		return errors.New("hostfile option not implemented")
 	}
+
+	if opts.Insecure == true {
+		config.TransportConfig.AllowInsecure = true
+	}
+
+	err = config.TransportConfig.PreLoadCertData()
+	if err != nil {
+		return errors.Wrap(err, "Unable to load Cerificate Data")
+	}
+	conns.SetTransportConfig(config.TransportConfig)
 
 	// broadcast app requests to host list by default
 	addresses := config.HostList
@@ -99,6 +111,7 @@ func dmgMain() error {
 
 	_, err := p.Parse()
 	if err != nil {
+		fmt.Println(err.Error())
 		return err
 	}
 

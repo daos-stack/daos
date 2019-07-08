@@ -349,7 +349,7 @@ ec_init_tgt_set(daos_iod_t *iods, unsigned int nr,
  */
 int
 ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
-		     daos_oclass_attr_t *oca, uint64_t *tgt_set)
+		     struct daos_oclass_attr *oca, uint64_t *tgt_set)
 {
 	daos_obj_update_t	*args = dc_task_get_args(task);
 	struct ec_params	*head = NULL;

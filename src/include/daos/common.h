@@ -46,6 +46,7 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
+#include <daos_prop.h>
 #include <daos/checksum.h>
 
 #define DF_OID		DF_U64"."DF_U64
@@ -134,6 +135,20 @@ daos_rank_list_valid(const d_rank_list_t *rl)
 	return rl && rl->rl_ranks && rl->rl_nr;
 }
 
+/**
+ * Generate a rank list from a string with a seprator argument. This is a
+ * convenience function to generate the rank list required by
+ * daos_pool_connect().
+ *
+ * \param[in]	str	string with the rank list
+ * \param[in]	sep	separator of the ranks in \a str.
+ *			dmg uses ":" as the separator.
+ *
+ * \return		allocated rank list that user is responsible to free
+ *			with d_rank_list_free().
+ */
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
+
 static inline uint64_t
 daos_get_ntime(void)
 {
@@ -176,14 +191,13 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
-daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
-int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
-void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
 void daos_iov_free(d_iov_t *iov);
-bool daos_key_match(daos_key_t *key1, daos_key_t *key2);
+bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
+
+#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
 /* The DAOS BITS is composed by uint32_t[x] */
 #define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
@@ -489,53 +503,6 @@ bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
-
-static inline void
-daos_parse_oclass(const char *string, daos_oclass_id_t *objectClass)
-{
-	if (strcasecmp(string, "tiny") == 0)
-		*objectClass = DAOS_OC_TINY_RW;
-	else if (strcasecmp(string, "small") == 0)
-		*objectClass = DAOS_OC_SMALL_RW;
-	else if (strcasecmp(string, "large") == 0)
-		*objectClass = DAOS_OC_LARGE_RW;
-	else if (strcasecmp(string, "R2") == 0)
-		*objectClass = DAOS_OC_R2_RW;
-	else if (strcasecmp(string, "R2S") == 0)
-		*objectClass = DAOS_OC_R2S_RW;
-	else if (strcasecmp(string, "repl_max") == 0)
-		*objectClass = DAOS_OC_REPL_MAX_RW;
-	else
-		*objectClass = DAOS_OC_UNKNOWN;
-}
-
-static inline void
-daos_unparse_oclass(daos_oclass_id_t objectClass, char *string)
-{
-	switch (objectClass) {
-	case DAOS_OC_TINY_RW:
-		strcpy(string, "tiny");
-		break;
-	case DAOS_OC_SMALL_RW:
-		strcpy(string, "small");
-		break;
-	case DAOS_OC_LARGE_RW:
-		strcpy(string, "large");
-		break;
-	case DAOS_OC_R2_RW:
-		strcpy(string, "R2");
-		break;
-	case DAOS_OC_R2S_RW:
-	       strcpy(string, "R2S");
-	       break;
-	case DAOS_OC_REPL_MAX_RW:
-	       strcpy(string, "repl_max");
-	       break;
-	default:
-		strcpy(string, "unknown");
-		break;
-	}
-}
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

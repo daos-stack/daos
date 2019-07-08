@@ -32,8 +32,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 )
 
@@ -49,8 +49,6 @@ const (
 
 // init gets called once per package, don't call in other test files
 func init() {
-	log.NewDefaultLogger(log.Error, "server_tests: ", os.Stderr)
-
 	// load uncommented version of canonical config file daos_server.yml
 	uncommentServerConfig()
 }
@@ -59,7 +57,7 @@ func init() {
 // lines in order to verify parsing of all available params.
 func uncommentServerConfig() {
 	fail := func(e error) {
-		log.Errorf(e.Error())
+		fmt.Printf("removing comments from server config failed: " + e.Error())
 		os.Exit(1)
 	}
 
@@ -110,6 +108,8 @@ func mockConfigFromFile(t *testing.T, e External, path string) configuration {
 // from 2 files with multiple entries.
 // Write input to file, loadConfig (decode), saveConf (encode) and compare written yaml.
 func TestParseConfigSucceed(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	inputYamls, outputYamls, err := LoadTestFiles(
 		"testdata/input_good.txt", "testdata/output_success.txt")
 	if err != nil {
@@ -155,6 +155,8 @@ func TestParseConfigSucceed(t *testing.T) {
 // from 2 files with multiple entries.
 // Write input to file, loadConfig (decode) should fail, compare error message.
 func TestParseConfigFail(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	inputYamls, outputErrorMsgs, err := LoadTestFiles(
 		"testdata/input_bad.txt", "testdata/output_errors.txt")
 	if err != nil {
@@ -179,6 +181,8 @@ func TestParseConfigFail(t *testing.T) {
 // TestProvidedConfigs verifies that the provided server config matches what we expect
 // after being decoded.
 func TestProvidedConfigs(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	tests := []struct {
 		inExt  External
 		inPath string
@@ -316,6 +320,8 @@ func TestProvidedConfigs(t *testing.T) {
 // TestCmdlineOverride verified that cliOpts take precedence over existing
 // configs resulting in overrides appearing in ioparams
 func TestCmdlineOverride(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	r := rank(9)
 	m := "moduleA moduleB"
 	a := "/some/file"
@@ -639,6 +645,8 @@ func TestCmdlineOverride(t *testing.T) {
 }
 
 func TestPopulateEnv(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	noOfiPortConfig := func() configuration {
 		c := mockConfigFromFile(t, defaultMockExt(), socketsExample)
 		c.Servers[0].FabricIfacePort = 0
