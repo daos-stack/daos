@@ -47,13 +47,6 @@
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 
-enum {
-	BDEV_CLASS_NVME = 0,
-	BDEV_CLASS_MALLOC,
-	BDEV_CLASS_AIO,
-	BDEV_CLASS_UNKNOWN
-};
-
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -383,7 +376,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 	} while (count > 0);
 }
 
-static int
+int
 get_bdev_type(struct spdk_bdev *bdev)
 {
 	if (strcmp(spdk_bdev_get_product_name(bdev), "NVMe disk") == 0)
@@ -560,7 +553,7 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	D_FREE(bb->bb_xs_ctxts);
 
 	/* Free all device health monitoring info as well */
-	free_bio_health_monitoring(bb);
+	bio_fini_health_monitoring(bb);
 
 	D_FREE(bb);
 }
@@ -740,8 +733,6 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 	struct bio_bdev			*d_bdev;
 	struct spdk_blob_store		*bs;
 	struct smd_nvme_stream_bond	 xs_bond;
-	struct spdk_io_channel		*channel;
-	struct spdk_bdev_desc		*health_desc;
 	int				 rc;
 	bool				 found = false;
 
@@ -819,7 +810,8 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
 
-		rc = alloc_bio_health_monitoring(d_bdev->bb_blobstore);
+		rc = bio_init_health_monitoring(d_bdev->bb_blobstore,
+						d_bdev->bb_bdev);
 		if (rc != 0) {
 			D_ERROR("BIO health monitoring not allocated\n");
 			return rc;
@@ -848,21 +840,6 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		D_ERROR("Failed to create io channel\n");
 		return -DER_NOMEM;
 	}
-
-	/* Writable descriptor required for device health monitoring */
-	rc = spdk_bdev_open(d_bdev->bb_bdev, true, NULL, NULL,
-			    &ctxt->bxc_blobstore->bb_dev_health->bhm_desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n",
-			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
-		return daos_errno2der(-rc);
-	}
-	health_desc = ctxt->bxc_blobstore->bb_dev_health->bhm_desc;
-
-	/* Get and hold I/O channel for device health monitoring */
-	channel = spdk_bdev_get_io_channel(health_desc);
-	D_ASSERT(channel != NULL);
-	ctxt->bxc_blobstore->bb_dev_health->bhm_io_channel = channel;
 
 	return 0;
 }
@@ -894,11 +871,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt->bxc_desc != NULL) {
 		spdk_bdev_close(ctxt->bxc_desc);
 		ctxt->bxc_desc = NULL;
-	}
-
-	if (ctxt->bxc_blobstore->bb_dev_health->bhm_desc != NULL) {
-		spdk_bdev_close(ctxt->bxc_blobstore->bb_dev_health->bhm_desc);
-		ctxt->bxc_blobstore->bb_dev_health->bhm_desc = NULL;
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
