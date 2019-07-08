@@ -48,10 +48,10 @@ def rpm_test_pre = '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex
                       repo_file_base=\"*_job_\${JOB_NAME%%/*}_job_\"
-                      for repo in openpa libfabric pmix   \
-                                  ompi mercury spdk isa-l \
-                                  fio dpdk protobuf-c     \
-                                  fuse pmdk argobots raft \
+                      for repo in openpa@PR-8 libfabric@PR-9 pmix@PR-6   \
+                                  ompi@PR-6 mercury@PR-8 spdk@PR-8 isa-l@PR-5 \
+                                  fio@PR-6 dpdk@PR-5 protobuf-c@PR-3     \
+                                  fuse@PR-5 pmdk@PR-4 argobots@PR-6 raft@PR-25 \
                                   cart@PR-169; do     \
                           if [[ \\\$repo = *@* ]]; then
                               branch=\"\\\${repo#*@}\"
