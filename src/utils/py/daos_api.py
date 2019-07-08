@@ -742,7 +742,7 @@ class DaosObj(object):
         func = self.context.get_function('generate-oid')
 
         # XXX convert object class
-	cls = int(ConvertObjClass[DaosObjClassOld(objcls)])
+        cls = int(ConvertObjClass[DaosObjClassOld(objcls)])
 
         func.restype = DaosObjId
         self.c_oid = func(cls, 0, 0)
