@@ -402,7 +402,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			break;
 		case 'o':
 			ap->oclass = daos_oclass_name2id(optarg);
-			if (ap->oclass == -1) {
+			if (ap->oclass == OC_UNKNOWN) {
 				fprintf(stderr, "unknown object class: %s\n",
 						optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);

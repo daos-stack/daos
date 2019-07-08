@@ -349,12 +349,11 @@ daos_oclass_name2id(const char *name)
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
-			break;
+			return oc->oc_id;
 	}
-	if (oc->oc_id == OC_UNKNOWN)
-		return -1;
 
-	return oc->oc_id;
+	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	return OC_UNKNOWN;
 }
 
 int

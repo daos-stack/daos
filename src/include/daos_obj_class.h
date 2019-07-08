@@ -453,7 +453,7 @@ struct daos_oclass_list {
  *
  * \param[in]	name	Object class name.
  *
- * \return		The Object class ID, -1 if unknown.
+ * \return		The Object class ID, 0 / OC_UNKNOWN if unknown.
  */
 int
 daos_oclass_name2id(const char *name);
