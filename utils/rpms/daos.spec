@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.5.0
-Release:       3%{?dist}
+Release:       4%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -198,6 +198,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libioil.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
+%{_prefix}%{_sysconfdir}/daos_agent.yml
 
 %files tests
 %{daoshome}/utils/py
@@ -221,6 +222,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Fri Jun 21 2019 David Quigley <dquigley@intel.com>
+- Add daos_agent.yml to the list of packaged files
+
 * Thu Jun 12 2019 Brian J. Murrell <brian.murrell@intel.com>
 - move obj_ctl daos_gen_io_conf daos_run_io_conf to
   daos-tests sub-package

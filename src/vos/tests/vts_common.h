@@ -39,6 +39,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <daos/common.h>
+#include <daos/object.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 
@@ -83,9 +84,6 @@ vts_alloc_gen_fname(char **fname);
 
 int
 vts_pool_fallocate(char **fname);
-
-void
-vts_io_set_oid(daos_unit_oid_t *oid);
 
 /**
  * Init and Fini context, Sets up

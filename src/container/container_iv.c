@@ -31,6 +31,7 @@
 #include <daos/btree_class.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
+#include <daos_api.h>
 
 /* XXX Temporary limit for IV */
 #define MAX_SNAP_CNT	20
