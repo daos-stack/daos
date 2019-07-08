@@ -295,4 +295,17 @@ int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 bool
 ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid);
 
+int
+ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
+	       struct daos_oclass_attr *oca, long **skip_list);
+
+int
+ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
+		 struct daos_oclass_attr *oca, long **skip_list);
+
+int
+ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
+		        crt_bulk_t *remote_bulks, daos_handle_t ioh,
+			long **skip_list, int sgl_nr);
+
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

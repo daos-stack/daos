@@ -575,8 +575,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 			D_FREE(req_tgts->ort_shard_tgts);
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 	}
-	req_tgts->ort_grp_nr = grp_nr;
-	req_tgts->ort_grp_size = grp_size;
 
 	for (i = 0; i < grp_nr; i++) {
 		shard_idx = start_shard + i * grp_size;
@@ -604,6 +602,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 				return rc;
 		}
 	}
+	req_tgts->ort_grp_nr = grp_nr;
+	req_tgts->ort_grp_size = shard_nr;
 	D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_nr);
 
 	return 0;
@@ -1137,9 +1137,11 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	 */
 	data_size = sgls_size;
 
-	if (data_size >= OBJ_BULK_LIMIT ||
+	if (data_size >= OBJ_BULK_LIMIT) {
+	       /*	||
 		ec_mult_data_targets(obj_auxi->req_tgts.ort_grp_size,
 				     obj->cob_md.omd_id)) {
+	        */
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   obj_auxi);
