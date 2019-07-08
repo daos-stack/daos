@@ -1404,8 +1404,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->oid, dfs->root.oid);
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
-	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
-	obj->name[DFS_MAX_PATH] = '\0';
+	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH + 1);
+
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc = -daos_der2errno(rc));
@@ -1927,7 +1927,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		D_GOTO(err, rc = -EINVAL);
 	}
 
-	strncpy(new_obj->name, obj->name, DFS_MAX_PATH);
+	strncpy(new_obj->name, obj->name, DFS_MAX_PATH + 1);
 	new_obj->mode = obj->mode;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
 	oid_cp(&new_obj->oid, obj->oid);
