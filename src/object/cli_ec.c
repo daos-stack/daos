@@ -78,8 +78,8 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 				*tgt_set = ~0UL;
 				return true;
 			}
-		} else if (iod->iod_type == DAOS_IOD_SINGLE &&
-			   iod->iod_size >= ss) {
+		} else if (iod->iod_type == DAOS_IOD_SINGLE) {  // &&
+			   // iod->iod_size >= ss) {
 			*tgt_set = ~0UL;
 			return true;
 		}
@@ -356,11 +356,14 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 	struct ec_params	*current = NULL;
 	unsigned int		 i, j;
 	int			 rc = 0;
+	
+	D_ASSERT(args->nr == 1);
 
 	for (i = 0; i < args->nr; i++) {
 		d_sg_list_t	*sgl = &args->sgls[i];
 		daos_iod_t	*iod = &args->iods[i];
-
+		
+	
 		if (ec_has_full_stripe(iod, oca, tgt_set)) {
 			struct ec_params *params;
 
@@ -399,8 +402,8 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 				head->nr++;
 			} else {
 				D_ASSERT(iod->iod_type ==
-					 DAOS_IOD_SINGLE && iod->iod_size >=
-					 oca->u.ec.e_len * oca->u.ec.e_k);
+					 DAOS_IOD_SINGLE);  // && iod->iod_size >=
+					 // oca->u.ec.e_len * oca->u.ec.e_k);
 				/* Encode single value */
 			}
 		} else if (head != NULL && &(head->sgls[i]) != NULL) {
