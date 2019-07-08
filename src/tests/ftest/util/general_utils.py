@@ -485,6 +485,7 @@ class TestPool(TestDaosApiBase):
         self.name = TestParameter(None)
         self.group = TestParameter(None)
         self.svcn = TestParameter(None)
+        self.svcn_list = TestParameter(None)
         self.target_list = TestParameter(None)
         self.scm_size = TestParameter(None)
         self.nvme_size = TestParameter(None)
@@ -593,6 +594,21 @@ class TestPool(TestDaosApiBase):
             self.connect()
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
+
+    @fail_on(DaosApiError)
+    def get_svc_list(self,svcn):
+        """Obtain svc list using the number of svc
+           specified.
+           Args:
+                svcn: number of svc in yaml file
+           Returns:
+                svcn_list: list of svc separated with ':'
+        """
+        self.svcn_list = ""
+        for i in range(svcn):
+            self.svcn_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+        self.svcn_list = self.svcn_list[:-1]
+        return self.svcn_list
 
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
