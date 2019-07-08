@@ -157,7 +157,7 @@ test_epoch_aggregate(void **argp)
 	MUST(cont_create(arg, cont_uuid));
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	D_ALLOC_ARRAY(ths, 100);
@@ -221,7 +221,7 @@ test_snapshots(void **argp)
 	MUST(cont_create(arg, co_uuid));
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
 
 	D_ALLOC_ARRAY(ths, 100);

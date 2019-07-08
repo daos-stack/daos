@@ -631,7 +631,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		dth = NULL;
 	}
 
-	if (daos_oc_echo_type(daos_obj_id2class(orw->orw_oid.id_pub)) ||
+	if (daos_obj_is_echo(orw->orw_oid.id_pub) ||
 	    (daos_io_bypass & IOBP_TARGET)) {
 		ds_obj_rw_echo_handler(rpc);
 		D_GOTO(out, rc = 0);

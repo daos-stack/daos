@@ -131,7 +131,7 @@ fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	memset(&arg->kds[arg->kds_len], 0, sizeof(arg->kds[arg->kds_len]));
 	arg->kds[arg->kds_len].kd_key_len = sizeof(entry->ie_oid);
-	arg->kds[arg->kds_len].kd_val_types = type;
+	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds_len++;
 
 	/* Append the object ID to iovs. */
@@ -178,7 +178,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = size;
 	arg->kds[arg->kds_len].kd_csum_len = 0;
-	arg->kds[arg->kds_len].kd_val_types = type;
+	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds_len++;
 
 	if (arg->eprs != NULL) {
@@ -254,7 +254,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	}
 
 	/* Grow the next new descriptor (instead of creating yet a new one). */
-	arg->kds[arg->kds_len].kd_val_types = type;
+	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds[arg->kds_len].kd_key_len += sizeof(*rec);
 
 	/* Append the recx record to iovs. */
@@ -421,7 +421,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 	if (kds == NULL)
 		return 0;
 
-	if (kds->kd_val_types == VOS_ITER_SINGLE)
+	if (kds->kd_val_type == VOS_ITER_SINGLE)
 		type = DAOS_IOD_SINGLE;
 	else
 		type = DAOS_IOD_ARRAY;
@@ -707,9 +707,9 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 
 	D_ASSERT(arg->kds_len > 0);
 	D_ASSERT(arg->kds != NULL);
-	if (arg->kds[0].kd_val_types != type) {
+	if (arg->kds[0].kd_val_type != type) {
 		D_ERROR("the first kds type %d != %d\n",
-			arg->kds[0].kd_val_types, type);
+			arg->kds[0].kd_val_type, type);
 		return -DER_INVAL;
 	}
 
@@ -724,11 +724,11 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 
 	for (i = 0; i < arg->kds_len; i++) {
 		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
-			" total %zd\n", i, arg->kds[i].kd_val_types, ptr,
+			" total %zd\n", i, arg->kds[i].kd_val_type, ptr,
 			arg->kds[i].kd_key_len, arg->sgl->sg_iovs[0].iov_len);
 
 		D_ASSERT(arg->kds[i].kd_key_len > 0);
-		if (arg->kds[i].kd_val_types == VOS_ITER_OBJ) {
+		if (arg->kds[i].kd_val_type == VOS_ITER_OBJ) {
 			daos_unit_oid_t *oid = ptr;
 
 			if (arg->kds[i].kd_key_len != sizeof(*oid)) {
@@ -751,7 +751,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 			}
 			D_DEBUG(DB_REBUILD, "process obj "DF_UOID"\n",
 				DP_UOID(io.ui_oid));
-		} else if (arg->kds[i].kd_val_types == VOS_ITER_DKEY) {
+		} else if (arg->kds[i].kd_val_type == VOS_ITER_DKEY) {
 			daos_key_t tmp_key;
 
 			tmp_key.iov_buf = ptr;
@@ -781,7 +781,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 				(int)io.ui_dkey.iov_len,
 				(char *)io.ui_dkey.iov_buf,
 				eprs ? io.ui_dkey_eph : 0);
-		} else if (arg->kds[i].kd_val_types == VOS_ITER_AKEY) {
+		} else if (arg->kds[i].kd_val_type == VOS_ITER_AKEY) {
 			daos_key_t *iod_akey;
 
 			akey.iov_buf = ptr;
@@ -825,8 +825,8 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 			if (eprs)
 				io.ui_akey_ephs[io.ui_iods_len] =
 							eprs[i].epr_lo;
-		} else if (arg->kds[i].kd_val_types == VOS_ITER_SINGLE ||
-			   arg->kds[i].kd_val_types == VOS_ITER_RECX) {
+		} else if (arg->kds[i].kd_val_type == VOS_ITER_SINGLE ||
+			   arg->kds[i].kd_val_type == VOS_ITER_RECX) {
 			void *data = ptr;
 
 			if (io.ui_dkey.iov_len == 0 || akey.iov_len == 0) {
@@ -873,7 +873,7 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 			}
 		} else {
 			D_ERROR("unknow kds type %d\n",
-				arg->kds[i].kd_val_types);
+				arg->kds[i].kd_val_type);
 			rc = -DER_INVAL;
 			break;
 		}
