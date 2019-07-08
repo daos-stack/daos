@@ -453,6 +453,7 @@ cont_child_destroy_one(void *vin)
 	if (rc == 0) {
 		/* Should evict if idle, but no such interface at the moment. */
 		cont_child_put(tls->dt_cont_cache, cont);
+		D_ERROR("cont_child_lookup non-empty, return %d.\n", -DER_BUSY);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	} else if (rc != -DER_NONEXIST) {
 		D_GOTO(out_pool, rc);

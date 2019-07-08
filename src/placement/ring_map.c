@@ -1257,6 +1257,8 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int		 pos, i, j, k, rc = 0;
 
 	layout->ol_ver = pl_map_version(map);
+	layout->ol_grp_size = rop->rop_grp_size;
+	layout->ol_grp_nr = rop->rop_grp_nr;
 
 	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
 	plts_nr = rimap->rmp_target_nr;
@@ -1423,7 +1425,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					goto fill;
 
 				leader = pl_select_leader(md->omd_id,
-					l_shard->po_shard, layout->ol_nr,
+					l_shard->po_shard, layout->ol_grp_size,
 					true, pl_obj_get_shard, layout);
 				if (leader < 0) {
 					D_WARN("Not sure whether current shard "

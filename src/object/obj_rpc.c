@@ -56,7 +56,7 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &key->kd_val_types);
+	rc = crt_proc_uint32_t(proc, &key->kd_val_type);
 	if (rc != 0)
 		return -DER_HG;
 

@@ -128,13 +128,6 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
-				   &dbtree_recx_ops);
-	if (rc != 0 && rc != -DER_EXIST) {
-		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
-		D_GOTO(out_debug, rc);
-	}
-
 	/** set up handle hash-table */
 	rc = daos_hhash_init();
 	if (rc != 0)

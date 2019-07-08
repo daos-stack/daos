@@ -117,7 +117,8 @@ def run_agent(basepath, server_list, client_list=None):
         cmd = [
             "ssh",
             client,
-            daos_agent_bin
+            daos_agent_bin,
+            "-i"
         ]
 
         p = subprocess.Popen(cmd,

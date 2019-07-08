@@ -29,7 +29,7 @@
 
 int
 daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
-			daos_oclass_attr_t *cattr, daos_event_t *ev)
+			struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
@@ -37,14 +37,14 @@ daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 
 int
 daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
-		     daos_oclass_attr_t *cattr, daos_event_t *ev)
+		     struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-daos_obj_list_class(daos_handle_t coh, daos_oclass_list_t *clist,
+daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist,
 		    daos_anchor_t *anchor, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
@@ -139,7 +139,7 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 }
 
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, daos_obj_attr_t *oa,
+daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
 	       d_rank_list_t *ranks, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");

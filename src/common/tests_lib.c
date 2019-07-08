@@ -31,7 +31,7 @@
 #include <daos.h>
 #include <gurt/debug.h>
 
-#define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
+#define DTS_OCLASS_DEF		OC_RP_XSF
 
 static uint32_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
@@ -52,7 +52,7 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	oid.lo	= obj_id_gen++;
 	oid.lo	|= hdr;
 	oid.hi	= rand() % 100;
-	daos_obj_generate_id(&oid, ofeats, oclass);
+	daos_obj_generate_id(&oid, ofeats, oclass, 0);
 
 	return oid;
 }

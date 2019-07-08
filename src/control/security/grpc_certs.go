@@ -25,85 +25,87 @@ package security
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"fmt"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-func LoadServerCreds(caRootPath, certPath, keyPath string) (credentials.TransportCredentials, error) {
-
-	caPEM, err := LoadPEMData(caRootPath, SafeCertPerm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load caRoot")
+func GetServerTransportCredentials(cfg *TransportConfig) (credentials.TransportCredentials, error) {
+	if cfg == nil {
+		return nil, errors.New("nil TransportConfig")
 	}
 
-	certPEM, err := LoadPEMData(certPath, SafeCertPerm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load cert")
-	}
-
-	keyPEM, err := LoadPEMData(keyPath, SafeKeyPerm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load key")
-	}
-
-	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not create X509KeyPair")
-	}
-
-	certPool := x509.NewCertPool()
-
-	added := certPool.AppendCertsFromPEM(caPEM)
-	if !added {
-		return nil, errors.Wrapf(err, "unable to append caRoot to cert pool")
+	if cfg.TLSKeypair == nil || cfg.CAPool == nil {
+		err := cfg.PreLoadCertData()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tlsConfig := tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
-		Certificates: []tls.Certificate{certificate},
-		ClientCAs:    certPool,
+		Certificates: []tls.Certificate{*cfg.TLSKeypair},
+		ClientCAs:    cfg.CAPool,
 	}
 	creds := credentials.NewTLS(&tlsConfig)
 	return creds, nil
 }
 
-func LoadClientCreds(caRootPath, certPath, keyPath, serverName string) (credentials.TransportCredentials, error) {
-
-	caPEM, err := LoadPEMData(caRootPath, SafeCertPerm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load caRoot")
+func GetClientTransportCredentials(cfg *TransportConfig) (credentials.TransportCredentials, error) {
+	if cfg == nil {
+		return nil, errors.New("nil TransportConfig")
 	}
 
-	certPEM, err := LoadPEMData(certPath, SafeCertPerm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load cert")
-	}
-
-	keyPEM, err := LoadPEMData(keyPath, SafeKeyPerm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not load key")
-	}
-
-	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not create X509KeyPair")
-	}
-
-	certPool := x509.NewCertPool()
-
-	added := certPool.AppendCertsFromPEM(caPEM)
-	if !added {
-		return nil, fmt.Errorf("unable to append caRoot to cert pool")
+	if cfg.TLSKeypair == nil || cfg.CAPool == nil {
+		err := cfg.PreLoadCertData()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tlsConfig := tls.Config{
-		ServerName:   serverName,
-		Certificates: []tls.Certificate{certificate},
-		RootCAs:      certPool,
+		ServerName:   cfg.ServerName,
+		Certificates: []tls.Certificate{*cfg.TLSKeypair},
+		RootCAs:      cfg.CAPool,
 	}
 	creds := credentials.NewTLS(&tlsConfig)
 	return creds, nil
+}
+func ServerOptionForTransportConfig(cfg *TransportConfig) (grpc.ServerOption, error) {
+	if cfg == nil {
+		return nil, errors.New("nil TransportConfig")
+	}
+
+	if cfg.AllowInsecure {
+		return grpc.Creds(nil), nil
+	}
+
+	creds, err := GetServerTransportCredentials(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return grpc.Creds(creds), nil
+}
+
+func DialOptionForTransportConfig(cfg *TransportConfig) (grpc.DialOption, error) {
+	if cfg == nil {
+		return nil, errors.New("nil TransportConfig")
+	}
+
+	if cfg.AllowInsecure {
+		return grpc.WithInsecure(), nil
+	}
+
+	if cfg.ServerName == "" {
+		return nil, errors.New("No ServerName set in TransportConfig")
+	}
+
+	creds, err := GetClientTransportCredentials(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return grpc.WithTransportCredentials(creds), nil
 }

@@ -26,7 +26,6 @@ package server
 import (
 	"fmt"
 	"strconv"
-	"syscall"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -174,22 +173,46 @@ func (s *scmStorage) reFormat(devPath string) (err error) {
 	return
 }
 
+func getMntParams(srv *server) (mntType string, dev string, opts string, err error) {
+	switch srv.ScmClass {
+	case scmDCPM:
+		mntType = "ext4"
+		opts = "dax"
+		if len(srv.ScmList) != 1 {
+			err = errors.New(msgScmBadDevList)
+			break
+		}
+
+		dev = srv.ScmList[0]
+		if dev == "" {
+			err = errors.New(msgScmDevEmpty)
+		}
+	case scmRAM:
+		dev = "tmpfs"
+		mntType = "tmpfs"
+
+		if srv.ScmSize >= 0 {
+			opts = "size=" + strconv.Itoa(srv.ScmSize) + "g"
+		}
+	default:
+		err = errors.New(string(srv.ScmClass) + ": " + msgScmClassNotSupported)
+	}
+
+	return
+}
+
 // makeMount creates a mount target directory and mounts device there.
 //
 // NOTE: requires elevated privileges
 func (s *scmStorage) makeMount(
-	devPath string, mntPoint string, devType string, mntOpts string) (err error) {
-
-	flags := uintptr(syscall.MS_NOATIME | syscall.MS_SILENT)
-	flags |= syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_NOSUID
+	devPath string, mntPoint string, mntType string, mntOpts string,
+) (err error) {
 
 	if err = s.config.ext.mkdir(mntPoint); err != nil {
 		return
 	}
 
-	if err = s.config.ext.mount(
-		devPath, mntPoint, devType, flags, mntOpts); err != nil {
-
+	if err = s.config.ext.mount(devPath, mntPoint, mntType, uintptr(0), mntOpts); err != nil {
 		return
 	}
 
@@ -212,8 +235,6 @@ func newMntRet(
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
 func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
-	var devType, devPath, mntOpts string
-
 	srv := s.config.Servers[i]
 	mntPoint := srv.ScmMount
 	log.Debugf("performing SCM device reset, format and mount")
@@ -243,65 +264,41 @@ func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
 		return
 	}
 
+	mntType, devPath, mntOpts, err := getMntParams(&srv)
+	if err != nil {
+		addMretFormat(pb.ResponseStatus_CTRL_ERR_CONF, err.Error())
+		return
+	}
+
 	switch srv.ScmClass {
 	case scmDCPM:
-		devType = "ext4"
-		mntOpts = "dax"
-
-		if len(srv.ScmList) != 1 {
-			addMretFormat(
-				pb.ResponseStatus_CTRL_ERR_CONF, msgScmBadDevList)
-			return
-		}
-
-		devPath = srv.ScmList[0]
-		if devPath == "" {
-			addMretFormat(
-				pb.ResponseStatus_CTRL_ERR_CONF, msgScmDevEmpty)
-			return
-		}
-
 		if err := s.clearMount(mntPoint); err != nil {
 			addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
 
-		log.Debugf(
-			"formatting scm device %s, should be quick!...", devPath)
+		log.Debugf("formatting scm device %s, should be quick!...", devPath)
 
 		if err := s.reFormat(devPath); err != nil {
-			addMretFormat(
-				pb.ResponseStatus_CTRL_ERR_APP, err.Error())
+			addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
 
 		log.Debugf("scm format complete.\n")
 	case scmRAM:
-		devPath = "tmpfs"
-		devType = "tmpfs"
-
 		if err := s.clearMount(mntPoint); err != nil {
 			addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
 
-		if srv.ScmSize >= 0 {
-			mntOpts = "size=" + strconv.Itoa(srv.ScmSize) + "g"
-			break
-		}
 		log.Debugf("no scm_size specified in config for ram tmpfs")
-	default:
-		addMretFormat(
-			pb.ResponseStatus_CTRL_ERR_CONF,
-			string(srv.ScmClass)+": "+msgScmClassNotSupported)
-		return
 	}
 
 	log.Debugf(
 		"mounting scm device %s at %s (%s)...",
-		devPath, mntPoint, devType)
+		devPath, mntPoint, mntType)
 
-	if err := s.makeMount(devPath, mntPoint, devType, mntOpts); err != nil {
+	if err := s.makeMount(devPath, mntPoint, mntType, mntOpts); err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 		return
 	}

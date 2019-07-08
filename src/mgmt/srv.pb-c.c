@@ -52,49 +52,49 @@ void   mgmt__daos_rank__free_unpacked
   assert(message->base.descriptor == &mgmt__daos_rank__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__daos_response__init
-                     (Mgmt__DaosResponse         *message)
+void   mgmt__daos_resp__init
+                     (Mgmt__DaosResp         *message)
 {
-  static const Mgmt__DaosResponse init_value = MGMT__DAOS_RESPONSE__INIT;
+  static const Mgmt__DaosResp init_value = MGMT__DAOS_RESP__INIT;
   *message = init_value;
 }
-size_t mgmt__daos_response__get_packed_size
-                     (const Mgmt__DaosResponse *message)
+size_t mgmt__daos_resp__get_packed_size
+                     (const Mgmt__DaosResp *message)
 {
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mgmt__daos_response__pack
-                     (const Mgmt__DaosResponse *message,
+size_t mgmt__daos_resp__pack
+                     (const Mgmt__DaosResp *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mgmt__daos_response__pack_to_buffer
-                     (const Mgmt__DaosResponse *message,
+size_t mgmt__daos_resp__pack_to_buffer
+                     (const Mgmt__DaosResp *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mgmt__DaosResponse *
-       mgmt__daos_response__unpack
+Mgmt__DaosResp *
+       mgmt__daos_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mgmt__DaosResponse *)
-     protobuf_c_message_unpack (&mgmt__daos_response__descriptor,
+  return (Mgmt__DaosResp *)
+     protobuf_c_message_unpack (&mgmt__daos_resp__descriptor,
                                 allocator, len, data);
 }
-void   mgmt__daos_response__free_unpacked
-                     (Mgmt__DaosResponse *message,
+void   mgmt__daos_resp__free_unpacked
+                     (Mgmt__DaosResp *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   mgmt__set_rank_req__init
@@ -238,7 +238,7 @@ const ProtobufCMessageDescriptor mgmt__daos_rank__descriptor =
   (ProtobufCMessageInit) mgmt__daos_rank__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__daos_response__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__daos_resp__field_descriptors[1] =
 {
   {
     "status",
@@ -246,34 +246,34 @@ static const ProtobufCFieldDescriptor mgmt__daos_response__field_descriptors[1] 
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__DaosResponse, status),
+    offsetof(Mgmt__DaosResp, status),
     &mgmt__daos_request_status__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__daos_response__field_indices_by_name[] = {
+static const unsigned mgmt__daos_resp__field_indices_by_name[] = {
   0,   /* field[0] = status */
 };
-static const ProtobufCIntRange mgmt__daos_response__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__daos_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 1 }
 };
-const ProtobufCMessageDescriptor mgmt__daos_response__descriptor =
+const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.DaosResponse",
-  "DaosResponse",
-  "Mgmt__DaosResponse",
+  "mgmt.DaosResp",
+  "DaosResp",
+  "Mgmt__DaosResp",
   "mgmt",
-  sizeof(Mgmt__DaosResponse),
+  sizeof(Mgmt__DaosResp),
   1,
-  mgmt__daos_response__field_descriptors,
-  mgmt__daos_response__field_indices_by_name,
-  1,  mgmt__daos_response__number_ranges,
-  (ProtobufCMessageInit) mgmt__daos_response__init,
+  mgmt__daos_resp__field_descriptors,
+  mgmt__daos_resp__field_indices_by_name,
+  1,  mgmt__daos_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__daos_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[1] =
