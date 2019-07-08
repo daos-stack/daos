@@ -28,9 +28,10 @@ import (
 	"strconv"
 	"strings"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/ishell"
 	"github.com/pkg/errors"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func getUpdateStorageReq(c *ishell.Context) (*pb.UpdateStorageReq, error) {
