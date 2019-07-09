@@ -27,6 +27,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
 from multiprocessing import Process
 import os
+import re
 import socket
 import subprocess
 import time
@@ -35,6 +36,21 @@ import yaml
 
 TEST_LOG_FILE_YAML = "./data/daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
+SERVER_KEYS = (
+    "test_machines",
+    "test_servers",
+    "daos_servers",
+    "servers",
+    "test_machines1",
+    "test_machines2",
+    "test_machines2a",
+    "test_machines3",
+    "test_machines6",
+    )
+CLIENT_KEYS = (
+    "test_clients",
+    "clients",
+    )
 
 
 def get_build_environment():
@@ -210,22 +226,25 @@ def get_test_list(tags):
             # Otherwise it is assumed that this is a tag
             test_tags.append(" --filter-by-tags={}".format(tag))
 
-    # Find all the tests that match the tags.  If no tags are specified all of
-    # the tests will be found.
-    command = " | ".join([
-        "avocado list --paginator off{} ./".format(" ".join(test_tags)),
-        r"sed -ne '/INSTRUMENTED/s/.* \([^:]*\):.*/\1/p'",
-        "uniq"])
-    test_list.extend(get_output(command).splitlines())
+    # Add to the list of tests any test that matches the specified tags.  If no
+    # tags and no specific tests have been specified then all of the functional
+    # tests will be added.
+    if test_tags or not test_list:
+        command = " | ".join([
+            "avocado list --paginator off{} ./".format(" ".join(test_tags)),
+            r"sed -ne '/INSTRUMENTED/s/.* \([^:]*\):.*/\1/p'",
+            "uniq"])
+        test_list.extend(get_output(command).splitlines())
 
     return " ".join(test_tags), test_list
 
 
-def get_test_files(test_list):
+def get_test_files(test_list, args):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         list: a list of dictionaries of each test script and yaml file
@@ -234,9 +253,73 @@ def get_test_files(test_list):
     test_files = [{"py": test, "yaml": None} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        test_file["yaml"] = "{}.yaml".format(base)
+        test_file["yaml"] = replace_yaml_file("{}.yaml".format(base), args)
 
     return test_files
+
+
+def replace_yaml_file(yaml_file, args):
+    """Replace the server/client yaml file placeholders.
+
+    Replace any server or client yaml file placeholder names with the host
+    names provided by the command line arguments in a copy of the original
+    test yaml file.  If no replacements are specified return the original
+    test yaml file.
+
+    Args:
+        yaml_file (str): test yaml file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        str: the test yaml file
+
+    """
+    if args.test_servers:
+        # Determine which placeholder names need to be replaced in this yaml by
+        # getting the lists of hosts specified in the yaml file
+        unique_hosts = {"servers": set(), "clients": set()}
+        for key, placeholders in find_yaml_hosts(yaml_file).items():
+            if key in SERVER_KEYS:
+                unique_hosts["servers"].update(placeholders)
+            elif key in CLIENT_KEYS:
+                unique_hosts["clients"].update(placeholders)
+
+        # Map the placeholder names to values provided by the user
+        mapping_pairings = [("servers", args.test_servers.split(","))]
+        if args.test_clients:
+            mapping_pairings.append(("clients", args.test_clients.split(",")))
+        mapping = {
+            tmp: node_list[index] if index < len(node_list) else None
+            for key, node_list in mapping_pairings
+            for index, tmp in enumerate(sorted(unique_hosts[key]))}
+
+        # Read in the contents of the yaml file to retain the !mux entries
+        print("Reading {}".format(yaml_file))
+        with open(yaml_file) as yaml_buffer:
+            file_str = yaml_buffer.read()
+
+        # Apply the placeholder replacements
+        for placeholder, host in mapping.items():
+            if host:
+                # Replace the host entries with their mapped values
+                file_str = re.sub(
+                    "- {}".format(placeholder), "- {}".format(host), file_str)
+            else:
+                # Remove any host entries without a replacement value
+                file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
+
+        # Write the modified yaml file into a temporary file
+        home_tmp = os.path.join(os.path.expanduser("~"), "tmp")
+        if not os.path.exists(home_tmp):
+            os.makedirs(home_tmp)
+        yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
+        yaml_file = os.path.join(home_tmp, "{}.yaml".format(yaml_name))
+        print("Creating {}".format(yaml_file))
+        with open(yaml_file, "w") as yaml_buffer:
+            yaml_buffer.write(file_str)
+
+    # Return the untouched or modified yaml file
+    return yaml_file
 
 
 def run_tests(test_files, tag_filter, args):
@@ -291,9 +374,14 @@ def run_tests(test_files, tag_filter, args):
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"])
 
-            # Optionally reanme the test results directory for this test
+            # Optionally rename the test results directory for this test
             if args.rename:
                 rename_logs(avocado_logs_dir, test_file["py"])
+
+            # Remove the modified copy of the test's yaml file
+            if args.test_servers:
+                print("Removing {}".format(test_file["yaml"]))
+                os.remove(test_file["yaml"])
 
     return return_code
 
@@ -364,6 +452,19 @@ def get_log_files(config_yaml, daos_files=None):
     return daos_files
 
 
+def find_yaml_hosts(test_yaml):
+    """Find the all the host values in the specified yaml file.
+
+    Args:
+        test_yaml (str): test yaml file
+
+    Returns:
+        dict: a dictionary of each host key and its host values
+
+    """
+    return find_values(get_yaml_data(test_yaml), SERVER_KEYS + CLIENT_KEYS)
+
+
 def get_hosts_from_yaml(test_yaml):
     """Extract the list of hosts from the test yaml file.
 
@@ -377,27 +478,11 @@ def get_hosts_from_yaml(test_yaml):
         list: a unique list of hosts specified in the test's yaml file
 
     """
-    yaml_data = get_yaml_data(test_yaml)
-    server_keys = [
-        "test_machines",
-        "test_servers",
-        "daos_servers",
-        "servers",
-        "test_machines1",
-        "test_machines2",
-        "test_machines2a",
-        "test_machines3",
-        "test_machines6"]
-    client_keys = [
-        "test_clients",
-        "clients",
-    ]
     host_set = set()
     found_client_key = False
-    matches = find_values(yaml_data, server_keys + client_keys)
-    for key, value in matches.items():
+    for key, value in find_yaml_hosts(test_yaml).items():
         host_set.update(value)
-        if key in client_keys:
+        if key in CLIENT_KEYS:
             found_client_key = True
 
     # Include this host as a client if no clients are specified
@@ -460,7 +545,7 @@ def rename_logs(avocado_logs_dir, test_file):
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
-    test_name = os.path.splitext(os.path.basename(test_file))[0]
+    test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
     new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
@@ -473,6 +558,21 @@ def rename_logs(avocado_logs_dir, test_file):
         print(
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
+
+
+def get_test_category(test_file):
+    """Get a category for the specified test using its path and name.
+
+    Args:
+        test_file (str): the test python file
+
+    Returns:
+        str: concatenation of the test path and base filename joined by dashes
+
+    """
+    file_parts = os.path.split(test_file)
+    return "-".join(
+        [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
 def main():
@@ -541,6 +641,14 @@ def main():
         nargs="*",
         type=str,
         help="test category or file to run")
+    parser.add_argument(
+        "-tc", "--test_clients",
+        action="store",
+        help="comma-separated list of hosts to use as clients for each test")
+    parser.add_argument(
+        "-ts", "--test_servers",
+        action="store",
+        help="comma-separated list of hosts to use as servers for each test")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
@@ -560,8 +668,8 @@ def main():
     if args.list:
         exit(0)
 
-    # Create a dictioanry of test and their yaml files
-    test_files = get_test_files(test_list)
+    # Create a dictionary of test and their yaml files
+    test_files = get_test_files(test_list, args)
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)
