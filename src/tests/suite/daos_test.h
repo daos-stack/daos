@@ -440,9 +440,13 @@ test_rmdir(const char *path, bool force)
 			continue;   /* skips the dots */
 
 		rc = snprintf(fullpath, PATH_MAX, "%s/%s", path, ent->d_name);
-		if (rc >= PATH_MAX) {
+		if (rc <0 || rc >= PATH_MAX) {
+			if (rc < 0)
+				rc = -DER_INVAL;	/* invalid */
+			if (rc >= PATH_MAX)
+				rc = -DER_NOMEM;	/* overflow */
 			D_FREE(fullpath);
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out, rc);
 		}
 		rc = 0;
 
