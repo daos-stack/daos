@@ -4,8 +4,8 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 Name:          daos
-Version:       0.5.0
-Release:       4%{?dist}
+Version:       0.6.0
+Release:       1%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -222,6 +222,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Tue Jul 9 2019 Johann Lombardi <johann.lombardi@intel.com>
+- Version bump up to 0.6.0
+
 * Fri Jun 21 2019 David Quigley <dquigley@intel.com>
 - Add daos_agent.yml to the list of packaged files
 
