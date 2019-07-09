@@ -1159,7 +1159,7 @@ int main(int argc, char *argv[])
 	/** Connect to DAOS pool */
 	rc = daos_pool_connect(pool_uuid, dfuse_fs.group, svcl, DAOS_PC_RW,
 			       &poh, &pool_info, NULL);
-	daos_rank_list_free(svcl);
+	d_rank_list_free(svcl);
 	if (rc < 0) {
 		fprintf(stderr, "Failed to connect to pool (%d)\n", rc);
 		D_GOTO(out_daos, rc = 1);

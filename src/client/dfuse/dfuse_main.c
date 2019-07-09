@@ -273,7 +273,7 @@ out_open:
 		D_FREE(dfs);
 	}
 out:
-	daos_rank_list_free(dfuse_info->di_svcl);
+	d_rank_list_free(dfuse_info->di_svcl);
 	DFUSE_TRA_DOWN(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	D_FREE(dfuse_info);
