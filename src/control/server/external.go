@@ -23,22 +23,23 @@
 
 package server
 
+//#include <unistd.h>
+//#include <errno.h>
+import "C"
+
 import (
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"syscall"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
-
-	//#include <unistd.h>
-	//#include <errno.h>
-	"C"
 )
-import "strings"
 
 const (
 	msgUnmount      = "syscall: calling unmount with %s, MNT_DETACH"

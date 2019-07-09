@@ -24,12 +24,14 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/security"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"os/user"
 	"strconv"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 // Module id for the Agent security module

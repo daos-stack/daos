@@ -30,9 +30,9 @@ import (
 	"sort"
 	"time"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
 	"golang.org/x/net/context"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // FeatureMap is an alias for mgmt features supported by gRPC server.

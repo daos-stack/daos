@@ -27,11 +27,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/pkg/errors"
+	. "google.golang.org/grpc/connectivity"
+
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/pkg/errors"
-	. "google.golang.org/grpc/connectivity"
 )
 
 func connectSetup(

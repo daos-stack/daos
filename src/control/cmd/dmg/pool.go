@@ -27,11 +27,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/inhies/go-bytesize"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/inhies/go-bytesize"
-	"github.com/pkg/errors"
 )
 
 const (
