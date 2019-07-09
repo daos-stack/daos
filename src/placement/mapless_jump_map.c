@@ -388,9 +388,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 
 		num_doms = root->do_child_nr;
 
-		uint64_t child_pos = (uint64_t)(root->do_children)
-				     - (uint64_t)root;
-		child_pos = child_pos / sizeof(struct pool_domain);
+		uint64_t child_pos = (root->do_children) - root;
 
 		/*
 		 * Choose domains using jump consistent hash until we find a
