@@ -405,7 +405,7 @@ class TestParameter(object):
         self.default = default
 
     def __str__(self):
-        """Conver this object into a string.
+        """Convert this object into a string.
 
         Returns:
             str: the string version of the parameter's value
