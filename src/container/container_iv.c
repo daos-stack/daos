@@ -391,7 +391,7 @@ cont_iv_capa_alloc_internal(d_sg_list_t *sgl)
 		return -DER_NOMEM;
 	}
 
-	daos_iov_set(&sgl->sg_iovs[0], entry, sizeof(*entry));
+	d_iov_set(&sgl->sg_iovs[0], entry, sizeof(*entry));
 	return 0;
 }
 

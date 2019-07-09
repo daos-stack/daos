@@ -25,8 +25,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 
+	"github.com/daos-stack/daos/src/control/client"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -38,10 +38,13 @@ type StorCmd struct {
 }
 
 // ScanStorCmd is the struct representing the scan storage subcommand.
-type ScanStorCmd struct{}
+type ScanStorCmd struct {
+	broadcastCmd
+	connectedCmd
+}
 
 // run NVMe and SCM storage query on all connected servers
-func scanStor() {
+func scanStor(conns client.Connect) {
 	cCtrlrs, cModules := conns.ScanStorage()
 	fmt.Printf("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
 	fmt.Printf("SCM modules:\n%s", cModules)
@@ -49,25 +52,19 @@ func scanStor() {
 
 // Execute is run when ScanStorCmd activates
 func (s *ScanStorCmd) Execute(args []string) error {
-	if err := appSetup(true /* broadcast */); err != nil {
-		return err
-	}
-
-	scanStor()
-
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
+	scanStor(s.conns)
 	return nil
 }
 
 // FormatStorCmd is the struct representing the format storage subcommand.
 type FormatStorCmd struct {
+	broadcastCmd
+	connectedCmd
 	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
 // run NVMe and SCM storage format on all connected servers
-func formatStor(force bool) {
+func formatStor(conns client.Connect, force bool) {
 	fmt.Println(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
@@ -84,20 +81,14 @@ func formatStor(force bool) {
 
 // Execute is run when FormatStorCmd activates
 func (s *FormatStorCmd) Execute(args []string) error {
-	if err := appSetup(true /* broadcast */); err != nil {
-		return err
-	}
-
-	formatStor(s.Force)
-
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
+	formatStor(s.conns, s.Force)
 	return nil
 }
 
 // UpdateStorCmd is the struct representing the update storage subcommand.
 type UpdateStorCmd struct {
+	broadcastCmd
+	connectedCmd
 	Force        bool   `short:"f" long:"force" description:"Perform update without prompting for confirmation"`
 	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`
 	NVMeStartRev string `short:"r" long:"nvme-fw-rev" description:"Only update firmware on NVMe SSDs currently running this firmware revision." required:"1"`
@@ -106,7 +97,7 @@ type UpdateStorCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(req *pb.UpdateStorageReq, force bool) {
+func updateStor(conns client.Connect, req *pb.UpdateStorageReq, force bool) {
 	fmt.Println(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -124,13 +115,9 @@ func updateStor(req *pb.UpdateStorageReq, force bool) {
 
 // Execute is run when UpdateStorCmd activates
 func (u *UpdateStorCmd) Execute(args []string) error {
-	if err := appSetup(true /* broadcast */); err != nil {
-		fmt.Printf("app setup returned %s", err)
-		return err
-	}
-
 	// only populate nvme fwupdate params for the moment
 	updateStor(
+		u.conns,
 		&pb.UpdateStorageReq{
 			Nvme: &pb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
@@ -138,9 +125,6 @@ func (u *UpdateStorCmd) Execute(args []string) error {
 			},
 		}, u.Force)
 
-	// exit immediately to avoid continuation of main
-	os.Exit(0)
-	// never reached
 	return nil
 }
 
