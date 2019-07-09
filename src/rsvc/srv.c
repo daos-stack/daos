@@ -834,7 +834,7 @@ out_stop:
 }
 
 int
-ds_rsvc_add_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 		     d_rank_list_t *ranks, size_t size, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;
@@ -865,12 +865,12 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 	if (stop_ranks->rl_nr > 0)
 		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
 				  true /* destroy */);
-	daos_rank_list_free(stop_ranks);
+	d_rank_list_free(stop_ranks);
 	return rc;
 }
 
 int
-ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 			d_rank_list_t *ranks, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;

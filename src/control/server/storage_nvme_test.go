@@ -28,11 +28,11 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/daos-stack/go-spdk/spdk"
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/go-spdk/spdk"
 )
 
 var nvmeFormatCalls []string // record calls to nvme.Format()

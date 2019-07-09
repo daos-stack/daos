@@ -28,13 +28,13 @@ import (
 	"sync"
 	"testing"
 
-	ipmctl "github.com/daos-stack/go-ipmctl/ipmctl"
-	spdk "github.com/daos-stack/go-spdk/spdk"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/go-ipmctl/ipmctl"
+	"github.com/daos-stack/go-spdk/spdk"
 )
 
 // mockFormatStorageServer provides mocking for server side streaming,
