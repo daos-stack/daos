@@ -89,7 +89,7 @@ jump_consistent_hash(uint64_t key, uint32_t num_buckets)
 static inline uint64_t
 crc(uint64_t data, uint32_t init_val)
 {
-	return crc64_ecma_refl(init_val, (uint8_t *)data, sizeof(data));
+	return crc64_ecma_refl(init_val, (uint8_t *)&data, sizeof(data));
 }
 
 /**
@@ -295,10 +295,23 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
-
+			int		range_set;
 			uint64_t	child_pos;
 
 			child_pos = (curr_dom->do_children) - root_pos;
+
+			/*
+			 * If all of the nodes in this domain have been used for
+			 * shards but we still have shards to place mark all
+			 * nodes as unused in bookkeeping array so duplicates
+			 * can be chosen
+			 */
+			range_set = isset_range(dom_used, child_pos, child_pos
+						 + num_doms - 1);
+			if (range_set  && curr_dom->do_children != NULL) {
+				clrbit_range(dom_used, child_pos,
+						child_pos + (num_doms - 1));
+			}
 
 			/*
 			 * Keep choosing new domains until one that has
@@ -838,6 +851,8 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
+	layout->ol_grp_nr = mop.mop_grp_nr;
+	layout->ol_grp_size = mop.mop_grp_size;
 
 	/* Get root node of pool map */
 	D_INIT_LIST_HEAD(&remap_list);
@@ -925,6 +940,8 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
+	layout->ol_grp_nr = mop.mop_grp_nr;
+	layout->ol_grp_size = mop.mop_grp_size;
 
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = get_object_layout(mmap, layout, &mop, &remap_list, md);
