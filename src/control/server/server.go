@@ -28,13 +28,14 @@ import (
 	"net"
 	"os"
 
+	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
-	flags "github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 func parseCliOpts(opts *cliOptions) error {

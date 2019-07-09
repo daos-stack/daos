@@ -28,10 +28,11 @@ import (
 	"io"
 	"time"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
