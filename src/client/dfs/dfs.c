@@ -1560,9 +1560,6 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		if (rc)
 			D_GOTO(out, rc = -daos_der2errno(rc));
 
-		if (number == 0)
-			continue; /* loop should break for EOF */
-
 		for (ptr = enum_buf, i = 0; i < number; i++) {
 			snprintf(dirs[key_nr].d_name, kds[i].kd_key_len + 1,
 				 "%s", ptr);
@@ -1635,10 +1632,6 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 					&sgl, anchor, NULL);
 		if (rc)
 			D_GOTO(out, rc = -daos_der2errno(rc));
-
-		/** If no entries were listed, continue to check anchor */
-		if (num == 0)
-			continue; /* loop should break for EOF */
 
 		/** for every entry, issue the filler cb */
 		for (ptr = enum_buf, i = 0; i < num; i++) {
