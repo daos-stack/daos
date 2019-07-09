@@ -1130,8 +1130,8 @@ The `daos_agent` configuration file is parsed when starting the
 on the command line (`daos_agent -h` for usage) or default location
 (`install/etc/daos_agent.yml`).
 
-Parameter descriptions are specified in [daos_agent.yml](../../utils/config/daos_agent.yml)
-and example configurations files in the [examples](../../utils/config/examples)
+Parameter descriptions are specified in [daos_agent.yml](/utils/config/daos_agent.yml)
+and example configurations files in the [examples](/utils/config/examples)
 directory.
 
 Any option supplied to `daos_server` as a commandline option or flag will
@@ -1229,9 +1229,6 @@ log\_file: /tmp/daos\_agent2.log
 
 DAOS Agent is a standalone application to be run on each compute node. It can be configured to use secure communications (default) or can be allowed to communicate with the control plane over unencrypted channels. The example below for executing daos_agent specifies to operate in insecure mode as certificate support is not fully integrated into DAOS as of 0.6
 
-For further details on building and running DAOS see the
-[Quickstart guide](../quickstart.md).
-
 To start the DAOS Agent, run:
 ```
 daos_agent -i
@@ -1241,7 +1238,7 @@ System Validation
 -----------------
 
 To validate that the DAOS system is properly installed, the daos\_test
-suite can be executed:
+suite can be executed. Ensure the DAOS Agent is configuerd and running before running daos\_test:
 
 [[]{#_Toc4574315 .anchor}]{#_Toc4572376 .anchor}orterun -np
 &lt;num\_clients&gt; --hostfile \${hostfile} --ompi-server
