@@ -36,6 +36,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+> ftest.sh.debug
+exec 1> >(tee -ai ftest.sh.debug)            \
+     2> >(tee -ai ftest.sh.debug >&2)        \
+     3> >(tee -ai ftest.sh.debug >/dev/null)
+export BASH_XTRACEFD=3
 set -ex -o pipefail
 
 # shellcheck disable=SC1091

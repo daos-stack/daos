@@ -347,6 +347,7 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      mv ftest.sh.debug "$STAGE_NAME/"
                                       ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
                                       mv src/tests/ftest/avocado/* \
                                          $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
@@ -414,6 +415,7 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      mv ftest.sh.debug "$STAGE_NAME/"
                                       ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
                                       mv src/tests/ftest/avocado/* \
                                          $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
