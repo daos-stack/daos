@@ -27,9 +27,6 @@
 extern "C" {
 #endif
 
-#include <daos/common.h>
-#include <daos_types.h>
-
 /**
  * Predefined object classes
  * It describes schema of data distribution & protection.
@@ -450,6 +447,28 @@ struct daos_oclass_list {
 	/** Attributes of each listed class, optional */
 	struct daos_oclass_attr	*cl_cattrs;
 };
+
+/**
+ * Return the Object class ID given the object class name in string format.
+ *
+ * \param[in]	name	Object class name.
+ *
+ * \return		The Object class ID, 0 / OC_UNKNOWN if unknown.
+ */
+int
+daos_oclass_name2id(const char *name);
+
+/**
+ * Return the object class name given it's ID.
+ *
+ * \param[in]	oc_id	Object class ID.
+ * \param[out]	name	buffer for the name of the object class to be copied
+ *			into it.
+ *
+ * \return		0 on success, -1 if invalid class.
+ */
+int
+daos_oclass_id2name(daos_oclass_id_t oc_id, char *name);
 
 /**
  * Register a new object class in addition to the default ones (see DAOS_OC_*).
