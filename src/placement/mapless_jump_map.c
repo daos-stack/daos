@@ -89,7 +89,7 @@ jump_consistent_hash(uint64_t key, uint32_t num_buckets)
 static inline uint64_t
 crc(uint64_t data, uint32_t init_val)
 {
-	return crc64_ecma_refl(init_val, (uint8_t*)data, sizeof(data));
+	return crc64_ecma_refl(init_val, (uint8_t *)data, sizeof(data));
 }
 
 /**

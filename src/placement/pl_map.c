@@ -25,30 +25,30 @@
  *
  * src/placement/pl_map.c
  */
-#define D_LOGFAC	DD_FAC(placement)
+#define D_LOGFAC        DD_FAC(placement)
 
 #include "pl_map.h"
 #include <gurt/hash.h>
 
-extern struct pl_map_ops	ring_map_ops;
-extern struct pl_map_ops	mapless_map_ops;
+extern struct pl_map_ops        ring_map_ops;
+extern struct pl_map_ops        mapless_map_ops;
 
 /** dictionary for all unknown placement maps */
 struct pl_map_dict {
 	/** type of the placement map */
-	pl_map_type_t		 pd_type;
+	pl_map_type_t            pd_type;
 	/** customized functions */
-	struct pl_map_ops	*pd_ops;
+	struct pl_map_ops       *pd_ops;
 	/** name of the placement map */
-	char			*pd_name;
+	char                    *pd_name;
 };
 
 /** array of defined placement maps */
 static struct pl_map_dict pl_maps[] = {
 	{
-		.pd_type	= PL_TYPE_RING,
-		.pd_ops		= &ring_map_ops,
-		.pd_name	= "ring",
+		.pd_type        = PL_TYPE_RING,
+		.pd_ops         = &ring_map_ops,
+		.pd_name        = "ring",
 	},
 	{
 		.pd_type    = PL_TYPE_MAPLESS,
@@ -56,20 +56,20 @@ static struct pl_map_dict pl_maps[] = {
 		.pd_name    = "mapless",
 	},
 	{
-		.pd_type	= PL_TYPE_UNKNOWN,
-		.pd_ops		= NULL,
-		.pd_name	= "unknown",
+		.pd_type        = PL_TYPE_UNKNOWN,
+		.pd_ops         = NULL,
+		.pd_name        = "unknown",
 	},
 };
 
 
 static int
 pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
-		    struct pl_map **pl_mapp)
+		     struct pl_map **pl_mapp)
 {
-	struct pl_map_dict	*dict = pl_maps;
-	struct pl_map		*map;
-	int			 rc;
+	struct pl_map_dict      *dict = pl_maps;
+	struct pl_map           *map;
+	int                      rc;
 
 	for (dict = &pl_maps[0]; dict->pd_type != PL_TYPE_UNKNOWN; dict++) {
 		if (dict->pd_type == mia->ia_type)
@@ -147,19 +147,19 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * Check if the provided object has any shard needs to be rebuilt for the
  * given rebuild version @rebuild_ver.
  *
- * \param  map [IN]		pl_map this check is performed on
- * \param  md  [IN]		object metadata
- * \param  shard_md [IN]	shard metadata (optional)
- * \param  rebuild_ver [IN]	current rebuild version
- * \param  tgt_rank [OUT]	spare target ranks
- * \param  shard_id [OUT]	shard ids to be rebuilt
- * \param  array_size [IN]	array size of tgt_rank & shard_id
- * \prarm  myrank [IN]		rank of current server in communication group
+ * \param  map [IN]             pl_map this check is performed on
+ * \param  md  [IN]             object metadata
+ * \param  shard_md [IN]        shard metadata (optional)
+ * \param  rebuild_ver [IN]     current rebuild version
+ * \param  tgt_rank [OUT]       spare target ranks
+ * \param  shard_id [OUT]       shard ids to be rebuilt
+ * \param  array_size [IN]      array size of tgt_rank & shard_id
+ * \prarm  myrank [IN]          rank of current server in communication group
 
- * \return	> 0	the array size of tgt_rank & shard_id, so it means
+ * \return      > 0     the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
- *		0	No need rebuild or find spare tgts successfully.
- *		-ve	error code.
+ *              0       No need rebuild or find spare tgts successfully.
+ *              -ve     error code.
  */
 int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
@@ -181,9 +181,9 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
  * Check if the provided object shard needs to be built on the reintegrated
  * targets @tgp_reint.
  *
- * \return	1	Build the object on the returned target @tgt_reint.
- *		0	Skip this object.
- *		-ve	error code.
+ * \return      1       Build the object on the returned target @tgt_reint.
+ *              0       Skip this object.
+ *              -ve     error code.
  */
 int
 pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
@@ -223,7 +223,7 @@ pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
 
 	*layout_pp = layout;
 	return 0;
- failed:
+failed:
 	pl_obj_layout_free(layout);
 	return -DER_NOMEM;
 }
@@ -254,7 +254,7 @@ unsigned int
 pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
 		      struct daos_oclass_attr *oc_attr)
 {
-	int sid	= shard_md->smd_id.id_shard;
+	int sid = shard_md->smd_id.id_shard;
 
 	/* XXX: only for the static stripe classes for the time being */
 	D_ASSERT(oc_attr->ca_schema == DAOS_OS_SINGLE ||
@@ -276,7 +276,7 @@ unsigned int
 pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 		       struct daos_oclass_attr *oc_attr)
 {
-	int sid	= shard_md->smd_id.id_shard;
+	int sid = shard_md->smd_id.id_shard;
 
 	/* XXX: only for the static stripe classes for the time being */
 	D_ASSERT(oc_attr->ca_schema == DAOS_OS_SINGLE ||
@@ -293,14 +293,14 @@ pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 }
 
 /** serialize operations on pl_htable */
-pthread_rwlock_t	pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+pthread_rwlock_t        pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
-struct d_hash_table	pl_htable = {
-	.ht_ops			  = NULL,
+struct d_hash_table     pl_htable = {
+	.ht_ops                   = NULL,
 };
 
-#define DSR_RING_DOMAIN		PO_COMP_TP_RACK
-#define DSR_MAPLESS_DOMAIN	PO_COMP_TP_RACK
+#define DSR_RING_DOMAIN         PO_COMP_TP_RACK
+#define DSR_MAPLESS_DOMAIN      PO_COMP_TP_RACK
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -314,13 +314,13 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		break;
 
 	case PL_TYPE_RING:
-		mia->ia_type	     = PL_TYPE_RING;
+		mia->ia_type         = PL_TYPE_RING;
 		mia->ia_ring.domain  = DSR_RING_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
 	case PL_TYPE_MAPLESS:
-		mia->ia_type		= PL_TYPE_MAPLESS;
-		mia->ia_mapless.domain	= DSR_MAPLESS_DOMAIN;
+		mia->ia_type            = PL_TYPE_MAPLESS;
+		mia->ia_mapless.domain  = DSR_MAPLESS_DOMAIN;
 	}
 
 }
@@ -362,8 +362,8 @@ pl_hop_rec_addref(struct d_hash_table *htab, d_list_t *link)
 static bool
 pl_hop_rec_decref(struct d_hash_table *htab, d_list_t *link)
 {
-	struct pl_map	*map = pl_link2map(link);
-	bool		 zombie;
+	struct pl_map   *map = pl_link2map(link);
+	bool             zombie;
 
 	D_ASSERT(map->pl_ref > 0);
 
@@ -385,14 +385,14 @@ pl_hop_rec_free(struct d_hash_table *htab, d_list_t *link)
 }
 
 static d_hash_table_ops_t pl_hash_ops = {
-	.hop_key_hash		= pl_hop_key_hash,
-	.hop_key_cmp		= pl_hop_key_cmp,
-	.hop_rec_addref		= pl_hop_rec_addref,
-	.hop_rec_decref		= pl_hop_rec_decref,
-	.hop_rec_free		= pl_hop_rec_free,
+	.hop_key_hash           = pl_hop_key_hash,
+	.hop_key_cmp            = pl_hop_key_cmp,
+	.hop_rec_addref         = pl_hop_rec_addref,
+	.hop_rec_decref         = pl_hop_rec_decref,
+	.hop_rec_free           = pl_hop_rec_free,
 };
 
-#define PL_HTABLE_BITS		7
+#define PL_HTABLE_BITS          7
 
 static int
 pl_htable_init()
@@ -434,17 +434,17 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
  * Generate a new placement map from the pool map @pool_map, and replace the
  * original placement map for the same pool.
  *
- * \param	uuid [IN]	uuid of \a pool_map
- * \param	pool_map [IN]	pool_map
- * \param	connect [IN]	from pool connect or not
+ * \param       uuid [IN]       uuid of \a pool_map
+ * \param       pool_map [IN]   pool_map
+ * \param       connect [IN]    from pool connect or not
  */
 int
 pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 {
-	d_list_t		*link;
-	struct pl_map		*map;
-	struct pl_map_init_attr	 mia;
-	int			 rc;
+	d_list_t                *link;
+	struct pl_map           *map;
+	struct pl_map_init_attr  mia;
+	int                      rc;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	if (!pl_htable.ht_ops) {
@@ -464,7 +464,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
-		struct pl_map	*tmp;
+		struct pl_map   *tmp;
 
 		tmp = container_of(link, struct pl_map, pl_link);
 		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
@@ -498,7 +498,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 			       &map->pl_link, true);
 	D_ASSERT(rc == 0);
 	pl_map_decref(map); /* hash table has held the refcount */
- out:
+out:
 	D_RWLOCK_UNLOCK(&pl_rwlock);
 	return rc;
 }
@@ -510,12 +510,12 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	d_list_t	*link;
+	d_list_t        *link;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
 	if (link) {
-		struct pl_map	*map;
+		struct pl_map   *map;
 
 		map = container_of(link, struct pl_map, pl_link);
 		D_ASSERT(map->pl_connects > 0);
@@ -535,7 +535,7 @@ pl_map_disconnect(uuid_t uuid)
 struct pl_map *
 pl_map_find(uuid_t uuid, daos_obj_id_t oid)
 {
-	d_list_t	*link;
+	d_list_t        *link;
 
 	D_RWLOCK_RDLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
@@ -564,31 +564,31 @@ pl_map_version(struct pl_map *map)
 /**
  * Select leader replica for the given object's shard.
  *
- * \param [IN]	oid		The object identifier.
- * \param [IN]	shard_idx	The shard index.
- * \param [IN]	grp_size	Group size of obj layout.
- * \param [IN]	for_tgt_id	Require leader target id or leader shard index.
- * \param [IN]	pl_get_shard	The callback function to parse out pl_obj_shard
- *				from the given @data.
- * \param [IN]	data		The parameter used by the @pl_get_shard.
+ * \param [IN]  oid             The object identifier.
+ * \param [IN]  shard_idx       The shard index.
+ * \param [IN]  grp_size        Group size of obj layout.
+ * \param [IN]  for_tgt_id      Require leader target id or leader shard index.
+ * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
+ *                              from the given @data.
+ * \param [IN]  data            The parameter used by the @pl_get_shard.
  *
- * \return			The selected leader on success: its tgt_id or
- *				shard index. Negative value if error.
+ * \return                      The selected leader on success: its tgt_id or
+ *                              shard index. Negative value if error.
  */
 int
 pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
-	struct pl_obj_shard		*shard;
-	struct daos_oclass_attr		*oc_attr;
-	uint32_t			 replicas;
-	int				 preferred;
-	int				 rdg_idx;
-	int				 start;
-	int				 pos;
-	int				 off;
-	int				 replica_idx;
-	int				 i;
+	struct pl_obj_shard             *shard;
+	struct daos_oclass_attr         *oc_attr;
+	uint32_t                         replicas;
+	int                              preferred;
+	int                              rdg_idx;
+	int                              start;
+	int                              pos;
+	int                              off;
+	int                              replica_idx;
+	int                              i;
 
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
@@ -623,12 +623,12 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	}
 
 	/* XXX: The shards within [start, start + replicas) will search from
-	 *	the same @preferred position, then they will have the same
-	 *	leader. The shards (belonging to the same object) in
-	 *	other redundancy group may get different leader node.
+	 *      the same @preferred position, then they will have the same
+	 *      leader. The shards (belonging to the same object) in
+	 *      other redundancy group may get different leader node.
 	 *
-	 *	The one with the lowest f_seq will be elected as the leader
-	 *	to avoid leader switch.
+	 *      The one with the lowest f_seq will be elected as the leader
+	 *      to avoid leader switch.
 	 */
 	rdg_idx = shard_idx / replicas;
 	start = rdg_idx * replicas;
