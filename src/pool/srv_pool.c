@@ -1736,8 +1736,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_buf			*map_buf;
 	uint32_t			map_version;
 	struct rdb_tx			tx;
-	daos_iov_t			key;
-	daos_iov_t			value;
+	d_iov_t				key;
+	d_iov_t				value;
 	struct pool_hdl			hdl;
 	d_iov_t				iv_iov;
 	unsigned int			iv_ns_id;
@@ -2323,9 +2323,9 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 		if (!daos_rank_list_identical(replicas, tmp_replicas))
 			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
 				DP_UUID(svc->ps_uuid));
-		daos_rank_list_free(tmp_replicas);
+		d_rank_list_free(tmp_replicas);
 	}
-	daos_rank_list_free(replicas);
+	d_rank_list_free(replicas);
 out:
 	return rc;
 }

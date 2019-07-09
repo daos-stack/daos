@@ -124,7 +124,7 @@ cmd_args_print(struct cmd_args_s *ap)
 	if (ap == NULL)
 		return;
 
-	daos_oclass_id2str(ap->oclass, oclass);
+	daos_oclass_id2name(ap->oclass, oclass);
 	daos_unparse_ctype(ap->type, type);
 
 	D_INFO("\tDAOS system name: %s\n", ap->sysname);
@@ -401,7 +401,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			}
 			break;
 		case 'o':
-			daos_oclass_str2id(optarg, &ap->oclass);
+			ap->oclass = daos_oclass_name2id(optarg);
 			if (ap->oclass == OC_UNKNOWN) {
 				fprintf(stderr, "unknown object class: %s\n",
 						optarg);
@@ -505,7 +505,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	return 0;
 
 out_free:
-	daos_rank_list_free(ap->mdsrv);
+	d_rank_list_free(ap->mdsrv);
 	if (ap->sysname != NULL)
 		D_FREE(ap->sysname);
 	if (ap->mdsrv_str != NULL)
@@ -948,7 +948,7 @@ main(int argc, char *argv[])
 	rc = hdlr(&dargs);
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
-	daos_rank_list_free(dargs.mdsrv);
+	d_rank_list_free(dargs.mdsrv);
 
 	daos_fini();
 

@@ -262,7 +262,7 @@ out_pool:
 out_dfs:
 	D_FREE(dfs);
 out_svcl:
-	daos_rank_list_free(dfuse_info->di_svcl);
+	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_FREE(dfuse_info);
