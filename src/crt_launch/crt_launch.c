@@ -133,7 +133,7 @@ parse_args(int argc, char **argv)
 			break;
 		case 'e':
 			g_opt.app_to_exec = optarg;
-			g_opt.app_args_indx = optind;
+			g_opt.app_args_indx = optind - 1;
 			break;
 		default:
 			g_opt.show_help = true;
