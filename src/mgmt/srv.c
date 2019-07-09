@@ -468,6 +468,7 @@ process_setup_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 }
 
+static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
 	uint8_t	*body;
