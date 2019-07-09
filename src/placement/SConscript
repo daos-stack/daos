@@ -26,7 +26,7 @@ def scons():
     Export("dc_placement_tgts")
 
     # Build tests
-    SConscript('tests/SConscript', exports=['denv', 'common_tgts', 'prereqs'])
+    SConscript('tests/SConscript', exports=['denv', 'common_tgts'])
 
 if __name__ == "SCons.Script":
     scons()

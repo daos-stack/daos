@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'common_tgts', 'prereqs')
+    Import('denv', 'common_tgts')
 
     denv.AppendUnique(LIBPATH=['../../client/api'])
 
