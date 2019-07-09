@@ -55,8 +55,6 @@ func parseCliOpts(opts *cliOptions) error {
 // TODO: Refactor this to decouple CLI functionality from core
 // server logic and allow for easier testing.
 func Main() error {
-	// Bootstrap default logger before config options get set.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
 	opts := new(cliOptions)
 	if err := parseCliOpts(opts); err != nil {
