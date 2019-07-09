@@ -35,6 +35,17 @@ import (
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
+//go:generate stringer -type=scmState
+type scmState int
+
+const (
+	unknown scmState = iota
+	noModules
+	noRegions
+	noNamespaces
+	noCapacity
+)
+
 var (
 	msgScmNotInited        = "scm storage not initialized"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
@@ -48,6 +59,65 @@ var (
 	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
+// PmemDevs are kernel devices mapping to SCM region namespaces
+type PmemDevs []string
+
+// ScmSetup is an interface to configure scm prerequisites via shell tools
+type ScmSetup interface {
+	prep(common.ScmModules) (PmemDevs, error)
+	reset() error
+}
+
+// scmSetup is an implementation of the ScmSetup interface
+type scmSetup struct{}
+
+// prep executes commands to configure SCM modules into AppDirect
+// interleaved regions/sets hosting pmem kernel device namespaces.
+//
+// State will be established based on presence of modules, presence of
+// regions and free space on regions. Actions based on state:
+//
+// * no modules -> no-op
+// * modules exist and no regions -> create regions
+// * regions exist and free capacity -> create namespaces
+// * regions exist but no free capacity -> no-op
+//
+// Any newly created kernel devices will be listed in return value.
+func (s *scmSetup) prep(modules common.ScmModules) (devs PmemDevs, err error) {
+	ss, err := s.getState()
+	if err != nil {
+		return devs, errors.WithMessage(err, "establish scm state")
+	}
+
+	log.Debugf("scm in state %s\n", ss)
+
+	switch ss {
+	case noModules:
+		log.Debugf("no scm modules to prepare\n")
+	case noRegions:
+		err = s.createRegions()
+	case noNamespaces:
+		return s.createNamespaces()
+	case noCapacity:
+		log.Debugf("scm modules have already been prepared\n")
+		return s.getNamespaces()
+	default:
+		err = errors.New("unknown scm state")
+	}
+
+	return
+}
+
+// reset executes commands to remove namespaces and regions on SCM models.
+func (s *scmSetup) reset() error {
+	return nil // TODO
+}
+
+func (s *scmSetup) getState() (state scmState, err error)        { return }
+func (s *scmSetup) createRegions() (err error)                   { return }
+func (s *scmSetup) createNamespaces() (devs PmemDevs, err error) { return }
+func (s *scmSetup) getNamespaces() (devs PmemDevs, err error)    { return }
+
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device
 // details.
@@ -56,6 +126,7 @@ var (
 // Memory modules through libipmctl via go-ipmctl bindings.
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
+	scm         ScmSetup       // interact with SCM tools via shell
 	config      *configuration // server configuration structure
 	modules     common.ScmModules
 	initialized bool

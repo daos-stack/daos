@@ -64,6 +64,7 @@ func newMockScmStorage(
 
 	return &scmStorage{
 		ipmctl:      &mockIpmctl{discoverModulesRet, mms},
+		scm:         &scmSetup{},
 		initialized: inited,
 		config:      c,
 	}
@@ -74,6 +75,50 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 
 	return newMockScmStorage(
 		nil, []DeviceDiscovery{m}, false, config)
+}
+
+func TestPrepScm(t *testing.T) {
+	defer ShowLogOnFailure(t)()
+
+	//mPB := MockModulePB()
+	m := MockModule()
+	config := defaultMockConfig(t)
+
+	tests := []struct {
+		desc              string
+		inited            bool
+		ipmctlDiscoverRet error
+		formatted         bool
+		errMsg            string
+		expPmemDevs       []string
+	}{
+		{
+			inited: true,
+		},
+		{
+			inited: false,
+		},
+	}
+
+	for _, tt := range tests {
+		ss := newMockScmStorage(tt.ipmctlDiscoverRet, []DeviceDiscovery{m},
+			tt.inited, &config)
+
+		ss.formatted = tt.formatted
+
+		if tt.inited {
+			// not concerned with response
+			ss.Discover(new(pb.ScanStorageResp))
+		}
+
+		newDevs, err := ss.scm.prep(ss.modules)
+		if tt.errMsg != "" {
+			ExpectError(t, err, tt.errMsg, tt.desc)
+			continue
+		}
+
+		AssertStringsEqual(t, newDevs, tt.expPmemDevs, tt.desc+": unexpected new devices")
+	}
 }
 
 func TestDiscoverScm(t *testing.T) {
