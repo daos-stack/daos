@@ -34,6 +34,20 @@ extern "C" {
 #endif
 
 /**
+ * Generate a rank list from a string with a seprator argument. This is a
+ * convenience function to generate the rank list required by
+ * daos_pool_connect().
+ *
+ * \param[in]	str	string with the rank list
+ * \param[in]	sep	separator of the ranks in \a str.
+ *			dmg uses ":" as the separator.
+ *
+ * \return		allocated rank list that user is responsible to free
+ *			with d_rank_list_free().
+ */
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
+
+/**
  * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful
  * completion, \a poh returns the pool handle, and \a info returns the latest
  * pool information.
