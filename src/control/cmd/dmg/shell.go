@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/client"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/ishell"
 	"github.com/pkg/errors"
@@ -94,7 +95,7 @@ func getKillRankParams(c *ishell.Context) (pool string, rank int, err error) {
 	return
 }
 
-func setupShell() *ishell.Shell {
+func setupShell(conns client.Connect) *ishell.Shell {
 	shell := ishell.New()
 
 	shell.AddCmd(&ishell.Cmd{
@@ -146,7 +147,7 @@ func setupShell() *ishell.Shell {
 			_, out := hasConns(conns.GetActiveConns(nil))
 			c.Println(out)
 
-			scanStor()
+			scanStor(conns)
 		},
 	})
 
@@ -158,7 +159,7 @@ func setupShell() *ishell.Shell {
 			_, out := hasConns(conns.GetActiveConns(nil))
 			c.Println(out)
 
-			formatStor(false)
+			formatStor(conns, false)
 		},
 	})
 
@@ -175,7 +176,7 @@ func setupShell() *ishell.Shell {
 				c.Println(err)
 			}
 
-			updateStor(req, false)
+			updateStor(conns, req, false)
 		},
 	})
 
@@ -195,7 +196,7 @@ func setupShell() *ishell.Shell {
 				c.Println(err)
 			}
 
-			killRankSvc(poolUUID, uint32(rank))
+			killRankSvc(conns, poolUUID, uint32(rank))
 		},
 	})
 
