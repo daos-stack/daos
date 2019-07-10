@@ -30,11 +30,12 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
 )
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
