@@ -30,11 +30,12 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
 )
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
@@ -90,16 +91,29 @@ func awaitStorageFormat(config *configuration) error {
 
 	if syscall.Getuid() == 0 {
 		for i, srv := range config.Servers {
-			if ok, err := config.ext.exists(
-				iosrvSuperPath(srv.ScmMount)); err != nil {
+			isMount, err := config.ext.isMountPoint(srv.ScmMount)
+			if err == nil && !isMount {
+				log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
 
-				return errors.WithMessage(
-					err, "checking superblock exists")
+				mntType, devPath, mntOpts, err := getMntParams(&srv)
+				if err != nil {
+					return errors.WithMessage(err, "getting scm mount params")
+				}
+
+				log.Debugf("mounting scm %s at %s (%s)...", devPath, srv.ScmMount, mntType)
+
+				err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
+				if err != nil {
+					return errors.WithMessage(err, "mounting existing scm dir")
+				}
+			} else if !os.IsNotExist(err) {
+				return errors.WithMessage(err, "checking scm mounted")
+			}
+
+			if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+				return errors.WithMessage(err, "checking superblock exists")
 			} else if ok {
-				log.Debugf(
-					msgSkip+" (server already formatted)\n",
-					i)
-
+				log.Debugf(msgSkip+" (server already formatted)\n", i)
 				continue
 			}
 

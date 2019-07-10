@@ -94,8 +94,8 @@ type the following command in the top source directory to build the DAOS stack:
     scons --config=force install
 ```
 
-If you are a developer of DAOS, we recommend following the instructions in
-Section 4.4.4 below.
+If you are a developer of DAOS, we recommend following the instructions in the
+last section of this chapter.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
@@ -132,12 +132,12 @@ specified through PREFIX.
 To build the Docker image directly from GitHub, run the following command:
 
 ```
-    $ docker build -t daos -f Dockerfile.centos\:7 github.com/daos-stack/daos#:utils/docker
+    $ docker build -t daos -f Dockerfile.centos.7 github.com/daos-stack/daos#:utils/docker
 ```
 
 This creates a CentOS7 image, fetches the latest DAOS version from GitHub and
 builds it in the container. For Ubuntu and other Linux distributions, replace
-Dockerfile.centos\:7 with Dockerfile.ubuntu\:18.04 and the appropriate version
+Dockerfile.centos.7 with Dockerfile.ubuntu.18.04 and the appropriate version
 of interest.
 
 To build from a local tree stored on the host, a volume must be created to share
@@ -145,15 +145,17 @@ the source tree with the Docker container. To do so, please execute the followin
 command to create a docker image without checking out the DAOS source tree:
 
 ```
-    $ docker build -t daos -f utils/docker/Dockerfile.centos\:7 --build-arg NOBUILD=1 .
+    $ docker build -t daos -f utils/docker/Dockerfile.centos.7 --build-arg NOBUILD=1 .
 ```
 
 Then please execute the following command to export the DAOS source tree to the
 docker container and build it:
 
 ```
-    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "scons --config=force install"
+    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "scons --config=force --build-deps=yes install"
 ```
+
+${daospath} should be replaced with the full path to your DAOS source tree.
 
 ## DAOS for Development
 

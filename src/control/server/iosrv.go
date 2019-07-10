@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
@@ -47,7 +48,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/golang/protobuf/proto"
 )
 
 // pmixless returns if we are in PMIx-less or PMIx mode.

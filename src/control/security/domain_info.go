@@ -27,9 +27,10 @@ import (
 	"net"
 	"syscall"
 
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
+
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // DomainInfo holds our socket credentials to be used by the DomainSocketServer
