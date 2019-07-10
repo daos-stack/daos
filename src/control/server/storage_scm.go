@@ -69,7 +69,9 @@ type ScmSetup interface {
 }
 
 // scmSetup is an implementation of the ScmSetup interface
-type scmSetup struct{}
+type scmSetup struct {
+	config *configuration
+}
 
 // prep executes commands to configure SCM modules into AppDirect
 // interleaved regions/sets hosting pmem kernel device namespaces.
@@ -113,7 +115,16 @@ func (s *scmSetup) reset() error {
 	return nil // TODO
 }
 
-func (s *scmSetup) getState() (state scmState, err error)        { return }
+func (s *scmSetup) getState(modules common.ScmModules) (state scmState, err error) {
+	if len(modules) == 0 {
+		return noModules, nil
+	}
+
+	// TODO: discovery should provide SCM region details
+	s.config.ext.run("ipmctl show -a -region")
+	return
+}
+
 func (s *scmSetup) createRegions() (err error)                   { return }
 func (s *scmSetup) createNamespaces() (devs PmemDevs, err error) { return }
 func (s *scmSetup) getNamespaces() (devs PmemDevs, err error)    { return }
@@ -404,6 +415,7 @@ func (s *scmStorage) Update(
 func newScmStorage(config *configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
+		scm:    scmSetup{config: config},
 		config: config,
 	}
 
