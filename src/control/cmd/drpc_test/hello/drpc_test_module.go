@@ -26,9 +26,9 @@ package hello
 import (
 	"fmt"
 
-	"github.com/daos-stack/daos/src/control/drpc"
-
 	"github.com/golang/protobuf/proto"
+
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 //HelloModule is the RPC Handler for the Hello Module

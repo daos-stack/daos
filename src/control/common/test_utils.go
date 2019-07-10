@@ -35,6 +35,8 @@ import (
 
 // AssertTrue asserts b is true
 func AssertTrue(t *testing.T, b bool, message string) {
+	t.Helper()
+
 	if !b {
 		t.Fatal(message)
 	}
@@ -42,6 +44,8 @@ func AssertTrue(t *testing.T, b bool, message string) {
 
 // AssertFalse asserts b is false
 func AssertFalse(t *testing.T, b bool, message string) {
+	t.Helper()
+
 	if b {
 		t.Fatal(message)
 	}
@@ -54,6 +58,7 @@ func AssertFalse(t *testing.T, b bool, message string) {
 // then be used but will introduce a third party dep.
 func AssertEqual(
 	t *testing.T, a interface{}, b interface{}, message string) {
+	t.Helper()
 
 	if reflect.DeepEqual(a, b) {
 		return
@@ -68,6 +73,7 @@ func AssertEqual(
 // AssertStringsEqual sorts string slices before comparing.
 func AssertStringsEqual(
 	t *testing.T, a []string, b []string, message string) {
+	t.Helper()
 
 	sort.Strings(a)
 	sort.Strings(b)
@@ -78,6 +84,7 @@ func AssertStringsEqual(
 // ExpectError asserts error contains expected message
 func ExpectError(
 	t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
+	t.Helper()
 
 	if actualErr == nil {
 		t.Fatalf("Expected a non-nil error: %v", desc)
@@ -115,6 +122,8 @@ func LoadTestFiles(inFile string, outFile string) (
 // ShowLogOnFailure captures the log output in a buffer and displays it on test
 // failure. Returns a closure which should be run via defer in the test function.
 func ShowLogOnFailure(t *testing.T) func() {
+	t.Helper()
+
 	var buf strings.Builder
 	log.NewDefaultLogger(log.Error, t.Name(), &buf)
 

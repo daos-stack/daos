@@ -24,10 +24,14 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
 	. "github.com/inhies/go-bytesize"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // TestGetSize verifies the correct number of bytes are returned from input
@@ -105,4 +109,107 @@ func TestCalcStorage(t *testing.T) {
 		AssertEqual(t, scmBytes, tt.outScm, "bad scm bytes, "+tt.desc)
 		AssertEqual(t, nvmeBytes, tt.outNvme, "bad nvme bytes, "+tt.desc)
 	}
+}
+
+func TestPoolCommands(t *testing.T) {
+	testSizeStr := "512GB"
+	testSize, err := getSize(testSizeStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runCmdTests(t, []cmdTest{
+		{
+			"Create pool with missing arguments",
+			"pool create",
+			"",
+			nil,
+			errMissingFlag,
+		},
+		{
+			"Create pool with minimal arguments",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+					Scmbytes:   uint64(testSize),
+					Numsvcreps: 3,
+					Sys:        "daos_server", // FIXME: This should be a constant
+				}),
+			}, " "),
+			nil,
+			cmdSuccess,
+		},
+		{
+			"Create pool with all arguments",
+			// TODO: --acl-file not supported yet
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord", testSizeStr, testSizeStr),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+					Scmbytes:   uint64(testSize),
+					Nvmebytes:  uint64(testSize),
+					Numsvcreps: 3,
+					Sys:        "fnord",
+				}),
+			}, " "),
+			nil,
+			cmdSuccess,
+		},
+		{
+			"Create pool with too many replicas",
+			fmt.Sprintf("pool create --scm-size %s --nsvc %d", testSizeStr, maxNumSvcReps+1),
+			"ConnectClients",
+			nil,
+			fmt.Errorf("max number of service replicas"),
+		},
+		{
+			"Create pool with wacky size",
+			"pool create --scm-size a",
+			"ConnectClients",
+			nil,
+			fmt.Errorf("illegal scm size"),
+		},
+		{
+			"Destroy pool with missing arguments",
+			"pool destroy",
+			"",
+			nil,
+			errMissingFlag,
+		},
+		{
+			"Destroy pool without force",
+			"pool destroy --uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			// FIXME: Shouldn't force be checked locally, and therefore
+			// skip sending this?
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("DestroyPool-%s", &pb.DestroyPoolReq{
+					Uuid: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+			cmdSuccess,
+		},
+		{
+			"Destroy pool with force",
+			"pool destroy --uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("DestroyPool-%s", &pb.DestroyPoolReq{
+					Uuid:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Force: true,
+				}),
+			}, " "),
+			nil,
+			cmdSuccess,
+		},
+		{
+			"Nonexistent subcommand",
+			"pool quack",
+			"",
+			nil,
+			fmt.Errorf("Unknown command"),
+		},
+	})
 }

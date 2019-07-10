@@ -29,11 +29,12 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/pkg/errors"
+	yaml "gopkg.in/yaml.v2"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/pkg/errors"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
