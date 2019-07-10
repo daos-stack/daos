@@ -75,15 +75,16 @@ enum bio_bs_state {
 /*
  * SPDK device health monitoring.
  */
-struct bio_health_monitoring {
+struct bio_dev_health {
+	struct bio_device_health_state	 bdh_health_state;
 	/* writable open descriptor for health info polling */
-	struct spdk_bdev_desc	*bhm_desc;
-	struct spdk_io_channel	*bhm_io_channel;
-	void			*bhm_health_buf; /* device health info logs */
-	void			*bhm_ctrlr_buf; /* controller data */
-	void			*bhm_error_buf; /* device error logs */
-	uint64_t		 bhm_stat_age;
-	unsigned int		 bhm_inflights;
+	struct spdk_bdev_desc		*bdh_desc;
+	struct spdk_io_channel		*bdh_io_channel;
+	void				*bdh_health_buf; /* health info logs */
+	void				*bdh_ctrlr_buf; /* controller data */
+	void				*bdh_error_buf; /* device error logs */
+	uint64_t			 bdh_stat_age;
+	unsigned int			 bdh_inflights;
 };
 
 /*
@@ -91,26 +92,26 @@ struct bio_health_monitoring {
  * blobstore for certain NVMe device.
  */
 struct bio_blobstore {
-	ABT_mutex			 bb_mutex;
-	ABT_cond			 bb_barrier;
-	struct spdk_blob_store		*bb_bs;
+	ABT_mutex		 bb_mutex;
+	ABT_cond		 bb_barrier;
+	struct spdk_blob_store	*bb_bs;
 	/*
 	 * The xstream resposible for blobstore load/unload, monitor
 	 * and faulty/reint reaction.
 	 */
-	struct bio_xs_context		*bb_owner_xs;
+	struct bio_xs_context	*bb_owner_xs;
 	/* All the xstreams using the blobstore */
-	struct bio_xs_context		**bb_xs_ctxts;
+	struct bio_xs_context	**bb_xs_ctxts;
 	/* Device/blobstore health monitoring info */
-	struct bio_health_monitoring	 bb_dev_health;
-	enum bio_bs_state		 bb_state;
+	struct bio_dev_health	 bb_dev_health;
+	enum bio_bs_state	 bb_state;
 	/* Blobstore used by how many xstreams */
-	int				 bb_ref;
+	int			 bb_ref;
 	/*
 	 * Blobstore is held and being accessed by requests from upper
 	 * layer, teardown procedure needs be postponed.
 	 */
-	int				 bb_holdings;
+	int			 bb_holdings;
 };
 
 /* Per-xstream NVMe context */

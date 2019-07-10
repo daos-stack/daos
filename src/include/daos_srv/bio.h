@@ -86,6 +86,26 @@ struct bio_blob_hdr {
 	uuid_t		bbh_pool;
 };
 
+/*
+ * Current device state (health statistics). Periodically updated in
+ * bio_bs_monitor(). Used to determine faulty device status.
+ */
+struct bio_device_health_state {
+	uint64_t	 bhs_timestamp;
+	int		 bhs_bio_err;
+	/* Health log page information */
+	uint64_t	*bhs_media_errors; /* supports 128-bit values */
+	uint16_t	 bhs_temperature; /* in Kelvin */
+	/* Critical warnings */
+	uint8_t		 bhs_temp_warning	: 1;
+	uint8_t		 bhs_avail_spare_warning	: 1;
+	uint8_t		 bhs_dev_reliabilty_warning : 1;
+	uint8_t		 bhs_read_only_warning	: 1;
+	uint8_t		 bhs_volatile_mem_warning: 1; /*volatile memory backup*/
+	/* Error log page */
+	uint64_t	 bhs_error_count;
+};
+
 static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
