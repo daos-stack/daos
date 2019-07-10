@@ -58,8 +58,6 @@ class CartCoRpcOneNodeTest(Test):
 
         cmd = self.utils.build_cmd(self, self.env, "srv")
 
-        print("\nTest cmd : %s\n" % cmd)
-
         self.utils.launch_test(self, cmd)
 
 if __name__ == "__main__":

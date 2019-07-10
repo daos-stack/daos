@@ -70,7 +70,7 @@ class CartNoPmixOneNodeTest(Test):
 
         test_bin = self.params.get("tst_bin", '/run/tests/*/')
 
-        print("\nTest cmd : %s\n" % test_bin)
+        self.utils.print("\nTest cmd : %s\n" % test_bin)
 
         ranks = [1, 2, 3, 10, 4]
         master_rank = 10
@@ -101,17 +101,17 @@ class CartNoPmixOneNodeTest(Test):
             rc = self.utils.wait_process(x, 10)
 
             if rc != 0:
-                print("Error waiting for process. returning {}".format(rc))
+                self.utils.print("Error waiting for process. returning {}".format(rc))
                 return rc
 
-            print("Finished waiting for {}".format(x))
+            self.utils.print("Finished waiting for {}".format(x))
 
         rc = self.utils.wait_process(p1, 10)
         if rc != 0:
-            print("error waiting for master process {}".format(rc))
+            self.utils.print("error waiting for master process {}".format(rc))
             return rc
 
-        print("everything finished successfully")
+        self.utils.print("everything finished successfully")
 
 if __name__ == "__main__":
     main()

@@ -70,7 +70,7 @@ class CartNoPmixOneNodeTest(Test):
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 
-        print("\nTest cmd : %s\n" % cmd)
+        self.utils.print("\nTest cmd : %s\n" % cmd)
 
         test_env = self.pass_env
         p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
@@ -78,10 +78,10 @@ class CartNoPmixOneNodeTest(Test):
         rc = self.utils.wait_process(p, 10)
 
         if rc != 0:
-            print("Error waiting for process. returning {}".format(rc))
+            self.utils.print("Error waiting for process. returning {}".format(rc))
             self.fail("Test failed.\n")
 
-        print("Finished waiting for {}".format(p))
+        self.utils.print("Finished waiting for {}".format(p))
 
 if __name__ == "__main__":
     main()

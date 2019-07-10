@@ -110,19 +110,19 @@ class CartIvTwoNodeTest(Test):
         if (('operation' not in action) or
                 ('rank' not in action) or
                 ('key' not in action)):
-            print("Error happened during action check")
+            self.utils.print("Error happened during action check")
             raise ValueError("Each action must contain an operation," \
                              " rank, and key")
 
         if len(action['key']) != 2:
-            print("Error key should be tuple of (rank, idx)")
+            self.utils.print("Error key should be tuple of (rank, idx)")
             raise ValueError("key should be a tuple of (rank, idx)")
 
     def _verify_fetch_operation(self, action):
         """verify fetch operation"""
         if (('return_code' not in action) or
                 ('expected_value' not in action)):
-            print("Error: fetch operation was malformed")
+            self.utils.print("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
     def _iv_test_actions(self, cmd, actions):
@@ -151,7 +151,7 @@ class CartIvTwoNodeTest(Test):
                             log_path)
                 clicmd += command
 
-                print("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -194,7 +194,7 @@ class CartIvTwoNodeTest(Test):
                                 action['value'])
                 clicmd += command
 
-                print("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -206,7 +206,7 @@ class CartIvTwoNodeTest(Test):
                     command, operation, rank, key_rank, key_idx)
                 clicmd += command
 
-                print("\nClient cmd : %s\n" % clicmd)
+                self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
                 if cli_rtn != 0:
@@ -222,12 +222,10 @@ class CartIvTwoNodeTest(Test):
 
         srvcmd = self.utils.build_cmd(self, self.env, "srv")
 
-        print("\nServer cmd : %s\n" % srvcmd)
-
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         except Exception as e:
-            print("Exception in launching server : {}".format(e))
+            self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -264,7 +262,7 @@ class CartIvTwoNodeTest(Test):
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
             failed = True
-            print("TEST FAILED: %s", str(exception))
+            self.utils.print("TEST FAILED: %s", str(exception))
 
         ########## Shutdown Servers ##########
 
@@ -276,23 +274,23 @@ class CartIvTwoNodeTest(Test):
         # Request each server shut down gracefully
         for rank in reversed(range(1, int(srv_ppn) * num_servers)):
             clicmd += " -o shutdown -r " + str(rank)
-            print("\nClient cmd : %s\n" % clicmd)
+            self.utils.print("\nClient cmd : %s\n" % clicmd)
             try:
                 subprocess.call(shlex.split(clicmd))
             except Exception as e:
                 failed = True
-                print("Exception in launching client : {}".format(e))
+                self.utils.print("Exception in launching client : {}".format(e))
 
         time.sleep(1)
 
         # Shutdown rank 0 separately
         clicmd += " -o shutdown -r 0"
-        print("\nClient cmd : %s\n" % clicmd)
+        self.utils.print("\nClient cmd : %s\n" % clicmd)
         try:
             subprocess.call(shlex.split(clicmd))
         except Exception as e:
             failed = True
-            print("Exception in launching client : {}".format(e))
+            self.utils.print("Exception in launching client : {}".format(e))
 
         time.sleep(2)
 

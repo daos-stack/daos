@@ -67,43 +67,35 @@ class CartGroupTiersThreeNodeTest(Test):
 
         srv2cmd = self.utils.build_cmd(self, self.env, "srv2", True, urifile2)
 
-        print("\nServer 1 cmd : %s\n" % srv2cmd)
-
         try:
             srv2_rtn = self.utils.launch_cmd_bg(self, srv2cmd)
         except Exception as e:
-            print("Exception in launching server : {}".format(e))
+            self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         time.sleep(8)
 
-        print("\nServer 2 cmd : %s\n" % srvcmd)
-
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
         except Exception as e:
-            print("Exception in launching server : {}".format(e))
+            self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         time.sleep(4)
 
         clicmd = self.utils.build_cmd(self, self.env, "cli1", False, urifile2)
 
-        print("\nClient 1 cmd : %s\n" % clicmd)
-
         self.utils.launch_test(self, clicmd, srv_rtn, srv2_rtn)
 
         clicmd = self.utils.build_cmd(self, self.env, "cli2", False, urifile1)
 
-        print("\nClient 2 cmd : %s\n" % clicmd)
-
         self.utils.launch_test(self, clicmd, srv_rtn, srv2_rtn)
 
         # Stop the server
-        print("Stopping server process 2 {}".format(srv2_rtn))
+        self.utils.print("Stopping server process 2 {}".format(srv2_rtn))
         procrtn2 = self.utils.stop_process(srv2_rtn)
 
-        print("Stopping server process 1 {}".format(srv_rtn))
+        self.utils.print("Stopping server process 1 {}".format(srv_rtn))
         procrtn1 = self.utils.stop_process(srv_rtn)
 
         if procrtn2 or procrtn1:

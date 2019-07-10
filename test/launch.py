@@ -124,7 +124,7 @@ if __name__ == "__main__":
     if not test_files:
         printhelp()
 
-    avocado = ' avocado run'
+    avocado = ' avocado --show app,progress run'
     if sparse:
         output_options = ' --html-job-result on'
     else:
