@@ -5,7 +5,7 @@
 #
 
 # Pull base image
-FROM suse/sles:12.3
+FROM opensuse/leap:42.3
 MAINTAINER Brian J. Murrell <brian.murrell@intel.com>
 
 # use same UID as host and default value of 1000 if not specified
@@ -30,9 +30,9 @@ RUN zypper --non-interactive install rdma-core-devel libnl3-devel        \
 # mercury
 ARG JENKINS_URL=""
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f \
-    ${JENKINS_URL}job/daos-stack/job/openpa/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ openpa; \
+    ${JENKINS_URL}job/daos-stack/job/openpa/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ openpa; \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f \
-    ${JENKINS_URL}job/daos-stack/job/libfabric/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ libfabric; \
+    ${JENKINS_URL}job/daos-stack/job/libfabric/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ libfabric; \
     zypper --non-interactive ref openpa libfabric
 # our libfabric conflicts with libfabric1
 # TODO: consider if we should rename ours or replace libfabric1, etc.
@@ -45,10 +45,8 @@ RUN zypper --non-interactive --no-gpg-check install openpa-devel      \
 RUN zypper --non-interactive install libevent-devel
 
 # ompi
-RUN zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc; \
-    zypper --non-interactive --gpg-auto-import-keys ref hwloc;                                                                  \
-    zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                                    \
-    ${JENKINS_URL}job/daos-stack/job/pmix/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ pmix;                     \
+RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                              \
+    ${JENKINS_URL}job/daos-stack/job/pmix/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ pmix; \
     zypper --non-interactive ref pmix
 RUN zypper --non-interactive install hwloc-devel pmix-devel flex
 
@@ -57,16 +55,16 @@ RUN zypper --non-interactive install fdupes
 
 # cart
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f \
-    ${JENKINS_URL}job/daos-stack/job/mercury/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ mercury; \
-    zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                      \
-    ${JENKINS_URL}job/daos-stack/job/ompi/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ ompi;       \
-    zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                      \
-    ${JENKINS_URL}job/daos-stack/job/scons/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ scons;     \
+    ${JENKINS_URL}job/daos-stack/job/mercury/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ mercury; \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                    \
+    ${JENKINS_URL}job/daos-stack/job/ompi/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ ompi;     \
+    zypper --non-interactive ar --gpgcheck-allow-unsigned -f                                                    \
+    ${JENKINS_URL}job/daos-stack/job/scons/job/master/lastSuccessfulBuild/artifact/artifacts/leap42.3/ scons;     \
     zypper --non-interactive --gpg-auto-import-keys ref mercury ompi scons
-RUN zypper --non-interactive install scons libyaml-devel mercury-devel    \
+RUN zypper --non-interactive install scons libyaml-devel mercury-devel \
                                      ompi-devel openssl-devel
-RUN zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo; \
-    zypper --non-interactive --gpg-auto-import-keys ref 'A project for basic libraries shared among multiple projects (SLE_12_SP3)'
+RUN zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/openSUSE_Leap_42.3/devel:libraries:c_c++.repo; \
+    zypper --non-interactive --gpg-auto-import-keys ref 'A project for basic libraries shared among multiple projects (openSUSE_Leap_42.3)'
 RUN zypper --non-interactive install libcmocka-devel
 
 # force an upgrade to get any newly built RPMs
