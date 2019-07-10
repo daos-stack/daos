@@ -203,11 +203,20 @@ On each storage node, the DAOS server will use a storage path (specified either 
 To start the DAOS server, run:
 
 ```
-    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server
+    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server -i
 ```
 
 By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams in the configuration file (cpus) or with the -c #cores\_to\_use cli option.
 Hostfile used here is the same as the ones used by Open MPI. See (https://www.open-mpi.org/faq/?category=running#mpirun-hostfile) for additional details.
+
+### Starting DAOS agent
+
+The DAOS agent is a process run locally to the machine running DAOS client library applications. The purpose of the agent is to allow DAOS applications to obtain security credentials for the purposes of connecting to various DAOS pools. To ensure that the agent can start properly follow the directions in the [Runtime Directory setup](#-Runtime-Directory-Setup) section.
+
+To start the DAOS agent, run:
+```
+	daos_agent -i &
+```
 
 ### DAOS Pool Management
 
@@ -229,7 +238,7 @@ To destroy a pool:
 
 ### Testing DAOS
 
-To build applications or I/O middleware against the DAOS library, include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests.
+To build applications or I/O middleware against the DAOS library, include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests. All DAOS library applications including daos_test must have daos_agent started prior to running. To configure and start daos agent see the [Starting DAOS agent](#-Starting-DAOS-agent) section
 
 To run the applications:
 

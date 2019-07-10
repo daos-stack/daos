@@ -349,12 +349,27 @@ daos_oclass_name2id(const char *name)
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
-			break;
+			return oc->oc_id;
 	}
-	if (oc->oc_id == OC_UNKNOWN)
-		return -1;
 
-	return oc->oc_id;
+	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	return OC_UNKNOWN;
+}
+
+int
+daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
+{
+	struct daos_obj_class   *oc;
+
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		if (oc->oc_id == oc_id) {
+			strcpy(str, oc->oc_name);
+			return 0;
+		}
+	}
+
+	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	return -1;
 }
 
 /** Return the redundancy group size of @oc_attr */
@@ -402,55 +417,6 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 {
 	/* NB: @md is unsupported for now */
 	return oc_attr->ca_grp_nr;
-}
-
-void
-daos_oclass_str2id(const char *str, daos_oclass_id_t *oc_id)
-{
-	/* XXX should just scan the class table */
-	if (strcasecmp(str, "tiny") == 0)
-		*oc_id = OC_S1;
-	else if (strcasecmp(str, "small") == 0)
-		*oc_id = OC_S4;
-	else if (strcasecmp(str, "large") == 0)
-		*oc_id = OC_SX;
-	else if (strcasecmp(str, "R2") == 0)
-		*oc_id = OC_RP_2G2;
-	else if (strcasecmp(str, "R2S") == 0)
-		*oc_id = OC_RP_2G1;
-	else if (strcasecmp(str, "repl_max") == 0)
-		*oc_id = OC_RP_XSF;
-	else
-		*oc_id = OC_UNKNOWN;
-}
-
-void
-daos_oclass_id2str(daos_oclass_id_t oc_id, char *str)
-{
-	/* XXX should just scan the class table */
-	switch (oc_id) {
-	case OC_S1:
-		strcpy(str, "tiny");
-		break;
-	case OC_S4:
-		strcpy(str, "small");
-		break;
-	case OC_SX:
-		strcpy(str, "large");
-		break;
-	case OC_RP_2G2:
-		strcpy(str, "R2");
-		break;
-	case OC_RP_2G1:
-	       strcpy(str, "R2S");
-	       break;
-	case OC_RP_XSF:
-	       strcpy(str, "repl_max");
-	       break;
-	default:
-		strcpy(str, "unknown");
-		break;
-	}
 }
 
 /** a structure to map EC object class to EC codec structure */
