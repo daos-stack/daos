@@ -23,7 +23,6 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "dfuse_da.h"
 
 /* Inode record hash table operations */
 
