@@ -421,13 +421,8 @@ test_rmdir(const char *path, bool force)
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	D_ALLOC(fullpath, PATH_MAX);
-	if (fullpath == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	dir = opendir(path);
 	if (dir == NULL) {
-		D_FREE(fullpath);
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
 		D_ERROR("can't open directory %s, %d (%s)",
@@ -439,16 +434,9 @@ test_rmdir(const char *path, bool force)
 		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 			continue;   /* skips the dots */
 
-		rc = snprintf(fullpath, PATH_MAX, "%s/%s", path, ent->d_name);
-		if (rc < 0 || rc >= PATH_MAX) {
-			if (rc < 0)
-				rc = -DER_INVAL;	/* invalid */
-			if (rc >= PATH_MAX)
-				rc = -DER_NOMEM;	/* overflow */
-			D_FREE(fullpath);
-			D_GOTO(out, rc);
-		}
-		rc = 0;
+		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
+		if (fullpath == NULL)
+			D_GOTO(out, -DER_NOMEM);
 
 		switch (ent->d_type) {
 		case DT_DIR:
@@ -472,9 +460,9 @@ test_rmdir(const char *path, bool force)
 		if (rc != 0)
 			rc = errno;
 	}
-	D_FREE(fullpath);
 
 out:
+	D_FREE(fullpath);
 	return rc;
 }
 
