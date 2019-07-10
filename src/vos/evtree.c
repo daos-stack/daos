@@ -186,7 +186,7 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 	/* NB: they can be negative */
 	wt_diff->wt_major = wt1->wt_major - wt2->wt_major;
 	/** wt2 is the difference to the original mbr */
-	wt_diff->wt_minor = wt2->wt_minor;
+	wt_diff->wt_minor = wt1->wt_major - wt2->wt_minor;
 }
 
 /** Internal function for initializing an array.   Using 0 for max
@@ -1400,7 +1400,7 @@ evt_root_destroy(struct evt_context *tcx)
 	return evt_root_free(tcx);
 }
 
-static uint64_t
+static int64_t
 evt_epoch_dist(struct evt_context *tcx, struct evt_node *nd,
 	       const struct evt_rect *rect)
 {
@@ -2452,7 +2452,7 @@ evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 {
 	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
-	weight->wt_minor = -rect->rc_epc;
+	weight->wt_minor = 0; /* Disable minor weight in favor of distance */
 
 	return 0;
 }
