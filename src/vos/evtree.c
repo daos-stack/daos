@@ -1243,10 +1243,10 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	memset(&wt_new, 0, sizeof(wt_new));
 
 	rtmp = nd->tn_mbr;
-	tcx->tc_ops->po_rect_weight(tcx, rect->rc_epc, &rtmp, &wt_org);
+	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_org);
 
 	evt_rect_merge(&rtmp, rect);
-	tcx->tc_ops->po_rect_weight(tcx, rect->rc_epc, &rtmp, &wt_new);
+	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_new);
 
 	evt_weight_diff(&wt_new, &wt_org, weight_diff);
 }
@@ -1400,6 +1400,18 @@ evt_root_destroy(struct evt_context *tcx)
 	return evt_root_free(tcx);
 }
 
+static uint64_t
+evt_epoch_dist(struct evt_context *tcx, struct evt_node *nd,
+	       const struct evt_rect *rect)
+{
+	struct evt_rect	*mbr = evt_node_mbr_get(tcx, nd);
+
+	if (mbr->rc_epc > rect->rc_epc)
+		return mbr->rc_epc - rect->rc_epc;
+
+	return rect->rc_epc - mbr->rc_epc;
+}
+
 /** Select a node from two for the rectangle \a rect being inserted */
 static struct evt_node *
 evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
@@ -1407,12 +1419,25 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 {
 	struct evt_weight	wt1;
 	struct evt_weight	wt2;
+	uint64_t		dist1;
+	uint64_t		dist2;
 	int			rc;
 
 	evt_node_weight_diff(tcx, nd1, rect, &wt1);
 	evt_node_weight_diff(tcx, nd2, rect, &wt2);
 
 	rc = evt_weight_cmp(&wt1, &wt2);
+
+	if (rc == 0) {
+		dist1 = evt_epoch_dist(tcx, nd1, rect);
+		dist2 = evt_epoch_dist(tcx, nd2, rect);
+
+		if (dist1 < dist2)
+			return nd1;
+		else
+			return nd2;
+	}
+
 	return rc < 0 ? nd1 : nd2;
 }
 
@@ -2412,16 +2437,12 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 }
 
 static int
-evt_common_rect_weight(struct evt_context *tcx, daos_epoch_t epoch,
-		       const struct evt_rect *rect, struct evt_weight *weight)
+evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
+		       struct evt_weight *weight)
 {
 	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
-	/* Check the distance of the new epoch from the stored one */
-	if (epoch >= rect->rc_epc)
-		weight->wt_minor = epoch - rect->rc_epc;
-	else
-		weight->wt_minor = rect->rc_epc - epoch;
+	weight->wt_minor = -rect->rc_epc;
 
 	return 0;
 }
