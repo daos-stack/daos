@@ -1,0 +1,136 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# see ENVIRONMENT in dpkg-buildflags(1)
+# package maintainers to append CFLAGS
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+name := daos
+prefix := /usr
+exec_prefix := $(prefix)
+datadir := $(prefix)/share
+libdir := $(prefix)/lib/$(DEB_BUILD_MULTIARCH)
+bindir := $(prefix)/bin
+includedir := $(prefix)/include
+sysconfdir := /etc
+daoshome := $(exec_prefix)/lib/$(name)
+buildroot := debian/tmp
+
+SCONS = scons
+DEB_SCONS_OPTIONS := --config=force USE_INSTALLED=all \
+	PMIX_PREBUILT=/usr/lib/$(DEB_BUILD_MULTIARCH)/pmix \
+	OMPI_PREBUILT=/usr/lib/$(DEB_BUILD_MULTIARCH)/openmpi \
+	PREFIX=$(buildroot)$(prefix)
+
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	#if [ ! -e src/$(name)/_structures_from_macros_.h_orig ] ;then \
+	#  cp src/$(name)/_structures_from_macros_.h \
+	#  src/$(name)/_structures_from_macros_.h_orig ;fi
+	if [ ! -e src/SConscript_orig ] ;then \
+	  find . -name SConscript -exec cp -v '{}' '{}_orig' ';' ;fi
+	find . -name SConscript | \
+	  xargs sed -i -e '/AppendUnique(RPATH=.*)/d'
+	if [ ! -e utils/daos_build.py_orig ] ;then \
+	  cp utils/daos_build.py utils/daos_build.py_orig ; fi
+	sed -i -e '/AppendUnique(RPATH=.*)/d' utils/daos_build.py
+	$(SCONS) $(DEB_SCONS_OPTIONS)
+
+override_dh_auto_clean:
+	$(SCONS) --clean
+	rm -rf build install
+	find . -name '*.pyc' -delete
+	rm -rf _build.external
+	#rm -rf .sconf-temp-Linux
+	#rm -f .sconsign-Linux.dblite
+	rm -f .build_vars.json .build_vars.sh
+	rm -f $(name).conf
+	rm -f config.log
+	#if [ -e src/$(name)/_structures_from_macros_.h_orig ] ;then \
+	#  mv src/$(name)/_structures_from_macros_.h_orig \
+	#    src/$(name)/_structures_from_macros_.h ;fi
+	if [ -e src/SConscript_orig ] ; then \
+	  find . -name SConscript -exec mv -v -f '{}_orig' '{}' ';' ;fi
+	if [ -e utils/daos_build.py_orig ] ;then \
+          mv utils/daos_build.py_orig utils/daos_build.py ; fi
+	dh_auto_clean
+
+# cp openmpi/include to work around bug until ompi dependency removed
+# Need to save/restore src/cart/_structures_from_macros_.h
+override_dh_auto_install:
+	#if [ ! -e src/$(name)/_structures_from_macros_.h_orig ] ;then \
+	#  cp src/$(name)/_structures_from_macros_.h \
+	#    src/$(name)/_structures_from_macros_.h_orig ;fi
+	if [ ! -e src/SConscript_orig ] ; then \
+	  find . -name SConscript -exec cp -v '{}' '{}_orig' ';' ;fi
+	find . -name SConscript | \
+	  xargs sed -i -e '/AppendUnique(RPATH=.*)/d'
+	if [ ! -e utils/daos_build.py_orig ] ;then \
+	  cp utils/daos_build.py utils/daos_build.py_orig ; fi
+	mkdir -p $(buildroot)$(prefix)/include
+	#cp -r /usr/lib/$(DEB_BUILD_MULTIARCH)/openmpi/include/* \
+	#  $(buildroot)$(prefix)/include
+	$(SCONS) $(DEB_SCONS_OPTIONS) install
+	find . -name src/SConscript -exec mv -v -f '{}_orig' '{}' ';'
+	mv utils/daos_build.py_orig utils/daos_build.py ; fi
+	#sed -i -r -e s%.+$(buildroot)$(prefix)%$(prefix)%g \
+	#  $(buildroot)$(prefix)/TESTING/.build_vars.*
+	for f in acl_dump_test daos daos_addons_test daos_agent \
+		 daos_gen_io_conf daos_io_server daos_perf \
+		 daos_run_io_conf daos_server daos_shell daos_test \
+		 daosbench daosctl dcont dfuse dfuse_hl dmg \
+		 drpc_iosrv_test drpc_test evt_ctl hello_drpc \
+		 obj_ctl pl_map rdpt security_test smd_ut vea_ut \
+		 vos_size vos_tests; do \
+	  mv $(buildroot)$(prefix)/bin/$$f \
+	    $(buildroot)$(prefix)/bin/$(DEB_BUILD_MULTIARCH)-$$f ; \
+	  ln -s $(DEB_BUILD_MULTIARCH)-$$f $(buildroot)$(prefix)/bin/$$f ;done
+	mkdir -p $(buildroot)$(daoshome)
+	mkdir -p $(buildroot)$(prefix)/lib/$(DEB_BUILD_MULTIARCH)
+	mkdir -p $(buildroot)$(daoshome)/utils/py
+	cp -al src/utils/py/daos_api.py $(buildroot)$(daoshome)/utils/py
+	cp -al src/utils/py/daos_cref.py $(buildroot)$(daoshome)/utils/py
+	cp -al src/utils/py/conversion.py $(buildroot)$(daoshome)/utils/py
+	mkdir -p $(buildroot)/$(sysconfdir)/ld.so.conf.d/
+	echo "$(libdir)/daos_srv" > \
+	  $(buildroot)/$(sysconfdir)/ld.so.conf.d/daos.conf
+	#cp -al multi-node-test.sh utils $(buildroot)$(daoshome)/
+	mkdir -p $(buildroot)$(prefix)/lib/$(name)
+	mv $(buildroot)$(prefix)/TESTING $(buildroot)$(daoshome)/
+	cp -al ftest.sh src/tests/ftest $(buildroot)$(daoshome)/TESTING
+	for f in lf_s_test_ioil s_test_ioil; do \
+          mv $(buildroot)$(daoshome)/TESTING/tests/$$f \
+            $(buildroot)$(daoshome)/TESTING/tests/$(DEB_BUILD_MULTIARCH)-$$f ; \
+          ln -s $(DEB_BUILD_MULTIARCH)-$$f \
+	    $(buildroot)$(daoshome)/TESTING/tests/$$f ;done
+	find $(buildroot)$(daoshome)/TESTING/ftest \
+	  -name \*.py[co] -print0 | xargs -r0 rm -f
+	#ln $(buildroot)$(carthome)/TESTING/.build_vars.sh \
+	#  $(buildroot)$(carthome)/.build_vars-linux.sh
+	mv $(buildroot)$(prefix)/lib/lib*.so* \
+	  $(buildroot)$(prefix)/lib/$(DEB_BUILD_MULTIARCH)/
+	mkdir -p $(buildroot)$(prefix)/lib/daos_srv/$(DEB_BUILD_MULTIARCH)
+	mv $(buildroot)$(prefix)/lib/daos_srv/lib*.so* \
+	  $(buildroot)$(prefix)/lib/daos_srv/$(DEB_BUILD_MULTIARCH)
+	mv $(buildroot)$(prefix)/lib/lib*.a \
+	  $(buildroot)$(prefix)/lib/$(DEB_BUILD_MULTIARCH)
+	#rm -rf $(buildroot)$(daoshome)/utils/docker
+	#chmod 0644 $(buildroot)$(daoshome)/TESTING/*/*.yaml
+	chmod 0644 $(buildroot)$(daoshome)/TESTING/ftest/container/*.py
+	chmod 0644 $(buildroot)$(prefix)/bin/io_conf/*
+	rm -rf build install _build.external
+	find . -name '*.pyc' -delete
+
+
+

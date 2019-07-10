@@ -1,0 +1,3 @@
+usr/include/*
+usr/lib/*/libdaos.so
+usr/lib/*/*.a

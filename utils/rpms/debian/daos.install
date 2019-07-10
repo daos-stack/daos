@@ -1,0 +1,16 @@
+usr/bin/daos_shell
+usr/bin/*-daos_shell
+usr/bin/daosctl
+usr/bin/*-daosctl
+usr/bin/dcont
+usr/bin/*-dcont
+usr/bin/daos_agent
+usr/bin/*-daos_agent
+usr/bin/dfuse_hl
+usr/bin/*-dfuse_hl
+usr/lib/*/libdfs.so
+usr/lib/*/libduns.so
+usr/lib/*/libdfuse.so
+usr/lib/*/libioil.so
+usr/share/daos/ioil-ld-opts
+usr/etc/daos.yml

@@ -1,0 +1,17 @@
+usr/etc/daos_server.yml
+etc/ld.so.conf.d/daos.conf
+usr/bin/daos_server
+usr/bin/*-daos_server
+usr/lib/daos_srv/*/libcont.so
+usr/lib/daos_srv/*/libdtx.so
+usr/lib/daos_srv/*/libmgmt.so
+usr/lib/daos_srv/*/libobj.so
+usr/lib/daos_srv/*/libpool.so
+usr/lib/daos_srv/*/librdb.so
+usr/lib/daos_srv/*/librdbt.so
+usr/lib/daos_srv/*/librebuild.so
+usr/lib/daos_srv/*/librsvc.so
+usr/lib/daos_srv/*/librsvc.so
+usr/lib/daos_srv/*/libsecurity.so
+usr/lib/daos_srv/*/libvos_srv.so
+usr/share/daos/control

@@ -231,6 +231,8 @@ pipeline {
                     }
                 }
                 stage('Build RPM on SLES 12.3') {
+                    when { beforeAgent true
+                           environment name: 'SLES12_3_DOCKER', value: 'true' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile-rpmbuild.sles.12.3'
@@ -281,7 +283,67 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7') {
+                stage('Build DEB on Ubuntu 18.04') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-debbuild.ubuntu.18.04'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '--build-arg UID=$(id -u) ' +
+                              ' --build-arg JENKINS_URL=' + env.JENKINS_URL +
+                              ' --build-arg CACHEBUST=' +
+                              currentBuild.startTimeInMillis
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/ubuntu18.04/
+                              mkdir -p artifacts/ubuntu18.04/
+                              rm -f utils/rpms/*.tar.gz
+                              rm -rf _topdir/BUILD
+                              mkdir -p _topdir/BUILD
+                              : "${DEBEMAIL:="daos@daos.groups.io"}"
+                              : "${DEBFULLNAME:="daos-stack"}"
+                              : "${LANG:="C.UTF-8"}"
+                              : "${LC_ALL:="C.UTF-8"}"
+                              export DEBEMAIL
+                              export DEBFULLNAME
+                              export LANG
+                              export LC_ALL
+                              if make -C utils/rpms debs; then
+                                  ln -v utils/rpms/_topdir/BUILD/*{.build,.changes,.deb,.dsc,.gz,.xz}  artifacts/ubuntu18.04/
+
+                                  pushd artifacts/ubuntu18.04/
+                                    dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+                                  popd
+                              else
+                                  exit \${PIPESTATUS[0]}
+                              fi'''
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.04/**'
+                        }
+                        success {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
+                    }
+                }
+               stage('Build on CentOS 7') {
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -1121,6 +1183,8 @@ pipeline {
                     }
                 }
                 stage('Test SLES12.3 RPMs') {
+                    when { beforeAgent true
+                           environment name: 'SLES12_3_DOCKER', value: 'true' }
                     agent {
                         label 'ci_vm1'
                     }
