@@ -458,10 +458,10 @@ out:
 }
 
 static void
-process_setup_request(Drpc__Call *drpc_req, Mgmt__DaosResponse *daos_resp)
+process_setup_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 {
 	/* response status is populated with SUCCESS on init */
-	mgmt__daos_response__init(daos_resp);
+	mgmt__daos_resp__init(daos_resp);
 
 	D_DEBUG(DB_MGMT, "Received request to set up server\n");
 
@@ -496,7 +496,7 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosResp	*daos_resp = NULL;
+	Mgmt__DaosResp		*daos_resp = NULL;
 	Mgmt__JoinResp		*join_resp;
 	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
 	Mgmt__CreatePoolResp	*create_pool_resp;
