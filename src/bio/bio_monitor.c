@@ -154,8 +154,8 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	struct spdk_nvme_ctrlr_data			*cdata;
 	struct spdk_bdev				*bdev;
 	struct spdk_nvme_cmd				 cmd;
-	uint32_t					 error_page_sz;
-	uint32_t					 error_page_buf_sz;
+	uint32_t					 ep_sz;
+	uint32_t					 ep_buf_sz;
 	uint32_t					 numd, numdl, numdu;
 	int						 rc;
 	int						 sc, sct;
@@ -200,8 +200,8 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 prep_cmd:
 	/* Prep NVMe command to get device error log pages */
-	error_page_sz = sizeof(struct spdk_nvme_error_information_entry);
-	numd = error_page_sz / sizeof(uint32_t) - 1u;
+	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
+	numd = ep_sz / sizeof(uint32_t) - 1u;
 	numdl = numd & 0xFFFFu;
 	numdu = (numd >> 16) & 0xFFFFu;
 	memset(&cmd, 0, sizeof(cmd));
@@ -215,7 +215,7 @@ prep_cmd:
 		dev_health->bhm_inflights--;
 		goto out;
 	}
-	error_page_buf_sz = error_page_sz * (cdata->elpe + 1);
+	ep_buf_sz = ep_sz * (cdata->elpe + 1);
 
 	/*
 	 * Submit an NVMe Admin command to get device error log page
@@ -225,7 +225,7 @@ prep_cmd:
 					   dev_health->bhm_io_channel,
 					   &cmd,
 					   dev_health->bhm_error_buf,
-					   error_page_buf_sz,
+					   ep_buf_sz,
 					   get_spdk_err_log_page_completion,
 					   dev_health);
 	if (rc) {
@@ -243,10 +243,10 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
 	struct bio_health_monitoring			*dev_health = cb_arg;
-	struct spdk_nvme_health_information_page	*health_page;
+	struct spdk_nvme_health_information_page	*hp;
 	struct spdk_bdev				*bdev;
 	struct spdk_nvme_cmd				 cmd;
-	uint32_t					 ctrlr_page_sz;
+	uint32_t					 cp_sz;
 	int						 rc;
 	int						 sc, sct;
 
@@ -263,7 +263,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bhm_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bhm_desc);
 	D_ASSERT(bdev != NULL);
-	health_page = dev_health->bhm_health_buf;
+	hp = dev_health->bhm_health_buf;
 
 	/* TODO Store device health info in in-memory health state log. */
 
@@ -277,65 +277,61 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_PRINT("==========================================================\n");
 	D_PRINT("Critical Warnings:\n");
 	D_PRINT("  Available Spare Space:     %s\n",
-		health_page->critical_warning.bits.available_spare ?
-		"WARNING" : "OK");
+		hp->critical_warning.bits.available_spare ? "WARNING" : "OK");
 	D_PRINT("  Temperature:               %s\n",
-		health_page->critical_warning.bits.temperature ?
-		"WARNING" : "OK");
+		hp->critical_warning.bits.temperature ? "WARNING" : "OK");
 	D_PRINT("  Device Reliability:        %s\n",
-		health_page->critical_warning.bits.device_reliability ?
+		hp->critical_warning.bits.device_reliability ?
 		"WARNING" : "OK");
 	D_PRINT("  Read Only:                 %s\n",
-		health_page->critical_warning.bits.read_only ? "Yes" : "No");
+		hp->critical_warning.bits.read_only ? "Yes" : "No");
 	D_PRINT("  Volatile Memory Backup:    %s\n",
-		health_page->critical_warning.bits.volatile_memory_backup ?
+		hp->critical_warning.bits.volatile_memory_backup ?
 		"WARNING" : "OK");
 	D_PRINT("  Current Temperature:       %u Kelvin (%d Celsius)\n",
-		health_page->temperature, (int)health_page->temperature - 273);
-	D_PRINT("Available Spare:             %u%%\n",
-		health_page->available_spare);
+		hp->temperature, (int)hp->temperature - 273);
+	D_PRINT("Available Spare:             %u%%\n", hp->available_spare);
 	D_PRINT("Available Spare Threshold:   %u%%\n",
-		health_page->available_spare_threshold);
-	D_PRINT("Life Percentage Used:        %u%%\n",
-		health_page->percentage_used);
+		hp->available_spare_threshold);
+	D_PRINT("Life Percentage Used:        %u%%\n", hp->percentage_used);
 	D_PRINT("Data Units Read:             ");
-	dprint_uint128_dec(health_page->data_units_read);
+	dprint_uint128_dec(hp->data_units_read);
 	D_PRINT("\n");
 	D_PRINT("Data Units Written:          ");
-	dprint_uint128_dec(health_page->data_units_written);
+	dprint_uint128_dec(hp->data_units_written);
 	D_PRINT("\n");
 	D_PRINT("Host Read Commands:          ");
-	dprint_uint128_dec(health_page->host_read_commands);
+	dprint_uint128_dec(hp->host_read_commands);
 	D_PRINT("\n");
 	D_PRINT("Host Write Commands:         ");
-	dprint_uint128_dec(health_page->host_write_commands);
+	dprint_uint128_dec(hp->host_write_commands);
 	D_PRINT("\n");
 	D_PRINT("Controller Busy Time:        ");
-	dprint_uint128_dec(health_page->controller_busy_time);
+	dprint_uint128_dec(hp->controller_busy_time);
 	D_PRINT(" minutes\n");
 	D_PRINT("Power Cycles:                ");
-	dprint_uint128_dec(health_page->power_cycles);
+	dprint_uint128_dec(hp->power_cycles);
 	D_PRINT("\n");
 	D_PRINT("Power On Hours:              ");
-	dprint_uint128_dec(health_page->power_on_hours);
+	dprint_uint128_dec(hp->power_on_hours);
 	D_PRINT(" hours\n");
 	D_PRINT("Unsafe Shutdowns:	     ");
-	dprint_uint128_dec(health_page->unsafe_shutdowns);
+	dprint_uint128_dec(hp->unsafe_shutdowns);
 	D_PRINT("\n");
 	D_PRINT("Unrecoverable Media Errors:  ");
-	dprint_uint128_dec(health_page->media_errors);
+	dprint_uint128_dec(hp->media_errors);
 	D_PRINT("\n");
 	D_PRINT("Lifetime Error Log Entries:  ");
-	dprint_uint128_dec(health_page->num_error_info_log_entries);
+	dprint_uint128_dec(hp->num_error_info_log_entries);
 	D_PRINT("\n");
 	D_PRINT("Warning Temperature Time:    %u minutes\n",
-		health_page->warning_temp_time);
+		hp->warning_temp_time);
 	D_PRINT("Critical Temperature Time:   %u minutes\n",
-		health_page->critical_temp_time);
+		hp->critical_temp_time);
 
 prep_cmd:
 	/* Prep NVMe command to get controller data */
-	ctrlr_page_sz = sizeof(struct spdk_nvme_ctrlr_data);
+	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opc = SPDK_NVME_OPC_IDENTIFY;
 	cmd.cdw10 = SPDK_NVME_IDENTIFY_CTRLR;
@@ -348,7 +344,7 @@ prep_cmd:
 					   dev_health->bhm_io_channel,
 					   &cmd,
 					   dev_health->bhm_ctrlr_buf,
-					   ctrlr_page_sz,
+					   cp_sz,
 					   get_spdk_identify_ctrlr_completion,
 					   dev_health);
 	if (rc) {
