@@ -28,13 +28,14 @@ import (
 	"net"
 	"os"
 
+	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
-	flags "github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 func parseCliOpts(opts *cliOptions) error {
@@ -55,8 +56,6 @@ func parseCliOpts(opts *cliOptions) error {
 // TODO: Refactor this to decouple CLI functionality from core
 // server logic and allow for easier testing.
 func Main() error {
-	// Bootstrap default logger before config options get set.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
 	opts := new(cliOptions)
 	if err := parseCliOpts(opts); err != nil {
