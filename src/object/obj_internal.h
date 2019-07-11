@@ -304,8 +304,12 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 		 struct daos_oclass_attr *oca, long **skip_list);
 
 int
+ec_copy_iods(daos_iod_t **out, daos_iod_t *in, int nr);
+/*
+int
 ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
 		        crt_bulk_t *remote_bulks, daos_handle_t ioh,
 			long **skip_list, int sgl_nr);
+			*/
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

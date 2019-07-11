@@ -612,6 +612,128 @@ out:
 	orwo->orw_map_version = orw->orw_map_ver;
 }
 
+
+static int
+ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
+		 crt_bulk_t *remote_bulks, daos_handle_t ioh, long **skip_list,
+		 int sgl_nr)
+{
+	struct ds_bulk_async_args arg = { 0 };
+	crt_bulk_opid_t		bulk_opid;
+	crt_bulk_op_t		bulk_op = CRT_BULK_GET;
+	crt_bulk_perm_t		bulk_perm = CRT_BULK_RW;
+	int			i, rc, *status, ret;
+
+	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
+	if (rc != 0)
+		return dss_abterr2der(rc);
+
+	for (i = 0; i < sgl_nr; i++) {
+		d_sg_list_t		*sgl, tmp_sgl;
+		struct crt_bulk_desc	 bulk_desc;
+		crt_bulk_t		 local_bulk_hdl;
+		struct bio_sglist	*bsgl;
+		daos_size_t		 offset = 0;
+		unsigned int		 idx = 0;
+		unsigned int		 sl_idx = 0;
+
+		if (remote_bulks[i] == NULL)
+			 continue;
+
+
+		D_ASSERT(!daos_handle_is_inval(ioh));
+		bsgl = vos_iod_sgl_at(ioh, i);
+		D_ASSERT(bsgl != NULL);
+
+		sgl = &tmp_sgl;
+		rc = bio_sgl_convert(bsgl, sgl);
+		sgl->sg_nr, sgl->sg_nr_out);
+		if (rc)
+			break;
+
+		if (daos_io_bypass & IOBP_SRV_BULK) {
+			/* this mode will bypass network bulk transfer and
+			 * only copy data from/to dummy buffer. This is for
+			 * performance evaluation on low bandwidth network.
+			 */
+			bulk_bypass(sgl, bulk_op);
+			goto next;
+		}
+
+		while (idx < sgl->sg_nr_out) {
+			d_sg_list_t	sgl_sent;
+			daos_size_t	length = 0;
+			unsigned int	start = idx;
+
+			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
+			if (skip_list[i] == NULL) {
+				/* Find the end of the non-empty record */
+				while (sgl->sg_iovs[idx].iov_buf != NULL &&
+					idx < sgl->sg_nr_out)
+					length += sgl->sg_iovs[idx++].iov_len;
+			} else {
+				while (skip_list[i][sl_idx] < 0)
+					offset +=
+					(uint64_t)-skip_list[i][sl_idx++];
+				length += sgl->sg_iovs[idx++].iov_len;
+				D_ASSERT(skip_list[i][sl_idx] == length);
+				sl_idx++;
+			}
+			sgl_sent.sg_nr = idx - start;
+			sgl_sent.sg_nr_out = idx - start;
+
+			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent,
+					     bulk_perm, &local_bulk_hdl);
+			if (rc != 0) {
+				D_ERROR("crt_bulk_create %d error (%d).\n",
+					i, rc);
+				break;
+			}
+
+			crt_req_addref(rpc);
+			bulk_desc.bd_rpc	= rpc;
+			bulk_desc.bd_bulk_op	= bulk_op;
+			bulk_desc.bd_remote_hdl	= remote_bulks[i];
+			bulk_desc.bd_local_hdl	= local_bulk_hdl;
+			bulk_desc.bd_len	= length;
+			bulk_desc.bd_remote_off	= offset;
+			bulk_desc.bd_local_off	= 0;
+
+			arg.bulks_inflight++;
+			if (bulk_bind)
+				rc = crt_bulk_bind_transfer(&bulk_desc,
+					bulk_complete_cb, &arg, &bulk_opid);
+			else
+				rc = crt_bulk_transfer(&bulk_desc,
+					bulk_complete_cb, &arg, &bulk_opid);
+			if (rc < 0) {
+				D_ERROR("crt_bulk_transfer %d error (%d).\n",
+					i, rc);
+				arg.bulks_inflight--;
+				crt_bulk_free(local_bulk_hdl);
+				crt_req_decref(rpc);
+				break;
+			}
+			offset += length;
+		}
+next:
+		daos_sgl_fini(sgl, false);
+		if (rc)
+			break;
+		D_FREE(skip_list[i]);
+	}
+
+	if (arg.bulks_inflight == 0)
+		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
+
+	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
+	if (rc == 0)
+		rc = ret ? dss_abterr2der(ret) : *status;
+
+	ABT_eventual_free(&arg.eventual);
+	return rc;
+}
+
 static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, struct dtx_handle *dth)
@@ -627,6 +749,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
+	daos_iod_t		*iods = NULL;
 	int			rc, err;
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
@@ -644,10 +767,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
 		tag, orw->orw_epoch);
-	D_INFO("Local_rw: opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
-		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		tag, orw->orw_epoch);
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
 
@@ -655,37 +774,52 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) {
 		bulk_op = CRT_BULK_GET;
-		D_INFO("Object resilience: %d\n", oca->ca_resil);
 		if (oca->ca_resil == DAOS_RES_EC) {
 			int i;
 			unsigned int tgt_idx = orw->orw_oid.id_shard -
 						orw->orw_start_shard;
 
-			D_INFO("Processing tgt_idx: %u\n", tgt_idx);
 			for (i = 0; i < orw->orw_nr; i++)
 				skip_list[i] = NULL;
+
 			if (tgt_idx >= oca->u.ec.e_p) {
 				rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
 						    orw->orw_nr,
 						    orw->orw_iods.ca_arrays,
 						    oca, skip_list);
+			} else if (tgt_idx == 0) {
+				rc = ec_copy_iods(&iods, orw->orw_iods.ca_arrays,
+					     orw->orw_nr);
+				if (rc == 0) {
+					rc = ec_parity_target(tgt_idx,
+							      orw->orw_nr,
+							      iods, oca,
+							      skip_list);
+				}
 			} else {
-				rc = ec_parity_target(tgt_idx, orw->orw_nr,
+				rc = ec_parity_target(tgt_idx,
+						      orw->orw_nr,
 						      orw->orw_iods.ca_arrays,
 						      oca, skip_list);
 			}
 			if (rc) {
-				D_ERROR(DF_UOID" Update begin failed: %d\n",
+				D_ERROR(DF_UOID"EC update failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
 				goto out;
 			}
-			D_INFO("Completed EC preprocessing\n");
 		}
-		D_INFO("Calling Vos update begin\n");
-		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-				      orw->orw_epoch, &orw->orw_dkey,
-				      orw->orw_nr, orw->orw_iods.ca_arrays,
-				      &ioh, dth);
+		if (iods) {
+			rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
+					      orw->orw_epoch, &orw->orw_dkey,
+					      orw->orw_nr, iods,
+					      &ioh, dth);
+		} else {
+			rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
+					      orw->orw_epoch, &orw->orw_dkey,
+					      orw->orw_nr,
+					      orw->orw_iods.ca_arrays, &ioh,
+					      dth);
+		}
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -734,13 +868,16 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		if ((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) &&
 			oca->ca_resil == DAOS_RES_EC) {
+			D_INFO("Calling EC bulk transfer\n");
 			rc = ec_update_bulk_transfer(rpc, bulk_bind,
 			orw->orw_bulks.ca_arrays, ioh, skip_list, orw->orw_nr);
 		} else {
+			D_INFO("Calling regular bulk transfer\n");
 			rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind,
 			orw->orw_bulks.ca_arrays, ioh, NULL, orw->orw_nr);
 		}
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
+		D_INFO("Calling biod_copy\n");
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
 
