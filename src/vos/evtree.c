@@ -185,8 +185,7 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 {
 	/* NB: they can be negative */
 	wt_diff->wt_major = wt1->wt_major - wt2->wt_major;
-	/** wt2 is the difference to the original mbr */
-	wt_diff->wt_minor = wt1->wt_major - wt2->wt_minor;
+	wt_diff->wt_minor = wt1->wt_minor - wt2->wt_minor;
 }
 
 /** Internal function for initializing an array.   Using 0 for max
