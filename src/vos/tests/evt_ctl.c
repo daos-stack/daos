@@ -1451,7 +1451,6 @@ test_evt_iter_delete_internal(void **state)
 static void
 test_evt_variable_record_size_internal(void **state)
 {
-
 	struct test_arg		*arg = *state;
 	daos_handle_t		 toh;
 	struct evt_entry_in	 entry = {0};
@@ -1526,8 +1525,9 @@ test_evt_various_data_size_internal(void **state)
 		strcpy(data, "EVTree: Out of Memory");
 		epr.epr_lo = 0;
 		/* Loop does the following : evt_insert,
-		evt_find (first epoch) and evt_delete (random deletes)
-		till out of space condition*/
+		* evt_find (first epoch) and evt_delete (random deletes)
+		* till out of space condition
+		*/
 		for (epoch = 1; ; epoch++) {
 			entry.ei_rect.rc_ex.ex_lo = epoch;
 			entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
