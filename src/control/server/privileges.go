@@ -21,14 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"os/user"
 	"strconv"
 
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 func getUID(ext External, userName string) (*user.User, int64, error) {

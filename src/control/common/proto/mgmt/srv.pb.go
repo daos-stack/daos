@@ -18,33 +18,39 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type DaosRequestStatus int32
+type DaosRequestStatus_State int32
 
 const (
-	DaosRequestStatus_SUCCESS          DaosRequestStatus = 0
-	DaosRequestStatus_ERR_UNKNOWN      DaosRequestStatus = -1
-	DaosRequestStatus_ERR_INVALID_RANK DaosRequestStatus = -2
-	DaosRequestStatus_ERR_INVALID_UUID DaosRequestStatus = -3
+	DaosRequestStatus_SUCCESS          DaosRequestStatus_State = 0
+	DaosRequestStatus_ERR_UNKNOWN      DaosRequestStatus_State = -1
+	DaosRequestStatus_ERR_INVALID_RANK DaosRequestStatus_State = -2
+	DaosRequestStatus_ERR_INVALID_UUID DaosRequestStatus_State = -3
+	DaosRequestStatus_ERR_PROTO        DaosRequestStatus_State = -4
+	DaosRequestStatus_ERR_DAOS         DaosRequestStatus_State = -5
 )
 
-var DaosRequestStatus_name = map[int32]string{
+var DaosRequestStatus_State_name = map[int32]string{
 	0:  "SUCCESS",
 	-1: "ERR_UNKNOWN",
 	-2: "ERR_INVALID_RANK",
 	-3: "ERR_INVALID_UUID",
+	-4: "ERR_PROTO",
+	-5: "ERR_DAOS",
 }
-var DaosRequestStatus_value = map[string]int32{
+var DaosRequestStatus_State_value = map[string]int32{
 	"SUCCESS":          0,
 	"ERR_UNKNOWN":      -1,
 	"ERR_INVALID_RANK": -2,
 	"ERR_INVALID_UUID": -3,
+	"ERR_PROTO":        -4,
+	"ERR_DAOS":         -5,
 }
 
-func (x DaosRequestStatus) String() string {
-	return proto.EnumName(DaosRequestStatus_name, int32(x))
+func (x DaosRequestStatus_State) String() string {
+	return proto.EnumName(DaosRequestStatus_State_name, int32(x))
 }
-func (DaosRequestStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{0}
+func (DaosRequestStatus_State) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_srv_8ac04f1cef091100, []int{1, 0}
 }
 
 // Identifier for server rank within DAOS pool
@@ -60,7 +66,7 @@ func (m *DaosRank) Reset()         { *m = DaosRank{} }
 func (m *DaosRank) String() string { return proto.CompactTextString(m) }
 func (*DaosRank) ProtoMessage()    {}
 func (*DaosRank) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{0}
+	return fileDescriptor_srv_8ac04f1cef091100, []int{0}
 }
 func (m *DaosRank) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosRank.Unmarshal(m, b)
@@ -94,42 +100,88 @@ func (m *DaosRank) GetRank() uint32 {
 	return 0
 }
 
-type DaosResponse struct {
-	Status               DaosRequestStatus `protobuf:"varint,1,opt,name=status,proto3,enum=mgmt.DaosRequestStatus" json:"status,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+type DaosRequestStatus struct {
+	State                DaosRequestStatus_State `protobuf:"varint,1,opt,name=state,proto3,enum=mgmt.DaosRequestStatus_State" json:"state,omitempty"`
+	Der                  int32                   `protobuf:"varint,2,opt,name=der,proto3" json:"der,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
+	XXX_unrecognized     []byte                  `json:"-"`
+	XXX_sizecache        int32                   `json:"-"`
 }
 
-func (m *DaosResponse) Reset()         { *m = DaosResponse{} }
-func (m *DaosResponse) String() string { return proto.CompactTextString(m) }
-func (*DaosResponse) ProtoMessage()    {}
-func (*DaosResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{1}
+func (m *DaosRequestStatus) Reset()         { *m = DaosRequestStatus{} }
+func (m *DaosRequestStatus) String() string { return proto.CompactTextString(m) }
+func (*DaosRequestStatus) ProtoMessage()    {}
+func (*DaosRequestStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_8ac04f1cef091100, []int{1}
 }
-func (m *DaosResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_DaosResponse.Unmarshal(m, b)
+func (m *DaosRequestStatus) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DaosRequestStatus.Unmarshal(m, b)
 }
-func (m *DaosResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_DaosResponse.Marshal(b, m, deterministic)
+func (m *DaosRequestStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DaosRequestStatus.Marshal(b, m, deterministic)
 }
-func (dst *DaosResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DaosResponse.Merge(dst, src)
+func (dst *DaosRequestStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DaosRequestStatus.Merge(dst, src)
 }
-func (m *DaosResponse) XXX_Size() int {
-	return xxx_messageInfo_DaosResponse.Size(m)
+func (m *DaosRequestStatus) XXX_Size() int {
+	return xxx_messageInfo_DaosRequestStatus.Size(m)
 }
-func (m *DaosResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_DaosResponse.DiscardUnknown(m)
+func (m *DaosRequestStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_DaosRequestStatus.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_DaosResponse proto.InternalMessageInfo
+var xxx_messageInfo_DaosRequestStatus proto.InternalMessageInfo
 
-func (m *DaosResponse) GetStatus() DaosRequestStatus {
+func (m *DaosRequestStatus) GetState() DaosRequestStatus_State {
+	if m != nil {
+		return m.State
+	}
+	return DaosRequestStatus_SUCCESS
+}
+
+func (m *DaosRequestStatus) GetDer() int32 {
+	if m != nil {
+		return m.Der
+	}
+	return 0
+}
+
+type DaosResp struct {
+	Status               *DaosRequestStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
+}
+
+func (m *DaosResp) Reset()         { *m = DaosResp{} }
+func (m *DaosResp) String() string { return proto.CompactTextString(m) }
+func (*DaosResp) ProtoMessage()    {}
+func (*DaosResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_srv_8ac04f1cef091100, []int{2}
+}
+func (m *DaosResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DaosResp.Unmarshal(m, b)
+}
+func (m *DaosResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DaosResp.Marshal(b, m, deterministic)
+}
+func (dst *DaosResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DaosResp.Merge(dst, src)
+}
+func (m *DaosResp) XXX_Size() int {
+	return xxx_messageInfo_DaosResp.Size(m)
+}
+func (m *DaosResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_DaosResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DaosResp proto.InternalMessageInfo
+
+func (m *DaosResp) GetStatus() *DaosRequestStatus {
 	if m != nil {
 		return m.Status
 	}
-	return DaosRequestStatus_SUCCESS
+	return nil
 }
 
 type SetRankReq struct {
@@ -143,7 +195,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{2}
+	return fileDescriptor_srv_8ac04f1cef091100, []int{3}
 }
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRankReq.Unmarshal(m, b)
@@ -171,8 +223,10 @@ func (m *SetRankReq) GetRank() uint32 {
 }
 
 type CreateMsReq struct {
-	Bootstrap            bool     `protobuf:"varint,1,opt,name=bootstrap,proto3" json:"bootstrap,omitempty"`
-	Uuid                 string   `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Bootstrap bool `protobuf:"varint,1,opt,name=bootstrap,proto3" json:"bootstrap,omitempty"`
+	// Server UUID of this MS replica.
+	Uuid string `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	// Server management address of this MS replica.
 	Addr                 string   `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -183,7 +237,7 @@ func (m *CreateMsReq) Reset()         { *m = CreateMsReq{} }
 func (m *CreateMsReq) String() string { return proto.CompactTextString(m) }
 func (*CreateMsReq) ProtoMessage()    {}
 func (*CreateMsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a8657ce0239cb25, []int{3}
+	return fileDescriptor_srv_8ac04f1cef091100, []int{4}
 }
 func (m *CreateMsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateMsReq.Unmarshal(m, b)
@@ -226,32 +280,36 @@ func (m *CreateMsReq) GetAddr() string {
 
 func init() {
 	proto.RegisterType((*DaosRank)(nil), "mgmt.DaosRank")
-	proto.RegisterType((*DaosResponse)(nil), "mgmt.DaosResponse")
+	proto.RegisterType((*DaosRequestStatus)(nil), "mgmt.DaosRequestStatus")
+	proto.RegisterType((*DaosResp)(nil), "mgmt.DaosResp")
 	proto.RegisterType((*SetRankReq)(nil), "mgmt.SetRankReq")
 	proto.RegisterType((*CreateMsReq)(nil), "mgmt.CreateMsReq")
-	proto.RegisterEnum("mgmt.DaosRequestStatus", DaosRequestStatus_name, DaosRequestStatus_value)
+	proto.RegisterEnum("mgmt.DaosRequestStatus_State", DaosRequestStatus_State_name, DaosRequestStatus_State_value)
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_4a8657ce0239cb25) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_8ac04f1cef091100) }
 
-var fileDescriptor_srv_4a8657ce0239cb25 = []byte{
-	// 276 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x50, 0xcd, 0x4b, 0xc3, 0x30,
-	0x1c, 0xb5, 0x73, 0xcc, 0xf6, 0x57, 0x95, 0x9a, 0x8b, 0x05, 0x15, 0x4a, 0x4f, 0xc3, 0x43, 0x05,
-	0x3d, 0x7a, 0x90, 0xd1, 0xee, 0x50, 0xa6, 0x11, 0x12, 0xa2, 0xc7, 0x92, 0xd1, 0x20, 0x63, 0xae,
-	0xe9, 0xf2, 0x21, 0xfe, 0xf3, 0x7e, 0x90, 0x4c, 0xa7, 0x20, 0xe6, 0xf4, 0x78, 0xef, 0xfd, 0xde,
-	0x7b, 0x04, 0x22, 0xad, 0x5e, 0x8a, 0x5e, 0x49, 0x23, 0xd1, 0x70, 0xf5, 0xb4, 0x32, 0xf9, 0x35,
-	0x84, 0x15, 0x97, 0x9a, 0xf0, 0x6e, 0x89, 0x4e, 0x20, 0xea, 0xa5, 0x7c, 0x6e, 0xac, 0x5d, 0xb4,
-	0x69, 0x90, 0x05, 0xe3, 0x88, 0x84, 0x8e, 0x60, 0x76, 0xd1, 0x22, 0x04, 0x43, 0xc5, 0xbb, 0x65,
-	0x3a, 0xc8, 0x82, 0xf1, 0x01, 0xf1, 0x38, 0xbf, 0x81, 0x7d, 0x7f, 0x2c, 0x74, 0x2f, 0x3b, 0x2d,
-	0xd0, 0x05, 0x8c, 0xb4, 0xe1, 0xc6, 0x6a, 0x7f, 0x7d, 0x78, 0x79, 0x5c, 0xb8, 0x8e, 0x62, 0xe3,
-	0x59, 0x5b, 0xa1, 0x0d, 0xf5, 0x32, 0xf9, 0xb2, 0xe5, 0x19, 0x00, 0x15, 0xc6, 0x95, 0x13, 0xb1,
-	0xde, 0x56, 0x04, 0xbf, 0x2a, 0x28, 0xc4, 0xa5, 0x12, 0xdc, 0x88, 0x3b, 0x17, 0x81, 0x4e, 0x21,
-	0x9a, 0x4b, 0x69, 0xb4, 0x51, 0xbc, 0xf7, 0xbe, 0x90, 0xfc, 0x10, 0x2e, 0xc0, 0x6f, 0x1f, 0xf8,
-	0xed, 0x1e, 0x3b, 0x8e, 0xb7, 0xad, 0x4a, 0x77, 0x37, 0x9c, 0xc3, 0xe7, 0xaf, 0x70, 0xf4, 0x67,
-	0x13, 0x8a, 0x61, 0x8f, 0xb2, 0xb2, 0x9c, 0x52, 0x9a, 0xec, 0xa0, 0x14, 0xe2, 0x29, 0x21, 0x0d,
-	0xc3, 0x33, 0x7c, 0xff, 0x88, 0x93, 0x8f, 0xef, 0x17, 0xa0, 0x33, 0x48, 0x9c, 0x52, 0xe3, 0x87,
-	0xc9, 0x6d, 0x5d, 0x35, 0x64, 0x82, 0x67, 0xc9, 0xfb, 0xbf, 0x32, 0x63, 0x75, 0x95, 0xbc, 0x6d,
-	0xe5, 0xf9, 0xc8, 0xff, 0xfd, 0xd5, 0x67, 0x00, 0x00, 0x00, 0xff, 0xff, 0x49, 0x36, 0x3e, 0x25,
-	0x88, 0x01, 0x00, 0x00,
+var fileDescriptor_srv_8ac04f1cef091100 = []byte{
+	// 332 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x51, 0x5d, 0x4b, 0xf3, 0x30,
+	0x18, 0x7d, 0xb3, 0xaf, 0xb7, 0x7d, 0x8a, 0x12, 0x03, 0x6a, 0x41, 0x07, 0xa3, 0x57, 0xbb, 0xaa,
+	0xb0, 0x5d, 0x7a, 0x35, 0xd6, 0x5d, 0x8c, 0x69, 0x2b, 0x89, 0xd5, 0xcb, 0x91, 0xd1, 0x20, 0x63,
+	0x6e, 0xe9, 0x92, 0xd4, 0x3f, 0xe3, 0x1f, 0x15, 0xfc, 0x24, 0x99, 0x6e, 0x82, 0x2c, 0x37, 0x39,
+	0x9c, 0x73, 0x72, 0xc2, 0x73, 0x1e, 0xf0, 0xb5, 0x7a, 0x8a, 0x4b, 0x25, 0x8d, 0x24, 0x8d, 0xe5,
+	0xc3, 0xd2, 0x44, 0x97, 0xe0, 0x25, 0x5c, 0x6a, 0xca, 0x57, 0x0b, 0x72, 0x06, 0x7e, 0x29, 0xe5,
+	0xe3, 0xb4, 0xaa, 0xe6, 0x45, 0x88, 0x3a, 0xa8, 0xeb, 0x53, 0xcf, 0x12, 0x79, 0x35, 0x2f, 0x08,
+	0x81, 0x86, 0xe2, 0xab, 0x45, 0x58, 0xeb, 0xa0, 0xee, 0x01, 0x75, 0x38, 0x7a, 0x41, 0x70, 0xe4,
+	0x5e, 0x8b, 0x75, 0x25, 0xb4, 0x61, 0x86, 0x9b, 0x4a, 0x93, 0x3e, 0x34, 0xb5, 0xe1, 0x46, 0xb8,
+	0x88, 0xc3, 0x5e, 0x3b, 0xb6, 0x1f, 0xc5, 0x7f, 0x7c, 0xb1, 0xbd, 0x04, 0xdd, 0x78, 0x09, 0x86,
+	0x7a, 0x21, 0x94, 0x4b, 0x6f, 0x52, 0x0b, 0xa3, 0x67, 0x04, 0x4d, 0x67, 0x21, 0x01, 0xfc, 0x67,
+	0xf9, 0x70, 0x38, 0x62, 0x0c, 0xff, 0x23, 0x21, 0x04, 0x23, 0x4a, 0xa7, 0x79, 0x3a, 0x49, 0xb3,
+	0xfb, 0x14, 0x7f, 0xfe, 0x1c, 0x44, 0xda, 0x80, 0xad, 0x32, 0x4e, 0xef, 0x06, 0x57, 0xe3, 0x64,
+	0x4a, 0x07, 0xe9, 0x04, 0x7f, 0xec, 0x95, 0xf3, 0x7c, 0x9c, 0xe0, 0xf7, 0x9d, 0x7c, 0x02, 0xbe,
+	0x95, 0x6f, 0x68, 0x76, 0x9b, 0xe1, 0xb7, 0x1d, 0x7f, 0x0c, 0x9e, 0xe5, 0x93, 0x41, 0xc6, 0xf0,
+	0xeb, 0x96, 0xde, 0xf6, 0x26, 0x74, 0x49, 0x2e, 0xa0, 0xa5, 0xdd, 0x48, 0x6e, 0xe2, 0xa0, 0x77,
+	0xba, 0x67, 0x62, 0xfa, 0x6d, 0x8b, 0x3a, 0x00, 0x4c, 0x18, 0xdb, 0x39, 0x15, 0xeb, 0x6d, 0xb3,
+	0xe8, 0x57, 0xb3, 0x0c, 0x82, 0xa1, 0x12, 0xdc, 0x88, 0x6b, 0x1b, 0x41, 0xce, 0xc1, 0x9f, 0x49,
+	0x69, 0xb4, 0x51, 0xbc, 0x74, 0x3e, 0x8f, 0xee, 0x08, 0x1b, 0xe0, 0x56, 0x56, 0x73, 0x2b, 0x73,
+	0xd8, 0x72, 0xbc, 0x28, 0x54, 0x58, 0xdf, 0x70, 0x16, 0xcf, 0x5a, 0x6e, 0xf1, 0xfd, 0xaf, 0x00,
+	0x00, 0x00, 0xff, 0xff, 0x10, 0x00, 0x69, 0xa4, 0x05, 0x02, 0x00, 0x00,
 }

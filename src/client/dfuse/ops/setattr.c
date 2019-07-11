@@ -25,9 +25,8 @@
 #include "dfuse.h"
 
 #define REQ_NAME request
-#define POOL_NAME fsh_da
+#define POOL_NAME dpi_fsh
 #define TYPE_NAME common_req
-#include "dfuse_ops.h"
 
 static bool
 dfuse_setattr_result_fn(struct dfuse_request *request)
@@ -36,12 +35,12 @@ dfuse_setattr_result_fn(struct dfuse_request *request)
 
 	DFUSE_REQUEST_RESOLVE(request, out);
 
-	if (request->rc == 0)
-		DFUSE_REPLY_ATTR(request->req, &out->stat);
+	if (request->ir_rc == 0)
+		DFUSE_REPLY_ATTR(request->ir_req, &out->stat);
 	else
-		DFUSE_REPLY_ERR(request, request->rc);
+		DFUSE_REPLY_ERR(request, request->ir_rc);
 
-	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
+	dfuse_da_release(request->ir_fsh->POOL_NAME, CONTAINER(request));
 	return false;
 }
 

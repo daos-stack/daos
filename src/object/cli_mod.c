@@ -32,7 +32,7 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-bool	srv_io_dispatch = true;
+unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 
 /**
  * Initialize object interface
@@ -40,16 +40,21 @@ bool	srv_io_dispatch = true;
 int
 dc_obj_init(void)
 {
-	uint32_t	mode = DIM_DTX_FULL_ENABLED;
-	int		rc;
+	int rc;
 
-	d_getenv_int("DAOS_IO_MODE", &mode);
-	if (mode == DIM_CLIENT_DISPATCH) {
-		srv_io_dispatch = false;
-		D_DEBUG(DB_IO, "Server IO dispatch disabled.\n");
+	d_getenv_int("DAOS_IO_MODE", &srv_io_mode);
+	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+		D_DEBUG(DB_IO, "Client dispatch.\n");
+	} else if (srv_io_mode == DIM_SERVER_DISPATCH) {
+		D_DEBUG(DB_IO, "Server dispatch but without dtx.\n");
 	} else {
-		D_DEBUG(DB_IO, "Server IO dispatch enabled.\n");
+		srv_io_mode = DIM_DTX_FULL_ENABLED;
+		D_DEBUG(DB_IO, "Full dtx mode by default\n");
 	}
+
+	rc = obj_utils_init();
+	if (rc)
+		goto out;
 
 	rc = daos_rpc_register(&obj_proto_fmt, OBJ_PROTO_CLI_COUNT,
 				NULL, DAOS_OBJ_MODULE);
@@ -74,4 +79,5 @@ dc_obj_fini(void)
 {
 	daos_rpc_unregister(&obj_proto_fmt);
 	obj_ec_codec_fini();
+	obj_utils_fini();
 }

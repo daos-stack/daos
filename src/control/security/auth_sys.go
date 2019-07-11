@@ -28,10 +28,10 @@ import (
 	"os"
 	"os/user"
 
-	"github.com/daos-stack/daos/src/control/security/auth"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 // User is an interface wrapping a representation of a specific system user

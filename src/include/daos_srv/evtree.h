@@ -191,9 +191,18 @@ struct evt_root {
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
 	EVT_FEAT_SORT_SOFF		= (1 << 0),
+	/** rectangles split by closest side of MBR
+	 */
+	EVT_FEAT_SORT_DIST		= (1 << 1),
+	/** rectangles are sorted by distance to sides of MBR and split
+	 *  evenly
+	 */
+	EVT_FEAT_SORT_DIST_EVEN		= (1 << 2),
 };
 
-#define EVT_FEAT_DEFAULT		EVT_FEAT_SORT_SOFF
+#define EVT_FEAT_DEFAULT EVT_FEAT_SORT_DIST
+#define EVT_FEATS_SUPPORTED	\
+	(EVT_FEAT_SORT_SOFF | EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN)
 
 /* Information about record to insert */
 struct evt_entry_in {
@@ -348,11 +357,13 @@ struct evt_context;
 struct evt_policy_ops {
 	/**
 	 * Add an entry \a entry to a tree node \a node.
+	 * Set changed flag if MBR changes
 	 */
 	int	(*po_insert)(struct evt_context *tcx,
 			     struct evt_node *node,
 			     uint64_t in_off,
-			     const struct evt_entry_in *entry);
+			     const struct evt_entry_in *entry,
+			     bool *mbr_changed);
 	/**
 	 * move half entries of the current node \a nd_src to the new
 	 * node \a nd_dst.
@@ -448,11 +459,13 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
  * \a rect to \a ent_array.
  *
  * \param toh		[IN]		The tree open handle
- * \param rect		[IN]		The versioned extent to search
+ * \param epr		[IN]		Epoch range to search
+ * \param extent	[IN]		The extent to search
  * \param ent_array	[IN,OUT]	Pass in initialized list, filled in by
  *					the function
  */
-int evt_find(daos_handle_t toh, const struct evt_rect *rect,
+int evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
+	     const struct evt_extent *extent,
 	     struct evt_entry_array *ent_array);
 
 /**

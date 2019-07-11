@@ -10,8 +10,7 @@ hosts:
     - boro-F
     - boro-G
     - boro-H
-# rebuild alone takes about 2hrs
-timeout: 5000
+timeout: 900
 server_config:
   name: daos_server
 daos_tests:
@@ -20,10 +19,6 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_r:
-      daos_test: r
-      test_name: rebuild tests
-      args: -u subtests="0-19"
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests

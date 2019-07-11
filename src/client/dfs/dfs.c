@@ -32,7 +32,7 @@
 #include <daos/container.h>
 
 #include "daos_types.h"
-#include "daos_api.h"
+#include "daos.h"
 #include "daos_addons.h"
 #include "daos_fs.h"
 #include "daos_security.h"
@@ -63,7 +63,6 @@
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
 
 /** Parameters for dkey enumeration */
-#define ENUM_KEY_NR     1000
 #define ENUM_DESC_NR    10
 #define ENUM_DESC_BUF   (ENUM_DESC_NR * DFS_MAX_PATH)
 
@@ -224,7 +223,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 	int		rc;
 
 	if (oclass == 0)
-		oclass = DAOS_OC_REPL_MAX_RW;
+		oclass = OC_RP_XSF;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -246,10 +245,10 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
+		feat = DAOS_OF_DKEY_UINT64;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_generate_id(oid, feat, oclass);
+	daos_obj_generate_id(oid, feat, oclass, 0);
 
 	return 0;
 }
@@ -460,14 +459,14 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 }
 
 static int
-get_nlinks(daos_handle_t oh, daos_handle_t th, uint32_t *nlinks,
-	   bool check_empty)
+get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
+		bool check_empty)
 {
 	daos_key_desc_t	kds[ENUM_DESC_NR];
 	daos_anchor_t	anchor = {0};
 	uint32_t	key_nr = 0;
 	d_sg_list_t	sgl;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
 
 	sgl.sg_nr = 1;
@@ -495,7 +494,7 @@ get_nlinks(daos_handle_t oh, daos_handle_t th, uint32_t *nlinks,
 			break;
 	}
 
-	*nlinks = key_nr;
+	*nr = key_nr;
 	return 0;
 }
 
@@ -506,7 +505,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	struct dfs_entry	entry = {0};
 	bool			exists;
 	daos_size_t		size;
-	uint32_t		nlinks;
 	int			rc;
 
 	memset(stbuf, 0, sizeof(struct stat));
@@ -521,30 +519,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
-	{
-		daos_handle_t	dir_oh;
-
 		size = sizeof(entry);
-		rc = daos_obj_open(dfs->coh, entry.oid, DAOS_OO_RO,
-				   &dir_oh, NULL);
-		if (rc)
-			return -daos_der2errno(rc);
-
-		/*
-		 * TODO - This makes stat very slow now. Need to figure out a
-		 * different way to get/maintain nlinks.
-		 */
-		rc = get_nlinks(dir_oh, th, &nlinks, false);
-		if (rc) {
-			daos_obj_close(dir_oh, NULL);
-			return rc;
-		}
-
-		rc = daos_obj_close(dir_oh, NULL);
-		if (rc)
-			return -daos_der2errno(rc);
 		break;
-	}
 	case S_IFREG:
 	{
 		daos_handle_t	file_oh;
@@ -573,8 +549,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		if (rc)
 			return -daos_der2errno(rc);
 
-		nlinks = 1;
-
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
@@ -585,14 +559,13 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	case S_IFLNK:
 		size = strlen(entry.value);
 		D_FREE(entry.value);
-		nlinks = 1;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
 		return -EINVAL;
 	}
 
-	stbuf->st_nlink = (nlink_t)nlinks;
+	stbuf->st_nlink = 1;
 	stbuf->st_size = size;
 	stbuf->st_mode = entry.mode;
 	stbuf->st_uid = dfs->uid;
@@ -674,13 +647,11 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 	if (flags & O_CREAT) {
 		if (exists) {
-			if (flags & O_EXCL) {
-				D_ERROR("File Exists (O_EXCL mode passed\n");
+			if (flags & O_EXCL)
 				return -EEXIST;
-			}
 
 			if (S_ISDIR(entry.mode)) {
-				D_ERROR("can't overwrite dir %s with "
+				D_DEBUG(DB_TRACE, "can't overwrite dir %s with "
 					"non-directory\n", file->name);
 				return -EINVAL;
 			}
@@ -733,17 +704,13 @@ open_file:
 	}
 
 	daos_mode = get_daos_obj_mode(flags);
-	if (daos_mode == -1) {
-		D_ERROR("Invalid access mode.\n");
+	if (daos_mode == -1)
 		return -EINVAL;
-	}
 
 	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
 			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	file->mode = entry.mode;
 	rc = daos_array_open(dfs->coh, entry.oid, th, daos_mode,
@@ -827,10 +794,8 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	}
 
 	daos_mode = get_daos_obj_mode(flags);
-	if (daos_mode == -1) {
-		D_ERROR("Invalid access mode.\n");
+	if (daos_mode == -1)
 		return -EINVAL;
-	}
 
 	/* Check if parent has the dirname entry */
 	rc = fetch_entry(parent_oh, th, dir->name, false, &exists, &entry);
@@ -845,10 +810,8 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 
 	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
 			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
@@ -972,10 +935,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	amode = (flags & O_ACCMODE);
 	obj_mode = get_daos_obj_mode(flags);
-	if (obj_mode == -1) {
-		D_ERROR("Invalid access mode.\n");
+	if (obj_mode == -1)
 		return -EINVAL;
-	}
 
 	D_ALLOC_PTR(dfs);
 	if (dfs == NULL)
@@ -1019,6 +980,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		D_GOTO(err_prop, rc = -daos_der2errno(rc));
 	}
 
+	daos_prop_free(prop);
+
 	/** if mount RW, create TX */
 	if (amode == O_RDWR) {
 		rc = daos_tx_open(coh, &th, NULL);
@@ -1039,7 +1002,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	/** Open special object on container for SB info */
 	dfs->super_oid.lo = RESERVED_LO;
 	dfs->super_oid.hi = SB_HI;
-	daos_obj_generate_id(&dfs->super_oid, 0, DAOS_OC_REPL_MAX_RW);
+	daos_obj_generate_id(&dfs->super_oid, 0, OC_RP_XSF, 0);
 
 	rc = daos_obj_open(coh, dfs->super_oid, obj_mode, &dfs->super_oh, NULL);
 	if (rc) {
@@ -1107,7 +1070,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		dfs->root.mode = S_IFDIR | 0777;
 		dfs->root.oid.lo = RESERVED_LO;
 		dfs->root.oid.hi = ROOT_HI;
-		daos_obj_generate_id(&dfs->root.oid, 0, DAOS_OC_REPL_MAX_RW);
+		daos_obj_generate_id(&dfs->root.oid, 0, OC_RP_XSF, 0);
 
 		rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh,
 				   NULL);
@@ -1213,15 +1176,12 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		return -ENOTDIR;
 
 	rc = check_name(name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
+
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
@@ -1329,15 +1289,11 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 		return -ENOTDIR;
 
 	rc = check_name(name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	rc = fetch_entry(parent->oh, th, name, false, &exists, &entry);
 	if (rc)
@@ -1347,7 +1303,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 		D_GOTO(out, rc = -ENOENT);
 
 	if (S_ISDIR(entry.mode)) {
-		uint32_t nlinks = 0;
+		uint32_t nr = 0;
 		daos_handle_t oh;
 
 		/** check if dir is empty */
@@ -1357,7 +1313,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 			D_GOTO(out, rc = -daos_der2errno(rc));
 		}
 
-		rc = get_nlinks(oh, th, &nlinks, true);
+		rc = get_num_entries(oh, th, &nr, true);
 		if (rc) {
 			daos_obj_close(oh, NULL);
 			D_GOTO(out, rc);
@@ -1367,10 +1323,10 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 		if (rc)
 			D_GOTO(out, rc = -daos_der2errno(rc));
 
-		if (!force && nlinks != 0)
+		if (!force && nr != 0)
 			D_GOTO(out, rc = -ENOTEMPTY);
 
-		if (force && nlinks != 0) {
+		if (force && nr != 0) {
 			rc = remove_dir_contents(dfs, th, entry);
 			if (rc)
 				D_GOTO(out, rc);
@@ -1408,10 +1364,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return -EINVAL;
 
 	daos_mode = get_daos_obj_mode(flags);
-	if (daos_mode == -1) {
-		D_ERROR("Invalid access mode.\n");
+	if (daos_mode == -1)
 		return -EINVAL;
-	}
 
 	rem = strdup(path);
 	if (rem == NULL)
@@ -1424,8 +1378,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->oid, dfs->root.oid);
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
-	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
-	obj->name[DFS_MAX_PATH] = '\0';
+	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH + 1);
+
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc = -daos_der2errno(rc));
@@ -1442,10 +1396,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 dfs_lookup_loop:
 
 		rc = check_access(dfs, uid, gid, parent.mode, X_OK);
-		if (rc) {
-			D_ERROR("Permission Denied.\n");
+		if (rc)
 			return rc;
-		}
 
 		rc = fetch_entry(parent.oh, DAOS_TX_NONE, token, true,
 				 &exists, &entry);
@@ -1511,7 +1463,8 @@ dfs_lookup_loop:
 				rc = dfs_lookup(dfs, obj->value, flags, &sym,
 						NULL);
 				if (rc) {
-					D_ERROR("Invalid Symlink dir %s\n",
+					D_DEBUG(DB_TRACE,
+						"Failed to lookup symlink %s\n",
 						obj->value);
 					D_FREE(sym);
 					D_GOTO(err_obj, rc);
@@ -1557,27 +1510,14 @@ err_obj:
 }
 
 int
-dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks)
-{
-	if (dfs == NULL || !dfs->mounted)
-		return -EINVAL;
-	if (obj == NULL || !S_ISDIR(obj->mode))
-		return -ENOTDIR;
-	if (nlinks == NULL)
-		return -EINVAL;
-
-	return get_nlinks(obj->oh, DAOS_TX_NONE, nlinks, false);
-}
-
-int
 dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
-	struct dirent *dirs)
+	    struct dirent *dirs)
 {
-	daos_key_desc_t *kds;
-	char *enum_buf;
-	uint32_t number, key_nr, i;
-	d_sg_list_t sgl;
-	int rc;
+	daos_key_desc_t	*kds;
+	char		*enum_buf;
+	uint32_t	number, key_nr, i;
+	d_sg_list_t	sgl;
+	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return -EINVAL;
@@ -1589,10 +1529,8 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 		return -EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	D_ALLOC_ARRAY(kds, *nr);
 	if (kds == NULL)
@@ -1607,8 +1545,8 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	key_nr = 0;
 	number = *nr;
 	while (!daos_anchor_is_eof(anchor)) {
-		d_iov_t iov;
-		char *ptr;
+		d_iov_t	iov;
+		char	*ptr;
 
 		memset(enum_buf, 0, (*nr) * DFS_MAX_PATH);
 
@@ -1644,6 +1582,97 @@ out:
 }
 
 int
+dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata)
+{
+	daos_key_desc_t	*kds;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	uint32_t	num, keys_nr;
+	char		*enum_buf;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -EINVAL;
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return -ENOTDIR;
+	if (size == 0 || *nr == 0)
+		return 0;
+	if (anchor == NULL)
+		return -EINVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
+	if (rc)
+		return rc;
+
+	num = *nr;
+	D_ALLOC_ARRAY(kds, num);
+	if (kds == NULL)
+		return -ENOMEM;
+
+	/** Allocate a buffer to store the entry keys */
+	D_ALLOC_ARRAY(enum_buf, size);
+	if (enum_buf == NULL) {
+		D_FREE(kds);
+		return -ENOMEM;
+	}
+
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, size);
+	sgl.sg_iovs = &iov;
+	keys_nr = 0;
+
+	while (!daos_anchor_is_eof(anchor)) {
+		char		*ptr;
+		uint32_t	i;
+
+		/*
+		 * list num or less entries, but not more than we can fit in
+		 * enum_buf
+		 */
+		rc = daos_obj_list_dkey(obj->oh, DAOS_TX_NONE, &num, kds,
+					&sgl, anchor, NULL);
+		if (rc)
+			D_GOTO(out, rc = -daos_der2errno(rc));
+
+		/** If no entries were listed, continue to check anchor */
+		if (num == 0)
+			continue; /* loop should break for EOF */
+
+		/** for every entry, issue the filler cb */
+		for (ptr = enum_buf, i = 0; i < num; i++) {
+			char name[DFS_MAX_PATH];
+
+			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
+			if (op) {
+				rc = op(dfs, obj, name, udata);
+				if (rc)
+					D_GOTO(out, rc);
+			}
+
+			/** advance pointer to next entry */
+			ptr += kds[i].kd_key_len;
+			/** adjust size of buffer data remaining */
+			size -= kds[i].kd_key_len;
+			keys_nr++;
+		}
+		num = *nr - keys_nr;
+		/** stop if no more size or entries available to fill */
+		if (size == 0 || num == 0)
+			break;
+		/** adjust iov for iteration */
+		d_iov_set(&iov, ptr, size);
+	}
+
+	*nr = keys_nr;
+out:
+	D_FREE(kds);
+	D_FREE(enum_buf);
+	return rc;
+}
+
+int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	       dfs_obj_t **_obj, mode_t *mode)
 {
@@ -1663,21 +1692,14 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		return -ENOTDIR;
 
 	rc = check_name(name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
-
 	daos_mode = get_daos_obj_mode(flags);
-	if (daos_mode == -1) {
-		D_ERROR("Invalid access mode.\n");
+	if (daos_mode == -1)
 		return -EINVAL;
-	}
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -1758,16 +1780,12 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		return -ENOTDIR;
 
 	rc = check_name(name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode,
 			  (flags & O_CREAT) ? W_OK | X_OK : X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -1782,21 +1800,21 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	case S_IFREG:
 		rc = open_file(dfs, th, parent, flags, cid, chunk_size, obj);
 		if (rc) {
-			D_ERROR("Failed to open file (%d)\n", rc);
+			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		break;
 	case S_IFDIR:
 		rc = open_dir(dfs, th, parent->oh, flags, cid, obj);
 		if (rc) {
-			D_ERROR("Failed to open directory (%d)\n", rc);
+			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		break;
 	case S_IFLNK:
 		rc = open_symlink(dfs, th, parent, flags, value, obj);
 		if (rc) {
-			D_ERROR("Failed to open symlink (%d)\n", rc);
+			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		break;
@@ -1810,6 +1828,76 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	return rc;
 out:
 	D_FREE(obj);
+	return rc;
+}
+
+int
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
+{
+	dfs_obj_t	*new_obj;
+	unsigned int	daos_mode;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -EINVAL;
+	if (obj == NULL || _new_obj == NULL)
+		return -EINVAL;
+
+	daos_mode = get_daos_obj_mode(flags);
+	if (daos_mode == -1)
+		return -EINVAL;
+
+	rc = check_access(dfs, geteuid(), getegid(), obj->mode,
+			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
+	if (rc)
+		return rc;
+
+	D_ALLOC_PTR(new_obj);
+	if (new_obj == NULL)
+		return -ENOMEM;
+
+	switch (obj->mode & S_IFMT) {
+	case S_IFDIR:
+		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode,
+				   &new_obj->oh, NULL);
+		if (rc)
+			D_GOTO(err, rc = -daos_der2errno(rc));
+		break;
+	case S_IFREG:
+	{
+		char		buf[1024];
+		d_iov_t		ghdl;
+
+		d_iov_set(&ghdl, buf, 1024);
+
+		rc = daos_array_local2global(obj->oh, &ghdl);
+		if (rc)
+			D_GOTO(err, rc = -daos_der2errno(rc));
+
+		rc = daos_array_global2local(dfs->coh, ghdl, daos_mode,
+					     &new_obj->oh);
+		if (rc)
+			D_GOTO(err, rc = -daos_der2errno(rc));
+		break;
+	}
+	case S_IFLNK:
+		new_obj->value = strdup(obj->value);
+		break;
+	default:
+		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
+		D_GOTO(err, rc = -EINVAL);
+	}
+
+	strncpy(new_obj->name, obj->name, DFS_MAX_PATH + 1);
+	new_obj->mode = obj->mode;
+	oid_cp(&new_obj->parent_oid, obj->parent_oid);
+	oid_cp(&new_obj->oid, obj->oid);
+
+	*_new_obj = new_obj;
+	return 0;
+
+err:
+	D_FREE(new_obj);
 	return rc;
 }
 
@@ -1959,10 +2047,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		return -ENOTDIR;
 
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
@@ -1974,10 +2060,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = dfs->super_oh;
 	} else {
 		rc = check_name(name);
-		if (rc) {
-			D_ERROR("Invalid file/dir Name\n");
+		if (rc)
 			return rc;
-		}
 		oh = parent->oh;
 	}
 
@@ -2035,10 +2119,8 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		oh = dfs->super_oh;
 	} else {
 		rc = check_name(name);
-		if (rc) {
-			D_ERROR("Invalid file/dir Name\n");
+		if (rc)
 			return rc;
-		}
 		oh = parent->oh;
 	}
 
@@ -2067,7 +2149,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL);
 	if (rc) {
-		D_ERROR("Invalid Symlink %s\n", entry.value);
+		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		return rc;
 	}
 
@@ -2110,10 +2192,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = dfs->super_oh;
 	} else {
 		rc = check_name(name);
-		if (rc) {
-			D_ERROR("Invalid file/dir Name\n");
+		if (rc)
 			return rc;
-		}
 		oh = parent->oh;
 	}
 
@@ -2147,7 +2227,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL);
 		if (rc) {
-			D_ERROR("Invalid Symlink %s\n", entry.value);
+			D_ERROR("Failed to lookup Symlink %s\n", entry.value);
 			return rc;
 		}
 
@@ -2201,10 +2281,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 		return -EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	return daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
 }
@@ -2225,10 +2303,8 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return -EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	/** simple truncate */
 	if (len == DFS_MAX_FSIZE) {
@@ -2330,16 +2406,11 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		return -ENOTDIR;
 
 	rc = check_name(name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
-
 	rc = check_name(new_name);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
 
 	/*
 	 * TODO - more permission checks for source & target attributes needed
@@ -2347,17 +2418,12 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	 */
 
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
-
 	rc = check_access(dfs, geteuid(), getegid(), new_parent->mode,
 			  W_OK | X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	rc = fetch_entry(parent->oh, th, name, true, &exists, &entry);
 	if (rc) {
@@ -2376,7 +2442,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	if (exists) {
 		if (S_ISDIR(new_entry.mode)) {
-			uint32_t nlinks = 0;
+			uint32_t nr = 0;
 			daos_handle_t oh;
 
 			/** if old entry not a dir, return error */
@@ -2393,7 +2459,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				D_GOTO(out, rc = -daos_der2errno(rc));
 			}
 
-			rc = get_nlinks(oh, th, &nlinks, true);
+			rc = get_num_entries(oh, th, &nr, true);
 			if (rc) {
 				D_ERROR("failed to check dir %s (%d)\n",
 					new_name, rc);
@@ -2407,7 +2473,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				D_GOTO(out, rc = -daos_der2errno(rc));
 			}
 
-			if (nlinks != 0) {
+			if (nr != 0) {
 				D_ERROR("target dir is not empty\n");
 				D_GOTO(out, rc = -ENOTEMPTY);
 			}
@@ -2489,27 +2555,19 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		return -ENOTDIR;
 
 	rc = check_name(name1);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
 	rc = check_name(name2);
-	if (rc) {
-		D_ERROR("Invalid file/dir Name\n");
+	if (rc)
 		return rc;
-	}
 	rc = check_access(dfs, geteuid(), getegid(), parent1->mode,
 			  W_OK | X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 	rc = check_access(dfs, geteuid(), getegid(), parent2->mode,
 			  W_OK | X_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	rc = fetch_entry(parent1->oh, th, name1, true, &exists, &entry1);
 	if (rc) {
@@ -2621,10 +2679,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 		return -EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	/** prefix name with x: to avoid collision with internal attrs */
 	xname = concat("x:", name);
@@ -2709,10 +2765,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		return -EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, R_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -2786,10 +2840,8 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		return -EINVAL;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
-	if (rc) {
-		D_ERROR("Permission Denied.\n");
+	if (rc)
 		return rc;
-	}
 
 	xname = concat("x:", name);
 	if (xname == NULL)

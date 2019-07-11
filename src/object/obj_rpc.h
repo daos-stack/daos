@@ -37,6 +37,7 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/dtx.h>
+#include <daos/object.h>
 
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
@@ -114,8 +115,6 @@ enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
 	/** It is a resent RPC. */
 	ORF_RESEND		= (1 << 1),
-	/** Disable DTX or not. */
-	ORF_DTX_DISABLED	= (1 << 3),
 };
 
 /* common for update/fetch */
@@ -145,8 +144,8 @@ enum obj_rpc_flags {
 	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
 	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
 	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
-	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
-	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY)
+	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY)	   \
+	((uint32_t)		(orw_nrs)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)

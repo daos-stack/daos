@@ -33,14 +33,20 @@ message DaosRank {
 	uint32 rank = 2;	// Server rank
 }
 
-enum DaosRequestStatus {
-	SUCCESS = 0;
-	ERR_UNKNOWN = -1;		// Unknown error
-	ERR_INVALID_RANK = -2;		// Rank requested is invalid
-	ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
+message DaosRequestStatus {
+	enum State {
+		SUCCESS = 0;
+		ERR_UNKNOWN = -1;		// Unknown error
+		ERR_INVALID_RANK = -2;		// Rank requested is invalid
+		ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
+		ERR_PROTO = -4;			// Proto builtin op failed
+		ERR_DAOS = -5;			// DAOS iosrv error, see "der"
+	}
+	State state = 1; // DAOS request state
+	int32 der = 2; // DAOS error code
 }
 
-message DaosResponse {
+message DaosResp {
 	DaosRequestStatus status = 1;
 }
 
@@ -48,7 +54,7 @@ message SetRankReq {
 	uint32 rank = 1;
 }
 
-// SetRankResp is identical to DaosResponse.
+// SetRankResp is identical to DaosResp.
 
 message CreateMsReq {
 	bool bootstrap = 1;
@@ -58,8 +64,8 @@ message CreateMsReq {
 	string addr = 3;
 }
 
-// CreateMsResp is identical to DaosResponse.
+// CreateMsResp is identical to DaosResp.
 
 // StartMsReq is nil.
 
-// StartMsResp is identical to DaosResponse.
+// StartMsResp is identical to DaosResp.

@@ -64,6 +64,7 @@ struct test_input_value tst_fn_val;
 
 static struct utest_context	*ts_utx;
 static struct umem_attr		*ts_uma;
+static int			 ts_feats = EVT_FEAT_DEFAULT;
 
 #define ORDER_DEF		16
 
@@ -108,7 +109,7 @@ ts_open_create(void **state)
 
 	if (create) {
 		D_PRINT("Create evtree with order %d\n", ts_order);
-		rc = evt_create(EVT_FEAT_DEFAULT, ts_order, ts_uma, ts_root,
+		rc = evt_create(ts_feats, ts_order, ts_uma, ts_root,
 				DAOS_HDL_INVAL, &ts_toh);
 	} else {
 		D_PRINT("Open evtree\n");
@@ -378,6 +379,7 @@ ts_find_rect(void **state)
 	char			*val;
 	bio_addr_t		 addr;
 	struct evt_rect		 rect;
+	daos_epoch_range_t	 epr;
 	struct evt_entry_array	 ent_array;
 	int			 rc;
 	bool			 should_pass;
@@ -393,8 +395,10 @@ ts_find_rect(void **state)
 
 	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
+	epr.epr_lo = 0;
+	epr.epr_hi = rect.rc_epc;
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(ts_toh, &rect, &ent_array);
+	rc = evt_find(ts_toh, &epr, &rect.rc_ex, &ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed %d\n", rc);
 
@@ -618,7 +622,7 @@ ts_many_add(void **state)
 	if (!buf)
 		fail();
 
-	seq = dts_rand_iarr_alloc(nr, 0);
+	seq = dts_rand_iarr_alloc(nr, 0, true);
 	if (!seq) {
 		D_FREE(buf);
 		fail();
@@ -943,7 +947,7 @@ test_evt_iter_flags(void **state)
 	int		t_repeats;
 
 	/* Create a evtree */
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	D_ALLOC_ARRAY(data, (NUM_EPOCHS+1));
@@ -1108,10 +1112,11 @@ test_evt_iter_delete(void **state)
 	struct evt_filter	 filter;
 	uint32_t		 inob;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
-
+	rc = utest_sync_mem_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
@@ -1127,6 +1132,10 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 		}
 	}
@@ -1212,17 +1221,164 @@ test_evt_iter_delete(void **state)
 
 		sum += *value;
 		utest_free(arg->ta_utx, addr.ba_off);
+		rc = utest_check_mem_decrease(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
 	}
 	rc = evt_iter_finish(ih);
 	assert_int_equal(rc, 0);
 
 	expected_sum = NUM_EPOCHS * (NUM_EXTENTS * (NUM_EXTENTS + 1) / 2);
 	assert_int_equal(expected_sum, sum);
-
+	rc = utest_check_mem_initial_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
 
+static void
+test_evt_find_internal(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry_in	 entry = {0};
+	struct evt_entry	 *ent;
+	struct evt_extent	 extent;
+	daos_epoch_range_t	 epr;
+	struct evt_entry_array	 ent_array;
+	bio_addr_t		 addr;
+	int			 rc;
+	int			 epoch;
+	int			 offset;
+	int			 hole_epoch;
+	char testdata[] = "deadbeef";
+
+	/* Create a evtree */
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+			DAOS_HDL_INVAL, &toh);
+	assert_int_equal(rc, 0);
+	rc = utest_sync_mem_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
+	srand(time(0));
+	hole_epoch = (rand() % 98) + 1;
+	print_message("Hole inserted %d epoch.\n", hole_epoch);
+	/* Insert data : deadbeef */
+	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
+		for (offset = epoch;
+			offset < sizeof(testdata) + epoch;
+			offset += sizeof(testdata)) {
+			entry.ei_rect.rc_ex.ex_lo = offset;
+			entry.ei_rect.rc_ex.ex_hi = offset+sizeof(testdata);
+			entry.ei_rect.rc_epc = epoch;
+			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+			entry.ei_ver = 0;
+			/* Insert a hole at random epoch */
+			if (epoch == hole_epoch)
+				entry.ei_inob = 0;
+			else
+				entry.ei_inob = sizeof(testdata);
+			if (entry.ei_inob == 0) {
+				rc = bio_alloc_init(arg->ta_utx,
+						&entry.ei_addr, NULL, 0);
+				assert_int_equal(rc, 0);
+			} else {
+				rc = bio_alloc_init(arg->ta_utx,
+						&entry.ei_addr,
+						testdata, sizeof(testdata));
+				assert_int_equal(rc, 0);
+			}
+			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
+			assert_int_equal(rc, 0);
+		}
+	}
+	/*Prepare and Probe the tree. Iteration flags not set */
+	rc = evt_iter_prepare(toh, 0, NULL, &ih);
+	assert_int_equal(rc, 0);
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/*
+	 * Delete each record from last and run evt_find
+	 * you get deadbeef, d (2-records). Covered records
+	 * should be exposed on each deletes
+	 */
+	epr.epr_lo = 0;
+	for (epoch = NUM_EPOCHS; epoch > 0; epoch--) {
+		extent.ex_lo = epoch-1;
+		extent.ex_hi = epoch+9;
+		epr.epr_hi = epoch;
+		evt_ent_array_init(&ent_array);
+		rc = evt_find(toh, &epr, &extent, &ent_array);
+		if (rc != 0)
+			D_FATAL("Add rect failed %d\n", rc);
+		evt_ent_array_for_each(ent, &ent_array) {
+			bool punched;
+			static char buf[10];
+
+			addr = ent->en_addr;
+			strcpy(buf, " ");
+			punched = bio_addr_is_hole(&addr);
+			D_PRINT("Find rect "DF_ENT" width=%d val=%.*s\n",
+			DP_ENT(ent),
+			(int)evt_extent_width(&ent->en_sel_ext),
+			punched ? 4 : (int)evt_extent_width(&ent->en_sel_ext),
+			punched ? "None" : (char *)utest_off2ptr(arg->ta_utx,
+								 addr.ba_off));
+			punched ? strcpy(buf, "None") :
+			strncpy(buf,
+				(char *)utest_off2ptr(arg->ta_utx, addr.ba_off),
+				(int)evt_extent_width(&ent->en_sel_ext));
+			if (punched) {
+				rc = strcmp(buf, "None");
+				if (rc != 0)
+					fail_msg("Data Check Failed");
+			} else {
+				if ((int)evt_extent_width(&ent->en_sel_ext)
+					== 1) {
+					rc = strcmp(buf, "d");
+					if (rc != 0)
+						fail_msg("Data Check Failed");
+				} else {
+					rc = strcmp(buf, "deadbeef");
+					if (rc != 0)
+						fail_msg("Data Check Failed");
+				}
+			}
+		}
+		/* Delete the last visible record */
+		entry.ei_rect.rc_ex.ex_lo = epoch;
+		entry.ei_rect.rc_ex.ex_hi = extent.ex_hi;
+		entry.ei_rect.rc_epc = epr.epr_hi;
+		rc = evt_delete(toh, &entry.ei_rect, NULL);
+		assert_int_equal(rc, 0);
+		rc = utest_check_mem_decrease(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		evt_ent_array_fini(&ent_array);
+	}
+	rc = utest_check_mem_initial_status(arg->ta_utx);
+	assert_int_equal(rc, 0);
+	/* Destroy the tree */
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+
+}
+/*
+*   10: EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
+*   26: EVT_ITER_REVERSE|EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
+*    2: EVT_ITER_VISIBLE
+*   18: EVT_ITER_REVERSE|EVT_ITER_VISIBLE
+*    4: EVT_ITER_COVERED
+*   20: EVT_ITER_REVERSE|EVT_ITER_COVERED
+*    6: EVT_ITER_COVERED|EVT_ITER_VISIBLE
+*   22: EVT_ITER_REVERSE|EVT_ITER_COVERED|EVT_ITER_VISIBLE
+*/
 static void
 test_evt_iter_delete_internal(void **state)
 {
@@ -1233,8 +1389,10 @@ test_evt_iter_delete_internal(void **state)
 	int			 rc;
 	int			 epoch;
 	int			 offset;
+	int			 val[] = {10, 26, 2, 18, 4, 20, 6, 22, 0};
+	int			 iter_count;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1255,22 +1413,29 @@ test_evt_iter_delete_internal(void **state)
 			assert_int_equal(rc, 0);
 		}
 	}
+	for (iter_count = 0; iter_count < (
+		sizeof(val)/sizeof(int)); iter_count++) {
+		/* No filter so delete everything */
+		rc = evt_iter_prepare(toh, val[iter_count], NULL, &ih);
+		assert_int_equal(rc, 0);
 
-	/* No filter so delete everything */
-	rc = evt_iter_prepare(toh, 0, NULL, &ih);
-	assert_int_equal(rc, 0);
+		rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+		assert_int_equal(rc, 0);
 
-	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
-
-	/* Ok, delete the rest */
-	while (!evt_iter_empty(ih)) {
-		rc = evt_iter_delete(ih, NULL);
+		/* Ok, delete the rest */
+		while (!evt_iter_empty(ih)) {
+			rc = evt_iter_delete(ih, NULL);
+			if (val[iter_count] == 0) {
+				assert_int_equal(rc, 0);
+			} else {
+				assert_int_not_equal(rc, 0);
+				/* exit the loop */
+				break;
+			}
+		}
+		rc = evt_iter_finish(ih);
 		assert_int_equal(rc, 0);
 	}
-	rc = evt_iter_finish(ih);
-	assert_int_equal(rc, 0);
-
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
@@ -1305,7 +1470,7 @@ test_evt_ent_alloc_bug(void **state)
 	int			 last = 0;
 	int			 idx1, nr1, idx2, nr2, idx3, nr3;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1375,7 +1540,7 @@ test_evt_root_deactivate_bug(void **state)
 	struct evt_entry_in	 entry_in = {0};
 	int			 rc;
 
-	rc = evt_create(EVT_FEAT_DEFAULT, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1511,6 +1676,9 @@ run_internal_tests(void)
 		{ "EVT013: evt_iter_flags",
 			test_evt_iter_flags,
 			setup_builtin, teardown_builtin},
+		{ "EVT014: evt_find_internal",
+			test_evt_find_internal,
+			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
 
@@ -1530,13 +1698,14 @@ static struct option ts_ops[] = {
 	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ "test",	required_argument,	NULL,	't'	},
+	{ "sort",	required_argument,	NULL,	's'	},
 	{ NULL,		0,			NULL,	0	},
 };
 
 static int
 ts_cmd_run(char opc, char *args)
 {
-	int	rc;
+	int	rc = 0;
 
 	tst_fn_val.optval = args;
 	tst_fn_val.input = true;
@@ -1577,6 +1746,12 @@ ts_cmd_run(char opc, char *args)
 		break;
 	case 't':
 		rc = run_internal_tests();
+		break;
+	case 's':
+		if (strcasecmp(args, "soff") == 0)
+			ts_feats = EVT_FEAT_SORT_SOFF;
+		else if (strcasecmp(args, "dist_even") == 0)
+			ts_feats = EVT_FEAT_SORT_DIST_EVEN;
 		break;
 	default:
 		D_PRINT("Unsupported command %c\n", opc);
@@ -1624,7 +1799,7 @@ main(int argc, char **argv)
 		goto out;
 	}
 
-	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::t",
+	while ((rc = getopt_long(argc, argv, "C:a:m:f:g:d:b:Docl::ts:",
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)

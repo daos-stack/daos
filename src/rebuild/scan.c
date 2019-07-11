@@ -268,7 +268,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		}
 
 		for (i = 0; i < failed_tgts_cnt; i++) {
-			if (targets[i].ta_comp.co_rank == tgt_id) {
+			if (targets[i].ta_comp.co_id == tgt_id) {
 				target_failed = true;
 				break;
 			}
@@ -905,6 +905,9 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	struct rebuild_scan_out	*src = crt_reply_get(source);
 	struct rebuild_scan_out *dst = crt_reply_get(result);
 	int i;
+
+	if (dst->rso_status == 0)
+		dst->rso_status = src->rso_status;
 
 	if (src->rso_ranks_list == NULL ||
 	    src->rso_ranks_list->rl_nr == 0)

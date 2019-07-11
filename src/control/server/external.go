@@ -21,33 +21,37 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
+
+//#include <unistd.h>
+//#include <errno.h>
+import "C"
 
 import (
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"syscall"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
-
-	//#include <unistd.h>
-	//#include <errno.h>
-	"C"
 )
 
 const (
-	msgUnmount = "syscall: calling unmount with %s, MNT_DETACH"
-	msgMount   = "syscall: mount %s, %s, %s, %s, %s"
-	msgMkdir   = "os: mkdirall %s, 0777"
-	msgRemove  = "os: removeall %s"
-	msgCmd     = "cmd: %s"
-	msgSetUID  = "C: setuid %d"
-	msgSetGID  = "C: setgid %d"
-	msgChown   = "os: chown %s %d %d"
+	msgUnmount      = "syscall: calling unmount with %s, MNT_DETACH"
+	msgMount        = "syscall: mount %s, %s, %s, %s, %s"
+	msgIsMountPoint = "check if dir %s is mounted"
+	msgExists       = "os: stat %s"
+	msgMkdir        = "os: mkdirall %s, 0777"
+	msgRemove       = "os: removeall %s"
+	msgCmd          = "cmd: %s"
+	msgSetUID       = "C: setuid %d"
+	msgSetGID       = "C: setgid %d"
+	msgChown        = "os: chown %s %d %d"
 )
 
 // External interface provides methods to support various os operations.
@@ -56,6 +60,7 @@ type External interface {
 	writeToFile(string, string) error
 	createEmpty(string, int64) error
 	mount(string, string, string, uintptr, string) error
+	isMountPoint(string) (bool, error)
 	unmount(string) error
 	mkdir(string) error
 	remove(string) error
@@ -106,27 +111,34 @@ func (e *ext) writeToFile(contents string, path string) error {
 // createEmpty creates a file (if it doesn't exist) of specified size in bytes
 // at the given path.
 // If Fallocate not supported by kernel or backing fs, fall back to Truncate.
-func (e *ext) createEmpty(path string, size int64) (err error) {
+func (e *ext) createEmpty(path string, size int64) error {
 	if !filepath.IsAbs(path) {
 		return errors.Errorf("please specify absolute path (%s)", path)
 	}
-	if _, err = os.Stat(path); !os.IsNotExist(err) {
-		return
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		return err
 	}
+
 	file, err := common.TruncFile(path)
 	if err != nil {
-		return
+		return err
 	}
 	defer file.Close()
+
 	if err := syscall.Fallocate(int(file.Fd()), 0, 0, size); err != nil {
 		e, ok := err.(syscall.Errno)
 		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
 			log.Debugf(
 				"Warning: Fallocate not supported, attempting Truncate: ", e)
-			err = file.Truncate(size)
+
+			if err := file.Truncate(size); err != nil {
+				return err
+			}
 		}
 	}
-	return
+
+	return nil
 }
 
 // NOTE: requires elevated privileges
@@ -138,10 +150,38 @@ func (e *ext) mount(
 	log.Debugf(op)
 	e.history = append(e.history, op)
 
+	if flags == 0 {
+		flags = uintptr(syscall.MS_NOATIME | syscall.MS_SILENT)
+		flags |= syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_NOSUID
+	}
+
 	if err := syscall.Mount(dev, mount, mntType, flags, opts); err != nil {
 		return errPermsAnnotate(os.NewSyscallError("mount", err))
 	}
 	return nil
+}
+
+// isMountPoint checks if path is likely to be a mount point.straiowhotenoul
+func (e *ext) isMountPoint(path string) (bool, error) {
+	log.Debugf(msgIsMountPoint, path)
+	e.history = append(e.history, fmt.Sprintf(msgIsMountPoint, path))
+
+	pStat, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	rStat, err := os.Stat(filepath.Dir(strings.TrimSuffix(path, "/")))
+	if err != nil {
+		return false, err
+	}
+
+	if pStat.Sys().(*syscall.Stat_t).Dev == rStat.Sys().(*syscall.Stat_t).Dev {
+		return false, nil
+	}
+
+	// if root dir has different parent device than path then probably a mountpoint
+	return true, nil
 }
 
 // NOTE: requires elevated privileges, lazy unmount, mntpoint may not be
@@ -189,6 +229,9 @@ func (e *ext) remove(path string) error {
 }
 
 func (e *ext) exists(path string) (bool, error) {
+	log.Debugf(msgExists, path)
+	e.history = append(e.history, fmt.Sprintf(msgExists, path))
+
 	if _, err := os.Stat(path); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {

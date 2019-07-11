@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"bytes"
@@ -190,6 +190,10 @@ func (c *configuration) parseNvme(i int) (err error) {
 	if msg := bdev.isEmpty(srv); msg != "" {
 		log.Debugf("spdk %s: %s (server %d)\n", srv.BdevClass, msg, i)
 		return
+	}
+
+	if msg := bdev.isValid(srv); msg != "" {
+		log.Debugf("spdk %s: %s (server %d)\n", srv.BdevClass, msg, i)
 	}
 
 	if err = bdev.prep(i, c); err != nil {

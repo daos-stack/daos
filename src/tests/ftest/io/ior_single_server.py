@@ -67,6 +67,10 @@ class IorSingleServer(Test):
                                             self.workdir, None))
         print("Host file clientsis: {}".format(self.hostfile_clients))
 
+        # set ior_flags and object class to be used by test
+        self.ior_flags = self.params.get("F", '/run/ior/iorflags/')
+        self.object_class = self.params.get("o", '/run/ior/objectclass/')
+
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers,
                                                     self.hostlist_clients)
@@ -105,11 +109,9 @@ class IorSingleServer(Test):
         # ior parameters
         client_processes = self.params.get("np", '/run/ior/client_processes/*/')
         iteration = self.params.get("iter", '/run/ior/iteration/')
-        ior_flags = self.params.get("F", '/run/ior/iorflags/')
         transfer_size = self.params.get("t",
                                         '/run/ior/transfersize_blocksize/*/')
         block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
-        object_class = self.params.get("o", '/run/ior/objectclass/')
 
         try:
             # initialize a python pool object then create the underlying
@@ -126,10 +128,10 @@ class IorSingleServer(Test):
                 svc_list += str(tmp_rank_list[item]) + ":"
             svc_list = svc_list[:-1]
 
-            ior_utils.run_ior_daos(self.hostfile_clients, ior_flags, iteration,
-                                   block_size, transfer_size, pool_uuid,
-                                   svc_list, object_class, self.basepath,
-                                   client_processes)
+            ior_utils.run_ior_daos(self.hostfile_clients, self.ior_flags,
+                                   iteration, block_size, transfer_size,
+                                   pool_uuid, svc_list, self.object_class,
+                                   self.basepath, client_processes)
 
         except (DaosApiError, ior_utils.IorFailed) as excep:
             self.fail("<Single Server Test FAILED>\n {}".format(excep))

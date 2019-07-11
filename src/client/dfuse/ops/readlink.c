@@ -30,7 +30,7 @@ readlink_cb(struct dfuse_request *request)
 	struct dfuse_string_out *out = request->out;
 
 	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc) {
+	if (request->ir_rc) {
 		D_GOTO(out_err, 0);
 	}
 
@@ -40,7 +40,7 @@ readlink_cb(struct dfuse_request *request)
 	return false;
 
 out_err:
-	DFUSE_REPLY_ERR(request, request->rc);
+	DFUSE_REPLY_ERR(request, request->ir_rc);
 	D_FREE(request);
 	return false;
 
@@ -69,7 +69,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 	DFUSE_TRA_UP(request, fs_handle, "readlink");
 	DFUSE_TRA_INFO(request, "statfs %lu", ino);
 
-	request->req = req;
+	request->ir_req = req;
 	request->ir_api = &api;
 	request->ir_ht = RHS_INODE_NUM;
 	request->ir_inode_num = ino;

@@ -29,6 +29,7 @@
 
 #include <daos/common.h>
 #include <daos/tse.h>
+#include <daos/object.h>
 #include <daos/addons.h>
 #include <daos_api.h>
 #include <daos_addons.h>
@@ -300,7 +301,7 @@ dac_kv_list(tse_task_t *task)
 	list_args->nr		= args->nr;
 	list_args->sgl		= args->sgl;
 	list_args->kds		= args->kds;
-	list_args->anchor	= args->anchor;
+	list_args->dkey_anchor	= args->anchor;
 
 	rc = tse_task_register_deps(task, 1, &list_task);
 	if (rc != 0)

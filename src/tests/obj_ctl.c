@@ -344,7 +344,7 @@ ctl_cmd_run(char opc, char *args)
 				break;
 
 			daos_obj_generate_id(&ctl_oid.id_pub, 0,
-					     DAOS_OC_TINY_RW);
+					     OC_S1, 0);
 			break;
 		case 'd':
 		case 'D':

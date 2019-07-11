@@ -31,22 +31,17 @@
 ## default: 10000
 #port: 10001
 #
+## Transport Credentials Specifying certificates to secure communications
 #
-## Path to CA certificate
-#
-## If not specified, DAOS will start in insecure way which means that
-## anybody can administrate the DAOS installation and access data
-#
-#ca_cert: ./.daos/ca.crt
-#
-#
-## Path to server certificate and key file
-#
-## Discarded if no CA certificate is passed.
-#
-## default: ./.daos/daos_server.{crt,key}
-#cert: ./.daosa/daos_server.crt
-#key: ./.daosa/daos_server.key
+#transport_config:
+#  # Specify to bypass loading certificates and use insecure communications channnels
+#  allow_insecure: false
+#  # Custom CA Root certificate for generated certs
+#  ca_cert: .daos/daosCA.crt
+#  # Server certificate for use in TLS handshakes
+#  cert: .daos/daos_server.crt
+#  # Key portion of Server Certificate
+#  key: .daos/daos_server.key
 #
 #
 ## Fault domain path
@@ -164,14 +159,6 @@
 #
 ## default: print to stderr
 #control_log_file: /tmp/daos_control.log
-#
-#
-## Format override when true will continue to format and start data plane
-## without waiting for client API storage format call (which formats
-## NVMe and SCM storage devices.
-#
-## default: true
-#format_override: false
 #
 #
 ## Username used to lookup user uid/gid to drop privileges to if started

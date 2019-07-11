@@ -29,9 +29,11 @@
 
 #include <daos/btree.h>
 #include <daos/mem.h>
+#include <daos/object.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
+
+int vos_evt_feats = EVT_FEAT_SORT_SOFF;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -357,7 +359,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
 	if (UMOFF_IS_NULL(rec->rec_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	krec = vos_rec2krec(tins, rec);
 	if (kbund->kb_epoch == DAOS_EPOCH_MAX) {
@@ -646,7 +648,7 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		rec->rec_off = umem_alloc(&tins->ti_umm,
 					   vos_irec_size(rbund));
 		if (UMOFF_IS_NULL(rec->rec_off))
-			return -DER_NOMEM;
+			return -DER_NOSPACE;
 	} else {
 		umem_tx_add(&tins->ti_umm, rbund->rb_off,
 			    vos_irec_msize(rbund));
@@ -853,7 +855,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	D_ASSERT(flags & SUBTR_CREATE);
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, uma,
+		rc = evt_create(vos_evt_feats, VOS_EVT_ORDER, uma,
 				&krec->kr_evt, coh, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);

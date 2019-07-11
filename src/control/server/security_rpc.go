@@ -21,16 +21,17 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"bytes"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 // Module id for the Server security module
@@ -52,8 +53,8 @@ func processValidateCredentials(body []byte) ([]byte, error) {
 	}
 
 	// Check our verifier
-	hash, err := security.HashFromToken(credential.Token)
-	if bytes.Compare(hash, credential.Verifier.Data) != 0 {
+	hash, _ := security.HashFromToken(credential.Token)
+	if !bytes.Equal(hash, credential.Verifier.Data) {
 		return nil, errors.Errorf("Verifier does not match token")
 	}
 

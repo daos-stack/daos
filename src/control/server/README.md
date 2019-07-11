@@ -2,7 +2,7 @@
 
 ## Workflow
 
-Control plane server (`daos_server`) instances will open a gRPC channel to listen for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through the control plane [`dmg`](../dmg) management tool. Calling `dmg storage format` formats persistent storage on the server node, writes the superblock and starts the data plane.
+Control plane server (`daos_server`) instances will open a gRPC channel to listen for requests from control plane client applications. Administrators can perform provisioning operations on network and storage hardware through the control plane [`dmg`](../cmd/dmg) management tool. Calling `dmg storage format` formats persistent storage on the server node, writes the superblock and starts the data plane.
 
 ![Server format diagram](/doc/graph/server_format_flow.png)
 
@@ -10,7 +10,7 @@ Control plane server (`daos_server`) instances will open a gRPC channel to liste
 
 `daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
 
-For instructions on building and running DAOS see the [Quickstart guide](../../doc/quickstart.md).
+For instructions on building and running DAOS see the [Quickstart guide](../../../doc/quickstart.md).
 
 <details>
 <summary>Example output from invoking `daos_server` on multiple hosts with `orterun` (with logging to stdout for illustration purposes)</summary>
@@ -127,14 +127,14 @@ linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
 
 See `daos_server storage prep-nvme --help` for usage.
 
-### storage list
+### storage scan
 
 <details>
 <summary>List NVMe SSDs and SCM modules locally attached to the host.</summary>
 <p>
 
 ```bash
-[tanabarr@boro-45 daos_m]$ daos_server storage list
+[tanabarr@boro-45 daos_m]$ daos_server storage scan
 Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 [ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk_pid29193 ]
 EAL: Detected 72 lcore(s)
@@ -186,11 +186,11 @@ SCM:
 </p>
 </details>
 
-See `daos_server show-storage --help` for usage.
+See `daos_server storage scan --help` for usage.
 
 ## Management Tool (client) Usage
 
-[`daos_shell`](../dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
+[`daos_shell`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
 The tool is lightweight and doesn't depend on storage libraries.
 Implemented as a gRPC client application it connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
@@ -199,7 +199,7 @@ In order to run the tool to perform administrative tasks from non-storage nodes 
  1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
  2. run `daos_shell` from a login node
 
-See `daos_shell --help` for usage and [here](../dmg) for package details.
+See `daos_shell --help` for usage and [here](../cmd/dmg) for package details.
 
 ## Storage management
 
@@ -225,24 +225,27 @@ The DAOS control plane will provide SCM storage management capabilities enabling
 
 #### SCM module discovery
 
-Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage list` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
 
 TODO: return details of AppDirect memory regions
 
 #### SCM format
 
-Format can be [triggered](../dmg/README.md#subcommands) through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is performed as specified in config file parameters prefixed with `scm_`.
+Format can be [triggered](../cmd/dmg/README.md#-subcommands) through the management tool at DAOS system installation time, formatting and mounting of SCM device namespace is performed as specified in config file parameters prefixed with `scm_`.
 
-SCM device format is expected only to be performed when installing DAOS system for the first time.
+SCM device format is expected only to be performed when installing DAOS system for the first time and requires `daos_server` to be started by root user.
 
-##### `format_override` == true
+If `daos_server` is run by root user, data plane will be started automatically ONLY if the DAOS superblock exists within the specified `scm_mount`.
+Otherwise, the control plane will wait until an administrator calls "[storage format](../cmd/dmg/README.md#subcommands)" over the client API from the management tool.
+If `storage format` call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
 
-If `format_override` IS SET to `true` in config file, control plane will attempt to use whatever is mounted at `scm_mount` location specified in config file and start data plane instances regardless of whether the server has been formatted.
+If `daos_server` is run by a normal (non-root) user, the data plane will be started automatically if the DAOS superblock exists within the specified `scm_mount`.
 If `scm_mount` IS NOT mounted, control plane will fail to start data plane.
 If `scm_mount` IS mounted but no superblock exists, control plane will attempt to create superblock and start data plane.
 
+
 <details>
-<summary>Example output from invoking `daos_server` on single host with `format_override` TRUE when `scm_mount` IS NOT mounted</summary>
+<summary>Example output from invoking `daos_server` on single host when run as a normal user and `scm_mount` IS NOT mounted</summary>
 <p>
 
 ```bash
@@ -274,7 +277,7 @@ wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:09 main.go:129: error: Failed to fo
 </p>
 
 <details>
-<summary>Example output from invoking `daos_server` on single host with `format_override` TRUE when `scm_mount` IS mounted</summary>
+<summary>Example output from invoking `daos_server` on single host run as a normal user and `scm_mount` IS mounted</summary>
 <p>
 
 ```bash
@@ -307,15 +310,8 @@ DAOS I/O server (v0.4.0) process 135939 started on rank 0 (out of 1) with 1 targ
 </details>
 </p>
 
-##### `format_override` == false
-
-If `format_override` IS SET to `false` in config file, control plane will attempt to start the data plane instances ONLY if the DAOS superblock exists within the specified `scm_mount`.
-Otherwise, the control plane will wait until an administrator calls "[storage format](../dmg/README.md#subcommands)" over the client API from the management tool.
-If `storage format` call is successful, control plane will continue to start data plane instances when SCM and NVMe have been formatted, SCM mounted and superblock and nvme.conf successfully written to SCM mount.
-If a superblock exists in `scm_mount`, and the location is mounted, the control plane will fail (so as to not inadvertently wipe a useful SCM location).
-
 <details>
-<summary>Example output from invoking `daos_server` on single host with `format_override` FALSE when superblock already exists</summary>
+<summary>Example output from invoking `daos_server` on single host when run as root user when superblock already exists</summary>
 <p>
 
 ```bash
@@ -345,7 +341,7 @@ DAOS I/O server (v0.4.0) process 135671 started on rank 0 (out of 1) with 1 targ
 </details>
 
 <details>
-<summary>Example output from invoking `daos_server` on single host with `format_override` FALSE when `scm_mount` location is not mounted</summary>
+<summary>Example output from invoking `daos_server` on single host when run as root and `scm_mount` location is not mounted</summary>
 <p>
 
 ```bash
@@ -368,7 +364,7 @@ EAL: PCI device 0000:da:00.0 on NUMA socket 1
 EAL:   probe driver: 8086:953 spdk_nvme
 wolf-72.wolf.hpdd.intel.com 2019/04/10 03:49:19 iosrv.go:108: debug: waiting for storage format on server 0
 ```
-...after [`storage format`](../dmg/README.md#subcommands) gets called, data plane is started...
+...after [`storage format`](../cmd/dmg/README.md#subcommands) gets called, data plane is started...
 ```bash
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 mgmt.go:108: debug: performing nvme format, may take several minutes!
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 mgmt.go:114: debug: performing scm format, should be quick!
@@ -407,7 +403,7 @@ The DAOS control plane will provide NVMe storage management capabilities enablin
 
 #### NVMe Controller and Namespace Discovery
 
-Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage list` subcommand on [`daos_shell`](../dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
@@ -415,7 +411,7 @@ The following animation illustrates starting the control server and using the ma
 
 #### NVMe Format
 
-Format can be [triggered](../dmg/README.md#subcommands) through the management tool at DAOS system installation time.
+Format can be [triggered](../cmd/dmg/README.md#subcommands) through the management tool at DAOS system installation time.
 
 NVMe device format is expected only to be performed when installing DAOS system for the first time.
 

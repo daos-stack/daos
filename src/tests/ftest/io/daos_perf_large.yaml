@@ -1,0 +1,50 @@
+hosts:
+    test_servers:
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
+    test_clients:
+        - boro-E
+        - boro-F
+        - boro-G
+        - boro-H
+
+# some run can take long to run, but needs to be verified
+# by running consecutively for accurate time.
+timeout: 2000
+server_config:
+    name: daos_server
+daos_perf_large:
+  pool_size:
+    scm:
+      size: '10G'
+    nvme:
+      size: '40G'
+  client_processes:
+    np_64:
+      np: 64
+      mode: 'daos'
+      value_size: !mux
+        size_256:
+          size: 256
+        size_4k:
+          size: '4k'
+      value_type:
+        single_value:
+          objects: !mux
+            obj_1:
+              obj: 1
+            obj_8:
+              obj: 8
+          dkeys: '4k'
+          akeys: '1k'
+          records: 1
+          flags:
+            for_singlevalue:
+              F: ' '
+      oclass: !mux
+        large:
+          o: 'Large'
+        r2:
+          o: 'R2'

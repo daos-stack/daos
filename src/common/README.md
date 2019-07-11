@@ -78,7 +78,7 @@ code [here](/src/include/daos/tse.h).
 
 ## dRPC C API
 
-For a general overview of dRPC concepts and the corresponding Golang API, see [here](/src/control/drpc/README.md).
+For a general overview of dRPC concepts and the corresponding Go API, see [here](/src/control/drpc/README.md).
 
 In the C API, an active dRPC connection is represented by a pointer to a context object (`struct drpc`). The context supplies all the state information required to communicate over the Unix Domain Socket. When finished with a context, the object should be freed by using `drpc_close()`.
 

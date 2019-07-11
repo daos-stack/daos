@@ -331,7 +331,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 
 	/* Call all registered poller one by one */
 	d_list_for_each_entry(poller, &ctxt->bxc_pollers, bnp_link) {
-		if (poller->bnp_period_us != 0 && poller->bnp_expire_us < now)
+		if (poller->bnp_period_us != 0 && poller->bnp_expire_us > now)
 			continue;
 
 		poller->bnp_fn(poller->bnp_arg);
@@ -575,33 +575,59 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 }
 
 static void
+free_bio_blobstore(struct bio_blobstore *bb)
+{
+	D_ASSERT(bb->bb_bs == NULL);
+	D_ASSERT(bb->bb_ref == 0);
+
+	ABT_cond_free(&bb->bb_barrier);
+	ABT_mutex_free(&bb->bb_mutex);
+	D_FREE(bb->bb_xs_ctxts);
+	D_FREE(bb);
+}
+
+static void
 put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 {
-	struct spdk_blob_store *bs = NULL;
-	bool last = false;
+	struct spdk_blob_store	*bs = NULL;
+	struct bio_io_context	*ioc, *tmp;
+	int			i, xs_cnt_max = BIO_XS_CNT_MAX;
 
-	/*
-	 * Unload the blobstore within the same thread where is't loaded,
-	 * all server xstreams which should have stopped using the blobstore.
-	 */
+	d_list_for_each_entry_safe(ioc, tmp, &ctxt->bxc_io_ctxts, bic_link) {
+		d_list_del_init(&ioc->bic_link);
+		if (ioc->bic_blob != NULL)
+			D_WARN("Pool isn't closed. xs:%p\n", ctxt);
+	}
+
 	ABT_mutex_lock(bb->bb_mutex);
-	if (bb->bb_ctxt == ctxt && bb->bb_bs != NULL) {
+	/* Unload the blobstore in the same xstream where it was loaded. */
+	if (bb->bb_owner_xs == ctxt && bb->bb_bs != NULL) {
 		bs = bb->bb_bs;
 		bb->bb_bs = NULL;
 	}
 
+	for (i = 0; i < xs_cnt_max; i++) {
+		if (bb->bb_xs_ctxts[i] == ctxt) {
+			bb->bb_xs_ctxts[i] = NULL;
+			break;
+		}
+	}
+	D_ASSERT(i < xs_cnt_max);
+
 	D_ASSERT(bb->bb_ref > 0);
 	bb->bb_ref--;
-	if (bb->bb_ref == 0)
-		last = true;
+
+	/* Wait for other xstreams to put_bio_blobstore() first */
+	if (bs != NULL && bb->bb_ref)
+		ABT_cond_wait(bb->bb_barrier, bb->bb_mutex);
+	else if (bb->bb_ref == 0)
+		ABT_cond_broadcast(bb->bb_barrier);
+
 	ABT_mutex_unlock(bb->bb_mutex);
 
-	if (bs != NULL)
+	if (bs != NULL) {
+		D_ASSERT(bb->bb_holdings == 0);
 		unload_blobstore(ctxt, bs);
-
-	if (last) {
-		ABT_mutex_free(&bb->bb_mutex);
-		D_FREE(bb);
 	}
 }
 
@@ -614,7 +640,7 @@ fini_bio_bdevs(struct bio_xs_context *ctxt)
 		d_list_del_init(&d_bdev->bb_link);
 
 		if (d_bdev->bb_blobstore != NULL)
-			put_bio_blobstore(d_bdev->bb_blobstore, ctxt);
+			free_bio_blobstore(d_bdev->bb_blobstore);
 
 		D_FREE(d_bdev);
 	}
@@ -623,30 +649,61 @@ fini_bio_bdevs(struct bio_xs_context *ctxt)
 static struct bio_blobstore *
 alloc_bio_blobstore(struct bio_xs_context *ctxt)
 {
-	struct bio_blobstore *bb;
-	int rc;
+	struct bio_blobstore	*bb;
+	int			 rc, xs_cnt_max = BIO_XS_CNT_MAX;
 
 	D_ASSERT(ctxt != NULL);
 	D_ALLOC_PTR(bb);
 	if (bb == NULL)
 		return NULL;
 
+	D_ALLOC_ARRAY(bb->bb_xs_ctxts, xs_cnt_max);
+	if (bb->bb_xs_ctxts == NULL)
+		goto out_bb;
+
 	rc = ABT_mutex_create(&bb->bb_mutex);
-	if (rc != ABT_SUCCESS) {
-		D_FREE(bb);
-		return NULL;
-	}
+	if (rc != ABT_SUCCESS)
+		goto out_ctxts;
 
-	bb->bb_ref = 1;
-	bb->bb_ctxt = ctxt;
+	rc = ABT_cond_create(&bb->bb_barrier);
+	if (rc != ABT_SUCCESS)
+		goto out_mutex;
 
+	bb->bb_ref = 0;
+	bb->bb_owner_xs = ctxt;
 	return bb;
+
+out_mutex:
+	ABT_mutex_free(&bb->bb_mutex);
+out_ctxts:
+	D_FREE(bb->bb_xs_ctxts);
+out_bb:
+	D_FREE(bb);
+	return NULL;
 }
 
 static struct bio_blobstore *
-get_bio_blobstore(struct bio_blobstore *bb)
+get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 {
+	int	i, xs_cnt_max = BIO_XS_CNT_MAX;
+
 	ABT_mutex_lock(bb->bb_mutex);
+
+	for (i = 0; i < xs_cnt_max; i++) {
+		if (bb->bb_xs_ctxts[i] == ctxt) {
+			D_ERROR("Dup xstream context!\n");
+			ABT_mutex_unlock(bb->bb_mutex);
+			return NULL;
+		} else if (bb->bb_xs_ctxts[i] == NULL) {
+			bb->bb_xs_ctxts[i] = ctxt;
+			break;
+		}
+	}
+	if (i == xs_cnt_max) {
+		D_ERROR("Too many xstreams per device!\n");
+		ABT_mutex_unlock(bb->bb_mutex);
+		return NULL;
+	}
 	bb->bb_ref++;
 	ABT_mutex_unlock(bb->bb_mutex);
 	return bb;
@@ -792,7 +849,10 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 			xs_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
 	}
 
-	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore);
+	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
+	if (ctxt->bxc_blobstore == NULL)
+		return -DER_NOMEM;
+
 	bs = ctxt->bxc_blobstore->bb_bs;
 	D_ASSERT(bs != NULL);
 	ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bs);
@@ -906,6 +966,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_pollers);
+	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_xs_id = xs_id;
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
