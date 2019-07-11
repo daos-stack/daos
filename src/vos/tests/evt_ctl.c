@@ -1514,7 +1514,6 @@ test_evt_various_data_size_internal(void **state)
 	struct evt_extent	 extent;
 	daos_epoch_range_t	 epr;
 
-
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
 		rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
@@ -1526,7 +1525,9 @@ test_evt_various_data_size_internal(void **state)
 		D_ALLOC(data, data_size);
 		strcpy(data, "EVTree: Out of Memory");
 		epr.epr_lo = 0;
-		/* Insert a bunch of entries till evt_insert fails */
+		/* Loop does the following : evt_insert,
+		evt_find (first epoch) and evt_delete (random deletes)
+		till out of space condition*/
 		for (epoch = 1; ; epoch++) {
 			entry.ei_rect.rc_ex.ex_lo = epoch;
 			entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
@@ -1570,7 +1571,20 @@ test_evt_various_data_size_internal(void **state)
 				}
 				evt_ent_array_fini(&ent_array);
 			}
+			/* Delete a record*/
+			if (epoch % 10 == 0) {
+				entry.ei_rect.rc_ex.ex_lo = epoch;
+				entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
+				entry.ei_rect.rc_epc = epoch;
+				rc = evt_delete(toh, &entry.ei_rect, NULL);
+				assert_int_equal(rc, 0);
+				rc = utest_check_mem_decrease(arg->ta_utx);
+				assert_int_equal(rc, 0);
+				rc = utest_sync_mem_status(arg->ta_utx);
+				assert_int_equal(rc, 0);
+			}
 		}
+		/* Delete remaining records: evt_iter_delete */
 		rc = evt_iter_prepare(toh, 0, NULL, &ih);
 		assert_int_equal(rc, 0);
 		rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
