@@ -201,16 +201,16 @@ class TestWithServers(TestWithoutServers):
                         expected_count, host_type, actual_count))
 
         # Start the servers and clients
-        if self.agent_sessions is None:
-            # Create host files
-            self.hostfile_servers = write_host_file.write_host_file(
-                self.hostlist_servers, self.workdir)
-            if self.hostlist_clients:
-                self.hostfile_clients = write_host_file.write_host_file(
-                    self.hostlist_clients, self.workdir)
 
-            self.agent_sessions = agent_utils.run_agent(
-                self.basepath, self.hostlist_servers, self.hostlist_clients)
+        # Create host files
+        self.hostfile_servers = write_host_file.write_host_file(
+            self.hostlist_servers, self.workdir)
+        if self.hostlist_clients:
+            self.hostfile_clients = write_host_file.write_host_file(
+                self.hostlist_clients, self.workdir)
+
+        self.agent_sessions = agent_utils.run_agent(
+            self.basepath, self.hostlist_servers, self.hostlist_clients)
 
         if self.setup_start_servers:
             self.start_servers()
