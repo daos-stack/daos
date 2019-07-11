@@ -59,6 +59,16 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 				       &ie->ie_htl);
 
 	if (rlink != &ie->ie_htl) {
+		dfs_obj_t		*obj;
+		struct dfuse_inode_entry *existing;
+
+		existing = container_of(rlink, struct dfuse_inode_entry,
+				        ie_htl);
+
+		obj = ie->ie_obj;
+		ie->ie_obj = existing->ie_obj;
+		existing->ie_obj = obj;
+
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
 		 * keep a reference on the parent.
