@@ -613,7 +613,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 			D_FREE(req_tgts->ort_shard_tgts);
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 	}
-
+	req_tgts->ort_grp_nr = grp_nr;
+	req_tgts->ort_grp_size = shard_nr;
 	for (i = 0; i < grp_nr; i++) {
 		shard_idx = start_shard + i * grp_size;
 		tgt = req_tgts->ort_shard_tgts + i * grp_size;
@@ -632,7 +633,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		}
 		for (j = 0; j < grp_size; j++, shard_idx++) {
 			if (shard_idx == leader_shard ||
-			    (tgt_set && !(tgt_set & 1UL << i)))
+			    (tgt_set && !(tgt_set & 1UL << j)))
 				continue;
 			rc = obj_shard_tgts_query(obj, map_ver, shard_idx,
 						  tgt++);
@@ -640,8 +641,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 				return rc;
 		}
 	}
-	req_tgts->ort_grp_nr = grp_nr;
-	req_tgts->ort_grp_size = shard_nr;
 	D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_nr);
 
 	return 0;

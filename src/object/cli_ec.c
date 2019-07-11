@@ -81,7 +81,7 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 		} else if (iod->iod_type == DAOS_IOD_SINGLE) {  // &&
 			   // iod->iod_size >= ss) {
 			*tgt_set = ~0UL;
-			return true;
+			return false;
 		}
 	}
 	return false;
@@ -91,9 +91,19 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 static void
 ec_init_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl)
 {
-	memset(params, 0, sizeof(struct ec_params));
-	params->niod		= *iod;
-	params->nsgl		= *sgl;
+	params->niod            = *iod;
+	params->nsgl            = *sgl;
+	params->nr              = 0;
+	params->niod.iod_recxs  = NULL;
+	params->niod.iod_nr     = 0;
+	params->nsgl.sg_iovs    = NULL;
+	params->nsgl.sg_nr      = 0;
+	params->nsgl.sg_nr_out  = 0;
+	params->p_segs.p_bufs   = NULL;
+	params->p_segs.p_nr     = 0;
+	params->iods            = NULL;
+	params->sgls            = NULL;
+	params->next            = NULL;
 }
 
 /* The head of the params list contains the replacement IOD and SGL arrays.
@@ -234,7 +244,7 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
  */
 static int
 ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
-		 unsigned int len)
+		 unsigned int len, unsigned int k)
 {
 	daos_recx_t	*nrecx;
 	unsigned int	 i;
@@ -245,9 +255,46 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	if (nrecx == NULL)
 		return -DER_NOMEM;
 	params->niod.iod_recxs = nrecx;
-	for (i = 0; i < iod->iod_nr; i++)
-		params->niod.iod_recxs[params->niod.iod_nr++] =
-			iod->iod_recxs[i];
+	for (i = 0; i < iod->iod_nr; i++) {
+		if (iod->iod_recxs[i].rx_nr * iod->iod_size > len * k) {
+			/* can't have more than one stripe in a recx entry */
+			uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
+			uint64_t start = iod->iod_recxs[i].rx_idx;
+
+			while (rem) {
+				if (rem <= len * k) {
+					params->
+					niod.iod_recxs[params->niod.iod_nr].
+					rx_nr = rem/iod->iod_size;
+					params->
+					niod.iod_recxs[params->niod.iod_nr++].
+					rx_idx = start;
+					rem = 0;
+				} else {
+					params->
+					niod.iod_recxs[params->niod.iod_nr].
+					rx_nr = (len * k) / iod->iod_size;
+					params->
+					niod.iod_recxs[params->niod.iod_nr++].
+					rx_idx = start;
+					start += (len * k) / iod->iod_size;
+					rem -= len * k;
+					D_REALLOC_ARRAY(nrecx,
+						(params->niod.iod_recxs),
+						(params->niod.iod_nr +
+						 iod->iod_nr));
+					if (nrecx == NULL) {
+						D_FREE(params->niod.iod_recxs);
+						return -DER_NOMEM;
+					}
+					params->niod.iod_recxs = nrecx;
+				}
+			}
+		} else {
+			params->niod.iod_recxs[params->niod.iod_nr++] =
+				iod->iod_recxs[i];
+		}
+	}
 
 	D_ALLOC_ARRAY(params->nsgl.sg_iovs, (params->p_segs.p_nr + sgl->sg_nr));
 	if (params->nsgl.sg_iovs == NULL)
@@ -258,6 +305,7 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		params->nsgl.sg_iovs[i].iov_len = len;
 		params->nsgl.sg_nr++;
 	}
+
 	for (i = 0; i < sgl->sg_nr; i++)
 		params->nsgl.sg_iovs[params->nsgl.sg_nr++] = sgl->sg_iovs[i];
 
@@ -269,6 +317,7 @@ static void
 ec_free_params(struct ec_params *head)
 {
 	D_FREE(head->iods);
+	/*
 	D_FREE(head->sgls);
 	while (head != NULL) {
 		int i;
@@ -282,6 +331,7 @@ ec_free_params(struct ec_params *head)
 		head = current->next;
 		D_FREE(current);
 	}
+	*/
 }
 
 
@@ -344,6 +394,14 @@ ec_init_tgt_set(daos_iod_t *iods, unsigned int nr,
 		*tgt_set = 0;
 }
 
+static bool 
+ec_has_parity(daos_iod_t* iod)
+{
+	if (iod->iod_recxs[0].rx_idx & PARITY_INDICATOR)
+		return true;
+	return false;
+}
+
 /* Iterates over the IODs in the update, encoding all full stripes contained
  * within each recx.
  */
@@ -356,17 +414,20 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 	struct ec_params	*current = NULL;
 	unsigned int		 i, j;
 	int			 rc = 0;
-	
-	D_ASSERT(args->nr == 1);
 
 	for (i = 0; i < args->nr; i++) {
 		d_sg_list_t	*sgl = &args->sgls[i];
 		daos_iod_t	*iod = &args->iods[i];
-		
-	
+
 		if (ec_has_full_stripe(iod, oca, tgt_set)) {
 			struct ec_params *params;
 
+			if (ec_has_parity(iod)) {
+				/* retry of update, don't want to add parity
+				 * again
+				 */
+				return rc;
+			}
 			D_ALLOC_PTR(params);
 			if (params == NULL) {
 				rc = -DER_NOMEM;
@@ -395,7 +456,8 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 						break;
 				}
 				rc = ec_update_params(params, iod, sgl,
-						      oca->u.ec.e_len);
+						      oca->u.ec.e_len,
+						      oca->u.ec.e_k);
 				head->iods[i] = params->niod;
 				head->sgls[i] = params->nsgl;
 				D_ASSERT(head->nr == i);
