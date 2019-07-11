@@ -1508,10 +1508,12 @@ test_evt_various_data_size_internal(void **state)
 					D_256M_SIZE};
 	uint64_t		data_size;
 	char                     *data;
-	struct evt_rect		 rect;
 	struct evt_entry_array	 ent_array;
 	struct evt_entry	 *ent;
 	bio_addr_t		 addr;
+	struct evt_extent	 extent;
+	daos_epoch_range_t	 epr;
+
 
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
 		rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
@@ -1523,6 +1525,7 @@ test_evt_various_data_size_internal(void **state)
 		D_PRINT("Data Size: %ld\n", data_size);
 		D_ALLOC(data, data_size);
 		strcpy(data, "EVTree: Out of Memory");
+		epr.epr_lo = 0;
 		/* Insert a bunch of entries till evt_insert fails */
 		for (epoch = 1; ; epoch++) {
 			entry.ei_rect.rc_ex.ex_lo = epoch;
@@ -1544,10 +1547,10 @@ test_evt_various_data_size_internal(void **state)
 			assert_int_equal(rc, 0);
 			if (epoch == 1) {
 				evt_ent_array_init(&ent_array);
-				rect.rc_ex.ex_lo = epoch;
-				rect.rc_ex.ex_hi = epoch + data_size;
-				rect.rc_epc = epoch;
-				rc = evt_find(toh, &rect, &ent_array);
+				extent.ex_lo = epoch;
+				extent.ex_hi = epoch + data_size;
+				epr.epr_hi = epoch;
+				rc = evt_find(toh, &epr, &extent, &ent_array);
 				if (rc != 0)
 					D_FATAL("Add rect failed %d\n", rc);
 				evt_ent_array_for_each(ent, &ent_array) {
