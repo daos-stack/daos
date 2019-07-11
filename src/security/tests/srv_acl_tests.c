@@ -139,6 +139,15 @@ setup_drpc_with_default_token(void)
 	auth__token__free_unpacked(token, NULL);
 }
 
+static void
+free_ace_list(struct daos_ace **aces, size_t len)
+{
+	size_t i;
+
+	for (i = 0; i < len; i++)
+		daos_ace_free(aces[i]);
+}
+
 /*
  * Setup and teardown
  */
@@ -1024,6 +1033,344 @@ test_check_pool_access_fall_thru_everyone(void **state)
 	daos_iov_free(&cred);
 }
 
+static void
+test_check_pool_access_user_matches(void **state)
+{
+	struct daos_acl		*acl;
+	struct daos_ace		*ace;
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	/* Ownership won't match our creds */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_default_cred(&cred);
+
+	/* User entry matches our cred */
+	ace = daos_ace_create(DAOS_ACL_USER, TEST_USER);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	acl = daos_acl_create(&ace, 1);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 0);
+
+	daos_acl_free(acl);
+	daos_ace_free(ace);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_user_matches_second(void **state)
+{
+	struct daos_acl		*acl;
+	size_t			num_aces = 2;
+	struct daos_ace		*ace[num_aces];
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	/* Ownership won't match our creds */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_default_cred(&cred);
+
+	/* Match is not the first in the list */
+	ace[0] = daos_ace_create(DAOS_ACL_USER, "fakeuser@");
+	ace[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[0]->dae_allow_perms = DAOS_ACL_PERM_READ;
+	ace[1] = daos_ace_create(DAOS_ACL_USER, TEST_USER);
+	ace[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[1]->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	acl = daos_acl_create(ace, 2);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 0);
+
+	daos_acl_free(acl);
+	free_ace_list(ace, num_aces);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_owner_beats_user(void **state)
+{
+	struct daos_acl		*acl;
+	struct daos_ace		*ace;
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	/* Owner matches our creds */
+	ownership.user = TEST_USER;
+	ownership.group = "somegroup@";
+
+	init_default_cred(&cred);
+
+	acl = get_acl_with_perms(DAOS_ACL_PERM_READ, DAOS_ACL_PERM_READ);
+
+	/* User entry matches our cred */
+	ace = daos_ace_create(DAOS_ACL_USER, TEST_USER);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+
+	/*
+	 * Requesting RW - but owner ACE has RO. Owner overrides named user
+	 * even though both match.
+	 */
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 -DER_NO_PERM);
+
+	daos_acl_free(acl);
+	daos_ace_free(ace);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_user_beats_owner_grp(void **state)
+{
+	struct daos_acl		*acl;
+	struct daos_ace		*ace;
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	/* Owner group matches our creds */
+	ownership.user = "someuser@";
+	ownership.group = TEST_GROUP;
+
+	init_default_cred(&cred);
+
+	acl = get_acl_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
+
+	/* User entry matches our cred */
+	ace = daos_ace_create(DAOS_ACL_USER, TEST_USER);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ;
+	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+
+	/*
+	 * Requesting RW - but user ACE has RO. User overrides owner-group
+	 * even though both match.
+	 * Owner-user doesn't match at all.
+	 */
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 -DER_NO_PERM);
+
+	daos_acl_free(acl);
+	daos_ace_free(ace);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_grp_matches(void **state)
+{
+	struct daos_acl		*acl;
+	struct daos_ace		*ace;
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	/* Ownership won't match our creds */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_default_cred(&cred);
+
+	/* Group entry matches our cred */
+	ace = daos_ace_create(DAOS_ACL_GROUP, TEST_GROUP);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	acl = daos_acl_create(&ace, 1);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 0);
+
+	daos_acl_free(acl);
+	daos_ace_free(ace);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_grp_matches_second(void **state)
+{
+	struct daos_acl		*acl;
+	size_t			num_aces = 2;
+	struct daos_ace		*ace[num_aces];
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+
+	/* Ownership won't match our creds */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_default_cred(&cred);
+
+	/* Match is not the first in the list */
+	ace[0] = daos_ace_create(DAOS_ACL_GROUP, "fakegrp@");
+	ace[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[0]->dae_allow_perms = DAOS_ACL_PERM_READ;
+	ace[1] = daos_ace_create(DAOS_ACL_GROUP, TEST_GROUP);
+	ace[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[1]->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	acl = daos_acl_create(ace, 2);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 0);
+
+	daos_acl_free(acl);
+	free_ace_list(ace, num_aces);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_grp_matches_multiple(void **state)
+{
+	struct daos_acl		*acl;
+	size_t			num_aces = 2;
+	struct daos_ace		*ace[num_aces];
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+	const char		*groups[] = { "group1@", "group2@" };
+
+	/* Ownership won't match our creds */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, groups, 2);
+
+	/* Both groups in the ACL with different perms - should be unioned */
+	ace[0] = daos_ace_create(DAOS_ACL_GROUP, groups[0]);
+	ace[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[0]->dae_allow_perms = DAOS_ACL_PERM_READ;
+	ace[1] = daos_ace_create(DAOS_ACL_GROUP, groups[1]);
+	ace[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[1]->dae_allow_perms = DAOS_ACL_PERM_WRITE;
+	acl = daos_acl_create(ace, 2);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 0);
+
+	daos_acl_free(acl);
+	free_ace_list(ace, num_aces);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_grp_no_match(void **state)
+{
+	struct daos_acl		*acl;
+	size_t			num_aces = 2;
+	struct daos_ace		*ace[num_aces];
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+	const char		*groups[] = { "group1@", "group2@" };
+
+	/* Ownership won't match our creds */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, groups, 2);
+
+	/* Shouldn't match any of them */
+	ace[0] = daos_ace_create(DAOS_ACL_GROUP, "fakegrp@");
+	ace[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[0]->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	ace[1] = daos_ace_create(DAOS_ACL_GROUP, "fakegrp2@");
+	ace[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[1]->dae_allow_perms = DAOS_ACL_PERM_READ;
+	ace[2] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
+	ace[2]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[2]->dae_allow_perms = DAOS_ACL_PERM_READ;
+	acl = daos_acl_create(ace, 2);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
+			 -DER_NO_PERM);
+
+	daos_acl_free(acl);
+	free_ace_list(ace, num_aces);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_grp_check_includes_owner(void **state)
+{
+	struct daos_acl		*acl;
+	size_t			num_aces = 2;
+	struct daos_ace		*ace[num_aces];
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+	const char		*groups[] = { "group1@", "group2@" };
+
+	/* Ownership matches group */
+	ownership.user = "someuser@";
+	ownership.group = TEST_GROUP;
+
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, groups, 2);
+
+	/* Should get union of owner group and named groups */
+	ace[0] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
+	ace[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[0]->dae_allow_perms = DAOS_ACL_PERM_WRITE;
+	ace[1] = daos_ace_create(DAOS_ACL_GROUP, groups[1]);
+	ace[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[1]->dae_allow_perms = DAOS_ACL_PERM_READ;
+	acl = daos_acl_create(ace, 2);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RW),
+			 0);
+
+	daos_acl_free(acl);
+	free_ace_list(ace, num_aces);
+	daos_iov_free(&cred);
+}
+
+static void
+test_check_pool_access_grps_beat_everyone(void **state)
+{
+	struct daos_acl		*acl;
+	size_t			num_aces = 2;
+	struct daos_ace		*ace[num_aces];
+	d_iov_t			cred;
+	struct pool_owner	ownership;
+	const char		*groups[] = { "group1@", "group2@" };
+
+	/* Ownership doesn't match */
+	ownership.user = "someuser@";
+	ownership.group = "somegroup@";
+
+	init_valid_cred(&cred, TEST_USER, TEST_GROUP, groups, 2);
+
+	/*
+	 * "Everyone" has more privs than the group, but the matching group
+	 * privileges take priority.
+	 */
+	ace[0] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
+	ace[0]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[0]->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	ace[1] = daos_ace_create(DAOS_ACL_GROUP, groups[1]);
+	ace[1]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[1]->dae_allow_perms = 0;
+	acl = daos_acl_create(ace, 2);
+
+	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
+						  DAOS_PC_RO),
+			 -DER_NO_PERM);
+
+	daos_acl_free(acl);
+	free_ace_list(ace, num_aces);
+	daos_iov_free(&cred);
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -1065,6 +1412,16 @@ main(void)
 		ACL_UTEST(test_check_pool_access_everyone_success),
 		ACL_UTEST(test_check_pool_access_everyone_forbidden),
 		ACL_UTEST(test_check_pool_access_fall_thru_everyone),
+		ACL_UTEST(test_check_pool_access_user_matches),
+		ACL_UTEST(test_check_pool_access_user_matches_second),
+		ACL_UTEST(test_check_pool_access_owner_beats_user),
+		ACL_UTEST(test_check_pool_access_user_beats_owner_grp),
+		ACL_UTEST(test_check_pool_access_grp_matches),
+		ACL_UTEST(test_check_pool_access_grp_matches_second),
+		ACL_UTEST(test_check_pool_access_grp_matches_multiple),
+		ACL_UTEST(test_check_pool_access_grp_no_match),
+		ACL_UTEST(test_check_pool_access_grp_check_includes_owner),
+		ACL_UTEST(test_check_pool_access_grps_beat_everyone),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
