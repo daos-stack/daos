@@ -26,14 +26,59 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
-
-	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/log"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/log"
 )
+
+type dmgErr string
+
+func (de dmgErr) Error() string {
+	return string(de)
+}
+
+const (
+	// use this error type to signal that a
+	// subcommand completed without error
+	cmdSuccess dmgErr = "completed successfully"
+)
+
+type (
+	// this interface decorates a command which
+	// should be broadcast rather than unicast
+	// to a single access point
+	broadcaster interface {
+		isBroadcast()
+	}
+	broadcastCmd struct{}
+)
+
+// implement the interface
+func (broadcastCmd) isBroadcast() {}
+
+type (
+	// this interface decorates a command which
+	// requires a connection to the control
+	// plane and therefore must have an
+	// implementation of client.Connect
+	connector interface {
+		setConns(client.Connect)
+	}
+
+	connectedCmd struct {
+		conns client.Connect
+	}
+)
+
+// implement the interface
+func (cmd *connectedCmd) setConns(conns client.Connect) {
+	cmd.conns = conns
+}
 
 type cliOptions struct {
 	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
@@ -47,13 +92,8 @@ type cliOptions struct {
 	Pool       PoolCmd `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }
 
-var (
-	opts  = new(cliOptions)
-	conns = client.NewConnect()
-)
-
 // appSetup loads config file, processes cli overrides and connects clients.
-func appSetup(broadcast bool) error {
+func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
 	config, err := client.GetConfig(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
@@ -94,38 +134,70 @@ func appSetup(broadcast bool) error {
 	return nil
 }
 
-func main() {
-	if dmgMain() != nil {
-		os.Exit(1)
-	}
+func exitWithError(err error) {
+	log.Errorf("%s exiting with error: %v", path.Base(os.Args[0]), err)
+	os.Exit(1)
 }
 
-func dmgMain() error {
-	// Set default global logger for application.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
+	opts := new(cliOptions)
 
-	// Parse cli args and either execute subcommand then exit or
-	// drop into shell if no subcommand is specified.
 	p := flags.NewParser(opts, flags.Default)
 	p.SubcommandsOptional = true
+	p.CommandHandler = func(cmd flags.Commander, args []string) error {
+		if cmd == nil {
+			return nil
+		}
 
-	_, err := p.Parse()
+		_, shouldBroadcast := cmd.(broadcaster)
+		if err := appSetup(shouldBroadcast, opts, conns); err != nil {
+			return err
+		}
+		if wantsConn, ok := cmd.(connector); ok {
+			wantsConn.setConns(conns)
+		}
+		if err := cmd.Execute(args); err != nil {
+			return err
+		}
+
+		return cmdSuccess
+	}
+
+	unparsed, err := p.ParseArgs(args)
 	if err != nil {
-		fmt.Println(err.Error())
-		return err
+		return nil, err
+	}
+	if len(unparsed) > 0 {
+		log.Debugf("Unparsed arguments: %v", unparsed)
+	}
+
+	return opts, nil
+}
+
+func main() {
+	// Set default global logger for application.
+	// TODO: Configure level/destination via CLI opts
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
+	conns := client.NewConnect()
+
+	opts, err := parseOpts(os.Args[1:], conns)
+	if err != nil {
+		if err == cmdSuccess {
+			os.Exit(0)
+		}
+		exitWithError(err)
 	}
 
 	// If no subcommand has been specified, interactive shell is started
 	// with expected functionality (tab expansion and utility commands)
 	// after parsing config/opts and setting up connections.
-	if err := appSetup(true); err != nil {
+	if err := appSetup(true, opts, conns); err != nil {
 		fmt.Println(err.Error()) // notify of app setup errors
 		fmt.Println("")
 	}
 
-	shell := setupShell()
+	shell := setupShell(conns)
 	shell.Println("DAOS Management Shell")
 	shell.Run()
-
-	return nil
 }

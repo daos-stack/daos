@@ -28,12 +28,13 @@ import (
 	"sync"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	ipmctl "github.com/daos-stack/go-ipmctl/ipmctl"
-	spdk "github.com/daos-stack/go-spdk/spdk"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/go-ipmctl/ipmctl"
+	"github.com/daos-stack/go-spdk/spdk"
 )
 
 // mockFormatStorageServer provides mocking for server side streaming,
@@ -64,12 +65,12 @@ func (m *mockUpdateStorageServer) Send(resp *pb.UpdateStorageResp) error {
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass ScmClass, scmDevs []string, scmSize int,
-	bdevClass BdevClass, bdevDevs []string, existsRet bool) *configuration {
+	bdevClass BdevClass, bdevDevs []string, existsRet bool,
+) *configuration {
 
-	c := newDefaultConfiguration(
-		newMockExt(
-			nil, existsRet, mountRet, unmountRet, mkdirRet,
-			removeRet))
+	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
+		true, unmountRet, mkdirRet, removeRet))
+
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount
 	c.Servers[0].ScmClass = scmClass

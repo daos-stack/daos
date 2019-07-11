@@ -26,11 +26,12 @@ package server
 import (
 	"bytes"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 // Module id for the Server security module

@@ -26,6 +26,7 @@ package server
 // #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
 import "C"
+
 import (
 	"context"
 
