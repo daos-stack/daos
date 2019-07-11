@@ -28,7 +28,6 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 

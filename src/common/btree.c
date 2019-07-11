@@ -964,7 +964,6 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			 struct btr_record *rec)
 {
 	struct btr_record *rec_a;
-	struct btr_record *rec_b;
 	struct btr_node   *nd;
 	bool		   leaf;
 	bool		   reuse = false;
@@ -978,28 +977,41 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			btr_rec_string(tcx, rec, leaf, sbuf, BTR_PRINT_BUF),
 			btr_rec_size(tcx));
 
-	rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
-	rec_b = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at + 1);
-
 	nd = btr_off2ptr(tcx, trace->tr_node);
-	if (trace->tr_at != nd->tn_keyn) {
+	if (nd->tn_keyn > 0) {
 		struct btr_check_alb	alb;
 		int			rc;
 
+		if (trace->tr_at != nd->tn_keyn)
+			alb.at = trace->tr_at;
+		else
+			alb.at = trace->tr_at - 1;
+
 		alb.nd_off = trace->tr_node;
-		alb.at = trace->tr_at;
 		alb.intent = DAOS_INTENT_CHECK;
 		rc = btr_check_availability(tcx, &alb);
-		if (rc == PROBE_RC_UNAVAILABLE)
+		if (rc == PROBE_RC_UNAVAILABLE) {
 			reuse = true;
+			btr_trace_debug(tcx, trace, "reuse at %d for insert\n",
+					alb.at);
+			if (trace->tr_at == nd->tn_keyn)
+				trace->tr_at -= 1;
+		}
 	}
+
+	rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 
 	if (reuse) {
 		btr_rec_free(tcx, rec_a, NULL);
 	} else {
-		if (trace->tr_at != nd->tn_keyn)
+		if (trace->tr_at != nd->tn_keyn) {
+			struct btr_record *rec_b;
+
+			rec_b = btr_node_rec_at(tcx, trace->tr_node,
+						trace->tr_at + 1);
 			btr_rec_move(tcx, rec_b, rec_a,
 				     nd->tn_keyn - trace->tr_at);
+		}
 		nd->tn_keyn++;
 	}
 

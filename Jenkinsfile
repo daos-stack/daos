@@ -45,7 +45,8 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def rpm_test_pre = '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
                       nodelist=(${NODELIST//,/ })
-                      scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
+				    jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex
                       repo_file_base=\"*_job_\${JOB_NAME%%/*}_job_\"
                       for repo in openpa libfabric pmix   \
@@ -70,6 +71,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
                             cat /usr/etc/daos_server.yml
+                            cat /usr/etc/daos_agent.yml
                             coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1  daos_server -c 1 -a /tmp -o /usr/etc/daos_server.yml -i
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
@@ -78,7 +80,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                                 echo \"Server stdout: \\\$line\"
                             done
                             echo \"Server started!\"
-                            daos_agent &
+                            daos_agent -o /usr/etc/daos_agent.yml -i &
                             AGENT_PID=\\\$!
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             orterun -np 1 -x OFI_INTERFACE=eth0 -x CRT_ATTACH_INFO_PATH=/tmp -x DAOS_SINGLETON_CLI=1 daos_test -m'''
