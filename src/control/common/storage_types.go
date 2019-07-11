@@ -21,12 +21,11 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package common
 
 import (
 	"bytes"
 	"fmt"
-	"sort"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
@@ -51,6 +50,10 @@ func (nc NvmeControllers) String() string {
 
 	return buf.String()
 }
+
+// NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
+// representing namespaces existing on a NVMe SSD.
+type NvmeNamespaces []*pb.NvmeController_Namespace
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
 // representing operation results on a number of NVMe controllers.
@@ -96,26 +99,6 @@ func (cr CtrlrResults) String() string {
 	}
 
 	return "no controllers found"
-}
-
-// ClientCtrlrMap is an alias for query results of NVMe controllers (and
-// any residing namespaces) on connected servers keyed on address.
-type ClientCtrlrMap map[string]CtrlrResults
-
-func (ccm ClientCtrlrMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(ccm))
-
-	for server := range ccm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
-	}
-
-	return buf.String()
 }
 
 // ScmMounts is an alias for protobuf ScmMount message slice representing
@@ -178,26 +161,6 @@ func (mr MountResults) String() string {
 	return "no scm mounts found"
 }
 
-// ClientMountMap is an alias for query results of SCM regions mounted
-// on connected servers keyed on address.
-type ClientMountMap map[string]MountResults
-
-func (cmm ClientMountMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
 // ScmModules is an alias for protobuf ScmModule message slice representing
 // a number of SCM modules installed on a storage node.
 type ScmModules []*pb.ScmModule
@@ -256,31 +219,4 @@ func (mr ModuleResults) String() string {
 	}
 
 	return "no scm modules found"
-}
-
-// ClientModuleMap is an alias for query results of SCM modules installed
-// on connected servers keyed on address.
-type ClientModuleMap map[string]ModuleResults
-
-func (cmm ClientModuleMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
-// storageResult generic container for results of storage subsystems queries.
-type storageResult struct {
-	nvmeCtrlr CtrlrResults
-	scmModule ModuleResults
-	scmMount  MountResults
 }
