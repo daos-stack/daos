@@ -43,6 +43,10 @@
 #include "crt_internal.h"
 #include <sys/stat.h>
 
+static int crt_group_node_add_internal(struct crt_grp_priv *grp_priv,
+					d_rank_t rank, int tag,
+					crt_node_info_t info);
+
 /* global CRT group list */
 D_LIST_HEAD(crt_grp_list);
 /* protect global group list */
@@ -1113,7 +1117,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	grp_priv_fini_membs(grp_priv);
 
 	if (grp_priv->gp_psr_phy_addr != NULL)
-		free(grp_priv->gp_psr_phy_addr);
+		D_FREE(grp_priv->gp_psr_phy_addr);
 	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
 	D_FREE(grp_priv->gp_pub.cg_grpid);
 
@@ -2337,6 +2341,26 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 		D_ERROR("crt group not initialized.\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
+
+	/* For non-PMIX case attach is a group view creation + cfg load */
+	if (!CRT_PMIX_ENABLED()) {
+		rc = crt_group_view_create(srv_grpid, attached_grp);
+		if (rc != 0) {
+			D_ERROR("crt_group_view_create() failed; rc=%d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		grp_priv = container_of(*attached_grp,
+				struct crt_grp_priv, gp_pub);
+		rc = crt_grp_config_load(grp_priv);
+		if (rc != 0) {
+			D_ERROR("crt_grp_config_load() failed; rc=%d\n", rc);
+			crt_group_view_destroy(*attached_grp);
+		}
+
+		D_GOTO(out, rc);
+	}
+
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 
@@ -2458,6 +2482,11 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 
 	D_ASSERT(srv_grpid != NULL);
 	D_ASSERT(attached_grp != NULL);
+
+	if (!CRT_PMIX_ENABLED()) {
+		D_ERROR("Should never be called for non-pmix mode\n");
+		D_ASSERT(0);
+	}
 
 	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true /* primary group */,
 				 NULL /* member_ranks */,
@@ -2916,15 +2945,31 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		char *uri;
 
 		uri = NULL;
-		rc = crt_pmix_uri_lookup(grpid, rank, &uri);
-		if (rc != 0) {
-			D_ERROR("crt_pmix_uri_lookup(grp %s, rank %d), failed "
-				"rc: %d.\n", grpid, rank, rc);
-			D_GOTO(out, rc);
+
+		if (CRT_PMIX_ENABLED()) {
+			rc = crt_pmix_uri_lookup(grpid, rank, &uri);
+			if (rc != 0) {
+				D_ERROR("crt_pmix_uri_lookup(grp %s, rank %d) "
+					"failed rc: %d.\n", grpid, rank, rc);
+				D_GOTO(out, rc);
+			}
+		} else {
+			rc = crt_rank_uri_get(grp, rank, 0, &uri);
+			if (rc != 0) {
+				D_ERROR("crt_rank_uri_get(%s, %d) failed "
+					"rc: %d.\n", grpid, rank, rc);
+				D_GOTO(out, rc);
+			}
 		}
+
 		D_ASSERT(uri != NULL);
 		rc = fprintf(fp, "%d %s\n", rank, uri);
-		free(uri);
+
+		if (CRT_PMIX_ENABLED())
+			free(uri);
+		else
+			D_FREE(uri);
+
 		if (rc < 0) {
 			D_ERROR("write to file %s failed (%s).\n",
 				tmp_name, strerror(errno));
@@ -3012,8 +3057,9 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	char		all_or_self[8] = {'\0'};
 	char		fmt[64] = {'\0'};
 	crt_phy_addr_t	addr_str = NULL;
-	d_rank_t	rank, idx;
+	d_rank_t	rank;
 	bool		forall;
+	int		grp_size;
 	int		rc = 0;
 
 	D_ASSERT(crt_initialized());
@@ -3047,12 +3093,18 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = fscanf(fp, "%*s%d", &grp_priv->gp_size);
+	grp_size = 0;
+
+	rc = fscanf(fp, "%*s%d", &grp_size);
 	if (rc == EOF) {
 		D_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
+
+	/* Non pmix case will populate group size later on */
+	if (CRT_PMIX_ENABLED())
+		grp_priv->gp_size = grp_size;
 
 	rc = fscanf(fp, "%4s", all_or_self);
 	if (rc == EOF) {
@@ -3074,33 +3126,66 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	if (addr_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	if (psr_rank == -1) {
-		crt_group_rank(NULL, &rank);
-		psr_rank = rank % grp_priv->gp_size;
-	} else {
-		if (psr_rank >= grp_priv->gp_size) {
-			D_ERROR("invalid parameter (psr %d, gp_size %d).\n",
-				psr_rank, grp_priv->gp_size);
-			D_GOTO(out, rc = -DER_INVAL);
+	if (CRT_PMIX_ENABLED()) {
+		if (psr_rank == -1) {
+			crt_group_rank(NULL, &rank);
+			psr_rank = rank % grp_priv->gp_size;
+		} else {
+			if (psr_rank >= grp_priv->gp_size) {
+				D_ERROR("invalid param (psr %d, gp_size %d)\n",
+					psr_rank, grp_priv->gp_size);
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 		}
 	}
 
 	memset(fmt, 0, 64);
 	snprintf(fmt, 64, "%%d %%%ds", CRT_ADDR_STR_MAX_LEN);
 	rc = -DER_INVAL;
-	for (idx = 0; idx < grp_priv->gp_size; idx++) {
+
+	while (1) {
 		rc = fscanf(fp, fmt, &rank, (char *)addr_str);
 		if (rc == EOF) {
-			D_ERROR("read from file %s failed (%s).\n",
-				filename, strerror(errno));
-			D_GOTO(out, rc = d_errno2der(errno));
-		}
-		if (!forall || rank == psr_rank) {
-			D_DEBUG(DB_TRACE, "grp %s selected psr_rank %d, "
-				"uri %s.\n", grpid, rank, addr_str);
-			crt_grp_psr_set(grp_priv, rank, addr_str);
 			rc = 0;
 			break;
+		}
+
+		if (CRT_PMIX_ENABLED()) {
+			if (!forall || rank == psr_rank) {
+				D_DEBUG(DB_TRACE, "grp %s selected psr_rank %d"
+					", uri %s.\n", grpid, rank, addr_str);
+				crt_grp_psr_set(grp_priv, rank, addr_str);
+				rc = 0;
+
+				break;
+			}
+		}
+
+		if (!CRT_PMIX_ENABLED()) {
+			crt_node_info_t	node_info;
+
+			node_info.uri = addr_str;
+
+			rc = crt_group_node_add_internal(grp_priv, rank, 0,
+					node_info);
+			if (rc != 0) {
+				D_ERROR("crt_group_node_add_internal() failed;"
+					" rank=%d uri='%s' rc=%d\n",
+					rank, addr_str, rc);
+				break;
+			}
+
+			if (rank == psr_rank) {
+				crt_grp_psr_set(grp_priv, rank, addr_str);
+			}
+		}
+	}
+
+	/* If PSR was not specified, pick for now last added node as PSR */
+	if (!CRT_PMIX_ENABLED()) {
+		/* TODO: PSR selection logic to be changed with CART-688 */
+		if (psr_rank != -1) {
+			crt_grp_psr_set(grp_priv, rank, addr_str);
 		}
 	}
 
@@ -3110,11 +3195,12 @@ out:
 	if (filename != NULL)
 		free(filename);
 	D_FREE(grpname);
-	if (rc != 0) {
-		D_FREE(addr_str);
+	D_FREE(addr_str);
+
+	if (rc != 0)
 		D_ERROR("crt_grp_config_psr_load (grpid %s) failed, rc: %d.\n",
 			grpid, rc);
-	}
+
 	return rc;
 }
 
@@ -3464,7 +3550,7 @@ int
 crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 {
 	d_rank_t	psr_rank;
-	crt_phy_addr_t	uri = NULL, psr_phy_addr = NULL;
+	crt_phy_addr_t	uri = NULL;
 	int		rc = 0;
 
 	psr_rank = grp_priv->gp_psr_rank;
@@ -3480,10 +3566,7 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 			if (uri == NULL)
 				break;
 
-			D_STRNDUP(psr_phy_addr, uri, CRT_ADDR_STR_MAX_LEN);
-			if (psr_phy_addr == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			crt_grp_psr_set(grp_priv, psr_rank, psr_phy_addr);
+			crt_grp_psr_set(grp_priv, psr_rank, uri);
 			D_GOTO(out, rc = 0);
 		} else if (rc != -DER_EVICTED) {
 			/*
@@ -3675,6 +3758,38 @@ out:
 }
 
 
+static int crt_group_node_add_internal(struct crt_grp_priv *grp_priv,
+					d_rank_t rank, int tag,
+					crt_node_info_t info)
+{
+	int i;
+	int rc;
+
+	if (!grp_priv->gp_primary) {
+		D_ERROR("Only available for primary groups\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, tag, info.uri);
+		if (rc != 0) {
+			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	/* Only add node to membership list once, for tag 0 */
+	/* TODO: This logic needs to be refactored as part of CART-517 */
+	if (tag == 0) {
+		D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+		rc = grp_add_to_membs_list(grp_priv, rank);
+		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+	}
+
+out:
+	return rc;
+}
+
 int
 crt_group_node_add(crt_group_t *group, d_rank_t rank, int tag,
 		crt_node_info_t info)
@@ -3694,25 +3809,7 @@ crt_group_node_add(crt_group_t *group, d_rank_t rank, int tag,
 
 	grp_priv = crt_grp_pub2priv(group);
 
-	if (!grp_priv->gp_primary) {
-		D_ERROR("Only available for primary groups\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = crt_grp_lc_uri_insert_all(group, rank, tag, info.uri);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert_all() failed; rc=%d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-	/* Only add node to membership list once, for tag 0 */
-	/* TODO: This logic needs to be refactored as part of CART-517 */
-	if (tag == 0) {
-		D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-		rc = grp_add_to_membs_list(grp_priv, rank);
-		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	}
-
+	rc = crt_group_node_add_internal(grp_priv, rank, tag, info);
 out:
 	return rc;
 }
@@ -4217,6 +4314,7 @@ int crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 	}
 
 	crt_grp_psr_set(grp_priv, rank, uri);
+	D_FREE(uri);
 
 out:
 	return rc;

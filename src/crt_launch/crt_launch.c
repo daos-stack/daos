@@ -134,7 +134,7 @@ parse_args(int argc, char **argv)
 		case 'e':
 			g_opt.app_to_exec = optarg;
 			g_opt.app_args_indx = optind - 1;
-			break;
+			return 0;
 		default:
 			g_opt.show_help = true;
 			return 1;

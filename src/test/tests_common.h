@@ -40,6 +40,9 @@
  */
 #ifndef __TESTS_COMMON_H__
 #define __TESTS_COMMON_H__
+#include <semaphore.h>
+#include <cart/api.h>
+#include <gurt/common.h>
 
 int
 tc_load_group_from_file(const char *grp_cfg_file, crt_group_t *grp,

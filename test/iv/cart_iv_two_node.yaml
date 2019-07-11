@@ -27,8 +27,8 @@ hosts: !mux
 tests: !mux
   iv:
     name: iv_basic
-    srv_bin: tests/iv_server
-    srv_arg: "-v 3"
+    srv_bin: crt_launch
+    srv_arg: "-e tests/iv_server -v 3"
     srv_env: "-x CRT_ALLOW_SINGLETON=1"
     srv_ppn: "1"
 

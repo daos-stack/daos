@@ -53,6 +53,8 @@
 #include <gurt/common.h>
 #include <gurt/list.h>
 
+#include "tests_common.h"
+
 #define _SERVER
 #include "iv_common.h"
 
@@ -1155,9 +1157,13 @@ show_usage(char *app_name)
 
 int main(int argc, char **argv)
 {
-	char	*arg_verbose = NULL;
-	int	 c;
-	int	 rc;
+	char		*arg_verbose = NULL;
+	char		*env_self_rank;
+	char		*grp_cfg_file;
+	crt_group_t	*grp;
+	d_rank_t	my_rank;
+	int		c;
+	int		rc;
 
 	while ((c = getopt(argc, argv, "v:")) != -1) {
 		switch (c) {
@@ -1181,12 +1187,42 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	env_self_rank = getenv("CRT_L_RANK");
+	if (env_self_rank == NULL) {
+		printf("CRT_L_RANK was not set\n");
+		return -1;
+	}
+
+	my_rank = atoi(env_self_rank);
+
 	init_hostname(g_hostname, sizeof(g_hostname));
 
-	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER |
+			CRT_FLAG_BIT_PMIX_DISABLE);
 	assert(rc == 0);
 
-	DBG_PRINT("Server starting\n");
+	rc = crt_rank_self_set(my_rank);
+	assert(rc == 0);
+
+	grp = crt_group_lookup(IV_GRP_NAME);
+	if (grp == NULL) {
+		D_ERROR("Failed to lookup group %s\n", IV_GRP_NAME);
+		assert(0);
+	}
+
+	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	if (grp_cfg_file == NULL) {
+		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		assert(0);
+	}
+
+	rc = tc_load_group_from_file(grp_cfg_file, grp, 1, my_rank, true);
+	if (rc != 0) {
+		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
+		assert(0);
+	}
+
+	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);
 
 	rc = crt_proto_register(&my_proto_fmt_iv);
 	assert(rc == 0);
@@ -1206,7 +1242,7 @@ int main(int argc, char **argv)
 	 */
 	wait_for_namespace();
 
-	rc = crt_group_config_save(NULL, true);
+	rc = crt_group_config_save(grp, true);
 	assert(rc == 0);
 
 	while (!g_do_shutdown)

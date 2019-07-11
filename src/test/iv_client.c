@@ -60,6 +60,8 @@
 #include <sys/stat.h>
 #include "iv_common.h"
 
+#include "tests_common.h"
+
 static crt_context_t	g_crt_ctx;
 static crt_endpoint_t	g_server_ep;
 static char		g_hostname[100];
@@ -507,7 +509,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SINGLETON);
+	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SINGLETON |
+			CRT_FLAG_BIT_PMIX_DISABLE | CRT_FLAG_BIT_LM_DISABLE);
 	assert(rc == 0);
 
 	rc = crt_context_create(&g_crt_ctx);
@@ -525,6 +528,7 @@ int main(int argc, char **argv)
 		sleep(1);
 	}
 	assert(rc == 0);
+
 	rc = pthread_create(&progress_thread, 0, progress_function, &g_crt_ctx);
 	assert(rc == 0);
 

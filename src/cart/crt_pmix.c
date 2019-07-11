@@ -538,9 +538,10 @@ crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 
 	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
 				 psr_rank, &uri);
-	if (rc == 0)
+	if (rc == 0) {
 		crt_grp_psr_set(grp_priv, psr_rank, uri);
-	else
+		free(uri);
+	} else
 		D_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
 			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, psr_rank, rc);
 
