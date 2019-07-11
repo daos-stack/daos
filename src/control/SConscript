@@ -179,7 +179,8 @@ def scons():
                 Copy("$TARGET", "$SOURCE")
             ])
 
-    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "daos_server", "daos_server")
+    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "daos_server",
+                   "daos_server")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 
