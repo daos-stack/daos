@@ -236,7 +236,7 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		daos_oclass_id2str(ap->oclass, oclass);
+		daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
 		printf("Object Class:\t%s\n", oclass);
 		printf("Chunk Size:\t%zu\n", ap->chunk_size);

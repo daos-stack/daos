@@ -742,7 +742,7 @@ class DaosObj(object):
         func = self.context.get_function('generate-oid')
 
         # XXX convert object class
-	cls = int(ConvertObjClass[DaosObjClassOld(objcls)])
+        cls = int(ConvertObjClass[DaosObjClassOld(objcls)])
 
         func.restype = DaosObjId
         self.c_oid = func(cls, 0, 0)
@@ -2090,7 +2090,7 @@ class DaosContext(object):
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.5.0",
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.6.0",
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
