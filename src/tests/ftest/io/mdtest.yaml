@@ -24,21 +24,30 @@ pool:
         svcn: 1
 mdtest:
     client_processes: !mux
-        np_4:
-            np: 4
+        np_1:
+            np: 1
         np_8:
             np: 8
-    api: DFS
+    api: 'DFS'
     diff_flags: !mux
         flags_ssf:
             flags: "--dfs.destroy"
         flags_fpp:
             flags: "-u --dfs.destroy"
-    num_of_tasks: 100
+    num_of_files_dir: !mux
+        num_0:
+            num_of_tasks: 0
+        num_100:
+            num_of_tasks: 100
     test_dir: /
     iteration: 3
-    write_bytes: 100
-    read_bytes: 100
+    data: !mux
+        zero_bytes:
+            write_bytes: 0
+            read_bytes: 0
+        100_bytes:
+            write_bytes: 100
+            read_bytes: 100
     directory_depth: !mux
         depth_0:
             depth: 0
