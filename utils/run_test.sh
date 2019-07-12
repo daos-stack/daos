@@ -40,9 +40,9 @@ fi
 
 run_test()
 {
-    in="$*"
-    a="${in// /-}"
-    b="${a////-}"
+    local in="$*"
+    local a="${in// /-}"
+    local b="${a////-}"
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 
