@@ -56,10 +56,16 @@ class RebuildNoCap(TestWithServers):
         # Create a pool
         self.pool.create()
 
+        # Display pool size before write
+        self.pool.display_pool_daos_space("before write")
+
         # Write enough data to the pool that will not be able to be rebuilt
         self.pool.write_file(
             self.orterun, len(self.hostlist_clients), self.hostfile_clients,
             data)
+
+        # Display pool size after write
+        self.pool.display_pool_daos_space("after write")
 
         # Verify the pool information before starting rebuild
         checks = {
@@ -82,6 +88,9 @@ class RebuildNoCap(TestWithServers):
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild(False)
+
+        # Display pool size after rebuild
+        self.pool.display_pool_daos_space("after rebuild")
 
         # Verify the pool information after rebuild
         checks["pi_ndisabled"] = targets

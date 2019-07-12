@@ -73,7 +73,7 @@ class RebuildTests(TestWithServers):
         self.pool.wait_for_rebuild(False)
 
         # Check the pool information after the rebuild
-        self.pool.check_pool_info(pi_ndisabled=targets)
+        # self.pool.check_pool_info(pi_ndisabled=targets)  DAOS-2799
         rs_obj_nr = self.container.object_qty.value
         rs_rec_nr = rs_obj_nr * self.container.record_qty.value
         self.pool.check_rebuild_status(
@@ -134,7 +134,7 @@ class RebuildTests(TestWithServers):
 
         # Check the pool information after the rebuild
         for index in range(quantity):
-            pools[index].check_pool_info(pi_ndisabled=targets)
+            # pools[index].check_pool_info(pi_ndisabled=targets)  DAOS-2799
             rs_obj_nr = containers[index].object_qty.value
             rs_rec_nr = rs_obj_nr * containers[index].record_qty.value
             pools[index].check_rebuild_status(

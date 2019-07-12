@@ -492,6 +492,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.uuid = None
         self.info = None
+        self.ranks = None
         self.connected = False
 
     def get_params(self, test, path="/run/pool/*"):
@@ -511,7 +512,10 @@ class TestPool(TestDaosApiBase):
         self.uuid.
         """
         self.destroy()
-        self.log.info("Creating a pool")
+        self.log.info(
+            "Creating a pool{}".format(
+                " on targets {}".format(self.target_list.value)
+                if self.target_list.value else ""))
         self.pool = DaosPool(self.context)
         kwargs = {
             "mode": self.mode.value, "uid": self.uid, "gid": self.gid,
@@ -522,6 +526,11 @@ class TestPool(TestDaosApiBase):
                 kwargs[key] = value
         self._call_method(self.pool.create, kwargs)
         self.uuid = self.pool.get_uuid_str()
+        self.ranks = [
+            int(self.pool.svc.rl_ranks[index])
+            for index in range(self.pool.svc.rl_nr)]
+        self.log.info("  Pool created with uuid {} and ranks {}".format(
+            self.uuid, self.ranks))
 
     @fail_on(DaosApiError)
     def connect(self, permission=1):
@@ -580,6 +589,7 @@ class TestPool(TestDaosApiBase):
             self.pool = None
             self.uuid = None
             self.info = None
+            self.ranks = None
             return True
         return False
 
@@ -829,12 +839,40 @@ class TestPool(TestDaosApiBase):
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
             "DAOS_SINGLETON_CLI": "1",
+            "PYTHONPATH": os.getenv("PYTHONPATH", ""),
         }
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
             os.path.join(current_path, "write_some_data.py"), size)
         return process.run(command, timeout, True, False, "both", True, env)
+
+    def get_pool_daos_space(self):
+        """Get the pool info daos space attributes as a dictionary.
+
+        Returns:
+            dict: a dictionary of lists of the daos space attributes
+
+        """
+        self.get_info()
+        keys = ("s_total", "s_free")
+        return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def display_pool_daos_space(self, msg=None):
+        """Display the pool info daos space attributes.
+
+        Args:
+            msg (str, optional): optional text to include in the output.
+                Defaults to None.
+        """
+        daos_space = self.get_pool_daos_space()
+        sizes = [
+            "{}[{}]={}".format(key, index, item)
+            for key in sorted(daos_space.keys())
+            for index, item in enumerate(daos_space[key])]
+        self.log.info(
+            "Pool %s space%s:\n  %s", self.uuid,
+            " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
 
 class TestContainerData(object):

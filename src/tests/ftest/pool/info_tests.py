@@ -62,7 +62,7 @@ class InfoTests(TestWithServers):
         # Verify the pool information
         checks = {
             "pi_uuid": self.pool.uuid,
-            "pi_ntargets": len(self.hostlist_servers) * targets,
+            # "pi_ntargets": len(self.hostlist_servers) * targets,  DAOS-2799
             "pi_nnodes": len(self.hostlist_servers),
             "pi_ndisabled": 0,
             "pi_map_ver": 1,

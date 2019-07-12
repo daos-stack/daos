@@ -72,6 +72,8 @@ class Test(avocadoTest):
 
         self.basepath = None
         self.orterun = None
+        self.prefix = None
+        self.ompi_prefix = None
         self.tmp = None
         self.server_group = None
         self.daosctl = None
@@ -108,10 +110,11 @@ class TestWithoutServers(Test):
         self.basepath = os.path.normpath(os.path.join(build_paths['PREFIX'],
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
+        self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
         self.daos_test = os.path.join(self.basepath, 'install', 'bin',
                                       'daos_test')
-        self.orterun = os.path.join(self.basepath, 'install', 'bin', 'orterun')
+        self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
         self.daosctl = os.path.join(self.basepath, 'install', 'bin', 'daosctl')
 
         # setup fault injection, this MUST be before API setup
