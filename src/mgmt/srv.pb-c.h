@@ -16,6 +16,7 @@ PROTOBUF_C__BEGIN_DECLS
 
 
 typedef struct _Mgmt__DaosRank Mgmt__DaosRank;
+typedef struct _Mgmt__DaosRequestStatus Mgmt__DaosRequestStatus;
 typedef struct _Mgmt__DaosResp Mgmt__DaosResp;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
@@ -23,22 +24,30 @@ typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
 
 /* --- enums --- */
 
-typedef enum _Mgmt__DaosRequestStatus {
-  MGMT__DAOS_REQUEST_STATUS__SUCCESS = 0,
+typedef enum _Mgmt__DaosRequestStatus__State {
+  MGMT__DAOS_REQUEST_STATUS__STATE__SUCCESS = 0,
   /*
    * Unknown error
    */
-  MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN = -1,
+  MGMT__DAOS_REQUEST_STATUS__STATE__ERR_UNKNOWN = -1,
   /*
    * Rank requested is invalid
    */
-  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_RANK = -2,
+  MGMT__DAOS_REQUEST_STATUS__STATE__ERR_INVALID_RANK = -2,
   /*
    * Pool UUID requested is invalid
    */
-  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_UUID = -3
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__DAOS_REQUEST_STATUS)
-} Mgmt__DaosRequestStatus;
+  MGMT__DAOS_REQUEST_STATUS__STATE__ERR_INVALID_UUID = -3,
+  /*
+   * Proto builtin op failed
+   */
+  MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO = -4,
+  /*
+   * DAOS iosrv error, see "der"
+   */
+  MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS = -5
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__DAOS_REQUEST_STATUS__STATE)
+} Mgmt__DaosRequestStatus__State;
 
 /* --- messages --- */
 
@@ -62,14 +71,31 @@ struct  _Mgmt__DaosRank
     , (char *)protobuf_c_empty_string, 0 }
 
 
+struct  _Mgmt__DaosRequestStatus
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS request state
+   */
+  Mgmt__DaosRequestStatus__State state;
+  /*
+   * DAOS error code
+   */
+  int32_t der;
+};
+#define MGMT__DAOS_REQUEST_STATUS__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_request_status__descriptor) \
+    , MGMT__DAOS_REQUEST_STATUS__STATE__SUCCESS, 0 }
+
+
 struct  _Mgmt__DaosResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus status;
+  Mgmt__DaosRequestStatus *status;
 };
 #define MGMT__DAOS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_resp__descriptor) \
-    , MGMT__DAOS_REQUEST_STATUS__SUCCESS }
+    , NULL }
 
 
 struct  _Mgmt__SetRankReq
@@ -118,6 +144,25 @@ Mgmt__DaosRank *
                       const uint8_t       *data);
 void   mgmt__daos_rank__free_unpacked
                      (Mgmt__DaosRank *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__DaosRequestStatus methods */
+void   mgmt__daos_request_status__init
+                     (Mgmt__DaosRequestStatus         *message);
+size_t mgmt__daos_request_status__get_packed_size
+                     (const Mgmt__DaosRequestStatus   *message);
+size_t mgmt__daos_request_status__pack
+                     (const Mgmt__DaosRequestStatus   *message,
+                      uint8_t             *out);
+size_t mgmt__daos_request_status__pack_to_buffer
+                     (const Mgmt__DaosRequestStatus   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DaosRequestStatus *
+       mgmt__daos_request_status__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__daos_request_status__free_unpacked
+                     (Mgmt__DaosRequestStatus *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__DaosResp methods */
 void   mgmt__daos_resp__init
@@ -181,6 +226,9 @@ void   mgmt__create_ms_req__free_unpacked
 typedef void (*Mgmt__DaosRank_Closure)
                  (const Mgmt__DaosRank *message,
                   void *closure_data);
+typedef void (*Mgmt__DaosRequestStatus_Closure)
+                 (const Mgmt__DaosRequestStatus *message,
+                  void *closure_data);
 typedef void (*Mgmt__DaosResp_Closure)
                  (const Mgmt__DaosResp *message,
                   void *closure_data);
@@ -196,8 +244,9 @@ typedef void (*Mgmt__CreateMsReq_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCEnumDescriptor    mgmt__daos_request_status__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__daos_rank__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__daos_request_status__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__daos_request_status__state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor;

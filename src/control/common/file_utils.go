@@ -32,9 +32,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (

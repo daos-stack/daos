@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -53,7 +54,12 @@ type cliOptions struct {
 var opts = new(cliOptions)
 
 func main() {
-	if agentMain() != nil {
+	// Set default global logger for application.
+	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
+	if err := agentMain(); err != nil {
+		fmt.Fprintf(os.Stderr, "fatal error: %s\n", err)
+		log.Errorf("%+v", err)
 		os.Exit(1)
 	}
 }
@@ -78,8 +84,6 @@ func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
 }
 
 func agentMain() error {
-	// Set default global logger for application.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
 	log.Debugf("Starting daos_agent:")
 
