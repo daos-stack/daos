@@ -50,30 +50,6 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-// pmixless returns if we are in PMIx-less or PMIx mode.
-func pmixless() bool {
-	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
-		return true
-	}
-	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
-		return true
-	}
-	return false
-}
-
-// pmixRank returns the PMIx rank. If PMIx-less, it returns nilRank.
-func pmixRank() rank {
-	s, ok := os.LookupEnv("PMIX_RANK")
-	if !ok {
-		return nilRank
-	}
-	r, err := strconv.ParseUint(s, 0, 32)
-	if err != nil {
-		panic(fmt.Sprintf("PMIX_RANK=%s: %v", s, err))
-	}
-	return rank(r)
-}
-
 func formatIosrvs(config *configuration, reformat bool) error {
 	// Determine if an I/O server needs to createMS or bootstrapMS.
 	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("0.0.0.0:%d", config.Port))
@@ -86,9 +62,15 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	}
 	// A temporary workaround to create and start MS before we fully
 	// migrate to PMIx-less mode.
-	if !pmixless() && pmixRank() == 0 {
-		createMS = true
-		bootstrapMS = true
+	if !pmixless() {
+		rank, err := pmixRank()
+		if err != nil {
+			return err
+		}
+		if rank == 0 {
+			createMS = true
+			bootstrapMS = true
+		}
 	}
 
 	for i := range config.Servers {
@@ -104,6 +86,31 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	}
 
 	return nil
+}
+
+// pmixless returns if we are in PMIx-less or PMIx mode.
+func pmixless() bool {
+	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
+		return true
+	}
+	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
+		return true
+	}
+	return false
+}
+
+// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
+// value, it returns an error.
+func pmixRank() (rank, error) {
+	s, ok := os.LookupEnv("PMIX_RANK")
+	if !ok {
+		return nilRank, errors.New("not in PMIx mode")
+	}
+	r, err := strconv.ParseUint(s, 0, 32)
+	if err != nil {
+		return nilRank, errors.Wrap(err, "PMIX_RANK="+s)
+	}
+	return rank(r), nil
 }
 
 // formatIosrv will prepare DAOS IO servers and store relevant metadata.
