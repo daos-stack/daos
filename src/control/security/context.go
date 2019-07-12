@@ -24,10 +24,10 @@
 package security
 
 import (
-	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/pkg/errors"
-
 	uuid "github.com/satori/go.uuid"
+
+	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 // Context holds the accounting information for requested

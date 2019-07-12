@@ -31,11 +31,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/go-spdk/spdk"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -135,7 +136,7 @@ type nvmeStorage struct {
 	nvme        spdk.NVME      // SPDK NVMe interface
 	spdk        SpdkSetup      // SPDK shell configuration interface
 	config      *configuration // server configuration structure
-	controllers []*pb.NvmeController
+	controllers common.NvmeControllers
 	initialized bool
 	formatted   bool
 }
@@ -255,7 +256,7 @@ func newCret(
 // One result with empty Pciaddr will be reported if there are preliminary
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
-func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
+func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 	var pciAddr string
 	srv := n.config.Servers[i]
 	log.Debugf("performing device format on NVMe controllers")
@@ -352,7 +353,8 @@ func (n *nvmeStorage) Format(i int, results *([]*pb.NvmeControllerResult)) {
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
 func (n *nvmeStorage) Update(
-	i int, req *pb.UpdateNvmeReq, results *([]*pb.NvmeControllerResult)) {
+	i int, req *pb.UpdateNvmeReq, results *(common.NvmeControllerResults),
+) {
 
 	var pciAddr string
 	srv := n.config.Servers[i]
@@ -515,7 +517,8 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
 func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
-	pbCtrlrs []*pb.NvmeController) {
+	pbCtrlrs common.NvmeControllers) {
+
 	for _, c := range ctrlrs {
 		pbCtrlrs = append(
 			pbCtrlrs,
@@ -533,9 +536,8 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(
-	ctrlrPciAddr string, nss []spdk.Namespace) (
-	_nss []*pb.NvmeController_Namespace) {
+func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (
+	_nss common.NvmeNamespaces) {
 
 	for _, ns := range nss {
 		if ns.CtrlrPciAddr == ctrlrPciAddr {

@@ -391,7 +391,7 @@ cont_iv_capa_alloc_internal(d_sg_list_t *sgl)
 		return -DER_NOMEM;
 	}
 
-	daos_iov_set(&sgl->sg_iovs[0], entry, sizeof(*entry));
+	d_iov_set(&sgl->sg_iovs[0], entry, sizeof(*entry));
 	return 0;
 }
 
@@ -653,7 +653,7 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	rc = cont_iv_update(ns, IV_CONT_CAPA, cont_hdl_uuid, &iv_entry,
 			    sizeof(struct cont_iv_entry),
-			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_LAZY);
+			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER);
 	return rc;
 }
 
