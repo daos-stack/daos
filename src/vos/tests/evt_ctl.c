@@ -1537,11 +1537,15 @@ test_evt_various_data_size_internal(void **state)
 			entry.ei_inob = data_size;
 			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
 					    data, data_size);
-			if (rc != 0)
+			if (rc != 0) {
+				assert_int_equal(rc, -DER_NOSPACE);
 				break;
+			}
 			rc = evt_insert(toh, &entry);
-			if (rc != 0)
+			if (rc != 0) {
+				assert_int_equal(rc, -DER_NOSPACE);
 				break;
+			}
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			rc = utest_sync_mem_status(arg->ta_utx);
