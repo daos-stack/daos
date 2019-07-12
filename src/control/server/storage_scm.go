@@ -115,11 +115,64 @@ func (s *scmSetup) reset() error {
 	return nil // TODO
 }
 
+type AppConfigProperties map[string]string
+
+func ReadPropertiesFile(filename string) (AppConfigProperties, error) {
+    config := AppConfigProperties{}
+
+    if len(filename) == 0 {
+        return config, nil
+    }
+    file, err := os.Open(filename)
+    if err != nil {
+        log.Fatal(err)
+        return nil, err
+    }
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        line := scanner.Text()
+        if equal := strings.Index(line, "="); equal >= 0 {
+            if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
+                value := ""
+                if len(line) > equal {
+                    value = strings.TrimSpace(line[equal+1:])
+                }
+                config[key] = value
+            }
+        }
+    }
+
+    if err := scanner.Err(); err != nil {
+        log.Fatal(err)
+        return nil, err
+    }
+
+    return config, nil
+}
+
+[root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
+
+---ISetID=$(ISetID---
+   PersistentMemoryType=AppDirect
+   FreeCapacity=0.0 GiB
+---ISetID=$(ISetID---
+   PersistentMemoryType=AppDirect
+   FreeCapacity=0.0 GiB
+[root@wolf-72 daos_m]#
+
 func (s *scmSetup) getState(modules common.ScmModules) (state scmState, err error) {
 	if len(modules) == 0 {
 		return noModules, nil
 	}
 
+	var regionSections []string
+	var regionProps key[string]string
+	var regionCapacities []string
+
+	out, err := exec.Command( [root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
+	// redo the work that was lost, ScmRegion, 
 	// TODO: discovery should provide SCM region details
 	s.config.ext.run("ipmctl show -a -region")
 	return
