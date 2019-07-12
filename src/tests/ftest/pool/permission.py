@@ -83,7 +83,7 @@ class Permission(Test):
     def test_connectpermission(self):
         """
         Test pool connections with specific permissions.
-        :avocado: tags=all,pool,pr,small,connectpermission
+        :avocado: tags=pool,permission,connectpermission
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -132,7 +132,7 @@ class Permission(Test):
         Test whether file modification happens as expected under different
         permission levels.
 
-        :avocado: tags=all,pool,pr,small,filemodification
+        :avocado: tags=pool,permission,filemodification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
