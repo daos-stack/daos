@@ -50,7 +50,6 @@ class RebuildTests(TestWithServers):
         self.pool.get_params(self)
         self.container = TestContainer(self.pool)
         self.container.get_params(self)
-        targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank", "/run/testparams/*")
 
         # Create a pool and confirm its status
@@ -99,7 +98,6 @@ class RebuildTests(TestWithServers):
         # Get the test parameters
         pools = []
         containers = []
-        targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank", "/run/testparams/*")
         quantity = self.params.get("quantity", "/run/testparams/*")
         for index in range(quantity):
