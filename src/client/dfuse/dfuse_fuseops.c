@@ -159,16 +159,14 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		if (!inode->ie_dfs->dfs_ops->getattr) {
-			D_GOTO(decref, rc = ENOTSUP);
+		if (inode->ie_dfs->dfs_ops->getattr) {
+			inode->ie_dfs->dfs_ops->getattr(req, inode);
+		} else {
+			DFUSE_REPLY_ATTR(req, &inode->ie_stat);
 		}
-
-		inode->ie_dfs->dfs_ops->getattr(req, inode);
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	}
 	return;
-decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
