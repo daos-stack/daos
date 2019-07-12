@@ -85,6 +85,13 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             orterun -np 1 -x OFI_INTERFACE=eth0 -x CRT_ATTACH_INFO_PATH=/tmp -x DAOS_SINGLETON_CLI=1 daos_test -m'''
 
+// bail out of branch builds that are not on a whitelist
+if (!env.CHANGE_ID &&
+    env.BRANCH_NAME != "master") {
+   currentBuild.result = 'SUCCESS'
+   return
+}
+
 pipeline {
     agent { label 'lightweight' }
 
