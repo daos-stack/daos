@@ -116,11 +116,11 @@ func Main() error {
 	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)
 
 	// If running as root and user name specified in config file, respawn proc.
-	shouldRespawn := syscall.Getuid() == 0 && config.UserName != ""
+	needsRespawn := syscall.Getuid() == 0 && config.UserName != ""
 
 	// Only provide IO/Agent communication if not attempting to respawn after format,
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
-	if !shouldRespawn {
+	if !needsRespawn {
 		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(config))
 		secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 		acl.RegisterAccessControlServer(grpcServer, secServer)
@@ -138,15 +138,14 @@ func Main() error {
 		}
 	}
 
-	if shouldRespawn {
+	if needsRespawn {
 		// Chown required files and respawn process under new user.
 		if err := changeFileOwnership(config); err != nil {
 			return errors.WithMessage(err, "changing file ownership")
 		}
 
-		if err := respawnProc(config); err != nil {
-			return errors.WithMessage(err, "re-spawning process")
-		}
+		log.Debugf("formatting complete and file ownership changed,"+
+			"please rerun %s as user %s\n", os.Args[0], config.UserName)
 
 		return nil
 	}

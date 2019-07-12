@@ -24,13 +24,9 @@
 package server
 
 import (
-	"bytes"
-	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"strconv"
-	"strings"
 
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
@@ -127,32 +123,6 @@ func changeFileOwnership(config *configuration) error {
 	}
 
 	if err := chownAll(config, usr, grp); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// respawnProc builds and executes command chain to respawn process under new ownership.
-func respawnProc(config *configuration) error {
-	var buf bytes.Buffer // build command string
-
-	// Wait for this proc to exit and make NVMe storage accessible to new user.
-	fmt.Fprintf(&buf, `sleep 1 && %s storage prep-nvme -u %s &> %s`,
-		os.Args[0], config.UserName, config.ControlLogFile)
-
-	// Run daos_server from within a subshell of target user with the same args.
-	fmt.Fprintf(&buf, ` && su %s -c "`, config.UserName)
-
-	fmt.Fprintf(&buf, strings.Join(os.Args, " "))
-
-	// Redirect output of new proc to existing log file.
-	fmt.Fprintf(&buf, `&> %s"`, config.ControlLogFile)
-
-	msg := fmt.Sprintf("dropping privileges: re-spawning (%s)\n", buf.String())
-	log.Debugf(msg)
-
-	if err := exec.Command("bash", "-c", buf.String()).Start(); err != nil {
 		return err
 	}
 
