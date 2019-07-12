@@ -13,7 +13,7 @@
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
-
+kworker/16:1
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
@@ -27,45 +27,71 @@ import os
 import time
 import traceback
 
+from dmg_utils import DmgCmdUtils
 from server_utils import ServerCmdUtils
+from cmd_utils import CommandLineFailure
 from apricot import TestWithoutServers
-# from daos_api import DaosApiError
+from avocado.utils import process
 
 class StorageScanTest(TestWithoutServers):
     """
     Simple test to verify the scan function of the daos_server.
 
     :avocado: recursive
+
     """
     def __init__(self, *args, **kwargs):
         super(StorageScanTest, self).__init__(*args, **kwargs)
 
-    # def setUp(self):
-    #     try:
-    #         super(StorageScanTest, self).setup()
-    #     except DaosApiError as excpn:
-    #         print(excpn)
-    #         print(traceback.format__exc())
-    #         self.fail("Test failed during setup. \n")
+    def cleanUp(self):
+        """ Setup/cleanup for the daos_server to run properly."""
+
+        umount_daos = "umount /mnt/daos; rm -rf /mnt/daos"
+        rm_sockets = "rm -rf /tmp/daos_sockets/"
+        rm_logs = "rm -rf /tmp/*.log"
+
+        # Clean up the /mnt/daos dir and logs
+        try:
+            umount_result = process.run(
+                umount_daos, verbose = True, ignore_status = True, sudo = True)
+        except Exception as excpn:
+            raise CommandLineFailure("<Command Error>:{}".format(umount_daos))
+
+        try:
+            rm_sockets_result = process.run(
+                rm_sockets, verbose = True, ignore_status = True, sudo = True)
+        except Exception as excpn:
+            raise CommandLineFailure("<Command Error>:{}".format(rm_sockets))
+
+        try:
+            rm_logs_result = process.run(
+                rm_logs, verbose = True, ignore_status = True, sudo = True)
+        except Exception as excpn:
+            raise CommandLineFailure("<Command Error>:{}".format(rm_logs))
 
     def test_server_storage_scan_basic(self):
         """
         Test basic daos_server functionality, to scan the storage on system.
 
         :avocado: tags=all,pr,dmg,control,amanda
+
         """
+        # Cleanup /mnt/daos
+        self.cleanUp()
 
-        # Create daos_server command
-        # daos_server = SvrCmdline("/run/server/*")
-        # daos_server.run(self.basepath)
-
-        # Verify that command ran
-
-        # Create dmg command
-        print("Running daos_server command line!")
+        # Create and execute daos_server command in the background
         daos_server = ServerCmdUtils()
-        # daos_server.command.set_yaml_value("command",self, "/run/daos_server/*")
-        # print(daos_server.command.value)
-        daos_server.execute(self, self.basepath)
+        daos_server_rc = daos_server.execute(self, self.basepath, bg = True)
+
+        # Start background process
+        daos_server_rc.start()
+
+        # Create and execute daos_shell command
+        daos_shell = DmgCmdUtils(tool = "daos_shell")
+        daos_shell_rc = daos_shell.execute(self, self.basepath, bg = False)
 
         # Verify that command ran
+        # TO-DO
+
+        # Stop backgroung process
+        daos_server_rc.stop()

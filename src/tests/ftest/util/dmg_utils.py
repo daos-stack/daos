@@ -21,32 +21,50 @@
     Any reproduction of computer software, computer software documentation, or
     portions thereof marked with this legend must also reproduce the markings.
     '''
+from __future__ import print_function
+
 import os
 import json
+from cmd_utils import Command, CommandParam
 
-class DmgFailed(Exception):
-    """Raise if DMG command or related activity doesn't work."""
+class DmgCmdUtils(Command):
+    """Defines a object representing a dmg (or daos_shell) command."""
 
-def get_dmg_script(dmgparams, testparams, basepath):
-    '''
-    Build a dmg command line
-    '''
+    def __init__(self, tool = "dmg"):
+        """Create a dmg Command object
 
-    with open(os.path.join(basepath, ".build_vars.json")) as afile:
-        build_paths = json.load(afile)
-    orterun_bin = os.path.join(build_paths["OMPI_PREFIX"], "bin/orterun")
+        Args:
+            tool (str): tool to execute, default = dmg
 
-    script = []
-    parambase = "/run/" + dmgparams + "/"
-    commands = testparams.get("commands", parambase)
+        """
 
-    # commands are a list of lists of tuples
-    for command in commands:
-        dmg_cmd = os.path.join(build_paths["OMPI_PREFIX"], "bin/dmg")
-        for token in command:
-            dmg_cmd += " " + token[1]
-        complete_cmd = orterun_bin + " -N 1 --host $SLURM_NODELIST " \
-                        + dmg_cmd + "\n"
-        script.append(complete_cmd)
+        self.command = CommandParam("{}")           # i.e. storage, network
+        self.action = CommandParam("{}")            # i.e. format, scan
 
-    return script
+        # daos_shell options
+        self.hostlist = CommandParam("-l {}")       # list of addresses
+        self.hostfile = CommandParam("-f {}")       # path of hostfile
+        self.configpath = CommandParam("-o {}")     # client config file path
+
+        # dmg options
+
+
+        self.cmd = Command(tool, "/run/{}/*".format(tool), self.__dict__)
+
+    def execute(self, test, basepath = "", bg = False):
+        """Run the dmg command
+
+        Args:
+            test (object): Avocado test object
+            basepath (str, optional): DAOS install dir. Defaults to "".
+
+        Return:
+            Avocado cmd object.
+
+        """
+
+        # Set param values and get command string
+        self.cmd.set_param_values(test)
+        command = os.path.join(basepath, 'install', 'bin', self.cmd.__str__())
+
+        return self.cmd.run(command)

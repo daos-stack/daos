@@ -53,12 +53,22 @@ class ServerCmdUtils(object):
     def __init__(self):
         """Create a server Command object"""
 
-        self.command = CommandParam("{}")       # i.e storage, network
-        self.action = CommandParam("{}")        # i.e scan, format, update
+        self.command = CommandParam("{}")           # i.e storage, network
+        self.action = CommandParam("{}")            # i.e scan, format, update
+        self.targets = CommandParam("-t {}")        # number of tagets to use
+        self.config = CommandParam("-o {}")         # server config file path
+        self.port = CommandParam("-p {}")           # port for gRPC to listen
+        self.storage = CommandParam("-s {}")        # storage path
+        self.modules = CommandParam("-m {}")        # list of server modules
+        self.xshelpernr = CommandParam("-x {}")     # number of helper XS
+        self.firstcore = CommandParam("-f {}")      # index of first core
+        self.group = CommandParam("-g {}")          # server group name
+        self.attach = CommandParam("-a {}")         # attach info patch
+        self.sock_dir = CommandParam("-d {}")       # daos_server socket dir
 
         self.cmd = Command("daos_server", "/run/daos_server/*", self.__dict__)
 
-    def execute(self, test, basepath = ""):
+    def execute(self, test, basepath = "", bg = False):
         """Run the server command
 
         Args:
@@ -66,16 +76,21 @@ class ServerCmdUtils(object):
             basepath (str, optional): DAOS install dir. Defaults to "".
 
         Return:
-            Command output(stdout or stderr)
+            Avocado cmd object.
+
         """
 
         # Set param values
         self.cmd.set_param_values(test)
 
-        # Get the command string
+        # Setup the config file value
+        if self.config.value != None:
+            self.config.value = os.path.join(basepath, str(self.config.value))
+
+        # Get command as string
         command = os.path.join(basepath, 'install', 'bin', self.cmd.__str__())
 
-        return self.cmd.run(command)
+        return self.cmd.run(command, bg)
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """

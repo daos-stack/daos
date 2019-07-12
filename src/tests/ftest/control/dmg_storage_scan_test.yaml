@@ -5,6 +5,10 @@ hosts:
     - boro-10
 server_config:
   name: daos_server
-daos_server:
+daos_shell:
+  hostlist: boro-10:10001
   command: storage
   action: scan
+daos_server:
+  targets: 1
+  config: utils/config/examples/daos_server_sockets.yml

@@ -60,13 +60,19 @@ class Command(object):
         command = str(self.params["command"].value)
         action = str(self.params["action"].value)
 
+        if command == "None":
+            command = ""
+        if action == "None":
+            action = ""
+
         for param_name, param_obj in self.params.items():
             if isinstance(param_obj, CommandParam):
                 if param_name not in ["command", "action"]:
-                    value_str = str(param_obj.value)
-                    if value_str != "":
+                    value_str = param_obj.__str__()
+                    if (str(param_obj.value) != "None" and
+                        str(param_obj.value) != ""):
                         options.append(value_str)
-        return self.tool + " " + " ".join(options) + command + " " + action
+        return self.tool + " " + " ".join(options) + " "+ command + " " + action
 
     def set_param_values(self, test):
         """Set values for all of the command params using a yaml file.
@@ -80,33 +86,41 @@ class Command(object):
             if isinstance(param_obj, CommandParam):
                 param_obj.set_yaml_value(param_name, test, self.path)
 
-    def run(self, command):
-        """run [summary]
-
-        [extended_summary]
+    def run(self, command, bg = False):
+        """ Run the command provided and handle command failure
 
         Args:
-            command ([type]): [description]
+            command (str): full command string
+            bg (bool): if true, run command in the backgroung. Default False
+
         """
 
-        try:
-            cmd_result = process.run(command, verbose = True, sudo = True)
-        except Exception as excpn:
-            print("Server command failed with exit status: <{}>".format(
-                cmd_result.exit_status))
-            raise CommandLineFailure("<Command Error>:", cmd_result.stderr)
+        cmd_obj = None
 
-        return cmd_result
+        try:
+            if bg == False:
+                cmd_obj = process.run(command, verbose = True, sudo = True,
+                    shell = True)
+            else:
+                cmd_obj = process.SubProcess(
+                    command, verbose = True, sudo = True,
+                    ignore_bg_processes = True)
+        except Exception as excpn:
+            raise CommandLineFailure("<Command Error>:{}".format(command))
+
+        return cmd_obj
 
 class CommandParam(object):
     """Defines an object represeting a single command line parameter."""
 
     def __init__(self, str_format, default=None):
         """Create a CommandParam object.
+
         Args:
             str_format (str): format string used to convert the value into an
                 command line argument string
             default (object): default value for the param
+
         """
         self.str_format = str_format
         self.default = default
@@ -120,17 +134,19 @@ class CommandParam(object):
 
         """
         if self.default == None and self.value:
-            return self.str_format
-        elif self.default != None and self.value:
+            return self.str_format.format(self.value)
+        elif self.default and self.value:
             return self.str_format.format(self.value)
         else:
             return ""
 
     def set_yaml_value(self, name, test, path=""):
         """Set the value of the parameter using the test's yaml file value.
+
         Args:
             name (str): name associated with the value in the yaml file
             test (Test): avocado Test object
             path (str, optional): yaml namespace. Defaults to "".
+
         """
         self.value = test.params.get(name, path)
