@@ -459,11 +459,13 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
  * \a rect to \a ent_array.
  *
  * \param toh		[IN]		The tree open handle
- * \param rect		[IN]		The versioned extent to search
+ * \param epr		[IN]		Epoch range to search
+ * \param extent	[IN]		The extent to search
  * \param ent_array	[IN,OUT]	Pass in initialized list, filled in by
  *					the function
  */
-int evt_find(daos_handle_t toh, const struct evt_rect *rect,
+int evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
+	     const struct evt_extent *extent,
 	     struct evt_entry_array *ent_array);
 
 /**
