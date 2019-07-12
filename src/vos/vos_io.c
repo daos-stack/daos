@@ -263,7 +263,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 
 /** Fetch the single value within the specified epoch range of an key */
 static int
-akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
+akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		  daos_size_t *rsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
@@ -275,7 +275,7 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 
 	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= epoch;
+	kbund.kb_epoch	= epr->epr_hi;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_biov	= &biov;
@@ -290,6 +290,13 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 		rc = 0;
 	} else if (rc != 0) {
 		goto out;
+	} else if (kbund.kb_epoch < epr->epr_lo) {
+		/* The single value is before the valid epoch range (after a
+		 * punch when incarnation log is available
+		 */
+		rc = 0;
+		rbund.rb_rsize = 0;
+		bio_addr_set_hole(&biov.bi_addr, 1);
 	}
 
 	rc = iod_fetch(ioc, &biov);
@@ -311,8 +318,8 @@ biov_set_hole(struct bio_iov *biov, ssize_t len)
 
 /** Fetch an extent from an akey */
 static int
-akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
-		daos_csum_buf_t *csum, daos_size_t *rsize_p,
+akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
+		daos_recx_t *recx, daos_csum_buf_t *csum, daos_size_t *rsize_p,
 		struct vos_io_context *ioc)
 {
 	struct evt_entry	*ent;
@@ -320,7 +327,7 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	 * sorting and clipping of rectangles
 	 */
 	struct evt_entry_array	 ent_array = { 0 };
-	struct evt_rect		 rect;
+	struct evt_extent	 extent;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
 	daos_size_t		 rsize;
@@ -331,12 +338,11 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
 
-	rect.rc_ex.ex_lo = index;
-	rect.rc_ex.ex_hi = end - 1;
-	rect.rc_epc = epoch;
+	extent.ex_lo = index;
+	extent.ex_hi = end - 1;
 
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &rect, &ent_array);
+	rc = evt_find(toh, epr, &extent, &ent_array);
 	if (rc != 0)
 		goto failed;
 
@@ -353,8 +359,8 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 
 		if (lo != index) {
 			D_ASSERTF(lo > index,
-				  DF_U64"/"DF_U64", "DF_RECT", "DF_ENT"\n",
-				  lo, index, DP_RECT(&rect),
+				  DF_U64"/"DF_U64", "DF_EXT", "DF_ENT"\n",
+				  lo, index, DP_EXT(&extent),
 				  DP_ENT(ent));
 			holes += lo - index;
 		}
@@ -458,9 +464,9 @@ static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
 	daos_iod_t	*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	daos_epoch_t	 epoch = ioc->ic_epoch;
 	struct vos_krec_df *krec = NULL;
 	daos_handle_t	 toh = DAOS_HDL_INVAL;
+	daos_epoch_range_t	val_epr = {0, ioc->ic_epoch};
 	int		 i, rc;
 	int		 flags = 0;
 
@@ -474,10 +480,10 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		if (iod->iod_eprs && iod->iod_eprs[0].epr_lo != 0)
-			epoch = iod->iod_eprs[0].epr_lo;
+			val_epr.epr_hi = iod->iod_eprs[0].epr_lo;
 
-		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags,
+		rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi, ak_toh,
+				      VOS_BTR_AKEY, &iod->iod_name, flags,
 				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
@@ -490,7 +496,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			return rc;
 		}
 
-		rc = akey_fetch_single(toh, ioc->ic_epoch, &iod->iod_size, ioc);
+		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
 
 		key_tree_release(toh, false);
 
@@ -501,24 +507,25 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
 		if (iod->iod_eprs && iod->iod_eprs[i].epr_lo)
-			epoch = iod->iod_eprs[i].epr_lo;
+			val_epr.epr_hi = iod->iod_eprs[i].epr_lo;
 
 		/* If epoch on each iod_eprs are out of boundary, then it needs
 		 * to re-prepare the key tree.
 		 */
-		if (daos_handle_is_inval(toh) || (epoch > krec->kr_latest ||
-						  epoch < krec->kr_earliest)) {
+		if (daos_handle_is_inval(toh) ||
+		    (val_epr.epr_hi  > krec->kr_latest ||
+		     val_epr.epr_hi < krec->kr_earliest)) {
 			if (!daos_handle_is_inval(toh)) {
 				key_tree_release(toh, true);
 				toh = DAOS_HDL_INVAL;
 			}
 
 			D_DEBUG(DB_IO, "repare the key tree for eph "DF_U64"\n",
-				epoch);
-			rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh,
-					      VOS_BTR_AKEY, &iod->iod_name,
-					      flags, DAOS_INTENT_DEFAULT,
-					      &krec, &toh);
+				val_epr.epr_hi);
+			rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi,
+					      ak_toh, VOS_BTR_AKEY,
+					      &iod->iod_name, flags,
+					      DAOS_INTENT_DEFAULT, &krec, &toh);
 			if (rc != 0) {
 				if (rc == -DER_NONEXIST) {
 					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
@@ -531,8 +538,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			}
 		}
 
-		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
-		rc = akey_fetch_recx(toh, epoch, &iod->iod_recxs[i],
+		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, val_epr.epr_hi);
+		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i],
 				     daos_iod_csum(iod, i), &rsize, ioc);
 		if (rc != 0) {
 			D_DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
