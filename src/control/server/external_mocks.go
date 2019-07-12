@@ -33,21 +33,22 @@ type mockExt struct {
 	// return error if cmd in shell fails
 	cmdRet error
 	// return true if file already exists
-	existsRet   bool
-	mountRet    error
-	unmountRet  error
-	mkdirRet    error
-	removeRet   error
-	lUsrRet     *user.User  // lookup user
-	lGrpRet     *user.Group // lookup group
-	lUsrErr     error       // lookup user error
-	lGrpErr     error       // lookup group error
-	listGrpsErr error       // list groups error
-	listGrpsRet []string    // list of user's groups
-	sUIDErr     error       // set uid error
-	sGIDErr     error       // set gid error
-	chownErr    error
-	history     []string
+	existsRet       bool
+	mountRet        error
+	isMountPointRet bool
+	unmountRet      error
+	mkdirRet        error
+	removeRet       error
+	lUsrRet         *user.User  // lookup user
+	lGrpRet         *user.Group // lookup group
+	lUsrErr         error       // lookup user error
+	lGrpErr         error       // lookup group error
+	listGrpsErr     error       // list groups error
+	listGrpsRet     []string    // list of user's groups
+	sUIDErr         error       // set uid error
+	sGIDErr         error       // set gid error
+	chownErr        error
+	history         []string
 }
 
 func (m *mockExt) getHistory() []string {
@@ -83,6 +84,12 @@ func (m *mockExt) mount(
 	m.history = append(m.history, op)
 
 	return m.mountRet
+}
+
+func (m *mockExt) isMountPoint(path string) (bool, error) {
+	m.history = append(m.history, fmt.Sprintf(msgIsMountPoint, path))
+
+	return m.isMountPointRet, nil
 }
 
 func (m *mockExt) unmount(path string) error {
@@ -142,12 +149,13 @@ func (m *mockExt) chown(path string, uid int, gid int) error {
 }
 
 func newMockExt(
-	cmdRet error, existsRet bool, mountRet error,
-	unmountRet error, mkdirRet error, removeRet error) External {
+	cmdRet error, existsRet bool, mountRet error, isMountPointRet bool,
+	unmountRet error, mkdirRet error, removeRet error,
+) External {
 
 	return &mockExt{
-		cmdRet, existsRet, mountRet, unmountRet, mkdirRet, removeRet,
-		nil, nil, nil, nil, nil, []string{}, nil, nil, nil, []string{},
+		cmdRet, existsRet, mountRet, isMountPointRet, unmountRet, mkdirRet,
+		removeRet, nil, nil, nil, nil, nil, []string{}, nil, nil, nil, []string{},
 	}
 }
 

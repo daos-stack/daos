@@ -31,7 +31,7 @@
 #define DB_CAP	(1L << 25)
 
 static char		*test_svc_name = "rsvc_test";
-static daos_iov_t	 test_svc_id;
+static d_iov_t	 test_svc_id;
 static uuid_t		 test_db_uuid;
 
 #define ID_OK(id) ioveq((id), &test_svc_id)
@@ -60,7 +60,7 @@ ioveq(const d_iov_t *iov1, const d_iov_t *iov2)
 }
 
 static int
-test_svc_name_cb(daos_iov_t *id, char **name)
+test_svc_name_cb(d_iov_t *id, char **name)
 {
 	ID_OK(id);
 	D_STRNDUP(*name, test_svc_name, strlen(test_svc_name));
@@ -69,7 +69,7 @@ test_svc_name_cb(daos_iov_t *id, char **name)
 }
 
 static int
-test_svc_load_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+test_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
 {
 	ID_OK(id);
 	uuid_copy(db_uuid, test_db_uuid);
@@ -77,21 +77,21 @@ test_svc_load_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
 }
 
 static int
-test_svc_store_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+test_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
 {
 	ID_OK(id);
 	return 0;
 }
 
 static int
-test_svc_delete_uuid_cb(daos_iov_t *id)
+test_svc_delete_uuid_cb(d_iov_t *id)
 {
 	ID_OK(id);
 	return 0;
 }
 
 static int
-test_svc_locate_cb(daos_iov_t *id, char **path)
+test_svc_locate_cb(d_iov_t *id, char **path)
 {
 	char	uuid_string[DAOS_UUID_STR_SIZE];
 	int	rc;
@@ -105,7 +105,7 @@ test_svc_locate_cb(daos_iov_t *id, char **path)
 }
 
 static int
-test_svc_alloc_cb(daos_iov_t *id, struct ds_rsvc **svcp)
+test_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **svcp)
 {
 	ID_OK(id);
 	D_ALLOC_PTR(*svcp);
@@ -481,7 +481,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 static int
 rdbt_module_init(void)
 {
-	daos_iov_set(&test_svc_id, test_svc_name, strlen(test_svc_name) + 1);
+	d_iov_set(&test_svc_id, test_svc_name, strlen(test_svc_name) + 1);
 	ds_rsvc_class_register(DS_RSVC_CLASS_TEST, &test_svc_rsvc_class);
 	return 0;
 }

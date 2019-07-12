@@ -28,12 +28,14 @@ import (
 	"net"
 	"os"
 
+	flags "github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
-	flags "github.com/jessevdk/go-flags"
-	"google.golang.org/grpc"
 )
 
 func parseCliOpts(opts *cliOptions) error {
@@ -54,8 +56,6 @@ func parseCliOpts(opts *cliOptions) error {
 // TODO: Refactor this to decouple CLI functionality from core
 // server logic and allow for easier testing.
 func Main() error {
-	// Bootstrap default logger before config options get set.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 
 	opts := new(cliOptions)
 	if err := parseCliOpts(opts); err != nil {
@@ -64,15 +64,13 @@ func Main() error {
 
 	host, err := os.Hostname()
 	if err != nil {
-		log.Errorf("Failed to get hostname: %+v", err)
 		return err
 	}
 
 	// Parse configuration file and load values.
 	config, err := loadConfigOpts(opts, host)
 	if err != nil {
-		log.Errorf("Failed to load config options: %+v", err)
-		return err
+		return errors.WithMessage(err, "load config options")
 	}
 
 	// Backup active config.
@@ -80,18 +78,17 @@ func Main() error {
 
 	f, err := config.setLogging(host)
 	if err != nil {
-		log.Errorf("Failed to configure logging: %+v", err)
-		return err
+		return errors.Wrap(err, "configure logging")
 	}
 	if f != nil {
 		defer f.Close()
 	}
+
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
 		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
-		log.Errorf("Failed to init ControlService: %s", err)
-		return err
+		return errors.Wrap(err, "init control server")
 	}
 	mgmtCtlSvc.Setup()
 	defer mgmtCtlSvc.Teardown()
@@ -100,8 +97,7 @@ func Main() error {
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
 	lis, err := net.Listen("tcp4", addr)
 	if err != nil {
-		log.Errorf("Unable to listen on management interface: %s", err)
-		return err
+		return errors.Wrap(err, "enable to listen on management interface")
 	}
 	log.Debugf("DAOS control server listening on %s", addr)
 
@@ -130,45 +126,37 @@ func Main() error {
 	// Wait for storage to be formatted if necessary and subsequently drop
 	// current process privileges to that of normal user.
 	if err = awaitStorageFormat(&config); err != nil {
-		log.Errorf("Failed to format storage: %s", err)
-		return err
+		return errors.Wrap(err, "format storage")
 	}
 
 	// Format the unformatted servers by writing persistant superblock.
 	if err = formatIosrvs(&config, false); err != nil {
-		log.Errorf("Failed to format servers: %s", err)
-		return err
+		return errors.Wrap(err, "format servers")
 	}
 
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
 	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
-		log.Errorf("Failed to load server: %s", err)
-		return err
+		return errors.Wrap(err, "load server")
 	}
 	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
-		log.Errorf("Failed to set up dRPC: %s", err)
-		return err
+		return errors.Wrap(err, "set up dRPC")
 	}
 	if err = iosrv.start(); err != nil {
-		log.Errorf("Failed to start server: %s", err)
-		return err
+		return errors.Wrap(err, "start server")
 	}
 
 	extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
 	if err != nil {
-		log.Errorf(
-			"Unable to determine if management service replica: %s",
-			err)
-		return err
+		return errors.Wrap(err, "unable to determine if management service replica")
 	}
 	log.Debugf("DAOS I/O server running %s", extraText)
 
 	// Wait for I/O server to return.
 	err = iosrv.wait()
 	if err != nil {
-		log.Errorf("DAOS I/O server exited with error: %s", err)
+		return errors.Wrap(err, "DAOS I/O server exited with error")
 	}
 
 	return err

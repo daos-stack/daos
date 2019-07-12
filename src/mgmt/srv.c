@@ -84,7 +84,8 @@ process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (pb_rank == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract rank from request\n");
 
 		return;
@@ -112,7 +113,8 @@ process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -124,7 +126,9 @@ process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 	rc = crt_rank_self_set(daos_req->rank);
 	if (rc != 0) {
 		D_ERROR("Failed to set self rank %u: %d\n", daos_req->rank, rc);
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
 	}
 
 	dss_notify_rank_set();
@@ -151,7 +155,8 @@ process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -177,8 +182,11 @@ process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 
 out:
 	mgmt__create_ms_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 /*
@@ -202,7 +210,9 @@ process_startms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		D_DEBUG(DB_MGMT, "MS already started\n");
 	} else if (rc != 0) {
 		D_ERROR("Failed to start MS: %d\n", rc);
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
 	}
 }
 
@@ -221,7 +231,8 @@ process_getattachinfo_request(Drpc__Call *drpc_req,
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -231,12 +242,14 @@ process_getattachinfo_request(Drpc__Call *drpc_req,
 	D_DEBUG(DB_MGMT, "Received request to get attach info\n");
 
 	rc = ds_mgmt_get_attach_info_handler(daos_resp);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("Failed to get attach info: %d\n", rc);
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 
 	mgmt__get_attach_info_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
 }
 
 static void
@@ -256,7 +269,8 @@ process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -301,8 +315,11 @@ process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *daos_resp)
 
 out:
 	mgmt__join_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 static void
@@ -323,13 +340,13 @@ process_createpool_request(Drpc__Call *drpc_req,
 	mgmt__create_pool_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
-	daos_req = mgmt__create_pool_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
+	daos_req = mgmt__create_pool_req__unpack(NULL, drpc_req->body.len,
+						 drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
-
 		return;
 	}
 
@@ -338,7 +355,7 @@ process_createpool_request(Drpc__Call *drpc_req,
 		targets = daos_rank_list_parse(daos_req->ranks, ",");
 		if (targets == NULL) {
 			D_ERROR("failed to parse target ranks\n");
-			rc = -1;
+			rc = -DER_INVAL;
 			goto out;
 		}
 		D_DEBUG(DB_MGMT, "ranks in: %s\n", daos_req->ranks);
@@ -348,9 +365,9 @@ process_createpool_request(Drpc__Call *drpc_req,
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
-	rc = ds_mgmt_create_pool(pool_uuid, daos_req->sys, "pmem",
-			targets, daos_req->scmbytes, daos_req->nvmebytes,
-			NULL /* props */, daos_req->numsvcreps, &svc);
+	rc = ds_mgmt_create_pool(pool_uuid, daos_req->sys, "pmem", targets,
+				 daos_req->scmbytes, daos_req->nvmebytes,
+				 NULL /* props */, daos_req->numsvcreps, &svc);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -359,7 +376,6 @@ process_createpool_request(Drpc__Call *drpc_req,
 	}
 
 	D_ALLOC(daos_resp->uuid, DAOS_UUID_STR_SIZE);
-
 	if (daos_resp->uuid == NULL) {
 		D_ERROR("failed to allocate buffer");
 		rc = -DER_NOMEM;
@@ -371,7 +387,6 @@ process_createpool_request(Drpc__Call *drpc_req,
 	assert(svc->rl_nr > 0);
 
 	D_ALLOC(daos_resp->svcreps, buflen);
-
 	if (daos_resp->svcreps == NULL) {
 		D_ERROR("failed to allocate buffer");
 		rc = -DER_NOMEM;
@@ -383,7 +398,7 @@ process_createpool_request(Drpc__Call *drpc_req,
 
 	for (i = 1; i < svc->rl_nr; i++) {
 		index += snprintf(&daos_resp->svcreps[index], buflen-index,
-			",%u", svc->rl_ranks[i]);
+				  ",%u", svc->rl_ranks[i]);
 		if (index >= buflen) {
 			buflen *= 2;
 
@@ -396,7 +411,7 @@ process_createpool_request(Drpc__Call *drpc_req,
 			}
 
 			index = snprintf(extra, buflen, "%s,%u",
-				daos_resp->svcreps, svc->rl_ranks[i]);
+					 daos_resp->svcreps, svc->rl_ranks[i]);
 
 			D_FREE(daos_resp->svcreps);
 			daos_resp->svcreps = extra;
@@ -409,26 +424,31 @@ out:
 	mgmt__create_pool_req__free_unpacked(daos_req, NULL);
 	if (svc)
 		d_rank_list_free(svc);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 static void
-process_destroypool_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
+process_destroypool_request(Drpc__Call *drpc_req,
+			    Mgmt__DestroyPoolResp *daos_resp)
 {
 	Mgmt__DestroyPoolReq	*daos_req = NULL;
 	uuid_t			uuid;
 	int			rc = 0;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(daos_resp);
+	mgmt__destroy_pool_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
 	daos_req = mgmt__destroy_pool_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -453,8 +473,11 @@ process_destroypool_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 	}
 out:
 	mgmt__destroy_pool_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 static void
@@ -485,10 +508,11 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosResp	*daos_resp = NULL;
+	Mgmt__DaosResp		*daos_resp = NULL;
 	Mgmt__JoinResp		*join_resp;
 	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
 	Mgmt__CreatePoolResp	*create_pool_resp;
+	Mgmt__DestroyPoolResp	*destroy_pool_resp;
 	uint8_t			*body;
 	size_t			len;
 
@@ -577,21 +601,39 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		if (body == NULL) {
 			drpc_resp->status = DRPC__STATUS__FAILURE;
 			D_ERROR("Failed to allocate drpc response body\n");
-			D_FREE(create_pool_resp->svcreps);
-			D_FREE(create_pool_resp->uuid);
-			D_FREE(create_pool_resp);
-			break;
+		} else {
+			mgmt__create_pool_resp__pack(create_pool_resp, body);
+			drpc_resp->body.len = len;
+			drpc_resp->body.data = body;
 		}
-		mgmt__create_pool_resp__pack(create_pool_resp, body);
-		drpc_resp->body.len = len;
-		drpc_resp->body.data = body;
-		D_FREE(create_pool_resp->svcreps);
-		D_FREE(create_pool_resp->uuid);
+		/** check for '\0' which is a static allocation from protobuf */
+		if (create_pool_resp->svcreps && create_pool_resp->svcreps[0] != '\0')
+			D_FREE(create_pool_resp->svcreps);
+		if (create_pool_resp->uuid && create_pool_resp->uuid[0] != '\0')
+			D_FREE(create_pool_resp->uuid);
 		D_FREE(create_pool_resp);
 		break;
 	case DRPC_METHOD_MGMT_DESTROY_POOL:
-		process_destroypool_request(drpc_req, daos_resp);
-		pack_daos_response(daos_resp, drpc_resp);
+		D_ALLOC_PTR(destroy_pool_resp);
+		if (destroy_pool_resp == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate daos response ref\n");
+			break;
+		}
+		process_destroypool_request(drpc_req, destroy_pool_resp);
+		len = mgmt__destroy_pool_resp__get_packed_size(
+				destroy_pool_resp);
+		D_ALLOC(body, len);
+		if (body == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate drpc response body\n");
+			D_FREE(destroy_pool_resp);
+			break;
+		}
+		mgmt__destroy_pool_resp__pack(destroy_pool_resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+		D_FREE(destroy_pool_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;

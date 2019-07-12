@@ -2030,11 +2030,13 @@ struct evt_max_rect {
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_find(daos_handle_t toh, const struct evt_rect *rect,
+evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
+	 const struct evt_extent *extent,
 	 struct evt_entry_array *ent_array)
 {
 	struct evt_context	*tcx;
 	struct evt_filter	 filter;
+	struct evt_rect		 rect;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
@@ -2042,12 +2044,12 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 		return -DER_NO_HDL;
 
 	evt_ent_array_init(ent_array);
-	filter.fr_ex = rect->rc_ex;
-	filter.fr_epr.epr_lo = 0;
-	filter.fr_epr.epr_hi = rect->rc_epc;
+	rect.rc_ex = filter.fr_ex = *extent;
+	filter.fr_epr = *epr;
+	rect.rc_epc = epr->epr_hi;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
-				&filter, rect, ent_array);
+				&filter, &rect, ent_array);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
 	if (rc != 0)
@@ -2344,6 +2346,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			nr = nd->tn_nr - i;
 			memmove(ne + 1, ne, nr * sizeof(*ne));
 		} else {
+			umem_off_t	off = ne->ne_child;
+
 			/* We do not know whether the former @desc has checksum
 			 * buffer or not, and do not know whether such buffer
 			 * is large enough or not even if it had. So we have to
@@ -2354,6 +2358,9 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 				return rc;
 
 			reuse = true;
+			D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
+				"off "UMOFF_PF" (1)\n",
+				i, nd->tn_nr, UMOFF_P(off));
 		}
 
 		break;
@@ -2367,11 +2374,16 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
 							DAOS_INTENT_CHECK);
 			if (rc == ALB_UNAVAILABLE) {
+				umem_off_t	off = ne->ne_child;
+
 				rc = evt_node_entry_free(tcx, ne);
 				if (rc != 0)
 					return rc;
 
 				reuse = true;
+				D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
+					"off "UMOFF_PF" (2)\n",
+					i, nd->tn_nr, UMOFF_P(off));
 			}
 		}
 
