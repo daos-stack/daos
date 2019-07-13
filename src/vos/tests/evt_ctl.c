@@ -1485,8 +1485,8 @@ test_evt_variable_record_size_internal(void **state)
 			else
 				assert_int_equal(rc, 0);
 		}
+		D_FREE(data);
 	}
-	D_FREE(data);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
 }
