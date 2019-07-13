@@ -85,25 +85,25 @@ func TestDiscoverScm(t *testing.T) {
 		inited            bool
 		ipmctlDiscoverRet error
 		errMsg            string
-		expModules        []*pb.ScmModule
+		expModules        ScmModules
 	}{
 		{
 			true,
 			nil,
 			"",
-			[]*pb.ScmModule(nil),
+			ScmModules(nil),
 		},
 		{
 			false,
 			nil,
 			"",
-			[]*pb.ScmModule{mPB},
+			ScmModules{mPB},
 		},
 		{
 			false,
 			errors.New("ipmctl example failure"),
 			msgIpmctlDiscoverFail + ": ipmctl example failure",
-			[]*pb.ScmModule{mPB},
+			ScmModules{mPB},
 		},
 	}
 
@@ -143,13 +143,13 @@ func TestFormatScm(t *testing.T) {
 		devs       []string
 		size       int
 		expCmds    []string // expected arguments in syscall methods
-		expResults []*pb.ScmMountResult
+		expResults ScmMountResults
 		desc       string
 	}{
 		{
 			inited: false,
 			mount:  "/mnt/daos",
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -164,7 +164,7 @@ func TestFormatScm(t *testing.T) {
 			inited:    true,
 			mount:     "/mnt/daos",
 			formatted: true,
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -177,7 +177,7 @@ func TestFormatScm(t *testing.T) {
 		},
 		{
 			inited: true,
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "",
 					State: &pb.ResponseState{
@@ -191,7 +191,7 @@ func TestFormatScm(t *testing.T) {
 		{
 			inited: true,
 			mount:  "/mnt/daos",
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -207,7 +207,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmRAM,
 			size:   6,
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    &pb.ResponseState{},
@@ -226,7 +226,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{"/dev/pmem0"},
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    &pb.ResponseState{},
@@ -247,7 +247,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{},
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -263,7 +263,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string(nil),
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -279,7 +279,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{""},
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -303,7 +303,7 @@ func TestFormatScm(t *testing.T) {
 			nil, []DeviceDiscovery{}, false, config)
 		ss.formatted = tt.formatted
 
-		results := []*pb.ScmMountResult{}
+		results := ScmMountResults{}
 
 		if tt.inited {
 			// not concerned with response
@@ -350,11 +350,11 @@ func TestFormatScm(t *testing.T) {
 // implemented state in result.
 func TestUpdateScm(t *testing.T) {
 	tests := []struct {
-		expResults []*pb.ScmModuleResult
+		expResults ScmModuleResults
 		desc       string
 	}{
 		{
-			expResults: []*pb.ScmModuleResult{
+			expResults: ScmModuleResults{
 				{
 					Loc: &pb.ScmModule_Location{},
 					State: &pb.ResponseState{
@@ -374,7 +374,7 @@ func TestUpdateScm(t *testing.T) {
 		ss := newMockScmStorage(
 			nil, []DeviceDiscovery{}, false, &config)
 
-		results := []*pb.ScmModuleResult{}
+		results := ScmModuleResults{}
 
 		req := &pb.UpdateScmReq{}
 		ss.Update(srvIdx, req, &results)

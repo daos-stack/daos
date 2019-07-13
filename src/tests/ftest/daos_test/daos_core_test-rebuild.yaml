@@ -10,7 +10,7 @@ hosts:
     - boro-F
     - boro-G
     - boro-H
-timeout: 1500
+timeout: 600
 server_config:
   name: daos_server
 daos_tests:
@@ -23,6 +23,7 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 0-24
       args: -s3 -u subtests="0-24"
+      test_timeout: 1500
     test_r_25:
       daos_test: r
       test_name: rebuild tests 25
