@@ -1569,8 +1569,11 @@ test_evt_various_data_size_internal(void **state)
 					(int)evt_extent_width(
 						&ent->en_sel_ext));
 					rc = strcmp(actual, data);
-					if (rc != 0)
+					if (rc != 0) {
+						D_FREE(actual);
+						D_FREE(data);
 						fail_msg("Data Check Failed\n");
+					}
 					D_FREE(actual);
 				}
 				evt_ent_array_fini(&ent_array);
