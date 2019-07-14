@@ -962,6 +962,34 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 
 		kbund.kb_epoch	= DAOS_EPOCH_MAX;
 		rbund.rb_iov	= key;
+		if (tclass == VOS_BTR_DKEY) {
+			struct dtx_handle	*dth = vos_dth_get();
+
+			/* Dkey is the determining factor for on which target
+			 * the data will be stored: the akeys and SV/EV tree
+			 * records belong to the same dkey will be stored on
+			 * the same target. But for different dkeys belong to
+			 * the same redundancy group (for the same replicated
+			 * object), the leaders replica for these different
+			 * dkeys may reside on different targets in the same
+			 * redundancy group.
+			 *
+			 * For VOS_ITER_DKEY operation, if some new dkeys which
+			 * DTXs are committable but related leader replicas are
+			 * on different targets, then in spite of list dkeys on
+			 * which replica, the client will get -DER_INPROGRESS
+			 * and has to retry the list_dkey RPC again and again.
+			 * Further more, if there are more dkeys created during
+			 * the retry, related list_dkey RPC may be hung there
+			 * for very long time.
+			 *
+			 * To avoid such trouble, we may have to synchronously
+			 * commit the DTX that create the dkey.
+			 */
+			if (dth != NULL)
+				dth->dth_sync = 1;
+		}
+
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, &kiov, &riov);
 		if (rc) {
