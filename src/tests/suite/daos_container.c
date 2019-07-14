@@ -84,6 +84,8 @@ co_create(void **state)
 
 	/** destroy container */
 	if (arg->myrank == 0) {
+		/* XXX check if this is a real leak or out-of-sync close */
+		sleep(5);
 		print_message("destroying container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
 		rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */,
