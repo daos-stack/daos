@@ -439,7 +439,8 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
  * \param       connect [IN]    from pool connect or not
  */
 int
-pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
+pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
+		pl_map_type_t default_type)
 {
 	d_list_t                *link;
 	struct pl_map           *map;
@@ -459,7 +460,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect)
 	}
 
 	if (!link) {
-		pl_map_attr_init(pool_map, PL_TYPE_MAPLESS, &mia);
+		pl_map_attr_init(pool_map, default_type, &mia);
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0)
 			D_GOTO(out, rc);

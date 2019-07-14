@@ -834,7 +834,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			struct pool_map *tmp = pool->sp_map;
 
 			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true);
+					   pool->sp_map != NULL ? false : true,
+					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				D_ERROR(DF_UUID": failed update pl_map: %d\n",
@@ -861,7 +862,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		struct pool_map *tmp = pool->sp_map;
 
 		rc = pl_map_update(pool->sp_uuid, map,
-				   pool->sp_map != NULL ? false : true);
+				   pool->sp_map != NULL ? false : true,
+				   DEFAULT_PL_TYPE);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",

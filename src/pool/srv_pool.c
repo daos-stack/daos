@@ -1018,7 +1018,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 			struct pool_map *tmp;
 
 			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true);
+					   pool->sp_map != NULL ? false : true,
+					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				svc->ps_pool = NULL;
 				ABT_rwlock_unlock(pool->sp_lock);

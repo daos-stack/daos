@@ -33,6 +33,9 @@
 #include <daos/pool_map.h>
 #include <daos/object.h>
 
+/** default placement map when none are specified */
+#define DEFAULT_PL_TYPE PL_TYPE_MAPLESS
+
 /** types of placement maps */
 typedef enum {
 	PL_TYPE_UNKNOWN,
@@ -112,7 +115,8 @@ void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 
 struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
-int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect);
+int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect,
+		pl_map_type_t default_type);
 void pl_map_disconnect(uuid_t uuid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);

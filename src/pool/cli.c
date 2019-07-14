@@ -226,7 +226,8 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 
 	D_ASSERT(map != NULL);
 	if (pool->dp_map == NULL) {
-		rc = pl_map_update(pool->dp_pool, map, connect);
+		rc = pl_map_update(pool->dp_pool, map, connect,
+				DEFAULT_PL_TYPE);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -247,7 +248,7 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		pool->dp_map == NULL ?
 		0 : pool_map_get_version(pool->dp_map), map_version);
 
-	rc = pl_map_update(pool->dp_pool, map, connect);
+	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
 		D_ERROR("Failed to refresh placement map: %d\n", rc);
 		D_GOTO(out, rc);
@@ -979,7 +980,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D_GOTO(out, rc);
 	}
 
-	rc = pl_map_update(pool->dp_pool, pool->dp_map, true);
+	rc = pl_map_update(pool->dp_pool, pool->dp_map, true,
+			DEFAULT_PL_TYPE);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

@@ -694,7 +694,7 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_lock(rpt->rt_lock);
 	map = rebuild_pool_map_get(rpt->rt_pool);
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rpt->rt_pool_uuid, map, true);
+	rc = pl_map_update(rpt->rt_pool_uuid, map, true, DEFAULT_PL_TYPE);
 	if (rc != 0) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out_map, rc = -DER_NOMEM);
