@@ -44,10 +44,11 @@ def get_bin_path(gopath, name):
     return join(gopath, "bin", name)
 
 def show_go_info():
+    """Show the go version information"""
     from distutils import spawn
     go_bin = spawn.find_executable("go")
     go_version = os.popen('%s version' % go_bin).read()
-    print("Go compiler installed at %s: %s" % (go_bin, go_version)),
+    print("Go compiler installed at %s: %s" % (go_bin, go_version))
 
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
@@ -152,7 +153,8 @@ def scons():
                 Copy("$TARGET", "$SOURCE")
             ])
 
-    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "daos_server", "daos_server")
+    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "daos_server",
+                   "daos_server")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 

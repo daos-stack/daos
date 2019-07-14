@@ -2,7 +2,7 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'dc_sectest_tgts', 'dc_security_tgts')
+    Import('env', 'prereqs', 'dc_sectest_tgts')
 
     libs = ['gurt', 'daos', 'daos_common', 'protobuf-c']
     sec_sources = ['security_test.c', dc_sectest_tgts]

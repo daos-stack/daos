@@ -225,6 +225,16 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_stat.st_ino = 1;
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
+	if (dfs->dfs_ops == &dfuse_dfs_ops) {
+		mode_t mode;
+
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, &mode);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(-rc));
+			D_GOTO(err, 0);
+		}
+	}
+
 	rc = d_hash_rec_insert(&fs_handle->dpi_iet,
 			       &ie->ie_stat.st_ino,
 			       sizeof(ie->ie_stat.st_ino),
