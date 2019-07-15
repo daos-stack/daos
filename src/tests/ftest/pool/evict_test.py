@@ -41,7 +41,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a client from a pool.
 
-        :avocado: tags=pool,poolevict,quick,mjean
+        :avocado: tags=pool,poolevict,quick
         """
         pool = []
         container = []
@@ -54,7 +54,7 @@ class EvictTests(TestWithServers):
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
         # Create TestPool
-        for count in range(len(tlist)):
+        for count, _ in enumerate(tlist):
             self.log.info("Create a pool")
             pool.append(TestPool(self.context, self.log))
             pool[count].get_params(self)
@@ -153,7 +153,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool with an invalid uuid.
 
-        :avocado: tags=pool,poolevict,mjean
+        :avocado: tags=pool,poolevict
         """
         # Create a pool
         self.log.info("Create a pool")
@@ -219,7 +219,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=pool,poolevict,mjean
+        :avocado: tags=pool,poolevict
         """
         setid = self.params.get("setname", '/run/setnames/validsetname/')
         badsetid = self.params.get("setname", '/run/setnames/badsetname/')
