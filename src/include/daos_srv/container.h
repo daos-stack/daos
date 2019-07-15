@@ -56,13 +56,15 @@ struct ds_cont_child {
 	struct daos_llink	 sc_list;
 	daos_handle_t		 sc_hdl;
 	uuid_t			 sc_uuid;
+	ABT_mutex		 sc_mutex;
+	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
-	void			*sc_dtx_resync_cbdata;
 	/* The time for the latest DTX resync operation. */
 	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
-				 sc_closing:1;
+				 sc_closing:1,
+				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
 };
 
