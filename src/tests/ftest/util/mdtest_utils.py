@@ -75,36 +75,49 @@ class MdtestCommand(object):
     def __init__(self):
         """Create an MdtestCommand object."""
         self.flags = MdtestParam("{}")                 # mdtest flags
-        self.api = MdtestParam("-a {}")                   # API for I/O
+        self.api = MdtestParam("-a {}")                # API for I/O
                                                        # [POSIX|DAOS|DFS]
         self.branching_factor = MdtestParam("-b {}")   # branching factor
         self.test_dir = MdtestParam("-d {}")           # test directory in
                                                        # which tests should run
         self.barriers = MdtestParam("-B {}")           # no barriers between
                                                        # phases
-        self.read_bytes = MdtestParam("-e {}")      # bytes to read from each
-                                                       # file
+        self.read_bytes = MdtestParam("-e {}")         # bytes to read from
+                                                       # each file
         self.first_num_tasks = MdtestParam("-f {}")    # first number of tasks
                                                        # on which the test will
                                                        # run
         self.iteration = MdtestParam("-i {}")          # number of iterations
-        self.items = MdtestParam("-I {}")              # number of items per directory in tree
+        self.items = MdtestParam("-I {}")              # number of items per
+                                                       # directory in tree
         self.last_num_tasks = MdtestParam("-l {}")     # last number of tasks
-        self.num_of_tasks = MdtestParam("-n {}")       # every process will creat/stat/read/remove # directories and files
-        self.pre_iter = MdtestParam("-p {}")           # pre-iteration delay (in seconds)
-        self.random_seed = MdtestParam("--random-seed {}") # random seed for -R flag
-        self.stride = MdtestParam("-s {}")           # stride between the number of tasks
+        self.num_of_tasks = MdtestParam("-n {}")       # every process will
+                                                       # creat/stat/read/remove
+                                                       # num of  directories and
+                                                       # files
+        self.pre_iter = MdtestParam("-p {}")           # pre-iteration delay
+                                                       # (in seconds)
+        self.random_seed = MdtestParam("--random-seed {}") # random seed for -R
+                                                           # flag
+        self.stride = MdtestParam("-s {}")             # stride between the
+                                                       # number of tasks
         self.verbosity_value = MdtestParam("-V {}")    # verbosity value
-        self.write_bytes = MdtestParam("-w {}")        # bytes to write to each file
-        self.stonewall_timer = MdtestParam("-W {}")    # stonewall timer (in secs)
-        self.stonewall_statusfile = MdtestParam("-x {}") # StoneWallingStatusFile
-        self.depth = MdtestParam("-z {}")          # depth of hierarchical directory structure
+        self.write_bytes = MdtestParam("-w {}")        # bytes to write to each
+                                                       # file
+        self.stonewall_timer = MdtestParam("-W {}")    # stonewall timer
+                                                       # (in secs)
+        self.stonewall_statusfile = MdtestParam("-x {}") # num of iter of the
+                                                       # creation phase,
+                                                       # StoneWallingStatusFile
+        self.depth = MdtestParam("-z {}")              # depth of hierarchical
+                                                       # directory structure
 
         self.daos_pool_uuid = MdtestParam("--daos.pool {}") # pool uuid
         self.daos_svcl = MdtestParam("--daos.svcl {}")      # pool svcl
         self.daos_cont = MdtestParam("--daos.cont {}")      # cont uuid
         self.daos_group = MdtestParam("--daos.group {}")    # server group
-        self.daos_chunk_size = MdtestParam(" --daos.chunk_size {}") # chunk size
+        self.daos_chunk_size = MdtestParam(" --daos.chunk_size {}") # chunk
+                                                                    # size
         self.daos_oclass = MdtestParam("--daos.oclass {}")  # object class
 
         self.dfs_pool_uuid = MdtestParam("--dfs.pool {}") # pool uuid
@@ -153,26 +166,15 @@ class MdtestCommand(object):
             "DAOS_IO_MODE": 1,
         }
         export_cmd = [
-                         "export {}={}".format(key, val) for key, val in env.items()]
+            "export {}={}".format(key, val) for key, val in env.items()]
         mpirun_cmd = [
-#            (runpath if runpath else "/home/standan/mpiio/install/mpich/bin/mpirun"),
-            "/home/standan/mpiio/install/mpich/bin/mpirun",
+            "".join([runpath if runpath else build_paths["OMPI_PREFIX"],
+                     "/bin/mpirun"]),
             "-np {}".format(processes),
             "--hostfile {}".format(hostfile),
         ]
         command = " ".join(mpirun_cmd + [self.__str__()])
         command = "; ".join(export_cmd + [command])
-
-        #orterun_cmd = [
-        #    os.path.join(runpath if runpath else build_paths[
-        #        "OMPI_PREFIX"], "bin/orterun"),
-        #    "-np {}".format(processes),
-        #    "--hostfile {}".format(hostfile),
-        #    "--map-by node",
-        #    "-x DAOS_SINGLETON_CLI=1",
-        #    "-x CRT_ATTACH_INFO_PATH={}".format(attach_info_path),
-        #]
-        #command = " ".join(orterun_cmd + [self.__str__()])
 
         return command
 
@@ -212,4 +214,4 @@ class MdtestCommand(object):
             print("<MdtestRunFailed> Exception occurred: {0}".
                   format(str(error)))
             raise MdtestFailed("Mdtest Run process Failed: {}".
-                                 format(error))
+                               format(error))

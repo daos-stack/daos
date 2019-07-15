@@ -60,16 +60,18 @@ class MdtestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.pool is not None: 
+            if self.pool is not None:
                 self.pool.destroy(1)
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
 
     def execute_mdtest(self, mdtest_flags=None, object_class=None):
-        """Execute mdtest with optional overrides for mdtest flags and object_class.
-        If specified the mdtest flags and mdtest daos object class parameters will
-        override the values read from the yaml file.
+        """
+        Execute mdtest with optional overrides for mdtest flags
+        and object_class.
+        If specified the mdtest flags and mdtest daos object class parameters
+        will override the values read from the yaml file.
         Args:
             mdtest_flags (str, optional): mdtest flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
@@ -83,11 +85,6 @@ class MdtestBase(TestWithServers):
         nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
         svcn = self.params.get("svcn", "/run/pool/*", 1)
 
-        # get mdtest params
-        api = self.params.get("api", "/run/mdtest/*")
-        test_dir = self.params.get("test_file", "/run/mdtest/*")
-        depth = self.params.get("depth", "/run/mdtest/*")
-        oclass = self.params.get("oclass", "/run/mdtest/*")
         # Initialize a python pool object then create the underlying
         # daos storage
         self.pool = DaosPool(self.context)
@@ -95,26 +92,20 @@ class MdtestBase(TestWithServers):
             mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
 
         # Initialize MpioUtils if Mdtest is running in MPIIO mode
-        #if self.mdtest_cmd.api.value == "MPIIO":
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test: Mpich not installed")
         path = mpio_util.mpichinstall
-        #else:
-        #    path = None
+
         svc_list = ""
         for item in range(svcn):
             svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
         svc_list = svc_list[:-1]
 
         # assign mdtest params
-        #self.api.value = api
-        #self.test_dir.value = test_dir
-        #self.dir_depth.value = depth
         self.mdtest_cmd.dfs_pool_uuid.value = self.pool.get_uuid_str()
         self.mdtest_cmd.dfs_svcl.value = svc_list
-        #self.daos_cont_uuid.value = `uuidgen`
-        #self.daos_oclass.value = oclass
+
         # Override the yaml Mdtest params with provided values
         if mdtest_flags:
             self.mdtest_cmd.flags.value = mdtest_flags
@@ -122,7 +113,6 @@ class MdtestBase(TestWithServers):
             self.mdtest_cmd.daos_oclass.value = object_class
 
         # Run Mdtest
-        #self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
         try:
             self.mdtest_cmd.run(
                 self.basepath, self.processes, self.hostfile_clients, True,
@@ -141,8 +131,14 @@ class MdtestSmall(MdtestBase):
         Test Description:
             Test Mdtest in small config.
         Use Cases:
-            Different combinations of 1/64/128 Clients,
-            1K/4K/32K/128K/512K/1M transfer size.
+            Aim of this test is to test different combinations
+            of following configs:
+            1/8 Clients
+            num of files/dirs: 100
+            with/without unique working dir for each task
+            write bytes: 0|4K
+            read bytes: 0|4K
+            depth of hierarchical directory structure: 0|5
         :avocado: tags=mdtest,mdtestsmall
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
