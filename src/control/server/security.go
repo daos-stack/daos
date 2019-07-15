@@ -21,11 +21,12 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
 import "C"
+
 import (
 	"context"
 

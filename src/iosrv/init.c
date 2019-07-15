@@ -52,8 +52,8 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
  */
 static unsigned int	nr_threads;
 
-/** Server crt group ID */
-static char	       *server_group_id = DAOS_DEFAULT_GROUP_ID;
+/** DAOS system name (corresponds to crt group ID) */
+static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage path (hack) */
 const char	       *dss_storage_path = "/mnt/daos";
@@ -145,14 +145,6 @@ register_dbtree_classes(void)
 		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
 		return rc;
 	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
-				   &dbtree_recx_ops);
-	/* DBTREE_CLASS_RECX possibly be registered by client-stack also */
-	if (rc == -DER_EXIST)
-		rc = 0;
-	if (rc != 0)
-		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
 
 	return rc;
 }
@@ -373,7 +365,7 @@ server_init(int argc, char *argv[])
 		pmixless = true;
 	if (sys_map_path != NULL || pmixless)
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
-	rc = crt_init_opt(server_group_id, flags,
+	rc = crt_init_opt(daos_sysname, flags,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
@@ -386,7 +378,7 @@ server_init(int argc, char *argv[])
 		if (rc != 0)
 			D_ERROR("failed to set self rank %u: %d\n", self_rank,
 				rc);
-		rc = dss_sys_map_load(sys_map_path, server_group_id, self_rank,
+		rc = dss_sys_map_load(sys_map_path, daos_sysname, self_rank,
 				      DSS_CTX_NR_TOTAL);
 		if (rc) {
 			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
@@ -579,7 +571,7 @@ Options:\n\
       [Temporary] Self rank (default none; ignored if no --map|-y)\n\
   --help, -h\n\
       Print this description\n",
-		prog, prog, modules, server_group_id, dss_storage_path,
+		prog, prog, modules, daos_sysname, dss_storage_path,
 		dss_socket_dir, dss_nvme_conf);
 }
 
@@ -658,12 +650,12 @@ parse(int argc, char **argv)
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
 			    DAOS_SYS_NAME_MAX) {
-				printf("group name must be at most %d bytes\n",
-				       DAOS_SYS_NAME_MAX);
+				printf("DAOS system name must be at most "
+				       "%d bytes\n", DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
-			server_group_id = optarg;
+			daos_sysname = optarg;
 			break;
 		case 's':
 			dss_storage_path = optarg;

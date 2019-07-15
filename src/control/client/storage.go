@@ -24,14 +24,18 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -40,10 +44,77 @@ const (
 	msgTypeAssert     = "type assertion failed, wanted %T got %T"
 )
 
+// ClientCtrlrMap is an alias for query results of NVMe controllers (and
+// any residing namespaces) on connected servers keyed on address.
+type ClientCtrlrMap map[string]common.CtrlrResults
+
+func (ccm ClientCtrlrMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(ccm))
+
+	for server := range ccm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
+	}
+
+	return buf.String()
+}
+
+// ClientMountMap is an alias for query results of SCM regions mounted
+// on connected servers keyed on address.
+type ClientMountMap map[string]common.MountResults
+
+func (cmm ClientMountMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(cmm))
+
+	for server := range cmm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
+	}
+
+	return buf.String()
+}
+
+// ClientModuleMap is an alias for query results of SCM modules installed
+// on connected servers keyed on address.
+type ClientModuleMap map[string]common.ModuleResults
+
+func (cmm ClientModuleMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(cmm))
+
+	for server := range cmm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
+	}
+
+	return buf.String()
+}
+
+// StorageResult generic container for results of storage subsystems queries.
+type StorageResult struct {
+	nvmeCtrlr common.CtrlrResults
+	scmModule common.ModuleResults
+	scmMount  common.MountResults
+}
+
 // scanStorageRequest returns all discovered SCM and NVMe storage devices
 // discovered on a remote server by calling over gRPC channel.
 func scanStorageRequest(mc Control, req interface{}, ch chan ClientResult) {
-	sRes := storageResult{}
+	sRes := StorageResult{}
 
 	resp, err := mc.getCtlClient().ScanStorage(
 		context.Background(), &pb.ScanStorageReq{})
@@ -87,17 +158,17 @@ func (c *connList) ScanStorage() (ClientCtrlrMap, ClientModuleMap) {
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrs[res.Address] = CtrlrResults{Err: res.Err}
-			cModules[res.Address] = ModuleResults{Err: res.Err}
+			cCtrlrs[res.Address] = common.CtrlrResults{Err: res.Err}
+			cModules[res.Address] = common.ModuleResults{Err: res.Err}
 			continue
 		}
 
-		storageRes, ok := res.Value.(storageResult)
+		storageRes, ok := res.Value.(StorageResult)
 		if !ok {
-			err := fmt.Errorf(msgBadType, storageResult{}, res.Value)
+			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
 
-			cCtrlrs[res.Address] = CtrlrResults{Err: err}
-			cModules[res.Address] = ModuleResults{Err: err}
+			cCtrlrs[res.Address] = common.CtrlrResults{Err: err}
+			cModules[res.Address] = common.ModuleResults{Err: err}
 			continue
 		}
 
@@ -116,7 +187,7 @@ func (c *connList) ScanStorage() (ClientCtrlrMap, ClientModuleMap) {
 // and returns an open stream handle. Receive on stream and send ClientResult
 // over channel for each.
 func formatStorageRequest(mc Control, parms interface{}, ch chan ClientResult) {
-	sRes := storageResult{}
+	sRes := StorageResult{}
 
 	// Maximum time limit for format is 2hrs to account for lengthy low
 	// level formatting of multiple devices sequentially.
@@ -157,17 +228,17 @@ func (c *connList) FormatStorage() (ClientCtrlrMap, ClientMountMap) {
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrResults[res.Address] = CtrlrResults{Err: res.Err}
-			cMountResults[res.Address] = MountResults{Err: res.Err}
+			cCtrlrResults[res.Address] = common.CtrlrResults{Err: res.Err}
+			cMountResults[res.Address] = common.MountResults{Err: res.Err}
 			continue
 		}
 
-		storageRes, ok := res.Value.(storageResult)
+		storageRes, ok := res.Value.(StorageResult)
 		if !ok {
-			err := fmt.Errorf(msgBadType, storageResult{}, res.Value)
+			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = CtrlrResults{Err: err}
-			cMountResults[res.Address] = MountResults{Err: err}
+			cCtrlrResults[res.Address] = common.CtrlrResults{Err: err}
+			cMountResults[res.Address] = common.MountResults{Err: err}
 			continue
 		}
 
@@ -188,7 +259,7 @@ func (c *connList) FormatStorage() (ClientCtrlrMap, ClientMountMap) {
 func updateStorageRequest(
 	mc Control, req interface{}, ch chan ClientResult) {
 
-	sRes := storageResult{}
+	sRes := StorageResult{}
 
 	// Maximum time limit for update is 2hrs to account for lengthy firmware
 	// updates of multiple devices sequentially.
@@ -245,18 +316,18 @@ func (c *connList) UpdateStorage(req *pb.UpdateStorageReq) (
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrResults[res.Address] = CtrlrResults{Err: res.Err}
-			cModuleResults[res.Address] = ModuleResults{Err: res.Err}
+			cCtrlrResults[res.Address] = common.CtrlrResults{Err: res.Err}
+			cModuleResults[res.Address] = common.ModuleResults{Err: res.Err}
 			continue
 		}
 
-		storageRes, ok := res.Value.(storageResult)
+		storageRes, ok := res.Value.(StorageResult)
 		if !ok {
 			err := fmt.Errorf(
-				msgTypeAssert, storageResult{}, res.Value)
+				msgTypeAssert, StorageResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = CtrlrResults{Err: err}
-			cModuleResults[res.Address] = ModuleResults{Err: err}
+			cCtrlrResults[res.Address] = common.CtrlrResults{Err: err}
+			cModuleResults[res.Address] = common.ModuleResults{Err: err}
 			continue
 		}
 

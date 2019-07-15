@@ -27,11 +27,11 @@
  */
 #define D_LOGFAC	DD_FAC(addons)
 
-#include <daos/common.h>
-#include <daos/container.h>
+#include <daos.h>
 #include <daos/tse.h>
+#include <daos/object.h>
+#include <daos/container.h>
 #include <daos/addons.h>
-#include <daos_api.h>
 #include <daos_addons.h>
 #include <daos_task.h>
 

@@ -16,7 +16,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-DAOS_VERSION = "0.5.0"
+DAOS_VERSION = "0.6.0"
 
 def is_platform_arm():
     """Detect if platform is ARM"""
@@ -65,7 +65,10 @@ def scons():
 
     env = Environment(TOOLS=['extra', 'default'])
 
-    opts_file = os.path.join(Dir('#').abspath, 'daos_m.conf')
+    if os.path.exists("daos_m.conf"):
+        os.rename("daos_m.conf", "daos.conf")
+
+    opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
     commits_file = os.path.join(Dir('#').abspath, 'utils/build.config')

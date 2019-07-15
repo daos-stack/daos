@@ -32,7 +32,7 @@
 #include <daos/container.h>
 
 #include "daos_types.h"
-#include "daos_api.h"
+#include "daos.h"
 #include "daos_addons.h"
 #include "daos_fs.h"
 #include "daos_security.h"
@@ -223,7 +223,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 	int		rc;
 
 	if (oclass == 0)
-		oclass = DAOS_OC_REPL_MAX_RW;
+		oclass = OC_RP_XSF;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -245,10 +245,10 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_HASHED;
+		feat = DAOS_OF_DKEY_UINT64;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	daos_obj_generate_id(oid, feat, oclass);
+	daos_obj_generate_id(oid, feat, oclass, 0);
 
 	return 0;
 }
@@ -459,14 +459,14 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 }
 
 static int
-get_nlinks(daos_handle_t oh, daos_handle_t th, uint32_t *nlinks,
-	   bool check_empty)
+get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
+		bool check_empty)
 {
 	daos_key_desc_t	kds[ENUM_DESC_NR];
 	daos_anchor_t	anchor = {0};
 	uint32_t	key_nr = 0;
 	d_sg_list_t	sgl;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	char		enum_buf[ENUM_DESC_BUF] = {0};
 
 	sgl.sg_nr = 1;
@@ -494,7 +494,7 @@ get_nlinks(daos_handle_t oh, daos_handle_t th, uint32_t *nlinks,
 			break;
 	}
 
-	*nlinks = key_nr;
+	*nr = key_nr;
 	return 0;
 }
 
@@ -505,7 +505,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	struct dfs_entry	entry = {0};
 	bool			exists;
 	daos_size_t		size;
-	uint32_t		nlinks;
 	int			rc;
 
 	memset(stbuf, 0, sizeof(struct stat));
@@ -520,30 +519,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
-	{
-		daos_handle_t	dir_oh;
-
 		size = sizeof(entry);
-		rc = daos_obj_open(dfs->coh, entry.oid, DAOS_OO_RO,
-				   &dir_oh, NULL);
-		if (rc)
-			return -daos_der2errno(rc);
-
-		/*
-		 * TODO - This makes stat very slow now. Need to figure out a
-		 * different way to get/maintain nlinks.
-		 */
-		rc = get_nlinks(dir_oh, th, &nlinks, false);
-		if (rc) {
-			daos_obj_close(dir_oh, NULL);
-			return rc;
-		}
-
-		rc = daos_obj_close(dir_oh, NULL);
-		if (rc)
-			return -daos_der2errno(rc);
 		break;
-	}
 	case S_IFREG:
 	{
 		daos_handle_t	file_oh;
@@ -572,8 +549,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		if (rc)
 			return -daos_der2errno(rc);
 
-		nlinks = 1;
-
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
@@ -584,14 +559,13 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	case S_IFLNK:
 		size = strlen(entry.value);
 		D_FREE(entry.value);
-		nlinks = 1;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
 		return -EINVAL;
 	}
 
-	stbuf->st_nlink = (nlink_t)nlinks;
+	stbuf->st_nlink = 1;
 	stbuf->st_size = size;
 	stbuf->st_mode = entry.mode;
 	stbuf->st_uid = dfs->uid;
@@ -1006,6 +980,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		D_GOTO(err_prop, rc = -daos_der2errno(rc));
 	}
 
+	daos_prop_free(prop);
+
 	/** if mount RW, create TX */
 	if (amode == O_RDWR) {
 		rc = daos_tx_open(coh, &th, NULL);
@@ -1026,7 +1002,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	/** Open special object on container for SB info */
 	dfs->super_oid.lo = RESERVED_LO;
 	dfs->super_oid.hi = SB_HI;
-	daos_obj_generate_id(&dfs->super_oid, 0, DAOS_OC_REPL_MAX_RW);
+	daos_obj_generate_id(&dfs->super_oid, 0, OC_RP_XSF, 0);
 
 	rc = daos_obj_open(coh, dfs->super_oid, obj_mode, &dfs->super_oh, NULL);
 	if (rc) {
@@ -1094,7 +1070,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		dfs->root.mode = S_IFDIR | 0777;
 		dfs->root.oid.lo = RESERVED_LO;
 		dfs->root.oid.hi = ROOT_HI;
-		daos_obj_generate_id(&dfs->root.oid, 0, DAOS_OC_REPL_MAX_RW);
+		daos_obj_generate_id(&dfs->root.oid, 0, OC_RP_XSF, 0);
 
 		rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh,
 				   NULL);
@@ -1327,7 +1303,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 		D_GOTO(out, rc = -ENOENT);
 
 	if (S_ISDIR(entry.mode)) {
-		uint32_t nlinks = 0;
+		uint32_t nr = 0;
 		daos_handle_t oh;
 
 		/** check if dir is empty */
@@ -1337,7 +1313,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 			D_GOTO(out, rc = -daos_der2errno(rc));
 		}
 
-		rc = get_nlinks(oh, th, &nlinks, true);
+		rc = get_num_entries(oh, th, &nr, true);
 		if (rc) {
 			daos_obj_close(oh, NULL);
 			D_GOTO(out, rc);
@@ -1347,10 +1323,10 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 		if (rc)
 			D_GOTO(out, rc = -daos_der2errno(rc));
 
-		if (!force && nlinks != 0)
+		if (!force && nr != 0)
 			D_GOTO(out, rc = -ENOTEMPTY);
 
-		if (force && nlinks != 0) {
+		if (force && nr != 0) {
 			rc = remove_dir_contents(dfs, th, entry);
 			if (rc)
 				D_GOTO(out, rc);
@@ -1402,8 +1378,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	oid_cp(&obj->oid, dfs->root.oid);
 	oid_cp(&obj->parent_oid, dfs->root.parent_oid);
 	obj->mode = dfs->root.mode;
-	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH);
-	obj->name[DFS_MAX_PATH] = '\0';
+	strncpy(obj->name, dfs->root.name, DFS_MAX_PATH + 1);
+
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 	if (rc)
 		D_GOTO(err_obj, rc = -daos_der2errno(rc));
@@ -1531,19 +1507,6 @@ out:
 err_obj:
 	D_FREE(obj);
 	goto out;
-}
-
-int
-dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks)
-{
-	if (dfs == NULL || !dfs->mounted)
-		return -EINVAL;
-	if (obj == NULL || !S_ISDIR(obj->mode))
-		return -ENOTDIR;
-	if (nlinks == NULL)
-		return -EINVAL;
-
-	return get_nlinks(obj->oh, DAOS_TX_NONE, nlinks, false);
 }
 
 int
@@ -1903,9 +1866,9 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	case S_IFREG:
 	{
 		char		buf[1024];
-		daos_iov_t	ghdl;
+		d_iov_t		ghdl;
 
-		daos_iov_set(&ghdl, buf, 1024);
+		d_iov_set(&ghdl, buf, 1024);
 
 		rc = daos_array_local2global(obj->oh, &ghdl);
 		if (rc)
@@ -1925,7 +1888,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		D_GOTO(err, rc = -EINVAL);
 	}
 
-	strncpy(new_obj->name, obj->name, DFS_MAX_PATH);
+	strncpy(new_obj->name, obj->name, DFS_MAX_PATH + 1);
 	new_obj->mode = obj->mode;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
 	oid_cp(&new_obj->oid, obj->oid);
@@ -2479,7 +2442,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	if (exists) {
 		if (S_ISDIR(new_entry.mode)) {
-			uint32_t nlinks = 0;
+			uint32_t nr = 0;
 			daos_handle_t oh;
 
 			/** if old entry not a dir, return error */
@@ -2496,7 +2459,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				D_GOTO(out, rc = -daos_der2errno(rc));
 			}
 
-			rc = get_nlinks(oh, th, &nlinks, true);
+			rc = get_num_entries(oh, th, &nr, true);
 			if (rc) {
 				D_ERROR("failed to check dir %s (%d)\n",
 					new_name, rc);
@@ -2510,7 +2473,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				D_GOTO(out, rc = -daos_der2errno(rc));
 			}
 
-			if (nlinks != 0) {
+			if (nr != 0) {
 				D_ERROR("target dir is not empty\n");
 				D_GOTO(out, rc = -ENOTEMPTY);
 			}

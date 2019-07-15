@@ -36,7 +36,7 @@
 
 #define KEY_NR		100
 #define OBJ_NR		10
-#define OBJ_CLS		DAOS_OC_R3S_RW
+#define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
 #define REBUILD_POOL_SIZE	(4ULL << 30)
@@ -1024,11 +1024,18 @@ static void
 rebuild_tgt_start_fail(void **state)
 {
 	test_arg_t	*arg = *state;
+	test_arg_t	*new_arg = NULL;
 	daos_obj_id_t	oids[OBJ_NR];
 	d_rank_t	exclude_rank = 0;
+	int		rc;
 	int		i;
 
 	if (!test_runable(arg, 6))
+		return;
+
+	/* create/connect another pool */
+	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
+	if (rc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1036,20 +1043,20 @@ rebuild_tgt_start_fail(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(arg, oids, OBJ_NR);
+	rebuild_io(new_arg, oids, OBJ_NR);
 
 	/* failed to start rebuild on rank 0 */
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, exclude_rank, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(new_arg->group, exclude_rank,
+				     DSS_KEY_FAIL_LOC,
 				  DAOS_REBUILD_TGT_START_FAIL | DAOS_FAIL_ONCE,
 				  0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
-	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
 
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
-
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
-	rebuild_add_back_tgts(arg, exclude_rank, NULL, 1);
+	/* Rebuild rank 1 */
+	rebuild_single_pool_rank(new_arg, ranks_to_kill[0]);
+	rebuild_io_validate(new_arg, oids, OBJ_NR, true);
+	rebuild_pool_destroy(new_arg);
 }
 
 static void

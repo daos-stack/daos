@@ -226,6 +226,8 @@ class IorCommand(object):
             raise IorFailed("IOR Run process Failed: {}".format(error))
 
 
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
 def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                  pool_uuid, svc_list, object_class, basepath, client_processes,
                  cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
@@ -265,7 +267,9 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
         basepath, client_processes, client_file, display_output)
 
 
-def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
+# we probably need to introduce an IOR "object"
+# pylint: disable=too-many-arguments
+def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, numprocs, hostfile,
                   ior_flags, iteration, transfer_size, block_size,
                   display_output=True):
     """Run IOR over mpich.
@@ -275,7 +279,7 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
         mpichinstall (str): location of installed mpich
         pool_uuid (str): DAOS pool uuid
         svcl (str): DAOS pool svcl
-        np (int): number of client processes
+        numprocs (int): number of client processes
         hostfile (str): file holding client hostname and slots
         ior_flags (str): all ior specific flags
         iteration (int): number of iterations for ior run
@@ -294,4 +298,4 @@ def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
     ior_cmd.test_file.value = "daos:testFile"
 
     ior_cmd.run(
-        basepath, np, hostfile, display_output, mpichinstall)
+        basepath, numprocs, hostfile, display_output, mpichinstall)

@@ -33,9 +33,9 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-#include <daos/common.h>
+#include <daos/object.h>
+#include "daos.h"
 #include "daos_fs.h"
-#include "daos_api.h"
 
 struct dfuse_data {
 	int		show_help;
@@ -395,7 +395,7 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 
 	mode = S_IFREG | mode;
 	/** TODO - set the oclass and array chunk size using the UNS */
-	rc = dfs_open(dfs, parent, name, mode, fi->flags, DAOS_OC_LARGE_RW, 0,
+	rc = dfs_open(dfs, parent, name, mode, fi->flags, OC_SX, 0,
 		      NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc);
@@ -442,7 +442,7 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 	}
 
 	/** TODO - set the oclass and array chunk size using the UNS */
-	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, DAOS_OC_LARGE_RW,
+	rc = dfs_open(dfs, parent, name, S_IFREG, fi->flags, OC_SX,
 		      0, NULL, &obj);
 	if (rc)
 		D_GOTO(out, rc);
@@ -1159,6 +1159,7 @@ int main(int argc, char *argv[])
 	/** Connect to DAOS pool */
 	rc = daos_pool_connect(pool_uuid, dfuse_fs.group, svcl, DAOS_PC_RW,
 			       &poh, &pool_info, NULL);
+	d_rank_list_free(svcl);
 	if (rc < 0) {
 		fprintf(stderr, "Failed to connect to pool (%d)\n", rc);
 		D_GOTO(out_daos, rc = 1);

@@ -21,15 +21,16 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
 	"os"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/pkg/errors"
 )
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
@@ -48,6 +49,7 @@ type cliOptions struct {
 	Rank        *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	Storage     StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
+	Insecure    bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
 }
 
 // StorCmd is the struct representing the top-level storage subcommand.
@@ -103,7 +105,7 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 // PrepNvmeCmd is the struct representing the command to prep NVMe SSDs
 // for use with the SPDK as an unprivileged user.
 type PrepNvmeCmd struct {
-	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
+	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	Reset        bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`

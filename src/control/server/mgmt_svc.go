@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"net"
@@ -50,7 +50,7 @@ func CheckReplica(
 	isReplica, bootstrap, err := checkMgmtSvcReplica(
 		lis.Addr().(*net.TCPAddr), accessPoints)
 	if err != nil {
-		srv.Process.Kill()
+		_ = srv.Process.Kill()
 		return
 	}
 	if isReplica {
@@ -195,22 +195,46 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 
 // CreatePool implements the method defined for the Management Service.
 func (svc *mgmtSvc) CreatePool(
-	ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
+	ctx context.Context,
+	req *pb.CreatePoolReq,
+) (*pb.CreatePoolResp, error) {
 
-	log.Debugf("%T.CreatePool dispatch, req:%+v\n", *svc, *req)
-	// TODO: implement lock and drpc IDs & handler in iosrv
-	// svc.mutex.Lock()
-	// dresp, err := makeDrpcCall(c.drpc, mgmtModuleID, poolCreate, req)
-	// svc.mutex.Unlock()
-	// if err != nil {
-	//	return nil, err
-	//}
+	log.Debugf("MgmtSvc.CreatePool dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, createPool, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
 
 	resp := &pb.CreatePoolResp{}
-	// TODO
-	// if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-	// 	return nil, errors.Wrap(err, "unmarshal CreatePool response")
-	// }
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal CreatePool response")
+	}
 
-	return resp, errors.New("CreatePool dRPC not implemented")
+	return resp, nil
+}
+
+// DestroyPool implements the method defined for the Management Service.
+func (svc *mgmtSvc) DestroyPool(
+	ctx context.Context,
+	req *pb.DestroyPoolReq,
+) (*pb.DestroyPoolResp, error) {
+
+	log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, destroyPool, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.DestroyPoolResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
+	}
+
+	return resp, nil
 }

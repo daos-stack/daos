@@ -235,18 +235,6 @@ int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
 
 /**
- * Query number of link in dir object.
- *
- * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	obj	Opened directory object.
- * \param[out]	nlinks	Number of links returned.
- *
- * \return		0 on Success. Negative errno on Failure.
- */
-int
-dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks);
-
-/**
  * directory readdir.
  *
  * \param[in]	dfs	Pointer to the mounted file system.

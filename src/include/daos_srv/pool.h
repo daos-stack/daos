@@ -178,4 +178,16 @@ int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
+
+enum map_ranks_class {
+	MAP_RANKS_UP,
+	MAP_RANKS_DOWN
+};
+
+int
+map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
+	       d_rank_list_t *ranks);
+
+void
+map_ranks_fini(d_rank_list_t *ranks);
 #endif /* __DAOS_SRV_POOL_H__ */

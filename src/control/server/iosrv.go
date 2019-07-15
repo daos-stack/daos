@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -34,18 +34,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/golang/protobuf/proto"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 func formatIosrvs(config *configuration, reformat bool) error {
@@ -240,7 +241,7 @@ func (srv *iosrv) start() (err error) {
 	}
 	defer func() {
 		if err != nil {
-			srv.stopCmd()
+			_ = srv.stopCmd()
 		}
 	}()
 
@@ -320,7 +321,7 @@ func (srv *iosrv) startCmd() error {
 
 func (srv *iosrv) stopCmd() error {
 	// Ignore potential errors, as the I/O server may have already died.
-	srv.cmd.Process.Kill()
+	_ = srv.cmd.Process.Kill()
 
 	if err := srv.cmd.Wait(); err != nil {
 		return errors.WithStack(err)
@@ -337,13 +338,15 @@ func (srv *iosrv) setRank(ready *srvpb.NotifyReadyReq) error {
 	}
 
 	if !srv.super.ValidRank || !srv.super.MS {
-		resp, err := mgmtJoin(srv.config.AccessPoints[0], &mgmtpb.JoinReq{
-			Uuid:  srv.super.UUID,
-			Rank:  uint32(r),
-			Uri:   ready.Uri,
-			Nctxs: ready.Nctxs,
-			Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
-		})
+		resp, err := mgmtJoin(srv.config.AccessPoints[0],
+			srv.config.TransportConfig,
+			&mgmtpb.JoinReq{
+				Uuid:  srv.super.UUID,
+				Rank:  uint32(r),
+				Uri:   ready.Uri,
+				Nctxs: ready.Nctxs,
+				Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
+			})
 		if err != nil {
 			return err
 		} else if resp.State == mgmtpb.JoinResp_OUT {
@@ -381,7 +384,7 @@ func (srv *iosrv) callCreateMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
@@ -398,7 +401,7 @@ func (srv *iosrv) callStartMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
@@ -415,7 +418,7 @@ func (srv *iosrv) callSetRank(rank rank) error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}
@@ -432,12 +435,18 @@ func (srv *iosrv) writeSuper() error {
 
 // mgmtJoin sends the Join request to MS, retrying indefinitely until MS
 // responses.
-func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	log.Debugf("join(%s, %+v)", ap, *req)
+	var opts []grpc.DialOption
+	authDialOption, err := security.DialOptionForTransportConfig(tc)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to determine dial option from TransportConfig")
+	}
 
-	conn, err := grpc.Dial(ap, grpc.WithInsecure(), grpc.WithBlock(),
-		grpc.WithBackoffMaxDelay(5*time.Second),
-		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
+	// Setup Dial Options that will always be included.
+	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(5*time.Second),
+		grpc.WithDefaultCallOptions(grpc.FailFast(false)), authDialOption)
+	conn, err := grpc.Dial(ap, opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", ap)
 	}

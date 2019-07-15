@@ -56,11 +56,11 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &key->kd_val_types);
+	rc = crt_proc_uint32_t(proc, &key->kd_val_type);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &key->kd_csum_type);
+	rc = crt_proc_uint16_t(proc, &key->kd_csum_type);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -557,7 +557,6 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 	void *reply = crt_reply_get(rpc);
 
 	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE: {
 		struct obj_rw_out	*orw = reply;
 
@@ -565,9 +564,6 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 		orw->orw_dkey_conflict = dce->dce_dkey;
 		break;
 	}
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {

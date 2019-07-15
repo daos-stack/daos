@@ -24,14 +24,16 @@
 package client
 
 import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 // Control interface provides connection handling capabilities.
 type Control interface {
-	connect(string) error
+	connect(string, *security.TransportConfig) error
 	disconnect() error
 	connected() (connectivity.State, bool)
 	getAddress() string
@@ -52,9 +54,14 @@ type control struct {
 //
 // It takes address and port in a string.
 //	addr: address and port number separated by a ":"
-func (c *control) connect(addr string) (err error) {
+func (c *control) connect(addr string, cfg *security.TransportConfig) (err error) {
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
+
+	creds, err := security.DialOptionForTransportConfig(cfg)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, creds)
 
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {

@@ -12,7 +12,7 @@ Storage-class memory (SCM) can be emulated with DRAM by creating tmpfs mountpoin
 
 ## Software Dependencies
 
-DAOS requires a C99-capable compiler, a golang compiler, and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
+DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool. Moreover, the DAOS stack leverages the following open source projects:
 - [CaRT](https://github.com/daos-stack/cart) that relies on both [Mercury](https://mercury-hpc.github.io) and [Libfabric](https://ofiwg.github.io/libfabric/) for lightweight network transport and [PMIx](https://github.com/pmix/master) for process set management. See the CaRT repository for more information on how to build the CaRT library.
 - [PMDK](https://github.com/pmem/pmdk.git) for persistent memory programming.
 - [SPDK](http://spdk.io) for userspace NVMe device access and management.
@@ -123,7 +123,7 @@ If you are a developer of DAOS, we recommend following the instructions in [DAOS
 Otherwise, the missing dependencies can be built automatically by invoking scons with the following parameters:
 
 ```
-    scons --config=force --build-deps=yes USE_INSTALLED=all install
+    scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under \${daospath}/install. The installation path can be modified by adding the PREFIX= option to the above command line (e.g., PREFIX=/usr/local).
@@ -203,11 +203,20 @@ On each storage node, the DAOS server will use a storage path (specified either 
 To start the DAOS server, run:
 
 ```
-    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server
+    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server -i
 ```
 
 By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams in the configuration file (cpus) or with the -c #cores\_to\_use cli option.
 Hostfile used here is the same as the ones used by Open MPI. See (https://www.open-mpi.org/faq/?category=running#mpirun-hostfile) for additional details.
+
+### Starting DAOS agent
+
+The DAOS agent is a process run locally to the machine running DAOS client library applications. The purpose of the agent is to allow DAOS applications to obtain security credentials for the purposes of connecting to various DAOS pools. To ensure that the agent can start properly follow the directions in the [Runtime Directory setup](#-Runtime-Directory-Setup) section.
+
+To start the DAOS agent, run:
+```
+	daos_agent -i &
+```
 
 ### DAOS Pool Management
 
@@ -229,7 +238,7 @@ To destroy a pool:
 
 ### Testing DAOS
 
-To build applications or I/O middleware against the DAOS library, include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests.
+To build applications or I/O middleware against the DAOS library, include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests. All DAOS library applications including daos_test must have daos_agent started prior to running. To configure and start daos agent see the [Starting DAOS agent](#-Starting-DAOS-agent) section
 
 To run the applications:
 

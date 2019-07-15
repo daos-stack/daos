@@ -33,7 +33,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_obj_hdl		*oh = NULL;
 	int				rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_FUSE_REPLY_ERR(req, ENOENT);
 		return;
@@ -45,21 +45,22 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(err, rc = ENOMEM);
 
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dffs_dfs, ie->ie_obj, fi->flags,
+	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
 		     &oh->doh_obj);
 	if (rc)
 		D_GOTO(err, rc = -rc);
 
-	oh->doh_dfs = ie->ie_dfs->dffs_dfs;
+	oh->doh_dfs = ie->ie_dfs->dfs_ns;
+
 	fi->direct_io = 1;
 	fi->fh = (uint64_t)oh;
 
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(req, fi);
 
 	return;
 err:
-	d_hash_rec_decref(&fs_handle->dfpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	D_FREE(oh);
 	DFUSE_FUSE_REPLY_ERR(req, rc);
 }
@@ -67,12 +68,24 @@ err:
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int				rc;
+	struct dfuse_obj_hdl	*oh;
+	int			rc;
 
-	/** duplicate the file handle for the fuse handle */
+	if (fi == NULL || fi->fh == 0) {
+		fuse_reply_err(req, 0);
+		return;
+	}
+
+	oh = (struct dfuse_obj_hdl *)((uint64_t)(fi->fh));
+
+	/** Files should not have readdir buffers */
+	D_ASSERT(oh->doh_buf == NULL);
+
 	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
+	if (rc == 0) {
 		D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, -rc);
+		fi->fh = 0;
+	}
+
+	fuse_reply_err(req, -rc);
 }

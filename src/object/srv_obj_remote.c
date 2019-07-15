@@ -42,10 +42,10 @@
 #include "obj_internal.h"
 
 struct obj_remote_cb_arg {
-	dtx_exec_shard_comp_cb_t	comp_cb;
-	void				*cb_arg;
+	dtx_sub_comp_cb_t		comp_cb;
 	crt_rpc_t			*parent_req;
-	struct dtx_exec_shard_arg	*shard_arg;
+	struct dtx_leader_handle	*dlh;
+	int				idx;
 };
 
 static void
@@ -53,10 +53,11 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*req = cb_info->cci_rpc;
 	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
-	struct dtx_exec_shard_arg	*shard_arg = arg->shard_arg;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_rw_out		*orwo = crt_reply_get(req);
 	struct obj_rw_in		*orw_parent = crt_req_get(parent_req);
+	struct dtx_leader_handle	*dlh = arg->dlh;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
@@ -68,9 +69,9 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 	} else {
 		rc1 = orwo->orw_ret;
 		if (rc1 == -DER_INPROGRESS) {
-			daos_dti_copy(&shard_arg->exec_dce.dce_xid,
+			daos_dti_copy(&sub->dss_dce.dce_xid,
 				      &orwo->orw_dti_conflict);
-			shard_arg->exec_dce.dce_dkey = orwo->orw_dkey_conflict;
+			sub->dss_dce.dce_dkey = orwo->orw_dkey_conflict;
 		}
 	}
 
@@ -78,7 +79,7 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 		rc = rc1;
 
 	if (arg->comp_cb)
-		arg->comp_cb(arg->cb_arg, rc);
+		arg->comp_cb(dlh, arg->idx, rc);
 
 	crt_req_decref(parent_req);
 	D_FREE_PTR(arg);
@@ -86,25 +87,24 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 
 /* Execute update on the remote target */
 int
-ds_obj_remote_update(struct dtx_handle *dth, void *data, int idx,
-		     dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg)
+ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
+		     dtx_sub_comp_cb_t comp_cb)
 {
 	struct ds_obj_exec_arg		*obj_exec_arg = data;
-	struct dtx_exec_arg		*arg = dth->dth_exec_arg;
 	struct daos_shard_tgt		*shard_tgt;
-	struct dtx_exec_shard_arg	*shard_arg;
 	crt_endpoint_t			 tgt_ep;
 	crt_rpc_t			*parent_req = obj_exec_arg->rpc;
 	crt_rpc_t			*req;
+	struct dtx_sub_status		*sub;
+	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct obj_remote_cb_arg	*remote_arg = NULL;
 	struct obj_rw_in		*orw;
 	struct obj_rw_in		*orw_parent;
 	int				 rc = 0;
 
-	D_ASSERT(arg != NULL);
-	D_ASSERT(idx < arg->shard_cnt);
-	shard_arg = &arg->exec_shards_args[idx];
-	shard_tgt = shard_arg->exec_shard_tgt;
+	D_ASSERT(idx < dlh->dlh_sub_cnt);
+	sub = &dlh->dlh_subs[idx];
+	shard_tgt = &sub->dss_tgt;
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
 		/* to trigger retry on all other shards */
 		if (shard_tgt->st_shard != daos_fail_value_get()) {
@@ -122,11 +122,12 @@ ds_obj_remote_update(struct dtx_handle *dth, void *data, int idx,
 	tgt_ep.ep_rank = shard_tgt->st_rank;
 	tgt_ep.ep_tag = shard_tgt->st_tgt_idx;
 
+	remote_arg->dlh = dlh;
 	remote_arg->comp_cb = comp_cb;
-	remote_arg->cb_arg = cb_arg;
-	remote_arg->shard_arg = shard_arg;
+	remote_arg->idx = idx;
 	crt_req_addref(parent_req);
 	remote_arg->parent_req = parent_req;
+
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 			    DAOS_OBJ_RPC_TGT_UPDATE, &req);
 	if (rc != 0) {
@@ -137,14 +138,12 @@ ds_obj_remote_update(struct dtx_handle *dth, void *data, int idx,
 	orw_parent = crt_req_get(parent_req);
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
-	orw->orw_oid.id_shard = shard_arg->exec_shard_tgt->st_shard;
+	orw->orw_oid.id_shard = shard_tgt->st_shard;
 	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
 	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
 	orw->orw_shard_tgts.ca_count	= 0;
 	orw->orw_shard_tgts.ca_arrays	= NULL;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
-	if (!srv_enable_dtx)
-		orw->orw_flags |= ORF_DTX_DISABLED;
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
 
@@ -159,9 +158,9 @@ ds_obj_remote_update(struct dtx_handle *dth, void *data, int idx,
 
 out:
 	if (rc) {
-		shard_arg->exec_shard_rc = rc;
-		if (comp_cb != NULL)
-			comp_cb(cb_arg, rc);
+		sub->dss_result = rc;
+		if (comp_cb)
+			comp_cb(dlh, idx, rc);
 		if (remote_arg) {
 			if (remote_arg->parent_req)
 				crt_req_decref(remote_arg->parent_req);
@@ -177,9 +176,10 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t			*req = cb_info->cci_rpc;
 	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
 	crt_rpc_t			*parent_req = arg->parent_req;
-	struct dtx_exec_shard_arg	*shard_arg = arg->shard_arg;
 	struct obj_punch_out		*opo = crt_reply_get(req);
 	struct obj_punch_in		*opi_parent = crt_req_get(req);
+	struct dtx_leader_handle	*dlh = arg->dlh;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
@@ -191,9 +191,9 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 	} else {
 		rc1 = opo->opo_ret;
 		if (rc1 == -DER_INPROGRESS) {
-			daos_dti_copy(&shard_arg->exec_dce.dce_xid,
+			daos_dti_copy(&sub->dss_dce.dce_xid,
 				      &opo->opo_dti_conflict);
-			shard_arg->exec_dce.dce_dkey = opo->opo_dkey_conflict;
+			sub->dss_dce.dce_dkey = opo->opo_dkey_conflict;
 		}
 	}
 
@@ -201,7 +201,7 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 		rc = rc1;
 
 	if (arg->comp_cb)
-		arg->comp_cb(arg->cb_arg, rc);
+		arg->comp_cb(dlh, arg->idx, rc);
 
 	crt_req_decref(parent_req);
 	D_FREE_PTR(arg);
@@ -209,14 +209,14 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 
 /* Execute punch on the remote target */
 int
-ds_obj_remote_punch(struct dtx_handle *dth, void *data, int idx,
-		    dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg)
+ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
+		    dtx_sub_comp_cb_t comp_cb)
 {
 	struct ds_obj_exec_arg		*obj_exec_arg = data;
-	struct dtx_exec_arg		*arg = dth->dth_exec_arg;
 	struct daos_shard_tgt		*shard_tgt;
-	struct dtx_exec_shard_arg	*shard_arg;
 	struct obj_remote_cb_arg	*remote_arg;
+	struct dtx_handle		*dth = &dlh->dlh_handle;
+	struct dtx_sub_status		*sub;
 	crt_endpoint_t			 tgt_ep;
 	crt_rpc_t			*parent_req = obj_exec_arg->rpc;
 	crt_rpc_t			*req;
@@ -225,10 +225,9 @@ ds_obj_remote_punch(struct dtx_handle *dth, void *data, int idx,
 	crt_opcode_t			opc;
 	int				rc = 0;
 
-	D_ASSERT(arg != NULL);
-	D_ASSERT(idx < arg->shard_cnt);
-	shard_arg = &arg->exec_shards_args[idx];
-	shard_tgt = shard_arg->exec_shard_tgt;
+	D_ASSERT(idx < dlh->dlh_sub_cnt);
+	sub = &dlh->dlh_subs[idx];
+	shard_tgt = &sub->dss_tgt;
 	D_ALLOC_PTR(remote_arg);
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -237,11 +236,12 @@ ds_obj_remote_punch(struct dtx_handle *dth, void *data, int idx,
 	tgt_ep.ep_rank = shard_tgt->st_rank;
 	tgt_ep.ep_tag = shard_tgt->st_tgt_idx;
 
+	remote_arg->dlh = dlh;
 	remote_arg->comp_cb = comp_cb;
-	remote_arg->cb_arg = cb_arg;
-	remote_arg->shard_arg = shard_arg;
+	remote_arg->idx = idx;
 	crt_req_addref(parent_req);
 	remote_arg->parent_req = parent_req;
+
 	if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_PUNCH)
 		opc = DAOS_OBJ_RPC_TGT_PUNCH;
 	else if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS)
@@ -258,14 +258,12 @@ ds_obj_remote_punch(struct dtx_handle *dth, void *data, int idx,
 	opi_parent = crt_req_get(parent_req);
 	opi = crt_req_get(req);
 	*opi = *opi_parent;
-	opi->opi_oid.id_shard = shard_arg->exec_shard_tgt->st_shard;
+	opi->opi_oid.id_shard = shard_tgt->st_shard;
 	uuid_copy(opi->opi_co_hdl, opi_parent->opi_co_hdl);
 	uuid_copy(opi->opi_co_uuid, opi_parent->opi_co_uuid);
 	opi->opi_shard_tgts.ca_count = 0;
 	opi->opi_shard_tgts.ca_arrays = NULL;
 	opi->opi_flags |= obj_exec_arg->flags;
-	if (!srv_enable_dtx)
-		opi->opi_flags |= ORF_DTX_DISABLED;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
 
@@ -281,10 +279,9 @@ ds_obj_remote_punch(struct dtx_handle *dth, void *data, int idx,
 
 out:
 	if (rc) {
-		shard_arg->exec_shard_rc = rc;
-		rc = dss_abterr2der(rc);
+		sub->dss_result = rc;
 		if (comp_cb != NULL)
-			comp_cb(cb_arg, rc);
+			comp_cb(dlh, idx, rc);
 		if (remote_arg) {
 			if (remote_arg->parent_req)
 				crt_req_decref(remote_arg->parent_req);

@@ -297,7 +297,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					  DAOS_FAIL_ONCE);
 		}
 	}
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE) && !srv_io_dispatch) {
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE) &&
+	    srv_io_mode == DIM_CLIENT_DISPATCH) {
 		/* to trigger retry on all other shards */
 		if (args->auxi.shard != daos_fail_value_get()) {
 			D_INFO("complete shard %d update as -DER_TIMEDOUT.\n",
@@ -324,7 +325,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" %d %s rank:%d tag:%d eph "
 		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
 		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag,
-		args->epoch);
+		args->auxi.epoch);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
@@ -353,7 +354,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 
-	orw->orw_epoch = args->epoch;
+	orw->orw_epoch = args->auxi.epoch;
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
@@ -363,7 +364,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
 		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
-		tgt_ep.ep_tag, args->epoch, DP_DTI(&orw->orw_dti));
+		tgt_ep.ep_tag, args->auxi.epoch, DP_DTI(&orw->orw_dti));
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;
@@ -474,7 +475,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
 	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d epoch "DF_U64".\n",
-		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag, args->pa_epoch);
+		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag, args->pa_auxi.epoch);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
@@ -492,7 +493,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_ASSERT(opi != NULL);
 
 	opi->opi_map_ver	 = args->pa_auxi.map_ver;
-	opi->opi_epoch		 = args->pa_epoch;
+	opi->opi_epoch		 = args->pa_auxi.epoch;
 	opi->opi_dkey_hash	 = args->pa_dkey_hash;
 	opi->opi_oid		 = oid;
 	opi->opi_dkeys.ca_count  = (dkey == NULL) ? 0 : 1;
@@ -702,7 +703,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
-	oei->oei_epoch		= args->la_epoch;
+	oei->oei_epoch		= args->la_auxi.epoch;
 	oei->oei_nr		= *obj_args->nr;
 	oei->oei_rec_type	= obj_args->type;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);

@@ -24,8 +24,9 @@
 package client
 
 import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"golang.org/x/net/context"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // CreatePool will create a DAOS pool using provided parameters and return uuid
@@ -34,6 +35,19 @@ func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
 	mc := c.controllers[0] // connect to first AP only for now
 
 	resp, err := mc.getSvcClient().CreatePool(context.Background(), req)
+
+	result := ClientResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
+}
+
+// DestroyPool will Destroy a DAOS pool identified by its UUID.
+func (c *connList) DestroyPool(req *pb.DestroyPoolReq) ResultMap {
+	results := make(ResultMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	resp, err := mc.getSvcClient().DestroyPool(context.Background(), req)
 
 	result := ClientResult{mc.getAddress(), resp, err}
 	results[result.Address] = result

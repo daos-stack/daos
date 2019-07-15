@@ -29,6 +29,7 @@
 
 #include <daos/common.h>
 #include <daos/tse.h>
+#include <daos/object.h>
 #include <daos/addons.h>
 #include <daos_api.h>
 #include <daos_addons.h>

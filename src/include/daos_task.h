@@ -32,8 +32,10 @@ extern "C" {
 #endif
 
 #include <daos_types.h>
+#include <daos_obj.h>
 #include <daos_addons.h>
 #include <daos_errno.h>
+#include <daos_prop.h>
 #include <daos/tse.h>
 
 /** DAOS operation codes for task creation */
@@ -360,18 +362,18 @@ typedef struct {
 typedef struct {
 	daos_handle_t		coh;
 	daos_oclass_id_t	cid;
-	daos_oclass_attr_t	*cattr;
+	struct daos_oclass_attr	*cattr;
 } daos_obj_register_class_t;
 
 typedef struct {
 	daos_handle_t		coh;
 	daos_oclass_id_t	cid;
-	daos_oclass_attr_t	*cattr;
+	struct daos_oclass_attr	*cattr;
 } daos_obj_query_class_t;
 
 typedef struct {
 	daos_handle_t		coh;
-	daos_oclass_list_t	*clist;
+	struct daos_oclass_list	*clist;
 	daos_anchor_t		*anchor;
 } daos_obj_list_class_t;
 
@@ -403,7 +405,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
-	daos_obj_attr_t		*oa;
+	struct daos_obj_attr	*oa;
 	d_rank_list_t		*ranks;
 } daos_obj_query_t;
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,6 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
-
 static inline int
 map_ranks_include(enum map_ranks_class class, int status)
 {
@@ -53,7 +48,7 @@ map_ranks_include(enum map_ranks_class class, int status)
 }
 
 /* Build a rank list of targets with certain status. */
-static int
+int
 map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	       d_rank_list_t *ranks)
 {
@@ -100,7 +95,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	return 0;
 }
 
-static void
+void
 map_ranks_fini(d_rank_list_t *ranks)
 {
 	if (ranks->rl_ranks != NULL) {
@@ -267,14 +262,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			int opc)
 {
 	uint32_t	version;
-	int		nchanges = 0;
 	int		i;
 	int		rc;
 
 	D_ASSERT(tgts != NULL);
 
-	version = pool_map_get_version(map) + 1;
-
+	version = pool_map_get_version(map);
 	for (i = 0; i < tgts->pti_number; i++) {
 		struct pool_target	*target = NULL;
 		struct pool_domain	*dom = NULL;
@@ -306,8 +299,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
-			target->ta_comp.co_fseq = version++;
-			nchanges++;
+			target->ta_comp.co_fseq = ++version;
 
 			D_PRINT("Target (rank %u idx %u) is down.\n",
 				target->ta_comp.co_rank,
@@ -337,17 +329,17 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is added.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			target->ta_comp.co_status = PO_COMP_ST_UP;
+			target->ta_comp.co_status = PO_COMP_ST_UPIN;
 			target->ta_comp.co_fseq = 1;
-			nchanges++;
-			dom->do_comp.co_status = PO_COMP_ST_UP;
+			version++;
+			dom->do_comp.co_status = PO_COMP_ST_UPIN;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			nchanges++;
+			version++;
 			D_PRINT("Target (rank %u idx %u) is excluded.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
@@ -361,9 +353,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	}
 
 	/* Set the version only if actual changes have been made. */
-	if (nchanges > 0) {
-		D_DEBUG(DF_DSMS, "generating map %p version %u: nchanges=%d\n",
-			map, version, nchanges);
+	if (version > pool_map_get_version(map)) {
+		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
+			map, version);
 		rc = pool_map_set_version(map, version);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
@@ -371,3 +363,91 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	return 0;
 }
 
+#define SWAP_RANKS(ranks, i, j)					\
+	do {							\
+		d_rank_t r = ranks->rl_ranks[i];		\
+								\
+		ranks->rl_ranks[i] = ranks->rl_ranks[j];	\
+		ranks->rl_ranks[j] = r;				\
+	} while (0)
+
+/*
+ * Find failed ranks in `replicas` and copy to a new list `failed`
+ * Replace the failed ranks with ranks which are up and running.
+ * `alt` points to the subset of `replicas` containing replacements.
+ */
+int
+ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
+			      d_rank_list_t *failed, d_rank_list_t *alt)
+{
+	struct pool_domain	*nodes = NULL;
+	int			 nnodes;
+	int			 nfailed;
+	int			 nreplaced;
+	int			 idx;
+	int			 i;
+	int			 rc;
+
+	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &nodes);
+	if (nnodes == 0) {
+		D_ERROR("no nodes in pool map\n");
+		return -DER_IO;
+	}
+
+	/**
+	 * Move all ranks in the list of replicas which are marked as DOWN
+	 * in the pool map to the end of the list.
+	 **/
+	for (i = 0, nfailed = 0; i < nnodes; i++) {
+		if (!map_ranks_include(MAP_RANKS_DOWN,
+				       nodes[i].do_comp.co_status))
+			continue;
+		if (!daos_rank_list_find(replicas,
+					 nodes[i].do_comp.co_rank, &idx))
+			continue;
+		if (idx < replicas->rl_nr - (nfailed + 1))
+			SWAP_RANKS(replicas, idx,
+				   replicas->rl_nr - (nfailed + 1));
+		++nfailed;
+	}
+
+	if (nfailed == 0) {
+		memset(failed, 0, sizeof(*failed));
+		memset(alt, 0, sizeof(*alt));
+		return 0;
+	}
+
+	/** Make `alt` point to failed subset towards the end **/
+	alt->rl_nr = nfailed;
+	alt->rl_ranks = replicas->rl_ranks + (replicas->rl_nr - nfailed);
+
+	/** Copy failed ranks to make room for replacements **/
+	memset(failed, 0, sizeof(*failed));
+	rc = daos_rank_list_copy(failed, alt);
+	if (rc != 0)
+		return rc;
+
+	/**
+	 * For replacements, search all ranks which are marked as UP
+	 * in the pool map and not present in the list of replicas.
+	 **/
+	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
+		if (nodes[i].do_comp.co_rank == 0 /* Skip rank 0 */)
+			continue;
+		if (!map_ranks_include(MAP_RANKS_UP,
+				       nodes[i].do_comp.co_status))
+			continue;
+		if (daos_rank_list_find(replicas,
+					nodes[i].do_comp.co_rank, &idx))
+			continue;
+		alt->rl_ranks[nreplaced++] = nodes[i].do_comp.co_rank;
+	}
+
+	if (nreplaced < nfailed) {
+		D_WARN("Not enough ranks available; Failed %d, Replacements %d",
+			nfailed, nreplaced);
+		alt->rl_nr = nreplaced;
+		replicas->rl_nr -= (nfailed - nreplaced);
+	}
+	return 0;
+}

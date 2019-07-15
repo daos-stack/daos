@@ -21,13 +21,13 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -41,14 +41,14 @@ func TestGetFeature(t *testing.T) {
 	fMap[mockFeature.Fname.Name] = mockFeature
 	cs.supportedFeatures = fMap
 
-	feature, err := cs.GetFeature(nil, mockFeature.Fname)
+	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	AssertEqual(t, feature, mockFeature, "")
 
-	feature, err = cs.GetFeature(nil, &pb.FeatureName{Name: "non-existent"})
+	_, err = cs.GetFeature(context.TODO(), &pb.FeatureName{Name: "non-existent"})
 	if err == nil {
 		t.Fatal(err)
 	}

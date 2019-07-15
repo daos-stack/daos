@@ -36,9 +36,9 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
+#include <daos/object.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
-#include <daos_types.h>
 
 #include "obj_rpc.h"
 
@@ -61,8 +61,7 @@
  */
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
-extern bool	srv_io_dispatch;
-extern bool	srv_enable_dtx;
+extern unsigned int	srv_io_mode;
 
 /** client object shard */
 struct dc_obj_shard {
@@ -113,8 +112,9 @@ struct dc_object {
 	/* cob_lock protects layout and shard objects ptrs */
 	pthread_rwlock_t	 cob_lock;
 
-	unsigned int		cob_version;
-	unsigned int		cob_shards_nr;
+	unsigned int		 cob_version;
+	unsigned int		 cob_shards_nr;
+	unsigned int		 cob_grp_size;
 	/** shard object ptrs */
 	struct dc_obj_layout	*cob_shards;
 };
@@ -175,6 +175,7 @@ struct shard_auxi_args {
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
+	uint64_t		 epoch;
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
@@ -188,7 +189,6 @@ struct shard_auxi_args {
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
 	daos_obj_rw_t		*api_args;
-	daos_epoch_t		 epoch;
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
@@ -196,11 +196,10 @@ struct shard_rw_args {
 
 struct shard_punch_args {
 	struct shard_auxi_args	 pa_auxi;
+	daos_obj_punch_t	*pa_api_args;
 	uuid_t			 pa_coh_uuid;
 	uuid_t			 pa_cont_uuid;
-	daos_obj_punch_t	*pa_api_args;
 	uint64_t		 pa_dkey_hash;
-	daos_epoch_t		 pa_epoch;
 	struct dtx_id		 pa_dti;
 	uint32_t		 pa_opc;
 };
@@ -208,7 +207,6 @@ struct shard_punch_args {
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
-	daos_epoch_t		 la_epoch;
 };
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
@@ -221,7 +219,7 @@ int dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int
 ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
-		     daos_oclass_attr_t *oca, uint64_t *tgt_set);
+		     struct daos_oclass_attr *oca, uint64_t *tgt_set);
 
 int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		       void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -258,11 +256,11 @@ struct ds_obj_exec_arg {
 };
 
 int
-ds_obj_remote_update(struct dtx_handle *dth, void *arg, int idx,
-		     dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
+ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
+		     dtx_sub_comp_cb_t comp_cb);
 int
-ds_obj_remote_punch(struct dtx_handle *dth, void *arg, int idx,
-		    dtx_exec_shard_comp_cb_t comp_cb, void *cb_arg);
+ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
+		    dtx_sub_comp_cb_t comp_cb);
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
@@ -270,8 +268,7 @@ void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
-ABT_pool
-ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
+ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t
@@ -284,6 +281,9 @@ obj_dkey2hash(daos_key_t *dkey)
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
 }
+
+int  obj_utils_init(void);
+void obj_utils_fini(void);
 
 /* obj_class.c */
 int obj_ec_codec_init(void);
