@@ -33,17 +33,11 @@ message DaosRank {
 	uint32 rank = 2;	// Server rank
 }
 
-message DaosRequestStatus {
-	enum State {
-		SUCCESS = 0;
-		ERR_UNKNOWN = -1;		// Unknown error
-		ERR_INVALID_RANK = -2;		// Rank requested is invalid
-		ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
-		ERR_PROTO = -4;			// Proto builtin op failed
-		ERR_DAOS = -5;			// DAOS iosrv error, see "der"
-	}
-	State state = 1; // DAOS request state
-	int32 der = 2; // DAOS error code
+enum DaosRequestStatus {
+	SUCCESS = 0;
+	ERR_UNKNOWN = -1;		// Unknown error
+	ERR_INVALID_RANK = -2;		// Rank requested is invalid
+	ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
 }
 
 message DaosResp {

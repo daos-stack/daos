@@ -266,11 +266,11 @@ int
 dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	   bool block)
 {
-	ABT_future			 future;
 	struct ds_cont_child		*cont = NULL;
 	struct dtx_resync_args		 dra = { 0 };
 	int				 rc = 0;
 	int				 rc1 = 0;
+	bool				 resynced = false;
 
 	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0) {
@@ -280,31 +280,25 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		return rc;
 	}
 
-	if (cont->sc_dtx_resyncing) {
-		if (!block)
+	ABT_mutex_lock(cont->sc_mutex);
+	while (cont->sc_dtx_resyncing) {
+		if (!block) {
+			ABT_mutex_unlock(cont->sc_mutex);
 			goto out;
-
-		D_ASSERT(cont->sc_dtx_resync_cbdata == NULL);
-
-		rc = ABT_future_create(1, NULL, &future);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("ABT_future_create failed for DTX resync on"
-				DF_UUID": rc = %d\n", DP_UUID(co_uuid), rc);
-			D_GOTO(out, rc = dss_abterr2der(rc));
 		}
-
-		cont->sc_dtx_resync_cbdata = future;
-		rc = ABT_future_wait(future);
-		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed for DTX "
-			  "resync on "DF_UUID" %d\n", DP_UUID(co_uuid), rc);
-
-		ABT_future_free(&future);
-
-		/* Someone just did the DTX resync, unnecessary to repeat. */
+		D_DEBUG(DB_TRACE, "Waiting for resync of "DF_UUID"\n",
+			DP_UUID(co_uuid));
+		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+		resynced = true;
+	}
+	if (resynced || /* Someone just did the DTX resync*/
+	    cont->sc_destroying) { /* pool is being destroyed */
+		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}
-
 	cont->sc_dtx_resyncing = 1;
+	ABT_mutex_unlock(cont->sc_mutex);
+
 	cont->sc_dtx_resync_time = crt_hlc_get();
 
 	dra.cont = cont;
@@ -331,16 +325,10 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" stop: rc = %d\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid), rc);
 
+	ABT_mutex_lock(cont->sc_mutex);
 	cont->sc_dtx_resyncing = 0;
-
-	if (cont->sc_dtx_resync_cbdata != NULL) {
-		future = cont->sc_dtx_resync_cbdata;
-		rc = ABT_future_set(future, NULL);
-		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
-			  "resync on "DF_UUID" %d\n", DP_UUID(co_uuid), rc);
-
-		cont->sc_dtx_resync_cbdata = NULL;
-	}
+	ABT_cond_broadcast(cont->sc_dtx_resync_cond);
+	ABT_mutex_unlock(cont->sc_mutex);
 
 out:
 	ds_cont_child_put(cont);
