@@ -19,10 +19,7 @@
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
-
-if [ -d /work ]; then
-    export D_LOG_FILE=/work/daos.log
-fi
+log_num=0
 
 # this can be rmeoved once we are no longer using the old CI system
 if ${OLD_CI:-true}; then
@@ -43,6 +40,12 @@ fi
 
 run_test()
 {
+    local in="$*"
+    local a="${in// /-}"
+    local b="${a////-}"
+    export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
+    echo "Running $* with log file: ${D_LOG_FILE}"
+
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
@@ -56,6 +59,8 @@ run_test()
         ((failed = failed + 1))
         failures+=("$*")
     fi
+
+    ((log_num += 1))
 }
 
 if [ -d "/mnt/daos" ]; then
