@@ -134,14 +134,20 @@ This can be done manually via the following commands:
 
 \# to verify there is non-volatile memory type
 
-\# ipmctl show -a -topology | egrep 'Capac|MemoryType'  
-MemoryType=Logical Non-Volatile Device  
-Capacity=502.6 GiB  
-MemoryType=Logical Non-Volatile Device  
-Capacity=502.6 GiB  
-MemoryType=Logical Non-Volatile Device  
-Capacity=502.6 GiB  
-\[…\]  
+\# ipmctl show -a -topology | egrep 'Capac|MemoryType'
+
+MemoryType=Logical Non-Volatile Device
+
+Capacity=502.6 GiB
+
+MemoryType=Logical Non-Volatile Device
+
+Capacity=502.6 GiB
+
+MemoryType=Logical Non-Volatile Device
+
+Capacity=502.6 GiB
+\[…\]
 
 \# ipmctl create -goal PersistentMemoryType=AppDirect
 
@@ -902,12 +908,17 @@ Typically an administrator will perform the following tasks:
 3. Add device identifiers to Server config file
     - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#-server-configuration)
-    - For DCPM SCM, these fields need to be specified:  
-	\# When scm_class is set to dcpm, scm_list is the list of device paths for  
-	\# AppDirect pmem namespaces (currently only one per server supported).  
-	scm_mount: /mnt/pmem1  
-	scm_class: dcpm  
-	scm_list: [/dev/pmem1]
+    - For DCPM SCM, these fields need to be specified:
+
+	\# When scm_class is set to dcpm, scm_list is the list of device paths for
+
+	\# AppDirect pmem namespaces (currently only one per server supported).
+
+scm_mount: /mnt/pmem1
+
+scm_class: dcpm
+
+scm_list: [/dev/pmem1]
 
 4. Start DAOS control plane
     - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -i -o <daos>/utils/config/examples/daos_server_sockets.yml`
