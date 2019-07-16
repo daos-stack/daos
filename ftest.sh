@@ -134,11 +134,6 @@ sed -i.dist -e "s/- boro-A/- ${nodes[1]}/g" \
             -e "s/- boro-G/- ${nodes[7]}/g" \
             -e "s/- boro-H/- ${nodes[8]}/g" "${yaml_files[@]}"
 
-
-# let's output to a dir in the tree
-rm -rf src/tests/ftest/avocado ./*_results.xml
-mkdir -p src/tests/ftest/avocado/job-results
-
 trap 'set +e; cleanup' EXIT
 
 DAOS_BASE=${SL_PREFIX%/install}
@@ -321,10 +316,6 @@ if ! ./launch.py -c -a -r -s ${TEST_TAG_ARR[*]}; then
 else
     rc=0
 fi
-
-# Remove the latest avocado symlink directory to avoid inclusion in the
-# jenkins build artifacts
-unlink $DAOS_BASE/src/tests/ftest/avocado/job-results/latest
 
 # get stacktraces for the core files
 if ls core.*; then
