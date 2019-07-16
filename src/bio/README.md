@@ -36,3 +36,10 @@ On DAOS server start, these tables are loaded from persistent memory and used to
 
 ## DMA Buffer Management
 BIO internally manages a per-xstream DMA safe buffer for SPDK DMA transfer over NVMe SSDs. The buffer is allocated using the SPDK memory allocation API and can dynamically grow on demand. This buffer also acts as an intermediate buffer for RDMA over NVMe SSDs, meaning on DAOS bulk update, client data will be RDMA transferred to this buffer first, then the SPDK blob I/O interface will be called to start local DMA transfer from the buffer directly to NVMe SSD. On DAOS bulk fetch, data present on the NVMe SSD will be DMA transferred to this buffer first, and then RDMA transferred to the client.
+
+## NVMe Threading Model
+
+![/doc/graph/NVME_Threading_Model.png](/doc/graph/NVME_Threading_Model.png "NVMe Threading Model")
+
+## Faulty Device Detection
+Currently in progress
