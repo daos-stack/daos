@@ -108,7 +108,7 @@ class DestroyTests(TestWithServers):
             self.pool.check_files(hostlist_servers),
             "Pool data not detected on servers before destroy")
 
-        # Attempt to evict pool with invald UUID
+        # Attempt to destroy pool with invald UUID
         saved_uuid = self.pool.uuid
         bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
         # set the UUID directly
