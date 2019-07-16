@@ -46,7 +46,7 @@ func (x JoinResp_State) String() string {
 	return proto.EnumName(JoinResp_State_name, int32(x))
 }
 func (JoinResp_State) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_c0227a4333e0532d, []int{1, 0}
+	return fileDescriptor_mgmt_a35d8afd83f7137e, []int{1, 0}
 }
 
 type JoinReq struct {
@@ -69,7 +69,7 @@ func (m *JoinReq) Reset()         { *m = JoinReq{} }
 func (m *JoinReq) String() string { return proto.CompactTextString(m) }
 func (*JoinReq) ProtoMessage()    {}
 func (*JoinReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_c0227a4333e0532d, []int{0}
+	return fileDescriptor_mgmt_a35d8afd83f7137e, []int{0}
 }
 func (m *JoinReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinReq.Unmarshal(m, b)
@@ -125,7 +125,7 @@ func (m *JoinReq) GetAddr() string {
 }
 
 type JoinResp struct {
-	Status *DaosRequestStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Status DaosRequestStatus `protobuf:"varint,1,opt,name=status,proto3,enum=mgmt.DaosRequestStatus" json:"status,omitempty"`
 	// Server rank assigned.
 	Rank                 uint32         `protobuf:"varint,2,opt,name=rank,proto3" json:"rank,omitempty"`
 	State                JoinResp_State `protobuf:"varint,3,opt,name=state,proto3,enum=mgmt.JoinResp_State" json:"state,omitempty"`
@@ -138,7 +138,7 @@ func (m *JoinResp) Reset()         { *m = JoinResp{} }
 func (m *JoinResp) String() string { return proto.CompactTextString(m) }
 func (*JoinResp) ProtoMessage()    {}
 func (*JoinResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_c0227a4333e0532d, []int{1}
+	return fileDescriptor_mgmt_a35d8afd83f7137e, []int{1}
 }
 func (m *JoinResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinResp.Unmarshal(m, b)
@@ -158,11 +158,11 @@ func (m *JoinResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_JoinResp proto.InternalMessageInfo
 
-func (m *JoinResp) GetStatus() *DaosRequestStatus {
+func (m *JoinResp) GetStatus() DaosRequestStatus {
 	if m != nil {
 		return m.Status
 	}
-	return nil
+	return DaosRequestStatus_SUCCESS
 }
 
 func (m *JoinResp) GetRank() uint32 {
@@ -191,7 +191,7 @@ func (m *GetAttachInfoReq) Reset()         { *m = GetAttachInfoReq{} }
 func (m *GetAttachInfoReq) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoReq) ProtoMessage()    {}
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_c0227a4333e0532d, []int{2}
+	return fileDescriptor_mgmt_a35d8afd83f7137e, []int{2}
 }
 func (m *GetAttachInfoReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoReq.Unmarshal(m, b)
@@ -219,7 +219,7 @@ func (m *GetAttachInfoReq) GetSys() string {
 }
 
 type GetAttachInfoResp struct {
-	Status *DaosRequestStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Status DaosRequestStatus `protobuf:"varint,1,opt,name=status,proto3,enum=mgmt.DaosRequestStatus" json:"status,omitempty"`
 	// CaRT PSRs of the system group.
 	Psrs                 []*GetAttachInfoResp_Psr `protobuf:"bytes,2,rep,name=psrs,proto3" json:"psrs,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
@@ -231,7 +231,7 @@ func (m *GetAttachInfoResp) Reset()         { *m = GetAttachInfoResp{} }
 func (m *GetAttachInfoResp) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp) ProtoMessage()    {}
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_c0227a4333e0532d, []int{3}
+	return fileDescriptor_mgmt_a35d8afd83f7137e, []int{3}
 }
 func (m *GetAttachInfoResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp.Unmarshal(m, b)
@@ -251,11 +251,11 @@ func (m *GetAttachInfoResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetAttachInfoResp proto.InternalMessageInfo
 
-func (m *GetAttachInfoResp) GetStatus() *DaosRequestStatus {
+func (m *GetAttachInfoResp) GetStatus() DaosRequestStatus {
 	if m != nil {
 		return m.Status
 	}
-	return nil
+	return DaosRequestStatus_SUCCESS
 }
 
 func (m *GetAttachInfoResp) GetPsrs() []*GetAttachInfoResp_Psr {
@@ -278,7 +278,7 @@ func (m *GetAttachInfoResp_Psr) Reset()         { *m = GetAttachInfoResp_Psr{} }
 func (m *GetAttachInfoResp_Psr) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp_Psr) ProtoMessage()    {}
 func (*GetAttachInfoResp_Psr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_c0227a4333e0532d, []int{3, 0}
+	return fileDescriptor_mgmt_a35d8afd83f7137e, []int{3, 0}
 }
 func (m *GetAttachInfoResp_Psr) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp_Psr.Unmarshal(m, b)
@@ -500,9 +500,9 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 	Metadata: "mgmt.proto",
 }
 
-func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_c0227a4333e0532d) }
+func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_a35d8afd83f7137e) }
 
-var fileDescriptor_mgmt_c0227a4333e0532d = []byte{
+var fileDescriptor_mgmt_a35d8afd83f7137e = []byte{
 	// 392 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x52, 0xdd, 0x4e, 0xe2, 0x40,
 	0x18, 0x65, 0xfa, 0x03, 0xcb, 0x47, 0x20, 0xdd, 0x59, 0x76, 0x69, 0xba, 0x37, 0xa4, 0x31, 0x91,
@@ -514,7 +514,7 @@ var fileDescriptor_mgmt_c0227a4333e0532d = []byte{
 	0x36, 0xea, 0x54, 0x23, 0x85, 0x25, 0xc7, 0xe2, 0xf4, 0xc9, 0x35, 0xda, 0xa8, 0x53, 0x8f, 0x14,
 	0xc6, 0x0e, 0x98, 0x05, 0x9b, 0xba, 0xa6, 0x92, 0x49, 0x88, 0x9b, 0x60, 0xa7, 0x23, 0xf1, 0xcc,
 	0x5d, 0x4b, 0xc9, 0xf4, 0x87, 0xf4, 0xc6, 0xe3, 0x31, 0x73, 0x6d, 0xdd, 0x4f, 0x62, 0xff, 0x05,
-	0xc1, 0x2f, 0x3d, 0x8f, 0x67, 0xb8, 0x0b, 0x65, 0x2e, 0x62, 0x51, 0x70, 0x35, 0xb2, 0x16, 0xb6,
+	0xc1, 0x2f, 0x3d, 0x8f, 0x67, 0xb8, 0x0b, 0x65, 0x2e, 0x62, 0x51, 0x70, 0x35, 0xb2, 0x11, 0xb6,
 	0x02, 0xb5, 0x75, 0x2f, 0xa6, 0x3c, 0x22, 0x79, 0x41, 0xb8, 0x18, 0xaa, 0x72, 0xb4, 0x94, 0xed,
 	0xdc, 0xe6, 0x00, 0x6c, 0x59, 0x25, 0x6a, 0x9f, 0x46, 0xd8, 0xd4, 0x3d, 0x3e, 0x66, 0x04, 0xb2,
 	0x03, 0x89, 0xb4, 0xc4, 0x77, 0xc1, 0x56, 0xdf, 0xb8, 0x0c, 0x46, 0xff, 0xda, 0x29, 0xe1, 0x0a,
@@ -528,5 +528,5 @@ var fileDescriptor_mgmt_c0227a4333e0532d = []byte{
 	0xb7, 0x49, 0x65, 0x3d, 0x81, 0x5a, 0x8f, 0x70, 0xc1, 0xe8, 0x42, 0x79, 0x97, 0xb2, 0x35, 0x4a,
 	0x9a, 0xff, 0xee, 0x60, 0x95, 0xfb, 0x0c, 0xea, 0x1b, 0x97, 0xe3, 0x7f, 0x3b, 0xe3, 0xc8, 0xbd,
 	0xd6, 0x37, 0x31, 0xf9, 0xa5, 0xfb, 0xb2, 0xfa, 0x95, 0x8f, 0xde, 0x03, 0x00, 0x00, 0xff, 0xff,
-	0xa1, 0x73, 0x78, 0xa1, 0xf5, 0x02, 0x00, 0x00,
+	0x70, 0x6b, 0x80, 0x56, 0xf5, 0x02, 0x00, 0x00,
 }
