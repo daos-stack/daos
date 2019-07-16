@@ -977,8 +977,8 @@ pipeline {
                                        inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
+                                script: '''export SSH_KEY_ARGS="-ici_key"
+                                           export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=regression,vm
@@ -1001,8 +1001,8 @@ pipeline {
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1044,8 +1044,8 @@ pipeline {
                                        inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
+                                script: '''export SSH_KEY_ARGS="-ici_key"
+                                           export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw
@@ -1068,8 +1068,8 @@ pipeline {
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
