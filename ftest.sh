@@ -53,21 +53,9 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-
-# put yaml files back
-restore_dist_files() {
-    local dist_files="$*"
-
-    for file in $dist_files; do
-        if [ -f "$file".dist ]; then
-            mv -f "$file".dist "$file"
-        fi
-    done
-
-}
+CSL_NODES=$(IFS=","; echo "${nodes[*]}")
 
 cleanup() {
-    restore_dist_files "${yaml_files[@]}"
     i=5
     while [ $i -gt 0 ]; do
         pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
@@ -113,22 +101,6 @@ if ${TEARDOWN_ONLY:-false}; then
     cleanup
     exit 0
 fi
-
-# set our machine names
-mapfile -t yaml_files < <(find src/tests/ftest -name \*.yaml)
-
-trap 'set +e; restore_dist_files "${yaml_files[@]}"' EXIT
-
-# shellcheck disable=SC2086
-sed -i.dist -e "s/- boro-A/- ${nodes[1]}/g" \
-            -e "s/- boro-B/- ${nodes[2]}/g" \
-            -e "s/- boro-C/- ${nodes[3]}/g" \
-            -e "s/- boro-D/- ${nodes[4]}/g" \
-            -e "s/- boro-E/- ${nodes[5]}/g" \
-            -e "s/- boro-F/- ${nodes[6]}/g" \
-            -e "s/- boro-G/- ${nodes[7]}/g" \
-            -e "s/- boro-H/- ${nodes[8]}/g" "${yaml_files[@]}"
-
 
 # let's output to a dir in the tree
 rm -rf src/tests/ftest/avocado ./*_results.xml
@@ -339,7 +311,7 @@ fi
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -c -a -r -s ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -c -a -r -s -ts ${CSL_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0

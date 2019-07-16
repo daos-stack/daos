@@ -282,7 +282,9 @@ def replace_yaml_file(yaml_file, args):
             if key in SERVER_KEYS:
                 unique_hosts["servers"].update(placeholders)
             elif key in CLIENT_KEYS:
-                unique_hosts["clients"].update(placeholders)
+                # If no specific clients are specified use a specified server
+                key = "clients" if args.test_clients else "servers"
+                unique_hosts[key].update(placeholders)
 
         # Map the placeholder names to values provided by the user
         mapping_pairings = [("servers", args.test_servers.split(","))]
@@ -304,8 +306,8 @@ def replace_yaml_file(yaml_file, args):
                 # Replace the host entries with their mapped values
                 file_str = re.sub(
                     "- {}".format(placeholder), "- {}".format(host), file_str)
-            else:
-                # Remove any host entries without a replacement value
+            elif args.discard:
+                # Discard any host entries without a replacement value
                 file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
 
         # Write the modified yaml file into a temporary file
@@ -608,6 +610,18 @@ def main():
         "Tests can also be launched by specifying a path to the python script "
         "instead of its tag.",
         "",
+        "The placeholder server and client names in the yaml file can also be "
+        "replaced with the following options:",
+        "\tlaunch.py -ts node1,node2 -tc node3 <tag>",
+        "\t  - Use node[1-2] to run the daos server in each test",
+        "\t  - Use node3 to run the daos client in each test",
+        "\tlaunch.py -ts node1,node2 <tag>",
+        "\t  - Use node[1-2] to run the daos server or client in each test",
+        "\tlaunch.py -ts node1,node2 -d <tag>",
+        "\t  - Use node[1-2] to run the daos server or client in each test",
+        "\t  - Discard of any additional server or client placeholders for "
+        "each test",
+        "",
         "You can also specify the sparse flag -s to limit output to "
         "pass/fail.",
         "\tExample command: launch.py -s pool"
@@ -624,6 +638,11 @@ def main():
         "-c", "--clean",
         action="store_true",
         help="remove daos log files from the test hosts prior to the test")
+    parser.add_argument(
+        "-d", "--discard",
+        action="store_true",
+        help="when replacing server/client yaml file placeholders, discard "
+             "any placeholders that do not end up with a replacement value")
     parser.add_argument(
         "-l", "--list",
         action="store_true",
@@ -644,11 +663,13 @@ def main():
     parser.add_argument(
         "-tc", "--test_clients",
         action="store",
-        help="comma-separated list of hosts to use as clients for each test")
+        help="comma-separated list of hosts to use as replacement values for "
+             "client placeholders in each test's yaml file")
     parser.add_argument(
         "-ts", "--test_servers",
         action="store",
-        help="comma-separated list of hosts to use as servers for each test")
+        help="comma-separated list of hosts to use as replacement values for "
+             "server placeholders in each test's yaml file")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
