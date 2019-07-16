@@ -296,7 +296,7 @@ class Snapshot(TestWithServers):
                       "taking snapshot with a NULL epoch.")
 
 
-        #(6)DAOS-1392 Test snapshot with an invalid epoch
+        #(6)DAOS-1392 destroy snapshot with an invalid handle
         self.log.info(
             "==(6)DAOS-1392 destroy snapshot with an invalid handle.")
         try:
@@ -308,6 +308,10 @@ class Snapshot(TestWithServers):
             self.log.info(
                 "==>Negative test, destroy snapshot with an invalid handle.")
             self.log.info("   Expected Error: %s", str(error))
+            expected_error = "RC: -1002"
+            if expected_error not in str(error):
+                self.fail(
+                    "##(6.1)Expecting error RC: -1002  did not show.")
 
         #(7)DAOS-1388 Verify snap_list bad parameter behavior
         self.log.info(
@@ -321,6 +325,11 @@ class Snapshot(TestWithServers):
             self.log.info(
                 "==>Negative test, snapshot list with an invalid coh.")
             self.log.info("   Expected Error: %s", str(error))
+            expected_error = "RC: -1002"
+            if expected_error not in str(error):
+                self.fail(
+                    "##(7.1)Expecting error RC: -1002  did not show.")
+
 
 
     def test_snapshots(self):
