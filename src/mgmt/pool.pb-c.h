@@ -67,7 +67,7 @@ struct  _Mgmt__CreatePoolReq
 struct  _Mgmt__CreatePoolResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus *status;
+  Mgmt__DaosRequestStatus status;
   /*
    * new pool's uuid
    */
@@ -79,7 +79,7 @@ struct  _Mgmt__CreatePoolResp
 };
 #define MGMT__CREATE_POOL_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__create_pool_resp__descriptor) \
-    , NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , MGMT__DAOS_REQUEST_STATUS__SUCCESS, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -112,11 +112,11 @@ struct  _Mgmt__DestroyPoolReq
 struct  _Mgmt__DestroyPoolResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus *status;
+  Mgmt__DaosRequestStatus status;
 };
 #define MGMT__DESTROY_POOL_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__destroy_pool_resp__descriptor) \
-    , NULL }
+    , MGMT__DAOS_REQUEST_STATUS__SUCCESS }
 
 
 /* Mgmt__CreatePoolReq methods */
