@@ -342,11 +342,12 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX" ' \
+                commands=['./configure --prefix="$SPDK_PREFIX" --with-shared ' \
                           ' --with-fio="$FIO_SRC"',
                           'make $JOBS_OPT', 'make install',
+                          'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
-                          'cp -r  include scripts examples/nvme/fio_plugin ' \
+                          'cp -r include scripts examples/nvme/fio_plugin ' \
                           '"$SPDK_PREFIX/share/spdk"'],
                 libs=['spdk'],
                 requires=['fio'])
