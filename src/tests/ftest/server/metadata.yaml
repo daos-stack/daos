@@ -30,4 +30,4 @@ ior:
     iorreadflags:
       F: "-r -R -G 1"
     objectclass:
-      daos_oclass: "LARGE"
+      daos_oclass: "SX"

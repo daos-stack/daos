@@ -58,4 +58,4 @@ ior:
         1M:
             transfer_size: '1M'
             block_size: '64M'
-    daos_oclass: "LARGE"
+    daos_oclass: "SX"
