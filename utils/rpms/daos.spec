@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       1%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -222,13 +222,16 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
-* Tue Jul 9 2019 Johann Lombardi <johann.lombardi@intel.com>
+* Tue Jul 16 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Add git hash and commit count to release
+
+* Tue Jul 09 2019 Johann Lombardi <johann.lombardi@intel.com>
 - Version bump up to 0.6.0
 
 * Fri Jun 21 2019 David Quigley <dquigley@intel.com>
 - Add daos_agent.yml to the list of packaged files
 
-* Thu Jun 12 2019 Brian J. Murrell <brian.murrell@intel.com>
+* Thu Jun 13 2019 Brian J. Murrell <brian.murrell@intel.com>
 - move obj_ctl daos_gen_io_conf daos_run_io_conf to
   daos-tests sub-package
 - daos-server needs spdk-tools
