@@ -46,8 +46,8 @@ ior:
             transfer_size: '1M'
             block_size: '32M'
     objectclass: !mux
-        oclass_Large:
-            daos_oclass: "LARGE"
+        oclass_SX:
+            daos_oclass: SX
 # Uncomment when DAOS-2305 is resolved
-#        oclass_R2:
-#            daos_oclass: "R2"
+#        oclass_RP_2G2:
+#            daos_oclass: "RP_2G2"

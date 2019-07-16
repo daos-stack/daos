@@ -45,8 +45,8 @@ ior:
             block_size: '4m'
             transfer_size: '4m'
     objectclass: !mux
-        LARGE:
-            daos_oclass: "LARGE"
+        SX:
+            daos_oclass: "SX"
         2-way_Replication:
-            daos_oclass: "R2"
+            daos_oclass: "RP_2G2"
 
