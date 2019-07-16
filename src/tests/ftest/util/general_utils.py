@@ -264,3 +264,17 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
+
+def exports_cmd(env):
+    """ Given a dictionary of environment variables and values, return
+        a shell command exporting them all
+
+    Args:
+        env (dict): dictionary of env. variables and values
+
+    Returns:
+        string: a shell command to export the variables
+    """
+
+    assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+    return "export {}; ".format("; export ".join(assign_env))
