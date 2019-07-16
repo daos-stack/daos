@@ -1237,7 +1237,7 @@ test_check_pool_access_grp_matches_multiple(void **state)
 	struct daos_ace		*ace[num_aces];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
-	const char		*groups[] = { "group1@", "group2@" };
+	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership won't match our creds */
 	ownership.user = "someuser@";
@@ -1271,7 +1271,7 @@ test_check_pool_access_grp_no_match(void **state)
 	struct daos_ace		*ace[num_aces];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
-	const char		*groups[] = { "group1@", "group2@" };
+	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership won't match our creds */
 	ownership.user = "someuser@";
@@ -1308,7 +1308,7 @@ test_check_pool_access_grp_check_includes_owner(void **state)
 	struct daos_ace		*ace[num_aces];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
-	const char		*groups[] = { "group1@", "group2@" };
+	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership matches group */
 	ownership.user = "someuser@";
@@ -1342,7 +1342,7 @@ test_check_pool_access_grps_beat_everyone(void **state)
 	struct daos_ace		*ace[num_aces];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
-	const char		*groups[] = { "group1@", "group2@" };
+	static const char	*groups[] = { "group1@", "group2@" };
 
 	/* Ownership doesn't match */
 	ownership.user = "someuser@";
