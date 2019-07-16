@@ -187,9 +187,13 @@ class EvictTests(TestWithServers):
             self.pool.pool.evict()
         # exception is expected
         except DaosApiError as result:
-            self.log.info(
-                "Expected exception - evicting pool with invalid UUID\n %s",
-                str(result))
+            if "-1005" in str(result):
+                self.log.info(
+                    "Expected exception: evicting pool with invalid UUID\n %s",
+                    str(result))
+            else:
+                self.log.info(
+                    "Unexpected exception: \n %s", str(result))
             # restore the valid UUID and check if pool handle still exists
             self.pool.pool.set_uuid_str(saved_uuid)
             self.log.info("Check if pool handle still exist")
@@ -197,7 +201,7 @@ class EvictTests(TestWithServers):
                 (int(self.pool.pool.handle.value) > 0),
                 "Pool handle was removed when doing an evict with a bad UUID")
             return
-        # if here then pool-evict did not raise an exception as expected
+        # if here then pool-evict did not raise an DAOS exception as expected
         # restore the valid UUID and check if valid pool still exists
         self.log.info(
             "DAOS api exception did not occur"
@@ -254,9 +258,13 @@ class EvictTests(TestWithServers):
             self.pool.pool.evict()
         # exception is expected
         except DaosApiError as result:
-            self.log.info(
-                "Expected exception - evicting pool with "
-                "invalid Server Group\n %s", str(result))
+            if "-1005" in str(result):
+                self.log.info(
+                    "Expected exception - invalid server group\n %s",
+                    str(result))
+            else:
+                self.log.info(
+                    "Unexpected exception \n %s", str(result))
             # restore the valid group name, check if pool handle still exists
             self.pool.pool.group = ctypes.create_string_buffer(setid)
             self.log.info("Check if pool handle still exist")
