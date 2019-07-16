@@ -57,7 +57,7 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
-IFS=" " read -r -a nodes <<< "${2//,/ }"
+IFS=" " read -r -a nodes <<< "$(cluset -e $2)"
 
 # put yaml files back
 restore_dist_files() {
@@ -75,7 +75,7 @@ cleanup() {
     restore_dist_files "${yaml_files[@]}"
     i=5
     while [ $i -gt 0 ]; do
-        pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+        if ! clush $CLUSH_ARGS -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
              -w "$(IFS=','; echo "${nodes[*]}")" "set -x
         if grep /mnt/daos /proc/mounts; then
             if ! sudo umount /mnt/daos; then
@@ -85,26 +85,27 @@ cleanup() {
         fi
         x=0
         sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-        while [ \$x -lt 30 ] &&
-              grep $DAOS_BASE /proc/mounts &&
-              ! sudo umount $DAOS_BASE; do
-            sleep 1
-            let x+=1
-        done
-        if grep $DAOS_BASE /proc/mounts; then
-            echo \"Failed to unmount $DAOS_BASE\"
-            exit 1
-        fi
-        if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
-            echo \"Failed to remove $DAOS_BASE\"
-            if [ -d $DAOS_BASE ]; then
-                ls -l $DAOS_BASE
-            else
-                echo \"because it doesnt exist\"
+        if [ -n \"$DAOS_BASE\" ]; then
+            while [ \$x -lt 30 ] &&
+                  grep $DAOS_BASE /proc/mounts &&
+                  ! sudo umount $DAOS_BASE; do
+                sleep 1
+                let x+=1
+            done
+            if grep $DAOS_BASE /proc/mounts; then
+                echo \"Failed to unmount $DAOS_BASE\"
+                exit 1
             fi
-            exit 1
-        fi" 2>&1 | dshbak -c
-        if [ "${PIPESTATUS[0]}" = 0 ]; then
+            if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
+                echo \"Failed to remove $DAOS_BASE\"
+                if [ -d $DAOS_BASE ]; then
+                    ls -l $DAOS_BASE
+                else
+                    echo \"because it doesnt exist\"
+                fi
+                exit 1
+            fi
+        fi"; then
             i=0
         fi
         ((i-=1))
@@ -137,7 +138,7 @@ sed -i.dist -e "s/- boro-A/- ${nodes[1]}/g" \
 trap 'set +e; cleanup' EXIT
 
 DAOS_BASE=${SL_PREFIX%/install}
-if ! pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+if ! clush $CLUSH_ARGS -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 which ior || true
 rpm -qvi mpich ior-hpc || true
@@ -185,7 +186,7 @@ rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
 if [ -z \"\$JENKINS_URL\" ]; then
     exit 0
-fi" 2>&1 | dshbak -c; then
+fi"; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1
 fi
