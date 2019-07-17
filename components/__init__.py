@@ -342,7 +342,7 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX" --with-shared ' \
+                commands=['./configure --prefix="$SPDK_PREFIX" ' \
                           ' --with-fio="$FIO_SRC"',
                           'make $JOBS_OPT', 'make install',
                           'cp dpdk/build/lib/* "$SPDK_PREFIX/lib"',
