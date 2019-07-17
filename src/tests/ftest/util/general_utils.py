@@ -334,15 +334,15 @@ def check_pool_files(log, hosts, uuid):
     task = task_self()
 
     log.info("Checking for pool data on %s", nodeset)
-    for filename in file_list:
+    for fname in file_list:
         task.run(
-            "test -e /mnt/daos/{}; echo $?".format(filename), nodes=nodeset)
+            "test -e /mnt/daos/{}; echo $?".format(fname), nodes=nodeset)
         for output, node_list in task.iter_buffers():
             if output == "0":
                 actual += len(node_list)
             else:
                 nodes = NodeSet.fromlist(node_list)
-                log.error("%s: /mnt/daos/%s not found", nodes, filename)
+                log.error("%s: /mnt/daos/%s not found", nodes, fname)
     return expect == actual
 
 
@@ -405,7 +405,7 @@ class TestParameter(object):
         self.default = default
 
     def __str__(self):
-        """Conver this object into a string.
+        """Convert this object into a string.
 
         Returns:
             str: the string version of the parameter's value
@@ -797,16 +797,6 @@ class TestPool(TestDaosApiBase):
         daos_log.info(msg)
         server = DaosServer(self.context, server_group, rank)
         server.kill(1)
-        self.exclude(rank, daos_log)
-
-    @fail_on(DaosApiError)
-    def exclude(self, rank, daos_log):
-        """Manually exclude a rank from this pool.
-
-        Args:
-            rank (int): daos server rank to kill
-            daos_log (DaosLog): object for logging messages
-        """
         msg = "Excluding server rank {} from pool {}".format(rank, self.uuid)
         self.log.info(msg)
         daos_log.info(msg)

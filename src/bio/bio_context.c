@@ -640,7 +640,8 @@ bio_ioctxt_close(struct bio_io_context *ctxt)
 int
 bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 {
-	struct blob_cp_arg	 ba;
+	struct blob_msg_arg	 bma = { 0 };
+	struct blob_cp_arg	*ba = &bma.bma_cp_arg;
 	struct spdk_io_channel	*channel;
 	uint64_t		 pg_off;
 	uint64_t		 pg_cnt;
@@ -677,7 +678,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 		return -DER_NO_HDL;
 	}
 
-	rc = blob_cp_arg_init(&ba);
+	rc = blob_cp_arg_init(ba);
 	if (rc != 0)
 		return rc;
 
@@ -685,13 +686,13 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 		ioctxt->bic_blob, pg_off, pg_cnt);
 
 	ioctxt->bic_inflight_dmas++;
-	ba.bca_inflights = 1;
+	ba->bca_inflights = 1;
 	spdk_blob_io_unmap(ioctxt->bic_blob, channel, pg_off, pg_cnt, blob_cb,
-			   &ba);
+			   &bma);
 
 	/* Wait for blob unmap done */
-	blob_wait_completion(ioctxt->bic_xs_ctxt, &ba);
-	rc = ba.bca_rc;
+	blob_wait_completion(ioctxt->bic_xs_ctxt, ba);
+	rc = ba->bca_rc;
 	ioctxt->bic_inflight_dmas--;
 
 	if (rc != 0)
@@ -701,7 +702,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 		D_DEBUG(DB_MGMT, "Successfully unmapped blob %p for xs:%p\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
 
-	blob_cp_arg_fini(&ba);
+	blob_cp_arg_fini(ba);
 	return rc;
 }
 

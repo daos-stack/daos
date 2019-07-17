@@ -27,19 +27,20 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/security"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 var (
 	MockServers  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	MockFeatures = []*pb.Feature{common.MockFeaturePB()}
-	MockCtrlrs   = NvmeControllers{common.MockControllerPB("")}
+	MockFeatures = []*pb.Feature{MockFeaturePB()}
+	MockCtrlrs   = NvmeControllers{MockControllerPB("")}
 	MockState    = pb.ResponseState{
 		Status: pb.ResponseStatus_CTRL_ERR_APP,
 		Error:  "example application error",
@@ -50,14 +51,14 @@ var (
 			State:   &MockState,
 		},
 	}
-	MockModules       = ScmModules{common.MockModulePB()}
+	MockModules       = ScmModules{MockModulePB()}
 	MockModuleResults = ScmModuleResults{
 		&pb.ScmModuleResult{
 			Loc:   &pb.ScmModule_Location{},
 			State: &MockState,
 		},
 	}
-	MockMounts       = ScmMounts{common.MockMountPB()}
+	MockMounts       = ScmMounts{MockMountPB()}
 	MockMountResults = ScmMountResults{
 		&pb.ScmMountResult{
 			Mntpoint: "/mnt/daos",
@@ -228,11 +229,18 @@ func (m *mockMgmtCtlClient) KillRank(
 }
 
 func newMockMgmtCtlClient(
-	features []*pb.Feature, ctrlrs NvmeControllers,
-	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, mountResults ScmMountResults,
-	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error) pb.MgmtCtlClient {
+	features []*pb.Feature,
+	ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults,
+	modules ScmModules,
+	moduleResults ScmModuleResults,
+	mountResults ScmMountResults,
+	scanRet error,
+	formatRet error,
+	updateRet error,
+	burninRet error,
+	killRet error,
+) pb.MgmtCtlClient {
 
 	return &mockMgmtCtlClient{
 		MockFeatures, ctrlrs, ctrlrResults, modules, moduleResults,

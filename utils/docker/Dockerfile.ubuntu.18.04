@@ -66,7 +66,7 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH

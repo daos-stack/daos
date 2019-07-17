@@ -1237,18 +1237,6 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	struct evt_rect	   rtmp;
 	struct evt_weight  wt_org;
 	struct evt_weight  wt_new;
-	int		   range;
-	int		   time;
-
-	evt_rect_overlap(&nd->tn_mbr, rect, &range, &time);
-	if ((time & (RT_OVERLAP_SAME | RT_OVERLAP_OVER)) &&
-	    (range & RT_OVERLAP_INCLUDED)) {
-		/* no difference, because the rectangle is included by the
-		 * MBR of the node.
-		 */
-		memset(weight_diff, 0, sizeof(*weight_diff));
-		return;
-	}
 
 	memset(&wt_org, 0, sizeof(wt_org));
 	memset(&wt_new, 0, sizeof(wt_new));
@@ -1411,6 +1399,18 @@ evt_root_destroy(struct evt_context *tcx)
 	return evt_root_free(tcx);
 }
 
+static int64_t
+evt_epoch_dist(struct evt_context *tcx, struct evt_node *nd,
+	       const struct evt_rect *rect)
+{
+	struct evt_rect	*mbr = evt_node_mbr_get(tcx, nd);
+
+	if (mbr->rc_epc > rect->rc_epc)
+		return mbr->rc_epc - rect->rc_epc;
+
+	return rect->rc_epc - mbr->rc_epc;
+}
+
 /** Select a node from two for the rectangle \a rect being inserted */
 static struct evt_node *
 evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
@@ -1418,12 +1418,25 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 {
 	struct evt_weight	wt1;
 	struct evt_weight	wt2;
+	uint64_t		dist1;
+	uint64_t		dist2;
 	int			rc;
 
 	evt_node_weight_diff(tcx, nd1, rect, &wt1);
 	evt_node_weight_diff(tcx, nd2, rect, &wt2);
 
 	rc = evt_weight_cmp(&wt1, &wt2);
+
+	if (rc == 0) {
+		dist1 = evt_epoch_dist(tcx, nd1, rect);
+		dist2 = evt_epoch_dist(tcx, nd2, rect);
+
+		if (dist1 < dist2)
+			return nd1;
+		else
+			return nd2;
+	}
+
 	return rc < 0 ? nd1 : nd2;
 }
 
@@ -2030,11 +2043,13 @@ struct evt_max_rect {
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_find(daos_handle_t toh, const struct evt_rect *rect,
+evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
+	 const struct evt_extent *extent,
 	 struct evt_entry_array *ent_array)
 {
 	struct evt_context	*tcx;
 	struct evt_filter	 filter;
+	struct evt_rect		 rect;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
@@ -2042,12 +2057,12 @@ evt_find(daos_handle_t toh, const struct evt_rect *rect,
 		return -DER_NO_HDL;
 
 	evt_ent_array_init(ent_array);
-	filter.fr_ex = rect->rc_ex;
-	filter.fr_epr.epr_lo = 0;
-	filter.fr_epr.epr_hi = rect->rc_epc;
+	rect.rc_ex = filter.fr_ex = *extent;
+	filter.fr_epr = *epr;
+	rect.rc_epc = epr->epr_hi;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
-				&filter, rect, ent_array);
+				&filter, &rect, ent_array);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
 	if (rc != 0)
@@ -2327,6 +2342,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		int	nr;
 
 		ne = evt_node_entry_at(tcx, nd, i);
+
 		rc = cb(tcx, mbr, &ne->ne_rect, &ent->ei_rect);
 		if (rc < 0)
 			continue;
@@ -2344,6 +2360,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			nr = nd->tn_nr - i;
 			memmove(ne + 1, ne, nr * sizeof(*ne));
 		} else {
+			umem_off_t	off = ne->ne_child;
+
 			/* We do not know whether the former @desc has checksum
 			 * buffer or not, and do not know whether such buffer
 			 * is large enough or not even if it had. So we have to
@@ -2354,6 +2372,9 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 				return rc;
 
 			reuse = true;
+			D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
+				"off "UMOFF_PF" (1)\n",
+				i, nd->tn_nr, UMOFF_P(off));
 		}
 
 		break;
@@ -2367,11 +2388,16 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
 							DAOS_INTENT_CHECK);
 			if (rc == ALB_UNAVAILABLE) {
+				umem_off_t	off = ne->ne_child;
+
 				rc = evt_node_entry_free(tcx, ne);
 				if (rc != 0)
 					return rc;
 
 				reuse = true;
+				D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
+					"off "UMOFF_PF" (2)\n",
+					i, nd->tn_nr, UMOFF_P(off));
 			}
 		}
 
@@ -2427,10 +2453,8 @@ evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 {
 	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
-	/* NB: we don't consider about high epoch for SSOF because it's based
-	 * on assumption there is no overwrite.
-	 */
-	weight->wt_minor = -rect->rc_epc;
+	weight->wt_minor = 0; /* Disable minor weight in favor of distance */
+
 	return 0;
 }
 
@@ -2598,32 +2622,39 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 {
 	struct evt_node_entry	*entry_src;
 	struct evt_node_entry	*entry_dst;
+	struct evt_rect		*mbr;
 	int			 nr;
 	int			 delta;
 	int			 boundary;
 	bool			 cond;
 	int64_t			 dist;
 
+	mbr = evt_node_mbr_get(tcx, nd_src);
+
 	D_ASSERT(nd_src->tn_nr == tcx->tc_order);
 	nr = nd_src->tn_nr / 2;
 
 	nr += nd_src->tn_nr % 2;
 
-	entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
-	dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src), &entry_src->ne_rect);
+	entry_src = evt_node_entry_at(tcx, nd_src, nr);
+	dist = evt_mbr_dist(mbr, &entry_src->ne_rect);
+
+	if (dist == 0) /* special case if middle node is equal distance */
+		goto done;
 
 	cond = dist > 0;
 	delta = cond ? -1 : 1;
 	boundary = cond ? 1 : nd_src->tn_nr - 1;
+
 	do {
 		nr += delta;
 		if (nr == boundary)
 			break;
-		entry_src = evt_node_entry_at(tcx, nd_src, nr - 1);
-		dist = evt_mbr_dist(evt_node_mbr_get(tcx, nd_src),
-				    &entry_src->ne_rect);
+		entry_src = evt_node_entry_at(tcx, nd_src, nr);
+		dist = evt_mbr_dist(mbr, &entry_src->ne_rect);
 	} while ((dist > 0) == cond);
 
+done:
 	entry_src = evt_node_entry_at(tcx, nd_src, nr);
 	entry_dst = evt_node_entry_at(tcx, nd_dst, 0);
 	memcpy(entry_dst, entry_src, sizeof(*entry_dst) * (nd_src->tn_nr - nr));
@@ -2851,8 +2882,12 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 			continue;
 
 		changed_level = level;
-		if (offset < 0)
+		if (offset < 0) {
+			D_ASSERTF(trace->tr_at >= -offset,
+				  "at:%u, offset:%d\n", trace->tr_at, offset);
 			trace->tr_at += offset;
+			ne = evt_node_entry_at(tcx, node, trace->tr_at);
+		}
 	}
 
 fix_trace:
