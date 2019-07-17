@@ -49,14 +49,12 @@ ec_is_one_cell(daos_iod_t *iod, struct daos_oclass_attr *oca,
 
 	for (j = 0; j < iod->iod_nr; j++) {
 		daos_recx_t     *this_recx = &iod->iod_recxs[j];
-
 		uint64_t         recx_start_offset = this_recx->rx_idx *
 						     iod->iod_size;
 		uint64_t         recx_end_offset =
 					(this_recx->rx_nr * iod->iod_size) +
 					recx_start_offset;
 
-		D_INFO("Processing recx: %u in ec_is_one_cell\n", j);
 		if (recx_start_offset & PARITY_INDICATOR) {
 			rc = false;
 			break;
@@ -118,7 +116,6 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				ec_del_recx(iod, idx);;
 				continue;
 			}
-
 			if (cell == dtgt_idx) {
 				uint32_t new_len = (cell+1) *
 							oca->u.ec.e_len - so;
@@ -277,16 +274,21 @@ ec_copy_iods(daos_iod_t **out_iod, daos_iod_t *in_iod, int nr)
 
 	D_ALLOC_ARRAY(*out_iod, nr);
 	if (*out_iod == NULL)
-		return -1;
+		D_GOTO(out, rc = -1);
 	for (i = 0; i < nr; i++) {
 		(*out_iod)[i] = in_iod[i];
 		D_ALLOC_ARRAY((*out_iod)[i].iod_recxs, (*out_iod)[i].iod_nr);
 		if((*out_iod)[i].iod_recxs == NULL) {
+			int j;
+
+			for (j =0; j < i; j++)
+				D_FREE((*out_iod)[j].iod_recxs);
 			D_FREE(out_iod);
-			return -1;
+			D_GOTO(out, rc = -1);
 		}
 		memcpy((*out_iod)[i].iod_recxs, in_iod[i].iod_recxs,
 		       in_iod[i].iod_nr * sizeof(daos_recx_t));
 	}
+out:
 	return rc;
 }
