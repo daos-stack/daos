@@ -396,10 +396,15 @@ dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 
 	/* XXX: Need some special handling for EC case in the future. */
 
-	if (oc_attr->ca_resil != DAOS_RES_REPL)
+	if (oc_attr->ca_resil != DAOS_RES_REPL && oc_attr->ca_resil != DAOS_RES_EC)
 		return -DER_NOTAPPLICABLE;
+	if ( oc_attr->ca_resil == DAOS_RES_REPL)
+		replicas = oc_attr->u.repl.r_num;
+	else {
+		D_ASSERT(oc_attr->ca_resil == DAOS_RES_EC);
+		replicas = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+	}
 
-	replicas = oc_attr->u.rp.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX)
 		replicas = layout->ol_grp_size;
 

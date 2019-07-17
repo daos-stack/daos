@@ -781,7 +781,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 			for (i = 0; i < orw->orw_nr; i++)
 				skip_list[i] = NULL;
-
 			if (tgt_idx >= oca->u.ec.e_p) {
 				rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
 						    orw->orw_nr,

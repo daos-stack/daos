@@ -34,29 +34,27 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/* Determines if entire update affects just this target. If so, no IOD
+ * modifications or special bulk-transfer handling are needed for this
+ * update request.
+ */
 static bool
 ec_is_one_cell(daos_iod_t *iod, struct daos_oclass_attr *oca,
 	       unsigned int tgt_idx)
 {
 	unsigned int    len = oca->u.ec.e_len;
 	unsigned int    k = oca->u.ec.e_k;
-	int		rc = 0;
+	int		rc;
 	unsigned int	j;
 
-	D_INFO("Entering ec_is_one_cell\n");
 	for (j = 0; j < iod->iod_nr; j++) {
-		D_INFO("Entered loop in ec_is_one_cell; iod->iod_nr == %u\n",
-		       iod->iod_nr);
 		daos_recx_t     *this_recx = &iod->iod_recxs[j];
-		D_INFO("Dereferenced recx: %u in ec_is_one_cell\n", j);
-
 		uint64_t         recx_start_offset = this_recx->rx_idx *
 						     iod->iod_size;
 		uint64_t         recx_end_offset =
 					(this_recx->rx_nr * iod->iod_size) +
 					recx_start_offset;
 
-		D_INFO("Processing recx: %u in ec_is_one_cell\n", j);
 		if (recx_start_offset & PARITY_INDICATOR) {
 			rc = false;
 			break;
@@ -71,17 +69,21 @@ ec_is_one_cell(daos_iod_t *iod, struct daos_oclass_attr *oca,
 	return rc;
 }
 
+/* Removes the specified recx entry from an IOD's iod_recx array.
+ */
 static void
 ec_del_recx(daos_iod_t *iod, unsigned int idx)
 {
 	int j;
 
-	D_INFO("deleting recx at %u\n", idx);
 	for (j = idx; j < iod->iod_nr - 1; j++)
 		iod->iod_recxs[j] = iod->iod_recxs[j+1];
 	iod->iod_nr--;
 }
 
+/* Process IOD array on data target. Keeps extents that are addressed
+ * to this target.
+ */
 int
 ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 	       struct daos_oclass_attr *oca, long **skip_list)
@@ -94,16 +96,14 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 		daos_iod_t	*iod = &iods[i];
 		int		 sl_idx = 0;
 
-		D_INFO("Processing IOD: %u for data target: %u of type %d\n",
-		       i, dtgt_idx, iod->iod_type);
 		if (iod->iod_type == DAOS_IOD_SINGLE ||
 			ec_is_one_cell(iod, oca, dtgt_idx))
 			continue;
 		D_ALLOC_ARRAY(skip_list[i], 3 * iod->iod_nr + 1);
+		if (skip_list[i] == NULL)
+			D_GOTO(out, rc = -1);
 		unsigned int loop_bound = iod->iod_nr;
-		D_INFO("loop_bound: %u\n", loop_bound);
 		for (idx = 0, j = 0; j < loop_bound; j++) {
-			D_INFO("idx: %u, j: %u\n", idx, j);
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
 			unsigned long	so =
 				(this_recx->rx_idx * iod->iod_size) % ss;
@@ -111,30 +111,20 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			unsigned long	recx_size = iod->iod_size *
 						 this_recx->rx_nr;
 
-			D_INFO("Processing recx: %u, size %lu, starts at %lu\n",
-			       j, recx_size, this_recx->rx_idx);
 			if ( iod->iod_recxs[idx].rx_idx & PARITY_INDICATOR) {
-				D_INFO("processing parity recx at start %lu\n",
-				       this_recx->rx_idx & ~PARITY_INDICATOR);
 				skip_list[i][sl_idx++] = -(long)oca->u.ec.e_len;
-				D_INFO("Deleting parity recx\n");
 				ec_del_recx(iod, idx);;
 				continue;
 			}
-
-			D_INFO("cell: %u, target: %u\n", cell, dtgt_idx);
 			if (cell == dtgt_idx) {
 				uint32_t new_len = (cell+1) *
 							oca->u.ec.e_len - so;
-				D_INFO("new_len: %u\n", new_len);
 
 				this_recx->rx_nr = new_len / iod->iod_size;
 				skip_list[i][sl_idx++] = new_len;
 				skip_list[i][sl_idx++] =
 					-(long)(recx_size - new_len);
 			} else if ((dtgt_idx +1) * oca->u.ec.e_len < so) {
-				D_INFO("cell ends at %u), offset is %lu\n",
-				       (dtgt_idx +1) * oca->u.ec.e_len, so);
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx */
 				ec_del_recx(iod, idx);
@@ -146,8 +136,6 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				int cell_start = dtgt_idx *
 							  oca->u.ec.e_len - so;
 
-				D_INFO("cell_start: %d\n", cell_start);
-
 				if (cell_start > recx_size) {
 					/* this recx doesn't map to this target
 					 * so we need to remove the recx */
@@ -156,8 +144,6 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 					      this_recx->rx_nr * iod->iod_size;
 					continue;
 				}
-				D_INFO("setting skip_list[0][%u] to %d\n", idx,
-				       -cell_start); 
 				skip_list[i][sl_idx++] = -cell_start;
 				this_recx->rx_idx += cell_start / iod->iod_size;
 				if (cell_start + oca->u.ec.e_len < recx_size) {
@@ -177,28 +163,31 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			idx++;
 		}
 	}
+out:
 	return rc;
 }
 
+/* Determines if parity exists for the specified stripe */
 static bool
 ec_has_parity(daos_recx_t *recxs, uint64_t stripe, uint32_t pss,
 	      uint32_t iod_size)
 {
 	unsigned int j;
 
-	D_INFO("checking for parity, stripe: %lu\n", stripe);
-
 	for (j = 0; recxs[j].rx_idx & PARITY_INDICATOR; j++) {
 		uint64_t p_stripe = (~PARITY_INDICATOR &
 					(recxs[j].rx_idx * iod_size)) / pss;
 
-		D_INFO("p_stripe: %lu\n", p_stripe);
 		if (p_stripe == stripe)
 			return true;
 	}
 	return false;
 }
 
+/* Process IOD array on parity target. Keeps parity extents that are addressed
+ * to this target. Also retains all data extents that do not have parity for
+ * their stripe.
+ */
 int
 ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 	         struct daos_oclass_attr *oca, long **skip_list)
@@ -212,15 +201,11 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 		daos_iod_t	*iod = &iods[i];
 		int		 sl_idx = 0;
 
-		D_INFO("Processing IOD: %u in parity target\n", i);
-		D_INFO("iod->iod_nr == %u\n", iod->iod_nr);
-		if (iod->iod_type == DAOS_IOD_SINGLE) {
-			D_INFO("Single Value at parity target\n");
+		if (iod->iod_type == DAOS_IOD_SINGLE)
 			continue;
-		}
 		D_ALLOC_ARRAY(skip_list[i], iod->iod_nr + 1);
 		if (skip_list[i] == NULL)
-			return -1;
+			D_GOTO(out, rc = -1);
 		unsigned int loop_bound = iod->iod_nr;
 		for (idx = 0, j = 0; j < loop_bound; j++) {
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
@@ -232,19 +217,15 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				unsigned int	pcell = so / oca->u.ec.e_len;
 
 				if (pcell == ptgt_idx) {
-					D_INFO("keeping parity cell\n");
 					skip_list[i][sl_idx++] =
 						oca->u.ec.e_len;
 				} else {
-					D_INFO("skipping parity cell\n");
 					ec_del_recx(iod, idx);;
 					skip_list[i][sl_idx++] =
 						-(long)oca->u.ec.e_len;
 					continue;
 				}
 			} else {
-				D_INFO("processing nonparity recx at start: %lu, length: %lu\n",
-				       this_recx->rx_idx, this_recx->rx_nr);
 				uint64_t stripe = (this_recx->rx_idx *
 						iod->iod_size) / ss;
 
@@ -255,7 +236,6 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 						-(this_recx->rx_nr *
 						  iod->iod_size);
 				} else {
-					D_INFO("no parity\n");
 					skip_list[i][sl_idx++] =
 						(this_recx->rx_nr *
 						 iod->iod_size);
@@ -264,28 +244,36 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 			idx++;
 		}
 	}
+out:
 	return rc;
 }
 
+/* Make a copy of the iod array submitted in the RPC. Needed on the leader,
+ * since the original IOD contents must be forwarded to the slave targets.
+ */
 int
-ec_copy_iods(daos_iod_t **out, daos_iod_t *in, int nr)
+ec_copy_iods(daos_iod_t **out_iod, daos_iod_t *in_iod, int nr)
 {
 	int i, rc = 0;
-	D_ASSERT(*out == NULL);
+	D_ASSERT(*out_iod == NULL);
 
-	D_ALLOC_ARRAY(*out, nr);
-	if (*out == NULL)
-		return -1;
+	D_ALLOC_ARRAY(*out_iod, nr);
+	if (*out_iod == NULL)
+		D_GOTO(out, rc = -1);
 	for (i = 0; i < nr; i++) {
-		(*out)[i] = in[i];
-		D_ALLOC_ARRAY((*out)[i].iod_recxs, (*out)[i].iod_nr);
-		if((*out)[i].iod_recxs == NULL) {
-			D_FREE(out);
-			return -1;
+		(*out_iod)[i] = in_iod[i];
+		D_ALLOC_ARRAY((*out_iod)[i].iod_recxs, (*out_iod)[i].iod_nr);
+		if((*out_iod)[i].iod_recxs == NULL) {
+			int j;
+			for (j =0; j < i; j++)
+				D_FREE((*out_iod)[j].iod_recxs);
+			D_FREE(out_iod);
+			D_GOTO(out, rc = -1);
 		}
-		memcpy((*out)[i].iod_recxs, in[i].iod_recxs,
-		       in[i].iod_nr * sizeof(daos_recx_t));
+		memcpy((*out_iod)[i].iod_recxs, in_iod[i].iod_recxs,
+		       in_iod[i].iod_nr * sizeof(daos_recx_t));
 	}
+out:
 	return rc;
 }
 
