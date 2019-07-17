@@ -37,6 +37,10 @@ daos_tests:
     test_e:
       daos_test: e
       test_name: DAOS epoch tests
+    test_V:
+      daos_test: V
+      test_name: DAOS verify consistency tests
+      test_timeout: 900
     test_i:
       daos_test: i
       test_name: IO test

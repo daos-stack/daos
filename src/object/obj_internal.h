@@ -37,6 +37,7 @@
 #include <daos/btree_class.h>
 #include <daos/dtx.h>
 #include <daos/object.h>
+#include <daos/daos_enum.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
 
@@ -292,5 +293,58 @@ struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
+
+enum daos_io_flags {
+	/* The RPC will be sent to leader replica. */
+	DIOF_TO_LEADER		= 0x1,
+	/* The RPC will be sent to specified replica. */
+	DIOF_TO_SPEC_SHARD	= 0x2,
+	/* Flush DTXs before list. */
+	DIOF_FLUSH_DTX		= 0x4,
+};
+
+#define KDS_NUM		16
+#define ITER_BUF_SIZE	2048
+
+struct obj_enum_dkeys_arg {
+	daos_anchor_t		 dkey_anchor;
+	daos_anchor_t		 dkey_anchor_saved;
+	daos_anchor_t		 akey_anchor;
+	daos_anchor_t		 akey_anchor_saved;
+	daos_anchor_t		 anchor;
+	daos_anchor_t		 anchor_saved;
+	d_sg_list_t		 sgl;
+	d_iov_t			 iov;
+	char			 inline_buf[ITER_BUF_SIZE];
+	char			*buf;
+	char			*buf_saved;
+	daos_size_t		 buf_len;
+	daos_size_t		 buf_len_saved;
+	daos_size_t		 size;
+	daos_size_t		 size_saved;
+	uint32_t		 num;
+	unsigned int		 need_retry:1,
+				 has_retried:1,
+				 lost_shard:1;
+	daos_key_desc_t		 kds[KDS_NUM];
+	daos_epoch_range_t	 eprs[KDS_NUM];
+	struct daos_enum_arg	 enum_arg;
+};
+
+/* obj_enum.c */
+int enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
+		 unsigned int *acts);
+
+void daos_enum_dkeys_init_arg(struct obj_enum_dkeys_arg *oeda,
+			      daos_unit_oid_t oid);
+
+void daos_enum_dkeys_fini_arg(struct obj_enum_dkeys_arg *oeda);
+
+void daos_enum_dkeys_prep_unpack(struct obj_enum_dkeys_arg *oeda);
+
+int daos_enum_dkeys_do_list(daos_handle_t oh, daos_epoch_t *epoch,
+			    struct obj_enum_dkeys_arg *oeda,
+			    daos_obj_list_obj_cb_t list_cb, uint32_t flags);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

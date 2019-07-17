@@ -65,13 +65,6 @@ enum dtx_operation {
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-/* If the count of committable DTXs on leader exceeds this threshold,
- * it will trigger batched DTX commit globally. We will optimize the
- * threshould with considering RPC limitation, PMDK transaction, and
- * CPU schedule efficiency, and so on.
- */
-#define DTX_THRESHOLD_COUNT		(1 << 9)
-
 /* The age unit is second. */
 
 /* The time threshould for batched DTX commit. */
@@ -100,8 +93,6 @@ extern btr_ops_t dbtree_dtx_cf_ops;
 
 void dtx_aggregate(void *arg);
 void dtx_batched_commit(void *arg);
-int dtx_commit(uuid_t po_uuid, uuid_t co_uuid,
-	       struct dtx_entry *dtes, int count, uint32_t version);
 int dtx_abort(uuid_t po_uuid, uuid_t co_uuid,
 	      struct dtx_entry *dtes, int count, uint32_t version);
 int dtx_check(uuid_t po_uuid, uuid_t co_uuid,

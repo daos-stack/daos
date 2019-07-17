@@ -176,6 +176,7 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((uint32_t)		(oeo_map_version)	CRT_VAR) \
 	((uint32_t)		(oeo_num)		CRT_VAR) \
 	((uint32_t)		(oeo_padding)		CRT_VAR) \
+	((uint64_t)		(oeo_epoch)		CRT_VAR) \
 	((uint64_t)		(oeo_size)		CRT_VAR) \
 	((daos_anchor_t)	(oeo_anchor)		CRT_VAR) \
 	((daos_anchor_t)	(oeo_dkey_anchor)	CRT_VAR) \

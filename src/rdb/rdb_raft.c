@@ -44,6 +44,7 @@
 
 #include <abt.h>
 #include <raft.h>
+#include <daos/daos_enum.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
@@ -376,7 +377,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 		    d_iov_t *data, struct rdb_anchor *anchor)
 {
 	d_sg_list_t		sgl;
-	struct dss_enum_arg	arg = { 0 };
+	struct daos_enum_arg	arg = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	vos_iter_param_t	param = { 0 };
 	int			rc;
@@ -405,12 +406,12 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg);
+	rc = daos_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg);
 	if (rc < 0)
 		return rc;
 
 	/*
-	 * Report the new anchor. When rc == 0, dss_enum_pack doesn't guarantee
+	 * Report the new anchor. When rc == 0, daos_enum_pack doesn't guarantee
 	 * all the anchors to be EOF.
 	 */
 	if (rc == 0)
@@ -420,7 +421,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 				       &anchors.ia_dkey, &anchors.ia_akey,
 				       &anchors.ia_ev, &anchors.ia_sv);
 
-	/* Report the buffer lengths. data.iov_len is set by dss_enum_pack. */
+	/* Report the buffer lengths. data.iov_len is set by daos_enum_pack. */
 	kds->iov_len = sizeof(*arg.kds) * arg.kds_len;
 
 	return 0;
@@ -679,7 +680,7 @@ out:
 }
 
 static int
-rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
+rdb_raft_exec_unpack_io(struct daos_enum_unpack_io *io, void *arg)
 {
 	daos_handle_t  *slc = arg;
 
@@ -713,7 +714,7 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 static int
 rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
 {
-	struct dss_enum_arg	arg;
+	struct daos_enum_arg	arg;
 	d_sg_list_t		sgl;
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
@@ -730,7 +731,7 @@ rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
 	arg.sgl = &sgl;
 
 	/* Unpack from the object level. */
-	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
+	return daos_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
 			       &slc);
 }
 
