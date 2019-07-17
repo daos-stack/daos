@@ -84,7 +84,7 @@ PREREQS.define('hwloc2', retriever=WEB_RETRIEVER,
 
 PREREQS.define('openpa2',
                retriever=GitRepoRetriever( \
-               'http://git.mcs.anl.gov/radix/openpa.git'),
+               'https://github.com/pmodels/openpa.git'),
                commands=['$LIBTOOLIZE', './autogen.sh',
                          './configure --prefix=$OPENPA2_PREFIX', 'make',
                          'make install'], libs=['opa'])

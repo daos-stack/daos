@@ -202,7 +202,7 @@ pipeline {
             sh 'rm -rf testbin/ && mkdir -p testbin'
             sconsBuild target: 'openpa',
                        directory: 'scons_local',
-                       scm: [url: 'http://git.mcs.anl.gov/radix/openpa.git',
+                       scm: [url: 'https://github.com/pmodels/openpa.git',
                              branch: "${env.OPENPA_COMMIT}",
                              cleanAfterCheckout: true],
                        no_install: true,  // No separate install step
@@ -332,7 +332,7 @@ pipeline {
             // Older scons_local_review only used master branch.
             // Newer one looked up the last known good build of master branch.
             // Pipeline currently does not have access that info.
-            checkoutScm url: 'http://git.mcs.anl.gov/radix/openpa.git',
+            checkoutScm url: 'https://github.com/pmodels/openpa.git',
                         branch: "${env.OPENPA_COMMIT}",
                         checkoutDir: 'openpa',
                         cleanAfterCheckout: true

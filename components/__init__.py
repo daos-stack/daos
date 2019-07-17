@@ -105,7 +105,7 @@ def define_mercury(reqs):
 
     reqs.define('openpa',
                 retriever=GitRepoRetriever(
-                    'http://git.mcs.anl.gov/radix/openpa.git'),
+                    'https://github.com/pmodels/openpa.git'),
                 commands=['$LIBTOOLIZE', './autogen.sh',
                           './configure --prefix=$OPENPA_PREFIX',
                           'make $JOBS_OPT',
