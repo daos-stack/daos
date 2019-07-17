@@ -332,6 +332,8 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-ici_key"
                                            export CLUSH_ARGS="-o$SSH_KEY_ARGS"
+                                           clush $CLUSH_ARGS -B -l jenkins -R ssh -S -w $NODELIST "set -ex
+                                               sudo yum -y upgrade --exclude=dpdk"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag="iorsmallmpiio iorsmalldaos"
@@ -405,6 +407,8 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-ici_key"
                                            export CLUSH_ARGS="-o$SSH_KEY_ARGS"
+                                           clush $CLUSH_ARGS -B -l jenkins -R ssh -S -w $NODELIST "set -ex
+                                               sudo yum -y upgrade --exclude=dpdk"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag="iorsmallmpiio iorsmalldaos"
@@ -464,7 +468,6 @@ pipeline {
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
-                                       distro: 'el7.6',
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: daos_repos + ' ' + ior_repos,
