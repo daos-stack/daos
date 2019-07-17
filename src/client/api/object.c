@@ -168,10 +168,17 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 	       daos_iom_t *maps, daos_event_t *ev)
 {
 	tse_task_t	*task;
+	unsigned int	flags = 0;
+	unsigned int	shard = 0;
 	int		rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, 0, 0, dkey, nr, iods, sgls,
-				      maps, ev, NULL, &task);
+	if (DAOS_FAIL_CHECK(DAOS_DTX_READ_SPECIAL_SHARD)) {
+		flags = DIOF_TO_SPEC_SHARD;
+		shard = daos_fail_value_get();
+	}
+
+	rc = dc_obj_fetch_task_create(oh, th, flags, shard, dkey, nr, iods,
+				      sgls, maps, ev, NULL, &task);
 	if (rc)
 		return rc;
 

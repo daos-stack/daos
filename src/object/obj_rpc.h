@@ -115,6 +115,8 @@ enum obj_rpc_flags {
 	ORF_BULK_BIND		= (1 << 0),
 	/** It is a resent RPC. */
 	ORF_RESEND		= (1 << 1),
+	/** Commit DTX synchronously. */
+	ORF_DTX_SYNC		= (1 << 2),
 };
 
 /* common for update/fetch */

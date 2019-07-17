@@ -1679,7 +1679,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		 * shard if leader switched. That is why the resend logic
 		 * is handled at object layer rather than shard layer.
 		 */
-		obj_auxi->flags = ORF_RESEND;
+		obj_auxi->flags |= ORF_RESEND;
 
 		/* if with shard task list, reuse it and re-schedule */
 		if (!d_list_empty(task_list)) {
@@ -2103,6 +2103,9 @@ dc_obj_update(tse_task_t *task)
 	if (rc)
 		goto out_task;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
+
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), dkey_hash);
 
@@ -2330,6 +2333,9 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 			      false, &obj_auxi->req_tgts);
 	if (rc != 0)
 		goto out_task;
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
 
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
