@@ -334,7 +334,7 @@ pipeline {
                                            export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=regression,vm
+                                               test_tag="iorsmallmpiio iorsmalldaos"
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            rm -rf src/tests/ftest/avocado ./*_results.xml
@@ -407,7 +407,7 @@ pipeline {
                                            export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw
+                                               test_tag="iorsmallmpiio iorsmalldaos"
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            rm -rf src/tests/ftest/avocado ./*_results.xml
