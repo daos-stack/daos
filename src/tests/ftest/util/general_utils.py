@@ -405,7 +405,7 @@ class TestParameter(object):
         self.default = default
 
     def __str__(self):
-        """Conver this object into a string.
+        """Convert this object into a string.
 
         Returns:
             str: the string version of the parameter's value
@@ -578,7 +578,7 @@ class TestPool(TestDaosApiBase):
             force (int, optional): force flag. Defaults to 1.
 
         Returns:
-            bool: True if the pool has been destoyed; False if the pool is not
+            bool: True if the pool has been destroyed; False if the pool is not
                 defined.
 
         """
@@ -785,13 +785,18 @@ class TestPool(TestDaosApiBase):
             server_group (str): daos server group name
             rank (int): daos server rank to kill
             daos_log (DaosLog): object for logging messages
+
+        Returns:
+            bool: True if the server has been killed and the rank has been
+            excluded from the pool; False if the pool is undefined
+
         """
         msg = "Killing DAOS server {} (rank {})".format(server_group, rank)
         self.log.info(msg)
         daos_log.info(msg)
         server = DaosServer(self.context, server_group, rank)
         server.kill(1)
-        self.exclude(rank, daos_log)
+        return self.exclude(rank, daos_log)
 
     @fail_on(DaosApiError)
     def exclude(self, rank, daos_log):
@@ -800,11 +805,20 @@ class TestPool(TestDaosApiBase):
         Args:
             rank (int): daos server rank to kill
             daos_log (DaosLog): object for logging messages
+
+        Returns:
+            bool: True if rank has been excluded from the pool; False if the
+                pool is undefined
+
         """
-        msg = "Excluding server rank {} from pool {}".format(rank, self.uuid)
-        self.log.info(msg)
-        daos_log.info(msg)
-        self.pool.exclude([rank])
+        if self.pool:
+            msg = "Excluding server rank {} from pool {}".format(
+                rank, self.uuid)
+            self.log.info(msg)
+            daos_log.info(msg)
+            self.pool.exclude([rank])
+            return True
+        return False
 
     def check_files(self, hosts):
         """Check if pool files exist on the specified list of hosts.
