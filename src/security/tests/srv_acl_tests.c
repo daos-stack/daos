@@ -86,6 +86,12 @@ create_valid_auth_token(const char *user, const char *grp,
 	return token;
 }
 
+static Auth__Token *
+create_default_auth_token(void)
+{
+	return create_valid_auth_token(TEST_USER, TEST_GROUP, NULL, 0);
+}
+
 static void
 init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
 		const char *grp_list[], size_t num_grps)
@@ -123,6 +129,16 @@ init_default_ownership(struct pool_owner *owner)
 	owner->group = TEST_GROUP;
 }
 
+static void
+setup_drpc_with_default_token(void)
+{
+	Auth__Token *token = create_default_auth_token();
+
+	pack_token_in_drpc_call_resp_body(token);
+
+	auth__token__free_unpacked(token, NULL);
+}
+
 /*
  * Setup and teardown
  */
@@ -143,6 +159,13 @@ srv_acl_teardown(void **state)
 	mock_drpc_call_teardown();
 
 	return 0;
+}
+
+static void
+srv_acl_resetup(void **state)
+{
+	srv_acl_teardown(state);
+	srv_acl_setup(state);
 }
 
 /*
@@ -184,6 +207,161 @@ test_validate_creds_empty_cred(void **state)
 }
 
 static void
+test_validate_creds_drpc_connect_failed(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+
+	init_default_cred(&cred);
+
+	D_FREE(drpc_connect_return); /* failure returns null */
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_BADPATH);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_drpc_call_failed(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+
+	init_default_cred(&cred);
+
+	drpc_call_return = -DER_UNKNOWN;
+	drpc_call_resp_return_ptr = NULL;
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 drpc_call_return);
+
+	assert_null(result);
+	assert_non_null(drpc_close_ctx); /* closed regardless of error */
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_drpc_call_null_response(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+
+	init_default_cred(&cred);
+
+	drpc_call_resp_return_ptr = NULL;
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_NOREPLY);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_drpc_response_failure(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+
+	init_default_cred(&cred);
+	setup_drpc_with_default_token();
+
+	drpc_call_resp_return_content.status = DRPC__STATUS__FAILURE;
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_MISC);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_drpc_response_malformed_body(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+
+	init_default_cred(&cred);
+
+	free_drpc_call_resp_body();
+	D_ALLOC(drpc_call_resp_return_content.body.data, 1);
+	drpc_call_resp_return_content.body.len = 1;
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_PROTO);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_drpc_response_empty_token(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+	Auth__Token	bad_token = AUTH__TOKEN__INIT;
+
+	init_default_cred(&cred);
+
+	bad_token.data.data = NULL;
+	pack_token_in_drpc_call_resp_body(&bad_token);
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_PROTO);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_success(void **state)
+{
+	d_iov_t		cred;
+	Auth__Token	*result = NULL;
+	Auth__Sys	*authsys;
+
+	init_default_cred(&cred);
+	setup_drpc_with_default_token();
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result), 0);
+
+	assert_non_null(result);
+	assert_int_equal(result->flavor, AUTH__FLAVOR__AUTH_SYS);
+
+	authsys = auth__sys__unpack(NULL, result->data.len, result->data.data);
+	assert_non_null(authsys); /* NULL implies malformed payload */
+	assert_string_equal(authsys->user, TEST_USER);
+	assert_string_equal(authsys->group, TEST_GROUP);
+	assert_int_equal(authsys->n_groups, 0);
+
+	/* verify we called drpc with correct params */
+	assert_string_equal(drpc_connect_sockaddr, ds_sec_server_socket_path);
+
+	assert_ptr_equal(drpc_call_ctx, drpc_connect_return);
+	assert_int_equal(drpc_call_flags, R_SYNC);
+	assert_non_null(drpc_call_msg_ptr);
+	assert_int_equal(drpc_call_msg_content.module,
+			 DRPC_MODULE_SECURITY_SERVER);
+	assert_int_equal(drpc_call_msg_content.method,
+			 DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS);
+	assert_non_null(drpc_call_resp_ptr);
+
+	assert_ptr_equal(drpc_close_ctx, drpc_call_ctx);
+
+	daos_iov_free(&cred);
+	auth__sys__free_unpacked(authsys, NULL);
+	auth__token__free_unpacked(result, NULL);
+}
+
+static void
 test_check_pool_access_null_acl(void **state)
 {
 	d_iov_t			cred;
@@ -212,6 +390,7 @@ test_check_pool_access_null_ownership(void **state)
 						  DAOS_PC_RO),
 			 -DER_INVAL);
 
+	daos_iov_free(&cred);
 	daos_acl_free(acl);
 }
 
@@ -232,6 +411,7 @@ test_check_pool_access_bad_owner_user(void **state)
 						  DAOS_PC_RO),
 			 -DER_INVAL);
 
+	daos_iov_free(&cred);
 	daos_acl_free(acl);
 }
 
@@ -252,6 +432,7 @@ test_check_pool_access_bad_owner_group(void **state)
 						  DAOS_PC_RO),
 			 -DER_INVAL);
 
+	daos_iov_free(&cred);
 	daos_acl_free(acl);
 }
 
@@ -306,6 +487,7 @@ test_check_pool_access_validate_cred_failed(void **state)
 
 	/* drpc call failure will fail validation */
 	drpc_call_return = -DER_UNKNOWN;
+	drpc_call_resp_return_ptr = NULL;
 
 	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
 						  DAOS_PC_RO),
@@ -347,9 +529,14 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 }
 
 static void
-test_check_pool_access_not_authsys(void **state)
+test_check_pool_access_wrong_flavor(void **state)
 {
 	expect_no_access_bad_authsys_payload(AUTH__FLAVOR__AUTH_NONE);
+}
+
+static void
+test_check_pool_access_bad_payload(void **state)
+{
 	expect_no_access_bad_authsys_payload(AUTH__FLAVOR__AUTH_SYS);
 }
 
@@ -430,10 +617,13 @@ static void
 test_check_pool_access_owner_success(void **state)
 {
 	expect_owner_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_owner_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				       DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_owner_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				       DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_owner_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				       DAOS_PC_EX);
 }
@@ -458,10 +648,13 @@ static void
 test_check_pool_access_group_success(void **state)
 {
 	expect_group_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_group_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				       DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_group_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				       DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_group_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				       DAOS_PC_EX);
 }
@@ -491,10 +684,13 @@ static void
 test_check_pool_access_group_list_success(void **state)
 {
 	expect_list_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_list_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_list_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_list_access_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_EX);
 }
@@ -565,9 +761,13 @@ static void
 test_check_pool_access_owner_forbidden(void **state)
 {
 	expect_no_owner_access_with_perms(0, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_no_owner_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_no_owner_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_EX);
+	srv_acl_resetup(state);
 	expect_no_owner_access_with_perms(DAOS_ACL_PERM_WRITE, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_no_owner_access_with_perms(DAOS_ACL_PERM_WRITE, DAOS_PC_EX);
 }
 
@@ -594,9 +794,13 @@ static void
 test_check_pool_access_group_forbidden(void **state)
 {
 	expect_no_group_access_with_perms(0, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_no_group_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_no_group_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_EX);
+	srv_acl_resetup(state);
 	expect_no_group_access_with_perms(DAOS_ACL_PERM_WRITE, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_no_group_access_with_perms(DAOS_ACL_PERM_WRITE, DAOS_PC_EX);
 }
 
@@ -628,9 +832,13 @@ static void
 test_check_pool_access_list_forbidden(void **state)
 {
 	expect_no_list_access_with_perms(0, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_no_list_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_no_list_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_EX);
+	srv_acl_resetup(state);
 	expect_no_list_access_with_perms(DAOS_ACL_PERM_WRITE, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_no_list_access_with_perms(DAOS_ACL_PERM_WRITE, DAOS_PC_EX);
 }
 
@@ -747,12 +955,15 @@ static void
 test_check_pool_access_everyone_success(void **state)
 {
 	expect_everyone_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_everyone_access_with_perms(DAOS_ACL_PERM_READ |
 					  DAOS_ACL_PERM_WRITE,
 					  DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_everyone_access_with_perms(DAOS_ACL_PERM_READ |
 					  DAOS_ACL_PERM_WRITE,
 					  DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_everyone_access_with_perms(DAOS_ACL_PERM_READ |
 					  DAOS_ACL_PERM_WRITE,
 					  DAOS_PC_EX);
@@ -770,9 +981,13 @@ static void
 test_check_pool_access_everyone_forbidden(void **state)
 {
 	expect_everyone_no_access_with_perms(0, DAOS_PC_RO);
+	srv_acl_resetup(state);
 	expect_everyone_no_access_with_perms(0, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_everyone_no_access_with_perms(0, DAOS_PC_EX);
+	srv_acl_resetup(state);
 	expect_everyone_no_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RW);
+	srv_acl_resetup(state);
 	expect_everyone_no_access_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_EX);
 }
 
@@ -819,6 +1034,13 @@ main(void)
 		ACL_UTEST(test_validate_creds_null_cred),
 		ACL_UTEST(test_validate_creds_null_token_ptr),
 		ACL_UTEST(test_validate_creds_empty_cred),
+		ACL_UTEST(test_validate_creds_drpc_connect_failed),
+		ACL_UTEST(test_validate_creds_drpc_call_failed),
+		ACL_UTEST(test_validate_creds_drpc_call_null_response),
+		ACL_UTEST(test_validate_creds_drpc_response_failure),
+		ACL_UTEST(test_validate_creds_drpc_response_malformed_body),
+		ACL_UTEST(test_validate_creds_drpc_response_empty_token),
+		ACL_UTEST(test_validate_creds_success),
 		ACL_UTEST(test_check_pool_access_null_acl),
 		ACL_UTEST(test_check_pool_access_null_ownership),
 		ACL_UTEST(test_check_pool_access_bad_owner_user),
@@ -826,7 +1048,8 @@ main(void)
 		ACL_UTEST(test_check_pool_access_null_cred),
 		ACL_UTEST(test_check_pool_access_bad_acl),
 		ACL_UTEST(test_check_pool_access_validate_cred_failed),
-		ACL_UTEST(test_check_pool_access_not_authsys),
+		ACL_UTEST(test_check_pool_access_wrong_flavor),
+		ACL_UTEST(test_check_pool_access_bad_payload),
 		ACL_UTEST(test_check_pool_access_empty_acl),
 		ACL_UTEST(test_check_pool_access_owner_success),
 		ACL_UTEST(test_check_pool_access_group_success),
