@@ -212,7 +212,7 @@ struct test_update_fetch_arg {
 	int			 ua_single_value;
 	int			 ua_array:1, /* false for single */
 				 ua_verify:1;
-	bool 		        snap;
+	bool 		         snap;
 };
 
 struct test_add_exclude_arg {
