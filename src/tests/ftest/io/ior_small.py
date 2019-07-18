@@ -41,7 +41,7 @@ class IorSmallDaos(IorSingleServer):
                   offset instead of sequential.
                   All above three cases to be run with different combination of
                   transfer sizes and object classes.
-        :avocado: tags=all,daosio,small,iorsmall,iorsmalldaos
+        :avocado: tags=all,daosio,small,iorsmall,iorsmalldaos,pr,hw
         """
         # override ior flags and object class
         self.ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
@@ -66,7 +66,7 @@ class IorSmallMpiio(EightServers):
                   offset instead of sequential.
                   All above three cases to be run with different combination of
                   transfer sizes and object classes.
-        :avocado: tags=all,daosio,small,iorsmall,iorsmallmpiio
+        :avocado: tags=all,daosio,small,iorsmall,iorsmallmpiio,pr,hw
         """
         # override ior flags
         ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
