@@ -421,6 +421,8 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	unsigned int		flags;
+	unsigned int		shard;
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
@@ -428,7 +430,29 @@ typedef struct {
 	daos_iom_t		*maps; /* only valid for fetch */
 } daos_obj_rw_t;
 
+/**
+ * parameter subset for fetch -
+ * daos_handle_t	 oh;
+ * daos_handle_t	 th;
+ * unsigned int		 flags;
+ * unsigned int		 shard;
+ * daos_key_t		*dkey;
+ * unsigned int		 nr;
+ * daos_iod_t		*iods;
+ * d_sg_list_t		*sgls;
+ * daos_iom_t		*maps;
+ */
 typedef daos_obj_rw_t		daos_obj_fetch_t;
+
+/**
+ * parameter subset for update -
+ * daos_handle_t	 oh;
+ * daos_handle_t	 th;
+ * daos_key_t		*dkey;
+ * unsigned int		 nr;
+ * daos_iod_t		*iods;
+ * d_sg_list_t		*sgls;
+ */
 typedef daos_obj_rw_t		daos_obj_update_t;
 
 typedef struct {
@@ -455,6 +479,7 @@ typedef struct {
 	daos_anchor_t		*dkey_anchor;
 	daos_anchor_t		*akey_anchor;
 	uint32_t		*versions;
+	daos_epoch_t		*epoch;
 	bool			incr_order;
 } daos_obj_list_t;
 
@@ -514,6 +539,7 @@ typedef daos_obj_list_t		daos_obj_list_recx_t;
  * daos_anchor_t	*dkey_anchor;
  * daos_anchor_t	*akey_anchor;
  * uint32_t		*versions;
+ * daos_epoch_t		*epoch;
  * bool			incr_order;
 */
 typedef daos_obj_list_t		daos_obj_list_obj_t;

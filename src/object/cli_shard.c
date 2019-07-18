@@ -546,6 +546,7 @@ struct obj_enum_args {
 	daos_epoch_range_t	*eaa_eprs;
 	daos_size_t		*eaa_size;
 	unsigned int		*eaa_map_ver;
+	daos_epoch_t		*eaa_epoch;
 };
 
 static int
@@ -619,6 +620,9 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		if (rc)
 			D_GOTO(out, rc);
 	}
+
+	if (enum_args->eaa_epoch != NULL)
+		*enum_args->eaa_epoch = oeo->oeo_epoch;
 
 	/* Update dkey hash and tag */
 	if (enum_args->eaa_dkey_anchor)
@@ -761,6 +765,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
 	enum_args.eaa_recxs = obj_args->recxs;
 	enum_args.eaa_eprs = obj_args->eprs;
+	enum_args.eaa_epoch = obj_args->epoch;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)

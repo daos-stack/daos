@@ -32,6 +32,7 @@
 
 #include <abt.h>
 #include <daos/rpc.h>
+#include <daos/daos_enum.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/container.h>
@@ -720,9 +721,9 @@ out:
 static int
 ds_pre_check(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	     uuid_t hdl_uuid, uuid_t co_uuid, uint32_t opc,
-	     struct ds_cont_hdl **hdlp, struct ds_cont_child **contp)
+	     struct ds_cont_hdl **hdlp, struct ds_cont_child **contp,
+	     uint32_t *map_ver)
 {
-	uint32_t	map_ver;
 	int		rc;
 
 	*hdlp = NULL;
@@ -732,9 +733,9 @@ ds_pre_check(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 		return rc;
 
 	D_ASSERT((*hdlp)->sch_pool != NULL);
-	map_ver = (*hdlp)->sch_pool->spc_map_version;
+	*map_ver = (*hdlp)->sch_pool->spc_map_version;
 
-	if (rpc_map_ver > map_ver ||
+	if (rpc_map_ver > *map_ver ||
 	   (*hdlp)->sch_pool->spc_pool->sp_map == NULL ||
 	   DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
 		/* XXX: Client (or leader replica) has newer pool map than
@@ -763,12 +764,12 @@ ds_pre_check(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 * pool map to avoid any possible issue
 		 */
 		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
-			map_ver, rpc_map_ver);
+			*map_ver, rpc_map_ver);
 		rc = ds_pool_child_map_refresh_async((*hdlp)->sch_pool);
 		D_GOTO(out_put, rc = rc ? : -DER_STALE);
-	} else if (rpc_map_ver < map_ver) {
+	} else if (rpc_map_ver < *map_ver) {
 		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
-			rpc_map_ver, map_ver);
+			rpc_map_ver, *map_ver);
 		if (obj_is_modification_opc(opc))
 			D_GOTO(out_put, rc = -DER_STALE);
 		/* It is harmless if fetch with old pool map version. */
@@ -807,12 +808,19 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
 	if (rc)
 		goto out;
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_ver = cont_hdl->sch_pool->spc_map_version;
+
+	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
+		daos_key_t	*dkey = &orw->orw_dkey;
+		unsigned char	*buf = dkey->iov_buf;
+
+		buf[0] += 1;
+		orw->orw_dkey_hash = obj_dkey2hash(&orw->orw_dkey);
+	}
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
@@ -829,6 +837,17 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 				       orw->orw_dkey_hash, false);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
+	}
+
+	/* Inject failure for test to simulate the case of lost some
+	 * record/akey/dkey on some non-leader.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_VC_LOST_DATA)) {
+		if (orw->orw_dti_cos.ca_count > 0)
+			vos_dtx_commit(cont->sc_hdl, orw->orw_dti_cos.ca_arrays,
+				       orw->orw_dti_cos.ca_count);
+
+		D_GOTO(out, rc = 0);
 	}
 
 	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, cont->sc_hdl,
@@ -904,12 +923,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
 	if (rc)
 		goto out;
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_ver = cont_hdl->sch_pool->spc_map_version;
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
@@ -1035,9 +1053,42 @@ ds_eu_complete(crt_rpc_t *rpc, int status, int map_version)
 		D_FREE(oeo->oeo_recxs.ca_arrays);
 }
 
+/**
+ * Enumerate VOS objects, dkeys, akeys, and/or recxs and pack them into a set
+ * of buffers.
+ *
+ * The buffers must be provided by the caller. They may contain existing data,
+ * in which case this function appends to them.
+ *
+ * \param[in]		param		iteration parameters
+ * \param[in]		type		iteration type
+ * \param[in]		recursive	iterate to next level recursively
+ * \param[in]		anchors		iteration anchors
+ * \param[in,out]	arg		enumeration argument
+ *
+ * \retval		0		enumeration complete
+ * \retval		1		buffer(s) full
+ * \retval		-DER_*		error
+ */
+static int
+ds_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+	     struct vos_iter_anchors *anchors, struct daos_enum_arg *arg)
+{
+	int	rc;
+
+	D_ASSERT(!arg->fill_recxs ||
+		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
+
+	arg->copy_cb = vos_iter_copy;
+	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, arg);
+
+	D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
+	return rc;
+}
+
 static int
 ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
-	    struct dss_enum_arg *enum_arg, uint32_t *map_version)
+	    struct daos_enum_arg *enum_arg, uint32_t *map_version)
 {
 	vos_iter_param_t	param = { 0 };
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
@@ -1050,12 +1101,11 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 
 	rc = ds_pre_check(oei->oei_oid, oei->oei_map_ver, oei->oei_pool_uuid,
 			  oei->oei_co_hdl, oei->oei_co_uuid, opc, &cont_hdl,
-			  &cont);
+			  &cont, map_version);
 	if (rc)
 		D_GOTO(out, rc);
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	*map_version = cont_hdl->sch_pool->spc_map_version;
 
 	/* prepare enumeration parameters */
 	param.ip_hdl = cont->sc_hdl;
@@ -1092,7 +1142,7 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	} else if (opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_AKEY;
 	} else {
-		/* object iteration for rebuild */
+		/* object iteration for rebuild or consistency verification. */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		param.ip_epr.epr_lo = 0;
@@ -1110,10 +1160,50 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	 * Need to use separate anchors for SV and EV, or return a
 	 * 'type' to indicate the anchor is on SV tree or EV tree.
 	 */
-	if (type == VOS_ITER_SINGLE)
+	if (type == VOS_ITER_SINGLE) {
 		anchors->ia_sv = anchors->ia_ev;
+	} else if (type == VOS_ITER_DKEY &&
+		   (daos_anchor_get_flags(&anchors->ia_dkey) &
+		    DIOF_FLUSH_DTX)) {
+		struct ds_pool_child	*pool = cont_hdl->sch_pool;
+		uint64_t		 hlc = crt_hlc_get();
 
-	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
+		while (1) {
+			struct dtx_entry	*dtes = NULL;
+			struct dtx_stat		 stat = { 0 };
+
+			rc = vos_dtx_fetch_committable(cont->sc_hdl,
+					       DTX_THRESHOLD_COUNT, &dtes);
+			if (rc < 0) {
+				D_WARN(DF_UOID" fail to flush dtx (1), may "
+				       "cause subsequent failure: rc = %d\n",
+				       DP_UOID(oei->oei_oid), rc);
+				break;
+			}
+
+			if (rc == 0)
+				break;
+
+			rc = dtx_commit(pool->spc_uuid, cont->sc_uuid,
+					dtes, rc, pool->spc_map_version);
+			D_FREE(dtes);
+			if (rc < 0) {
+				D_WARN(DF_UOID" fail to flush dtx (2), may "
+				       "cause subsequent failure: rc = %d\n",
+				       DP_UOID(oei->oei_oid), rc);
+				break;
+			}
+
+			vos_dtx_stat(cont->sc_hdl, &stat);
+			if (hlc < stat.dtx_oldest_committable_time)
+				break;
+		}
+
+		if (DAOS_FAIL_CHECK(DAOS_VC_LOST_REP))
+			D_GOTO(out_cont_hdl, rc =  -DER_NONEXIST);
+	}
+
+	rc = ds_enum_pack(&param, type, recursive, anchors, enum_arg);
 
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
@@ -1191,7 +1281,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
-	struct dss_enum_arg	enum_arg = { 0 };
+	struct daos_enum_arg	enum_arg = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
@@ -1295,6 +1385,7 @@ out:
 	/* for KEY2BIG case, just reuse the oeo_size to reply the key len */
 	if (rc == -DER_KEY2BIG)
 		oeo->oeo_size = enum_arg.kds[0].kd_key_len;
+	oeo->oeo_epoch = oei->oei_epoch;
 	ds_eu_complete(rpc, rc, map_version);
 }
 
@@ -1375,7 +1466,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	rc = ds_pre_check(opi->opi_oid, opi->opi_map_ver, opi->opi_pool_uuid,
 			  opi->opi_co_hdl, opi->opi_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_version);
 	if (rc)
 		goto out;
 
@@ -1460,7 +1551,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	rc = ds_pre_check(opi->opi_oid, opi->opi_map_ver, opi->opi_pool_uuid,
 			  opi->opi_co_hdl, opi->opi_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_version);
 	if (rc)
 		goto out;
 

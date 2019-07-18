@@ -779,6 +779,24 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
 
+enum daos_obj_verify_flags {
+	/** There is not concurrent modification during the verification. */
+	DOVF_IMMUTABLE		= 0x1,
+};
+
+/**
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID.
+ * \param[in]	flags	The flags for verification, see daos_obj_verify_flags.
+ *
+ * \return		0		Success and consistent
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_MISMATCH	Found data inconsistency
+ */
+int
+daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, uint32_t flags);
+
 #if defined(__cplusplus)
 }
 #endif

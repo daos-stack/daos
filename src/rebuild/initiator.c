@@ -32,6 +32,7 @@
 #include <daos/btree_class.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos/daos_enum.h>
 #include <daos/object.h>
 #include <daos/container.h>
 #include <daos/pool.h>
@@ -77,16 +78,16 @@ static int
 rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t	sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t	iov[DSS_ENUM_UNPACK_MAX_IODS];
+	d_sg_list_t	sgls[DAOS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t		iov[DAOS_ENUM_UNPACK_MAX_IODS];
 	int		iod_cnt = 0;
 	int		start;
-	char		iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
+	char		iov_buf[DAOS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
 	bool		fetch = false;
 	int		i;
 	int		rc;
 
-	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	D_ASSERT(rdone->ro_iod_num <= DAOS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < rdone->ro_iod_num; i++) {
 		if (rdone->ro_iods[i].iod_size == 0)
 			continue;
@@ -163,11 +164,11 @@ static int
 rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS], *sgl;
+	d_sg_list_t	 sgls[DAOS_ENUM_UNPACK_MAX_IODS], *sgl;
 	daos_handle_t	 ioh;
 	int		 rc, i, ret, sgl_cnt = 0;
 
-	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	D_ASSERT(rdone->ro_iod_num <= DAOS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      &rdone->ro_dkey, rdone->ro_iod_num,
 			      rdone->ro_iods, &ioh, NULL);
@@ -716,7 +717,7 @@ free:
 }
 
 static int
-rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
+rebuild_one_queue_cb(struct daos_enum_unpack_io *io, void *arg)
 {
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
 				 io->ui_dkey_eph, io->ui_iods,
@@ -753,9 +754,6 @@ rebuild_obj_punch(struct rebuild_iter_obj_arg *arg)
 	return dss_task_collective(rebuild_obj_punch_one, arg, 0);
 }
 
-#define KDS_NUM		16
-#define ITER_BUF_SIZE   2048
-
 /**
  * Iterate akeys/dkeys of the object
  */
@@ -764,16 +762,7 @@ rebuild_obj_ult(void *data)
 {
 	struct rebuild_iter_obj_arg	*arg = data;
 	struct rebuild_pool_tls		*tls;
-	daos_anchor_t			 anchor;
-	daos_anchor_t			 dkey_anchor;
-	daos_anchor_t			 akey_anchor;
 	daos_handle_t			 oh;
-	d_sg_list_t			 sgl = { 0 };
-	d_iov_t			 iov = { 0 };
-	char				 stack_buf[ITER_BUF_SIZE];
-	char				*buf = NULL;
-	daos_size_t			 buf_len;
-	struct dss_enum_arg		 enum_arg;
 	int				 rc;
 
 	tls = rebuild_pool_tls_lookup(arg->rpt->rt_pool_uuid,
@@ -792,89 +781,15 @@ rebuild_obj_ult(void *data)
 
 	D_DEBUG(DB_REBUILD, "start rebuild obj "DF_UOID" for shard %u\n",
 		DP_UOID(arg->oid), arg->shard);
-	memset(&anchor, 0, sizeof(anchor));
-	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
-	memset(&akey_anchor, 0, sizeof(akey_anchor));
-	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-	daos_anchor_set_flags(&dkey_anchor,
-			      DAOS_ANCHOR_FLAGS_TO_LEADER);
 
-	/* Initialize enum_arg for VOS_ITER_DKEY. */
-	memset(&enum_arg, 0, sizeof(enum_arg));
-	enum_arg.oid = arg->oid;
-	enum_arg.chk_key2big = true;
+	D_ASSERT(arg->oid.id_shard == arg->shard);
 
-	buf = stack_buf;
-	buf_len = ITER_BUF_SIZE;
-	while (1) {
-		daos_key_desc_t	kds[KDS_NUM] = { 0 };
-		daos_epoch_range_t eprs[KDS_NUM];
-		uint32_t	num = KDS_NUM;
-		daos_size_t	size;
-
-		memset(buf, 0, buf_len);
-		iov.iov_len = 0;
-		iov.iov_buf = buf;
-		iov.iov_buf_len = buf_len;
-
-		sgl.sg_nr = 1;
-		sgl.sg_nr_out = 1;
-		sgl.sg_iovs = &iov;
-
-		rc = ds_obj_list_obj(oh, arg->epoch, NULL, NULL, &size,
-				     &num, kds, eprs, &sgl, &anchor,
-				     &dkey_anchor, &akey_anchor);
-
-		if (rc == -DER_KEY2BIG) {
-			D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" got "
-				"-DER_KEY2BIG, key_len "DF_U64"\n",
-				DP_UOID(arg->oid), kds[0].kd_key_len);
-			buf_len = roundup(kds[0].kd_key_len * 2, 8);
-			if (buf != stack_buf)
-				D_FREE(buf);
-			D_ALLOC(buf, buf_len);
-			if (buf == NULL) {
-				rc = -DER_NOMEM;
-				break;
-			}
-			continue;
-		} else if (rc) {
-			/* container might have been destroyed. Or there is
-			 * no spare target left for this object see
-			 * obj_grp_valid_shard_get()
-			 */
-			rc = (rc == -DER_NONEXIST) ? 0 : rc;
-			break;
-		}
-		if (num == 0)
-			break;
-
-		iov.iov_len = size;
-
-		enum_arg.kds = kds;
-		enum_arg.kds_cap = KDS_NUM;
-		enum_arg.kds_len = num;
-		enum_arg.sgl = &sgl;
-		enum_arg.sgl_idx = 1;
-		enum_arg.eprs = eprs;
-		enum_arg.eprs_cap = KDS_NUM;
-		enum_arg.eprs_len = num;
-		rc = dss_enum_unpack(VOS_ITER_DKEY, &enum_arg,
-				     rebuild_one_queue_cb, arg);
-		if (rc) {
-			D_ERROR("rebuild "DF_UOID" failed: %d\n",
-				DP_UOID(arg->oid), rc);
-			break;
-		}
-
-		if (daos_anchor_is_eof(&dkey_anchor))
-			break;
-	}
+	rc = daos_enum_dkeys(oh, arg->oid, arg->epoch, ds_obj_list_obj,
+			     rebuild_one_queue_cb, arg);
 
 	ds_obj_close(oh);
+
 free:
-	if (buf != NULL && buf != stack_buf)
-		D_FREE(buf);
 	if (arg->epoch == DAOS_EPOCH_MAX)
 		tls->rebuild_pool_obj_count++;
 	if (tls->rebuild_pool_status == 0 && rc < 0)

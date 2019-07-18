@@ -170,7 +170,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, dkey, nr, iods, sgls,
+	rc = dc_obj_fetch_task_create(oh, th, 0, 0, dkey, nr, iods, sgls,
 				      maps, ev, NULL, &task);
 	if (rc)
 		return rc;
@@ -261,6 +261,23 @@ daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 	daos_obj_close(oh, NULL);
 	if (rc != 0 && *layout != NULL)
 		daos_obj_layout_free(*layout);
+
+	return rc;
+}
+
+int
+daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, uint32_t flags)
+{
+	daos_handle_t	oh;
+	int		rc;
+
+	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = dc_obj_verify(oh, flags);
+
+	daos_obj_close(oh, NULL);
 
 	return rc;
 }

@@ -535,80 +535,11 @@ int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int nr,
 		 daos_iod_t *iods, d_sg_list_t *sgls,
 		 daos_iom_t *maps);
-int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t *epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
 		d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
-
-struct dss_enum_arg {
-	bool			fill_recxs;	/* type == S||R */
-	bool			chk_key2big;
-	daos_epoch_range_t     *eprs;
-	int			eprs_cap;
-	int			eprs_len;
-	int			last_type;	/* hack for tweaking kds_len */
-
-	/* Buffer fields */
-	union {
-		struct {	/* !fill_recxs */
-			daos_key_desc_t	       *kds;
-			int			kds_cap;
-			int			kds_len;
-			d_sg_list_t	       *sgl;
-			int			sgl_idx;
-		};
-		struct {	/* fill_recxs && type == S||R */
-			daos_recx_t	       *recxs;
-			int			recxs_cap;
-			int			recxs_len;
-		};
-	};
-	daos_size_t		inline_thres;	/* type == S||R || chk_key2big*/
-	int			rnum;		/* records num (type == S||R) */
-	daos_size_t		rsize;		/* record size (type == S||R) */
-	daos_unit_oid_t		oid;		/* for unpack */
-};
-
-int
-dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg);
-
-/** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
-#define DSS_ENUM_UNPACK_MAX_IODS 16
-
-/**
- * Used by dss_enum_unpack to accumulate recxs that can be stored with a single
- * VOS update.
- *
- * ui_oid and ui_dkey are only filled by dss_enum_unpack for certain
- * enumeration types, as commented after each field. Callers may fill ui_oid,
- * for instance, when the enumeration type is VOS_ITER_DKEY, to pass the object
- * ID to the callback.
- *
- * ui_iods, ui_recxs_caps, and ui_sgls are arrays of the same capacity
- * (ui_iods_cap) and length (ui_iods_len). That is, the iod in ui_iods[i] can
- * hold at most ui_recxs_caps[i] recxs, which have their inline data described
- * by ui_sgls[i]. ui_sgls is optional. If ui_iods[i].iod_recxs[j] has no inline
- * data, then ui_sgls[i].sg_iovs[j] will be empty.
- */
-struct dss_enum_unpack_io {
-	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
-	daos_key_t	ui_dkey;	/**< type <= DKEY */
-	daos_iod_t     *ui_iods;
-	int		ui_iods_cap;
-	int		ui_iods_len;
-	int	       *ui_recxs_caps;
-	daos_epoch_t	ui_dkey_eph;
-	daos_epoch_t   *ui_akey_ephs;
-	d_sg_list_t *ui_sgls;	/**< optional */
-	uint32_t	ui_version;
-};
-
-typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
-
-int dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
-		    dss_enum_unpack_cb_t cb, void *cb_arg);
 
 d_rank_t dss_self_rank(void);
 
