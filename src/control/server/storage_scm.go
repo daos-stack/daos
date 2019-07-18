@@ -57,7 +57,7 @@ var (
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *configuration // server configuration structure
-	modules     []*pb.ScmModule
+	modules     common.ScmModules
 	initialized bool
 	formatted   bool
 }
@@ -86,7 +86,7 @@ func (s *scmStorage) Teardown() error {
 	return nil
 }
 
-func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms []*pb.ScmModule) {
+func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -235,7 +235,7 @@ func newMntRet(
 
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
-func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
+func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 	srv := s.config.Servers[i]
 	mntPoint := srv.ScmMount
 	log.Debugf("performing SCM device reset, format and mount")
@@ -313,7 +313,7 @@ func (s *scmStorage) Format(i int, results *([]*pb.ScmMountResult)) {
 
 // Update is currently a placeholder method stubbing SCM module fw update.
 func (s *scmStorage) Update(
-	i int, req *pb.UpdateScmReq, results *([]*pb.ScmModuleResult)) {
+	i int, req *pb.UpdateScmReq, results *(common.ScmModuleResults)) {
 
 	// respond with single result indicating no implementation
 	*results = append(

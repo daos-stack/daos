@@ -23,9 +23,7 @@
 
 package common
 
-import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-)
+import pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 
 // MockFeaturePB is a mock protobuf Feature message used in tests for multiple
 // packages.
