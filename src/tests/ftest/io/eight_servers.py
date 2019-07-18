@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from ior_single_server import IorTestBase
+"""
+from ior_test_base import IorTestBase
 
 
 class IorEightServers(IorTestBase):
@@ -42,8 +42,9 @@ class IorEightServers(IorTestBase):
 
         :avocado: tags=ior,eightservers,ior_sequential
         """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/sequential/')
-        self.execute_ior(ior_flags)
+        ior_flags = self.params.get("F", "/run/ior/iorflags/sequential/")
+        self.ior_cmd.flags.update(ior_flags)
+        self.run_ior_with_pool()
 
     def test_random(self):
         """Jira ID: DAOS-1264.
@@ -57,5 +58,6 @@ class IorEightServers(IorTestBase):
 
         :avocado: tags=ior,eightservers,ior_random
         """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/random/')
-        self.execute_ior(ior_flags)
+        ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
+        self.ior_cmd.flags.update(ior_flags)
+        self.run_ior_with_pool()

@@ -47,7 +47,7 @@ ior:
             F: "-w -r -F"
     api: MPIIO
     test_file: daos:testFile
-    repetitions: 1
+    repetitions: 3
     transfersize_blocksize: !mux
         1K:
             transfer_size: '1K'
