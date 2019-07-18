@@ -596,7 +596,7 @@ class TestPool(TestDaosApiBase):
             self.info = self.pool.pool_info
 
     @fail_on(DaosApiError)
-    def get_svc_list(self,svcn):
+    def get_svc_list(self):
         """Obtain svc list using the number of svc
            specified.
            Args:
@@ -605,7 +605,7 @@ class TestPool(TestDaosApiBase):
                 svcn_list: list of svc separated with ':'
         """
         self.svcn_list = ""
-        for i in range(svcn):
+        for i in range(self.svcn.value):
             self.svcn_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
         self.svcn_list = self.svcn_list[:-1]
         return self.svcn_list

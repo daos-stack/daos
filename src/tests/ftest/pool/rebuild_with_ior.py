@@ -50,7 +50,7 @@ class RebuildWithIOR(TestWithServers):
             write_host_file.write_host_file(self.hostlist_clients,
                                             self.workdir, None))
 
-    @skipForTicket("DAOS-2773")
+#    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """
         Jira ID: DAOS-951
@@ -68,6 +68,8 @@ class RebuildWithIOR(TestWithServers):
         try:
             self.pool = TestPool(self.context, self.log)
             self.pool.get_params(self)
+            targets = self.params.get("targets", "/run/server_config/*")
+            rank = self.params.get("rank_to_kill", "/run/testparams/*")
 
             # initialize MpioUtils
             self.mpio = MpioUtils()
@@ -105,9 +107,9 @@ class RebuildWithIOR(TestWithServers):
 #                             createsize, createsetid, None, None, createsvc)
 
             self.pool.create()
-            pool_uuid = self.uuid
-            self.pool.get_svc_list(self.svcn)
-            svcn_list = self.svcn_list
+            pool_uuid = self.pool.uuid
+            self.pool.get_svc_list()
+            svcn_list = self.pool.svcn_list
 
 #            pool_uuid = self.pool.get_uuid_str()
 #            svc_list = ""
@@ -147,7 +149,7 @@ class RebuildWithIOR(TestWithServers):
 
             # perform first set of io using IOR
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                    pool_uuid, svc_list, client_processes,
+                                    pool_uuid, svcn_list, client_processes,
                                     self.hostfile_clients, iorflags_write,
                                     iteration, transfer_size, block_size, True,
                                     oclass)
@@ -163,7 +165,7 @@ class RebuildWithIOR(TestWithServers):
 
             # perform second set of io using IOR
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                    pool_uuid, svc_list, client_processes,
+                                    pool_uuid, svcn_list, client_processes,
                                     self.hostfile_clients, iorflags_write,
                                     iteration, transfer_size, block_size, True,
                                     oclass, "testFile2")
@@ -222,12 +224,12 @@ class RebuildWithIOR(TestWithServers):
 
             # check data intergrity using ior for both ior runs
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                    pool_uuid, svc_list, client_processes,
+                                    pool_uuid, svcn_list, client_processes,
                                     self.hostfile_clients, iorflags_read,
                                     iteration, transfer_size, block_size, True,
                                     oclass)
             ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                    pool_uuid, svc_list, client_processes,
+                                    pool_uuid, svcn_list, client_processes,
                                     self.hostfile_clients, iorflags_read,
                                     iteration, transfer_size, block_size, True,
                                     oclass, "testFile2")
