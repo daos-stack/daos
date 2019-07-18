@@ -208,11 +208,11 @@ struct test_key_record {
 struct test_update_fetch_arg {
 	daos_recx_t		*ua_recxs;
 	int			*ua_values;
-	int			 ua_recx_num;
-	int			 ua_single_value;
-	int			 ua_array:1, /* false for single */
-				 ua_verify:1;
-	bool 		         snap;
+	int			ua_recx_num;
+	int			ua_single_value;
+	int			ua_array:1, /* false for single */
+				ua_verify:1;
+	bool			snap;
 };
 
 struct test_add_exclude_arg {
