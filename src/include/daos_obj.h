@@ -287,6 +287,15 @@ typedef struct {
 	uint16_t	kd_csum_len;
 } daos_key_desc_t;
 
+enum daos_io_flags {
+	/* The RPC will be sent to leader replica. */
+	DIOF_TO_LEADER		= 0x1,
+	/* The RPC will be sent to specified replica. */
+	DIOF_TO_SPEC_SHARD	= 0x2,
+	/* Flush DTXs before list. */
+	DIOF_FLUSH_DTX		= 0x4,
+};
+
 /**
  * Generate a DAOS object ID by encoding the private DAOS bits of the object
  * address space.
@@ -381,6 +390,9 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Permission denied
  *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related DTX may has been aggregated.
+ *					The punch result is undefined.
  */
 int
 daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
@@ -403,6 +415,9 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Permission denied
  *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related DTX may has been aggregated.
+ *					The punch result is undefined.
  */
 int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
@@ -427,6 +442,9 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Permission denied
  *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related DTX may has been aggregated.
+ *					The punch result is undefined.
  */
 int
 daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
@@ -568,6 +586,9 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related DTX may has been aggregated.
+ *					The update result is undefined.
  */
 int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,

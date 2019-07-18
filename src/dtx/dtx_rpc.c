@@ -165,6 +165,7 @@ dtx_req_send(struct dtx_req_rec *drr)
 	crt_rpc_t		*req;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
+	struct dtx_in		*din = NULL;
 	int			 rc;
 
 	tgt_ep.ep_grp = NULL;
@@ -174,11 +175,10 @@ dtx_req_send(struct dtx_req_rec *drr)
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
-		struct dtx_in	*din;
-
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
+		din->di_epoch = crt_hlc_get();
 		din->di_dtx_array.ca_count = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
@@ -187,8 +187,8 @@ dtx_req_send(struct dtx_req_rec *drr)
 			crt_req_decref(req);
 	}
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x sent: rc = %d.\n",
-		dra->dra_opc, rc);
+	D_DEBUG(DB_TRACE, "DTX req for opc %x sent "DF_X64" : rc = %d.\n",
+		dra->dra_opc, din != NULL ? din->di_epoch : 0, rc);
 
 	if (rc != 0) {
 		drr->drr_result = rc;

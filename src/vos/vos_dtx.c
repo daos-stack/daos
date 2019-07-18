@@ -141,6 +141,8 @@ dtx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	 */
 	umoff = (umem_off_t *)args;
 	*umoff = rec->rec_off;
+
+	umem_tx_add_ptr(&tins->ti_umm, &rec->rec_off, sizeof(rec->rec_off));
 	rec->rec_off = UMOFF_NULL;
 
 	return 0;
@@ -290,8 +292,8 @@ dtx_obj_rec_exchange(struct umem_instance *umm, struct vos_obj_df *obj,
 		 * record will be removed via VOS aggregation or other
 		 * tools some time later.
 		 */
-		if (abort)
-			dtx_set_aborted(&obj->vo_dtx);
+		D_ASSERT(abort);
+		dtx_set_aborted(&obj->vo_dtx);
 		return;
 	}
 
@@ -375,16 +377,32 @@ dtx_obj_rec_release(struct umem_instance *umm, struct vos_obj_df *obj,
 
 	dtx = umem_off2ptr(umm, umoff);
 	if (dtx->te_intent == DAOS_INTENT_PUNCH) {
-		/* Because PUNCH cannot share with others, the vo_dtx should
-		 * reference current DTX.
-		 */
-		if (obj->vo_dtx != umoff)
+		if (dtx_is_null(obj->vo_dtx)) {
+			/* Two possible cases:
+			 *
+			 * 1. It is the punch exchange target (with the
+			 *    flag DTX_RF_EXCHANGE_TGT) that should has
+			 *    been processed when handling the exchange
+			 *    source.
+			 *
+			 * 2. It is the DTX record for creating the obj
+			 *    that will be punched in the modification.
+			 *    The flag is zero under such case.
+			 */
+			if (rec->tr_flags == 0 && abort)
+				dtx_set_aborted(&obj->vo_dtx);
+		} else if (obj->vo_dtx != umoff) {
+			/* Because PUNCH cannot share with others, the vo_dtx
+			 * should reference current DTX.
+			 */
 			D_ERROR("The OBJ "DF_UOID" should referece DTX "
-				DF_DTI", but referenced %s\n",
+				DF_DTI", but referenced "UMOFF_PF" by wrong.\n",
 				DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid),
-				dtx_is_null(obj->vo_dtx) ? "UNLL" : "other");
-		else
+				UMOFF_P(obj->vo_dtx));
+		} else {
 			dtx_obj_rec_exchange(umm, obj, dtx, rec, abort);
+		}
+
 		return;
 	}
 
@@ -449,8 +467,8 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 		 * record will be removed via VOS aggregation or other
 		 * tools some time later.
 		 */
-		if (abort)
-			dtx_set_aborted(&key->kr_dtx);
+		D_ASSERT(abort);
+		dtx_set_aborted(&key->kr_dtx);
 		return;
 	}
 
@@ -546,16 +564,28 @@ dtx_key_rec_release(struct umem_instance *umm, struct vos_krec_df *key,
 
 	dtx = umem_off2ptr(umm, umoff);
 	if (dtx->te_intent == DAOS_INTENT_PUNCH) {
-		/* Because PUNCH cannot share with others, the kr_dtx should
-		 * reference current DTX.
-		 */
-		if (key->kr_dtx != umoff)
+		if (dtx_is_null(key->kr_dtx)) {
+			if (rec->tr_flags != DTX_RF_EXCHANGE_TGT)
+				D_ERROR("The KEY ("UMOFF_PF") "DF_UOID
+					" should referece DTX "DF_DTI
+					", but lost punch flag (%x).\n",
+					UMOFF_P(umem_ptr2off(umm, rec)),
+					DP_UOID(dtx->te_oid),
+					DP_DTI(&dtx->te_xid), rec->tr_flags);
+
+			D_ASSERT(!abort);
+		} else if (key->kr_dtx != umoff) {
+			/* Because PUNCH cannot share with others, the kr_dtx
+			 * should reference current DTX.
+			 */
 			D_ERROR("The KEY "DF_UOID" should referece DTX "
-				DF_DTI", but referenced %s\n",
+				DF_DTI", but referenced "UMOFF_PF" by wrong.\n",
 				DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid),
-				dtx_is_null(key->kr_dtx) ? "UNLL" : "other");
-		else
+				UMOFF_P(key->kr_dtx));
+		} else {
 			dtx_key_rec_exchange(umm, key, dtx, rec, abort);
+		}
+
 		return;
 	}
 
@@ -1664,7 +1694,7 @@ vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age)
 		umem_off_t		 umoff;
 
 		dtx = umem_off2ptr(umm, dtx_umoff);
-		if (dtx_hlc_age2sec(dtx->te_sec) <= age)
+		if (dtx_hlc_age2sec(dtx->te_sec) < age)
 			break;
 
 		d_iov_set(&kiov, &dtx->te_xid, sizeof(dtx->te_xid));

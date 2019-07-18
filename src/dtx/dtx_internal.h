@@ -57,6 +57,7 @@ enum dtx_operation {
 #define DAOS_ISEQ_DTX							\
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
+	((uint64_t)		(di_epoch)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)
 
 /* DTX RPC output fields */

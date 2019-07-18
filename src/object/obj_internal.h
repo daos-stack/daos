@@ -294,15 +294,6 @@ int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
 
-enum daos_io_flags {
-	/* The RPC will be sent to leader replica. */
-	DIOF_TO_LEADER		= 0x1,
-	/* The RPC will be sent to specified replica. */
-	DIOF_TO_SPEC_SHARD	= 0x2,
-	/* Flush DTXs before list. */
-	DIOF_FLUSH_DTX		= 0x4,
-};
-
 #define KDS_NUM		16
 #define ITER_BUF_SIZE	2048
 

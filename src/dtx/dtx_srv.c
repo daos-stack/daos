@@ -77,8 +77,10 @@ dtx_handler(crt_rpc_t *rpc)
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u: rc = %d\n",
-		DP_DTI(din->di_dtx_array.ca_arrays), opc, rc);
+	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u, count %d, epoch "
+		DF_X64" : rc = %d\n",
+		DP_DTI(din->di_dtx_array.ca_arrays), opc,
+		(int)din->di_dtx_array.ca_count, din->di_epoch, rc);
 
 	dout->do_status = rc;
 	rc = crt_reply_send(rpc);
