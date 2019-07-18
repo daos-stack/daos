@@ -441,15 +441,17 @@ test_rmdir(const char *path, bool force)
 		switch (ent->d_type) {
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
+			if (rc != 0)
+				D_ERROR("test_rmdir %s failed, rc %d", fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
+			if (rc != 0)
+				D_ERROR("unlink %s failed, rc %d", fullpath, rc);
 			break;
 		default:
 			D_WARN("find unexpected type %d", ent->d_type);
 		}
-		if (rc != 0)
-			D_ERROR("unlink %s failed, rc %d", fullpath, rc);
 
 		memset(fullpath, 0, PATH_MAX);
 	}
