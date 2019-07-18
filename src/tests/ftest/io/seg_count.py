@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from ior_single_server import IorTestBase
+"""
+from ior_test_base import IorTestBase
 from write_host_file import write_host_file
 
 
@@ -49,23 +49,23 @@ class SegCount(IorTestBase):
 
         # Set the IOR segment count
         if self.ior_cmd.block_size.value == '4k' and self.processes == 16:
-            self.ior_cmd.segment_count.value = 491500
+            self.ior_cmd.segment_count.update(491500)
         elif self.ior_cmd.block_size.value == '4k' and self.processes == 32:
-            self.ior_cmd.segment_count.value = 245750
+            self.ior_cmd.segment_count.update(245750)
         elif self.ior_cmd.block_size.value == '4k' and self.processes == 64:
-            self.ior_cmd.segment_count.value = 122875
+            self.ior_cmd.segment_count.update(122875)
         elif self.ior_cmd.block_size.value == '1m' and self.processes == 16:
-            self.ior_cmd.segment_count.value = 1920
+            self.ior_cmd.segment_count.update(1920)
         elif self.ior_cmd.block_size.value == '1m' and self.processes == 32:
-            self.ior_cmd.segment_count.value = 960
+            self.ior_cmd.segment_count.update(960)
         elif self.ior_cmd.block_size.value == '1m' and self.processes == 64:
-            self.ior_cmd.segment_count.value = 480
+            self.ior_cmd.segment_count.update(480)
         elif self.ior_cmd.block_size.value == '4m' and self.processes == 16:
-            self.ior_cmd.segment_count.value = 480
+            self.ior_cmd.segment_count.update(480)
         elif self.ior_cmd.block_size.value == '4m' and self.processes == 32:
-            self.ior_cmd.segment_count.value = 240
+            self.ior_cmd.segment_count.update(240)
         elif self.ior_cmd.block_size.value == '4m' and self.processes == 64:
-            self.ior_cmd.segment_count.value = 120
+            self.ior_cmd.segment_count.update(120)
 
         # Create a pool and run IOR
-        self.execute_ior()
+        self.run_ior_with_pool()

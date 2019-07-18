@@ -209,10 +209,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=metadata,metadata_ior,nvme,small
         """
-        # files_per_thread = 400
-        files_per_thread = 2
-        # total_ior_threads = 5
-        total_ior_threads = 2
+        files_per_thread = 400
+        total_ior_threads = 5
         self.out_queue = Queue.Queue()
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")

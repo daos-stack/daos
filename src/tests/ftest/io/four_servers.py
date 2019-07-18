@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from ior_single_server import IorTestBase
+"""
+from ior_test_base import IorTestBase
 
 
 class IorFourServers(IorTestBase):
@@ -42,4 +42,4 @@ class IorFourServers(IorTestBase):
 
         :avocado: tags=ior,fourservers
         """
-        self.execute_ior()
+        self.run_ior_with_pool()

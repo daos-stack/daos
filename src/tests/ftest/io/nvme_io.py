@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,20 +20,17 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
 import avocado
 
-from apricot import TestWithServers
 from daos_api import DaosPool, DaosApiError
-from general_utils import DaosTestError
-from ior_utils import IorCommand, IorFailed
-import write_host_file
+from ior_test_base import IorTestBase
 
 
-class NvmeIo(TestWithServers):
+class NvmeIo(IorTestBase):
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -41,65 +38,6 @@ class NvmeIo(TestWithServers):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a IorTestBase object."""
-        super(NvmeIo, self).__init__(*args, **kwargs)
-        self.ior_cmd = None
-
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super(NvmeIo, self).setUp()
-
-        # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file.write_host_file(
-            self.hostlist_clients, self.workdir, None)
-
-        # Get the parameters for IOR
-        self.ior_cmd = IorCommand()
-        self.ior_cmd.set_params(self)
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(NvmeIo, self).tearDown()
-
-    def verify_pool_size(self, original_pool_info, processes):
-        """Validate the pool size.
-
-        Args:
-            original_pool_info (PoolInfo): Pool info prior to IOR
-            processes (int): number of processes
-
-        Raises:
-            DaosTestError: if there is any error obtaining the pool size
-
-        """
-        # Get the current pool size for comparison
-        current_pool_info = self.pool.pool_query()
-
-        # If Transfer size is < 4K, Pool size will verified against NVMe, else
-        # it will be checked against SCM
-        if self.ior_cmd.transfer_size.value >= 4096:
-            print("Size is > 4K,Size verification will be done with NVMe size")
-            storage_index = 1
-        else:
-            print("Size is < 4K,Size verification will be done with SCM size")
-            storage_index = 0
-        free_pool_size = \
-            original_pool_info.pi_space.ps_space.s_free[storage_index] - \
-            current_pool_info.pi_space.ps_space.s_free[storage_index]
-
-        expected_pool_size = self.ior_cmd.get_aggregate_total(processes)
-        if free_pool_size < expected_pool_size:
-            raise DaosTestError(
-                'Pool Free Size did not match Actual = {} Expected = {}'
-                .format(free_pool_size, expected_pool_size))
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_io(self):
@@ -122,36 +60,37 @@ class NvmeIo(TestWithServers):
         pool_group = self.params.get("setname", '/run/pool/createset/*')
         pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
 
+        # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
+
         # Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
                 # There is an issue with NVMe if Transfer size>64M,
                 # Skipped this sizes for now
                 if ior_param[2] > 67108864:
-                    print("Xfersize > 64M getting failed, DAOS-1264")
+                    self.log.warning("Xfersize > 64M fails - DAOS-1264")
                     continue
 
+                # Create and connect to a pool
                 self.pool = DaosPool(self.context)
                 self.pool.create(
                     pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
                     svcn=pool_svcn, nvme_size=ior_param[1])
                 self.pool.connect(1 << 1)
 
+                # Get the current pool sizes
                 size_before_ior = self.pool.pool_query()
 
+                # Run ior with the parameters specified for this pass
+                self.ior_cmd.transfer_size.update(ior_param[2])
+                self.ior_cmd.block_size.update(ior_param[3])
+                self.ior_cmd.daos_oclass.update(obj_type)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.ior_cmd.transfer_size.value = ior_param[2]
-                self.ior_cmd.block_size.value = ior_param[3]
-                self.ior_cmd.daos_oclass.value = obj_type
-                try:
-                    self.ior_cmd.run(
-                        self.basepath, ior_param[4], self.hostfile_clients)
-                except IorFailed as error:
-                    print(error)
-                    self.fail("Failed running IOR")
+                self.run_ior(self.get_job_manager_command(), ior_param[4])
 
+                # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, ior_param[4])
 
                 try:
@@ -159,5 +98,6 @@ class NvmeIo(TestWithServers):
                         self.pool.disconnect()
                         self.pool.destroy(1)
                 except DaosApiError as error:
-                    print(error)
+                    self.log.error(
+                        "Pool disconnect/destroy error: %s", str(error))
                     self.fail("Failed to Destroy/Disconnect the Pool")

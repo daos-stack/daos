@@ -69,5 +69,5 @@ ior:
         SX:
             daos_oclass: "SX"
         2-way_Replication:
-            daos_oclass: "RP_2G2"
+            daos_oclass: "RP_2GX"
 

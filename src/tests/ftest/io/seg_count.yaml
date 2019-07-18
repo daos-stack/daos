@@ -32,7 +32,7 @@ ior:
             np: 32
         slots_64:
             np: 64
-    repetitions: 2
+    repetitions: 3
     flags: "-v -W -w -r -R"
     blocksize_transfersize_stripesize: !mux
         4k:
@@ -48,5 +48,5 @@ ior:
         SX:
             daos_oclass: "SX"
         2-way_Replication:
-            daos_oclass: "RP_2G2"
+            daos_oclass: "RP_2GX"
 

@@ -49,5 +49,5 @@ ior:
         oclass_SX:
             daos_oclass: SX
 # Uncomment when DAOS-2305 is resolved
-#        oclass_RP_2G2:
-#            daos_oclass: "RP_2G2"
+#        oclass_RP_2GX:
+#            daos_oclass: "RP_2GX"
