@@ -1,4 +1,4 @@
-"""Build DAOS config"""
+"""Build DAOS Certificate Generation"""
 import os
 
 def scons():
