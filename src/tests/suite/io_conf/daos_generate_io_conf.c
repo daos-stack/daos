@@ -61,7 +61,7 @@ struct current_status {
 	int		cur_dkey_num;
 	int		cur_akey_num;
 	int		cur_rank;
-	int	    	cur_tx;
+	int		cur_tx;
 };
 
 enum rec_types {
@@ -90,7 +90,7 @@ struct record {
 	};
 	int		rec_size;
 	int		type;
-	bool    	snap;
+	bool		snap;
 };
 
 struct records {
