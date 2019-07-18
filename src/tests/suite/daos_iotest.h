@@ -40,6 +40,13 @@ extern int dts_obj_replica_cnt;
 #define IOREQ_SG_NR	5
 #define IOREQ_SG_IOD_NR	5
 
+#define MAX_EXT_NUM		5
+#define MAX_DISTANCE		10
+#define MAX_EXTENT_SIZE		50
+#define MAX_OFFSET		1048576
+#define SINGLE_REC_RATE		20
+#define MAX_EPOCH_TIMES		20
+
 struct ioreq {
 	daos_handle_t		oh;
 	test_arg_t		*arg;
@@ -160,7 +167,8 @@ enum test_op_type {
 	TEST_OP_ADD		= 5,
 	TEST_OP_EXCLUDE		= 6,
 	TEST_OP_POOL_QUERY	= 7,
-	TEST_OP_MAX		= 7,
+	TEST_OP_SNAPSHOT_CREATE = 8,
+	TEST_OP_MAX		= 8,
 };
 
 static inline bool
@@ -204,6 +212,7 @@ struct test_update_fetch_arg {
 	int			 ua_single_value;
 	int			 ua_array:1, /* false for single */
 				 ua_verify:1;
+	bool 		        snap;
 };
 
 struct test_add_exclude_arg {
@@ -219,10 +228,11 @@ struct test_punch_arg {
 /* one OP record per cmd line in the ioconf file */
 struct test_op_record {
 	/* link to test_key_record::or_queue */
-	d_list_t		 or_queue_link;
+	d_list_t		or_queue_link;
 	struct test_key_record	*or_key_rec; /* back pointer */
-	daos_epoch_t		 or_epoch;
-	enum test_op_type	 or_op;
+	int			tx;
+	daos_epoch_t		*snap_epoch;
+	enum test_op_type	or_op;
 	union {
 		struct test_update_fetch_arg	uf_arg;
 		struct test_punch_arg		pu_arg;
