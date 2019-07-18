@@ -848,13 +848,13 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 {
 	struct test_op_record	*op_rec;
 	struct test_punch_arg	*pu_arg;
-	char					*dkey = NULL;
-	char					*akey = NULL;
-	daos_recx_t				*recxs = NULL;
-	unsigned int			recxs_num;
-	int						tx = 1;
-	int						opt;
-	int						rc = 0;
+	char			*dkey = NULL;
+	char			*akey = NULL;
+	daos_recx_t		*recxs = NULL;
+	unsigned int		recxs_num;
+	int			tx = 1;
+	int			opt;
+	int			rc = 0;
 
 	static struct epoch_io_cmd_option options[] = {
 		{"--dkey",	true,	'd'},
