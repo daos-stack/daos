@@ -757,7 +757,7 @@ test_key_rec_add_op(struct test_key_record *key_rec,
 		d_list_add_tail(&op_rec->or_queue_link, &rec->or_queue_link);
 		key_rec->or_op_num++;
 #if CMD_LINE_DBG
-		print_message("added op %d, epoch "DF_U64", dkey %s akey %s, "
+		print_message("added op %d, tx %d, dkey %s akey %s, "
 			      "to queue, op_num %d.\n", op_rec->or_op,
 			      op_rec->tx, key_rec->or_dkey,
 			      key_rec->or_akey, key_rec->or_op_num);
