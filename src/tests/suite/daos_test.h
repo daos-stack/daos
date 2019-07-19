@@ -90,6 +90,14 @@ struct test_pool {
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	daos_size_t		pool_size;
+	/* Updated if some ranks are killed during degraged or rebuild
+	 * test, so we know whether some tests is allowed to be run.
+	 */
+	d_rank_list_t		alive_svc;
+	/* Used for all pool related operation, since client will
+	 * use this rank list to find out the real leader, so it
+	 * can not be changed.
+	 */
 	d_rank_list_t		svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;

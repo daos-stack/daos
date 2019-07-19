@@ -48,3 +48,4 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 31
       args: -s3 -u subtests="31"
+      test_timeout: 1500
