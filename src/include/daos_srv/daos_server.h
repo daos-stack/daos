@@ -198,9 +198,10 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
+	uint32_t		dmi_tse_ult_created:1;
+	uint32_t		dmi_gc_running:1;
 	d_list_t		dmi_dtx_batched_list;
 	tse_sched_t		dmi_sched;
-	uint64_t		dmi_tse_ult_created:1;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -617,5 +618,8 @@ enum dss_init_state {
 void dss_init_state_set(enum dss_init_state state);
 
 bool dss_pmixless(void);
+
+void dss_gc_run(int credits);
+int  dss_gc_run_ult(void);
 
 #endif /* __DSS_API_H__ */

@@ -499,11 +499,18 @@ cont_child_destroy_one(void *vin)
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
-	if (rc == -DER_NONEXIST)
+	if (rc == 0) {
+		rc = dss_gc_run_ult();
+		if (rc)
+			D_ERROR("failed to start VOS GC: %s\n", d_errstr(rc));
+		/* NB: no error is returned to the client, it's not fatal */
+
+	} else if (rc == -DER_NONEXIST) {
 		/** VOS container creation is effectively delayed until
 		 * container open time, so it might legitimately not exist if
 		 * the container has never been opened */
 		rc = 0;
+	}
 out_pool:
 	ds_pool_child_put(pool);
 out:

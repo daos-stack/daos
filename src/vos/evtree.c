@@ -2189,8 +2189,8 @@ evt_open(struct evt_root *root, struct umem_attr *uma,
 	int		    rc;
 
 	if (root->tr_order == 0) {
-		V_TRACE(DB_TRACE, "Tree order is zero\n");
-		return -DER_INVAL;
+		V_TRACE(DB_TRACE, "Nonexistent tree.\n");
+		return -DER_NONEXIST;
 	}
 
 	rc = evt_tcx_create(root, -1, -1, uma, cbs, &tcx);

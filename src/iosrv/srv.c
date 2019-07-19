@@ -35,6 +35,7 @@
 #include <daos_errno.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/vos.h>
 #include <gurt/list.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
@@ -1801,4 +1802,68 @@ dss_dump_ABT_state()
 		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
+}
+
+#define GC_CREDS	128
+
+void
+dss_gc_run(int credits)
+{
+	int	total = 0;
+
+	while (1) {
+		int	creds = 128;
+		int	rc;
+
+		if (credits > 0 && (credits - total) < creds)
+			creds = credits - total;
+
+		total += creds;
+		rc = vos_gc_run(&creds);
+		if (rc) {
+			D_ERROR("GC run failed: %s\n", d_errstr(rc));
+			break;
+		}
+		total -= creds; /* subtract the remainded credits */
+		if (creds != 0) {
+			D_DEBUG(DB_MD, "GC consumed %d credits\n", total);
+			break;
+		}
+
+		if (credits > 0 && total >= credits)
+			break;
+
+		ABT_thread_yield();
+	}
+}
+
+static void
+dss_gc_ult(void *args)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+
+	D_ASSERT(info->dmi_gc_running);
+	/* -1 means GC will run until there is nothing to do */
+	dss_gc_run(-1);
+	info->dmi_gc_running = 0;
+}
+
+int
+dss_gc_run_ult(void)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct dss_xstream	*dxs = dmi->dmi_xstream;
+	int			 rc;
+
+	if (dmi->dmi_gc_running)
+		return 0;
+
+	dmi->dmi_gc_running = 1;
+	rc = ABT_thread_create(dxs->dx_pools[DSS_POOL_SHARE], dss_gc_ult, NULL,
+			       ABT_THREAD_ATTR_NULL, NULL);
+	if (rc != ABT_SUCCESS) {
+		dmi->dmi_gc_running = 0;
+		return dss_abterr2der(rc);
+	}
+	return 0;
 }
