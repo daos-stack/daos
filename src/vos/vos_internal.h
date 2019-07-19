@@ -88,7 +88,8 @@ struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
 	struct d_ulink		vp_hlink;
 	/** number of openers */
-	int			vp_opened;
+	int			vp_opened:30;
+	int			vp_dying:1;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -97,6 +98,12 @@ struct vos_pool {
 	struct umem_instance	vp_umm;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
+	/** GC statistics of this pool */
+	struct vos_gc_stat	vp_gc_stat;
+	/** link chain on vos_tls::vtl_gc_pools */
+	d_list_t		vp_gc_link;
+	/** address of durable-format pool in SCM */
+	struct vos_pool_df	*vp_pool_df;
 	/** I/O context */
 	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */
@@ -127,10 +134,6 @@ struct vos_container {
 	d_list_t		vc_dtx_committable;
 	/* The count of commiitable DTXs. */
 	uint32_t		vc_dtx_committable_count;
-	/* Direct pointer to VOS object index
-	 * within container
-	 */
-	struct vos_obj_table_df	*vc_otab_df;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -158,11 +161,7 @@ struct vos_imem_strts {
 	daos_csum_t		vis_checksum;
 };
 /* in-memory structures standalone instance */
-struct vos_imem_strts		*vsa_imems_inst;
 struct bio_xs_context		*vsa_xsctxt_inst;
-struct umem_tx_stage_data	 vsa_txd_inst;
-struct dtx_handle		*vsa_dth;
-bool vsa_nvme_init;
 extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
@@ -187,28 +186,6 @@ enum {
 #define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
 #define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
-/**
- * A cached object (DRAM data structure).
- */
-struct vos_object {
-	/** llink for daos lru cache */
-	struct daos_llink		obj_llink;
-	/** Key for searching, object ID within a container */
-	daos_unit_oid_t			obj_id;
-	/** dkey tree open handle of the object */
-	daos_handle_t			obj_toh;
-	/** btree iterator handle */
-	daos_handle_t			obj_ih;
-	/** epoch when the object(cache) is initialized */
-	daos_epoch_t			obj_epoch;
-	/** cached vos_obj_df::vo_incarnation, for revalidation. */
-	uint32_t			obj_incarnation;
-	/** Persistent memory address of the object */
-	struct vos_obj_df		*obj_df;
-	/** backref to container */
-	struct vos_container		*obj_cont;
-};
-
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;
 extern struct vos_iter_ops vos_obj_iter_ops;
@@ -218,7 +195,12 @@ extern struct vos_iter_ops vos_dtx_iter_ops;
 /** VOS thread local storage structure */
 struct vos_tls {
 	/* in-memory structures TLS instance */
+	/* TODO: move those members to vos_tls, nosense to have another
+	 * data structure for it.
+	 */
 	struct vos_imem_strts		 vtl_imems_inst;
+	/** pools registered for GC */
+	d_list_t			 vtl_gc_pools;
 	/* PMDK transaction stage callback data */
 	struct umem_tx_stage_data	 vtl_txd;
 	/** XXX: The DTX handle.
@@ -236,123 +218,39 @@ struct vos_tls {
 	struct dtx_handle		*vtl_dth;
 };
 
-static inline struct vos_tls *
-vos_tls_get()
-{
-	struct vos_tls			*tls;
-	struct dss_thread_local_storage	*dtc;
-
-	dtc = dss_tls_get();
-	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
-	return tls;
-}
+struct vos_tls *
+vos_tls_get();
 
 static inline struct d_hash_table *
 vos_pool_hhash_get(void)
 {
-#ifdef VOS_STANDALONE
-	return vsa_imems_inst->vis_pool_hhash;
-#else
 	return vos_tls_get()->vtl_imems_inst.vis_pool_hhash;
-#endif
 }
 
 static inline struct d_hash_table *
 vos_cont_hhash_get(void)
 {
-#ifdef VOS_STANDALONE
-	return vsa_imems_inst->vis_cont_hhash;
-#else
 	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
-#endif
 }
 
 static inline struct umem_tx_stage_data *
 vos_txd_get(void)
 {
-#ifdef VOS_STANDALONE
-	return &vsa_txd_inst;
-#else
-	return &(vos_tls_get()->vtl_txd);
-#endif
+	return &vos_tls_get()->vtl_txd;
 }
 
 static inline struct dtx_handle *
 vos_dth_get(void)
 {
-#ifdef VOS_STANDALONE
-	return vsa_dth;
-#else
 	return vos_tls_get()->vtl_dth;
-#endif
 }
 
 static inline void
 vos_dth_set(struct dtx_handle *dth)
 {
-#ifdef VOS_STANDALONE
-	D_ASSERT(dth == NULL || vsa_dth == NULL);
-
-	vsa_dth = dth;
-#else
 	D_ASSERT(dth == NULL || vos_tls_get()->vtl_dth == NULL);
 
 	vos_tls_get()->vtl_dth = dth;
-#endif
-}
-
-extern pthread_mutex_t vos_pmemobj_lock;
-
-static inline PMEMobjpool *
-vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
-		   mode_t mode)
-{
-	PMEMobjpool *pop;
-
-	D_MUTEX_LOCK(&vos_pmemobj_lock);
-	pop = pmemobj_create(path, layout, poolsize, mode);
-	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
-	return pop;
-}
-
-static inline PMEMobjpool *
-vos_pmemobj_open(const char *path, const char *layout)
-{
-	PMEMobjpool *pop;
-
-	D_MUTEX_LOCK(&vos_pmemobj_lock);
-	pop = pmemobj_open(path, layout);
-	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
-	return pop;
-}
-
-static inline void
-vos_pmemobj_close(PMEMobjpool *pop)
-{
-	D_MUTEX_LOCK(&vos_pmemobj_lock);
-	pmemobj_close(pop);
-	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
-}
-
-static inline struct vos_pool_df *
-vos_pool_pop2df(PMEMobjpool *pop)
-{
-	TOID(struct vos_pool_df) pool_df;
-
-	pool_df = POBJ_ROOT(pop, struct vos_pool_df);
-	return D_RW(pool_df);
-}
-
-static inline PMEMobjpool *
-vos_pool_ptr2pop(struct vos_pool *pool)
-{
-	return pool->vp_uma.uma_pool;
-}
-
-static inline struct vos_pool_df *
-vos_pool_ptr2df(struct vos_pool *pool)
-{
-	return vos_pool_pop2df(vos_pool_ptr2pop(pool));
 }
 
 static inline void
@@ -367,8 +265,11 @@ vos_pool_decref(struct vos_pool *pool)
 	d_uhash_link_putref(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
-
-PMEMobjpool *vos_coh2pop(daos_handle_t coh);
+static inline void
+vos_pool_hash_del(struct vos_pool *pool)
+{
+	d_uhash_link_delete(vos_pool_hhash_get(), &pool->vp_hlink);
+}
 
 /**
  * Getting object cache
@@ -395,20 +296,6 @@ int
 vos_cont_tab_register();
 
 /**
- * Create a container table
- * Called from vos_pool_create.
- *
- * \param p_umem_attr	[IN]	Pool umem attributes
- * \param ctab_df	[IN]	vos container table in pmem
- *
- * \return		0 on success and negative on
- *			failure
- */
-int
-vos_cont_tab_create(struct umem_attr *p_umem_attr,
-		    struct vos_cont_table_df *ctab_df);
-
-/**
  * VOS object index class register for btree
  * Called with vos_init()
  *
@@ -417,35 +304,6 @@ vos_cont_tab_create(struct umem_attr *p_umem_attr,
  */
 int
 vos_obj_tab_register();
-
-/**
- * VOS object index create
- * Create a new B-tree if empty object index and adds the first
- * oid
- * Called from vos_container_create.
- *
- * \param pool		[IN]	vos pool
- * \param otab_df	[IN]	vos object index (pmem data structure)
- *
- * \return		0 on success and negative on
- *			failure
- */
-int
-vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
-
-/**
- * VOS object index destroy
- * Destroy the object index and all its objects
- * Called from vos_container_destroy
- *
- * \param pool		[IN]	vos pool
- * \param otab_df	[IN]	vos object index (pmem data structure)
- *
- * \return		0 on success and negative on
- *			failure
- */
-int
-vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
 /**
  * DTX table create
@@ -629,7 +487,7 @@ struct vos_rec_bundle {
 	 *	    TODO also support scatter/gather list input.
 	 * Output : parameter to return value address.
 	 */
-	d_iov_t		*rb_iov;
+	d_iov_t			*rb_iov;
 	/**
 	 * Single value record IOV.
 	 */
@@ -1125,5 +983,21 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_REBUILD;
 	return DAOS_INTENT_DEFAULT;
 }
+
+void
+gc_wait(void);
+void
+gc_wait_pool(struct vos_pool *pool);
+int
+gc_add_pool(struct vos_pool *pool);
+void
+gc_del_pool(struct vos_pool *pool);
+bool
+gc_have_pool(struct vos_pool *pool);
+int
+gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
+int
+gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
+	    uint64_t args);
 
 #endif /* __VOS_INTERNAL_H__ */
