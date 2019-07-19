@@ -26,6 +26,7 @@ from __future__ import print_function
 import os
 
 from apricot import TestWithServers
+
 from daos_api import DaosPool
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
@@ -58,25 +59,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.set_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
-
-    def execute_ior(self, ior_flags=None, object_class=None):
-        """Execute ior with optional overrides for ior flags and object_class.
-
-        If specified the ior flags and ior daos object class parameters will
-        override the values read from the yaml file.
-
-        Args:
-            ior_flags (str, optional): ior flags. Defaults to None.
-            object_class (str, optional): daos object class. Defaults to None.
-        """
         # Get the parameters used to create a pool
         mode = self.params.get("mode", "/run/pool/*")
         uid = os.geteuid()
@@ -92,6 +74,40 @@ class IorTestBase(TestWithServers):
         self.pool.create(
             mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
 
+    def tearDown(self):
+        """Tear down each test case."""
+        try:
+            if self.pool is not None and self.pool.attached:
+                self.pool.destroy(1)
+        finally:
+            # Stop the servers and agents
+            super(IorTestBase, self).tearDown()
+
+    def execute_ior(self, ior_flags=None, object_class=None, test_file=None):
+        """Execute ior with optional overrides for ior flags and object_class.
+
+        If specified the ior flags and ior daos object class parameters will
+        override the values read from the yaml file.
+
+        Args:
+            ior_flags (str, optional): ior flags. Defaults to None.
+            object_class (str, optional): daos object class. Defaults to None.
+        """
+        # Get the parameters used to create a pool
+#        mode = self.params.get("mode", "/run/pool/*")
+#        uid = os.geteuid()
+#        gid = os.getegid()
+#        group = self.params.get("setname", "/run/pool/*", self.server_group)
+#        scm_size = self.params.get("scm_size", "/run/pool/*")
+#        nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
+#        svcn = self.params.get("svcn", "/run/pool/*", 1)
+
+        # Initialize a python pool object then create the underlying
+        # daos storage
+#        self.pool = DaosPool(self.context)
+#        self.pool.create(
+#            mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
+
         # Initialize MpioUtils if IOR is running in MPIIO mode
         if self.ior_cmd.api.value == "MPIIO":
             mpio_util = MpioUtils()
@@ -106,6 +122,8 @@ class IorTestBase(TestWithServers):
             self.ior_cmd.flags.value = ior_flags
         if object_class:
             self.ior_cmd.daos_oclass.value = object_class
+        if test_file:
+            self.ior_cmd.test_file.value = test_file
 
         # Run IOR
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
