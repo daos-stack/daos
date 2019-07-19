@@ -30,6 +30,8 @@ import json
 import shlex
 import subprocess
 import logging
+import cart_logparse
+import cart_logtest
 
 class CartUtils():
     """CartUtils Class"""
@@ -164,6 +166,14 @@ class CartUtils():
         if not os.path.exists(log_path):
             os.makedirs(log_path)
 
+        # If the logparser is being used, make sure the log directory is empty
+        logparse = cartobj.params.get("logparse", "/run/tests/*/")
+        if logparse:
+	    for the_file in os.listdir(log_path):
+    		file_path = os.path.join(log_path, the_file)
+		if os.path.isfile(file_path):
+                    os.unlink(file_path)
+
         return env
 
     def get_srv_cnt(self, cartobj, host):
@@ -208,6 +218,7 @@ class CartUtils():
 
         tst_host = cartobj.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = cartobj.params.get("{}_ppn".format(host), "/run/tests/*/")
+        logparse = cartobj.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
             hostfile = self.write_host_file(tst_host,tst_slt)
@@ -230,6 +241,9 @@ class CartUtils():
 
         if tst_env is not None:
             tst_cmd += " " + tst_env
+
+        if logparse:
+	    tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
         tst_mod = os.getenv("CART_TEST_MODE", "native")
         if tst_mod == "memcheck":
@@ -301,3 +315,28 @@ class CartUtils():
 
         self.stdout.info(cmd)
         self.progress_log.info(cmd)
+
+    def log_check(self, cartobj):
+	"""Check log files for consistency """
+
+	logparse = cartobj.params.get("logparse", "/run/tests/*/")
+        if logparse is None or not logparse:
+		return
+
+        """Check log files for consistency """
+        strict_test = False
+	print ("Parsing log path", cartobj.log_path)
+	if not os.path.exists(cartobj.log_path):
+		print ("Path does not exist")
+		return
+
+	for filename in os.listdir(cartobj.log_path):
+	    log_file = os.path.join(cartobj.log_path, filename)
+	    if not os.path.isfile(log_file):
+	        print ("File is a Directory. Skipping.... :", log_file)
+		continue
+
+	    print ("Parsing ", log_file)
+            cl = cart_logparse.LogIter(log_file)
+            c_log_test = cart_logtest.LogTest(cl)
+	    c_log_test.check_log_file(strict_test)

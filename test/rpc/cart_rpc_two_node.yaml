@@ -36,6 +36,7 @@ tests: !mux
     cli_ppn: "1"
   echo:
     name: echo_basic
+    logparse: Yes
     srv_bin: tests/crt_echo_srv
     srv_arg: ""
     srv_env: ""
