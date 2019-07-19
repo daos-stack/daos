@@ -44,6 +44,60 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
+def clush(hostlist, command, env=None, verbose=True):
+    """Run a command in parallel on a list of nodes using clush.
+
+    Args:
+        hostlist (list): list of nodes on which to run the command in parallel
+        command (str): the command to run in parallel
+        env (dict, optional): dictionary of environment variables to set.
+            Defaults to None.
+        verbose (bool, optional): should the command output be displayed.
+            Defaults to True.
+
+    Returns:
+        CmdResult: a CmdResult object containing the result of the command:
+            .command        command issued
+            .exit_status    return code from the command
+            .stdout         raw stdout (bytes)
+            .stderr         raw stderr (bytes)
+            .duration       duration of the command
+            .interrupted    was the command interrupted
+            .pid            pid of the command
+
+    """
+    nodeset = NodeSet.fromlist(hostlist)
+    clush_command = "clush -w {} -B -S \"{}\"".format(nodeset, command)
+    return process.run(
+        clush_command, env=env, ignore_status=True, shell=True,
+        verbose=verbose, allow_output_check="none")
+
+
+def check_file_exists(hosts, filename):
+    """Check if a specified file exist on each specified hosts.
+
+    Args:
+        hosts (list): list of hosts
+        filename (str): file to check for the existence of on each host
+
+    Returns:
+        (bool, NodeSet): A tuple of:
+            - True if the file exists on each of the hosts; False otherwise
+            - A NodeSet of hosts on which the file does not exist
+
+    """
+    missing_file = NodeSet()
+    nodeset = NodeSet.fromlist(hosts)
+
+    task = task_self()
+    task.run("test -e {}".format(filename), nodes=nodeset)
+    for ret_code, node_list in task.iter_retcodes():
+        if ret_code != 0:
+            missing_file.add(NodeSet.fromlist(node_list))
+
+    return len(missing_file) == 0, missing_file
+
+
 def get_file_path(bin_name, dir_path=""):
     """
     Find the binary path name in daos_m and return the list of path.
@@ -327,23 +381,15 @@ def check_pool_files(log, hosts, uuid):
             otherwise
 
     """
-    file_list = (uuid, "superblock")
-    expect = len(file_list) * len(hosts)
-    actual = 0
-    nodeset = NodeSet.fromlist(hosts)
-    task = task_self()
-
-    log.info("Checking for pool data on %s", nodeset)
-    for fname in file_list:
-        task.run(
-            "test -e /mnt/daos/{}; echo $?".format(fname), nodes=nodeset)
-        for output, node_list in task.iter_buffers():
-            if output == "0":
-                actual += len(node_list)
-            else:
-                nodes = NodeSet.fromlist(node_list)
-                log.error("%s: /mnt/daos/%s not found", nodes, fname)
-    return expect == actual
+    status = True
+    log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
+    pool_files = [uuid, "superblock"]
+    for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
+        result = check_file_exists(hosts, filename)
+        if not result[0]:
+            log.error("%s: %s not found", result[1], filename)
+            status = False
+    return status
 
 
 class CallbackHandler(object):
