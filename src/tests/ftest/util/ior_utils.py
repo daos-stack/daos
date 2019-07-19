@@ -103,6 +103,9 @@ def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
                                              '/tmp/client_daos.log'))]
 
         ior_cmd = ('export ' + '; export '.join(env_variables) + '; ' +
+                   "command -v mpirun; " +
+                   "echo $PATH; " +
+                   "env | grep mpich; " +
                    mpichinstall + "bin/mpirun -np {0} --hostfile {1} " +
                    " ior {2} -a DAOS -s {3} -i {4} -b {5} -t {6}" +
                    " --daos.pool {7} --daos.svcl {8} --daos.cont {9}" +
