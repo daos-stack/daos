@@ -53,7 +53,7 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-CSL_NODES=$(IFS=","; echo "${nodes[*]}")
+TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
 cleanup() {
     i=5
@@ -311,7 +311,7 @@ fi
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -c -a -r -s -ts ${CSL_NODES} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -c -a -r -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0

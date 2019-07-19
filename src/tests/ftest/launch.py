@@ -669,7 +669,9 @@ def main():
         "-ts", "--test_servers",
         action="store",
         help="comma-separated list of hosts to use as replacement values for "
-             "server placeholders in each test's yaml file")
+             "server placeholders in each test's yaml file.  If the "
+             "'--test_clients' argument is not specified, this list of hosts "
+             "will also be used to replace client placeholders.")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
