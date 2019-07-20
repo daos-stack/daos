@@ -1196,7 +1196,7 @@ port: 10001
 
 Certificate support for securing the administrative channel for the DAOS
 components is specified in a key called transport_config: It contains the
-following keys with these default values
+following keys with these default values.
 
 
 ***Allow Insecure Communications***
@@ -1239,9 +1239,9 @@ log\_file: /tmp/daos\_agent2.log
 
 DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
-to communicate with the control plane over unencrypted channels. The example
-below for executing daos_agent specifies to operate in insecure mode as
-certificate support is not fully integrated into DAOS as of 0.6
+to communicate with the control plane over unencrypted channels. The following 
+example shows daos_agent being configured to operate in insecure mode due to 
+incomplete integration of certificate support as of the 0.6 release.
 
 To start the DAOS Agent, run:
 ```
@@ -1252,7 +1252,7 @@ System Validation
 -----------------
 
 To validate that the DAOS system is properly installed, the daos\_test
-suite can be executed. Ensure the DAOS Agent is configuered and running before
+suite can be executed. Ensure the DAOS Agent is configured and running before
 running daos\_test:
 
 [[]{#_Toc4574315 .anchor}]{#_Toc4572376 .anchor}orterun -np
