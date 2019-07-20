@@ -14,23 +14,18 @@ hosts:
         - boro-K
         - boro-L
 timeout: 7200
+logdir: /tmp/soak
 server_config:
     name: daos_server
 #slurm partition names
 partition:
-        client: daos_client
-        server: daos_server
+    name: daos_client
 # pool_params - attributes of the pools to create; Currently only create one
-# pool
-pool1:
-    createmode:
-        mode_RW: 146
-    createset:
-        setname: daos_server
-    createsize:
-        size: 100000000000
-    createsvc:
-        svcn: 3
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 100000000000
+    svcn: 1
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -79,9 +74,12 @@ jobsmoke:
     tasks: 1
     blocksize: '64M'
     jobspec:
-      - ior_daos_1m_large
-      - ior_daos_4k_large
-      - ior_daos_128k_large
+        - ior_daos_4k_large
+        - ior_daos_128k_large
+        - ior_daos_1m_large
+        - ior_mpiio_4k_tiny
+        - ior_mpiio_128k_large
+        - ior_mpiio_1m_large
 # task = 1
 job1:
     name: job1
@@ -92,6 +90,9 @@ job1:
         - ior_daos_4k_large
         - ior_daos_128k_large
         - ior_daos_1m_large
+        - ior_mpiio_4k_tiny
+        - ior_mpiio_128k_large
+        - ior_mpiio_1m_large
 # task = 16
 job16:
     name: job16
@@ -102,6 +103,9 @@ job16:
         - ior_daos_4k_large
         - ior_daos_128k_large
         - ior_daos_1m_large
+        - ior_mpiio_4k_tiny
+        - ior_mpiio_128k_large
+        - ior_mpiio_1m_large
 # tasks 32 is failing - DAOS-2518
 # task = 24
 job24:
@@ -113,6 +117,9 @@ job24:
         - ior_daos_4k_large
         - ior_daos_128k_large
         - ior_daos_1m_large
+        - ior_mpiio_4k_tiny
+        - ior_mpiio_128k_large
+        - ior_mpiio_1m_large
 # TBD test case for DMG
 job2:
     name: pool_job_3
@@ -126,34 +133,34 @@ ior_daos_4k_large:
     api: DAOS
     flags: -v -w -W -r -R
     transfer_size: 4k
-    daos_oclass: LARGE
+    daos_oclass: SX
 ior_daos_128k_large:
     api: DAOS
     flags: -v -w -W -r -R
     transfer_size: 128k
-    daos_oclass: LARGE
+    daos_oclass: SX
 # random
 ior_daos_1m_large:
     api: DAOS
     flags: -v -w -W -r -R
     transfer_size: 1m
-    daos_oclass: LARGE
+    daos_oclass: SX
 # IOR MPIIO cmdlines  - TBD
 ior_mpiio_4k_tiny:
     api: MPIIO
     flags: -v -w -W -r -R
     transfer_size: 4k
-    daos_oclass: TINY
+    daos_oclass: S1
 ior_mpiio_128k_large:
     api: MPIIO
     flags: -v -w -W -r -R
     transfer_size: 128k
-    daos_oclass: LARGE
+    daos_oclass: SX
 ior_mpiio_1m_large:
     api: MPIIO
     flags: -v -w -W -r -R
     transfer_size: 1m
-    daos_oclass: LARGE
+    daos_oclass: SX
 # dmg cmdline params - TBD
 dmg1:
     commands:

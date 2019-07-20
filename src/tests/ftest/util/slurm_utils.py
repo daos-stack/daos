@@ -29,6 +29,7 @@ import time
 import subprocess
 import threading
 import pyslurm
+from avocado.utils import process
 
 _lock = threading.Lock()
 
@@ -46,16 +47,44 @@ def cancel_jobs(job_id):
     :rtype: bool
 
     """
-    try:
-        cmd_line = "scancel {}".format(job_id)
-        proc = subprocess.Popen(cmd_line, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, shell=True)
-        proc.communicate()
-        return True
-    except(OSError, ValueError) as err:
-        print("<IorRunFailed> Exception occurred: {0}".format(str(err)))
+    status = process.system("scancel {}".format(job_id))
+    if status > 0:
         raise SlurmFailed(
             "Slurm: scancel failed to kill job {}".format(job_id))
+    return status
+
+
+def create_slurm_partition(nodelist, name):
+    """Create a slurm partion for soak jobs.
+
+    client nodes will be allocated for this partiton
+    Args:
+        nodelist (list): list of nodes for job allocation
+        name (str): partition name
+    Returns: status bool
+    """
+    # If the partition exists; delete it because if may have wrong nodes
+    status = process.system(
+        "scontrol delete PartitionName={}".format(name))
+    if status == 0:
+        status = process.system(
+            "scontrol create PartitionName={} Nodes={}".format(
+                name, ",".join(nodelist)))
+    return status
+
+
+def delete_slurm_partition(name):
+    """Create a slurm partion for soak jobs.
+
+    Remove the partition from slurm
+    Args:
+        name (str): partition name
+    Returns: status bool
+    """
+    # If the partition exists; delete it because if may have wrong nodes
+    status = process.system(
+        "scontrol delete PartitionName={}".format(name))
+    return status
 
 
 def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
@@ -87,7 +116,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("#SBATCH --nodes={}\n".format(nodecount))
         script_file.write("#SBATCH --distribution=cyclic\n")
         if output is not None:
-            output = output + "_" + str(unique) + "_%j_%t"
+            output = output + str(unique)
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
             for key, value in sbatch.items():
@@ -99,10 +128,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
         script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
         for cmd in list(cmds):
-            script_file.write(
-                "srun -l --mpi=pmi2 " + cmd)
-            script_file.write("\n")
-
+            script_file.write(cmd + "\n")
     return scriptfile
 
 
