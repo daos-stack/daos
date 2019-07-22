@@ -1458,8 +1458,8 @@ again:
 			if (rc != PROBE_RC_UNAVAILABLE)
 				goto out;
 
-			/* Current pos is unavailable, it can be used for the
-			 * follow-on insert if applicable.
+			/* The record for current pos is unavailable, can be
+			 * reused for the follow-on insert if applicable.
 			 */
 		} else {
 			/* Point at the first key which is larger than the
@@ -1479,8 +1479,8 @@ again:
 			if (rc != PROBE_RC_UNAVAILABLE)
 				goto out;
 
-			/* Current pos is unavailable, it can be used for the
-			 * follow-on insert if applicable.
+			/* The record for current pos is unavailable, can be
+			 * reused for the follow-on insert if applicable.
 			 */
 			if (saved == -1)
 				saved = at;
@@ -1488,6 +1488,14 @@ again:
 		/* fall through */
 	case BTR_PROBE_GT:
 		if (cmp & BTR_CMP_GT) {
+			if ((intent == DAOS_INTENT_UPDATE ||
+			     intent == DAOS_INTENT_PUNCH) &&
+			    !(cmp & BTR_CMP_MATCHED))
+				break;
+
+			/* Check availability if the target matched or it is
+			 * for non-modification related operation.
+			 */
 			rc = btr_check_availability(tcx, &alb);
 			if (rc != PROBE_RC_UNAVAILABLE) {
 				if (rc == PROBE_RC_OK)
@@ -1496,8 +1504,8 @@ again:
 				goto out;
 			}
 
-			/* Current pos is unavailable, it can be used for the
-			 * follow-on insert if applicable.
+			/* The record for current pos is unavailable, can be
+			 * reused for the follow-on insert if applicable.
 			 */
 			if (saved == -1)
 				saved = at;
@@ -1513,11 +1521,13 @@ again:
 		if (trace == NULL)
 			memcpy(traces, tcx->tc_trace,
 			       sizeof(*trace) * tcx->tc_depth);
+
 		if (btr_probe_next(tcx)) {
 			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
+
 		btr_trace_set(tcx, level, nd_off, saved);
 		rc = PROBE_RC_NONE;
 		goto out;
@@ -1531,6 +1541,14 @@ again:
 		/* fall through */
 	case BTR_PROBE_LT:
 		if (cmp & BTR_CMP_LT) {
+			if ((intent == DAOS_INTENT_UPDATE ||
+			     intent == DAOS_INTENT_PUNCH) &&
+			    !(cmp & BTR_CMP_MATCHED))
+				break;
+
+			/* Check availability if the target matched or it is
+			 * for non-modification related operation.
+			 */
 			rc = btr_check_availability(tcx, &alb);
 			if (rc != PROBE_RC_UNAVAILABLE) {
 				if (rc == PROBE_RC_OK)
@@ -1544,6 +1562,7 @@ again:
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
+
 		rc = PROBE_RC_NONE;
 		goto out;
 	}
