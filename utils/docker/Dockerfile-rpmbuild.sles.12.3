@@ -80,7 +80,7 @@ RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/d
 RUN zypper --non-interactive install dpdk-devel fio-src libiscsi-devel cunit-devel
 
 # meson
-RUN zypper --non-interactive install python-rpm-macros python3-base
+RUN zypper --non-interactive install python-rpm-macros python3-base python-devel python3-devel
 
 # fuse
 RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/meson/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ meson; \

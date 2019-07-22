@@ -52,9 +52,9 @@ def scons():
     Import('env', 'prereqs')
 
     svars = {}
-    for item in ['CC', 'OPT','BASECFLAGS', 'LDSHARED', 'SO']:
+    for item in ['CC', 'OPT', 'BASECFLAGS', 'LDSHARED', 'SO']:
         svars[item] = distutils.sysconfig.get_config_var(item)
-	if svars[item] is None:
+    if svars[item] is None:
             svars[item] = ""
 
     py_env = env.Clone()

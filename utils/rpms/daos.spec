@@ -39,12 +39,14 @@ BuildRequires:  numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
+BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
 BuildRequires:  libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
+BuildRequires: python-devel python3-devel
 %endif
 %endif
 Requires: cart

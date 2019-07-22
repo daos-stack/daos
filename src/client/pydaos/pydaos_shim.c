@@ -116,12 +116,12 @@ do {				\
 	DEFINE_OC(prot, SMALL);	\
 	DEFINE_OC(prot, LARGE);	\
 	DEFINE_OC(prot, MAX);	\
-} while(0)
+} while (0)
 
 	DEFINE_OC_PROT();		/** OC_TINY, OC_SMALL, ... */
 	DEFINE_OC_PROT(RP_);		/** OC_RP_TINY, OC_RP_SMALL, ... */
 	DEFINE_OC_PROT(RP_SF_);		/** OC_RP_SF_TINY, ... */
-	DEFINE_OC(RP_XSF,);		/** OC_RP_XSF */
+	DEFINE_OC(RP_XSF, );		/** OC_RP_XSF */
 	DEFINE_OC_PROT(EC_);		/** OC_EC_TINY, OC_EC_SMALL, ... */
 
 #define DEFINE_OC_EXPL(name)	\
@@ -141,7 +141,7 @@ do {				\
 	DEFINE_OC(name, 4K);	\
 	DEFINE_OC(name, 8K);	\
 	DEFINE_OC(name, X);	\
-} while(0)
+} while (0)
 
 	DEFINE_OC_EXPL(S);		/** OC_S1, OC_S2, ... */
 	DEFINE_OC_EXPL(RP_2G);		/** OC_2G1, OC_2G2, ... */
