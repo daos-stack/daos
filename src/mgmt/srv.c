@@ -84,7 +84,8 @@ process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (pb_rank == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract rank from request\n");
 
 		return;
@@ -112,7 +113,8 @@ process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -124,7 +126,9 @@ process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 	rc = crt_rank_self_set(daos_req->rank);
 	if (rc != 0) {
 		D_ERROR("Failed to set self rank %u: %d\n", daos_req->rank, rc);
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
 	}
 
 	dss_init_state_set(DSS_INIT_STATE_RANK_SET);
@@ -151,7 +155,8 @@ process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -177,8 +182,11 @@ process_createms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 
 out:
 	mgmt__create_ms_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 /*
@@ -202,7 +210,9 @@ process_startms_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		D_DEBUG(DB_MGMT, "MS already started\n");
 	} else if (rc != 0) {
 		D_ERROR("Failed to start MS: %d\n", rc);
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
 	}
 }
 
@@ -221,7 +231,8 @@ process_getattachinfo_request(Drpc__Call *drpc_req,
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -231,12 +242,14 @@ process_getattachinfo_request(Drpc__Call *drpc_req,
 	D_DEBUG(DB_MGMT, "Received request to get attach info\n");
 
 	rc = ds_mgmt_get_attach_info_handler(daos_resp);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("Failed to get attach info: %d\n", rc);
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 
 	mgmt__get_attach_info_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
 }
 
 static void
@@ -256,7 +269,8 @@ process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *daos_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -301,8 +315,11 @@ process_join_request(Drpc__Call *drpc_req, Mgmt__JoinResp *daos_resp)
 
 out:
 	mgmt__join_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 static void
@@ -327,7 +344,8 @@ process_createpool_request(Drpc__Call *drpc_req,
 						 drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 		return;
 	}
@@ -406,26 +424,31 @@ out:
 	mgmt__create_pool_req__free_unpacked(daos_req, NULL);
 	if (svc)
 		d_rank_list_free(svc);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 static void
-process_destroypool_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
+process_destroypool_request(Drpc__Call *drpc_req,
+			    Mgmt__DestroyPoolResp *daos_resp)
 {
 	Mgmt__DestroyPoolReq	*daos_req = NULL;
 	uuid_t			uuid;
 	int			rc = 0;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(daos_resp);
+	mgmt__destroy_pool_resp__init(daos_resp);
 
 	/* Unpack the daos request from the drpc call body */
 	daos_req = mgmt__destroy_pool_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (daos_req == NULL) {
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
 		D_ERROR("Failed to extract request\n");
 
 		return;
@@ -450,8 +473,11 @@ process_destroypool_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 	}
 out:
 	mgmt__destroy_pool_req__free_unpacked(daos_req, NULL);
-	if (rc != 0)
-		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
+	if (rc != 0) {
+		daos_resp->status->state =
+			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
+		daos_resp->status->der = rc;
+	}
 }
 
 static void
@@ -497,6 +523,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__JoinResp		*join_resp;
 	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
 	Mgmt__CreatePoolResp	*create_pool_resp;
+	Mgmt__DestroyPoolResp	*destroy_pool_resp;
 	uint8_t			*body;
 	size_t			len;
 
@@ -598,8 +625,26 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_FREE(create_pool_resp);
 		break;
 	case DRPC_METHOD_MGMT_DESTROY_POOL:
-		process_destroypool_request(drpc_req, daos_resp);
-		pack_daos_response(daos_resp, drpc_resp);
+		D_ALLOC_PTR(destroy_pool_resp);
+		if (destroy_pool_resp == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate daos response ref\n");
+			break;
+		}
+		process_destroypool_request(drpc_req, destroy_pool_resp);
+		len = mgmt__destroy_pool_resp__get_packed_size(
+				destroy_pool_resp);
+		D_ALLOC(body, len);
+		if (body == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to allocate drpc response body\n");
+			D_FREE(destroy_pool_resp);
+			break;
+		}
+		mgmt__destroy_pool_resp__pack(destroy_pool_resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+		D_FREE(destroy_pool_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_UP:
 		process_setup_request(drpc_req, daos_resp);
