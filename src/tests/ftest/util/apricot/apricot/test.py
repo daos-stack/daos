@@ -31,11 +31,13 @@ import json
 
 from avocado import Test as avocadoTest
 from avocado import skip
+from avocado.utils import process
 
 import fault_config_utils
 import agent_utils
 import server_utils
 import write_host_file
+from ClusterShell.NodeSet import NodeSet
 from daos_api import DaosContext, DaosLog
 
 
@@ -212,11 +214,27 @@ class TestWithServers(TestWithoutServers):
         self.agent_sessions = agent_utils.run_agent(
             self.basepath, self.hostlist_servers, self.hostlist_clients)
 
+        # verify that the agents are actually running
+        nodeset = NodeSet.fromlist(','.join(self.hostlist_clients))
+        clush_command = "clush -w {} -B -S \"ps -ef | grep agent\"".format(
+            nodeset)
+        process.run(
+            clush_command, ignore_status=True, shell=True,
+            verbose=True, allow_output_check="none")
+
         if self.setup_start_servers:
             self.start_servers()
 
     def tearDown(self):
         """Tear down after each test case."""
+        # verify that the agents are actually running
+        nodeset = NodeSet.fromlist(','.join(self.hostlist_clients))
+        clush_command = "clush -w {} -B -S \"ps -ef | grep agent\"".format(
+            nodeset)
+        process.run(
+            clush_command, ignore_status=True, shell=True,
+            verbose=True, allow_output_check="none")
+
         try:
             if self.agent_sessions:
                 self.d_log.info("Stopping agents")
