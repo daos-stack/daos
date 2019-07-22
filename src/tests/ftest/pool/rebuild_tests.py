@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,9 +20,9 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from apricot import TestWithServers
-from general_utils import TestPool, TestContainer
+"""
+from apricot import TestWithServers, skipForTicket
+from test_utils import TestPool, TestContainer
 
 
 class RebuildTests(TestWithServers):
@@ -34,8 +34,102 @@ class RebuildTests(TestWithServers):
     :avocado: recursive
     """
 
+    def run_rebuild_test(self, pool_quantity):
+        """Run the rebuild test for the specified number of pools.
+
+        Args:
+            pool_quantity (int): number of pools to test
+        """
+        # Get the test parameters
+        pools = []
+        containers = []
+        for index in range(pool_quantity):
+            pools.append(TestPool(self.context, self.log))
+            pools[index].get_params(self)
+            containers.append(TestContainer(pools[index]))
+            containers[index].get_params(self)
+        targets = self.params.get("targets", "/run/server_config/*")
+        rank = self.params.get("rank", "/run/testparams/*")
+        obj_class = self.params.get("object_class", "/run/testparams/*")
+
+        # Create the pools and confirm their status
+        server_count = len(self.hostlist_servers)
+        status = True
+        for index in range(pool_quantity):
+            pools[index].create()
+            status &= pools[index].check_pool_info(
+                pi_nnodes=server_count,
+                pi_ntargets=(server_count * targets),  # DAOS-2799
+                pi_ndisabled=0
+            )
+            status &= pools[index].check_rebuild_status(
+                rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
+        self.assertTrue(status, "Error confirming pool info before rebuild")
+
+        # Create containers in each pool and fill it with data
+        rs_obj_nr = []
+        rs_rec_nr = []
+        for index in range(pool_quantity):
+            containers[index].create()
+            containers[index].write_objects(rank, obj_class)
+
+        # Determine how many objects will need to be rebuilt
+        for index in range(pool_quantity):
+            rebuild_qty, target_rank_lists = \
+                containers[index].get_target_rank_list_data(
+                    rank, " prior to rebuild")
+            rs_obj_nr.append(rebuild_qty)
+            self.log.info(
+                "Expecting %s/%s rebuilt objects in container %s after "
+                "excluding rank %s", rs_obj_nr[-1], len(target_rank_lists),
+                containers[index], rank)
+            rs_rec_nr.append(
+                rs_obj_nr[-1] * containers[index].record_qty.value)
+            self.log.info(
+                "Expecting %s/%s rebuilt records in container %s after "
+                "excluding rank %s", rs_rec_nr[-1],
+                containers[index].object_qty.value *
+                containers[index].record_qty.value,
+                containers[index], rank)
+
+        # Manually exclude the specified rank
+        for index in range(pool_quantity):
+            if index == 0:
+                pools[index].start_rebuild(self.server_group, rank, self.d_log)
+            else:
+                pools[index].exclude(rank, self.d_log)
+
+        # Wait for recovery to start
+        for index in range(pool_quantity):
+            pools[index].wait_for_rebuild(True)
+
+        # Wait for recovery to complete
+        for index in range(pool_quantity):
+            pools[index].wait_for_rebuild(False)
+
+        # Check the pool information after the rebuild
+        status = True
+        for index in range(pool_quantity):
+            status &= pools[index].check_pool_info(
+                pi_nnodes=server_count,
+                pi_ntargets=(server_count * targets),  # DAOS-2799
+                pi_ndisabled=targets                   # DAOS-2799
+            )
+            status &= pools[index].check_rebuild_status(
+                rs_done=1, rs_obj_nr=rs_obj_nr[index],
+                rs_rec_nr=rs_rec_nr[index], rs_errno=0)
+        self.assertTrue(status, "Error confirming pool info after rebuild")
+
+        # Verify the data after rebuild
+        for index in range(pool_quantity):
+            self.assertTrue(
+                containers[index].read_objects(),
+                "Data verifiaction error after rebuild")
+        self.log.info("Test Passed")
+
+    @skipForTicket("DAOS-2922")
     def test_simple_rebuild(self):
-        """JIRA ID: Rebuild-001.
+        """JIRA ID: DAOS-XXXX Rebuild-001.
 
         Test Description:
             The most basic rebuild test.
@@ -45,45 +139,9 @@ class RebuildTests(TestWithServers):
 
         :avocado: tags=all,pr,medium,pool,rebuild,rebuildsimple
         """
-        # Get the test parameters
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
-        rank = self.params.get("rank", "/run/testparams/*")
+        self.run_rebuild_test(1)
 
-        # Create a pool and confirm its status
-        self.pool.create()
-        self.pool.check_pool_info(pi_ndisabled=0)
-        self.pool.check_rebuild_status(
-            rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
-
-        # Create a container in this pool and fill it with data
-        self.container.create()
-        self.container.write_objects()
-
-        # Kill the server
-        self.pool.start_rebuild(self.server_group, rank, self.d_log)
-
-        # Wait for recovery to start
-        self.pool.wait_for_rebuild(True)
-
-        # Wait for recovery to complete
-        self.pool.wait_for_rebuild(False)
-
-        # Check the pool information after the rebuild
-        # self.pool.check_pool_info(pi_ndisabled=targets)  DAOS-2799
-        rs_obj_nr = self.container.object_qty.value
-        rs_rec_nr = rs_obj_nr * self.container.record_qty.value
-        self.pool.check_rebuild_status(
-            rs_done=1, rs_obj_nr=rs_obj_nr, rs_rec_nr=rs_rec_nr, rs_errno=0)
-
-        # Verify the data after rebuild
-        self.assertTrue(
-            self.container.read_objects(),
-            "Data verifiaction error after rebuild")
-        self.log.info("Test Passed")
-
+    @skipForTicket("DAOS-2922")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
@@ -95,53 +153,4 @@ class RebuildTests(TestWithServers):
 
         :avocado: tags=all,pr,medium,pool,rebuild,rebuildmulti
         """
-        # Get the test parameters
-        pools = []
-        containers = []
-        rank = self.params.get("rank", "/run/testparams/*")
-        quantity = self.params.get("quantity", "/run/testparams/*")
-        for index in range(quantity):
-            pools.append(TestPool(self.context, self.log))
-            pools[index].get_params(self)
-            containers.append(TestContainer(pools[index]))
-            containers[index].get_params(self)
-
-        # Create the pools and confirm their status
-        for index in range(quantity):
-            pools[index].create()
-            pools[index].check_pool_info(pi_ndisabled=0)
-            pools[index].check_rebuild_status(
-                rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
-
-        # Create containers in each pool and fill it with data
-        for index in range(quantity):
-            containers[index].create()
-            containers[index].write_objects()
-
-        # Kill the server
-        pools[0].start_rebuild(self.server_group, rank, self.d_log)
-        pools[1].exclude(rank, self.d_log)
-
-        # Wait for recovery to start
-        for index in range(quantity):
-            pools[index].wait_for_rebuild(True)
-
-        # Wait for recovery to complete
-        for index in range(quantity):
-            pools[index].wait_for_rebuild(False)
-
-        # Check the pool information after the rebuild
-        for index in range(quantity):
-            # pools[index].check_pool_info(pi_ndisabled=targets)  DAOS-2799
-            rs_obj_nr = containers[index].object_qty.value
-            rs_rec_nr = rs_obj_nr * containers[index].record_qty.value
-            pools[index].check_rebuild_status(
-                rs_done=1, rs_obj_nr=rs_obj_nr, rs_rec_nr=rs_rec_nr,
-                rs_errno=0)
-
-        # Verify the data after rebuild
-        for index in range(quantity):
-            self.assertTrue(
-                containers[index].read_objects(),
-                "Data verifiaction error after rebuild")
-        self.log.info("Test Passed")
+        self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))

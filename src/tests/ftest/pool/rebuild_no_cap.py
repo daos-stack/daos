@@ -21,8 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from apricot import TestWithServers
-from general_utils import TestPool
+from apricot import TestWithServers, skipForTicket
+from test_utils import TestPool
 
 
 class RebuildNoCap(TestWithServers):
@@ -34,6 +34,7 @@ class RebuildNoCap(TestWithServers):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-2845")
     def test_rebuild_no_capacity(self):
         """Jira ID: DAOS-xxxx.
 
@@ -50,7 +51,6 @@ class RebuildNoCap(TestWithServers):
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
         targets = self.params.get("targets", "/run/server_config/*")
-        data = self.params.get("datasize", "/run/testparams/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
@@ -60,6 +60,7 @@ class RebuildNoCap(TestWithServers):
         self.pool.display_pool_daos_space("before write")
 
         # Write enough data to the pool that will not be able to be rebuilt
+        data = self.pool.scm_size.value * (targets - 1)
         self.pool.write_file(
             self.orterun, len(self.hostlist_clients), self.hostfile_clients,
             data)
@@ -68,17 +69,16 @@ class RebuildNoCap(TestWithServers):
         self.pool.display_pool_daos_space("after write")
 
         # Verify the pool information before starting rebuild
-        checks = {
-            "pi_nnodes": len(self.hostlist_servers),
-            "pi_ntargets": len(self.hostlist_servers) * targets,
-            "pi_ndisabled": 0,
-        }
-        self.assertTrue(
-            self.pool.check_pool_info(**checks),
-            "Invlaid pool information detected before rebuild")
-        self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0),
-            "Invlaid pool rebuild error number detected before rebuild")
+
+        # Check the pool information after the rebuild
+        server_count = len(self.hostlist_servers)
+        status = self.pool.check_pool_info(
+            pi_nnodes=server_count,
+            # pi_ntargets=(server_count * targets),  # DAOS-2799
+            pi_ndisabled=0
+        )
+        status &= self.pool.check_rebuild_status(rs_errno=0)
+        self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Kill the server
         self.pool.start_rebuild(self.server_group, rank, self.d_log)
@@ -93,11 +93,12 @@ class RebuildNoCap(TestWithServers):
         self.pool.display_pool_daos_space("after rebuild")
 
         # Verify the pool information after rebuild
-        checks["pi_ndisabled"] = targets
-        self.assertTrue(
-            self.pool.check_pool_info(**checks),
-            "Invalid pool information detected after rebuild")
-        self.assertFalse(
-            self.pool.check_rebuild_status(rs_errno=0),
-            "Invalid pool rebuild error number detected after rebuild")
+        status = self.pool.check_pool_info(
+            pi_nnodes=server_count,
+            # pi_ntargets=(server_count * targets),  # DAOS-2799
+            # pi_ndisabled=targets                   # DAOS-2799
+        )
+        status &= self.pool.check_rebuild_status(rs_errno=-1007)
+        self.assertTrue(status, "Error confirming pool info after rebuild")
+
         self.log.info("Test Passed")
