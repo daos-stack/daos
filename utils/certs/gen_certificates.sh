@@ -40,7 +40,6 @@
 __usage="
 Usage: gen_certificates.sh [OPTIONS]
 Generate certificates for DAOS deployment in the ./daosCA.
-Certificates will be named in the format daos_Component
 "
 
 function print_usage () {
@@ -59,7 +58,8 @@ function generate_ca_cert () {
 	openssl genrsa -out $PRIVATE/daosCA.key 4096
 	chmod 400 $PRIVATE/daosCA.key
 	# Generate CA Certificate
-	openssl req -new -x509 -config ca.cnf -key $PRIVATE/daosCA.key \
+	openssl req -new -x509 -config ca.cnf -days 3650 -sha512 \
+		-key $PRIVATE/daosCA.key \
 		-out $CERTS/daosCA.crt -batch
 	# Reset the the CA index
 	rm -f ./daosCA/index.txt ./daosCA/serial.txt
