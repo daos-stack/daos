@@ -31,7 +31,7 @@ import threading
 import pyslurm
 from avocado.utils import process
 
-_lock = threading.Lock()
+w_lock = threading.Lock()
 
 
 class SlurmFailed(Exception):
@@ -210,7 +210,7 @@ def watch_job(handle, maxwait, test_obj):
     wait_time = 0
     while True:
         state = check_slurm_job(handle)
-        if state == "PENDING" or state == "RUNNING":
+        if state == "PENDING" or state == "RUNNING" or state == "COMPLETING":
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
                 print("Job {} has timedout after {} secs".format(handle,
@@ -225,5 +225,5 @@ def watch_job(handle, maxwait, test_obj):
     print("FINAL STATE: slurm job {} completed with : {} at {}\n".format(
         handle, state, time.ctime()))
     params = {"handle": handle, "state": state}
-    with _lock:
+    with w_lock:
         test_obj.job_done(params)

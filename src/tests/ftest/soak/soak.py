@@ -321,7 +321,6 @@ class Soak(TestWithServers):
         for job, result in self.soak_results.items():
             # The queue seems to include status of "COMPLETING"
             # sleep to allow job to move to final state
-            time.sleep(2)
             if result == "COMPLETED":
                 job_id_list.remove(int(job))
             else:
