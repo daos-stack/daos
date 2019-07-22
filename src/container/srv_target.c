@@ -63,23 +63,40 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct ds_cont_child	*cont;
 	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": creating\n", DP_CONT(pool->spc_uuid, key));
+	D_DEBUG(DF_DSMS, DF_CONT": opening\n", DP_CONT(pool->spc_uuid, key));
 
 	D_ALLOC_PTR(cont);
 	if (cont == NULL)
 		return -DER_NOMEM;
 
+	rc = ABT_mutex_create(&cont->sc_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
+
+	rc = ABT_cond_create(&cont->sc_dtx_resync_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_mutex;
+	}
+
+	rc = vos_cont_open(pool->spc_hdl, key, &cont->sc_hdl);
+	if (rc != 0)
+		goto out_cond;
+
 	uuid_copy(cont->sc_uuid, key);
 	cont->sc_dtx_resync_time = crt_hlc_get();
 
-	rc = vos_cont_open(pool->spc_hdl, key, &cont->sc_hdl);
-	if (rc != 0) {
-		D_FREE(cont);
-		return rc;
-	}
-
 	*link = &cont->sc_list;
 	return 0;
+ out_cond:
+	ABT_cond_free(&cont->sc_dtx_resync_cond);
+ out_mutex:
+	ABT_mutex_free(&cont->sc_mutex);
+ out:
+	D_FREE(cont);
+	return rc;
 }
 
 static void
@@ -89,6 +106,9 @@ cont_child_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
 	vos_cont_close(cont->sc_hdl);
+
+	ABT_cond_free(&cont->sc_dtx_resync_cond);
+	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
 
@@ -438,25 +458,41 @@ ds_cont_cache_fini(void)
 static int
 cont_child_destroy_one(void *vin)
 {
-	struct cont_tgt_destroy_in     *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
+	struct cont_tgt_destroy_in     *in = vin;
 	struct ds_pool_child	       *pool;
-	struct ds_cont_child	       *cont;
 	int				rc;
 
 	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid, NULL,
-			       &cont);
-	if (rc == 0) {
+	while (1) {
+		struct ds_cont_child *cont;
+		bool		      resyncing = false;
+
+		rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid, NULL,
+				       &cont);
+		if (rc == -DER_NONEXIST)
+			break;
+		if (rc != 0)
+			D_GOTO(out_pool, rc);
+		/* found it */
+
+		ABT_mutex_lock(cont->sc_mutex);
+		cont->sc_destroying = 1;
+		if (cont->sc_dtx_resyncing) {
+			resyncing = true;
+			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+		}
+		ABT_mutex_unlock(cont->sc_mutex);
 		/* Should evict if idle, but no such interface at the moment. */
 		cont_child_put(tls->dt_cont_cache, cont);
-		D_ERROR("cont_child_lookup non-empty, return %d.\n", -DER_BUSY);
-		D_GOTO(out_pool, rc = -DER_BUSY);
-	} else if (rc != -DER_NONEXIST) {
-		D_GOTO(out_pool, rc);
+
+		if (!resyncing) {
+			D_ERROR("container is still in-use\n");
+			D_GOTO(out_pool, rc = -DER_BUSY);
+		} /* else: resync should have completed, try again */
 	}
 
 	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
@@ -468,7 +504,6 @@ cont_child_destroy_one(void *vin)
 		 * container open time, so it might legitimately not exist if
 		 * the container has never been opened */
 		rc = 0;
-
 out_pool:
 	ds_pool_child_put(pool);
 out:

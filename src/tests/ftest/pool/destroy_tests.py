@@ -111,9 +111,10 @@ class DestroyTests(TestWithServers):
         # Attempt to destroy pool with invald UUID
         saved_uuid = self.pool.uuid
         bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
-        self.pool.uuid = bogus_uuid
-        self.log.info("Deleting pool with Invalid Pool UUID:  %s",
-                      self.pool.uuid)
+        # set the UUID directly
+        self.pool.pool.set_uuid_str(bogus_uuid)
+        self.log.info("Destroying pool with Invalid Pool UUID:  %s",
+                      self.pool.pool.get_uuid_str())
         try:
             self.log.info("Attempting to destroy pool with an invalid UUID")
             # call daos destroy api directly
@@ -124,7 +125,7 @@ class DestroyTests(TestWithServers):
                 "Expected exception - destroying pool with invalid UUID\n %s",
                 str(result))
             # restore the valid UUID and check if valid pool still exists
-            self.pool.uuid = saved_uuid
+            self.pool.pool.set_uuid_str(saved_uuid)
             self.log.info("Check if valid files still exist")
             self.assertTrue(
                 self.pool.check_files(hostlist_servers),
@@ -136,15 +137,15 @@ class DestroyTests(TestWithServers):
         self.log.info(
             "DAOS api exception did not occur"
             " - destroyed pool with invalid UUID")
-        self.pool.uuid = saved_uuid
+        self.pool.pool.set_uuid_str(saved_uuid)
         self.log.info("Check if valid files still exist")
         self.assertTrue(
             self.pool.check_files(hostlist_servers),
             "Valid pool data was not detected on servers after "
             "a destroy-pool with invalid UUID failed to raise an exception")
         self.fail(
-            "Test did not raise an exception when "
-            "deleting a pool with invalid UUID")
+            "Pool still exists - destroy did not raise an exception "
+            "when attempting to delete a pool with invalid UUID")
 
     def test_delete_wrong_servers(self):
         """
