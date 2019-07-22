@@ -399,7 +399,7 @@ dtx_get_tgt_cnt(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 	if (oc_attr->ca_resil != DAOS_RES_REPL &&
 					 oc_attr->ca_resil != DAOS_RES_EC)
 		return -DER_NOTAPPLICABLE;
-	if ( oc_attr->ca_resil == DAOS_RES_REPL)
+	if (oc_attr->ca_resil == DAOS_RES_REPL)
 		tgt_cnt = oc_attr->u.rp.r_num;
 	else {
 		D_ASSERT(oc_attr->ca_resil == DAOS_RES_EC);
