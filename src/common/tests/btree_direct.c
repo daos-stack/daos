@@ -385,7 +385,7 @@ sk_btr_close_destroy(void **state)
 
 	if (destroy) {
 		D_PRINT("Destroy btree\n");
-		rc = dbtree_destroy(sk_toh);
+		rc = dbtree_destroy(sk_toh, NULL);
 	} else {
 		D_PRINT("Close btree\n");
 		rc = dbtree_close(sk_toh);
@@ -497,7 +497,8 @@ sk_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE:
-			rc = dbtree_delete(sk_toh, &key_iov, NULL);
+			rc = dbtree_delete(sk_toh, BTR_PROBE_EQ,
+					   &key_iov, NULL);
 			if (rc != 0) {
 				sprintf(outbuf, "Failed to delete %s\n", key);
 				fail_msg("%s", outbuf);
@@ -510,7 +511,8 @@ sk_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
-			rc = dbtree_delete(sk_toh, &key_iov, &rec_off);
+			rc = dbtree_delete(sk_toh, BTR_PROBE_EQ,
+					   &key_iov, &rec_off);
 			if (rc != 0) {
 				sprintf(outbuf, "Failed to delete %s\n", key);
 				fail_msg("%s", outbuf);
