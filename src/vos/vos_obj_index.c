@@ -183,7 +183,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (rc != 0)
 			D_ERROR("Failed to open OI tree: %d\n", rc);
 		else
-			dbtree_destroy(toh);
+			dbtree_destroy(toh, NULL);
 	}
 	umem_free(umm, rec->rec_off);
 	return rc;
@@ -740,7 +740,7 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
-	rc = dbtree_destroy(btr_hdl);
+	rc = dbtree_destroy(btr_hdl, NULL);
 	if (rc)
 		D_ERROR("OI BTREE destroy failed\n");
 exit:
