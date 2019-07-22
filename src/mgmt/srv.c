@@ -127,7 +127,7 @@ process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 		daos_resp->status = MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN;
 	}
 
-	dss_notify_rank_set();
+	dss_init_state_set(DSS_INIT_STATE_RANK_SET);
 
 	mgmt__set_rank_req__free_unpacked(daos_req, NULL);
 }
@@ -455,6 +455,17 @@ out:
 }
 
 static void
+process_setup_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
+{
+	/* response status is populated with SUCCESS on init */
+	mgmt__daos_resp__init(daos_resp);
+
+	D_DEBUG(DB_MGMT, "Received request to set up server\n");
+
+	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+}
+
+static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
 	uint8_t	*body;
@@ -588,6 +599,10 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_DESTROY_POOL:
 		process_destroypool_request(drpc_req, daos_resp);
+		pack_daos_response(daos_resp, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_SET_UP:
+		process_setup_request(drpc_req, daos_resp);
 		pack_daos_response(daos_resp, drpc_resp);
 		break;
 	default:
