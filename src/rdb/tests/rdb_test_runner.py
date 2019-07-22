@@ -32,7 +32,7 @@ This script runs the rdb tests. From the command line the tests are run with:
 server:
 orterun -N 1 --report-uri /tmp/urifile -x LD_LIBRARY_PATH
 daos_server -o <builddir>/utils/config/examples/daos_server_rdb_tests.yml
--d ./ -t 1 -m vos,rdb,rsvc,rdbt
+-d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt
 
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
@@ -105,7 +105,7 @@ def start_server(binfo):
     cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
     cmd += "-o {} ".format(config_file)
-    cmd += "-d ./ -t 1 -m vos,rdb,rsvc,rdbt -i"
+    cmd += "-d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt -i "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
 
