@@ -181,26 +181,45 @@ class Snapshot(TestWithServers):
         try:
             snapshot = DaosSnapshot(self.context)
             snapshot.create(coh, epoch)
-        except Exception:
-            self.log.info("Negative test, expected error:")
+        except Exception as error:
+            self.log.info("==>Negative test, expected error: %s", str(error))
             status = 1
         return status
 
     def test_snapshot_negativecases(self):
         """
-        Test ID: DAOS-1390 Verify snap_create bad parameter behavior
-
+        Test ID: DAOS-1390 Verify snap_create bad parameter behavior.
+                 DAOS-1322 Create a new container, verify snapshot state.
+                           as expected for a brand new container.
+                 DAOS-1392 Verify snap_destroy bad parameter behavior.
+                 DAOS-1388 Verify snap_list bad parameter behavior.
         Test Description:
+                (0)Take a snapshot of the newly created container.
                 (1)Create an object, write random data into it, and take
                    a snapshot.
                 (2)Verify the snapshot is working properly.
-                (3)Test snapshot with an invalid container handle
-                (4)Test snapshot with a NULL container handle
-                (5)Test snapshot with an invalid epoch
+                (3)Test snapshot with an invalid container handle.
+                (4)Test snapshot with a NULL container handle.
+                (5)Test snapshot with an invalid epoch.
+                (6)Verify snap_destroy with a bad parameter.
+                (7)Verify snap_list bad parameter behavior.
 
         Use Cases: Combinations with minimun 1 client and 1 server.
         :avocado: tags=snap,snapshot_negative,snapshotcreate_negative
         """
+
+        #DAOS-1322 Create a new container, verify snapshot state as expected
+        #          for a brand new container.
+        try:
+            self.log.info(
+                "==(0)Take a snapshot of the newly created container.")
+            snapshot = DaosSnapshot(self.context)
+            snapshot.create(self.container.coh, 0)
+            self.display_snapshot(snapshot)
+        except Exception as error:
+            self.fail(
+                "##(0)Error on a snapshot on a new container %s"
+                , str(error))
 
         #(1)Create an object, write some data into it, and take a snapshot
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
@@ -275,6 +294,42 @@ class Snapshot(TestWithServers):
         else:
             self.fail("##(5)Negative test 3 passing, expecting failed on "
                       "taking snapshot with a NULL epoch.")
+
+
+        #(6)DAOS-1392 destroy snapshot with an invalid handle
+        self.log.info(
+            "==(6)DAOS-1392 destroy snapshot with an invalid handle.")
+        try:
+            snapshot.destroy(None, epoch)
+            self.fail(
+                "##(6)Negative test destroy snapshot with an "
+                "invalid coh handle, expected fail, shown Passing##")
+        except Exception as error:
+            self.log.info(
+                "==>Negative test, destroy snapshot with an invalid handle.")
+            self.log.info("   Expected Error: %s", str(error))
+            expected_error = "RC: -1002"
+            if expected_error not in str(error):
+                self.fail(
+                    "##(6.1)Expecting error RC: -1002  did not show.")
+
+        #(7)DAOS-1388 Verify snap_list bad parameter behavior
+        self.log.info(
+            "==(7)DAOS-1388 Verify snap_list bad parameter behavior.")
+        try:
+            snapshot.list(None, 0)
+            self.fail(
+                "##(7)Negative test snapshot list with an "
+                "invalid coh and epoch, expected fail, shown Passing##")
+        except Exception as error:
+            self.log.info(
+                "==>Negative test, snapshot list with an invalid coh.")
+            self.log.info("   Expected Error: %s", str(error))
+            expected_error = "RC: -1002"
+            if expected_error not in str(error):
+                self.fail(
+                    "##(7.1)Expecting error RC: -1002  did not show.")
+
 
 
     def test_snapshots(self):

@@ -66,6 +66,7 @@ static struct utest_context	*ts_utx;
 static struct umem_attr		*ts_uma;
 static int			 ts_feats = EVT_FEAT_DEFAULT;
 
+#define ORDER_DEF_INTERNAL	13
 #define ORDER_DEF		16
 
 static int			ts_order = ORDER_DEF;
@@ -77,6 +78,14 @@ static daos_handle_t		ts_toh;
 #define EVT_SEP_VAL		':'
 #define EVT_SEP_EXT		'-'
 #define EVT_SEP_EPC		'@'
+
+/* Data sizes */
+#define D_1K_SIZE		1024
+#define D_16K_SIZE		(16 * 1024)
+#define D_256K_SIZE		(256 * 1024)
+#define D_512K_SIZE		(512 * 1024)
+#define D_1M_SIZE		(1024 * 1024)
+#define D_256M_SIZE		(256 * 1024 * 1024)
 
 static void
 ts_open_create(void **state)
@@ -947,7 +956,7 @@ test_evt_iter_flags(void **state)
 	int		t_repeats;
 
 	/* Create a evtree */
-	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	D_ALLOC_ARRAY(data, (NUM_EPOCHS+1));
@@ -1112,7 +1121,7 @@ test_evt_iter_delete(void **state)
 	struct evt_filter	 filter;
 	uint32_t		 inob;
 
-	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
@@ -1256,7 +1265,7 @@ test_evt_find_internal(void **state)
 	char testdata[] = "deadbeef";
 
 	/* Create a evtree */
-	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
@@ -1315,7 +1324,7 @@ test_evt_find_internal(void **state)
 		evt_ent_array_init(&ent_array);
 		rc = evt_find(toh, &epr, &extent, &ent_array);
 		if (rc != 0)
-			D_FATAL("Add rect failed %d\n", rc);
+			D_FATAL("Find rect failed %d\n", rc);
 		evt_ent_array_for_each(ent, &ent_array) {
 			bool punched;
 			static char buf[10];
@@ -1392,7 +1401,7 @@ test_evt_iter_delete_internal(void **state)
 	int			 val[] = {10, 26, 2, 18, 4, 20, 6, 22, 0};
 	int			 iter_count;
 
-	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1440,6 +1449,179 @@ test_evt_iter_delete_internal(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+test_evt_variable_record_size_internal(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	struct evt_entry_in	 entry = {0};
+	int			 rc, count;
+	int			 epoch;
+	const int		val[] = {D_1K_SIZE,
+					D_16K_SIZE};
+	uint64_t		data_size;
+	char                     *data;
+
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
+		DAOS_HDL_INVAL, &toh);
+	assert_int_equal(rc, 0);
+	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
+		/* Try to insert a bunch of entries with variable data sizes */
+		data_size = val[count];
+		D_ALLOC(data, data_size);
+		strcpy(data, "EVTree: Test Variable Record Size");
+		for (epoch = 1; epoch < 3 ; epoch++) {
+			entry.ei_rect.rc_ex.ex_lo = epoch;
+			entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
+			entry.ei_rect.rc_epc = epoch;
+			entry.ei_ver = 0;
+			entry.ei_inob = data_size;
+
+			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+
+			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
+					    data, data_size);
+			assert_int_equal(rc, 0);
+			rc = evt_insert(toh, &entry);
+			if (count > 0)
+				assert_int_not_equal(rc, 0);
+			else
+				assert_int_equal(rc, 0);
+		}
+		D_FREE(data);
+	}
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+}
+
+static void
+test_evt_various_data_size_internal(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry_in	 entry = {0};
+	int			 rc, count;
+	int			 epoch;
+	const int		val[] = {D_1K_SIZE,
+					D_16K_SIZE,
+					D_256K_SIZE,
+					D_512K_SIZE,
+					D_1M_SIZE,
+					D_256M_SIZE};
+	uint64_t		data_size;
+	char                     *data;
+	struct evt_entry_array	 ent_array;
+	struct evt_entry	 *ent;
+	bio_addr_t		 addr;
+	struct evt_extent	 extent;
+	daos_epoch_range_t	 epr;
+
+	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
+		rc = evt_create(ts_feats, ORDER_DEF_INTERNAL,
+			arg->ta_uma, arg->ta_root,
+			DAOS_HDL_INVAL, &toh);
+		assert_int_equal(rc, 0);
+		rc = utest_sync_mem_status(arg->ta_utx);
+		assert_int_equal(rc, 0);
+		data_size = val[count];
+		D_PRINT("Data Size: %ld\n", data_size);
+		D_ALLOC(data, data_size);
+		strcpy(data, "EVTree: Out of Memory");
+		epr.epr_lo = 0;
+		/* Loop does the following : evt_insert,
+		* evt_find (first epoch) and evt_delete (random deletes)
+		* till out of space condition
+		*/
+		for (epoch = 1; ; epoch++) {
+			entry.ei_rect.rc_ex.ex_lo = epoch;
+			entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
+			entry.ei_rect.rc_epc = epoch;
+			entry.ei_ver = 0;
+			entry.ei_inob = data_size;
+
+			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+
+			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
+					    data, data_size);
+			if (rc != 0) {
+				assert_int_equal(rc, -DER_NOSPACE);
+				break;
+			}
+			rc = evt_insert(toh, &entry);
+			if (rc != 0) {
+				assert_int_equal(rc, -DER_NOSPACE);
+				break;
+			}
+			rc = utest_check_mem_increase(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			if (epoch == 1) {
+				evt_ent_array_init(&ent_array);
+				extent.ex_lo = epoch;
+				extent.ex_hi = epoch + data_size;
+				epr.epr_hi = epoch;
+				rc = evt_find(toh, &epr, &extent, &ent_array);
+				if (rc != 0)
+					D_FATAL("Find rect failed %d\n", rc);
+				evt_ent_array_for_each(ent, &ent_array) {
+					static char *actual;
+
+					D_ALLOC(actual, data_size);
+					addr = ent->en_addr;
+					strncpy(actual,
+					(char *)utest_off2ptr(arg->ta_utx,
+						addr.ba_off),
+					(int)evt_extent_width(
+						&ent->en_sel_ext));
+					rc = strcmp(actual, data);
+					if (rc != 0) {
+						D_FREE(actual);
+						D_FREE(data);
+						fail_msg("Data Check Failed\n");
+					}
+					D_FREE(actual);
+				}
+				evt_ent_array_fini(&ent_array);
+			}
+			/* Delete a record*/
+			if (epoch % 10 == 0) {
+				entry.ei_rect.rc_ex.ex_lo = epoch;
+				entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
+				entry.ei_rect.rc_epc = epoch;
+
+				rc = evt_delete(toh, &entry.ei_rect, NULL);
+				assert_int_equal(rc, 0);
+				rc = utest_check_mem_decrease(arg->ta_utx);
+				assert_int_equal(rc, 0);
+				rc = utest_sync_mem_status(arg->ta_utx);
+				assert_int_equal(rc, 0);
+			}
+		}
+		/* Delete remaining records: evt_iter_delete */
+		rc = evt_iter_prepare(toh, 0, NULL, &ih);
+		assert_int_equal(rc, 0);
+		rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+		assert_int_equal(rc, 0);
+		print_message("Deleting evtree contents\n");
+		while (!evt_iter_empty(ih)) {
+			rc = evt_iter_delete(ih, NULL);
+			assert_int_equal(rc, 0);
+			rc = utest_check_mem_decrease(arg->ta_utx);
+			assert_int_equal(rc, 0);
+			rc = utest_sync_mem_status(arg->ta_utx);
+			assert_int_equal(rc, 0);
+		}
+		rc = evt_iter_finish(ih);
+		assert_int_equal(rc, 0);
+		/* Free allocated memory */
+		D_FREE(data);
+		rc = evt_destroy(toh);
+		assert_int_equal(rc, 0);
+	}
+}
+
 static inline int
 insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 {
@@ -1470,7 +1652,7 @@ test_evt_ent_alloc_bug(void **state)
 	int			 last = 0;
 	int			 idx1, nr1, idx2, nr2, idx3, nr3;
 
-	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1540,7 +1722,7 @@ test_evt_root_deactivate_bug(void **state)
 	struct evt_entry_in	 entry_in = {0};
 	int			 rc;
 
-	rc = evt_create(ts_feats, 13, arg->ta_uma, arg->ta_root,
+	rc = evt_create(ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma, arg->ta_root,
 			DAOS_HDL_INVAL, &toh);
 	assert_int_equal(rc, 0);
 
@@ -1678,6 +1860,12 @@ run_internal_tests(void)
 			setup_builtin, teardown_builtin},
 		{ "EVT014: evt_find_internal",
 			test_evt_find_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT015: evt_various_data_size_internal",
+			test_evt_various_data_size_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT016: evt_variable_record_size_internal",
+			test_evt_variable_record_size_internal,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};

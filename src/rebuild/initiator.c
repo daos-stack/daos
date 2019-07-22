@@ -1111,7 +1111,7 @@ rebuilt_btr_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
 	struct rebuild_root		*root = val_iov->iov_buf;
 	int				rc;
 
-	rc = dbtree_destroy(root->root_hdl);
+	rc = dbtree_destroy(root->root_hdl, NULL);
 	if (rc)
 		D_ERROR("dbtree_destroy, cont "DF_UUID" failed, rc %d.\n",
 			DP_UUID(*(uuid_t *)key_iov->iov_buf), rc);
@@ -1131,7 +1131,7 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl)
 		goto out;
 	}
 
-	rc = dbtree_destroy(btr_hdl);
+	rc = dbtree_destroy(btr_hdl, NULL);
 
 out:
 	return rc;
@@ -1237,7 +1237,7 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 		/* possible get more req due to reply lost */
 		if (roid->ro_req_recv >= roid_tmp.ro_req_expect ||
 		    roid->ro_req_recv == 0) {
-			rc = dbtree_delete(cont_root->root_hdl,
+			rc = dbtree_delete(cont_root->root_hdl, BTR_PROBE_EQ,
 					   &key_iov, NULL);
 			if (rc == 0) {
 				*cnt -= 1;
