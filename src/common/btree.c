@@ -123,9 +123,16 @@ struct btr_context {
 	/** embedded iterator */
 	struct btr_iterator		 tc_itr;
 	/** cached configured tree order */
-	uint16_t				 tc_order;
+	uint16_t			 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
-	uint16_t				 tc_depth;
+	uint16_t			 tc_depth;
+	/** credits for drain, see dbtree_drain */
+	int				 tc_creds:30;
+	/**
+	 * credits is turned on, \a tcx::tc_creds should be checked
+	 * while draining the tree
+	 */
+	int				 tc_creds_on:1;
 	/**
 	 * returned value of the probe, it should be reset after upsert
 	 * or delete because the probe path could have been changed.
@@ -157,9 +164,8 @@ static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
-static void btr_node_destroy(struct btr_context *tcx,
-			     umem_off_t nd_off,
-			     void *args);
+static void btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
+			     void *args, bool *empty_rc);
 static int btr_root_tx_add(struct btr_context *tcx);
 static bool btr_probe_prev(struct btr_context *tcx);
 static bool btr_probe_next(struct btr_context *tcx);
@@ -1324,7 +1330,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	struct btr_check_alb	 alb;
 	struct btr_trace	 traces[BTR_TRACE_MAX];
 	struct btr_trace	*trace = NULL;
-	umem_off_t	 nd_off;
+	umem_off_t		 nd_off;
 
 	if (!btr_probe_valid(probe_opc)) {
 		rc = PROBE_RC_ERR;
@@ -2616,7 +2622,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			btr_node_del_leaf_only(tcx, trace, true, args);
 		} else {
 
-			btr_node_destroy(tcx, trace->tr_node, args);
+			btr_node_destroy(tcx, trace->tr_node, args, NULL);
 			if (btr_has_tx(tcx))
 				btr_root_tx_add(tcx);
 
@@ -2703,7 +2709,7 @@ btr_tx_delete(struct btr_context *tcx, void *args)
  *				args to handle special cases(if any)
  */
 int
-dbtree_delete(daos_handle_t toh, d_iov_t *key,
+dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	      void *args)
 {
 	struct btr_context *tcx;
@@ -2713,7 +2719,7 @@ dbtree_delete(daos_handle_t toh, d_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key);
+	rc = btr_probe_key(tcx, opc, DAOS_INTENT_PUNCH, key);
 	if (rc == PROBE_RC_INPROGRESS) {
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
@@ -3068,10 +3074,11 @@ dbtree_close(daos_handle_t toh)
 /** Destroy a tree node and all its children recursively. */
 static void
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
-		 void *args)
+		 void *args, bool *empty_rc)
 {
 	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
 	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
+	bool		 empty	= true;
 	int		 i;
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
@@ -3082,52 +3089,88 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		leaf ? "leaf" : "node", nd_off, nd->tn_keyn);
 
 	if (leaf) {
-		for (i = 0; i < nd->tn_keyn; i++) {
+		for (i = nd->tn_keyn - 1; i >= 0; i--) {
 			struct btr_record *rec;
 
 			rec = btr_node_rec_at(tcx, nd_off, i);
 			btr_rec_free(tcx, rec, args);
+			if (!tcx->tc_creds_on)
+				continue;
+
+			/* NB: only leaf record consumes user credits */
+			D_ASSERT(tcx->tc_creds > 0);
+			tcx->tc_creds--;
+			if (tcx->tc_creds == 0) {
+				empty = (i == 0);
+				break;
+			}
 		}
-		return;
+	} else { /* non-leaf */
+		for (i = nd->tn_keyn; i >= 0; i--) {
+			umem_off_t	child_off;
+
+			child_off = btr_node_child_at(tcx, nd_off, i);
+			btr_node_destroy(tcx, child_off, NULL, &empty);
+			if (!tcx->tc_creds_on || tcx->tc_creds > 0) {
+				D_ASSERT(empty);
+				continue;
+			}
+			D_ASSERT(tcx->tc_creds == 0);
+
+			/* current child is empty, other children are not */
+			if (empty && i > 0) {
+				empty = false;
+				i--;
+			}
+			break;
+		}
 	}
 
-	for (i = 0; i <= nd->tn_keyn; i++) {
-		umem_off_t	child_off;
-
-		child_off = btr_node_child_at(tcx, nd_off, i);
-		btr_node_destroy(tcx, child_off, NULL);
+	if (empty) {
+		btr_node_free(tcx, nd_off);
+	} else {
+		if (btr_has_tx(tcx))
+			btr_node_tx_add(tcx, nd_off);
+		/* NB: i can be zero for non-leaf node */
+		D_ASSERT(i >= 0);
+		nd->tn_keyn = i;
 	}
-	btr_node_free(tcx, nd_off);
+
+	if (empty_rc)
+		*empty_rc = empty;
 }
 
 /** destroy all tree nodes and records, then release the root */
 static int
-btr_tree_destroy(struct btr_context *tcx)
+btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 {
 	struct btr_root *root;
+	bool		 empty = true;
 
 	D_DEBUG(DB_TRACE, "Destroy "DF_X64", order %d\n",
 		tcx->tc_tins.ti_root_off, tcx->tc_order);
 
 	root = tcx->tc_tins.ti_root;
-	if (!UMOFF_IS_NULL(root->tr_node)) {
+	if (root && !UMOFF_IS_NULL(root->tr_node)) {
 		/* destroy the root and all descendants */
-		btr_node_destroy(tcx, root->tr_node, NULL);
+		btr_node_destroy(tcx, root->tr_node, args, &empty);
 	}
+	*destroyed = empty;
+	if (empty)
+		btr_root_free(tcx);
 
-	btr_root_free(tcx);
 	return 0;
 }
 
 static int
-btr_tx_tree_destroy(struct btr_context *tcx)
+btr_tx_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 {
-	int		      rc = 0;
+	int      rc = 0;
 
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
-	rc = btr_tree_destroy(tcx);
+	rc = btr_tree_destroy(tcx, args, destroyed);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -3137,9 +3180,40 @@ btr_tx_tree_destroy(struct btr_context *tcx)
  * The tree open handle is invalid after the destroy.
  *
  * \param toh	[IN]	Tree open handle.
+ * \param args	[IN]	user parameter for btr_ops_t::to_rec_free
  */
 int
-dbtree_destroy(daos_handle_t toh)
+dbtree_destroy(daos_handle_t toh, void *args)
+{
+	struct btr_context *tcx;
+	bool		    destroyed;
+	int		    rc;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	D_ASSERT(!tcx->tc_creds_on);
+	rc = btr_tx_tree_destroy(tcx, args, &destroyed);
+	D_ASSERT(rc || destroyed);
+
+	btr_context_decref(tcx);
+	return rc;
+}
+
+/**
+ * This function drains key/values from the tree, each time it deletes a KV
+ * pair, it consumes a @credits, which is input paramter of this function.
+ * It returns if all input credits are consumed, or the tree is empty, in
+ * the later case, it also destroys the btree.
+ *
+ * \param toh		[IN]	 Tree open handle.
+ * \param credis	[IN/OUT] Input and returned drain credits
+ * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
+ * \param destroy	[OUT]	 Tree is empty and destroyed
+ */
+int
+dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -3148,9 +3222,25 @@ dbtree_destroy(daos_handle_t toh)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_tx_tree_destroy(tcx);
+	D_ASSERT(!tcx->tc_creds_on);
+	if (credits) {
+		if (*credits <= 0) {
+			rc = -DER_INVAL;
+			goto failed;
+		}
+		tcx->tc_creds = *credits;
+		tcx->tc_creds_on = 1;
+	}
 
-	btr_context_decref(tcx);
+	rc = btr_tx_tree_destroy(tcx, args, destroyed);
+	if (rc)
+		goto failed;
+
+	if (tcx->tc_creds_on)
+		*credits = tcx->tc_creds;
+failed:
+	tcx->tc_creds_on = 0;
+	tcx->tc_creds = 0;
 	return rc;
 }
 
