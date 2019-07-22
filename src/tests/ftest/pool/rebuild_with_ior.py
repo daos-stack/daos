@@ -70,7 +70,7 @@ class RebuildWithIOR(IorTestBase):
         """
 
         try:
-            self.gen_util = general_utils()
+            #self.gen_util = general_utils()
             #self.pool = TestPool(self.context, self.log)
             #self.pool.get_params(self)
             targets = self.params.get("targets", "/run/server_config/*")

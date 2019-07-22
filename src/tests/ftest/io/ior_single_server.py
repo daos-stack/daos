@@ -26,6 +26,7 @@ from __future__ import print_function
 import os
 
 from apricot import TestWithServers
+from general_utils import TestPool
 
 from daos_api import DaosPool
 from ior_utils import IorCommand, IorFailed
@@ -60,24 +61,31 @@ class IorTestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
         # Get the parameters used to create a pool
-        mode = self.params.get("mode", "/run/pool/*")
-        uid = os.geteuid()
-        gid = os.getegid()
-        group = self.params.get("setname", "/run/pool/*", self.server_group)
-        scm_size = self.params.get("scm_size", "/run/pool/*")
-        nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
-        svcn = self.params.get("svcn", "/run/pool/*", 1)
+#        mode = self.params.get("mode", "/run/pool/*")
+#        uid = os.geteuid()
+#        gid = os.getegid()
+#        group = self.params.get("setname", "/run/pool/*", self.server_group)
+#        scm_size = self.params.get("scm_size", "/run/pool/*")
+#        nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
+#        svcn = self.params.get("svcn", "/run/pool/*", 1)
 
         # Initialize a python pool object then create the underlying
         # daos storage
-        self.pool = DaosPool(self.context)
-        self.pool.create(
-            mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
+#        self.pool = DaosPool(self.context)
+#        self.pool.create(
+#            mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
+
+        # Get the test params
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+
+        # Create a pool
+        self.pool.create()
 
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.pool is not None and self.pool.attached:
+            if self.pool is not None:
                 self.pool.destroy(1)
         finally:
             # Stop the servers and agents

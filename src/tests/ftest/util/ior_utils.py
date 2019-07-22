@@ -117,7 +117,7 @@ class IorCommand(object):
         self.daos_group = IorParam("--daos.group {}")           # server group
         self.daos_chunk = IorParam("--daos.chunk_size {}", 1048576)
         self.daos_oclass = IorParam("--daos.oclass {}")         # object class
-        self.mpiio_oclass = None                     # mpiio object class,
+#        self.mpiio_oclass = 234                     # mpiio object class,
                                                     # default set as "SX"
     def __str__(self):
         """Return a IorCommand object as a string.
@@ -201,8 +201,8 @@ class IorCommand(object):
         """
         self.daos_svcl.value = ":".join(
             [str(item) for item in [
-                int(pool.svc.rl_ranks[index])
-                for index in range(pool.svc.rl_nr)]])
+                int(pool.pool.svc.rl_ranks[index])
+                for index in range(pool.pool.svc.rl_nr)]])
         if display:
             print("Updated DOAS IOR param: {}".format(str(self.daos_svcl)))
 
@@ -280,7 +280,7 @@ class IorCommand(object):
                 "DAOS_SVCL": self.daos_svcl.value,
                 "DAOS_SINGLETON_CLI": 1,
                 "FI_PSM2_DISCONNECT": 1,
-                "IOR_HINT__MPI__romio_daos_obj_class": self.mpiio_oclass,
+#                "IOR_HINT__MPI__romio_daos_obj_class": 234,
             }
             export_cmd = [
                 "export {}={}".format(key, val) for key, val in env.items()]
