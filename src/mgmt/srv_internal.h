@@ -35,6 +35,8 @@
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
 
 #include "mgmt.pb-c.h"
 #include "rpc.h"
@@ -47,11 +49,31 @@ void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */
+
+/* Management service */
+struct mgmt_svc {
+	struct ds_rsvc		ms_rsvc;
+	ABT_rwlock		ms_lock;
+	rdb_path_t		ms_root;
+	rdb_path_t		ms_servers;
+	rdb_path_t		ms_uuids;
+	rdb_path_t		ms_pools;
+	ABT_mutex		ms_mutex;
+	bool			ms_step_down;
+	bool			ms_distribute;
+	ABT_cond		ms_distribute_cv;
+	ABT_thread		ms_distributord;
+	uint32_t		ms_map_version;
+	uint32_t		ms_rank_next;
+};
+
 int ds_mgmt_system_module_init(void);
 void ds_mgmt_system_module_fini(void);
 int ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		      char *addr);
 int ds_mgmt_svc_stop(void);
+int ds_mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint);
+void ds_mgmt_svc_put_leader(struct mgmt_svc *svc);
 struct mgmt_join_in {
 	uint32_t		ji_rank;
 	struct server_rec	ji_server;

@@ -56,4 +56,4 @@ daos_tests:
     test_O:
       daos_test: O
       test_name: OID Allocator tests
-      test_timeout: 900
+      test_timeout: 1350

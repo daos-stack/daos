@@ -7,6 +7,18 @@ socket_dir: /tmp/daos_sockets
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
 
+## Transport Credentials Specifying certificates to secure communications
+##
+#transport_config:
+#  # Specify to bypass loading certificates and use insecure communications channnels
+#  allow_insecure: false
+#  # Custom CA Root certificate for generated certs
+#  ca_cert: .daos/daosCA.crt
+#  # Server certificate for use in TLS handshakes
+#  cert: .daos/daos_server.crt
+#  # Key portion of Server Certificate
+#  key: .daos/daos_server.key
+
 # single server instance per config file for now
 servers:
 -
