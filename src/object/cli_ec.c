@@ -250,34 +250,57 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
  */
 static int
 ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
-		 unsigned int len)
+		 unsigned int len, unsigned int k)
 {
 	daos_recx_t	*nrecx;
 	unsigned int	 i;
 	int		 rc = 0;
 
-	D_INFO("ec_update_params\n");
-	D_INFO("params->niod->iod_nr: %u\n", params->niod.iod_nr);
-	for (i = 0; i < params->niod.iod_nr; i++)
-		D_INFO(" params - i: %u, rx_idx: %lu, rx_nr: %lu\n", i,
-			params->niod.iod_recxs[i].rx_idx,
-			params->niod.iod_recxs[i].rx_nr);
 	D_REALLOC_ARRAY(nrecx, (params->niod.iod_recxs),
 			(params->niod.iod_nr + iod->iod_nr));
 	if (nrecx == NULL)
 		return -DER_NOMEM;
 	params->niod.iod_recxs = nrecx;
-	D_INFO("iod->iod_nr: %u\n", iod->iod_nr);
 	for (i = 0; i < iod->iod_nr; i++) {
+		if (iod->iod_recxs[i].rx_nr * iod->iod_size > len * k) {
+			/* can't have more than one stripe in a recx entry */
+			uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
+			uint64_t start = iod->iod_recxs[i].rx_idx;
+
+			while (rem) {
+				if (rem <= len * k) {
+					params->
+					niod.iod_recxs[params->niod.iod_nr].
+					rx_nr = rem/iod->iod_size;
+					params->
+					niod.iod_recxs[params->niod.iod_nr++].
+					rx_idx = start;
+					rem = 0;
+				} else {
+					params->
+					niod.iod_recxs[params->niod.iod_nr].
+					rx_nr = (len * k) / iod->iod_size;
+					params->
+					niod.iod_recxs[params->niod.iod_nr++].
+					rx_idx = start;
+					start += (len * k) / iod->iod_size;
+					rem -= len * k;
+					D_REALLOC_ARRAY(nrecx,
+						(params->niod.iod_recxs),
+						(params->niod.iod_nr +
+						 iod->iod_nr));
+					if (nrecx == NULL) {
+						D_FREE(params->niod.iod_recxs);
+						return -DER_NOMEM;
+					}
+					params->niod.iod_recxs = nrecx;
+				}
+			}
+		} else {
 		params->niod.iod_recxs[params->niod.iod_nr++] =
 			iod->iod_recxs[i];
-		D_INFO("i: %u, rx_idx: %lu, rx_nr: %lu\n", i,
-			iod->iod_recxs[i].rx_idx,
-			iod->iod_recxs[i].rx_nr);
+		}
 	}
-	D_INFO("Before - sgl->sgl_nr: %u, params->nsgl.sg_nr: %u\n",
-		sgl->sg_nr,
-		params->nsgl.sg_nr);
 	D_ALLOC_ARRAY(params->nsgl.sg_iovs, (params->p_segs.p_nr + sgl->sg_nr));
 	if (params->nsgl.sg_iovs == NULL)
 		return -DER_NOMEM;
@@ -287,11 +310,7 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		params->nsgl.sg_iovs[i].iov_len = len;
 		params->nsgl.sg_nr++;
 	}
-	D_INFO("After: sgl->sgl_nr: %u, params->nsgl.sg_nr: %u\n",
-		sgl->sg_nr,
-		params->nsgl.sg_nr);
-
-	for (i = 0; i < sgl->sg_nr; i++)
+	for (i = 0; i < sgl->sg_nr; i++) 
 		params->nsgl.sg_iovs[params->nsgl.sg_nr++] = sgl->sg_iovs[i];
 
 	return rc;
@@ -441,7 +460,8 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 						break;
 				}
 				rc = ec_update_params(params, iod, sgl,
-						      oca->u.ec.e_len);
+						      oca->u.ec.e_len,
+						      oca->u.ec.e_k);
 				head->iods[i] = params->niod;
 				head->sgls[i] = params->nsgl;
 				D_ASSERT(head->nr == i);

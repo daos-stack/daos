@@ -384,10 +384,10 @@ btr_ops_t dbtree_dtx_cf_ops = {
 #define DTX_CF_BTREE_ORDER	20
 
 static int
-dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
+dtx_get_tgt_cnt(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 {
 	struct daos_oclass_attr	*oc_attr;
-	int			 replicas;
+	int			 tgt_cnt;
 
 	if (layout->ol_nr <= oid->id_shard)
 		return -DER_INVAL;
@@ -399,19 +399,19 @@ dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 	if (oc_attr->ca_resil != DAOS_RES_REPL && oc_attr->ca_resil != DAOS_RES_EC)
 		return -DER_NOTAPPLICABLE;
 	if ( oc_attr->ca_resil == DAOS_RES_REPL)
-		replicas = oc_attr->u.repl.r_num;
+		tgt_cnt = oc_attr->u.rp.r_num;
 	else {
 		D_ASSERT(oc_attr->ca_resil == DAOS_RES_EC);
-		replicas = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+		tgt_cnt = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
 	}
 
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = layout->ol_grp_size;
+	if (tgt_cnt == DAOS_OBJ_REPL_MAX)
+		tgt_cnt = layout->ol_grp_size;
 
-	if (replicas < 1)
+	if (tgt_cnt < 1)
 		return -DER_INVAL;
 
-	return replicas;
+	return tgt_cnt;
 }
 
 static int
@@ -685,7 +685,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	struct dtx_req_rec	*next;
 	d_list_t		 head;
 	d_rank_t		 myrank;
-	int			 replicas;
+	int			 tgt_cnt;
 	int			 length = 0;
 	int			 start;
 	int			 rc = 0;
@@ -694,14 +694,14 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	if (layout->ol_nr <= oid->id_shard)
 		return -DER_INVAL;
 
-	replicas = dtx_get_replicas(oid, layout);
-	if (replicas < 0)
-		return replicas;
+	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
+	if (tgt_cnt < 0)
+		return tgt_cnt;
 
 	/* If no other replica, then currnet replica is the unique
 	 * one that can be committed if it is 'prepared'.
 	 */
-	if (replicas == 1)
+	if (tgt_cnt == 1)
 		return DTX_ST_PREPARED;
 
 	pool = ds_pool_lookup(po_uuid);
@@ -710,12 +710,12 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 
 	D_INIT_LIST_HEAD(&head);
 	crt_group_rank(pool->sp_group, &myrank);
-	start = (oid->id_shard / replicas) * replicas;
-	for (i = start; i < start + replicas; i++) {
+	start = (oid->id_shard / tgt_cnt) * tgt_cnt;
+	for (i = start; i < start + tgt_cnt; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
 
-		/* skip unavailable replica(s). */
+		/* skip unavailable target(s). */
 		shard = &layout->ol_shards[i];
 		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;

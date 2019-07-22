@@ -647,7 +647,6 @@ ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
 
 		sgl = &tmp_sgl;
 		rc = bio_sgl_convert(bsgl, sgl);
-		sgl->sg_nr, sgl->sg_nr_out);
 		if (rc)
 			break;
 
@@ -992,13 +991,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	map_ver = cont_hdl->sch_pool->spc_map_version;
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
-		DF_U64", pool ver %u/%u with "DF_DTI".\n",
-		rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
-		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
-		orw->orw_map_ver, map_ver, DP_DTI(&orw->orw_dti));
-	D_INFO("rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
 		rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,

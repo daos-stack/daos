@@ -2047,11 +2047,7 @@ dc_obj_update(tse_task_t *task)
 	}
 
 	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
-	D_INFO("update "DF_OID"\n",
-		DP_OID(obj->cob_md.omd_id));
 	if (oca->ca_resil == DAOS_RES_EC) {
-		D_INFO("Updating EC Object: "DF_OID"\n",
-		       DP_OID(obj->cob_md.omd_id));
 		rc = ec_obj_update_encode(task, obj->cob_md.omd_id, oca,
 					  &tgt_set);
 		if (rc != 0) {
