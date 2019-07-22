@@ -551,6 +551,9 @@ struct obj_req_tgts {
 	 */
 	struct daos_shard_tgt	*ort_shard_tgts;
 	uint32_t		 ort_grp_nr;
+	/* ort_grp_size is the size of the group that is sent as forwarded
+	 * shards
+	 */
 	uint32_t		 ort_grp_size;
 	/* ort_start_shard is only for EC object, it is the start shard number
 	 * of the EC stripe. To facilitate calculate the offset of different
@@ -642,7 +645,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		}
 	}
 	D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_nr);
-
 	return 0;
 }
 
