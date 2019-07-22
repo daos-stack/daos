@@ -128,7 +128,7 @@ invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
 "app-direct" with one set per socket (each module is assigned to socket
 and reports this via its NUMA rating). This configuration may require a
-rebooy and *daos\_server* will exit on completion of the task.
+reboot and *daos\_server* will exit on completion of the task.
 
 This can be done manually via the following commands:
 
