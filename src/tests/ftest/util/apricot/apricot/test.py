@@ -215,7 +215,7 @@ class TestWithServers(TestWithoutServers):
             self.basepath, self.hostlist_servers, self.hostlist_clients)
 
         # verify that the agents are actually running
-        nodeset = NodeSet.fromlist(','.join(self.hostlist_clients))
+        nodeset = NodeSet.fromlist(self.hostlist_clients)
         clush_command = "clush -w {} -B -S \"ps -ef | grep agent\"".format(
             nodeset)
         process.run(
@@ -228,7 +228,7 @@ class TestWithServers(TestWithoutServers):
     def tearDown(self):
         """Tear down after each test case."""
         # verify that the agents are actually running
-        nodeset = NodeSet.fromlist(','.join(self.hostlist_clients))
+        nodeset = NodeSet.fromlist(self.hostlist_clients)
         clush_command = "clush -w {} -B -S \"ps -ef | grep agent\"".format(
             nodeset)
         process.run(
