@@ -243,11 +243,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				 buf_size - udata.b_off, filler_cb, &udata);
 
 		/** if entry does not fit in buffer, just return */
-		if (rc == -E2BIG)
+		if (rc == E2BIG)
 			break;
 		/** otherwise a different error occured */
 		if (rc)
-			D_GOTO(err, rc = -rc);
+			D_GOTO(err, rc);
 
 		/** if the fuse buffer is full, break enumeration */
 		if (udata.stop)

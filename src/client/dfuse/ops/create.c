@@ -72,13 +72,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
 	if (rc)
-		D_GOTO(err, rc = -rc);
+		D_GOTO(err, rc);
 
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(parent->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
 		     &oh->doh_obj);
 	if (rc)
-		D_GOTO(release1, rc = -rc);
+		D_GOTO(release1, rc);
 
 	fi->direct_io = 1;
 	fi->fh = (uint64_t)oh;
@@ -91,7 +91,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc)
-		D_GOTO(release2, rc = -rc);
+		D_GOTO(release2, rc);
 
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);

@@ -46,7 +46,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 		if (rc == 0)
 			DFUSE_REPLY_WRITE(NULL, req, len);
 		else
-			DFUSE_REPLY_ERR_RAW(NULL, req, -rc);
+			DFUSE_REPLY_ERR_RAW(NULL, req, rc);
 		return;
 	}
 
@@ -63,7 +63,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	if (rc == 0)
 		DFUSE_REPLY_WRITE(ie, req, len);
 	else
-		DFUSE_REPLY_ERR_RAW(ie, req, -rc);
+		DFUSE_REPLY_ERR_RAW(ie, req, rc);
 
 	d_hash_rec_decref(&fsh->dpi_iet, rlink);
 }

@@ -48,7 +48,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
 		     &oh->doh_obj);
 	if (rc)
-		D_GOTO(err, rc = -rc);
+		D_GOTO(err, rc);
 
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 

@@ -41,11 +41,11 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
 		if (rc)
-			D_GOTO(err, rc = -rc);
+			D_GOTO(err, rc);
 		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &oid,
 					&ie->ie_stat.st_ino);
 		if (rc)
-			D_GOTO(err, rc = -rc);
+			D_GOTO(err, rc);
 	}
 
 	entry.attr = ie->ie_stat;
@@ -109,7 +109,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
 			       strerror(-rc));
-		D_GOTO(err, rc = -rc);
+		D_GOTO(err, rc);
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -118,7 +118,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc)
-		D_GOTO(err, rc = -rc);
+		D_GOTO(err, rc);
 
 	/* If the new entry is a link allocate an inode number here, as dfs
 	 * does not assign it an object id to be able to save an inode.

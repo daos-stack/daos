@@ -40,7 +40,7 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 
 	D_ALLOC_PTR(dfir);
 	if (!dfir)
-		D_GOTO(out, rc = -ENOMEM);
+		D_GOTO(out, rc = ENOMEM);
 
 	if (oid) {
 		dfir->ir_id.irid_oid.lo = oid->lo;
@@ -143,7 +143,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		rc = dfs_release(ie->ie_obj);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
-					strerror(-rc));
+					strerror(rc));
 		}
 	}
 

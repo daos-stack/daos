@@ -229,7 +229,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, &mode);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(-rc));
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(rc));
 			D_GOTO(err, 0);
 		}
 	}

@@ -36,6 +36,6 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc == 0) {
 		DFUSE_FUSE_REPLY_ZERO(req);
 	} else {
-		DFUSE_REPLY_ERR_RAW(fs_handle, req, -rc);
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	}
 }

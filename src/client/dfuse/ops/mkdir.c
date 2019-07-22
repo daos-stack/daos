@@ -36,17 +36,15 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
-	}
 
 	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
-	if (rc) {
-		D_GOTO(err, rc = -rc);
-	}
+	if (rc)
+		D_GOTO(err, rc);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -55,9 +53,8 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc) {
-		D_GOTO(release, rc = -rc);
-	}
+	if (rc)
+		D_GOTO(release, rc);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
