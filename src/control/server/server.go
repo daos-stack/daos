@@ -75,19 +75,19 @@ func Main() error {
 	}
 
 	// Backup active config.
-	saveActiveConfig(config)
+	saveActiveConfig(&config)
 
-	ctlLogFile, err := config.setLogging(host)
+	f, err := config.setLogging(host)
 	if err != nil {
 		return errors.Wrap(err, "configure logging")
 	}
-	if ctlLogFile != nil {
-		defer ctlLogFile.Close()
+	if f != nil {
+		defer f.Close()
 	}
 
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
-		config, getDrpcClientConnection(config.SocketDir))
+		&config, getDrpcClientConnection(config.SocketDir))
 	if err != nil {
 		return errors.Wrap(err, "init control server")
 	}
@@ -98,11 +98,12 @@ func Main() error {
 	addr := fmt.Sprintf("0.0.0.0:%d", config.Port)
 	lis, err := net.Listen("tcp4", addr)
 	if err != nil {
-		return errors.Wrap(err, "unable to listen on management interface")
+		return errors.Wrap(err, "enable to listen on management interface")
 	}
 	log.Debugf("DAOS control server listening on %s", addr)
 
-	// Create new grpc server, register services and start serving.
+	// Create new grpc server, register services and start serving (after
+	// dropping privileges).
 	var sOpts []grpc.ServerOption
 
 	opt, err := security.ServerOptionForTransportConfig(config.TransportConfig)
@@ -121,7 +122,7 @@ func Main() error {
 	// Only provide IO/Agent communication if not attempting to respawn after format,
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
 	if !needsRespawn {
-		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(config))
+		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(&config))
 		secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
 		acl.RegisterAccessControlServer(grpcServer, secServer)
 	}
@@ -133,14 +134,14 @@ func Main() error {
 
 	// If running as root, wait for storage format call over client API (mgmt tool).
 	if syscall.Getuid() == 0 {
-		if err = awaitStorageFormat(config); err != nil {
+		if err = awaitStorageFormat(&config); err != nil {
 			return errors.Wrap(err, "format storage")
 		}
 	}
 
 	if needsRespawn {
 		// Chown required files and respawn process under new user.
-		if err := changeFileOwnership(config); err != nil {
+		if err := changeFileOwnership(&config); err != nil {
 			return errors.WithMessage(err, "changing file ownership")
 		}
 
@@ -151,21 +152,21 @@ func Main() error {
 	}
 
 	// Format the unformatted servers by writing persistant superblock.
-	if err = formatIosrvs(config, false); err != nil {
+	if err = formatIosrvs(&config, false); err != nil {
 		return errors.Wrap(err, "format servers")
 	}
 
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
-	iosrv, err := newIosrv(config, 0)
+	iosrv, err := newIosrv(&config, 0)
 	if err != nil {
-		return errors.WithMessage(err, "load server")
+		return errors.Wrap(err, "load server")
 	}
 	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
-		return errors.WithMessage(err, "set up dRPC")
+		return errors.Wrap(err, "set up dRPC")
 	}
 	if err = iosrv.start(); err != nil {
-		return errors.WithMessage(err, "start server")
+		return errors.Wrap(err, "start server")
 	}
 
 	extraText, err := CheckReplica(lis, config.AccessPoints, iosrv.cmd)
@@ -177,7 +178,7 @@ func Main() error {
 	// Wait for I/O server to return.
 	err = iosrv.wait()
 	if err != nil {
-		return errors.WithMessage(err, "DAOS I/O server exited with error")
+		return errors.Wrap(err, "DAOS I/O server exited with error")
 	}
 
 	return err
