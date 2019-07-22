@@ -23,36 +23,16 @@
 '''
 from __future__ import print_function
 
-import os
-import sys
-import time
-import traceback
+from apricot import skipForTicket
+from ior_single_server import IorTestBase
 
-sys.path.append('./io')
-from apricot import TestWithServers, skipForTicket
-from ior_single_server import *
-#from ior_single_server import IorTestBase
-#import ior_single_server
-#import write_host_file
-#import ior_utils
-from mpio_utils import MpioUtils, MpioFailed
-from daos_api import DaosPool, DaosServer, DaosApiError
-from general_utils import *
-
+#pylint: disable=R0903
 class RebuildWithIOR(IorTestBase):
     """
     This class contains tests for pool rebuild that feature I/O going on
     during the rebuild using IOR.
     :avocado: recursive
     """
-
-#    def setUp(self):
-#        super(RebuildWithIOR, self).setUp()
-
-#        self.mpio = None
-#        self.hostfile_clients = (
-#            write_host_file.write_host_file(self.hostlist_clients,
-#                                            self.workdir, None))
 
 #    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
@@ -69,187 +49,55 @@ class RebuildWithIOR(IorTestBase):
         :avocado: tags=pool,rebuild,rebuildwithior
         """
 
-        try:
-            #self.gen_util = general_utils()
-            #self.pool = TestPool(self.context, self.log)
-            #self.pool.get_params(self)
-            targets = self.params.get("targets", "/run/server_config/*")
-            rank = self.params.get("rank_to_kill", "/run/testparams/*")
+        # set params
+        targets = self.params.get("targets", "/run/server_config/*")
+        rank = self.params.get("rank_to_kill", "/run/testparams/*")
 
-            # initialize IorBaseTest
-            ##self.iorbasetest = IorTestBase()
-            # initialize MpioUtils
-            #self.mpio = MpioUtils()
-            #if self.mpio.mpich_installed(self.hostlist_clients) is False:
-            #    self.fail("Exiting Test: Mpich not installed")
+        # ior parameters
+        iorflags_write = self.params.get("F", '/run/ior/iorflags/write/')
+        iorflags_read = self.params.get("F", '/run/ior/iorflags/read/')
+        file1 = "daos:testFile1"
+        file2 = "daos:testFile2"
 
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-#            createuid = os.geteuid()
-#            creategid = os.getegid()
+        # make sure pool looks good before we start
+        checks = {
+            "pi_nnodes": len(self.hostlist_servers),
+            "pi_ntargets": len(self.hostlist_servers) * targets,
+            "pi_ndisabled": 0,
+        }
+        self.assertTrue(
+            self.pool.check_pool_info(**checks),
+            "Invlaid pool information detected before rebuild")
 
-            # parameters used in pool create that are in yaml
-#            createmode = self.params.get("mode", '/run/testparams/createmode/')
-#            createsetid = self.params.get("setname",
-#                                          '/run/testparams/createset/')
-#            createsize = self.params.get("size", '/run/testparams/createsize/')
-#            createsvc = self.params.get("svcn", '/run/testparams/createsvc/')
+        self.assertTrue(
+            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
+                                           rs_obj_nr=0, rs_rec_nr=0),
+            "Invlaid pool rebuild info detected before rebuild")
 
-            # ior parameters
-            #client_processes = self.params.get("np",
-            #                                   '/run/ior/client_processes/*/')
-            #iteration = self.params.get("iter", '/run/ior/iteration/')
-            iorflags_write = self.params.get("write", '/run/ior/iorflags/')
-            iorflags_read = self.params.get("read", '/run/ior/iorflags/')
-            #file1 = self.params.get("file1", '/run/ior/run_files/')
-            #file2 = self.params.get("file2", '/run/ior/run_files/')
-            file1 = "daos:testFile1"
-            file2 = "daos:testFile2"
-            #transfer_size = self.params.get(
-            #    "t", '/run/ior/transfersize_blocksize/*/')
-            #block_size = self.params.get(
-            #    "b", '/run/ior/transfersize_blocksize/*/')
-            #oclass = self.params.get("oclass", '/run/ior/object_class/')
+        # perform first set of io using IOR
+        self.execute_ior(iorflags_write, test_file=file1)
 
-            # initialize a python pool object then create the underlying
-            # daos storage
-#            self.pool = DaosPool(self.context)
-#            self.pool.create(createmode, createuid, creategid,
-#                             createsize, createsetid, None, None, createsvc)
+        # Kill the server
+#        self.pool.start_rebuild(self.server_group, rank, self.d_log)
 
-            #self.pool.create()
-            #pool_uuid = self.pool.uuid
-            #self.pool.get_svc_list()
-            #svcn_list = self.pool.svcn_list
+        # Wait for rebuild to start
+#        self.pool.wait_for_rebuild(True)
 
-#            pool_uuid = self.pool.get_uuid_str()
-#            svc_list = ""
-#            for i in range(createsvc):
-#                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
-#            svc_list = svc_list[:-1]
+        # Wait for rebuild to complete
+#        self.pool.wait_for_rebuild(False)
 
-            # connect to the pool
-#            self.pool.connect(1 << 1)
+        # Verify the pool information after rebuild
+        checks["pi_ndisabled"] = targets
+        self.assertTrue(
+            self.pool.check_pool_info(**checks),
+            "Invalid pool information detected after rebuild")
+        self.assertTrue(
+            self.pool.check_rebuild_status(rs_errno=0, rs_done=1),
+            "Invalid pool rebuild error number detected after rebuild")
 
-            # get pool status and make sure it all looks good before we start
-#            self.pool.pool_query()
-#            if self.pool.pool_info.pi_ndisabled != 0:
-#                self.fail("Number of disabled targets reporting incorrectly.\n")
-#            if self.pool.pool_info.pi_rebuild_st.rs_errno != 0:
-#                self.fail("Rebuild error but rebuild hasn't run.\n")
-#            if self.pool.pool_info.pi_rebuild_st.rs_done != 1:
-#                self.fail("Rebuild is running but device hasn't failed yet.\n")
-#            if self.pool.pool_info.pi_rebuild_st.rs_obj_nr != 0:
-#                self.fail("Rebuilt objs not zero.\n")
-#            if self.pool.pool_info.pi_rebuild_st.rs_rec_nr != 0:
-#                self.fail("Rebuilt recs not zero.\n")
-#            dummy_pool_version = self.pool.pool_info.pi_rebuild_st.rs_version
-#
-            checks = {
-                "pi_nnodes": len(self.hostlist_servers),
-                "pi_ntargets": len(self.hostlist_servers) * targets,
-                "pi_ndisabled": 0,
-            }
-            self.assertTrue(
-                self.pool.check_pool_info(**checks),
-                "Invlaid pool information detected before rebuild")
+        # perform second set of io using IOR
+        self.execute_ior(iorflags_write, test_file=file2)
 
-            self.assertTrue(
-                self.pool.check_rebuild_status(rs_errno=0, rs_done=1, rs_obj_nr=0, rs_rec_nr=0),
-                "Invlaid pool rebuild info detected before rebuild")
-
-            # perform first set of io using IOR
-            self.execute_ior(iorflags_write, test_file=file1)
-            #ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-            #                        pool_uuid, svcn_list, client_processes,
-            #                        self.hostfile_clients, iorflags_write,
-            #                        iteration, transfer_size, block_size, True,
-            #                        oclass)
-
-            # Kill the server
-            self.pool.start_rebuild(self.server_group, rank, self.d_log)
-
-            # Wait for rebuild to start
-            self.pool.wait_for_rebuild(True)
-
-            # Wait for rebuild to complete
-            self.pool.wait_for_rebuild(False)
-
-            # perform second set of io using IOR
-            ##self.iorbasetest.execute_ior(iorflags_write, test_file=file2)
-            #ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-            #                        pool_uuid, svcn_list, client_processes,
-            #                        self.hostfile_clients, iorflags_write,
-            #                        iteration, transfer_size, block_size, True,
-            #                        oclass, "testFile2")
-
-            # Verify the pool information after rebuild
-            checks["pi_ndisabled"] = targets
-            self.assertTrue(
-                self.pool.check_pool_info(**checks),
-                "Invalid pool information detected after rebuild")
-            self.assertTrue(
-                self.pool.check_rebuild_status(rs_errno=0, rs_done=1),
-                "Invalid pool rebuild error number detected after rebuild")
-
-           
-            # perform first set of io using IOR
-#            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-#                                    pool_uuid, svc_list, client_processes,
-#                                    self.hostfile_clients, iorflags_write,
-#                                    iteration, transfer_size, block_size, True,
-#                                    oclass)
-
-            # trigger the rebuild
-#            rank = self.params.get("rank", '/run/testparams/ranks/*')
-#            server = DaosServer(self.context, self.server_group, rank)
-#            server.kill(1)
-#            self.pool.exclude([rank])
-            #self.pool.connect(1 << 1)
-
-            # wait for the rebuild to finish
-#            while True:
-#                self.pool.pool_query()
-#                if self.pool.pool_info.pi_rebuild_st.rs_done == 1:
-#                    print(1)
-#                    break
-#                else:
-#                    time.sleep(2)
-
-            # perform second set of io using IOR
-#            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-#                                    pool_uuid, svc_list, client_processes,
-#                                    self.hostfile_clients, iorflags_write,
-#                                    iteration, transfer_size, block_size, True,
-#                                    oclass, "testFile2")
-
-            # check rebuild statistics
-#            if self.pool.pool_info.pi_ndisabled != 8:
-#                self.fail("Number of disabled targets reporting incorrectly: {}"
-#                          .format(self.pool.pool_info.pi_ndisabled))
-#            if self.pool.pool_info.pi_rebuild_st.rs_errno != 0:
-#                self.fail("Rebuild error reported: {}".format(
-#                    self.pool.pool_info.pi_rebuild_st.rs_errno))
-#            if self.pool.pool_info.pi_rebuild_st.rs_obj_nr <= 0:
-#                self.fail("No objects have been rebuilt.")
-#            if self.pool.pool_info.pi_rebuild_st.rs_rec_nr <= 0:
-#                self.fail("No records have been rebuilt.")
-
-            # check data intergrity using ior for both ior runs
-            ##self.iorbasetest.execute_ior(iorflags_read, test_file=file1)
-            ##self.iorbasetest.execute_ior(iorflags_read, test_file=file2)
-            #ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-            #                        pool_uuid, svcn_list, client_processes,
-            #                        self.hostfile_clients, iorflags_read,
-            #                        iteration, transfer_size, block_size, True,
-            #                        oclass)
-            #ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-            #                        pool_uuid, svcn_list, client_processes,
-            #                        self.hostfile_clients, iorflags_read,
-            #                        iteration, transfer_size, block_size, True,
-            #                        oclass, "testFile2")
-
-        except (ValueError, DaosApiError, MpioFailed) as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Expecting to pass but test has failed.\n")
+        # check data intergrity using ior for both ior runs
+        self.execute_ior(iorflags_read, test_file=file1)
+        self.execute_ior(iorflags_read, test_file=file2)

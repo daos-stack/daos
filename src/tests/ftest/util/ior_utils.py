@@ -117,8 +117,7 @@ class IorCommand(object):
         self.daos_group = IorParam("--daos.group {}")           # server group
         self.daos_chunk = IorParam("--daos.chunk_size {}", 1048576)
         self.daos_oclass = IorParam("--daos.oclass {}")         # object class
-#        self.mpiio_oclass = 234                     # mpiio object class,
-                                                    # default set as "SX"
+
     def __str__(self):
         """Return a IorCommand object as a string.
 
@@ -186,7 +185,6 @@ class IorCommand(object):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-#        self.daos_pool.value = pool.get_uuid_str()
         self.daos_pool.value = pool.uuid
         self.set_daos_svcl_param(pool, display)
         if display:
@@ -251,7 +249,8 @@ class IorCommand(object):
 
         return total
 
-    def get_launch_command(self, basepath, processes, hostfile, runpath=None):
+    def get_launch_command(self, basepath, processes, hostfile, runpath=None,
+                           mpiio_oclass=None):
         """Get the process launch command used to run IOR.
 
         Args:
@@ -260,7 +259,8 @@ class IorCommand(object):
             hostfile (str): file defining host names and slots
             runpath (str, optional): Optional path to the mpirun/oretrun
                 command. Defaults to None.
-
+            mpiio_oclass (int, optional): Define object class when using
+                MPIIO api for IOR
         Raises:
             IorFailed: if an error occured building the IOR command
 
@@ -272,6 +272,10 @@ class IorCommand(object):
             build_paths = json.load(afile)
         attach_info_path = os.path.join(basepath, "install/tmp")
 
+        # assigning default mpiio oclass as SX
+        if mpiio_oclass is None:
+            mpiio_oclass = 214
+
         if self.api.value == "MPIIO":
             env = {
                 "CRT_ATTACH_INFO_PATH": attach_info_path,
@@ -280,7 +284,7 @@ class IorCommand(object):
                 "DAOS_SVCL": self.daos_svcl.value,
                 "DAOS_SINGLETON_CLI": 1,
                 "FI_PSM2_DISCONNECT": 1,
-#                "IOR_HINT__MPI__romio_daos_obj_class": 234,
+                "IOR_HINT__MPI__romio_daos_obj_class": mpiio_oclass,
             }
             export_cmd = [
                 "export {}={}".format(key, val) for key, val in env.items()]
@@ -312,7 +316,8 @@ class IorCommand(object):
 
         return command
 
-    def run(self, basepath, processes, hostfile, display=True, path=None):
+    def run(self, basepath, processes, hostfile, display=True, path=None,
+            mpiio_oclass=None):
         """Run the IOR command.
 
         Args:
@@ -328,7 +333,8 @@ class IorCommand(object):
             IorFailed: if an error occured runnig the IOR command
 
         """
-        command = self.get_launch_command(basepath, processes, hostfile, path)
+        command = self.get_launch_command(basepath, processes, hostfile, path,
+                                          mpiio_oclass)
         if display:
             print("<IOR CMD>: {}".format(command))
 

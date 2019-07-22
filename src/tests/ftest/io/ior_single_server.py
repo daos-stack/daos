@@ -23,12 +23,10 @@
 '''
 from __future__ import print_function
 
-import os
 
 from apricot import TestWithServers
 from general_utils import TestPool
 
-from daos_api import DaosPool
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 import write_host_file
@@ -59,21 +57,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.set_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
-
-        # Get the parameters used to create a pool
-#        mode = self.params.get("mode", "/run/pool/*")
-#        uid = os.geteuid()
-#        gid = os.getegid()
-#        group = self.params.get("setname", "/run/pool/*", self.server_group)
-#        scm_size = self.params.get("scm_size", "/run/pool/*")
-#        nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
-#        svcn = self.params.get("svcn", "/run/pool/*", 1)
-
-        # Initialize a python pool object then create the underlying
-        # daos storage
-#        self.pool = DaosPool(self.context)
-#        self.pool.create(
-#            mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
+        self.mpiio_oclass = self.params.get("mpiio_oclass", '/run/ior/*')
 
         # Get the test params
         self.pool = TestPool(self.context, self.log)
@@ -101,20 +85,6 @@ class IorTestBase(TestWithServers):
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
         """
-        # Get the parameters used to create a pool
-#        mode = self.params.get("mode", "/run/pool/*")
-#        uid = os.geteuid()
-#        gid = os.getegid()
-#        group = self.params.get("setname", "/run/pool/*", self.server_group)
-#        scm_size = self.params.get("scm_size", "/run/pool/*")
-#        nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
-#        svcn = self.params.get("svcn", "/run/pool/*", 1)
-
-        # Initialize a python pool object then create the underlying
-        # daos storage
-#        self.pool = DaosPool(self.context)
-#        self.pool.create(
-#            mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
 
         # Initialize MpioUtils if IOR is running in MPIIO mode
         if self.ior_cmd.api.value == "MPIIO":
@@ -138,11 +108,10 @@ class IorTestBase(TestWithServers):
         try:
             self.ior_cmd.run(
                 self.basepath, self.processes, self.hostfile_clients, True,
-                path)
+                path, self.mpiio_oclass)
         except IorFailed as excep:
             print(excep)
             self.fail("Test was expected to pass but it failed.\n")
-
 
 class IorSingleServer(IorTestBase):
     """Test class Description: Runs IOR with 1 server.

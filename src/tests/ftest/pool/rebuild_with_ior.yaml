@@ -31,12 +31,7 @@ ior:
             np: 8
     repetitions: 1
     api: MPIIO
-#    run_files:
-#      file1:
-#        test_file: daos:testFile1
-#      file2:
-#        test_file: daos:testFile2
-#    mpiio_oclass: 234
+    mpiio_oclass: 234
     iorflags:
         write:
           F: "-w -W -k -G 1"
@@ -52,5 +47,3 @@ ior:
 #        1G:
 #            transfer_size: '1M'
 #            block_size: '1G'
-#    object_class:
-#        oclass: '234'
