@@ -33,7 +33,10 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
-const sockFileName = "daos_server.sock"
+const (
+	sockFileName = "daos_server.sock"
+	sockDirMode  = 0755
+)
 
 func getDrpcClientSocket(sockDir string) string {
 	return filepath.Join(sockDir, "daos_io_server.sock")
@@ -44,21 +47,32 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 	return drpc.NewClientConnection(clientSock)
 }
 
+func createSocketDir(sockDir string) error {
+	// TODO: decide whether we want to bail if it doesn't exist, might fall under
+	// category of items that should be created during configurations management
+	// as locations may not be user creatable. If we do detect, verify permissions
+	// and that it is indeed a directory and not a file.
+	_, err := os.Stat(sockDir)
+	if err != nil {
+		if os.IsPermission(err) {
+			return errors.Wrapf(err, "user does not have permission to access %s", sockDir)
+		} else if os.IsNotExist(err) {
+			if err := os.MkdirAll(sockDir, sockDirMode); err != nil {
+				return errors.Wrapf(err, "unable to create socket directory %s", sockDir)
+			}
+		}
+
+		return errors.Wrapf(err, "unknown error locating socket directory %s", sockDir)
+	}
+
+	return nil
+}
+
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
 func drpcSetup(sockDir string, iosrv *iosrv) error {
-	// Create our socket directory if it doesn't exist
-	_, err := os.Stat(sockDir)
-	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
-	} else if err != nil && os.IsNotExist(err) {
-		err = os.MkdirAll(sockDir, 0755)
-		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
-		}
+	if err := createSocketDir(sockDir); err != nil {
+		return err
 	}
 
 	sockPath := filepath.Join(sockDir, sockFileName)
@@ -72,10 +86,8 @@ func drpcSetup(sockDir string, iosrv *iosrv) error {
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrv})
 
-	err = drpcServer.Start()
-	if err != nil {
-		return errors.Wrap(
-			err, "unable to start socket server on "+sockPath)
+	if err := drpcServer.Start(); err != nil {
+		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
 	}
 
 	return nil
