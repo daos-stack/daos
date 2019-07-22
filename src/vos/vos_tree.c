@@ -29,9 +29,11 @@
 
 #include <daos/btree.h>
 #include <daos/mem.h>
+#include <daos/object.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
+
+int vos_evt_feats = EVT_FEAT_SORT_DIST;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -427,7 +429,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
-			dbtree_destroy(toh);
+			dbtree_destroy(toh, NULL);
 	} /* It's possible that neither tree is created in case of punch only */
 exit:
 	umem_free(&tins->ti_umm, rec->rec_off);
@@ -853,7 +855,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	D_ASSERT(flags & SUBTR_CREATE);
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, uma,
+		rc = evt_create(vos_evt_feats, VOS_EVT_ORDER, uma,
 				&krec->kr_evt, coh, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);
@@ -1084,7 +1086,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 		kbund2.kb_key	= kbund->kb_key;
 		kbund2.kb_epoch	= DAOS_EPOCH_MAX;
 
-		rc = dbtree_delete(toh, &tmp, NULL);
+		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, NULL);
 		if (rc)
 			D_ERROR("Failed to delete: %d\n", rc);
 	} else {

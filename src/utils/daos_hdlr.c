@@ -230,13 +230,13 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		 * all resulting fields should be populated
 		 */
 		assert(ap->type != DAOS_PROP_CO_LAYOUT_UNKOWN);
-		assert(ap->oclass != DAOS_OC_UNKNOWN);
+		assert(ap->oclass != OC_UNKNOWN);
 		assert(ap->chunk_size != 0);
 
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		daos_unparse_oclass(ap->oclass, oclass);
+		daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
 		printf("Object Class:\t%s\n", oclass);
 		printf("Chunk Size:\t%zu\n", ap->chunk_size);

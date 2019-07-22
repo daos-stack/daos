@@ -143,12 +143,12 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 		return rc;
 
 	if (btr_check_tx(&attr) == BTR_NO_TX) {
-		rc = dbtree_destroy(hdl);
+		rc = dbtree_destroy(hdl, NULL);
 		if (rc != 0) {
 			dbtree_close(hdl);
 			D_GOTO(out, rc);
 		}
-		rc = dbtree_delete(tree, key, NULL);
+		rc = dbtree_delete(tree, BTR_PROBE_EQ, key, NULL);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
@@ -163,10 +163,10 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 			return rc_tmp;
 		}
 
-		rc_tmp = dbtree_destroy(hdl_tmp);
+		rc_tmp = dbtree_destroy(hdl_tmp, NULL);
 		if (rc_tmp == 0) {
 			hdl_tmp = DAOS_HDL_INVAL;
-			rc_tmp = dbtree_delete(tree, key, NULL);
+			rc_tmp = dbtree_delete(tree, BTR_PROBE_EQ, key, NULL);
 		}
 
 		if (!daos_handle_is_inval(hdl_tmp))
@@ -462,7 +462,7 @@ dbtree_nv_delete(daos_handle_t tree, const void *key, size_t key_size)
 
 	d_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = dbtree_delete(tree, &key_iov, NULL);
+	rc = dbtree_delete(tree, BTR_PROBE_EQ, &key_iov, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
@@ -784,7 +784,7 @@ dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 
 	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
-	rc = dbtree_delete(tree, &key, NULL);
+	rc = dbtree_delete(tree, BTR_PROBE_EQ, &key, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
@@ -1046,7 +1046,7 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 
 	d_iov_set(&key, &epoch, sizeof(epoch));
 
-	rc = dbtree_delete(tree, &key, NULL);
+	rc = dbtree_delete(tree, BTR_PROBE_EQ, &key, NULL);
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)
@@ -1353,119 +1353,4 @@ btr_ops_t dbtree_iv_ops = {
 	.to_rec_fetch	= iv_rec_fetch,
 	.to_rec_update	= iv_rec_update,
 	.to_rec_string	= iv_rec_string
-};
-
-struct recx_rec {
-	daos_recx_t	*rr_recx;
-};
-
-static int
-recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
-{
-	struct recx_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	daos_recx_t	*key_recx = (daos_recx_t *)(key->iov_buf);
-
-	D_ASSERT(key->iov_len == sizeof(*key_recx));
-
-	if (DAOS_RECX_PTR_OVERLAP(r->rr_recx, key_recx)) {
-		D_ERROR("recx overlap between ["DF_U64", "DF_U64"], "
-			"["DF_U64", "DF_U64"].\n", r->rr_recx->rx_idx,
-			r->rr_recx->rx_nr, key_recx->rx_idx, key_recx->rx_nr);
-		return BTR_CMP_ERR;
-	}
-
-	/* will never return BTR_CMP_EQ */
-	D_ASSERT(r->rr_recx->rx_idx != key_recx->rx_idx);
-	return dbtree_key_cmp_rc(r->rr_recx->rx_idx - key_recx->rx_idx);
-}
-
-static int
-recx_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	     struct btr_record *rec)
-{
-	struct recx_rec	*r;
-	umem_off_t	roff;
-	daos_recx_t	*key_recx = (daos_recx_t *)(key->iov_buf);
-
-	if (key_recx == NULL || key->iov_len != sizeof(*key_recx))
-		return -DER_INVAL;
-
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
-	if (UMOFF_IS_NULL(roff))
-		return tins->ti_umm.umm_nospc_rc;
-
-	r = umem_off2ptr(&tins->ti_umm, roff);
-	r->rr_recx = key_recx;
-	rec->rec_off = roff;
-
-	return 0;
-}
-
-static int
-recx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
-{
-	umem_free(&tins->ti_umm, rec->rec_off);
-	return 0;
-}
-
-static int
-recx_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		d_iov_t *key, d_iov_t *val)
-{
-	D_ASSERTF(0, "recx_rec_update should never be called.\n");
-	return 0;
-}
-
-static int
-recx_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	       d_iov_t *key, d_iov_t *val)
-{
-	D_ASSERTF(0, "recx_rec_fetch should never be called.\n");
-	return 0;
-}
-
-static void
-recx_key_encode(struct btr_instance *tins, d_iov_t *key,
-	daos_anchor_t *anchor)
-{
-	D_ASSERTF(0, "recx_key_encode should never be called.\n");
-}
-
-static void
-recx_key_decode(struct btr_instance *tins, d_iov_t *key,
-	daos_anchor_t *anchor)
-{
-	D_ASSERTF(0, "recx_key_decode should never be called.\n");
-}
-
-static char *
-recx_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
-		char *buf, int buf_len)
-{
-	struct recx_rec	*r = NULL;
-	daos_recx_t	*recx;
-
-	if (!leaf) {
-		/* no record body on intermediate node */
-		snprintf(buf, buf_len, "--");
-	} else {
-		r = (struct recx_rec *)umem_off2ptr(&tins->ti_umm,
-						   rec->rec_off);
-		recx = r->rr_recx;
-		snprintf(buf, buf_len, "rx_idx - "DF_U64" : rx_nr - "DF_U64,
-			 recx->rx_idx, recx->rx_nr);
-	}
-
-	return buf;
-}
-
-btr_ops_t dbtree_recx_ops = {
-	.to_key_cmp	= recx_key_cmp,
-	.to_rec_alloc	= recx_rec_alloc,
-	.to_rec_free	= recx_rec_free,
-	.to_rec_fetch	= recx_rec_fetch,
-	.to_rec_update	= recx_rec_update,
-	.to_rec_string	= recx_rec_string,
-	.to_key_encode	= recx_key_encode,
-	.to_key_decode	= recx_key_decode
 };

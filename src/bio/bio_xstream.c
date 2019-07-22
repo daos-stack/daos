@@ -83,7 +83,8 @@ static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
+bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+	      struct bio_reaction_ops *ops)
 {
 	char		*env;
 	int		rc, fd;
@@ -153,6 +154,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
+	ract_ops = ops;
 	return 0;
 
 free_cond:
@@ -668,16 +670,17 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 			return NULL;
 		} else if (bb->bb_xs_ctxts[i] == NULL) {
 			bb->bb_xs_ctxts[i] = ctxt;
+			bb->bb_ref++;
 			break;
 		}
 	}
+
+	ABT_mutex_unlock(bb->bb_mutex);
+
 	if (i == xs_cnt_max) {
 		D_ERROR("Too many xstreams per device!\n");
-		ABT_mutex_unlock(bb->bb_mutex);
 		return NULL;
 	}
-	bb->bb_ref++;
-	ABT_mutex_unlock(bb->bb_mutex);
 	return bb;
 }
 

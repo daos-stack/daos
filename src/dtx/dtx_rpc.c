@@ -399,7 +399,7 @@ dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 	if (oc_attr->ca_resil != DAOS_RES_REPL)
 		return -DER_NOTAPPLICABLE;
 
-	replicas = oc_attr->u.repl.r_num;
+	replicas = oc_attr->u.rp.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX)
 		replicas = layout->ol_grp_size;
 
@@ -594,7 +594,7 @@ out:
 		D_FREE(dti);
 
 	if (!daos_handle_is_inval(tree_hdl))
-		dbtree_destroy(tree_hdl);
+		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
 
@@ -654,7 +654,7 @@ out:
 		D_FREE(dti);
 
 	if (!daos_handle_is_inval(tree_hdl))
-		dbtree_destroy(tree_hdl);
+		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
 

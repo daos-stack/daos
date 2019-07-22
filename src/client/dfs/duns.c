@@ -32,8 +32,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <daos/common.h>
+#include <daos/object.h>
 #include "daos_types.h"
-#include "daos_api.h"
+#include "daos.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
 
@@ -94,7 +95,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
-	daos_parse_oclass(t, &attr->da_oclass);
+	attr->da_oclass = daos_oclass_name2id(t);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	attr->da_chunk_size = strtoull(t, NULL, 10);
@@ -160,7 +161,7 @@ duns_link_path(const char *path, const char *sysname,
 	}
 
 	uuid_unparse(attrp->da_puuid, pool);
-	daos_unparse_oclass(attrp->da_oclass, oclass);
+	daos_oclass_id2name(attrp->da_oclass, oclass);
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/* create container with specified container uuid (try_multiple=0)

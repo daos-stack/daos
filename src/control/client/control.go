@@ -24,10 +24,11 @@
 package client
 
 import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/security"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 // Control interface provides connection handling capabilities.

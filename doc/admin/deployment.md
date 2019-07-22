@@ -330,7 +330,7 @@ nodes before starting it.
 
 The DAOS security framework relies on certificates to authenticate
 administrators. The security infrastructure is currently under
-development and will be delivered in DAOS v1.0.
+development and will be delivered in DAOS v1.0. Initial support for certificates has been added to DAOS and can be disable either via the command line or in the DAOS server configuration file.
 
 ### Server Configuration File
 
@@ -395,22 +395,30 @@ default: 10000
 
 port: 10001
 
-**Path to CA certificate**
+**Transport Certificate Credentials**
 
-If not specified, DAOS will start in insecure way which means that
-anybody can administrate the DAOS installation and access data.
+Certificate support for securing the administrative channel for the DAOS components is specified in a key called transport_config: It contains the following keys with these default values
 
-ca\_cert: ./.daos/ca.crt
 
-**Path to server certificate and key file**
+***Allow Insecure Communications***
 
-Discarded if no CA certificate is passed.
+default: false
+
+allow_insecure: false
+
+***Path to Root Certificate***
+
+default: ./.daos/daosCA.crt
+
+ca\_cert: ./.daos/daosCA.crt
+
+***Path to server certificate and key file***
 
 default: ./.daos/daos\_server.{crt,key}
 
-cert: ./.daosa/daos\_server.crt
+cert: ./.daos/daos\_server.crt
 
-key: ./.daosa/daos\_server.key
+key: ./.daos/daos\_server.key
 
 **Fault domain path**
 
@@ -792,7 +800,7 @@ individually (e.g. independently on each storage node via systemd) or
 collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
 
 For further details on building and running DAOS see the
-[Quickstart guide](../doc/quickstart.md).
+[Quickstart guide](../quickstart.md).
 
 ### Parallel Launcher
 
@@ -810,7 +818,7 @@ man page for additional options.
 To start the DAOS server, run:
 
 orterun -np &lt;num\_servers&gt; --hostfile \${hostfile}
---enable-recovery --report-uri \${urifile} daos\_server
+--enable-recovery --report-uri \${urifile} daos\_server -i
 
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
@@ -886,7 +894,7 @@ DAOS I/O server (v0.0.2) process 23680 started on rank 0 (out of 2) with 1 targe
 ### Basic Workflow
 
 Control plane server ([daos_server](/src/control/server)) instances will
-listen for requests from the management tool ([daos_shell](/src/control/dmg)),
+listen for requests from the management tool ([daos_shell](/src/control/cmd/dmg)),
 enabling users to perform provisioning operations on network and storage
 hardware remotely on storage nodes (from for example a login node).
 
@@ -914,7 +922,7 @@ Typically an administrator will perform the following tasks:
     [details](#-server-configuration)
 
 4. Start DAOS control plane
-    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -i -o <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#-parallel-launcher)
 
 5. Provision Storage
@@ -927,8 +935,8 @@ Typically an administrator will perform the following tasks:
     [details](#-server-configuration)
 
 7. Format Storage (from any node)
-    - `daos_shell -l <host:port>,... storage format -f`
-    [management tool details](/src/control/dmg/README.md#-storage-format)
+    - `daos_shell -i -l <host:port>,... storage format -f`
+    [management tool details](/src/control/cmd/dmg/README.md#-storage-format)
     - [SCM specific details](/src/control/server/README.md#-scm-format)
     - [NVMe specific details](/src/control/server/README.md#-nvme-format)
 
@@ -1106,16 +1114,131 @@ Replace 16G with the desired tmpfs size.
 
 Agent Configuration
 -------------------
+This section addresses how to configure the DAOS servers on the storage
+nodes before starting it.
 
-The DAOS Agent is not required in DAOS v0.4 since authentication support
-is not fully landed yet. Instructions on how to setup and start the
-agent will be provided in the next revision of this document.
+### Certificate Generation
+
+The DAOS security framework relies on certificates to authenticate
+administrators. The security infrastructure is currently under
+development and will be delivered in DAOS v1.0. Initial support for certificates has been added to DAOS and can be disable either via the command line or in the DAOS Agent configuration file.
+
+### Server Configuration File
+
+The `daos_agent` configuration file is parsed when starting the
+`daos_agent` process. The configuration file location can be specified
+on the command line (`daos_agent -h` for usage) or default location
+(`install/etc/daos_agent.yml`).
+
+Parameter descriptions are specified in [daos_agent.yml](/utils/config/daos_agent.yml)
+and example configurations files in the [examples](/utils/config/examples)
+directory.
+
+Any option supplied to `daos_server` as a commandline option or flag will
+take precedence over equivalent configuration file parameter.
+
+For convenience, active parsed config values are written to a temporary
+file for reference, location will be written to the log.
+
+The following section lists the format, options, defaults and
+descriptions available in the configuration file.
+
+#### Configuration File Options
+
+This section lists the default empty configuration listing all the
+options (living documentation of the config file). Live examples are
+available at
+<https://github.com/daos-stack/daos/tree/master/utils/config>
+
+The Location of this configuration file is determined by first checking
+for the path specified through the -o option of the daos\_agentcommand
+line. Otherwise, /etc/daos\_agent_.conf is used.
+
+**Name associated with the DAOS system**
+
+Immutable after reformat.
+
+name: daos
+
+**Access points**
+
+To operate, DAOS will need a quorum of access point nodes to be
+available.
+
+Immutable after reformat.
+
+Hosts can be specified with or without port, default port below assumed
+if not specified.
+
+default: hostname of this node at port 10000 for local testing
+
+access\_points:
+\['hostname1:10001','hostname2:10001','hostname3:10001'\]
+
+access\_points: \[hostname1,hostname2,hostname3\]
+
+**Force default port**
+
+Force different port number to connect to access points.
+
+default: 10000
+
+port: 10001
+
+**Transport Certificate Credentials**
+
+Certificate support for securing the administrative channel for the DAOS components is specified in a key called transport_config: It contains the following keys with these default values
+
+
+***Allow Insecure Communications***
+
+default: false
+
+allow_insecure: false
+
+***Path to Root Certificate***
+
+default: ./.daos/daosCA.crt
+
+ca\_cert: ./.daos/daosCA.crt
+
+***Path to server certificate and key file***
+
+default: ./.daos/daos\_agent.{crt,key}
+
+cert: ./.daos/daos\_agent.crt
+
+key: ./.daos/daos\_agent.key
+
+**Use the given directory for creating unix domain sockets**
+
+DAOS Agent uses unix domain sockets for communication with other system components. This setting is the base location to place the sockets in.
+
+default: /var/run/daos\agent
+
+runtime\_dir: ./.daos/daos\_agent
+
+**Force specific path for DAOS Agent debug logs.**
+
+default: /tmp/daos_agent.log
+
+log\_file: /tmp/daos\_agent2.log
+
+## Agent Startup
+--------------
+
+DAOS Agent is a standalone application to be run on each compute node. It can be configured to use secure communications (default) or can be allowed to communicate with the control plane over unencrypted channels. The example below for executing daos_agent specifies to operate in insecure mode as certificate support is not fully integrated into DAOS as of 0.6
+
+To start the DAOS Agent, run:
+```
+daos_agent -i
+```
 
 System Validation
 -----------------
 
 To validate that the DAOS system is properly installed, the daos\_test
-suite can be executed:
+suite can be executed. Ensure the DAOS Agent is configuerd and running before running daos\_test:
 
 [[]{#_Toc4574315 .anchor}]{#_Toc4572376 .anchor}orterun -np
 &lt;num\_clients&gt; --hostfile \${hostfile} --ompi-server

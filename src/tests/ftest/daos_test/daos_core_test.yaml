@@ -10,8 +10,10 @@ hosts:
     - boro-F
     - boro-G
     - boro-H
-# rebuild alone takes about 2hrs
-timeout: 5000
+# Note that subtests below can set their own timeout so this
+# should be a general average of all tests not including outliers
+# (I'm looking at you "rebuild tests")
+timeout: 600
 server_config:
   name: daos_server
 daos_tests:
@@ -20,34 +22,6 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_r_0-24:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="0-24"
-    test_r_25:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="25"
-    test_r_26:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="26"
-    test_r_27:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="27"
-    test_r_28:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="28"
-    test_r_30:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="30"
-    test_r_31:
-      daos_test: r
-      test_name: rebuild tests
-      args: -s3 -u subtests="31"
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
@@ -66,6 +40,7 @@ daos_tests:
     test_i:
       daos_test: i
       test_name: IO test
+      test_timeout: 900
     test_A:
       daos_test: A
       test_name: DAOS Array tests
@@ -81,3 +56,4 @@ daos_tests:
     test_O:
       daos_test: O
       test_name: OID Allocator tests
+      test_timeout: 1350

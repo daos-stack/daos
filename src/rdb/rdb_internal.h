@@ -32,6 +32,7 @@
 #include <gurt/hash.h>
 #include <daos/lru.h>
 #include <daos/rpc.h>
+#include <daos/object.h>
 #include "rdb_layout.h"
 
 /* rdb_raft.c (parts required by struct rdb) **********************************/

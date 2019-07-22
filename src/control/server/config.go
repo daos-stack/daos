@@ -24,7 +24,6 @@
 package server
 
 import (
-	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -32,10 +31,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -55,11 +55,12 @@ func (c *configuration) loadConfig() error {
 
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "reading file")
 	}
 
 	if err = c.parse(bytes); err != nil {
-		return err
+		return errors.WithMessage(err, "parse failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples")
 	}
 
 	return nil
@@ -103,9 +104,14 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return config, errors.Wrap(err, "read config file")
+		return config, errors.WithMessagef(err, "loading %s", config.Path)
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
+
+	// Override certificate support if specified in cliOpts
+	if cliOpts.Insecure {
+		config.TransportConfig.AllowInsecure = true
+	}
 
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
@@ -223,7 +229,9 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 		// global rank parameter should only apply to first I/O service
 		c.Servers[0].Rank = opts.Rank
 	}
-
+	if opts.Insecure {
+		c.TransportConfig.AllowInsecure = true
+	}
 	// override each per-server config
 	for i := range c.Servers {
 		srv := &c.Servers[i]
@@ -237,7 +245,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 			srv.ScmMount = c.ScmMountPath
 		}
 		if opts.Cores > 0 {
-			fmt.Println("-c option deprecated, please use -t instead")
+			log.Debugf("-c option deprecated, please use -t instead")
 			srv.Targets = int(opts.Cores)
 		}
 		// Targets should override Cores if specified in cmdline or
