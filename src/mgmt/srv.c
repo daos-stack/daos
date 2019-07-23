@@ -72,68 +72,34 @@ static struct daos_rpc_handler mgmt_handlers[] = {
 #undef X
 
 static void
-process_killrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
+process_killrank_request(Mgmt__DaosRank *req, Mgmt__DaosResp *resp)
 {
-	Mgmt__DaosRank	*pb_rank = NULL;
-
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(daos_resp);
-
-	/* Unpack the daos request from the drpc call body */
-	pb_rank = mgmt__daos_rank__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
-
-	if (pb_rank == NULL) {
-		daos_resp->status->state =
-			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
-		D_ERROR("Failed to extract rank from request\n");
-
-		return;
-	}
+	mgmt__daos_resp__init(resp);
 
 	D_DEBUG(DB_MGMT, "Received request to kill rank (%u) on pool (%s)\n",
-		pb_rank->rank, pb_rank->pool_uuid);
+		req->rank, req->pool_uuid);
 
 	/* TODO: do something with request and populate daos response status */
-
-	mgmt__daos_rank__free_unpacked(pb_rank, NULL);
 }
 
 static void
-process_setrank_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
+process_setrank_request(Mgmt__SetRankReq *req, Mgmt__DaosResp *resp)
 {
-	Mgmt__SetRankReq	*daos_req = NULL;
 	int			rc;
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(daos_resp);
+	mgmt__daos_resp__init(resp);
 
-	/* Unpack the daos request from the drpc call body */
-	daos_req = mgmt__set_rank_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
+	D_DEBUG(DB_MGMT, "Received request to set rank to %u\n", req->rank);
 
-	if (daos_req == NULL) {
-		daos_resp->status->state =
-			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_PROTO;
-		D_ERROR("Failed to extract request\n");
-
-		return;
-	}
-
-	D_DEBUG(DB_MGMT, "Received request to set rank to %u\n",
-		daos_req->rank);
-
-	rc = crt_rank_self_set(daos_req->rank);
+	rc = crt_rank_self_set(req->rank);
 	if (rc != 0) {
-		D_ERROR("Failed to set self rank %u: %d\n", daos_req->rank, rc);
-		daos_resp->status->state =
-			MGMT__DAOS_REQUEST_STATUS__STATE__ERR_DAOS;
-		daos_resp->status->der = rc;
+		D_ERROR("Failed to set self rank %u: %d\n", req->rank, rc);
+		resp->status = rc;
 	}
 
 	dss_init_state_set(DSS_INIT_STATE_RANK_SET);
-
-	mgmt__set_rank_req__free_unpacked(daos_req, NULL);
 }
 
 /*
@@ -492,6 +458,31 @@ process_setup_request(Drpc__Call *drpc_req, Mgmt__DaosResp *daos_resp)
 }
 
 static void
+unpack_daos_response(Drpc__Request *drpc_req, Mgmt__daos_resp, Drpc__Response *drpc_resp)
+{
+	uint8_t	*body;
+	size_t	len;
+
+	len = mgmt__daos_resp__get_packed_size(daos_resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+		return;
+	}
+
+	if (mgmt__daos_resp__pack(daos_resp, body) != len) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Unexpected num bytes for daos resp\n");
+		return;
+	}
+
+	/* Populate drpc response body with packed daos response */
+	drpc_resp->body.len = len;
+	drpc_resp->body.data = body;
+}
+
+static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
 	uint8_t	*body;
@@ -519,6 +510,8 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 static void
 process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	Mgmt__DaosRank		*kr_req = NULL;
+	Mgmt__SetRankReq	*sr_req = NULL;
 	Mgmt__DaosResp		*daos_resp = NULL;
 	Mgmt__JoinResp		*join_resp;
 	Mgmt__GetAttachInfoResp	*getattachinfo_resp;
@@ -541,11 +534,28 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 */
 	switch (drpc_req->method) {
 	case DRPC_METHOD_MGMT_KILL_RANK:
-		process_killrank_request(drpc_req, daos_resp);
+		/* Unpack the daos request from the drpc call body */
+		kr_req = mgmt__daos_rank__unpack(
+			NULL, drpc_req->body.len, drpc_req->body.data);
+		if (kr_req == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to unpack req (kill rank)\n");
+			break;
+		}
+		process_killrank_request(kr_req, daos_resp);
+		mgmt__daos_rank__free_unpacked(kr_req, NULL);
 		pack_daos_response(daos_resp, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_RANK:
-		process_setrank_request(drpc_req, daos_resp);
+		sr_req = mgmt__set_rank_req__unpack(
+			NULL, drpc_req->body.len, drpc_req->body.data);
+		if (sr_req == NULL) {
+			drpc_resp->status = DRPC__STATUS__FAILURE;
+			D_ERROR("Failed to unpack req (set rank)\n");
+			break;
+		}
+		process_setrank_request(sr_req, daos_resp);
+		mgmt__set_rank_req__free_unpacked(sr_req, NULL);
 		pack_daos_response(daos_resp, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_CREATE_MS:
