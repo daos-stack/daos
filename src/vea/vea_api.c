@@ -41,14 +41,14 @@ erase_md(struct umem_instance *umem, struct vea_space_df *md)
 	uma.uma_pool = umem->umm_pool;
 	rc = dbtree_open_inplace(&md->vsd_free_tree, &uma, &free_btr);
 	if (rc == 0) {
-		rc = dbtree_destroy(free_btr);
+		rc = dbtree_destroy(free_btr, NULL);
 		if (rc)
 			D_ERROR("destroy free extent tree error: %d\n", rc);
 	}
 
 	rc = dbtree_open_inplace(&md->vsd_vec_tree, &uma, &vec_btr);
 	if (rc == 0) {
-		rc = dbtree_destroy(vec_btr);
+		rc = dbtree_destroy(vec_btr, NULL);
 		if (rc)
 			D_ERROR("destroy vector tree error: %d\n", rc);
 	}
@@ -185,19 +185,19 @@ vea_unload(struct vea_space_info *vsi)
 
 	/* Destroy the in-memory free extent tree */
 	if (!daos_handle_is_inval(vsi->vsi_free_btr)) {
-		dbtree_destroy(vsi->vsi_free_btr);
+		dbtree_destroy(vsi->vsi_free_btr, NULL);
 		vsi->vsi_free_btr = DAOS_HDL_INVAL;
 	}
 
 	/* Destroy the in-memory extent vector tree */
 	if (!daos_handle_is_inval(vsi->vsi_vec_btr)) {
-		dbtree_destroy(vsi->vsi_vec_btr);
+		dbtree_destroy(vsi->vsi_vec_btr, NULL);
 		vsi->vsi_vec_btr = DAOS_HDL_INVAL;
 	}
 
 	/* Destroy the in-memory aggregation tree */
 	if (!daos_handle_is_inval(vsi->vsi_agg_btr)) {
-		dbtree_destroy(vsi->vsi_agg_btr);
+		dbtree_destroy(vsi->vsi_agg_btr, NULL);
 		vsi->vsi_agg_btr = DAOS_HDL_INVAL;
 	}
 
