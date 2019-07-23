@@ -79,10 +79,13 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 		serverFormatted = true
 	}
 
-	ctrlrResults := common.NvmeControllerResults(resp.Crets)
+	ctrlrResults := common.NvmeControllerResults{}
 	c.nvme.Format(i, &ctrlrResults)
-	mountResults := common.ScmMountResults(resp.Mrets)
+	resp.Crets = ctrlrResults
+
+	mountResults := common.ScmMountResults{}
 	c.scm.Format(i, &mountResults)
+	resp.Mrets = mountResults
 
 	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
 		// storage subsystem format successful, broadcast formatted
@@ -133,10 +136,13 @@ func (c *controlService) UpdateStorage(
 	resp := new(pb.UpdateStorageResp)
 
 	for i := range c.config.Servers {
-		ctrlrResults := common.NvmeControllerResults(resp.Crets)
+		ctrlrResults := common.NvmeControllerResults{}
 		c.nvme.Update(i, req.Nvme, &ctrlrResults)
-		moduleResults := common.ScmModuleResults(resp.Mrets)
+		resp.Crets = ctrlrResults
+
+		moduleResults := common.ScmModuleResults{}
 		c.scm.Update(i, req.Scm, &moduleResults)
+		resp.Mrets = moduleResults
 	}
 
 	if err := stream.Send(resp); err != nil {
