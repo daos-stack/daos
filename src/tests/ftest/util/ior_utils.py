@@ -126,7 +126,8 @@ class IorCommand(object):
         self.daos_destroy = IorParam("--daos.destroy", True)    # destroy cont
         self.daos_group = IorParam("--daos.group {}")           # server group
         self.daos_chunk = IorParam("--daos.chunk_size {}", 1048576)
-        self.daos_oclass = IorParam("--daos.oclass {}")         # object class
+        self.daos_oclass = IorParam("--daos.oclass {}")     # daos object class
+        self.mpiio_oclass = None                            # mpiio object class
 
     def __str__(self):
         """Return a IorCommand object as a string.
@@ -148,7 +149,8 @@ class IorCommand(object):
         # Join all the IOR parameters that have been assigned a value to create
         # the IOR command string
         params = []
-        for value_str in [str(getattr(self, name)) for name in param_names]:
+        for value_str in [str(getattr(self, name)) for name in param_names
+                          if name not in "mpiio_oclass"]:
             if value_str != "":
                 params.append(value_str)
         return " ".join(["ior"] + params)
@@ -171,7 +173,8 @@ class IorCommand(object):
             if isinstance(ior_param, IorParam):
                 ior_param.set_yaml_value(name, test, path)
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
+    def set_daos_params(self, group, pool, cont_uuid=None, display=True,
+                        mpiio_oclass=None):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
         Args:
@@ -185,6 +188,13 @@ class IorCommand(object):
         self.daos_group.update(group, display)
         self.daos_cont.update(
             cont_uuid if cont_uuid else uuid.uuid4(), display)
+
+        # assigning obj class as SX in None else
+        # the desired one
+        if mpiio_oclass is None:
+            self.mpiio_oclass = 214
+        else:
+            self.mpiio_oclass = mpiio_oclass
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the IOR parameters that are based on a DAOS pool.
@@ -254,8 +264,7 @@ class IorCommand(object):
 
         return total
 
-    def get_launch_command(self, basepath, processes, hostfile, runpath=None,
-                           mpiio_oclass=None):
+    def get_launch_command(self, manager, attach_info, processes, hostfile):
         """Get the process launch command used to run IOR.
 
         Args:
@@ -266,8 +275,6 @@ class IorCommand(object):
             hostfile (str): file defining host names and slots
             runpath (str, optional): Optional path to the mpirun/oretrun
                 command. Defaults to None.
-            mpiio_oclass (int, optional): Define object class when using
-                MPIIO api for IOR
         Raises:
             IorFailed: if an error occured building the IOR command
 
@@ -275,22 +282,19 @@ class IorCommand(object):
             str: ior launch command
 
         """
-        # assigning default mpiio oclass as SX
-        if mpiio_oclass is None:
-            mpiio_oclass = 214
         print("Getting launch command for {}".format(manager))
         exports = ""
         env = {
             "CRT_ATTACH_INFO_PATH": attach_info,
             "MPI_LIB": "\"\"",
             "DAOS_SINGLETON_CLI": 1,
-            "IOR_HINT__MPI__romio_daos_obj_class": mpiio_oclass,
         }
         if manager.endswith("mpirun"):
             env.update({
                 "DAOS_POOL": self.daos_pool.value,
                 "DAOS_SVCL": self.daos_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
+                "IOR_HINT__MPI__romio_daos_obj_class": self.mpiio_oclass,
             })
             assign_env = ["{}={}".format(key, val) for key, val in env.items()]
             exports = "export {}; ".format("; export ".join(assign_env))
@@ -333,8 +337,7 @@ class IorCommand(object):
         return "{}{} {} {}".format(
             exports, manager, " ".join(args), self.__str__())
 
-    def run(self, basepath, processes, hostfile, display=True, path=None,
-            mpiio_oclass=None):
+    def run(self, manager, attach_info, processes, hostfile, display=True):
         """Run the IOR command.
 
         Args:
@@ -350,7 +353,7 @@ class IorCommand(object):
 
         """
         command = self.get_launch_command(
-            manager, attach_info, processes, hostfile, mpiio_oclass)
+            manager, attach_info, processes, hostfile)
         if display:
             print("<IOR CMD>: {}".format(command))
 

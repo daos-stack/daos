@@ -2,13 +2,13 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - boro-64
-    - boro-61
-    - boro-62
-    - boro-60
+    - boro-A
+    - boro-B
+    - boro-C
+    - boro-D
   test_clients:
-    - boro-64
-    - boro-61
+    - boro-E
+    - boro-F
 timeout: 300
 server_config:
   name: daos_server
@@ -41,9 +41,9 @@ ior:
         64M:
             transfer_size: '1M'
             block_size: '64M'
-#        512M:
-#            transfer_size: '1M'
-#            block_size: '512M'
-#        1G:
-#            transfer_size: '1M'
-#            block_size: '1G'
+        512M:
+            transfer_size: '1M'
+            block_size: '512M'
+        1G:
+            transfer_size: '1M'
+            block_size: '1G'

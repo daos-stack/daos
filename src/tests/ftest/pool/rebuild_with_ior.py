@@ -24,7 +24,7 @@
 from __future__ import print_function
 
 from apricot import skipForTicket
-from ior_single_server import IorTestBase
+from ior_test_base import IorTestBase
 
 #pylint: disable=R0903
 class RebuildWithIOR(IorTestBase):
@@ -34,7 +34,7 @@ class RebuildWithIOR(IorTestBase):
     :avocado: recursive
     """
 
-#    @skipForTicket("DAOS-2773")
+    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """
         Jira ID: DAOS-951
@@ -75,20 +75,22 @@ class RebuildWithIOR(IorTestBase):
             "Invlaid pool rebuild info detected before rebuild")
 
         # perform first set of io using IOR
-        self.execute_ior(iorflags_write, test_file=file1)
+        self.ior_cmd.flags.update(iorflags_write)
+        self.ior_cmd.test_file.update(file1)
+        self.run_ior_with_pool()
 
         # Kill the server
-#        self.pool.start_rebuild(self.server_group, rank, self.d_log)
+        self.pool.start_rebuild(self.server_group, rank, self.d_log)
 
         # Wait for rebuild to start
-#        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild(True)
 
         # Wait for rebuild to complete
-#        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild(False)
 
         # Verify the pool information after rebuild
         checks["pi_ndisabled"] = targets
-        self.assertTrue(
+        self.assertFalse(
             self.pool.check_pool_info(**checks),
             "Invalid pool information detected after rebuild")
         self.assertTrue(
@@ -96,8 +98,15 @@ class RebuildWithIOR(IorTestBase):
             "Invalid pool rebuild error number detected after rebuild")
 
         # perform second set of io using IOR
-        self.execute_ior(iorflags_write, test_file=file2)
+        self.ior_cmd.flags.update(iorflags_write)
+        self.ior_cmd.test_file.update(file2)
+        self.run_ior_with_pool()
 
         # check data intergrity using ior for both ior runs
-        self.execute_ior(iorflags_read, test_file=file1)
-        self.execute_ior(iorflags_read, test_file=file2)
+        self.ior_cmd.flags.update(iorflags_read)
+        self.ior_cmd.test_file.update(file1)
+        self.run_ior_with_pool()
+
+        self.ior_cmd.flags.update(iorflags_read)
+        self.ior_cmd.test_file.update(file2)
+        self.run_ior_with_pool()
