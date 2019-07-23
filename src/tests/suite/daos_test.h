@@ -455,7 +455,7 @@ test_rmdir(const char *path, bool force)
 			D_WARN("find unexpected type %d", ent->d_type);
 		}
 
-		D_FREE(fullpath);
+		memset(fullpath, 0, PATH_MAX);
 	}
 
 	rc = closedir(dir);
