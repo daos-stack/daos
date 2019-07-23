@@ -2882,8 +2882,12 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 			continue;
 
 		changed_level = level;
-		if (offset < 0)
+		if (offset < 0) {
+			D_ASSERTF(trace->tr_at >= -offset,
+				  "at:%u, offset:%d\n", trace->tr_at, offset);
 			trace->tr_at += offset;
+			ne = evt_node_entry_at(tcx, node, trace->tr_at);
+		}
 	}
 
 fix_trace:
@@ -2914,7 +2918,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 		return rc;
 
 	if (ent_array.ea_ent_nr == 0)
-		return -DER_NONEXIST;
+		return -DER_ENOENT;
 
 	D_ASSERT(ent_array.ea_ent_nr == 1);
 	if (ent != NULL)
