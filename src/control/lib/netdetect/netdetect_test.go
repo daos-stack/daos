@@ -24,8 +24,8 @@
 package netdetect
 
 import (
-	"testing"
 	"os"
+	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/log"
@@ -47,12 +47,12 @@ func TestParseTopology(t *testing.T) {
 		{[]string{"eth0"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
 		{[]string{"eth1"}, "testdata/boro-84.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
 		{[]string{"ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0","eth1"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0","eth1","ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0","eth0","ib1","eth1"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0","eth1","ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0","eth1","ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0","eth1","ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"eth0", "eth1"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
 		// wolf-133 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
 		// and ib1 on NUMA 1.  Notice that the cpuset and nodeset for ib1
 		// reflect that they are on a different node
@@ -60,10 +60,10 @@ func TestParseTopology(t *testing.T) {
 		{[]string{"eth1"}, "testdata/wolf-133.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
 		{[]string{"ib0"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
 		{[]string{"ib1"}, "testdata/wolf-133.xml", []string{"ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002"}},
-		{[]string{"eth0","eth1"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0", "eth0","eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0","eth0","ib1","eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001","eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001","ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002"}},
-}
+		{[]string{"eth0", "eth1"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"ib0", "eth0", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002"}},
+	}
 	log.NewDefaultLogger(log.Debug, "", os.Stderr)
 	for _, tt := range tests {
 		_, err := os.Stat(tt.topology)

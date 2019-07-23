@@ -27,9 +27,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 const sockFileName = "daos_server.sock"

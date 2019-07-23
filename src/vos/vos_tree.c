@@ -33,7 +33,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-int vos_evt_feats = EVT_FEAT_SORT_SOFF;
+int vos_evt_feats = EVT_FEAT_SORT_DIST;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -429,7 +429,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
-			dbtree_destroy(toh);
+			dbtree_destroy(toh, NULL);
 	} /* It's possible that neither tree is created in case of punch only */
 exit:
 	umem_free(&tins->ti_umm, rec->rec_off);
@@ -1086,7 +1086,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 		kbund2.kb_key	= kbund->kb_key;
 		kbund2.kb_epoch	= DAOS_EPOCH_MAX;
 
-		rc = dbtree_delete(toh, &tmp, NULL);
+		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, NULL);
 		if (rc)
 			D_ERROR("Failed to delete: %d\n", rc);
 	} else {

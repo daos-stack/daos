@@ -123,6 +123,8 @@ struct dfuse_inode_ops {
 			   struct fuse_file_info *fi);
 	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			size_t size, off_t offset, struct fuse_file_info *fi);
+	void (*symlink)(fuse_req_t req, const char *link,
+			struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
 };
@@ -279,16 +281,16 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(dfuse_req, path)				\
+#define DFUSE_REPLY_READLINK(req, path)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning path '%s'", path); \
-		__rc = fuse_reply_readlink((dfuse_req)->ir_req, path);	\
+		DFUSE_TRA_DEBUG(req, "Returning path '%s'", path);	\
+		__rc = fuse_reply_readlink(req, path);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
+			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
+		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
 #define DFUSE_REPLY_WRITE(handle, req, bytes)				\
@@ -493,6 +495,10 @@ dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
 void
 dfuse_cb_setattr(fuse_req_t, fuse_ino_t, struct stat *, int,
 		 struct fuse_file_info *);
+
+void
+dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
+		 const char *);
 
 /* Return inode information to fuse
  *

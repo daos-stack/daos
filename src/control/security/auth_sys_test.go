@@ -30,10 +30,10 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security/auth"
-
-	"github.com/golang/protobuf/proto"
 )
 
 // Mocks

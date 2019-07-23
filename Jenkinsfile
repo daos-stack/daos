@@ -85,6 +85,13 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             orterun -np 1 -x OFI_INTERFACE=eth0 -x CRT_ATTACH_INFO_PATH=/tmp -x DAOS_SINGLETON_CLI=1 daos_test -m'''
 
+// bail out of branch builds that are not on a whitelist
+if (!env.CHANGE_ID &&
+    env.BRANCH_NAME != "master") {
+   currentBuild.result = 'SUCCESS'
+   return
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -921,7 +928,9 @@ pipeline {
                                                OLD_CI=false utils/run_test.sh
                                                rm -rf run_test.sh/
                                                mkdir run_test.sh/
-                                               [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
+                                               if ls /tmp/daos*.log > /dev/null; then
+                                                   mv /tmp/daos*.log run_test.sh/
+                                               fi
                                                # servers can sometimes take a while to stop when the test is done
                                                x=0
                                                while [ \"\\\$x\" -lt \"10\" ] &&

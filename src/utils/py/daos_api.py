@@ -34,6 +34,7 @@ import enum
 from daos_cref import *
 from conversion import *
 
+
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
 
@@ -119,8 +120,8 @@ class DaosPool(object):
     def connect(self, flags, cb_func=None):
         """ connect to this pool. """
         # comment this out for now, so we can test bad data
-        #if not len(self.uuid) == 16:
-        #    raise DaosApiError("No existing UUID for pool.")
+        # if not len(self.uuid) == 16:
+        #     raise DaosApiError("No existing UUID for pool.")
 
         c_flags = ctypes.c_uint(flags)
         c_info = PoolInfo()
@@ -280,7 +281,7 @@ class DaosPool(object):
         Args:
             rank_list:  server rank
             tl_tgts:    Xstream targets on rank(server)
-                        Default -1 it means it will add all targets on the rank.
+                        Default -1 it means it will add all targets on the rank
             cb_func:    Command to run non-blocking mode if it's True
         """
         tl_ranks = DaosPool.__pylist_to_array(rank_list)
@@ -329,8 +330,8 @@ class DaosPool(object):
             ret = func(self.uuid, self.group, ctypes.byref(self.svc),
                        ctypes.byref(c_tgts), None)
             if ret != 0:
-                raise DaosApiError("Pool exclude_out returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError(
+                    "Pool exclude_out returned non-zero. RC: {0}".format(ret))
         else:
             event = DaosEvent()
             params = [self.uuid, self.group, ctypes.byref(self.svc),
@@ -368,7 +369,7 @@ class DaosPool(object):
 
         self.pool_info = PoolInfo()
         func = self.context.get_function('query-pool')
-        #Query space and Rebuild info
+        # Query space and Rebuild info
         self.pool_info.pi_bits = ctypes.c_ulong(-1)
 
         if cb_func is None:
@@ -459,7 +460,7 @@ class DaosPool(object):
                                .format(ret))
         buf = t_size[0]
 
-        buff = ctypes.create_string_buffer(buf  + 1).raw
+        buff = ctypes.create_string_buffer(buf + 1).raw
         total_size = ctypes.pointer(ctypes.c_size_t(buf + 1))
 
         # the async version
@@ -552,7 +553,7 @@ class DaosPool(object):
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
         buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                         for i in xrange(attr_count)])
+                         for i in range(attr_count)])
 
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
@@ -589,6 +590,7 @@ class DaosPool(object):
 
         return (ctypes.c_uint32 * len(pylist))(*pylist)
 
+
 class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_TINY_RW       = 1
     DAOS_OC_SMALL_RW      = 2
@@ -613,6 +615,7 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_EC_K2P1_L32K  = 22
     DAOS_OC_EC_K2P2_L32K  = 23
     DAOS_OC_EC_K8P2_L1M   = 24
+
 
 class DaosObjClass(enum.IntEnum):
     OC_BACK_COMPAT = 50
@@ -699,6 +702,7 @@ class DaosObjClass(enum.IntEnum):
     OC_RP_4G4      = 1027
     OC_RP_4GX      = 1028
 
+
 ConvertObjClass = {
     DaosObjClassOld.DAOS_OC_TINY_RW     : DaosObjClass.OC_S1,
     DaosObjClassOld.DAOS_OC_SMALL_RW    : DaosObjClass.OC_S4,
@@ -714,6 +718,48 @@ ConvertObjClass = {
     DaosObjClassOld.DAOS_OC_R4_MAX_RW   : DaosObjClass.OC_RP_4GX,
     DaosObjClassOld.DAOS_OC_REPL_MAX_RW : DaosObjClass.OC_RP_XSF
 }
+
+
+def get_object_class(item):
+    """Get the DAOS object class that represents the specified item.
+
+    Args:
+        item (object): object enumeration class name, number, or object
+
+    Raises:
+        DaosApiError: if the object class name does not match
+
+    Returns:
+        DaosObjClass: the DaosObjClass representing the object provided.
+
+    """
+    if not isinstance(item, (DaosObjClassOld, DaosObjClass)):
+        # Convert an integer or string into the DAOS object class with the
+        # matching value or name
+        for enum_class in (DaosObjClassOld, DaosObjClass):
+            for attr in ("value", "name"):
+                if item in [getattr(oclass, attr) for oclass in enum_class]:
+                    if attr == "name":
+                        item = enum_class[item]
+                    else:
+                        item = enum_class(item)
+                    break
+    if isinstance(item, DaosObjClassOld):
+        try:
+            # Return the new DAOS object class that replaces the old class
+            return ConvertObjClass[item]
+        except KeyError:
+            # No conversion exists for the old DAOS object class
+            raise DaosApiError(
+                "No conversion exists for the {} DAOS object class".format(
+                    item))
+    elif isinstance(item, DaosObjClass):
+        return item
+    else:
+        raise DaosApiError(
+            "Unknown DAOS object enumeration class for {} ({})".format(
+                item, type(item)))
+
 
 class DaosObj(object):
     """ A class representing an object stored in a DAOS container.  """
@@ -737,15 +783,28 @@ class DaosObj(object):
                                    "handle: {1}".format(ret, self.obj_handle))
             self.obj_handle = None
 
-    def create(self, rank=None, objcls=13):
-        """ generate a random oid """
+    def create(self, rank=None, objcls=None):
+        """Create a DAOS object by generating an oid.
+
+        Args:
+            rank (int, optional): server rank. Defaults to None.
+            objcls (object, optional): the DAOS class for this object specified
+                as either one of the DAOS object class enumerations or an
+                enumeration name or value. Defaults to DaosObjClass.OC_RP_XSF.
+
+        Raises:
+            DaosApiError: if the object class is invalid
+        """
         func = self.context.get_function('generate-oid')
 
-        # XXX convert object class
-        cls = int(ConvertObjClass[DaosObjClassOld(objcls)])
+        # Convert the object class into an valid object class enumeration value
+        if objcls is None:
+            obj_cls_int = DaosObjClass.OC_RP_XSF.value
+        else:
+            obj_cls_int = get_object_class(objcls).value
 
         func.restype = DaosObjId
-        self.c_oid = func(cls, 0, 0)
+        self.c_oid = func(obj_cls_int, 0, 0)
 
         if rank is not None:
             self.c_oid.hi |= rank << 24
@@ -816,7 +875,6 @@ class DaosObj(object):
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 
-
     def punch(self, txn, cb_func=None):
         """ Delete this object but only from the specified transaction
 
@@ -848,7 +906,6 @@ class DaosObj(object):
                                             cb_func,
                                             self))
             thread.start()
-
 
     def punch_dkeys(self, txn, dkeys, cb_func=None):
         """ Deletes dkeys and associated data from an object for a specific
@@ -952,20 +1009,27 @@ class DaosObj(object):
                                             self))
             thread.start()
 
+
 class IORequest(object):
     """
     Python object that centralizes details about an I/O
     type is either 1 (single) or 2 (array)
     """
     def __init__(self, context, container, obj, rank=None, iotype=1,
-                 objtype=13):
-        """
-        container --which container the object is (or will be) in
-        obj --None to create a new object or the OID of an existing obj
-        rank --utilize with certain object types to force obj to a specific
-               server
-        iotype --1 for single, 2 for array
-        objtype --specifies the attributes for the object
+                 objtype=None):
+        """Initialize an IORequest object.
+
+        Args:
+            context (DaosContext): the daos environment and other info
+            container (DaosContainer): the container storing the object
+            obj (DaosObject, None): None to create a new object or the OID of
+                an existing obj
+            rank (int, optional): utilized with certain object types to
+                force obj to a specific server. Defaults to None.
+            iotype (int, optional): 1 for single, 2 for array. Defaults to 1.
+            objtype (object, optional): the DAOS class for this object
+                specified as either one of the DAOS object class enumerations
+                or an enumeration name or value. Defaults to None.
         """
         self.context = context
         self.container = container
@@ -1363,6 +1427,7 @@ class IORequest(object):
 
         return result
 
+
 class DaosContainer(object):
     """ A python object representing a DAOS container."""
 
@@ -1575,7 +1640,7 @@ class DaosContainer(object):
                                .format(ret))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
-                             obj_cls=13):
+                             obj_cls=None):
 
         """
         Write an array of data to an object.  If an object is not supplied
@@ -1608,7 +1673,7 @@ class DaosContainer(object):
         return ioreq.obj, txn
 
     def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None,
-                     obj_cls=13):
+                     obj_cls=None):
         """
         Write a single value to an object, if an object isn't supplied a new
         one is created.  The update occurs in its own epoch and the epoch is
@@ -1643,7 +1708,7 @@ class DaosContainer(object):
         self.commit_tx(txn)
         return ioreq.obj, txn
 
-    def write_multi_akeys(self, dkey, data, obj=None, rank=None, obj_cls=13):
+    def write_multi_akeys(self, dkey, data, obj=None, rank=None, obj_cls=None):
         """
         Write multiple values to an object, each tagged with a unique akey.
         If an object isn't supplied a new one is created.  The update
@@ -1913,7 +1978,7 @@ class DaosContainer(object):
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
         buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                         for i in xrange(attr_count)])
+                         for i in range(attr_count)])
 
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
@@ -1976,6 +2041,7 @@ class DaosContainer(object):
                                             cb_func,
                                             self))
             thread.start()
+
 
 class DaosSnapshot(object):
     """ A python object that can represent a DAOS snapshot. We do not save the
@@ -2063,6 +2129,7 @@ class DaosSnapshot(object):
             raise Exception("Failed to destroy the snapshot. RC: {0}"
                             .format(retcode))
 
+
 class DaosServer(object):
     """Represents a DAOS Server"""
 
@@ -2084,13 +2151,14 @@ class DaosServer(object):
             raise DaosApiError("Server kill returned non-zero. RC: {0}"
                                .format(ret))
 
+
 class DaosContext(object):
     """Provides environment and other info for a DAOS client."""
 
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.5.0",
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.6.0",
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
@@ -2163,6 +2231,7 @@ class DaosContext(object):
         """ call a function through the API """
         return self.ftable[function]
 
+
 class DaosLog:
     """
     Expose functionality to write to the DAOS client log.
@@ -2204,10 +2273,12 @@ class DaosLog:
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
 
+
 class DaosApiError(Exception):
     """
     DAOS API exception class
     """
+
 
 if __name__ == '__main__':
     # this file is not intended to be run in normal circumstances
