@@ -34,6 +34,21 @@
 
 static size_t DEFAULT_BUF_LEN = 1024;
 
+/*
+ * States used to parse a formatted ACE string
+ */
+enum ace_str_state {
+	ACE_ACCESS,
+	ACE_FLAGS,
+	ACE_IDENTITY,
+	ACE_PERMS,
+	ACE_DONE,
+	ACE_INVALID
+};
+
+/*
+ * States used to parse a principal name
+ */
 enum validity_state {
 	STATE_START,
 	STATE_NAME,
@@ -43,7 +58,7 @@ enum validity_state {
 };
 
 static enum validity_state
-next_state(enum validity_state current_state, char ch)
+next_validity_state(enum validity_state current_state, char ch)
 {
 	switch (current_state) {
 	case STATE_START:
@@ -91,7 +106,7 @@ daos_acl_principal_is_valid(const char *name)
 	}
 
 	for (i = 0; i < (len + 1); i++) {
-		state = next_state(state, name[i]);
+		state = next_validity_state(state, name[i]);
 		if (state == STATE_INVALID) {
 			D_INFO("Name was badly formatted: %s\n", name);
 			return false;
@@ -340,4 +355,223 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 out:
 	D_FREE(buf);
 	return rc;
+}
+
+static enum ace_str_state
+process_access(const char *str, uint8_t *access)
+{
+	size_t len;
+	size_t i;
+
+	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN);
+	for (i = 0; i < len; i++) {
+		switch (str[i]) {
+		case 'A':
+			*access |= DAOS_ACL_ACCESS_ALLOW;
+			break;
+		case 'U':
+			*access |= DAOS_ACL_ACCESS_AUDIT;
+			break;
+		case 'L':
+			*access |= DAOS_ACL_ACCESS_ALARM;
+			break;
+		default:
+			D_INFO("Invalid access type '%c'\n", str[i]);
+			return ACE_INVALID;
+		}
+	}
+
+	return ACE_FLAGS;
+}
+
+static enum ace_str_state
+process_flags(const char *str, uint16_t *flags)
+{
+	size_t len;
+	size_t i;
+
+	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN);
+	for (i = 0; i < len; i++) {
+		switch (str[i]) {
+		case 'G':
+			*flags |= DAOS_ACL_FLAG_GROUP;
+			break;
+		case 'S':
+			*flags |= DAOS_ACL_FLAG_ACCESS_SUCCESS;
+			break;
+		case 'F':
+			*flags |= DAOS_ACL_FLAG_ACCESS_FAIL;
+			break;
+		case 'P':
+			*flags |= DAOS_ACL_FLAG_POOL_INHERIT;
+			break;
+		default:
+			D_INFO("Invalid flag '%c'\n", str[i]);
+			return ACE_INVALID;
+		}
+	}
+
+	return ACE_IDENTITY;
+}
+
+static enum ace_str_state
+process_perms(const char *str, uint64_t *perms)
+{
+	size_t len;
+	size_t i;
+
+	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN);
+	for (i = 0; i < len; i++) {
+		switch (str[i]) {
+		case 'r':
+			*perms |= DAOS_ACL_PERM_READ;
+			break;
+		case 'w':
+			*perms |= DAOS_ACL_PERM_WRITE;
+			break;
+		default:
+			D_INFO("Invalid permission '%c'\n", str[i]);
+			return ACE_INVALID;
+		}
+	}
+
+	return ACE_DONE;
+}
+
+static struct daos_ace *
+get_ace_from_identity(const char *identity, uint16_t flags)
+{
+	enum daos_acl_principal_type type;
+
+	if (strncmp(identity, "OWNER@",
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
+		type = DAOS_ACL_OWNER;
+	else if (strncmp(identity, "GROUP@",
+			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
+		type = DAOS_ACL_OWNER_GROUP;
+	else if (strncmp(identity, "EVERYONE@",
+			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
+		type = DAOS_ACL_EVERYONE;
+	else if (flags & DAOS_ACL_FLAG_GROUP)
+		type = DAOS_ACL_GROUP;
+	else
+		type = DAOS_ACL_USER;
+
+	return daos_ace_create(type, identity);
+}
+
+/*
+ * This helper function modifies the input string during processing.
+ */
+static int
+create_ace_from_mutable_str(char *str, struct daos_ace **ace)
+{
+	struct daos_ace			*new_ace = NULL;
+	char				*pch;
+	char				*field;
+	char				delimiter[] = ":";
+	enum ace_str_state		state = ACE_ACCESS;
+	uint16_t			flags = 0;
+	uint8_t				access = 0;
+	uint64_t			perms = 0;
+	int				rc = 0;
+
+	pch = strpbrk(str, delimiter);
+	field = str;
+	while (state != ACE_INVALID)
+	{
+		/*
+		 * We need to do one round with pch == NULL to pick up the last
+		 * field in the string.
+		 */
+		if (pch != NULL)
+			*pch = '\0';
+
+		switch (state) {
+		case ACE_ACCESS:
+			state = process_access(field, &access);
+			break;
+		case ACE_FLAGS:
+			state = process_flags(field, &flags);
+			break;
+		case ACE_IDENTITY:
+			new_ace = get_ace_from_identity(field, flags);
+			if (new_ace == NULL) {
+				D_ERROR("Couldn't alloc ACE structure\n");
+				D_GOTO(error, rc = -DER_NOMEM);
+			}
+			state = ACE_PERMS;
+			break;
+		case ACE_PERMS:
+			state = process_perms(field, &perms);
+			break;
+		case ACE_DONE:
+		default:
+			D_INFO("Bad state: %u\n", state);
+			state = ACE_INVALID;
+		}
+
+		if (pch == NULL)
+			break;
+		field = pch + 1;
+		pch = strpbrk(field, delimiter);
+	}
+
+	if (state != ACE_DONE) {
+		D_INFO("Invalid ACE string\n");
+		D_GOTO(error, rc = -DER_INVAL);
+	}
+
+	new_ace->dae_access_flags = flags;
+	new_ace->dae_access_types = access;
+
+	if (access & DAOS_ACL_ACCESS_ALLOW)
+		new_ace->dae_allow_perms = perms;
+	if (access & DAOS_ACL_ACCESS_AUDIT)
+		new_ace->dae_audit_perms = perms;
+	if (access & DAOS_ACL_ACCESS_ALARM)
+		new_ace->dae_alarm_perms = perms;
+
+	*ace = new_ace;
+
+	return 0;
+
+error:
+	daos_ace_free(new_ace);
+	return rc;
+}
+
+int
+daos_ace_from_str(const char *str, struct daos_ace **ace)
+{
+	int		rc;
+	char		*tmpstr;
+	struct daos_ace	*new_ace = NULL;
+
+	if (str == NULL || ace == NULL) {
+		D_INFO("Invalid input ptr, str=%p, ace=%p\n", str, ace);
+		return -DER_INVAL;
+	}
+
+	/* Will be mangling the string during processing */
+	D_STRNDUP(tmpstr, str, DAOS_ACL_MAX_ACE_STR_LEN);
+	if (tmpstr == NULL) {
+		D_ERROR("Couldn't allocate temporary string\n");
+		return -DER_NOMEM;
+	}
+
+	rc = create_ace_from_mutable_str(tmpstr, &new_ace);
+	D_FREE(tmpstr);
+	if (rc != 0)
+		return rc;
+
+	if (!daos_ace_is_valid(new_ace)) {
+		D_INFO("Finished building ACE but it's not valid\n");
+		daos_ace_free(new_ace);
+		return -DER_INVAL;
+	}
+
+	*ace = new_ace;
+
+	return 0;
 }

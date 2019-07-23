@@ -56,6 +56,12 @@ extern "C" {
 #define DAOS_ACL_MAX_ACE_LEN		(8192)
 
 /**
+ * Maximum length of an ACE provided in string format:
+ * 	<access>:<flags>:<principal>:<perms>
+ */
+#define DAOS_ACL_MAX_ACE_STR_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
+
+/**
  * Header for the Access Control List, followed by the table of variable-length
  * Access Control Entries.
  * The entry list may be walked by inspecting the principal length and
@@ -421,6 +427,19 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid);
  */
 int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
+
+/**
+ * Convert an Access Control Entry formatted as a string to a daos_ace
+ * structure.
+ *
+ * \param[in]	str	String defining an ACE
+ * \param[out]	ace	Newly allocated ACE structure
+ *
+ * @return	0		Success
+ *		-DER_INVAL	Invalid input
+ */
+int
+daos_ace_from_str(const char *str, struct daos_ace **ace);
 
 #if defined(__cplusplus)
 }
