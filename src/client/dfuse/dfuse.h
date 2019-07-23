@@ -123,6 +123,11 @@ struct dfuse_inode_ops {
 			struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
+	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 const char *name, const char *value, size_t size,
+			 int flags);
+	void (*getxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 const char *name, size_t size);
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -495,6 +500,14 @@ dfuse_cb_setattr(fuse_req_t, fuse_ino_t, struct stat *, int,
 void
 dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 		 const char *);
+
+void
+dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
+		  const char *, size_t, int);
+
+void
+dfuse_cb_getxattr(fuse_req_t, struct dfuse_inode_entry *,
+		  const char *, size_t);
 
 /* Return inode information to fuse
  *
