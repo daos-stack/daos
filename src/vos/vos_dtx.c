@@ -253,7 +253,7 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df)
 		rc = dbtree_open_inplace(&dtab_df->tt_active_btr,
 					 &pool->vp_uma, &hdl);
 		if (rc == 0)
-			rc = dbtree_destroy(hdl);
+			rc = dbtree_destroy(hdl, NULL);
 
 		if (rc != 0)
 			D_ERROR("Fail to destroy DTX active dbtree for pool"
@@ -264,7 +264,7 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df)
 		rc = dbtree_open_inplace(&dtab_df->tt_committed_btr,
 					 &pool->vp_uma, &hdl);
 		if (rc == 0)
-			rc = dbtree_destroy(hdl);
+			rc = dbtree_destroy(hdl, NULL);
 
 		if (rc != 0)
 			D_ERROR("Fail to destroy DTX committed dbtree for pool"
@@ -733,7 +733,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	int				 rc = 0;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	rc = dbtree_delete(cont->vc_dtx_active_hdl, &kiov, &umoff);
+	rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
+			   &kiov, &umoff);
 	if (rc == -DER_NONEXIST) {
 		d_iov_set(&riov, NULL, 0);
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
@@ -798,7 +799,7 @@ vos_dtx_abort_one(struct vos_container *cont, struct dtx_id *dti,
 	int		 rc;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	rc = dbtree_delete(cont->vc_dtx_active_hdl, &kiov, &dtx);
+	rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, &dtx);
 	if (rc == 0)
 		dtx_rec_release(&cont->vc_pool->vp_umm, dtx, true, true);
 
@@ -1668,7 +1669,8 @@ vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age)
 			break;
 
 		d_iov_set(&kiov, &dtx->te_xid, sizeof(dtx->te_xid));
-		rc = dbtree_delete(cont->vc_dtx_committed_hdl, &kiov, &umoff);
+		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
+				   &kiov, &umoff);
 		D_ASSERT(rc == 0);
 
 		tab->tt_count--;

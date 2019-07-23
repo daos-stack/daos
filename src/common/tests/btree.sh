@@ -102,6 +102,11 @@ run_test()
         -o                                          \
         -b "$BAT_NUM"                               \
         -D
+
+        echo "B+tree drain test..."
+        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -e -D
+
     else
         echo "B+tree performance test..."
         "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
