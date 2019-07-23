@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,27 +20,149 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 from apricot import TestWithServers
-from daos_api import DaosApiError
+from daos_api import DaosApiError 
 from general_utils import TestPool, get_container
 from conversion import c_uuid_to_str
 import ctypes
+import uuid
 
 
 class EvictTests(TestWithServers):
     """
+
     Tests DAOS client eviction from a pool that the client is using.
 
     :avocado: recursive
     """
 
+    def connected_pool(self, hostlist, targets=None):
+        """Connect to pool.
+
+        Args:
+            hostlist (list): list of daos server nodes
+            targets (list): List of targets for pool create
+        Returns:
+            TestPool (object)
+
+        """
+        pool = TestPool(self.context, self.log)
+        pool.get_params(self)
+        if targets is not None:
+            pool.target_list.value = targets
+        # create pool
+        pool.create()
+        # Check that the pool was created
+        status = pool.check_files(hostlist)
+        if not status:
+            self.log.error("Invalid pool - pool data not detected on servers")
+            return None
+        # Connect to the pool
+        status = pool.connect(1)
+        if not status:
+            self.log.error("Pool connect failed or already connected")
+            return None
+        # Return connected pool
+        return pool
+
+    def evict_badparam(self, test_param):
+        """Connect to pool, connect and try to evict with a bad param.
+
+        Args:
+            test_param (str): either invalid UUID or bad server name
+
+        Returns:
+            TestPool (bool)
+
+        """
+        # setup pool and connect
+        self.pool = self.connected_pool(self.hostlist_servers)
+
+        self.log.info(
+            "Pool UUID: %s\n Pool handle: %s\n Server group: %s\n",
+            self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
+
+        if test_param == "BAD_SERVER_NAME":
+            # Attempt to evict pool with invald server group name
+            # set the server group name directly
+            self.pool.pool.group = ctypes.create_string_buffer(test_param)
+            self.log.info(
+                "Evicting pool with invalid Server Group Name: %s", test_param)
+        elif test_param == "invalid_uuid":
+            # Attempt to evict pool with invald UUID
+            bogus_uuid = str(uuid.uuid4())
+            # set the UUID directly
+            self.pool.pool.set_uuid_str(bogus_uuid)
+            self.log.info(
+                "Evicting pool with Invalid Pool UUID:  %s",
+                self.pool.pool.get_uuid_str())
+        else:
+            self.fail("Invalid yaml parameters - check \"params\" values")
+        try:
+            # call daos evict api directly
+            self.pool.pool.evict()
+        # exception is expected
+        except DaosApiError as result:
+            if "-1005" in str(result):
+                self.log.info(
+                    "Expected exception - invalid param %s\n %s\n",
+                    test_param, str(result))
+            else:
+                self.log.info("Unexpected exception \n %s", str(result))
+
+            # Restore the valid server group name or uuid and verify that
+            # pool still exists and the handle is still valid.
+            if "BAD_SERVER_NAME" in test_param:
+                self.pool.pool.group = ctypes.create_string_buffer(
+                    self.server_group)
+            else:
+                self.pool.pool.set_uuid_str(self.pool.uuid)
+            self.log.info("Check if pool handle still exist")
+            if (int(self.pool.pool.handle.value) == 0):
+                self.log.error(
+                    "Pool handle was removed when evicting pool with %s",
+                    test_param)
+                return False
+            return True
+        # if here then pool-evict did not raise an exception as expected
+        # restore the valid server group name and check if valid pool
+        # still exists
+        self.log.info(
+            "DAOS api exception did not occur"
+            " - evict from pool with %s", test_param)
+
+        # restore the valid group name and UUID,
+        if "BAD_SERVER_NAME" in test_param:
+            self.pool.pool.group = ctypes.create_string_buffer(
+                self.server_group)
+        else:
+            self.pool.pool.set_uuid_str(self.pool.uuid)
+        # check if pool handle still exists
+        if (int(self.pool.pool.handle.value) == 0):
+            self.log.error(
+                "Pool handle was removed when doing an evict with bad param")
+        if (self.pool.check_files(self.hostlist_servers)):
+            self.log.error("Valid pool files were not detected on server after"
+                           " a pool evict with %s failed to raise an "
+                           "exception", test_param)
+        self.log.error("Test did not raise an exception with when "
+                       "evicting a pool with bad param: %s", test_param)
+        return False
+
     def test_evict(self):
         """
         Test evicting a client from a pool.
 
+        Test creates 2 pools on 4 target (pool_tgt [0,1,2,3])
+        and 1 pool on 2 targets (pool_tgt_ut [0,1]).  The pools are connected
+        to and a container with data is created on all 3.
+        The evict is done on connection to the pool with 2 targets.
+        The handle is removed.
+        The test verifies that the other two pools were not affected
+        by the evict
         :avocado: tags=pool,poolevict,quick
         """
         pool = []
@@ -53,39 +175,22 @@ class EvictTests(TestWithServers):
         pool_tgt_ut = [num for num in range(int(len(self.hostlist_servers)/2))]
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
-        # Create TestPool
-        for count, _ in enumerate(tlist):
-            self.log.info("Create a pool")
-            pool.append(TestPool(self.context, self.log))
-            pool[count].get_params(self)
-            pool[count].name.value = self.server_group
-            pool[count].target_list.value = tlist[count]
-            self.log.info(
-                "Pool # %s target list is %s",
-                count+1, pool[count].target_list)
-            pool[count].create()
-            self.log.info("Pool # %s UUID is %s and handle is %s",
-                          count+1, pool[count].uuid,
-                          pool[count].pool.handle.value)
+        non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+        # Create Connected TestPool
+        for count, target_list in enumerate(tlist):
+            pool.append(self.connected_pool(pool_servers[count], target_list))
+            if pool[count] is None:
+                self.fail("Failed to Create a connected pool")
 
-            # Check that the pools exist
-            self.assertTrue(
-                pool[count].check_files(pool_servers[count]),
-                "Pool # {} data not detected on servers before evict".format(
-                    count+1))
-            # Check that pool does not exists on targets not in pool
-            for host in self.hostlist_servers:
-                if host not in pool_servers[count]:
-                    non_pool_servers.append(host)
-            if len(non_pool_servers) > 0:
+            if len(non_pool_servers[count]) > 0:
                 self.assertFalse(
-                    pool[count].check_files(non_pool_servers),
+                    pool[count].check_files(non_pool_servers[count]),
                     "Pool # {} data detected on non pool servers {} ".format(
-                        count+1, non_pool_servers))
+                        count+1, non_pool_servers[count]))
 
-            # Connect to each pool
-            self.assertTrue(pool[count].connect(1 << 1),
-                            "Pool connect failed before evict")
+            # # Connect to each pool
+            # self.assertTrue(pool[count].connect(1),
+            #                 "Pool connect failed before evict")
             self.log.info("Pool # %s is connected with handle %s",
                           count+1, pool[count].pool.handle.value)
 
@@ -108,7 +213,7 @@ class EvictTests(TestWithServers):
                     str(result)))
 
         for count in range(len(tlist)):
-            # Check that all pools still exist
+            # Check that all pool files still exist
             if pool[count].check_files(pool_servers[count]):
                 self.log.info(
                     "Pool # %s with UUID %s still exists",
@@ -118,7 +223,8 @@ class EvictTests(TestWithServers):
                     "Pool # {} with UUID {} does not exists".format(
                         count+1, pool[count].uuid))
 
-            # Verify connection to pools with pool_query
+            # Verify connection to pools with pool_query; pool that was evicted
+            # should fail the pool query because the handle was removed
             try:
                 # Call daos api directly to avoid connecting to pool
                 pool_info = pool[count].pool.pool_query()
@@ -149,147 +255,20 @@ class EvictTests(TestWithServers):
                             count+1, pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
 
-    def test_evict_bad_uuid(self):
-        """
-        Test evicting a pool with an invalid uuid.
-
-        :avocado: tags=pool,poolevict
-        """
-        # Create a pool
-        self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.pool.create()
-        self.log.info("Valid Pool UUID is %s", self.pool.uuid)
-
-        # Check that the pool was created
-        self.assertTrue(
-            self.pool.check_files(self.hostlist_servers),
-            "Pool data not detected on servers before evict")
-
-        # Connect to the pool
-        self.assertTrue(self.pool.connect(1),
-                        "Pool connect failed before evict")
-        self.log.info(
-            "Pool UUID is %s and handle is %s",
-            self.pool.uuid, self.pool.pool.handle.value)
-
-        # Attempt to evict pool with invald UUID
-        saved_uuid = self.pool.uuid
-        bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
-        # set the UUID directly
-        self.pool.pool.set_uuid_str(bogus_uuid)
-        self.log.info("Evicting pool with Invalid Pool UUID:  %s",
-                      self.pool.pool.get_uuid_str())
-        try:
-            self.log.info("Attempting to evict pool with an invalid UUID")
-            # call daos evict api directly
-            self.pool.pool.evict()
-        # exception is expected
-        except DaosApiError as result:
-            if "-1005" in str(result):
-                self.log.info(
-                    "Expected exception: evicting pool with invalid UUID\n %s",
-                    str(result))
-            else:
-                self.log.info(
-                    "Unexpected exception: \n %s", str(result))
-            # restore the valid UUID and check if pool handle still exists
-            self.pool.pool.set_uuid_str(saved_uuid)
-            self.log.info("Check if pool handle still exist")
-            self.assertTrue(
-                (int(self.pool.pool.handle.value) > 0),
-                "Pool handle was removed when doing an evict with a bad UUID")
-            return
-        # if here then pool-evict did not raise an DAOS exception as expected
-        # restore the valid UUID and check if valid pool still exists
-        self.log.info(
-            "DAOS api exception did not occur"
-            " - evict pool with invalid UUID")
-        self.pool.pool.set_uuid_str(saved_uuid)
-        self.log.info("check if pool data and pool handle still exist")
-        self.assertTrue(
-            (int(self.pool.pool.handle.value) > 0),
-            "Pool handle was removed when doing an evict with a bad UUID")
-        self.assertTrue(
-            self.pool.check_files(self.hostlist_servers),
-            "Valid pool data was not detected on servers after "
-            "a pool evict with invalid UUID failed to raise an exception")
-        self.fail(
-            "Test did not raise an exception when "
-            "evicting a pool with invalid UUID")
-
-    def test_evict_bad_server_group(self):
+    def test_evict_bad_server_name(self):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=pool,poolevict
+        :avocado: tags=pool,poolevict,poolevict_bad_server_name
         """
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
-        badsetid = self.params.get("setname", '/run/setnames/badsetname/')
+        test_param = self.params.get("server_name", '/run/badparams/*')
+        self.assertTrue(self.evict_badparam(test_param))
 
-        # Create a pool
-        self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.pool.name.value = setid
-        self.pool.create()
-        self.log.info("Pool created with Server Group Name: %s",
-                      self.pool.name.value)
-        # Check that the pool was created
-        self.assertTrue(
-            self.pool.check_files(self.hostlist_servers),
-            "Pool data not detected on servers before evict")
+    def test_evict_bad_uuid(self):
+        """
+        Test evicting a pool using an invalid uuid.
 
-        # Connect to the pool
-        self.assertTrue(self.pool.connect(1),
-                        "Pool connect failed before evict")
-        self.log.info(
-            "Pool UUID is %s and handle is %s",
-            self.pool.uuid, self.pool.pool.handle.value)
-
-        # Attempt to evict pool with invald server group name
-        # set the server group name directly
-        self.pool.pool.group = ctypes.create_string_buffer(badsetid)
-        self.log.info(
-            "Evicting pool with invalid Server Group Name:  %s", badsetid)
-        try:
-            # call daos evict api directly
-            self.pool.pool.evict()
-        # exception is expected
-        except DaosApiError as result:
-            if "-1005" in str(result):
-                self.log.info(
-                    "Expected exception - invalid server group\n %s",
-                    str(result))
-            else:
-                self.log.info(
-                    "Unexpected exception \n %s", str(result))
-            # restore the valid group name, check if pool handle still exists
-            self.pool.pool.group = ctypes.create_string_buffer(setid)
-            self.log.info("Check if pool handle still exist")
-            self.assertTrue(
-                (int(self.pool.pool.handle.value) > 0),
-                "Pool handle was removed when evicting pool with "
-                "invalid server group name")
-            return
-        # if here then pool-evict did not raise an exception as expected
-        # restore the valid server group name and check if valid pool
-        # still exists
-        self.log.info(
-            "DAOS api exception did not occur"
-            " - evict pool with invalid Server Group Name")
-        self.pool.pool.group = ctypes.create_string_buffer(setid)
-        self.log.info("check if pool data and pool handle still exist")
-        self.assertTrue(
-            (int(self.pool.pool.handle.value) > 0),
-            "Pool handle was removed when doing an evict with a bad "
-            "invalid Server Group Name")
-        self.assertTrue(
-            self.pool.check_files(self.hostlist_servers),
-            "Valid pool data was not detected on servers after "
-            "a pool evict with invalid Server Group Name failed "
-            "to raise an exception")
-        self.fail(
-            "Test did not raise an exception when "
-            "evicting a pool with invalid Server Group Name")
+        :avocado: tags=pool,poolevict,poolevict_bad_uuid
+        """
+        test_param = self.params.get("uuid", '/run/badparams/*')
+        self.assertTrue(self.evict_badparam(test_param))
