@@ -49,9 +49,9 @@ enum ik_btr_opc {
 };
 
 struct test_input_value {
-	bool					input;
+	bool				input;
 	enum	 ik_btr_opc		opc;
-	char					*optval;
+	char				*optval;
 };
 
 struct test_input_value tst_fn_val;
@@ -360,7 +360,7 @@ ik_btr_close_destroy(void **state)
 
 	if (destroy) {
 		D_PRINT("Destroy btree\n");
-		rc = dbtree_destroy(ik_toh);
+		rc = dbtree_destroy(ik_toh, NULL);
 	} else {
 		D_PRINT("Close btree\n");
 		rc = dbtree_close(ik_toh);
@@ -475,7 +475,8 @@ ik_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE:
-			rc = dbtree_delete(ik_toh, &key_iov, NULL);
+			rc = dbtree_delete(ik_toh, BTR_PROBE_EQ,
+					   &key_iov, NULL);
 			if (rc != 0) {
 				sprintf(outbuf,
 					"Failed to delete "DF_U64"\n", key);
@@ -489,7 +490,8 @@ ik_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
-			rc = dbtree_delete(ik_toh, &key_iov, &rec_off);
+			rc = dbtree_delete(ik_toh, BTR_PROBE_EQ,
+					   &key_iov, &rec_off);
 			if (rc != 0) {
 				sprintf(outbuf,
 					"Failed to delete "DF_U64"\n", key);
@@ -826,6 +828,52 @@ ik_btr_perf(void **state)
 	D_FREE(arr);
 }
 
+
+static void
+ik_btr_drain(void **state)
+{
+	static const int drain_keys  = 10000;
+	static const int drain_creds = 23;
+
+	unsigned int	*arr;
+	unsigned int	 drained = 0;
+	char		 buf[64];
+	int		 i;
+
+	D_ALLOC_ARRAY(arr, drain_keys);
+	if (arr == NULL)
+		fail_msg("Array allocation failed");
+
+	D_PRINT("Batch add %d records.\n", drain_keys);
+	ik_btr_gen_keys(arr, drain_keys);
+	for (i = 0; i < drain_keys; i++) {
+		sprintf(buf, "%d:%d", arr[i], arr[i]);
+		tst_fn_val.opc	  = BTR_OPC_UPDATE;
+		tst_fn_val.optval = buf;
+		tst_fn_val.input  = false;
+
+		ik_btr_kv_operate(NULL);
+	}
+
+	ik_btr_query(NULL);
+	while (1) {
+		int	creds = drain_creds;
+		bool	empty = false;
+		int	rc;
+
+		rc = dbtree_drain(ik_toh, &creds, NULL, &empty);
+		if (rc) {
+			fail_msg("Failed to drain btree: %s\n", d_errstr(rc));
+			fail();
+		}
+		drained += drain_creds - creds;
+		D_PRINT("Drained %d of %d KVs, empty=%d\n",
+			drained, drain_keys, empty);
+		if (empty)
+			break;
+	}
+}
+
 static int
 run_btree_open_create_test(void)
 {
@@ -916,10 +964,22 @@ run_btree_kv_operate_test(void)
 				btree_kv_operate_test, NULL, NULL);
 }
 
+static int
+run_btree_drain_test(void)
+{
+	static const struct CMUnitTest btree_drain_test[] = {
+		{ "BTR008: btree_drain test", ik_btr_drain, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree drain test",
+				btree_drain_test, NULL, NULL);
+}
 
 static struct option btr_ops[] = {
 	{ "create",	required_argument,	NULL,	'C'	},
 	{ "destroy",	no_argument,		NULL,	'D'	},
+	{ "drain",	no_argument,		NULL,	'e'	},
 	{ "open",	no_argument,		NULL,	'o'	},
 	{ "close",	no_argument,		NULL,	'c'	},
 	{ "update",	required_argument,	NULL,	'u'	},
@@ -955,8 +1015,8 @@ main(int argc, char **argv)
 	optind = 0;
 
 	/* Check for -m option first */
-	while ((opt = getopt_long(argc, argv, "tmC:Docqu:d:r:f:i:b:p:", btr_ops,
-				  NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
+				  btr_ops, NULL)) != -1) {
 		if (opt == 'm') {
 			D_PRINT("Using pmem\n");
 			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
@@ -987,8 +1047,8 @@ main(int argc, char **argv)
 	/* start over */
 	optind = 0;
 
-	while ((opt = getopt_long(argc, argv, "tmC:Docqu:d:r:f:i:b:p:", btr_ops,
-				  NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
+				  btr_ops, NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
 		switch (opt) {
@@ -1007,6 +1067,9 @@ main(int argc, char **argv)
 		case 'c':
 			tst_fn_val.input = false;
 			rc = run_btree_close_destroy_test();
+			break;
+		case 'e':
+			rc = run_btree_drain_test();
 			break;
 		case 'q':
 			rc = run_btree_query_test();

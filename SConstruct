@@ -102,6 +102,9 @@ def scons():
     # install the configuration files
     SConscript('utils/config/SConscript')
 
+    # install certificate generation files
+    SConscript('utils/certs/SConscript')
+
     Default('build')
     Depends('install', 'build')
 
