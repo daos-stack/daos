@@ -49,7 +49,7 @@ class IorTestBase(TestWithServers):
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
-        self.ior_cmd.set_params(self)
+        self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
     def tearDown(self):

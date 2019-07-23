@@ -27,73 +27,20 @@ import re
 import uuid
 
 from avocado.utils.process import run, CmdError
+from command_utils import FormattedParameter, CommandWithParameters
 
 
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
 
-class IorParam(object):
-    """Defines a object representing a single IOR command line parameter."""
-
-    def __init__(self, str_format, default=None):
-        """Create a IorParam object.
-
-        Args:
-            str_format (str): format string used to convert the value into an
-                ior command line argument string
-            default (object): default value for the param
-        """
-        self.str_format = str_format
-        self.default = default
-        self.value = default
-
-    def __str__(self):
-        """Return a IorParam object as a string.
-
-        Returns:
-            str: if defined, the IOR parameter, otherwise an empty string
-
-        """
-        if isinstance(self.default, bool) and self.value:
-            return self.str_format
-        elif not isinstance(self.default, bool) and self.value:
-            return self.str_format.format(self.value)
-        else:
-            return ""
-
-    def set_yaml_value(self, name, test, path="/run/ior/*"):
-        """Set the value of the parameter using the test's yaml file value.
-
-        Args:
-            name (str): name associated with the value in the yaml file
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/ior/*".
-
-        """
-        self.value = test.params.get(name, path, self.default)
-
-    def update(self, value, display=True):
-        """Update the value of this IOR param.
-
-        Args:
-            value (object): value to assign
-            display (bool, optional): log the update. Defaults to True.
-        """
-        previous = "None" if self.value is None else self.__str__()
-        self.value = value
-        if display:
-            print(
-                "Updated IOR param: {} -> {}".format(previous, self.__str__()))
-
-
-class IorCommand(object):
+class IorCommand(CommandWithParameters):
     """Defines a object for executing an IOR command.
 
     Example:
         >>> # Typical use inside of a DAOS avocado test method.
         >>> ior_cmd = IorCommand()
-        >>> ior_cmd.set_params(self)
+        >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> ior_cmd.run(
                 self.basepath, len(self.hostlist_clients),
@@ -102,41 +49,72 @@ class IorCommand(object):
 
     def __init__(self):
         """Create an IorCommand object."""
-        self.flags = IorParam("{}")                 # IOR flags
-        self.api = IorParam("-a {}", "DAOS")        # API for I/O
-        self.block_size = IorParam("-b {}")         # bytes to write per task
-        self.test_delay = IorParam("-d {}")         # sec delay between reps
-        self.script = IorParam("-f {}")             # test script name
-        self.signatute = IorParam("-G {}")          # set value for rand seed
-        self.repetitions = IorParam("-i {}")        # number of repetitions
-        self.outlier_threshold = IorParam("-j {}")  # warn if N sec from mean
-        self.alignment = IorParam("-J {}")          # HDF5 alignment in bytes
-        self.data_packet_type = IorParam("-l {}")   # type of packet created
-        self.memory_per_node = IorParam("-M {}")    # hog memory on the node
-        self.num_tasks = IorParam("-N {}")          # number of tasks
-        self.test_file = IorParam("-o {}")          # full name for test
-        self.directives = IorParam("-O {}")         # IOR directives
-        self.task_offset = IorParam("-Q {}")        # for -C & -Z read tests
-        self.segment_count = IorParam("-s {}")      # number of segments
-        self.transfer_size = IorParam("-t {}")      # bytes to transfer
-        self.max_duration = IorParam("-T {}")       # max mins executing test
-        self.daos_pool = IorParam("--daos.pool {}")             # pool uuid
-        self.daos_svcl = IorParam("--daos.svcl {}")             # pool SVCL
-        self.daos_cont = IorParam("--daos.cont {}")             # cont uuid
-        self.daos_destroy = IorParam("--daos.destroy", True)    # destroy cont
-        self.daos_group = IorParam("--daos.group {}")           # server group
-        self.daos_chunk = IorParam("--daos.chunk_size {}", 1048576)
-        self.daos_oclass = IorParam("--daos.oclass {}")         # object class
+        super(IorCommand, self).__init__("ior")
 
-    def __str__(self):
-        """Return a IorCommand object as a string.
+        # Flags
+        self.flags = FormattedParameter("{}")
 
-        Returns:
-            str: the ior command with all the defined parameters
+        # Optional arguments
+        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DAOS|DFS]
+        #   -b=1048576      blockSize -- contiguous bytes to write per task
+        #   -d=0            interTestDelay -- delay between reps in seconds
+        #   -f=STRING       scriptFile -- test script name
+        #   -G=0            setTimeStampSignature -- time stamp signature
+        #   -i=1            repetitions -- number of repetitions of test
+        #   -j=0            outlierThreshold -- warn on outlier N sec from mean
+        #   -J=1            setAlignment -- HDF5 alignment in bytes
+        #   -l=STRING       datapacket type-- type of packet created
+        #   -M=STRING       memoryPerNode -- hog memory on the node
+        #   -N=0            numTasks -- num of participating tasks in the test
+        #   -o=testFile     testFile -- full name for test
+        #   -O=STRING       string of IOR directives
+        #   -Q=1            taskPerNodeOffset for read tests
+        #   -s=1            segmentCount -- number of segments
+        #   -t=262144       transferSize -- size of transfer in bytes
+        #   -T=0            maxTimeDuration -- max time in minutes executing
+        #                      repeated test; it aborts only between iterations
+        #                      and not within a test!
+        self.api = FormattedParameter("-a {}", "DAOS")
+        self.block_size = FormattedParameter("-b {}")
+        self.test_delay = FormattedParameter("-d {}")
+        self.script = FormattedParameter("-f {}")
+        self.signatute = FormattedParameter("-G {}")
+        self.repetitions = FormattedParameter("-i {}")
+        self.outlier_threshold = FormattedParameter("-j {}")
+        self.alignment = FormattedParameter("-J {}")
+        self.data_packet_type = FormattedParameter("-l {}")
+        self.memory_per_node = FormattedParameter("-M {}")
+        self.num_tasks = FormattedParameter("-N {}")
+        self.test_file = FormattedParameter("-o {}")
+        self.directives = FormattedParameter("-O {}")
+        self.task_offset = FormattedParameter("-Q {}")
+        self.segment_count = FormattedParameter("-s {}")
+        self.transfer_size = FormattedParameter("-t {}")
+        self.max_duration = FormattedParameter("-T {}")
 
-        """
+        # Module DAOS
+        #   Required arguments
+        #       --daos.pool=STRING            pool uuid
+        #       --daos.svcl=STRING            pool SVCL
+        #       --daos.cont=STRING            container uuid
+        #   Flags
+        #       --daos.destroy                Destroy Container
+        #   Optional arguments
+        #       --daos.group=STRING           server group
+        #       --daos.chunk_size=1048576     chunk size
+        #       --daos.oclass=STRING          object class
+        self.daos_pool = FormattedParameter("--daos.pool {}")
+        self.daos_svcl = FormattedParameter("--daos.svcl {}")
+        self.daos_cont = FormattedParameter("--daos.cont {}")
+        self.daos_destroy = FormattedParameter("--daos.destroy", True)
+        self.daos_group = FormattedParameter("--daos.group {}")
+        self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
+        self.daos_oclass = FormattedParameter("--daos.oclass {}")
+
+    def get_param_names(self):
+        """Get a sorted list of the defined IorCommand parameters."""
         # Sort the IOR parameter names to generate consistent ior commands
-        all_param_names = [name for name in sorted(self.__dict__.keys())]
+        all_param_names = super(IorCommand, self).get_param_names()
 
         # List all of the common ior params first followed by any daos-specific
         # params (except when using MPIIO).
@@ -145,31 +123,22 @@ class IorCommand(object):
             param_names.extend(
                 [name for name in all_param_names if "daos" in name])
 
-        # Join all the IOR parameters that have been assigned a value to create
-        # the IOR command string
-        params = []
-        for value_str in [str(getattr(self, name)) for name in param_names]:
-            if value_str != "":
-                params.append(value_str)
-        return " ".join(["ior"] + params)
+        return param_names
 
-    def set_params(self, test, path="/run/ior/*"):
-        """Set values for all of the ior command params using a yaml file.
+    def get_params(self, test, path="/run/ior/*"):
+        """Get values for all of the ior command params using a yaml file.
 
-        Sets the IorParam object's value to a yaml key that matches the
-        IoRCommand's attribute name.  For example, the self.block_size.value
-        will be set to the value in the yaml file with the key 'block_size'.
-        If no key matches are found in the yaml file the IorParam object will
-        be set to its defult value.
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.block_size.value will be set to the value in the yaml
+        file with the key 'block_size'.
 
         Args:
             test (Test): avocado Test object
             path (str, optional): yaml namespace. Defaults to "/run/ior/*".
 
         """
-        for name, ior_param in self.__dict__.items():
-            if isinstance(ior_param, IorParam):
-                ior_param.set_yaml_value(name, test, path)
+        super(IorCommand, self).get_params(test, path)
 
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
@@ -182,9 +151,10 @@ class IorCommand(object):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        self.daos_group.update(group, display)
+        self.daos_group.update(group, "daos_group" if display else None)
         self.daos_cont.update(
-            cont_uuid if cont_uuid else uuid.uuid4(), display)
+            cont_uuid if cont_uuid else uuid.uuid4(),
+            "daos_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the IOR parameters that are based on a DAOS pool.
@@ -193,7 +163,8 @@ class IorCommand(object):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.daos_pool.update(pool.get_uuid_str(), display)
+        self.daos_pool.update(
+            pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
@@ -207,7 +178,7 @@ class IorCommand(object):
             [str(item) for item in [
                 int(pool.svc.rl_ranks[index])
                 for index in range(pool.svc.rl_nr)]])
-        self.daos_svcl.update(svcl, display)
+        self.daos_svcl.update(svcl, "daos_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
