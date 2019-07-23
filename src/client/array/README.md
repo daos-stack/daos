@@ -9,13 +9,11 @@ punch).
 
 The Array representation over the DAOS KV API is done with integer typed DKeys,
 where each DKey holds chunk_size records. Each DKey has 1 AKey with a NULL value
-that holds the user array data in an array type extent. The only exception is
-the first DKey (which is 0) that holds a special AKey to hold the array
-metadata:
+that holds the user array data in an array type extent. The first DKey (which is
+0) does not hold any user data, but only the array metadata:
 
 ~~~~~~
 DKey: 0
-AKey: "daos_array_metadata"
 Single Value: 3 uint64_t
        [0] = magic value (0xdaca55a9daca55a9)
        [1] = array cell size
@@ -26,13 +24,13 @@ To illustrate the array mapping, suppose we have a logical array of 10 elements
 and chunk size being 3. The DAOS KV representation would be:
 
 ~~~~~~
-DKey: 0
-Array records: 0, 1, 2
 DKey: 1
-Array records: 3, 4, 5
+Array records: 0, 1, 2
 DKey: 2
-Array records: 6, 7, 8
+Array records: 3, 4, 5
 DKey: 3
+Array records: 6, 7, 8
+DKey: 4
 Array records: 9
 ~~~~~~
 
