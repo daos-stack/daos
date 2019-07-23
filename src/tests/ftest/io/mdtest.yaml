@@ -1,15 +1,13 @@
 hosts:
     test_servers:
-        - boro-64
-        - boro-60
-        - boro-61
-        - boro-62
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
     test_clients:
-        - boro-8
-        - boro-61
-        - boro-64
-#        - boro-H
-timeout: 240
+        - boro-E
+        - boro-F
+timeout: 600
 server_config:
     name: daos_server
 pool:
@@ -23,27 +21,17 @@ pool:
     createsvc:
         svcn: 1
 mdtest:
-    client_processes: !mux
-        np_1:
-            np: 1
+    client_processes:
         np_8:
             np: 8
     api: 'DFS'
-    diff_flags: !mux
-        flags_ssf:
-            flags: "--dfs.destroy"
-        flags_fpp:
-            flags: "-u --dfs.destroy"
-    num_of_files_dir: !mux
-        num_100:
-            num_of_tasks: 100
-    test_dir: /
-    iteration: 3
+    test_dir: "/"
+    iteration: 1
     data: !mux
-        zero_bytes:
+        zero:
             write_bytes: 0
             read_bytes: 0
-        4K_bytes:
+        4K:
             write_bytes: 4000
             read_bytes: 4000
     directory_depth: !mux
@@ -51,5 +39,18 @@ mdtest:
             depth: 0
         depth_5:
             depth: 5
+    branch: !mux
+        zero:
+            branching_factor: 1
+            num_of_tasks: 10000
+            diff_flags: !mux
+                flags_ssf:
+                    flags: "--dfs.destroy"
+                flags_fpp:
+                    flags: "-u --dfs.destroy"
+        two:
+            branching_factor: 2
+            items: 10
+            flags: "--dfs.destroy"
     dfs_cont: "`uuidgen`"
 

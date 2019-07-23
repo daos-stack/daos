@@ -163,7 +163,7 @@ class MdtestCommand(object):
             "CRT_ATTACH_INFO_PATH": attach_info_path,
             "MPI_LIB": "",
             "DAOS_SINGLETON_CLI": 1,
-            "DAOS_IO_MODE": 1,
+#            "DAOS_IO_MODE": 1,
         }
         export_cmd = [
             "export {}={}".format(key, val) for key, val in env.items()]
