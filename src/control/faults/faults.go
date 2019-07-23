@@ -1,3 +1,26 @@
+//
+// (C) Copyright 2018-2019 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
 package faults
 
 import (
@@ -7,23 +30,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Resolution represents a potential fault resolution.
-type Resolution string
-
 const (
 	// ResolutionEmpty is equivalent to an empty string.
-	ResolutionEmpty = Resolution("")
+	ResolutionEmpty = ""
 	// ResolutionUnknown indicates that there is no known
 	// resolution for the fault.
-	ResolutionUnknown = Resolution("no known resolution")
+	ResolutionUnknown = "no known resolution"
 	// ResolutionNone indicates that the fault cannot be
 	// resolved.
-	ResolutionNone = Resolution("none")
+	ResolutionNone = "none"
 )
-
-func (r Resolution) String() string {
-	return string(r)
-}
 
 const (
 	UnknownDomainStr      = "unknown"
@@ -44,10 +60,22 @@ var (
 // It implements the error interface and can be used
 // interchangeably with regular "dumb" errors.
 type Fault struct {
-	Domain      string
-	Code        Code
+	// Domain indicates the group or family for the fault
+	// (e.g. storage, network, etc.) It is used as a prefix
+	// when displaying the fault.
+	Domain string
+	// Code is the unique numeric identifier for known faults.
+	Code Code
+	// Description is the main description of the fault. It usually
+	// includes the reason for the fault, and therefore it is not
+	// necessary to display both Description and Reason.
 	Description string
-	Resolution  Resolution
+	// Reason is a short (single sentence) description of the
+	// fault, to be displayed where brevity is preferred.
+	Reason string
+	// Resolution is used to suggest possible solutions for
+	// the fault, if appropriate.
+	Resolution string
 }
 
 func sanitizeDomain(inDomain string) (outDomain string) {
