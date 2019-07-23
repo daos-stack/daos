@@ -942,3 +942,77 @@ void csum_invalid_input_tests(void **state)
 	free(read_data_buf);
 	free(csum_buf_1);
 }
+
+/* Inject fault on the update and fetch.
+* The update will initialize checksum value to zero.
+* Fetch operation will return random values in checksum field.
+* Test will compare the update and fetch output for pass/fail
+*/
+void
+csum_fault_injection_multiple_extents_tests(void **state)
+{
+	int rc;
+	int i;
+
+	/* Setup Test */
+	struct csum_test_params params;
+
+	params.total_records = 1024 * 1024 * 64;
+	params.record_bytes = 1;
+	params.csum_bytes = 8; /* CRC64? */
+	params.csum_chunk_records = 1024 * 16; /* 16K */
+	params.use_rand_csum = true;
+	struct csum_test test;
+
+	csum_test_setup(&test, state, &params);
+
+	/* extent counts for update and fetch. The extents will span the same
+	 * amount of data, the extents themselves will be of different lengths
+	 */
+	const int END = 0;
+	const int table[][2] = {
+	/*	update, fetch  */
+		{1,	1},
+		{1,	4},
+		{2,	4},
+		{4,	4},
+		{4,	1},
+		{4,	2},
+		{END,	END}
+	};
+
+	for (i = 0; table[i][0] != END; i++) {
+		int update_extents = table[i][0];
+		int fetch_extents = table[i][1];
+
+		printf("Update Extents: %d, Fetch Extents: %d\n",
+		       update_extents, fetch_extents);
+
+		uint32_t csums_count_total, csum_count_per_extent, csum_len;
+
+		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ONCE);
+		rc = update(&test, update_extents, i);
+		if (!SUCCESS(rc))
+			fail_msg("Error updating extent with csum: %s\n",
+				 d_errstr(rc));
+
+		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ONCE);
+		rc = fetch(&test, fetch_extents, &csum_count_per_extent,
+			   &csum_len, &csums_count_total, i);
+		if (!SUCCESS(rc))
+			fail_msg("Error fetching extent with csum: %s\n",
+				 d_errstr(rc));
+		daos_fail_loc_set(0);
+
+		/* Verify */
+		assert_int_equal(test.csum_bytes, csum_len);
+		assert_int_equal(get_csums_per_extent(&test, fetch_extents),
+				 csum_count_per_extent);
+		assert_int_equal(get_csum_total(&test, fetch_extents),
+				csums_count_total);
+		assert_memory_not_equal(test.update_csum_buf,
+					test.fetch_csum_buf,
+					test.csum_buf_len);
+	}
+	csum_test_teardown(&test);
+}

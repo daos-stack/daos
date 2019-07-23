@@ -394,8 +394,21 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			void *csum_ptr = daos_csum_from_offset(csum,
 				(uint32_t) ((lo - recx->rx_idx) * rsize));
 
-			memcpy(csum_ptr, ent->en_csum.cs_csum,
-			       csum_nr * ent->en_csum.cs_len);
+			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL)) {
+				void *fault_ptr;
+
+				D_ALLOC_ARRAY(fault_ptr,
+					csum_nr * ent->en_csum.cs_len);
+				memset(fault_ptr, 3,
+					csum_nr * ent->en_csum.cs_len);
+				memcpy(csum_ptr, fault_ptr,
+					csum_nr * ent->en_csum.cs_len);
+				D_FREE(fault_ptr);
+			} else {
+				memcpy(csum_ptr, ent->en_csum.cs_csum,
+					csum_nr * ent->en_csum.cs_len);
+			}
+
 			csum_copied += csum_nr * ent->en_csum.cs_len;
 
 			csum->cs_nr += csum_nr;
@@ -753,8 +766,16 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
-	if (daos_csum_isvalid(iod_csum))
-		ent.ei_csum = *iod_csum;
+
+	if (daos_csum_isvalid(iod_csum)) {
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
+			ent.ei_csum = *iod_csum;
+			/* Zero the checksum field */
+			memset(ent.ei_csum.cs_csum, 0, sizeof(uint8_t));
+		} else {
+			ent.ei_csum = *iod_csum;
+		}
+	}
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;

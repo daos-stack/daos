@@ -2416,6 +2416,8 @@ static const struct CMUnitTest io_tests[] = {
 		evt_csum_helper_functions_tests, NULL, NULL},
 	{ "VOS307: Some input validation",
 		csum_invalid_input_tests, NULL, NULL},
+	{ "VOS308: Checksum Fault injection test",
+		csum_fault_injection_multiple_extents_tests, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
