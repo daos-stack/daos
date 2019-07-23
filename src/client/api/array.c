@@ -21,16 +21,16 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_m
+ * This file is part of daos
  *
- * src/addons/daos_array.c
+ * src/client/api/daos_array.c
  */
-#define D_LOGFAC	DD_FAC(addons)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>
-#include <daos/addons.h>
-#include <daos_addons.h>
+#include <daos/array.h>
+#include <daos_array.h>
 
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
@@ -41,7 +41,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 	tse_task_t		*task;
 	int			 rc;
 
-	rc = dc_task_create(dac_array_create, NULL, ev, &task);
+	rc = dc_task_create(dc_array_create, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -65,7 +65,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 	tse_task_t		*task;
 	int			 rc;
 
-	rc = dc_task_create(dac_array_open, NULL, ev, &task);
+	rc = dc_task_create(dc_array_open, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -87,14 +87,14 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 int
 daos_array_local2global(daos_handle_t oh, d_iov_t *glob)
 {
-	return dac_array_local2global(oh, glob);
+	return dc_array_local2global(oh, glob);
 }
 
 int
 daos_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 			daos_handle_t *oh)
 {
-	return dac_array_global2local(coh, glob, mode, oh);
+	return dc_array_global2local(coh, glob, mode, oh);
 }
 
 int
@@ -104,7 +104,7 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev)
 	tse_task_t		*task;
 	int			 rc;
 
-	rc = dc_task_create(dac_array_close, NULL, ev, &task);
+	rc = dc_task_create(dc_array_close, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -121,7 +121,7 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
 	tse_task_t		*task;
 	int			 rc;
 
-	rc = dc_task_create(dac_array_destroy, NULL, ev, &task);
+	rc = dc_task_create(dc_array_destroy, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -141,7 +141,7 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
 	tse_task_t	*task;
 	int		 rc;
 
-	rc = dc_task_create(dac_array_read, NULL, ev, &task);
+	rc = dc_task_create(dc_array_read, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -164,7 +164,7 @@ daos_array_write(daos_handle_t oh, daos_handle_t th,
 	tse_task_t	*task;
 	int		 rc;
 
-	rc = dc_task_create(dac_array_write, NULL, ev, &task);
+	rc = dc_task_create(dc_array_write, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -186,7 +186,7 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th,
 	tse_task_t	*task;
 	int		 rc;
 
-	rc = dc_task_create(dac_array_punch, NULL, ev, &task);
+	rc = dc_task_create(dc_array_punch, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -208,7 +208,7 @@ daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
 	tse_task_t		*task;
 	int			 rc;
 
-	rc = dc_task_create(dac_array_get_size, NULL, ev, &task);
+	rc = dc_task_create(dc_array_get_size, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -228,7 +228,7 @@ daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
 	tse_task_t		*task;
 	int			 rc;
 
-	rc = dc_task_create(dac_array_set_size, NULL, ev, &task);
+	rc = dc_task_create(dc_array_set_size, NULL, ev, &task);
 	if (rc)
 		return rc;
 

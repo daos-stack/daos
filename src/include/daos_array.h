@@ -23,191 +23,18 @@
 /**
  * \file
  *
- * DAOS addons
+ * DAOS Array
  *
- * The DAOS addons include APIs that are built on top of the existing DAOS
- * API. No internal library functionality is used. The addons include a
- * simplified DAOS object API and a DAOS Array object abstraction on top of the
- * DAOS Key-Array object.
+ * The DAOS Array API provides a 1-D array implementation over the DAOS object
+ * data model.
  */
 
-#ifndef __DAOS_ADDONS_H__
-#define __DAOS_ADDONS_H__
+#ifndef __DAOS_ARRAY_H__
+#define __DAOS_ARRAY_H__
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
-/**
- * Insert or update a single object KV pair. The key specified will be mapped to
- * a dkey in DAOS. The object akey will be the same as the dkey. If a value
- * existed before it will be overwritten (punched first if not previously an
- * atomic value) with the new atomic value described by the sgl.
- *
- * \param[in]	oh	Object open handle.
- * \param[in]	th	Transaction handle.
- * \param[in]	key	Key associated with the update operation.
- * \param[in]	size	Size of the buffer to be inserted as an atomic val.
- * \param[in]	buf	Pointer to user buffer of the atomic value.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
-	    daos_size_t size, const void *buf, daos_event_t *ev);
-
-/**
- * Fetch value of a key.
- *
- * \param[in]	oh	Object open handle.
- * \param[in]	th	Transaction handle.
- * \param[in]	key	key associated with the update operation.
- * \param[in,out]
- *		size	[in]: Size of the user buf. if the size is unknown, set
- *			to DAOS_REC_ANY). [out]: The actual size of the value.
- * \param[in]	buf	Pointer to user buffer. If NULL, only size is returned.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
-	    daos_size_t *size, void *buf, daos_event_t *ev);
-
-/**
- * Remove a Key and it's value from the KV store
- *
- * \param[in]	oh	Object open handle.
- * \param[in]	th	Transaction handle.
- * \param[in]	key	Key to be punched/removed.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
-	       daos_event_t *ev);
-
-/**
- * List/enumerate all keys in an object.
- *
- * \param[in]	oh	Object open handle.
- * \param[in]	th	Transaction handle.
- * \param[in,out]
- *		nr	[in]: number of key descriptors in \a kds. [out]: number
- *			of returned key descriptors.
- * \param[in,out]
- *		kds	[in]: preallocated array of \nr key descriptors. [out]:
- *			size of each individual key.
- * \param[in]	sgl	Scatter/gather list to store the dkey list.
- *			All keys are written contiguously, with actual
- *			boundaries that can be calculated using \a kds.
- * \param[in,out]
- *		anchor	Hash anchor for the next call, it should be set to
- *			zeroes for the first call, it should not be changed
- *			by caller between calls.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-	     daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
-	     daos_event_t *ev);
-
-typedef struct {
-	daos_key_t	*ioa_dkey;
-	unsigned int	ioa_nr;
-	daos_iod_t	*ioa_iods;
-	d_sg_list_t	*ioa_sgls;
-	daos_iom_t	*ioa_maps;
-} daos_dkey_io_t;
-
-/**
- * Fetch Multiple Dkeys in a single call. Behaves the same as daos_obj_fetch but
- * for multiple dkeys.
- *
- * \param[in]	oh	Object open handle.
- * \param[in]	th	Transaction handle.
- * \param[in]	nr	Number of dkeys in \a io_array.
- * \param[in,out]
- *		io_array
- *			Array of io descriptors for all dkeys, which describes
- *			another array of iods for akeys within each dkey.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_obj_fetch_multi(daos_handle_t oh, daos_handle_t th, unsigned int nr,
-		     daos_dkey_io_t *io_array, daos_event_t *ev);
-
-/**
- * Update/Insert/Punch Multiple Dkeys in a single call. Behaves the same as
- * daos_obj_fetch but for multiple dkeys.
- *
- * \param[in]	oh	Object open handle.
- * \param[in]	th	Transaction handle.
- * \param[in]	nr	Number of dkeys in \a io_array.
- * \param[in]	io_array
- *			Array of io descriptors for all dkeys, which describes
- *			another array of iods for akeys within each dkey.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-daos_obj_update_multi(daos_handle_t oh, daos_handle_t th, unsigned int nr,
-		      daos_dkey_io_t *io_array, daos_event_t *ev);
 
 /** Range of contiguous records */
 typedef struct {
@@ -248,12 +75,10 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
 	static daos_ofeat_t	feat;
 	uint64_t		hdr;
 
-	feat = DAOS_OF_DKEY_UINT64;
+	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
 
 	if (add_attr)
 		feat = feat | DAOS_OF_ARRAY;
-	else
-		feat = feat | DAOS_OF_KV_FLAT;
 
 	/* TODO: add check at here, it should return error if user specified
 	 * bits reserved by DAOS
@@ -585,4 +410,4 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 }
 #endif
 
-#endif /* __DAOS_ADDONS_H__ */
+#endif /* __DAOS_ARRAY_H__ */

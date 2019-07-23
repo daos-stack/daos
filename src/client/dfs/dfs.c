@@ -33,7 +33,7 @@
 
 #include "daos_types.h"
 #include "daos.h"
-#include "daos_addons.h"
+#include "daos_array.h"
 #include "daos_fs.h"
 #include "daos_security.h"
 
@@ -245,7 +245,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64;
+		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
 	daos_obj_generate_id(oid, feat, oclass, 0);

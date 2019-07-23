@@ -108,19 +108,3 @@ class UnitTestWithoutServers(Test):
         :avocado: tags=all,unittest,pr,tiny,hw,vos_tests
         """
         unittest_runner(self, "vos_tests")
-
-class UnittestWithServers(TestWithServers):
-    """
-    Test Class Description: Avocado Unit Test class for tests which
-                            need servers.
-    :avocado: recursive
-    """
-    def test_daos_addons(self):
-        """
-        Jira ID: DAOS-2326
-        Test Description: Test daos_addons unittest.
-        Use Case: This tests Daos Addons Array unit tests
-                  and Daos Addons HL tests.
-        :avocado: tags=all,unittest,pr,tiny,hw,daos_addons_test
-        """
-        unittest_runner(self, "daos_addons_test")
