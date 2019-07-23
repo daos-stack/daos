@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"strings"
 
 	"github.com/inhies/go-bytesize"
@@ -144,19 +145,19 @@ func calcStorage(scmSize string, nvmeSize string) (
 
 // formatNameGroup converts system names to principal and if both user and group
 // are unspecified, takes effective user name and that user's primary group.
-func formatNameGroup(ext common.UserExt, usr string, grp string) (string, string, error) {
+func formatNameGroup(usr string, grp string) (string, string, error) {
 	if usr == "" && grp == "" {
-		eUsr, err := ext.Current()
+		eUsr, err := user.Current()
 		if err != nil {
 			return "", "", err
 		}
 
-		eGrp, err := ext.LookupGroupID(eUsr.GID())
+		eGrp, err := user.LookupGroupId(eUsr.Gid)
 		if err != nil {
 			return "", "", err
 		}
 
-		usr, grp = eUsr.Username(), eGrp.Name
+		usr, grp = eUsr.Username, eGrp.Name
 	}
 
 	if usr != "" && !strings.Contains(usr, "@") {
@@ -190,7 +191,7 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 			maxNumSvcReps, numSvcReps)
 	}
 
-	usr, grp, err := formatNameGroup(ext, userName, groupName)
+	usr, grp, err := formatNameGroup(userName, groupName)
 	if err != nil {
 		return errors.WithMessage(err, "formatting user/group strings")
 	}

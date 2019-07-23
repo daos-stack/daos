@@ -36,6 +36,47 @@ import (
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
+// Mocks
+
+type mockUser struct {
+	username   string
+	groupIDs   []uint32
+	groupIDErr error
+}
+
+func (u *mockUser) Username() string {
+	return u.username
+}
+
+func (u *mockUser) GroupIDs() ([]uint32, error) {
+	return u.groupIDs, u.groupIDErr
+}
+
+type mockExt struct {
+	lookupUserIDUid        uint32
+	lookupUserIDResult     User
+	lookupUserIDErr        error
+	lookupGroupIDGid       uint32
+	lookupGroupIDResults   []*user.Group
+	lookupGroupIDCallCount uint32
+	lookupGroupIDErr       error
+}
+
+func (e *mockExt) LookupUserID(uid uint32) (User, error) {
+	e.lookupUserIDUid = uid
+	return e.lookupUserIDResult, e.lookupUserIDErr
+}
+
+func (e *mockExt) LookupGroupID(gid uint32) (*user.Group, error) {
+	e.lookupGroupIDGid = gid
+	var result *user.Group
+	if len(e.lookupGroupIDResults) > 0 {
+		result = e.lookupGroupIDResults[e.lookupGroupIDCallCount]
+	}
+	e.lookupGroupIDCallCount++
+	return result, e.lookupGroupIDErr
+}
+
 // Helpers for the unit tests below
 
 func expectAuthSysErrorForToken(t *testing.T, badToken *auth.Token, expectedErrorMessage string) {
@@ -115,7 +156,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 // AuthSysRequestFromCreds tests
 
 func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
-	result, err := AuthSysRequestFromCreds(&MockUsers{}, nil)
+	result, err := AuthSysRequestFromCreds(&mockExt{}, nil)
 
 	if result != nil {
 		t.Error("Expected a nil request")
@@ -134,7 +175,7 @@ func getTestCreds(uid uint32, gid uint32) *DomainInfo {
 }
 
 func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
-	ext := &MockUsers{}
+	ext := &mockExt{}
 	uid := uint32(15)
 	gid := uint32(2001)
 	gids := []uint32{1, 2, 3}
@@ -143,18 +184,18 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 	expectedGroupList := []string{"group1", "group2", "group3"}
 	creds := getTestCreds(uid, gid)
 
-	ext.LookupUserIDResult = &MockUser{
-		Usrname: expectedUser,
-		GrpIDs:  gids,
+	ext.lookupUserIDResult = &mockUser{
+		username: expectedUser,
+		groupIDs: gids,
 	}
-	ext.LookupGroupIDResults = []*user.Group{
+	ext.lookupGroupIDResults = []*user.Group{
 		&user.Group{
 			Name: expectedGroup,
 		},
 	}
 
 	for _, grp := range expectedGroupList {
-		ext.LookupGroupIDResults = append(ext.LookupGroupIDResults,
+		ext.lookupGroupIDResults = append(ext.lookupGroupIDResults,
 			&user.Group{
 				Name: grp,
 			})
@@ -201,13 +242,13 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 }
 
 func TestAuthSysRequestFromCreds_UidLookupFails(t *testing.T) {
-	ext := &MockUsers{}
+	ext := &mockExt{}
 	uid := uint32(15)
 	creds := getTestCreds(uid, 500)
 
-	ext.LookupUserIDErr = errors.New("LookupUserID test error")
+	ext.lookupUserIDErr = errors.New("LookupUserID test error")
 	expectedErr := fmt.Errorf("Failed to lookup uid %v: %v", uid,
-		ext.LookupUserIDErr)
+		ext.lookupUserIDErr)
 
 	result, err := AuthSysRequestFromCreds(ext, creds)
 
@@ -225,18 +266,18 @@ func TestAuthSysRequestFromCreds_UidLookupFails(t *testing.T) {
 }
 
 func TestAuthSysRequestFromCreds_GidLookupFails(t *testing.T) {
-	ext := &MockUsers{}
+	ext := &mockExt{}
 	gid := uint32(205)
 	creds := getTestCreds(12, gid)
 
-	ext.LookupUserIDResult = &MockUser{
-		Usrname: "user@",
-		GrpIDs:  []uint32{1, 2},
+	ext.lookupUserIDResult = &mockUser{
+		username: "user@",
+		groupIDs: []uint32{1, 2},
 	}
 
-	ext.LookupGroupIDErr = errors.New("LookupGroupID test error")
+	ext.lookupGroupIDErr = errors.New("LookupGroupID test error")
 	expectedErr := fmt.Errorf("Failed to lookup gid %v: %v", gid,
-		ext.LookupGroupIDErr)
+		ext.lookupGroupIDErr)
 
 	result, err := AuthSysRequestFromCreds(ext, creds)
 
@@ -254,25 +295,25 @@ func TestAuthSysRequestFromCreds_GidLookupFails(t *testing.T) {
 }
 
 func TestAuthSysRequestFromCreds_GroupIDListFails(t *testing.T) {
-	ext := &MockUsers{}
+	ext := &mockExt{}
 	creds := getTestCreds(12, 15)
-	testUser := &MockUser{
-		Usrname: "user@",
-		GrpIDs:  []uint32{1, 2},
+	testUser := &mockUser{
+		username: "user@",
+		groupIDs: []uint32{1, 2},
 	}
 
-	ext.LookupUserIDResult = testUser
+	ext.lookupUserIDResult = testUser
 
-	ext.LookupGroupIDResults = []*user.Group{
+	ext.lookupGroupIDResults = []*user.Group{
 		&user.Group{
 			Name: "group@",
 		},
 	}
 
-	testUser.GrpIDErr = errors.New("GroupIDs test error")
+	testUser.groupIDErr = errors.New("GroupIDs test error")
 	expectedErr := fmt.Errorf("Failed to get group IDs for user %v: %v",
-		testUser.Usrname,
-		testUser.GrpIDErr)
+		testUser.username,
+		testUser.groupIDErr)
 
 	result, err := AuthSysRequestFromCreds(ext, creds)
 

@@ -23,11 +23,7 @@
 
 package common
 
-import (
-	"os/user"
-
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-)
+import pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 
 // MockFeaturePB is a mock protobuf Feature message used in tests for multiple
 // packages.
@@ -98,54 +94,4 @@ func MockMountPB() *pb.ScmMount {
 // MockCheckMountOk mocks CheckMount and always returns nil error.
 func MockCheckMountOk(path string) error {
 	return nil
-}
-
-// Mocking Users and Groups
-
-// MockUser mimics the user.User type
-type MockUser struct {
-	Usrname  string
-	GrpIDs   []uint32
-	GrpIDErr error
-}
-
-func (u *MockUser) Username() string {
-	return u.Usrname
-}
-
-func (u *MockUser) GroupIDs() ([]uint32, error) {
-	return u.GrpIDs, u.GrpIDErr
-}
-
-func (u *MockUser) GID() uint32 {
-	return u.GrpIDs[0]
-}
-
-type MockUsers struct {
-	lookupUserIDUid        uint32
-	LookupUserIDResult     User
-	LookupUserIDErr        error
-	lookupGroupIDGid       uint32
-	LookupGroupIDResults   []*user.Group
-	lookupGroupIDCallCount uint32
-	LookupGroupIDErr       error
-}
-
-func (m *MockUsers) LookupUserID(uid uint32) (User, error) {
-	m.lookupUserIDUid = uid
-	return m.LookupUserIDResult, m.LookupUserIDErr
-}
-
-func (m *MockUsers) LookupGroupID(gid uint32) (*user.Group, error) {
-	m.lookupGroupIDGid = gid
-	var result *user.Group
-	if len(m.LookupGroupIDResults) > 0 {
-		result = m.LookupGroupIDResults[m.lookupGroupIDCallCount]
-	}
-	m.lookupGroupIDCallCount++
-	return result, m.LookupGroupIDErr
-}
-
-func (m *MockUsers) Current() (User, error) {
-	return m.LookupUserIDResult, m.LookupUserIDErr
 }
