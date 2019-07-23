@@ -140,7 +140,7 @@ func Main() error {
 
 	if needsRespawn {
 		// Chown required files and respawn process under new user.
-		if err := changeFileOwnership(&config); err != nil {
+		if err := changeFileOwnership(config); err != nil {
 			return errors.WithMessage(err, "changing file ownership")
 		}
 
