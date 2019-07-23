@@ -24,7 +24,7 @@
 from __future__ import print_function
 
 from apricot import TestWithServers
-from daos_api import DaosApiError 
+from daos_api import DaosApiError
 from general_utils import TestPool, get_container
 from conversion import c_uuid_to_str
 import ctypes
@@ -121,7 +121,7 @@ class EvictTests(TestWithServers):
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
             self.log.info("Check if pool handle still exist")
-            if (int(self.pool.pool.handle.value) == 0):
+            if int(self.pool.pool.handle.value) == 0:
                 self.log.error(
                     "Pool handle was removed when evicting pool with %s",
                     test_param)
@@ -141,10 +141,10 @@ class EvictTests(TestWithServers):
         else:
             self.pool.pool.set_uuid_str(self.pool.uuid)
         # check if pool handle still exists
-        if (int(self.pool.pool.handle.value) == 0):
+        if int(self.pool.pool.handle.value) == 0:
             self.log.error(
                 "Pool handle was removed when doing an evict with bad param")
-        if (self.pool.check_files(self.hostlist_servers)):
+        if self.pool.check_files(self.hostlist_servers):
             self.log.error("Valid pool files were not detected on server after"
                            " a pool evict with %s failed to raise an "
                            "exception", test_param)
