@@ -118,13 +118,20 @@ func TestPoolCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eUsr, err := user.Current()
-	if err != nil {
-		t.Fatal(err)
+
+	ext := &MockUsers{}
+	gids := []uint32{1, 2, 3}
+	expectedUser := "myuser"
+	expectedGroup := "mygroup"
+
+	ext.LookupUserIDResult = &MockUser{
+		Usrname: expectedUser,
+		GrpIDs:  gids,
 	}
-	eGrp, err := user.LookupGroupId(eUsr.Gid)
-	if err != nil {
-		t.Fatal(err)
+	ext.LookupGroupIDResults = []*user.Group{
+		&user.Group{
+			Name: expectedGroup,
+		},
 	}
 
 	runCmdTests(t, []cmdTest{
@@ -144,8 +151,8 @@ func TestPoolCommands(t *testing.T) {
 					Scmbytes:   uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
-					User:       eUsr.Username + "@",
-					Usergroup:  eGrp.Name + "@",
+					User:       expectedUser + "@",
+					Usergroup:  expectedGroup + "@",
 				}),
 			}, " "),
 			nil,

@@ -26,25 +26,13 @@ package security
 import (
 	"crypto/sha512"
 	"os"
-	"os/user"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
-
-// User is an interface wrapping a representation of a specific system user
-type User interface {
-	Username() string
-	GroupIDs() ([]uint32, error)
-}
-
-// UserExt is an interface that wraps system user-related external functions
-type UserExt interface {
-	LookupUserID(uid uint32) (User, error)
-	LookupGroupID(gid uint32) (*user.Group, error)
-}
 
 // HashFromToken will return a SHA512 hash of the token data
 func HashFromToken(token *auth.Token) ([]byte, error) {
@@ -68,7 +56,7 @@ func sysNameToPrincipalName(name string) string {
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the gRPC handshake and creates an AuthSys security request to obtain
 // a handle from the management service.
-func AuthSysRequestFromCreds(ext UserExt, creds *DomainInfo) (*auth.Credential, error) {
+func AuthSysRequestFromCreds(ext common.UserExt, creds *DomainInfo) (*auth.Credential, error) {
 	if creds == nil {
 		return nil, errors.New("No credentials supplied")
 	}
