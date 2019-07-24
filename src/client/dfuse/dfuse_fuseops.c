@@ -447,6 +447,35 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
+void
+df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!inode->ie_dfs->dfs_ops->listxattr) {
+		D_GOTO(decref, rc = ENOTSUP);
+	}
+	inode->ie_dfs->dfs_ops->listxattr(req, inode, size);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
 static void
 dfuse_fuse_destroy(void *userdata)
 {
@@ -468,6 +497,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.symlink	= dfuse_cb_symlink,
 	.setxattr	= dfuse_cb_setxattr,
 	.getxattr	= dfuse_cb_getxattr,
+	.listxattr	= dfuse_cb_listxattr,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
@@ -502,6 +532,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->symlink	= df_ll_symlink;
 	fuse_ops->setxattr	= df_ll_setxattr;
 	fuse_ops->getxattr	= df_ll_getxattr;
+	fuse_ops->listxattr	= df_ll_listxattr;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;

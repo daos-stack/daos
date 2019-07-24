@@ -128,6 +128,9 @@ struct dfuse_inode_ops {
 			 int flags);
 	void (*getxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			 const char *name, size_t size);
+	void (*listxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			  size_t size);
+
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -508,6 +511,9 @@ dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
 void
 dfuse_cb_getxattr(fuse_req_t, struct dfuse_inode_entry *,
 		  const char *, size_t);
+
+void
+dfuse_cb_listxattr(fuse_req_t, struct dfuse_inode_entry *, size_t);
 
 /* Return inode information to fuse
  *
