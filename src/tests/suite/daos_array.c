@@ -964,26 +964,26 @@ strided_array(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
-static const struct CMUnitTest array_io_tests[] = {
-	{"Array I/O: create/open/close (blocking)",
+static const struct CMUnitTest array_api_tests[] = {
+	{"Array API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
-	{"Array I/O: small/simple array IO (blocking)",
+	{"Array API: small/simple array IO (blocking)",
 	 small_io, async_disable, NULL},
-	{"Array I/O: Contiguous memory and array (blocking)",
+	{"Array API: Contiguous memory and array (blocking)",
 	 contig_mem_contig_arr_io, async_disable, NULL},
-	{"Array I/O: Contiguous memory and array (non-blocking)",
+	{"Array API: Contiguous memory and array (non-blocking)",
 	 contig_mem_contig_arr_io, async_enable, NULL},
-	{"Array I/O: Contiguous memory Strided array (blocking)",
+	{"Array API: Contiguous memory Strided array (blocking)",
 	 contig_mem_str_arr_io, async_disable, NULL},
-	{"Array I/O: Contiguous memory Strided array (non-blocking)",
+	{"Array API: Contiguous memory Strided array (non-blocking)",
 	 contig_mem_str_arr_io, async_enable, NULL},
-	{"Array I/O: Strided memory and array (blocking)",
+	{"Array API: Strided memory and array (blocking)",
 	 str_mem_str_arr_io, async_disable, NULL},
-	{"Array I/O: Strided memory and array (non-blocking)",
+	{"Array API: Strided memory and array (non-blocking)",
 	 str_mem_str_arr_io, async_enable, NULL},
-	{"Array I/O: Read from Empty array & records (blocking)",
+	{"Array API: Read from Empty array & records (blocking)",
 	 read_empty_records, async_disable, NULL},
-	{"Array I/O: strided_array (blocking)",
+	{"Array API: strided_array (blocking)",
 	 strided_array, async_disable, NULL},
 };
 
@@ -999,8 +999,10 @@ run_daos_array_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("Array io tests", array_io_tests,
-					 daos_array_setup, test_teardown);
+	rc = cmocka_run_group_tests_name("DAOS Array API tests",
+					 array_api_tests, daos_array_setup,
+					 test_teardown);
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
