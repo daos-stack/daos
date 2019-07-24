@@ -44,33 +44,87 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-def clush(hostlist, command, env=None, verbose=True):
-    """Run a command in parallel on a list of nodes using clush.
+def run_task(hosts, command, timeout=None):
+    """Create a task to run a command on each host in parallel.
 
     Args:
-        hostlist (list): list of nodes on which to run the command in parallel
+        hosts (list): list of hosts
         command (str): the command to run in parallel
-        env (dict, optional): dictionary of environment variables to set.
-            Defaults to None.
-        verbose (bool, optional): should the command output be displayed.
-            Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to None.
 
     Returns:
-        CmdResult: a CmdResult object containing the result of the command:
-            .command        command issued
-            .exit_status    return code from the command
-            .stdout         raw stdout (bytes)
-            .stderr         raw stderr (bytes)
-            .duration       duration of the command
-            .interrupted    was the command interrupted
-            .pid            pid of the command
+        Task: a ClusterShell.Task.Task object for the executed command
 
     """
-    nodeset = NodeSet.fromlist(hostlist)
-    clush_command = "clush -w {} -B -S \"{}\"".format(nodeset, command)
-    return process.run(
-        clush_command, env=env, ignore_status=True, shell=True,
-        verbose=verbose, allow_output_check="none")
+    task = task_self()
+    kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    task.run(**kwargs)
+    return task
+
+
+def cluster_cmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
+    """Run a command on each host in parallel and get the return codes.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+        expect_rc (int, optional): exepcted return code. Defaults to 0.
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+
+    """
+    # Run the command on each host in parallel
+    task = run_task(hosts, command, timeout)
+
+    # Report any errors / display output if requested
+    retcode_dict = {}
+    for retcode, rc_nodes in task.iter_retcodes():
+        # Create a NodeSet for this list of nodes
+        nodeset = NodeSet.fromlist(rc_nodes)
+
+        # Include this NodeSet for this return code
+        if retcode not in retcode_dict:
+            retcode_dict[retcode] = NodeSet()
+        retcode_dict[retcode].add(nodeset)
+
+        # Display any errors or requested output
+        if retcode != expect_rc or verbose:
+            msg = "failure running" if retcode != expect_rc else "output from"
+            if len(list(task.iter_buffers(rc_nodes))) == 0:
+                print(
+                    "{}: {} '{}': rc={}".format(
+                        nodeset, msg, command, retcode))
+            else:
+                for output, nodes in task.iter_buffers(rc_nodes):
+                    nodeset = NodeSet.fromlist(nodes)
+                    lines = str(output).splitlines()
+                    output = "rc={}{}".format(
+                        retcode,
+                        ", {}".format(output) if len(lines) < 2 else
+                        "\n  {}".format("\n  ".join(lines)))
+                    print(
+                        "{}: {} '{}': {}".format(
+                            NodeSet.fromlist(nodes), msg, command, output))
+
+    # Report any timeouts
+    if timeout and task.num_timeout() > 0:
+        nodes = task.iter_keys_timeout()
+        print(
+            "{}: timeout detected running '{}' on {}/{} hosts".format(
+                NodeSet.fromlist(nodes),
+                command, task.num_timeout(), len(hosts)))
+        retcode = 255
+        if retcode not in retcode_dict:
+            retcode_dict[retcode] = NodeSet()
+        retcode_dict[retcode].add(NodeSet.fromlist(nodes))
+
+    return retcode_dict
 
 
 def check_file_exists(hosts, filename):
@@ -87,10 +141,7 @@ def check_file_exists(hosts, filename):
 
     """
     missing_file = NodeSet()
-    nodeset = NodeSet.fromlist(hosts)
-
-    task = task_self()
-    task.run("test -e {}".format(filename), nodes=nodeset)
+    task = run_task(hosts, "test -e '{}'".format(filename))
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))

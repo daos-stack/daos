@@ -33,7 +33,7 @@ import errno
 import fcntl
 import re
 
-from general_utils import clush, check_file_exists
+from general_utils import cluster_cmd, check_file_exists
 
 
 class AgentFailed(Exception):
@@ -130,7 +130,7 @@ def stop_agent(sessions, client_list=None):
     """Kill ssh and the agent.
 
     This is temporary; presuming the agent will deamonize at somepoint and can
-    be started killed more appropriately.
+    be started and killed more appropriately.
 
     Args:
         sessions (dict): set of subprocess sessions returned by run_agent()
@@ -146,7 +146,7 @@ def stop_agent(sessions, client_list=None):
         client_list = [socket.gethostname().split('.', 1)[0]]
 
     # Kill the agents processes
-    clush(client_list, "pkill daos_agent", None, False)
+    cluster_cmd(client_list, "pkill daos_agent", False)
 
     # Kill any processes running in the sessions
     for client in sessions:
@@ -161,8 +161,8 @@ def stop_agent(sessions, client_list=None):
     #   2 - Syntax error in the command line.
     #   3 - Fatal error: out of memory etc.
     time.sleep(5)
-    result = clush(client_list, "pgrep 'daos_agent'", None, False)
-    if result.exit_status != 1:
+    result = cluster_cmd(client_list, "pgrep 'daos_agent'", False, expect_rc=1)
+    if len(result) > 1 or 1 not in result:
         raise AgentFailed(
-            "DAOS agent processes detected after attempted stop:\n{}".format(
-                result.stdout))
+            "DAOS agent processes detected after attempted stop on {}".format(
+                ", ".join([str(result[key]) for key in result if key != 1])))

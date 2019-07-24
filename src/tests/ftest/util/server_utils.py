@@ -37,7 +37,7 @@ import errno
 import yaml
 
 from avocado.utils import genio
-from general_utils import clush
+from general_utils import cluster_cmd
 
 SESSIONS = {}
 
@@ -160,14 +160,16 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
 
         # clean the tmpfs on the servers
         print("Cleaning the server tmpfs directories")
-        result = clush(
+        result = cluster_cmd(
             servers,
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
             "xargs -0r rm -rf",
             verbose=False)
-        if result.exit_status != 0:
+        if len(result) > 1 or 0 not in result:
             raise ServerFailed(
-                "Error cleaning tmpfs on servers:\n{}".format(result.stdout))
+                "Error cleaning tmpfs on servers: {}".format(
+                    ", ".join(
+                        [str(result[key]) for key in result if key != 0])))
 
         # pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
@@ -305,12 +307,15 @@ def stop_server(setname=None, hosts=None):
     #   2 - Syntax error in the command line.
     #   3 - Fatal error: out of memory etc.
     time.sleep(5)
-    result = clush(hosts, "pgrep '(daos_server|daos_io_server)'", None, False)
-    if result.exit_status != 1:
-        kill_server(hosts)
+    result = cluster_cmd(
+        hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
+    if len(result) > 1 or 1 not in result:
+        bad_hosts = [
+            node for node in list(result[key]) for key in result if key != 1]
+        kill_server(bad_hosts)
         raise ServerFailed(
-            "DAOS server processes detected after attempted stop:\n{}".format(
-                result.stdout))
+            "DAOS server processes detected after attempted stop on {}".format(
+                ", ".join([str(result[key]) for key in result if key != 1])))
 
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously
@@ -332,4 +337,4 @@ def kill_server(hosts):
         "pkill '(daos_server|daos_io_server)' --signal KILL",
     ]
     # Intentionally ignoring the exit status of the command
-    clush(hosts, "; ".join(kill_cmds), verbose=False)
+    cluster_cmd(hosts, "; ".join(kill_cmds), False)
