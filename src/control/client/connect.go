@@ -69,7 +69,7 @@ func (rm ResultMap) String() string {
 	sort.Strings(servers)
 
 	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, rm[server])
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
 	}
 
 	return buf.String()

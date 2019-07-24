@@ -45,7 +45,7 @@ func (de dmgErr) Error() string {
 const (
 	// use this error type to signal that a
 	// subcommand completed without error
-	cmdSuccess dmgErr = "completed successfully"
+	cmdSuccess dmgErr = "command execution completed"
 )
 
 type (

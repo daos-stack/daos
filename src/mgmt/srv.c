@@ -477,7 +477,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (resp->uuid == NULL) {
 		D_ERROR("failed to allocate buffer");
 		rc = -DER_NOMEM;
-		goto out;
+		goto out_svc;
 	}
 
 	uuid_unparse_lower(pool_uuid, resp->uuid);
@@ -488,7 +488,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (resp->svcreps == NULL) {
 		D_ERROR("failed to allocate buffer");
 		rc = -DER_NOMEM;
-		goto out;
+		goto out_svc;
 	}
 
 	/* Populate the pool service replica ranks string. */
@@ -505,7 +505,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			if (extra == NULL) {
 				D_ERROR("failed to allocate buffer");
 				rc = -DER_NOMEM;
-				goto out;
+				goto out_svc;
 			}
 
 			index = snprintf(extra, buflen, "%s,%u",
@@ -519,6 +519,8 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_DEBUG(DB_MGMT, "%d service replicas: %s\n", svc->rl_nr,
 		resp->svcreps);
 
+out_svc:
+	d_rank_list_free(svc);
 out:
 	resp->status = rc;
 	len = mgmt__create_pool_resp__get_packed_size(resp);
@@ -533,8 +535,6 @@ out:
 	}
 
 	mgmt__create_pool_req__free_unpacked(req, NULL);
-	if (svc)
-		d_rank_list_free(svc);
 
 	/** check for '\0' which is a static allocation from protobuf */
 	if (resp->svcreps && resp->svcreps[0] != '\0')
