@@ -35,6 +35,11 @@
 
 #define NO_FLAGS	    (0)
 
+/* Fault injection */
+#define FAULT_INJECT		1
+#define RESET_FAULT_INJECT	0
+static	int	fault_injection_flag;
+
 /** epoch generator */
 static daos_epoch_t		vts_epoch_gen;
 
@@ -682,6 +687,10 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_nr	= 1;
 
 	/* Act */
+	if (fault_injection_flag == FAULT_INJECT) {
+		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
+		daos_fail_num_set(2);
+	}
 	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
 				NULL, true);
 	if (rc)
@@ -701,15 +710,27 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 				       UPDATE_CSUM_SIZE, csum_count,
 				       UPDATE_BUF_SIZE / csum_count);
 
+	if (fault_injection_flag == FAULT_INJECT) {
+		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
+		daos_fail_num_set(2);
+	}
 	/* Act again */
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
 
 	/* Verify */
-	if (arg->ta_flags & TF_USE_CSUM)
-		assert_memory_equal(expected_csum_buf, actual_csum_buf,
-				    UPDATE_CSUM_SIZE * csum_count);
+	if (arg->ta_flags & TF_USE_CSUM) {
+		if ((DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL)) |
+			(DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))) {
+			assert_memory_not_equal(expected_csum_buf,
+						actual_csum_buf,
+						UPDATE_CSUM_SIZE * csum_count);
+		} else {
+			assert_memory_equal(expected_csum_buf, actual_csum_buf,
+					UPDATE_CSUM_SIZE * csum_count);
+		}
+	}
 
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
@@ -2345,6 +2366,23 @@ io_query_key_negative(void **state)
 	assert_int_equal(rc, -DER_INVAL);
 }
 
+static void
+io_csum_fault_injection_single_value(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc;
+	daos_epoch_t		epoch = gen_rand_epoch();
+
+	fault_injection_flag = FAULT_INJECT;
+	test_args_reset(arg, VPOOL_SIZE);
+	arg->ta_flags = TF_USE_CSUM;
+	rc = io_update_and_fetch_dkey(arg, epoch, epoch);
+	assert_int_equal(rc, 0);
+	fault_injection_flag = RESET_FAULT_INJECT;
+	daos_fail_loc_reset();
+}
+
+
 static const struct CMUnitTest io_tests[] = {
 	{ "VOS201: VOS object IO index",
 		io_oi_test, NULL, NULL},
@@ -2416,8 +2454,10 @@ static const struct CMUnitTest io_tests[] = {
 		evt_csum_helper_functions_tests, NULL, NULL},
 	{ "VOS307: Some input validation",
 		csum_invalid_input_tests, NULL, NULL},
-	{ "VOS308: Checksum Fault injection test",
+	{ "VOS308: Checksum fault injection test : Multiple extents",
 		csum_fault_injection_multiple_extents_tests, NULL, NULL},
+	{ "VOS350: Checksum fault injection test : Single Value",
+		io_csum_fault_injection_single_value, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {

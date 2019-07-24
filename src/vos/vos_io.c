@@ -279,7 +279,29 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_biov	= &biov;
-	rbund.rb_csum	= &iod->iod_csums[0];
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL)) {
+		void	*fault_ptr;
+		uint8_t random_csum;
+
+		/* Get the iod_csum pointer and
+		* manipulate the checksum value
+		* for fault injection.
+		*/
+		rbund.rb_csum	= &iod->iod_csums[0];
+
+		D_ALLOC_ARRAY(fault_ptr, rbund.rb_csum->cs_len);
+		srand(time(NULL));
+		random_csum = (rand() % 8) + 1;
+		memset(fault_ptr, random_csum,
+			rbund.rb_csum->cs_len);
+		memcpy(rbund.rb_csum->cs_csum, fault_ptr,
+			rbund.rb_csum->cs_len);
+		D_FREE(fault_ptr);
+	} else {
+		rbund.rb_csum	= &iod->iod_csums[0];
+	}
+
 	memset(&biov, 0, sizeof(biov));
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
@@ -395,11 +417,14 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 				(uint32_t) ((lo - recx->rx_idx) * rsize));
 
 			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL)) {
-				void *fault_ptr;
+				void	*fault_ptr;
+				uint8_t	random_csum;
 
 				D_ALLOC_ARRAY(fault_ptr,
 					csum_nr * ent->en_csum.cs_len);
-				memset(fault_ptr, 3,
+				srand(time(NULL));
+				random_csum = (rand() % 8) + 1;
+				memset(fault_ptr, random_csum,
 					csum_nr * ent->en_csum.cs_len);
 				memcpy(csum_ptr, fault_ptr,
 					csum_nr * ent->en_csum.cs_len);
@@ -728,10 +753,15 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	biov = iod_update_biov(ioc);
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	if (iod->iod_csums)
-		rbund.rb_csum	= &iod->iod_csums[0];
-	else
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
 		rbund.rb_csum	= &csum;
+	} else {
+		if (iod->iod_csums)
+			rbund.rb_csum	= &iod->iod_csums[0];
+		else
+			rbund.rb_csum	= &csum;
+	}
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
