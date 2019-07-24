@@ -557,7 +557,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	}
 	case S_IFLNK:
-		size = strlen(entry.value);
+		size = strlen(entry.value) + 1;
 		D_FREE(entry.value);
 		break;
 	default:
@@ -2367,7 +2367,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 	if (obj == NULL || !S_ISLNK(obj->mode))
 		return -EINVAL;
 
-	val_size = strlen(obj->value);
+	val_size = strlen(obj->value) + 1;
 	if (*size == 0 || buf == NULL) {
 		*size = val_size;
 		return 0;
@@ -2753,7 +2753,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 {
 	char            *xname = NULL;
 	d_sg_list_t	sgl;
-	d_iov_t	sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
@@ -2827,8 +2827,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 {
 	char            *xname = NULL;
 	daos_handle_t	th = DAOS_TX_NONE;
-	daos_iod_t	iod;
-	daos_key_t	dkey;
+	daos_key_t	dkey, akey;
 	daos_handle_t	oh;
 	int		rc;
 
@@ -2854,19 +2853,10 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
-
 	/** set akey as the xattr name */
-	d_iov_set(&iod.iod_name, xname, strlen(xname));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
-	iod.iod_nr	= 1;
-	iod.iod_recxs	= NULL;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
-	iod.iod_type	= DAOS_IOD_SINGLE;
-	iod.iod_size	= 0;
+	d_iov_set(&akey, xname, strlen(xname));
 
-	/** Punch the xattr */
-	rc = daos_obj_update(oh, th, &dkey, 1, &iod, NULL, NULL);
+	rc = daos_obj_punch_akeys(oh, th, &dkey, 1, &akey, NULL);
 	if (rc) {
 		D_ERROR("Failed to punch extended attribute %s\n", name);
 		D_GOTO(out, rc = -daos_der2errno(rc));
