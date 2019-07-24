@@ -821,6 +821,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			 * just shut down
 			 */
 			if (upds[i].smu_id == self_id) {
+				swim_ctx_unlock(ctx);
 				SWIM_INFO("%lu: self confirmed DEAD "
 					  "(incarnation=%lu)\n", self_id,
 					  upds[i].smu_state.sms_incarnation);
