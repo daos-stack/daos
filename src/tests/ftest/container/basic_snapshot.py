@@ -136,7 +136,7 @@ class BasicSnapshot(Test):
         Verify the snapshot is still available and the contents remain in
         their original state.
 
-        :avocado: tags=all,snap,small,smoke,pr,basicsnap
+        :avocado: tags=snap,basicsnap
         """
 
         try:
