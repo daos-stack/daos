@@ -77,47 +77,47 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 		nil, []DeviceDiscovery{m}, false, config)
 }
 
-func TestPrepScm(t *testing.T) {
+func TestGetState(t *testing.T) {
 	defer ShowLogOnFailure(t)()
 
-	//mPB := MockModulePB()
-	m := MockModule()
-	config := defaultMockConfig(t)
-
 	tests := []struct {
-		desc              string
-		inited            bool
-		ipmctlDiscoverRet error
-		formatted         bool
-		errMsg            string
-		expPmemDevs       []string
+		desc          string
+		errMsg        string
+		notInited     bool
+		showDimmOut   []string
+		showRegionOut []string
+		expState      scmState
+		expPmemDevs   []string
 	}{
 		{
-			inited: true,
+			desc:      "no modules",
+			notInited: true,
+			expState:  noModules,
 		},
 		{
-			inited: false,
+			desc:     "models but no regions",
+			expState: noRegions,
 		},
 	}
 
 	for _, tt := range tests {
-		ss := newMockScmStorage(tt.ipmctlDiscoverRet, []DeviceDiscovery{m},
-			tt.inited, &config)
+		ss := defaultMockScmStorage(&config)
 
-		ss.formatted = tt.formatted
-
-		if tt.inited {
+		if !tt.notInited {
 			// not concerned with response
 			ss.Discover(new(pb.ScanStorageResp))
 		}
 
-		newDevs, err := ss.scm.prep(ss.modules)
+		state, err := ss.scm.getState(ss.modules)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
 		}
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		AssertStringsEqual(t, newDevs, tt.expPmemDevs, tt.desc+": unexpected new devices")
+		AssertEqual(t, state, tt.expState, tt.desc+": unexpected state")
 	}
 }
 

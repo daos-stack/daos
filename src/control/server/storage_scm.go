@@ -26,6 +26,7 @@ package server
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -64,6 +65,7 @@ type PmemDevs []string
 
 // ScmSetup is an interface to configure scm prerequisites via shell tools
 type ScmSetup interface {
+	getState(common.ScmModules) (scmState, error)
 	prep(common.ScmModules) (PmemDevs, error)
 	reset() error
 }
@@ -86,7 +88,7 @@ type scmSetup struct {
 //
 // Any newly created kernel devices will be listed in return value.
 func (s *scmSetup) prep(modules common.ScmModules) (devs PmemDevs, err error) {
-	ss, err := s.getState()
+	ss, err := s.getState(modules)
 	if err != nil {
 		return devs, errors.WithMessage(err, "establish scm state")
 	}
@@ -117,65 +119,61 @@ func (s *scmSetup) reset() error {
 
 type AppConfigProperties map[string]string
 
-func ReadPropertiesFile(filename string) (AppConfigProperties, error) {
-    config := AppConfigProperties{}
+func ReadProperties(lines []string) (AppConfigProperties, error) {
+	config := AppConfigProperties{}
 
-    if len(filename) == 0 {
-        return config, nil
-    }
-    file, err := os.Open(filename)
-    if err != nil {
-        log.Fatal(err)
-        return nil, err
-    }
-    defer file.Close()
+	//	if len(filename) == 0 {
+	//		return config, nil
+	//	}
+	//	lines, err := common.SplitFile(filename)
+	//	if err != nil {
+	//		return nil, err
+	//	}
 
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        line := scanner.Text()
-        if equal := strings.Index(line, "="); equal >= 0 {
-            if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
-                value := ""
-                if len(line) > equal {
-                    value = strings.TrimSpace(line[equal+1:])
-                }
-                config[key] = value
-            }
-        }
-    }
+	for _, line := range lines {
+		if equal := strings.Index(line, "="); equal >= 0 {
+			if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
+				value := ""
+				if len(line) > equal {
+					value = strings.TrimSpace(line[equal+1:])
+				}
+				config[key] = value
+			}
+		}
+	}
 
-    if err := scanner.Err(); err != nil {
-        log.Fatal(err)
-        return nil, err
-    }
+	//	if err := scanner.Err(); err != nil {
+	//		log.Fatal(err)
+	//		return nil, err
+	//	}
 
-    return config, nil
+	return config, nil
 }
 
-[root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
-
----ISetID=$(ISetID---
-   PersistentMemoryType=AppDirect
-   FreeCapacity=0.0 GiB
----ISetID=$(ISetID---
-   PersistentMemoryType=AppDirect
-   FreeCapacity=0.0 GiB
-[root@wolf-72 daos_m]#
+//[root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
+//
+//---ISetID=$(ISetID---
+//   PersistentMemoryType=AppDirect
+//   FreeCapacity=0.0 GiB
+//---ISetID=$(ISetID---
+//   PersistentMemoryType=AppDirect
+//   FreeCapacity=0.0 GiB
+//[root@wolf-72 daos_m]#
 
 func (s *scmSetup) getState(modules common.ScmModules) (state scmState, err error) {
 	if len(modules) == 0 {
 		return noModules, nil
 	}
 
-	var regionSections []string
-	var regionProps key[string]string
-	var regionCapacities []string
+	//	var regionSections []string
+	//	var regionProps key[string]string
+	//	var regionCapacities []string
 
-	out, err := exec.Command( [root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
-	// redo the work that was lost, ScmRegion, 
+	//out, err := exec.Command( [root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
+	// redo the work that was lost, ScmRegion,
 	// TODO: discovery should provide SCM region details
-	s.config.ext.run("ipmctl show -a -region")
-	return
+	//s.config.ext.run("ipmctl show -a -region")
+	return noRegions, nil
 }
 
 func (s *scmSetup) createRegions() (err error)                   { return }
@@ -468,7 +466,7 @@ func (s *scmStorage) Update(
 func newScmStorage(config *configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
-		scm:    scmSetup{config: config},
+		scm:    &scmSetup{config: config},
 		config: config,
 	}
 
