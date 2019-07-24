@@ -247,17 +247,52 @@ dss_topo_init()
 	return 0;
 }
 
-static ABT_mutex	rank_mutex;
-static ABT_cond		rank_cv;
-static bool		rank_set;
+static ABT_mutex		server_init_state_mutex;
+static ABT_cond			server_init_state_cv;
+static enum dss_init_state	server_init_state;
+
+static int
+server_init_state_init(void)
+{
+	int rc;
+
+	rc = ABT_mutex_create(&server_init_state_mutex);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+	rc = ABT_cond_create(&server_init_state_cv);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&server_init_state_mutex);
+		return dss_abterr2der(rc);
+	}
+	return 0;
+}
+
+static void
+server_init_state_fini(void)
+{
+	server_init_state = DSS_INIT_STATE_INIT;
+	ABT_cond_free(&server_init_state_cv);
+	ABT_mutex_free(&server_init_state_mutex);
+}
+
+static void
+server_init_state_wait(enum dss_init_state state)
+{
+	D_INFO("waiting for server init state %d\n", state);
+	ABT_mutex_lock(server_init_state_mutex);
+	while (server_init_state != state)
+		ABT_cond_wait(server_init_state_cv, server_init_state_mutex);
+	ABT_mutex_unlock(server_init_state_mutex);
+}
 
 void
-dss_notify_rank_set(void)
+dss_init_state_set(enum dss_init_state state)
 {
-	ABT_mutex_lock(rank_mutex);
-	rank_set = true;
-	ABT_cond_broadcast(rank_cv);
-	ABT_mutex_unlock(rank_mutex);
+	D_INFO("setting server init state to %d\n", state);
+	ABT_mutex_lock(server_init_state_mutex);
+	server_init_state = state;
+	ABT_cond_broadcast(server_init_state_cv);
+	ABT_mutex_unlock(server_init_state_mutex);
 }
 
 static int
@@ -326,6 +361,17 @@ abt_fini(void)
 	ABT_finalize();
 }
 
+bool
+dss_pmixless(void)
+{
+	bool pmixless = false;
+
+	if (getenv("PMIX_RANK") == NULL)
+		return true;
+	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
+	return pmixless;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -333,7 +379,6 @@ server_init(int argc, char *argv[])
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
-	bool		pmixless = false;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -360,10 +405,7 @@ server_init(int argc, char *argv[])
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	if (getenv("PMIX_RANK") == NULL)
-		pmixless = true;
-	if (sys_map_path != NULL || pmixless)
+	if (sys_map_path != NULL || dss_pmixless())
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
 	rc = crt_init_opt(daos_sysname, flags,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
@@ -425,30 +467,20 @@ server_init(int argc, char *argv[])
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
-	rc = ABT_mutex_create(&rank_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
+	rc = server_init_state_init();
+	if (rc != 0) {
+		D_ERROR("failed to init server init state: %d\n", rc);
 		goto exit_daos_fini;
-	}
-	rc = ABT_cond_create(&rank_cv);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto exit_rank_mutex;
 	}
 
 	rc = drpc_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize dRPC: %d\n", rc);
-		goto exit_rank_cv;
+		goto exit_init_state;
 	}
 
-	if (pmixless) {
-		D_INFO("Waiting for rank to be set\n");
-		ABT_mutex_lock(rank_mutex);
-		while (!rank_set)
-			ABT_cond_wait(rank_cv, rank_mutex);
-		ABT_mutex_unlock(rank_mutex);
-	}
+	if (dss_pmixless())
+		server_init_state_wait(DSS_INIT_STATE_RANK_SET);
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
@@ -474,6 +506,8 @@ server_init(int argc, char *argv[])
 		D_INFO("server group attach info saved\n");
 	}
 
+	server_init_state_wait(DSS_INIT_STATE_SET_UP);
+
 	rc = dss_module_setup_all();
 	if (rc != 0)
 		goto exit_drpc_fini;
@@ -489,10 +523,8 @@ server_init(int argc, char *argv[])
 
 exit_drpc_fini:
 	drpc_fini();
-exit_rank_cv:
-	ABT_cond_free(&rank_cv);
-exit_rank_mutex:
-	ABT_mutex_free(&rank_mutex);
+exit_init_state:
+	server_init_state_fini();
 exit_daos_fini:
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
@@ -520,8 +552,7 @@ server_fini(bool force)
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
 	drpc_fini();
-	ABT_cond_free(&rank_cv);
-	ABT_mutex_free(&rank_mutex);
+	server_init_state_fini();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
 	else
