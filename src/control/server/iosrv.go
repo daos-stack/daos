@@ -31,6 +31,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -59,6 +60,18 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	if err != nil {
 		return err
 	}
+	// A temporary workaround to create and start MS before we fully
+	// migrate to PMIx-less mode.
+	if !pmixless() {
+		rank, err := pmixRank()
+		if err != nil {
+			return err
+		}
+		if rank == 0 {
+			createMS = true
+			bootstrapMS = true
+		}
+	}
 
 	for i := range config.Servers {
 		// Only the first I/O server can be an MS replica.
@@ -73,6 +86,31 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	}
 
 	return nil
+}
+
+// pmixless returns if we are in PMIx-less or PMIx mode.
+func pmixless() bool {
+	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
+		return true
+	}
+	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
+		return true
+	}
+	return false
+}
+
+// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
+// value, it returns an error.
+func pmixRank() (rank, error) {
+	s, ok := os.LookupEnv("PMIX_RANK")
+	if !ok {
+		return nilRank, errors.New("not in PMIx mode")
+	}
+	r, err := strconv.ParseUint(s, 0, 32)
+	if err != nil {
+		return nilRank, errors.Wrap(err, "PMIX_RANK="+s)
+	}
+	return rank(r), nil
 }
 
 // formatIosrv will prepare DAOS IO servers and store relevant metadata.
@@ -255,16 +293,10 @@ func (srv *iosrv) start() (err error) {
 		return errors.New("received SIGCHLD")
 	}
 
-	// If we are launched using orterun and DAOS_PMIXLESS isn't set, use
-	// the old bootstrapping method.
-	if _, ok := os.LookupEnv("PMIX_RANK"); ok {
-		if _, ok := os.LookupEnv("DAOS_PMIXLESS"); !ok {
+	if pmixless() {
+		if err = srv.setRank(ready); err != nil {
 			return
 		}
-	}
-
-	if err = srv.setRank(ready); err != nil {
-		return
 	}
 
 	if srv.super.CreateMS {
@@ -280,10 +312,13 @@ func (srv *iosrv) start() (err error) {
 	}
 
 	if srv.super.MS {
-		err = srv.callStartMS()
+		if err = srv.callStartMS(); err != nil {
+			return
+		}
 	}
 
-	return
+	// Notify the I/O server that it may set up its server modules now.
+	return srv.callSetUp()
 }
 
 func (srv *iosrv) wait() error {
@@ -388,7 +423,7 @@ func (srv *iosrv) callCreateMS() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
-	if resp.Status.State != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
 		return errors.Errorf("CreateMS: %d\n", resp.Status)
 	}
 
@@ -405,7 +440,7 @@ func (srv *iosrv) callStartMS() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
-	if resp.Status.State != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
 		return errors.Errorf("StartMS: %d\n", resp.Status)
 	}
 
@@ -422,8 +457,25 @@ func (srv *iosrv) callSetRank(rank rank) error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}
-	if resp.Status.State != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) callSetUp() error {
+	dresp, err := makeDrpcCall(srv.conn, mgmtModuleID, setUp, nil)
+	if err != nil {
+		return err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshall SetUp response")
+	}
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+		return errors.Errorf("SetUp: %d\n", resp.Status)
 	}
 
 	return nil
@@ -458,7 +510,7 @@ func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mg
 	if err != nil {
 		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
 	}
-	if resp.Status.State != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
 		return nil, errors.Errorf("join %s %v: %d\n", ap, *req, resp.Status)
 	}
 

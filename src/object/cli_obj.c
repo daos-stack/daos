@@ -1196,7 +1196,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 				break;
 			}
 		}
-		dbtree_destroy(bth);
+		dbtree_destroy(bth, NULL);
 		break;
 	};
 

@@ -928,7 +928,9 @@ pipeline {
                                                OLD_CI=false utils/run_test.sh
                                                rm -rf run_test.sh/
                                                mkdir run_test.sh/
-                                               [ -f /tmp/daos.log ] && mv /tmp/daos.log run_test.sh/
+                                               if ls /tmp/daos*.log > /dev/null; then
+                                                   mv /tmp/daos*.log run_test.sh/
+                                               fi
                                                # servers can sometimes take a while to stop when the test is done
                                                x=0
                                                while [ \"\\\$x\" -lt \"10\" ] &&

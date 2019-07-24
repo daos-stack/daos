@@ -75,7 +75,7 @@ struct  _Mgmt__JoinReq
 struct  _Mgmt__JoinResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus *status;
+  Mgmt__DaosRequestStatus status;
   /*
    * Server rank assigned.
    */
@@ -84,7 +84,7 @@ struct  _Mgmt__JoinResp
 };
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
-    , NULL, 0, MGMT__JOIN_RESP__STATE__IN }
+    , MGMT__DAOS_REQUEST_STATUS__SUCCESS, 0, MGMT__JOIN_RESP__STATE__IN }
 
 
 struct  _Mgmt__GetAttachInfoReq
@@ -117,7 +117,7 @@ struct  _Mgmt__GetAttachInfoResp__Psr
 struct  _Mgmt__GetAttachInfoResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus *status;
+  Mgmt__DaosRequestStatus status;
   /*
    * CaRT PSRs of the system group.
    */
@@ -126,7 +126,7 @@ struct  _Mgmt__GetAttachInfoResp
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , NULL, 0,NULL }
+    , MGMT__DAOS_REQUEST_STATUS__SUCCESS, 0,NULL }
 
 
 /* Mgmt__JoinReq methods */
@@ -240,10 +240,6 @@ struct _Mgmt__MgmtSvc_Service
                       const Mgmt__CreatePoolReq *input,
                       Mgmt__CreatePoolResp_Closure closure,
                       void *closure_data);
-  void (*destroy_pool)(Mgmt__MgmtSvc_Service *service,
-                       const Mgmt__DestroyPoolReq *input,
-                       Mgmt__DestroyPoolResp_Closure closure,
-                       void *closure_data);
   void (*get_attach_info)(Mgmt__MgmtSvc_Service *service,
                           const Mgmt__GetAttachInfoReq *input,
                           Mgmt__GetAttachInfoResp_Closure closure,
@@ -258,7 +254,6 @@ void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
     { MGMT__MGMT_SVC__BASE_INIT,\
       function_prefix__ ## join,\
       function_prefix__ ## create_pool,\
-      function_prefix__ ## destroy_pool,\
       function_prefix__ ## get_attach_info  }
 void mgmt__mgmt_svc__join(ProtobufCService *service,
                           const Mgmt__JoinReq *input,
@@ -268,10 +263,6 @@ void mgmt__mgmt_svc__create_pool(ProtobufCService *service,
                                  const Mgmt__CreatePoolReq *input,
                                  Mgmt__CreatePoolResp_Closure closure,
                                  void *closure_data);
-void mgmt__mgmt_svc__destroy_pool(ProtobufCService *service,
-                                  const Mgmt__DestroyPoolReq *input,
-                                  Mgmt__DestroyPoolResp_Closure closure,
-                                  void *closure_data);
 void mgmt__mgmt_svc__get_attach_info(ProtobufCService *service,
                                      const Mgmt__GetAttachInfoReq *input,
                                      Mgmt__GetAttachInfoResp_Closure closure,

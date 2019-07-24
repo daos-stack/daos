@@ -40,7 +40,7 @@ import (
 var (
 	MockServers  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
 	MockFeatures = []*pb.Feature{MockFeaturePB()}
-	MockCtrlrs   = NvmeControllers{MockControllerPB("")}
+	MockCtrlrs   = NvmeControllers{MockControllerPB("E2010413")}
 	MockState    = pb.ResponseState{
 		Status: pb.ResponseStatus_CTRL_ERR_APP,
 		Error:  "example application error",
