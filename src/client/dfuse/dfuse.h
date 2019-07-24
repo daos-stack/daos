@@ -130,6 +130,8 @@ struct dfuse_inode_ops {
 			 const char *name, size_t size);
 	void (*listxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			  size_t size);
+	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			    const char *name);
 
 };
 
@@ -250,7 +252,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define DFUSE_FUSE_REPLY_ZERO(req)					\
+#define DFUSE_REPLY_ZERO(req)						\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(req, "Returning 0");			\
@@ -260,18 +262,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
 		DFUSE_TRA_DOWN(req);					\
-	} while (0)
-
-#define DFUSE_REPLY_ZERO(dfuse_req)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning 0");		\
-		__rc = fuse_reply_err((dfuse_req)->ir_req, 0);		\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
-					"fuse_reply_err returned %d:%s", \
-					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
 #define DFUSE_REPLY_ATTR(req, attr)					\
@@ -514,6 +504,9 @@ dfuse_cb_getxattr(fuse_req_t, struct dfuse_inode_entry *,
 
 void
 dfuse_cb_listxattr(fuse_req_t, struct dfuse_inode_entry *, size_t);
+
+void
+dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 /* Return inode information to fuse
  *

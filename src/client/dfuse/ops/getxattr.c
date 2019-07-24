@@ -32,10 +32,13 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	char *value;
 	int rc;
 
+	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
+
 	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL,
 			  &out_size);
-	if (rc != 0)
+	if (rc != 0) {
 		D_GOTO(err, rc = -rc);
+	}
 
 	if (size == 0) {
 		fuse_reply_xattr(req, out_size);

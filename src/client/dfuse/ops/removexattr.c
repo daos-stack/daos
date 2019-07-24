@@ -25,16 +25,14 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
-		  const char *name, const char *value, size_t size,
-		  int flags)
+dfuse_cb_removexattr(fuse_req_t req, struct dfuse_inode_entry *inode,
+		     const char *name)
 {
 	int rc;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
-			  size, flags);
+	rc = dfs_removexattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name);
 	if (rc == 0)
 		DFUSE_REPLY_ZERO(req);
 	else
