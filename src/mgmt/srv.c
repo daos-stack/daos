@@ -271,17 +271,17 @@ process_startms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 static void
 process_getattachinfo_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__GetAttachInfoReq	*gai_req = NULL;
-	Mgmt__GetAttachInfoResp	*gai_resp = NULL;
+	Mgmt__GetAttachInfoReq	*req = NULL;
+	Mgmt__GetAttachInfoResp	*resp = NULL;
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
 
 	/* Unpack the inner request from the drpc call body */
-	gai_req = mgmt__get_attach_info_req__unpack(
+	req = mgmt__get_attach_info_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
-	if (gai_req == NULL) {
+	if (req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to unpack req (get attach info)\n");
 		return;
@@ -289,36 +289,36 @@ process_getattachinfo_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_DEBUG(DB_MGMT, "Received request to get attach info\n");
 
-	D_ALLOC_PTR(gai_resp);
-	if (gai_resp == NULL) {
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate inner response ref\n");
-		mgmt__get_attach_info_req__free_unpacked(gai_req, NULL);
+		mgmt__get_attach_info_req__free_unpacked(req, NULL);
 		return;
 	}
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__get_attach_info_resp__init(gai_resp);
+	mgmt__get_attach_info_resp__init(resp);
 
-	rc = ds_mgmt_get_attach_info_handler(gai_resp);
+	rc = ds_mgmt_get_attach_info_handler(resp);
 	if (rc != 0) {
 		D_ERROR("Failed to get attach info: %d\n", rc);
-		gai_resp->status = rc;
+		resp->status = rc;
 	}
 
-	len = mgmt__get_attach_info_resp__get_packed_size(gai_resp);
+	len = mgmt__get_attach_info_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__get_attach_info_resp__pack(gai_resp, body);
+		mgmt__get_attach_info_resp__pack(resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__get_attach_info_req__free_unpacked(gai_req, NULL);
-	D_FREE(gai_resp);
+	mgmt__get_attach_info_req__free_unpacked(req, NULL);
+	D_FREE(resp);
 }
 
 static void
