@@ -38,7 +38,7 @@ static size_t DEFAULT_BUF_LEN = 1024;
  * States used to parse a formatted ACE string
  */
 enum ace_str_state {
-	ACE_ACCESS,
+	ACE_ACCESS_TYPES,
 	ACE_FLAGS,
 	ACE_IDENTITY,
 	ACE_PERMS,
@@ -358,7 +358,7 @@ out:
 }
 
 static enum ace_str_state
-process_access(const char *str, uint8_t *access)
+process_access_types(const char *str, uint8_t *access_types)
 {
 	size_t len;
 	size_t i;
@@ -367,13 +367,13 @@ process_access(const char *str, uint8_t *access)
 	for (i = 0; i < len; i++) {
 		switch (str[i]) {
 		case 'A':
-			*access |= DAOS_ACL_ACCESS_ALLOW;
+			*access_types |= DAOS_ACL_ACCESS_ALLOW;
 			break;
 		case 'U':
-			*access |= DAOS_ACL_ACCESS_AUDIT;
+			*access_types |= DAOS_ACL_ACCESS_AUDIT;
 			break;
 		case 'L':
-			*access |= DAOS_ACL_ACCESS_ALARM;
+			*access_types |= DAOS_ACL_ACCESS_ALARM;
 			break;
 		default:
 			D_INFO("Invalid access type '%c'\n", str[i]);
@@ -470,9 +470,9 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 	char				*pch;
 	char				*field;
 	char				delimiter[] = ":";
-	enum ace_str_state		state = ACE_ACCESS;
+	enum ace_str_state		state = ACE_ACCESS_TYPES;
 	uint16_t			flags = 0;
-	uint8_t				access = 0;
+	uint8_t				access_types = 0;
 	uint64_t			perms = 0;
 	int				rc = 0;
 
@@ -487,8 +487,8 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 			*pch = '\0';
 
 		switch (state) {
-		case ACE_ACCESS:
-			state = process_access(field, &access);
+		case ACE_ACCESS_TYPES:
+			state = process_access_types(field, &access_types);
 			break;
 		case ACE_FLAGS:
 			state = process_flags(field, &flags);
@@ -522,13 +522,13 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 	}
 
 	new_ace->dae_access_flags = flags;
-	new_ace->dae_access_types = access;
+	new_ace->dae_access_types = access_types;
 
-	if (access & DAOS_ACL_ACCESS_ALLOW)
+	if (access_types & DAOS_ACL_ACCESS_ALLOW)
 		new_ace->dae_allow_perms = perms;
-	if (access & DAOS_ACL_ACCESS_AUDIT)
+	if (access_types & DAOS_ACL_ACCESS_AUDIT)
 		new_ace->dae_audit_perms = perms;
-	if (access & DAOS_ACL_ACCESS_ALARM)
+	if (access_types & DAOS_ACL_ACCESS_ALARM)
 		new_ace->dae_alarm_perms = perms;
 
 	*ace = new_ace;
