@@ -26,7 +26,8 @@ from __future__ import print_function
 import server_utils
 from apricot import TestWithServers, skipForTicket
 from general_utils import get_pool, get_container
-from general_utils import check_pool_files, TestPool, CallbackHandler
+from general_utils import check_pool_files
+from test_utils import TestPool, CallbackHandler
 from daos_api import DaosApiError
 import ctypes
 
