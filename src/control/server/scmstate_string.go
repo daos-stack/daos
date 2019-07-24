@@ -11,11 +11,11 @@ func _() {
 	_ = x[unknown-0]
 	_ = x[noModules-1]
 	_ = x[noRegions-2]
-	_ = x[noNamespaces-3]
+	_ = x[freeCapacity-3]
 	_ = x[noCapacity-4]
 }
 
-const _scmState_name = "unknownnoModulesnoRegionsnoNamespacesnoCapacity"
+const _scmState_name = "unknownnoModulesnoRegionsfreeCapacitynoCapacity"
 
 var _scmState_index = [...]uint8{0, 7, 16, 25, 37, 47}
 

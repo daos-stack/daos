@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -43,11 +44,15 @@ const (
 	unknown scmState = iota
 	noModules
 	noRegions
-	noNamespaces
+	freeCapacity
 	noCapacity
-)
 
-var (
+	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
+	outScmNoRegions       = "There are no Regions defined in the system."
+	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
+	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
+	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
+
 	msgScmNotInited        = "scm storage not initialized"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
 		"reformat not implemented"
@@ -65,8 +70,7 @@ type PmemDevs []string
 
 // ScmSetup is an interface to configure scm prerequisites via shell tools
 type ScmSetup interface {
-	getState(common.ScmModules) (scmState, error)
-	prep(common.ScmModules) (PmemDevs, error)
+	prep(common.ScmModules) ([]byte, error)
 	reset() error
 }
 
@@ -87,29 +91,27 @@ type scmSetup struct {
 // * regions exist but no free capacity -> no-op
 //
 // Any newly created kernel devices will be listed in return value.
-func (s *scmSetup) prep(modules common.ScmModules) (devs PmemDevs, err error) {
-	ss, err := s.getState(modules)
+func (s *scmSetup) prep(modules common.ScmModules) (ba []byte, err error) {
+	ss, err := getState(modules, exec.Command(cmdScmShowRegions).Output)
 	if err != nil {
-		return devs, errors.WithMessage(err, "establish scm state")
+		return ba, errors.WithMessage(err, "establish scm state")
 	}
 
 	log.Debugf("scm in state %s\n", ss)
 
 	switch ss {
 	case noModules:
-		log.Debugf("no scm modules to prepare\n")
+		return []byte("no scm modules to prepare\n"), err
 	case noRegions:
-		err = s.createRegions()
-	case noNamespaces:
+		return s.createRegions()
+	case freeCapacity:
 		return s.createNamespaces()
 	case noCapacity:
 		log.Debugf("scm modules have already been prepared\n")
 		return s.getNamespaces()
-	default:
-		err = errors.New("unknown scm state")
 	}
 
-	return
+	return ba, errors.New("unknown scm state")
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
@@ -117,68 +119,82 @@ func (s *scmSetup) reset() error {
 	return nil // TODO
 }
 
-type AppConfigProperties map[string]string
-
-func ReadProperties(lines []string) (AppConfigProperties, error) {
-	config := AppConfigProperties{}
-
-	//	if len(filename) == 0 {
-	//		return config, nil
-	//	}
-	//	lines, err := common.SplitFile(filename)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-
-	for _, line := range lines {
-		if equal := strings.Index(line, "="); equal >= 0 {
-			if key := strings.TrimSpace(line[:equal]); len(key) > 0 {
-				value := ""
-				if len(line) > equal {
-					value = strings.TrimSpace(line[equal+1:])
-				}
-				config[key] = value
-			}
-		}
+// hasFreeCapacity takes output from ipmctl and checks for free capacity
+func hasFreeCapacity(text string) (hasCapacity bool, err error) {
+	lines := strings.Split(text, "\n")
+	if len(lines) < 4 {
+		return false, errors.Errorf("expecting at least 4 lines, got %d",
+			len(lines))
 	}
 
-	//	if err := scanner.Err(); err != nil {
-	//		log.Fatal(err)
-	//		return nil, err
-	//	}
+	for _, line := range lines {
+		entry := strings.TrimSpace(line)
 
-	return config, nil
+		kv := strings.Split(entry, "=")
+		if len(kv) != 2 {
+			continue
+		}
+
+		if kv[0] == "PersistentMemoryType" && kv[1] == "AppDirect" {
+			hasCapacity = true
+			continue
+		}
+
+		if kv[0] != "FreeCapacity" {
+			continue
+		}
+
+		if hasCapacity && kv[1] != "0.0 GiB" {
+			return
+		}
+
+		hasCapacity = false
+	}
+
+	return
 }
 
-//[root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
-//
-//---ISetID=$(ISetID---
-//   PersistentMemoryType=AppDirect
-//   FreeCapacity=0.0 GiB
-//---ISetID=$(ISetID---
-//   PersistentMemoryType=AppDirect
-//   FreeCapacity=0.0 GiB
-//[root@wolf-72 daos_m]#
+// getState establishes state of SCM regions and namespaces on local server.
+func getState(
+	modules common.ScmModules,
+	showRegionsFn func() ([]byte, error),
+) (scmState, error) {
 
-func (s *scmSetup) getState(modules common.ScmModules) (state scmState, err error) {
 	if len(modules) == 0 {
 		return noModules, nil
 	}
 
-	//	var regionSections []string
-	//	var regionProps key[string]string
-	//	var regionCapacities []string
-
-	//out, err := exec.Command( [root@wolf-72 daos_m]# ipmctl show -d PersistentMemoryType,FreeCapacity -region
-	// redo the work that was lost, ScmRegion,
 	// TODO: discovery should provide SCM region details
-	//s.config.ext.run("ipmctl show -a -region")
-	return noRegions, nil
+	out, err := showRegionsFn()
+	if err != nil {
+		return unknown, err
+	}
+
+	outStr := string(out)
+	if outStr == "\n"+outScmNoRegions {
+		return noRegions, nil
+	}
+
+	ok, err := hasFreeCapacity(outStr)
+	if err != nil {
+		return unknown, err
+	}
+	if ok {
+		return freeCapacity, nil
+	}
+
+	return noCapacity, nil
 }
 
-func (s *scmSetup) createRegions() (err error)                   { return }
-func (s *scmSetup) createNamespaces() (devs PmemDevs, err error) { return }
-func (s *scmSetup) getNamespaces() (devs PmemDevs, err error)    { return }
+func (s *scmSetup) createRegions() ([]byte, error) {
+	return exec.Command(cmdScmCreateRegions).Output()
+}
+func (s *scmSetup) createNamespaces() ([]byte, error) {
+	return exec.Command(cmdScmCreateNamespace).Output()
+}
+func (s *scmSetup) getNamespaces() ([]byte, error) {
+	return exec.Command(cmdScmListNamespaces).Output()
+}
 
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device

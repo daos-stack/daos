@@ -84,8 +84,7 @@ func TestGetState(t *testing.T) {
 		desc          string
 		errMsg        string
 		notInited     bool
-		showDimmOut   []string
-		showRegionOut []string
+		showRegionOut string
 		expState      scmState
 		expPmemDevs   []string
 	}{
@@ -95,12 +94,14 @@ func TestGetState(t *testing.T) {
 			expState:  noModules,
 		},
 		{
-			desc:     "models but no regions",
-			expState: noRegions,
+			desc:          "models but no regions",
+			showRegionOut: outScmNoRegions,
+			expState:      noRegions,
 		},
 	}
 
 	for _, tt := range tests {
+		config := defaultMockConfig(t)
 		ss := defaultMockScmStorage(&config)
 
 		if !tt.notInited {
@@ -108,7 +109,8 @@ func TestGetState(t *testing.T) {
 			ss.Discover(new(pb.ScanStorageResp))
 		}
 
-		state, err := ss.scm.getState(ss.modules)
+		state, err := getState(ss.modules,
+			func() ([]byte, error) { return []byte(tt.showRegionOut), nil })
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
