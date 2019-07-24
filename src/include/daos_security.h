@@ -57,7 +57,7 @@ extern "C" {
 
 /**
  * Maximum length of an ACE provided in string format:
- * 	<access>:<flags>:<principal>:<perms>
+ *	<access>:<flags>:<principal>:<perms>
  */
 #define DAOS_ACL_MAX_ACE_STR_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
 

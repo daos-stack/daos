@@ -478,8 +478,7 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 
 	pch = strpbrk(str, delimiter);
 	field = str;
-	while (state != ACE_INVALID)
-	{
+	while (state != ACE_INVALID) {
 		/*
 		 * We need to do one round with pch == NULL to pick up the last
 		 * field in the string.
