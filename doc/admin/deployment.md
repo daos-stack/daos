@@ -1239,8 +1239,8 @@ log\_file: /tmp/daos\_agent2.log
 
 DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
-to communicate with the control plane over unencrypted channels. The following 
-example shows daos_agent being configured to operate in insecure mode due to 
+to communicate with the control plane over unencrypted channels. The following
+example shows daos_agent being configured to operate in insecure mode due to
 incomplete integration of certificate support as of the 0.6 release.
 
 To start the DAOS Agent, run:
