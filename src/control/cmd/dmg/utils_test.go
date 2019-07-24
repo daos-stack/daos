@@ -100,7 +100,7 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}}.String(),
-			"1.2.3.4:10000:\nerror: unknown failure\n1.2.3.5:10001:\nerror: unknown failure\n",
+			"1.2.3.4:10000:\n\terror: unknown failure\n1.2.3.5:10001:\n\terror: unknown failure\n",
 		},
 		{
 			NewClientNvmeResults(
