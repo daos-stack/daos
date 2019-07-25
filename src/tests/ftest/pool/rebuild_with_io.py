@@ -79,7 +79,7 @@ class RebuildWithIO(TestWithServers):
             container.execute_io(30, rank, obj_class), container.uuid)
 
         # Determine how many objects will need to be rebuilt
-        container.get_target_rank_list(" prior to rebuild")
+        container.get_target_rank_lists(" prior to rebuild")
 
         # Trigger rebuild
         pool.start_rebuild(self.server_group, rank, self.d_log)

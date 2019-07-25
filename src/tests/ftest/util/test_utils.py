@@ -879,6 +879,14 @@ class TestContainer(TestDaosApiBase):
     def get_target_rank_lists(self, message=""):
         """Get a list of lists of target ranks from each written object.
 
+        Args:
+            message (str, optional): message to include in the target rank list
+                output. Defaults to "".
+
+        Raises:
+            DaosTestError: if there is an error obtaining the target rank list
+                from the DaosObj
+
         Returns:
             list: a list of list of targets for each written object in this
                 container
@@ -902,8 +910,8 @@ class TestContainer(TestDaosApiBase):
                 self.log.info("  %s", ranks)
         return target_rank_lists
 
-    def get_target_rank_count(self, target_rank_list, rank):
-        """Get the number of objects in the target rank list using the rank.
+    def get_target_rank_count(self, rank, target_rank_list):
+        """Get the number of times a rank appears in the target rank list.
 
         Args:
             rank (int): the rank to count. Defaults to None.
@@ -913,4 +921,8 @@ class TestContainer(TestDaosApiBase):
             (int): the number of object rank lists containing the rank
 
         """
-        return sum([ranks.count(rank) for ranks in target_rank_list])
+        count = sum([ranks.count(rank) for ranks in target_rank_list])
+        self.log.info(
+            "Occurrences of rank {} in the target rank list: {}".format(
+                rank, count))
+        return count
