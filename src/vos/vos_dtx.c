@@ -1544,8 +1544,8 @@ vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
 			  bool punch)
 {
 	struct vos_container	*cont;
-	d_iov_t		 kiov;
-	d_iov_t		 riov;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
 
 	cont = vos_hdl2cont(coh);
@@ -1555,6 +1555,12 @@ vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
 		rc = vos_dtx_lookup_cos(coh, oid, dti, dkey_hash, punch);
 		if (rc == 0)
 			return DTX_ST_COMMITTED;
+		if (rc != -DER_NONEXIST) {
+			D_ERROR(DF_UOID" DTX ("DF_DTI") vos_dtx_lookup_cos "
+				"failed, %d.\n", DP_UOID(*oid), DP_DTI(dti),
+				rc);
+			return rc;
+		}
 	}
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
