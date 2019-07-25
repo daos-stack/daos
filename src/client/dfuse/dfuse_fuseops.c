@@ -405,6 +405,9 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
+	if (!parent_inode->ie_dfs->dfs_ops->rename)
+		D_GOTO(decref, rc = EXDEV);
+
 	if (parent != newparent) {
 		rlink2 = d_hash_rec_find(&fs_handle->dpi_iet, &newparent,
 					 sizeof(newparent));
@@ -416,10 +419,11 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 		newparent_inode = container_of(rlink2, struct dfuse_inode_entry,
 					       ie_htl);
-	}
 
-	if (!parent_inode->ie_dfs->dfs_ops->rename)
-		D_GOTO(decref, rc = EXDEV);
+
+		if (parent_inode->ie_dfs != newparent_inode->ie_dfs)
+			D_GOTO(decref_both, rc = EXDEV);
+	}
 
 	parent_inode->ie_dfs->dfs_ops->rename(req, parent_inode, name,
 					      newparent_inode, newname, flags);
@@ -429,6 +433,8 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
+decref_both:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
