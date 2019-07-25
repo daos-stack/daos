@@ -503,7 +503,7 @@ dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
-		  bool create,
+		  struct fuse_file_info *fi_out,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
