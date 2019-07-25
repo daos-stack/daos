@@ -1,0 +1,70 @@
+hosts:
+    servers: !mux
+      1_server:
+        test_servers:
+          - boro-A
+      8_servers:
+        test_servers:
+          - boro-A
+          - boro-B
+          - boro-C
+          - boro-D
+          - boro-E
+          - boro-F
+          - boro-G
+          - boro-H
+    test_clients:
+        - boro-I
+        - boro-J
+        - boro-K
+        - boro-L
+        - boro-M
+        - boro-N
+        - boro-O
+        - boro-P
+timeout: 2000
+server_config:
+    name: daos_server
+pool:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        scm_size: 15000000000
+        nvme_size: 50000000000
+    createsvc:
+        svcn: 1
+mdtest:
+    client_processes: !mux
+        np_1:
+            np: 1
+        np_64:
+            np: 64
+        np_128:
+            np: 128
+    api: 'DFS'
+    test_dir: "/"
+    iteration: 3
+    num_of_files_dirs: 10000
+    data: !mux
+        zero:
+            write_bytes: 0
+            read_bytes: 0
+        1K:
+            write_bytes: 1000
+            read_bytes: 1000
+        32K:
+            write_bytes: 32000
+            read_bytes: 32000
+    diff_flags: !mux
+        flags_ssf:
+            flags: "--dfs.destroy"
+        flags_fpp:
+            flags: "-u --dfs.destroy"
+    directory_depth: !mux
+        depth_0:
+            depth: 0
+        depth_20:
+            depth: 100
