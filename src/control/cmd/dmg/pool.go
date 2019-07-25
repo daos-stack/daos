@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"strings"
 
 	"github.com/inhies/go-bytesize"
@@ -50,8 +51,8 @@ type PoolCmd struct {
 // CreatePoolCmd is the struct representing the command to create a DAOS pool.
 type CreatePoolCmd struct {
 	connectedCmd
-	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group"`
-	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user"`
+	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
@@ -142,11 +143,38 @@ func calcStorage(scmSize string, nvmeSize string) (
 	return scmBytes, nvmeBytes, nil
 }
 
+// formatNameGroup converts system names to principal and if both user and group
+// are unspecified, takes effective user name and that user's primary group.
+func formatNameGroup(usr string, grp string) (string, string, error) {
+	if usr == "" && grp == "" {
+		eUsr, err := user.Current()
+		if err != nil {
+			return "", "", err
+		}
+
+		eGrp, err := user.LookupGroupId(eUsr.Gid)
+		if err != nil {
+			return "", "", err
+		}
+
+		usr, grp = eUsr.Username, eGrp.Name
+	}
+
+	if usr != "" && !strings.Contains(usr, "@") {
+		usr += "@"
+	}
+
+	if grp != "" && !strings.Contains(grp, "@") {
+		grp += "@"
+	}
+
+	return usr, grp, nil
+}
+
 // createPool with specified parameters.
-func createPool(conns client.Connect,
-	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
-	groupName string, userName string, sys string,
-	aclFile string) error {
+func createPool(conns client.Connect, scmSize string, nvmeSize string,
+	rankList string, numSvcReps uint32, groupName string,
+	userName string, sys string, aclFile string) error {
 
 	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
 	if err != nil {
@@ -163,11 +191,15 @@ func createPool(conns client.Connect,
 			maxNumSvcReps, numSvcReps)
 	}
 
+	usr, grp, err := formatNameGroup(userName, groupName)
+	if err != nil {
+		return errors.WithMessage(err, "formatting user/group strings")
+	}
+
 	req := &pb.CreatePoolReq{
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
-		Ranks: rankList, Numsvcreps: numSvcReps,
-		// TODO: format and populate user/group
-		Sys: sys,
+		Ranks: rankList, Numsvcreps: numSvcReps, Sys: sys,
+		User: usr, Usergroup: grp,
 	}
 
 	fmt.Printf("Creating DAOS pool: %+v\n", req)

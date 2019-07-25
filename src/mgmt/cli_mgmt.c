@@ -294,9 +294,9 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 		rc = -DER_MISC;
 		goto out_dresp;
 	}
-	if (resp->status != MGMT__DAOS_REQUEST_STATUS__SUCCESS) {
+	if (resp->status != 0) {
 		D_ERROR("GetAttachInfo failed: %d\n", resp->status);
-		rc = -DER_MISC;
+		rc = resp->status;
 		goto out_resp;
 	}
 
