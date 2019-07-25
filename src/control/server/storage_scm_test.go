@@ -79,7 +79,11 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 
 // newMockRunFn generates runFn mocks returning provided output.
 func newMockRunFn(out string) runCmdFn {
-	return func(string) ([]byte, error) {
+	return func(in string) ([]byte, error) {
+		if out == "" {
+			return []byte(in), nil
+		}
+
 		return []byte(out), nil
 	}
 }
@@ -90,20 +94,15 @@ func TestGetState(t *testing.T) {
 	tests := []struct {
 		desc          string
 		errMsg        string
-		notInited     bool
 		showRegionOut string
 		expState      scmState
-		expPmemDevs   []string
+		expOut        string
 	}{
-		{
-			desc:      "no modules",
-			notInited: true,
-			expState:  noModules,
-		},
 		{
 			desc:          "modules but no regions",
 			showRegionOut: outScmNoRegions,
 			expState:      noRegions,
+			expOut:        cmdScmCreateRegions,
 		},
 		{
 			desc: "regions with free capacity",
@@ -116,6 +115,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expState: freeCapacity,
+			expOut:   cmdScmCreateNamespace,
 		},
 		{
 			desc: "single region with free capacity",
@@ -128,6 +128,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expState: freeCapacity,
+			expOut:   cmdScmCreateNamespace,
 		},
 		{
 			desc: "regions with no capacity",
@@ -140,19 +141,17 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
 			expState: noCapacity,
+			expOut:   cmdScmListNamespaces,
 		},
 	}
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
 		ss := defaultMockScmStorage(&config)
+		// not concerned with response
+		ss.Discover(new(pb.ScanStorageResp))
 
-		if !tt.notInited {
-			// not concerned with response
-			ss.Discover(new(pb.ScanStorageResp))
-		}
-
-		state, err := getState(ss.modules, newMockRunFn(tt.showRegionOut))
+		state, err := getState(newMockRunFn(tt.showRegionOut))
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -162,6 +161,17 @@ func TestGetState(t *testing.T) {
 		}
 
 		AssertEqual(t, state.String(), tt.expState.String(), tt.desc+": unexpected state")
+
+		out, err := progressState(state, newMockRunFn(""))
+		if tt.errMsg != "" {
+			ExpectError(t, err, tt.errMsg, tt.desc)
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		AssertEqual(t, string(out), tt.expOut, tt.desc+": unexpected command output")
 	}
 }
 

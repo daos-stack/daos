@@ -9,15 +9,14 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[unknown-0]
-	_ = x[noModules-1]
-	_ = x[noRegions-2]
-	_ = x[freeCapacity-3]
-	_ = x[noCapacity-4]
+	_ = x[noRegions-1]
+	_ = x[freeCapacity-2]
+	_ = x[noCapacity-3]
 }
 
-const _scmState_name = "unknownnoModulesnoRegionsfreeCapacitynoCapacity"
+const _scmState_name = "unknownnoRegionsfreeCapacitynoCapacity"
 
-var _scmState_index = [...]uint8{0, 7, 16, 25, 37, 47}
+var _scmState_index = [...]uint8{0, 7, 16, 28, 38}
 
 func (i scmState) String() string {
 	if i < 0 || i >= scmState(len(_scmState_index)-1) {

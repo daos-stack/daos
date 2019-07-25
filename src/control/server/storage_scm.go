@@ -42,10 +42,12 @@ type scmState int
 
 const (
 	unknown scmState = iota
-	noModules
 	noRegions
 	freeCapacity
 	noCapacity
+
+	msgScmNoModules = "no scm modules to prepare"
+	msgScmPrepared  = "scm has been prepared"
 
 	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	outScmNoRegions       = "\nThere are no Regions defined in the system."
@@ -82,16 +84,21 @@ type scmSetup struct {
 // interleaved regions/sets hosting pmem kernel device namespaces.
 //
 // State will be established based on presence of modules, presence of
-// regions and free space on regions. Actions based on state:
+// regions and free space on regions.
 //
+// Actions based on state:
 // * no modules -> no-op
-// * modules exist and no regions -> create regions
-// * regions exist and free capacity -> create namespaces
+// * modules exist and no regions -> create all regions (needs reboot)
+// * regions exist and free capacity -> create all namespaces
 // * regions exist but no free capacity -> no-op
 //
-// Any newly created kernel devices will be listed in return value.
+// Command output from external tools will be returned.
 func (s *scmSetup) prep(modules common.ScmModules) ([]byte, error) {
-	state, err := getState(modules, run)
+	if len(modules) == 0 {
+		return []byte(msgScmNoModules), nil
+	}
+
+	state, err := getState(run)
 	if err != nil {
 		return []byte{}, errors.WithMessage(err, "establish scm state")
 	}
@@ -112,11 +119,7 @@ func run(cmd string) ([]byte, error) {
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
-func getState(modules common.ScmModules, runFn runCmdFn) (scmState, error) {
-	if len(modules) == 0 {
-		return noModules, nil
-	}
-
+func getState(runFn runCmdFn) (scmState, error) {
 	// TODO: discovery should provide SCM region details
 	out, err := runFn(cmdScmShowRegions)
 	if err != nil {
@@ -177,14 +180,12 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 // progressState performs relevant actions for transition to next state.
 func progressState(state scmState, runFn runCmdFn) ([]byte, error) {
 	switch state {
-	case noModules:
-		return []byte("no scm modules to prepare\n"), nil
 	case noRegions:
 		return createRegions(runFn)
 	case freeCapacity:
 		return createNamespaces(runFn)
 	case noCapacity:
-		log.Debugf("scm modules have already been prepared\n")
+		log.Debugf(msgScmPrepared)
 		return getNamespaces(runFn)
 	}
 
@@ -195,8 +196,31 @@ func createRegions(runFn runCmdFn) ([]byte, error) {
 	return runFn(cmdScmCreateRegions)
 }
 
-func createNamespaces(runFn runCmdFn) ([]byte, error) {
-	return runFn(cmdScmCreateNamespace)
+// createNamespaces runs create until no free capacity.
+func createNamespaces(runFn runCmdFn) (ba []byte, e error) {
+	for {
+		out, err := runFn(cmdScmCreateNamespace)
+		if err != nil {
+			e = err
+			return
+		}
+		ba = append(ba, out...)
+
+		state, err := getState(runFn)
+		if err != nil {
+			e = err
+			return
+		}
+
+		switch {
+		case state == noCapacity:
+			return
+		case state != freeCapacity:
+			e = errors.Errorf("unexpected state: want %s, got %s",
+				freeCapacity.String(), state.String())
+			return
+		}
+	}
 }
 
 func getNamespaces(runFn runCmdFn) ([]byte, error) {
