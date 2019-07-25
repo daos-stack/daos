@@ -33,10 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
-const (
-	sockFileName = "daos_server.sock"
-	sockDirMode  = 0755
-)
+const sockFileName = "daos_server.sock"
 
 func getDrpcClientSocket(sockDir string) string {
 	return filepath.Join(sockDir, "daos_io_server.sock")
@@ -47,31 +44,31 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 	return drpc.NewClientConnection(clientSock)
 }
 
-func createSocketDir(sockDir string) error {
-	// TODO: decide whether we want to bail if it doesn't exist, might fall under
-	// category of items that should be created during configurations management
-	// as locations may not be user creatable. If we do detect, verify permissions
-	// and that it is indeed a directory and not a file.
-	_, err := os.Stat(sockDir)
+// checkSocketDir verifies socket directory exists, has appropriate permissions
+// and is a directory. SocketDir should be created during configuration management
+// as locations may not be user creatable.
+func checkSocketDir(sockDir string) error {
+	f, err := os.Stat(sockDir)
 	if err != nil {
+		msg := "unexpected error locating"
 		if os.IsPermission(err) {
-			return errors.Wrapf(err, "user does not have permission to access %s", sockDir)
+			msg = "permissions failure accessing"
 		} else if os.IsNotExist(err) {
-			if err := os.MkdirAll(sockDir, sockDirMode); err != nil {
-				return errors.Wrapf(err, "unable to create socket directory %s", sockDir)
-			}
+			msg = "missing"
 		}
 
-		return errors.Wrapf(err, "unknown error locating socket directory %s", sockDir)
+		return errors.WithMessagef(err, "%s socket directory %s", msg, sockDir)
+	}
+	if !f.IsDir() {
+		return errors.Errorf("path not a dir (socket directory %s", sockDir)
 	}
 
 	return nil
 }
 
-// drpcSetup creates socket directory, specifies socket path and then
-// starts drpc server.
+// drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
 func drpcSetup(sockDir string, iosrv *iosrv) error {
-	if err := createSocketDir(sockDir); err != nil {
+	if err := checkSocketDir(sockDir); err != nil {
 		return err
 	}
 
