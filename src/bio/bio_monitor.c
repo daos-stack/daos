@@ -79,7 +79,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 				 void *cb_arg)
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
-	struct bio_device_health_state		 *hs;
+	struct bio_dev_state			 *dev_state;
 	struct spdk_nvme_error_information_entry *error_entries;
 	struct spdk_nvme_error_information_entry *error_entry;
 	struct spdk_nvme_ctrlr_data		 *cdata;
@@ -96,7 +96,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 		goto out;
 	}
 
-	hs = &dev_health->bdh_health_state;
+	dev_state = &dev_health->bdh_health_state;
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 
@@ -114,7 +114,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 	for (i = 0; i < cdata->elpe; i++) {
 		error_entry = &error_entries[i];
-		hs->bhs_error_count = error_entry->error_count;
+		dev_state->bds_error_count = error_entry->error_count;
 		if (error_entry->error_count == 0) {
 			if (getenv("PRINT_HEALTH_INFO") != NULL)
 				D_PRINT("No errors found!\n");
@@ -247,8 +247,8 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
+	struct bio_dev_state			 *dev_state;
 	struct spdk_nvme_health_information_page *hp;
-	struct bio_device_health_state		 *hs;
 	struct spdk_bdev			 *bdev;
 	struct spdk_nvme_cmd			  cmd;
 	uint32_t				  cp_sz;
@@ -272,20 +272,20 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	hp = dev_health->bdh_health_buf;
 
 	/* Store device health info in in-memory health state log. */
-	hs = &dev_health->bdh_health_state;
-	hs->bhs_timestamp = dev_health->bdh_stat_age;
-	hs->bhs_temperature = hp->temperature;
+	dev_state = &dev_health->bdh_health_state;
+	dev_state->bds_timestamp = dev_health->bdh_stat_age;
+	dev_state->bds_temperature = hp->temperature;
 	crit_warn = hp->critical_warning.bits.temperature;
-	hs->bhs_temp_warning = crit_warn;
+	dev_state->bds_temp_warning = crit_warn;
 	crit_warn = hp->critical_warning.bits.available_spare;
-	hs->bhs_avail_spare_warning = crit_warn;
+	dev_state->bds_avail_spare_warning = crit_warn;
 	crit_warn = hp->critical_warning.bits.device_reliability;
-	hs->bhs_dev_reliabilty_warning = crit_warn;
+	dev_state->bds_dev_reliabilty_warning = crit_warn;
 	crit_warn = hp->critical_warning.bits.read_only;
-	hs->bhs_read_only_warning = crit_warn;
+	dev_state->bds_read_only_warning = crit_warn;
 	crit_warn = hp->critical_warning.bits.volatile_memory_backup;
-	hs->bhs_volatile_mem_warning = crit_warn;
-	hs->bhs_media_errors = hp->media_errors;
+	dev_state->bds_volatile_mem_warning = crit_warn;
+	dev_state->bds_media_errors = hp->media_errors;
 
 	/* Only print device health info to console if env is set */
 	if (getenv("PRINT_HEALTH_INFO") == NULL)
