@@ -48,13 +48,6 @@
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 
-enum {
-	BDEV_CLASS_NVME = 0,
-	BDEV_CLASS_MALLOC,
-	BDEV_CLASS_AIO,
-	BDEV_CLASS_UNKNOWN
-};
-
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -88,42 +81,7 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-static uint64_t io_stat_period;
-
-/* Print the io stat every few seconds, for debug only */
-static void
-print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
-{
-	struct spdk_bdev_io_stat	 stat;
-	struct spdk_bdev		*bdev;
-	struct spdk_io_channel		*channel;
-
-	if (io_stat_period == 0)
-		return;
-
-	if (ctxt->bxc_stat_age + io_stat_period >= now)
-		return;
-
-	if (ctxt->bxc_desc != NULL) {
-		channel = spdk_bdev_get_io_channel(ctxt->bxc_desc);
-		D_ASSERT(channel != NULL);
-		spdk_bdev_get_io_stat(NULL, channel, &stat);
-		spdk_put_io_channel(channel);
-
-		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
-
-		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
-			"read_ops["DF_U64"], write_bytes["DF_U64"], "
-			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
-			"write_latency_ticks["DF_U64"]\n",
-			ctxt->bxc_xs_id, spdk_bdev_get_name(bdev),
-			stat.bytes_read, stat.num_read_ops, stat.bytes_written,
-			stat.num_write_ops, stat.read_latency_ticks,
-			stat.write_latency_ticks);
-	}
-
-	ctxt->bxc_stat_age = now;
-}
+uint64_t io_stat_period;
 
 int
 bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
@@ -236,6 +194,7 @@ bio_nvme_fini(void)
 int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
+
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
 
@@ -245,7 +204,17 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
-	print_io_stat(ctxt, now);
+	/* Print SPDK I/O stats for each xstream */
+	bio_xs_io_stat(ctxt, now);
+
+	/*
+	 * Query and print the SPDK device health stats for only the device
+	 * owner xstream.
+	 */
+	if (ctxt->bxc_blobstore != NULL) {
+		if (ctxt->bxc_blobstore->bb_owner_xs == ctxt)
+			bio_bs_monitor(ctxt, now);
+	}
 
 	return rc;
 }
@@ -313,7 +282,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 	} while (rc > 0);
 }
 
-static int
+int
 get_bdev_type(struct spdk_bdev *bdev)
 {
 	if (strcmp(spdk_bdev_get_product_name(bdev), "NVMe disk") == 0)
@@ -488,6 +457,10 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	ABT_cond_free(&bb->bb_barrier);
 	ABT_mutex_free(&bb->bb_mutex);
 	D_FREE(bb->bb_xs_ctxts);
+
+	/* Free all device health monitoring info as well */
+	bio_fini_health_monitoring(bb);
+
 	D_FREE(bb);
 }
 
@@ -730,6 +703,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 	}
 
 	D_ASSERT(d_bdev->bb_bdev != NULL);
+	/* generic read only descriptor (currently used for IO stats) */
 	rc = spdk_bdev_open(d_bdev->bb_bdev, false, NULL, NULL,
 			    &ctxt->bxc_desc);
 	if (rc != 0) {
@@ -742,6 +716,13 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt);
 		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
+
+		rc = bio_init_health_monitoring(d_bdev->bb_blobstore,
+						d_bdev->bb_bdev);
+		if (rc != 0) {
+			D_ERROR("BIO health monitoring not allocated\n");
+			return rc;
+		}
 
 		/* Load blobstore with bstype specified for sanity check */
 		bs = load_blobstore(ctxt, d_bdev->bb_bdev, &d_bdev->bb_uuid,
@@ -1006,3 +987,4 @@ out:
 	*pctxt = (rc != 0) ? NULL : ctxt;
 	return rc;
 }
+
