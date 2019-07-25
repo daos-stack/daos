@@ -135,7 +135,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.uuid = None
         self.info = None
-        self.ranks = None
+        self.svc_ranks = None
         self.connected = False
 
     def get_params(self, test, path="/run/pool/*"):
@@ -169,11 +169,11 @@ class TestPool(TestDaosApiBase):
                 kwargs[key] = value
         self._call_method(self.pool.create, kwargs)
         self.uuid = self.pool.get_uuid_str()
-        self.ranks = [
+        self.svc_ranks = [
             int(self.pool.svc.rl_ranks[index])
             for index in range(self.pool.svc.rl_nr)]
-        self.log.info("  Pool created with uuid {} and ranks {}".format(
-            self.uuid, self.ranks))
+        self.log.info("  Pool created with uuid {} and svc ranks {}".format(
+            self.uuid, self.svc_ranks))
 
     @fail_on(DaosApiError)
     def connect(self, permission=1):
@@ -232,7 +232,7 @@ class TestPool(TestDaosApiBase):
             self.pool = None
             self.uuid = None
             self.info = None
-            self.ranks = None
+            self.svc_ranks = None
             return True
         return False
 
@@ -876,7 +876,7 @@ class TestContainer(TestDaosApiBase):
             total_bytes_written += self.data_size.value
         return total_bytes_written
 
-    def get_target_rank_lists(self):
+    def get_target_rank_lists(self, message=""):
         """Get a list of lists of target ranks from each written object.
 
         Returns:
@@ -896,31 +896,21 @@ class TestContainer(TestDaosApiBase):
                 raise DaosTestError(
                     "Error obtaining target rank list for object {} in "
                     "container {}: {}".format(data.obj, self.uuid, error))
+        if message is not None:
+            self.log.info("Target rank lists%s:", message)
+            for ranks in target_rank_lists:
+                self.log.info("  %s", ranks)
         return target_rank_lists
 
-    def get_target_rank_list_data(self, rank=None, message=""):
-        """Get the rank list for each object written in the container.
-
-        Display the list and optionally tally the number of objects using the
-        specified rank.
+    def get_target_rank_count(self, target_rank_list, rank):
+        """Get the number of objects in the target rank list using the rank.
 
         Args:
-            rank (int, optional): the rank. Defaults to None.
-            message (str, optional): additionalk text to display.  Defaults to
-                an empty string.
+            rank (int): the rank to count. Defaults to None.
+            target_rank_list (list): a list of lists of target ranks per object
 
         Returns:
-            (int, list): a tuple of the number of object rank lists containing
-                the specified rank and the list of all the object's rank lists
+            (int): the number of object rank lists containing the rank
 
         """
-        rebuilt_objects = 0
-        rank_lists = self.get_target_rank_lists()
-        self.log.info("Target rank lists%s:", message)
-        for ranks in rank_lists:
-            if isinstance(rank, int) and rank in ranks:
-                self.log.info("  %s - found rank %s", ranks, rank)
-                rebuilt_objects += 1
-            else:
-                self.log.info("  %s", ranks)
-        return rebuilt_objects, rank_lists
+        return sum([ranks.count(rank) for ranks in target_rank_list])

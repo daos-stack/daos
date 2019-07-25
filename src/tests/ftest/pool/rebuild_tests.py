@@ -75,9 +75,10 @@ class RebuildTests(TestWithServers):
 
         # Determine how many objects will need to be rebuilt
         for index in range(pool_quantity):
-            rebuild_qty, target_rank_lists = \
-                containers[index].get_target_rank_list_data(
-                    rank, " prior to rebuild")
+            target_rank_lists = containers[index].get_target_rank_list(
+                " prior to rebuild")
+            rebuild_qty = containers[index].get_target_rank_count(
+                target_rank_lists, rank)
             rs_obj_nr.append(rebuild_qty)
             self.log.info(
                 "Expecting %s/%s rebuilt objects in container %s after "
