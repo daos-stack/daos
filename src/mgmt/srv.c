@@ -111,7 +111,7 @@ process_killrank_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to kill rank (%u) on pool (%s)\n",
+	D_INFO("Received request to kill rank (%u) on pool (%s)\n",
 		req->rank, req->pool_uuid);
 
 	D_ALLOC_PTR(resp);
@@ -148,7 +148,7 @@ process_setrank_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to set rank to %u\n",
+	D_INFO("Received request to set rank to %u\n",
 		req->rank);
 
 	D_ALLOC_PTR(resp);
@@ -196,7 +196,7 @@ process_createms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to create MS (bootstrap=%d)\n",
+	D_INFO("Received request to create MS (bootstrap=%d)\n",
 		req->bootstrap);
 
 	D_ALLOC_PTR(resp);
@@ -242,7 +242,7 @@ process_startms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__DaosResp	*resp = NULL;
 	int rc;
 
-	D_DEBUG(DB_MGMT, "Received request to start MS\n");
+	D_INFO("Received request to start MS\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -258,7 +258,7 @@ process_startms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			       false /* !bootstrap */, NULL /* uuid */,
 			       NULL /* addr */);
 	if (rc == -DER_ALREADY) {
-		D_DEBUG(DB_MGMT, "MS already started\n");
+		D_INFO("MS already started\n");
 	} else if (rc != 0) {
 		D_ERROR("Failed to start MS: %d\n", rc);
 		resp->status = rc;
@@ -287,7 +287,7 @@ process_getattachinfo_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to get attach info\n");
+	D_INFO("Received request to get attach info\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -342,7 +342,7 @@ process_join_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to join\n");
+	D_INFO("Received request to join\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -435,7 +435,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to create pool\n");
+	D_INFO("Received request to create pool\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -564,7 +564,7 @@ process_destroypool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to destroy pool %s\n",
+	D_INFO("Received request to destroy pool %s\n",
 		req->uuid);
 
 	D_ALLOC_PTR(resp);
@@ -615,7 +615,7 @@ process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	*resp = NULL;
 
-	D_DEBUG(DB_MGMT, "Received request to start MS\n");
+	D_INFO("Received request to start MS\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -626,8 +626,6 @@ process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__daos_resp__init(resp);
-
-	D_DEBUG(DB_MGMT, "Received request to set up server\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 
