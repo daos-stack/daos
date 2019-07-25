@@ -48,7 +48,7 @@ const (
 	noCapacity
 
 	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions       = "There are no Regions defined in the system."
+	outScmNoRegions       = "\nThere are no Regions defined in the system."
 	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
 	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
@@ -65,8 +65,7 @@ const (
 	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
-// PmemDevs are kernel devices mapping to SCM region namespaces
-type PmemDevs []string
+type runCmdFn func(string) ([]byte, error)
 
 // ScmSetup is an interface to configure scm prerequisites via shell tools
 type ScmSetup interface {
@@ -91,27 +90,15 @@ type scmSetup struct {
 // * regions exist but no free capacity -> no-op
 //
 // Any newly created kernel devices will be listed in return value.
-func (s *scmSetup) prep(modules common.ScmModules) (ba []byte, err error) {
-	ss, err := getState(modules, exec.Command(cmdScmShowRegions).Output)
+func (s *scmSetup) prep(modules common.ScmModules) ([]byte, error) {
+	state, err := getState(modules, run)
 	if err != nil {
-		return ba, errors.WithMessage(err, "establish scm state")
+		return []byte{}, errors.WithMessage(err, "establish scm state")
 	}
 
-	log.Debugf("scm in state %s\n", ss)
+	log.Debugf("scm in state %s\n", state)
 
-	switch ss {
-	case noModules:
-		return []byte("no scm modules to prepare\n"), err
-	case noRegions:
-		return s.createRegions()
-	case freeCapacity:
-		return s.createNamespaces()
-	case noCapacity:
-		log.Debugf("scm modules have already been prepared\n")
-		return s.getNamespaces()
-	}
-
-	return ba, errors.New("unknown scm state")
+	return progressState(state, run)
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
@@ -119,7 +106,40 @@ func (s *scmSetup) reset() error {
 	return nil // TODO
 }
 
-// hasFreeCapacity takes output from ipmctl and checks for free capacity
+// run wraps exec.Command().Output() to enable mocking
+func run(cmd string) ([]byte, error) {
+	return exec.Command(cmd).Output()
+}
+
+// getState establishes state of SCM regions and namespaces on local server.
+func getState(modules common.ScmModules, runFn runCmdFn) (scmState, error) {
+	if len(modules) == 0 {
+		return noModules, nil
+	}
+
+	// TODO: discovery should provide SCM region details
+	out, err := runFn(cmdScmShowRegions)
+	if err != nil {
+		return unknown, err
+	}
+
+	outStr := string(out)
+	if outStr == outScmNoRegions {
+		return noRegions, nil
+	}
+
+	ok, err := hasFreeCapacity(outStr)
+	if err != nil {
+		return unknown, err
+	}
+	if ok {
+		return freeCapacity, nil
+	}
+
+	return noCapacity, nil
+}
+
+// hasFreeCapacity takes output from ipmctl and checks for free capacity.
 func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	lines := strings.Split(text, "\n")
 	if len(lines) < 4 {
@@ -154,46 +174,33 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	return
 }
 
-// getState establishes state of SCM regions and namespaces on local server.
-func getState(
-	modules common.ScmModules,
-	showRegionsFn func() ([]byte, error),
-) (scmState, error) {
-
-	if len(modules) == 0 {
-		return noModules, nil
+// progressState performs relevant actions for transition to next state.
+func progressState(state scmState, runFn runCmdFn) ([]byte, error) {
+	switch state {
+	case noModules:
+		return []byte("no scm modules to prepare\n"), nil
+	case noRegions:
+		return createRegions(runFn)
+	case freeCapacity:
+		return createNamespaces(runFn)
+	case noCapacity:
+		log.Debugf("scm modules have already been prepared\n")
+		return getNamespaces(runFn)
 	}
 
-	// TODO: discovery should provide SCM region details
-	out, err := showRegionsFn()
-	if err != nil {
-		return unknown, err
-	}
-
-	outStr := string(out)
-	if outStr == "\n"+outScmNoRegions {
-		return noRegions, nil
-	}
-
-	ok, err := hasFreeCapacity(outStr)
-	if err != nil {
-		return unknown, err
-	}
-	if ok {
-		return freeCapacity, nil
-	}
-
-	return noCapacity, nil
+	return []byte{}, errors.New("unknown scm state")
 }
 
-func (s *scmSetup) createRegions() ([]byte, error) {
-	return exec.Command(cmdScmCreateRegions).Output()
+func createRegions(runFn runCmdFn) ([]byte, error) {
+	return runFn(cmdScmCreateRegions)
 }
-func (s *scmSetup) createNamespaces() ([]byte, error) {
-	return exec.Command(cmdScmCreateNamespace).Output()
+
+func createNamespaces(runFn runCmdFn) ([]byte, error) {
+	return runFn(cmdScmCreateNamespace)
 }
-func (s *scmSetup) getNamespaces() ([]byte, error) {
-	return exec.Command(cmdScmListNamespaces).Output()
+
+func getNamespaces(runFn runCmdFn) ([]byte, error) {
+	return runFn(cmdScmListNamespaces)
 }
 
 // scmStorage gives access to underlying storage interface implementation

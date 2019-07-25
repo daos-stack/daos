@@ -77,6 +77,13 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 		nil, []DeviceDiscovery{m}, false, config)
 }
 
+// newMockRunFn generates runFn mocks returning provided output.
+func newMockRunFn(out string) runCmdFn {
+	return func(string) ([]byte, error) {
+		return []byte(out), nil
+	}
+}
+
 func TestGetState(t *testing.T) {
 	defer ShowLogOnFailure(t)()
 
@@ -94,9 +101,45 @@ func TestGetState(t *testing.T) {
 			expState:  noModules,
 		},
 		{
-			desc:          "models but no regions",
+			desc:          "modules but no regions",
 			showRegionOut: outScmNoRegions,
 			expState:      noRegions,
+		},
+		{
+			desc: "regions with free capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"\n",
+			expState: freeCapacity,
+		},
+		{
+			desc: "single region with free capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"\n",
+			expState: freeCapacity,
+		},
+		{
+			desc: "regions with no capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.0 GiB\n" +
+				"\n",
+			expState: noCapacity,
 		},
 	}
 
@@ -109,8 +152,7 @@ func TestGetState(t *testing.T) {
 			ss.Discover(new(pb.ScanStorageResp))
 		}
 
-		state, err := getState(ss.modules,
-			func() ([]byte, error) { return []byte(tt.showRegionOut), nil })
+		state, err := getState(ss.modules, newMockRunFn(tt.showRegionOut))
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -119,7 +161,7 @@ func TestGetState(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		AssertEqual(t, state, tt.expState, tt.desc+": unexpected state")
+		AssertEqual(t, state.String(), tt.expState.String(), tt.desc+": unexpected state")
 	}
 }
 
