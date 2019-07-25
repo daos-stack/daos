@@ -112,6 +112,15 @@ func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
 
+func testExpectedError(t *testing.T, expected, actual error) {
+	t.Helper()
+
+	errRe := regexp.MustCompile(expected.Error())
+	if !errRe.MatchString(actual.Error()) {
+		t.Fatalf("error string %q doesn't match expected error %q", actual, expected)
+	}
+}
+
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	t.Helper()
 
@@ -128,10 +137,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 					t.Fatalf("expected nil error, got %+v", err)
 				}
 
-				errRe := regexp.MustCompile(st.expectedErr.Error())
-				if !errRe.MatchString(err.Error()) {
-					t.Fatalf("error string %q doesn't match expected error %q", err, st.expectedErr)
-				}
+				testExpectedError(t, st.expectedErr, err)
 			}
 			if st.expectedCalls != "" {
 				st.expectedCalls = fmt.Sprintf("SetTransportConfig %s", st.expectedCalls)
@@ -144,13 +150,18 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	}
 }
 
-// FIXME: This does not fail as expected
-/*func TestBadCommand(t *testing.T) {
+func TestBadCommand(t *testing.T) {
 	defer common.ShowLogOnFailure(t)()
 
 	conn := newTestConn(t)
-	opts, err := parseOpts([]string{"foo"}, conn)
-	if err == nil {
-		t.Fatal("expected error; got nil")
-	}
-}*/
+	_, err := parseOpts([]string{"foo"}, conn)
+	testExpectedError(t, fmt.Errorf("Unknown command `foo'"), err)
+}
+
+func TestNoCommand(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
+	conn := newTestConn(t)
+	_, err := parseOpts([]string{}, conn)
+	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
+}
