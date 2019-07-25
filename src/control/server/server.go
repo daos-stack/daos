@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"syscall"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -113,19 +114,40 @@ func Main() error {
 	grpcServer := grpc.NewServer(sOpts...)
 
 	mgmtpb.RegisterMgmtCtlServer(grpcServer, mgmtCtlSvc)
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(config))
-	secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
-	acl.RegisterAccessControlServer(grpcServer, secServer)
+
+	// If running as root and user name specified in config file, respawn proc.
+	needsRespawn := syscall.Getuid() == 0 && config.UserName != ""
+
+	// Only provide IO/Agent communication if not attempting to respawn after format,
+	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
+	if !needsRespawn {
+		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(config))
+		secServer := newSecurityService(getDrpcClientConnection(config.SocketDir))
+		acl.RegisterAccessControlServer(grpcServer, secServer)
+	}
 
 	go func() {
 		_ = grpcServer.Serve(lis)
 	}()
 	defer grpcServer.GracefulStop()
 
-	// Wait for storage to be formatted if necessary and subsequently drop
-	// current process privileges to that of normal user.
-	if err = awaitStorageFormat(config); err != nil {
-		return errors.Wrap(err, "format storage")
+	// If running as root, wait for storage format call over client API (mgmt tool).
+	if syscall.Getuid() == 0 {
+		if err = awaitStorageFormat(config); err != nil {
+			return errors.Wrap(err, "format storage")
+		}
+	}
+
+	if needsRespawn {
+		// Chown required files and respawn process under new user.
+		if err := changeFileOwnership(config); err != nil {
+			return errors.WithMessage(err, "changing file ownership")
+		}
+
+		log.Debugf("formatting complete and file ownership changed,"+
+			"please rerun %s as user %s\n", os.Args[0], config.UserName)
+
+		return nil
 	}
 
 	// Format the unformatted servers by writing persistant superblock.
