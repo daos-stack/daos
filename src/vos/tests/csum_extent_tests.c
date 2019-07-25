@@ -953,19 +953,12 @@ csum_fault_injection_multiple_extents_tests(void **state)
 {
 	int rc;
 	int i;
-
+	int update_extents;
+	int fetch_extents;
+	struct csum_test test;
 	/* Setup Test */
 	struct csum_test_params params;
-
-	params.total_records = 1024 * 1024 * 64;
-	params.record_bytes = 1;
-	params.csum_bytes = 8; /* CRC64? */
-	params.csum_chunk_records = 1024 * 16; /* 16K */
-	params.use_rand_csum = true;
-	struct csum_test test;
-
-	csum_test_setup(&test, state, &params);
-
+	uint32_t csums_count_total, csum_count_per_extent, csum_len;
 	/* extent counts for update and fetch. The extents will span the same
 	 * amount of data, the extents themselves will be of different lengths
 	 */
@@ -981,14 +974,22 @@ csum_fault_injection_multiple_extents_tests(void **state)
 		{END,	END}
 	};
 
+
+	params.total_records = 1024 * 1024 * 64;
+	params.record_bytes = 1;
+	params.csum_bytes = 8; /* CRC64? */
+	params.csum_chunk_records = 1024 * 16; /* 16K */
+	params.use_rand_csum = true;
+
+	csum_test_setup(&test, state, &params);
+
+
 	for (i = 0; table[i][0] != END; i++) {
-		int update_extents = table[i][0];
-		int fetch_extents = table[i][1];
+		update_extents = table[i][0];
+		fetch_extents = table[i][1];
 
 		printf("Update Extents: %d, Fetch Extents: %d\n",
 		       update_extents, fetch_extents);
-
-		uint32_t csums_count_total, csum_count_per_extent, csum_len;
 
 		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ONCE);
 		rc = update(&test, update_extents, i);
@@ -1002,7 +1003,6 @@ csum_fault_injection_multiple_extents_tests(void **state)
 		if (!SUCCESS(rc))
 			fail_msg("Error fetching extent with csum: %s\n",
 				 d_errstr(rc));
-		daos_fail_loc_set(0);
 
 		/* Verify */
 		assert_int_equal(test.csum_bytes, csum_len);
@@ -1014,5 +1014,6 @@ csum_fault_injection_multiple_extents_tests(void **state)
 					test.fetch_csum_buf,
 					test.csum_buf_len);
 	}
+	daos_fail_loc_set(0);
 	csum_test_teardown(&test);
 }

@@ -281,23 +281,14 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	rbund.rb_biov	= &biov;
 
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL)) {
-		void	*fault_ptr;
-		uint8_t random_csum;
-
 		/* Get the iod_csum pointer and
 		* manipulate the checksum value
 		* for fault injection.
 		*/
 		rbund.rb_csum	= &iod->iod_csums[0];
 
-		D_ALLOC_ARRAY(fault_ptr, rbund.rb_csum->cs_len);
-		srand(time(NULL));
-		random_csum = (rand() % 8) + 1;
-		memset(fault_ptr, random_csum,
+		memset(rbund.rb_csum->cs_csum, random(),
 			rbund.rb_csum->cs_len);
-		memcpy(rbund.rb_csum->cs_csum, fault_ptr,
-			rbund.rb_csum->cs_len);
-		D_FREE(fault_ptr);
 	} else {
 		rbund.rb_csum	= &iod->iod_csums[0];
 	}
@@ -416,23 +407,12 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			void *csum_ptr = daos_csum_from_offset(csum,
 				(uint32_t) ((lo - recx->rx_idx) * rsize));
 
-			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL)) {
-				void	*fault_ptr;
-				uint8_t	random_csum;
-
-				D_ALLOC_ARRAY(fault_ptr,
+			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+				memset(csum_ptr, random(),
 					csum_nr * ent->en_csum.cs_len);
-				srand(time(NULL));
-				random_csum = (rand() % 8) + 1;
-				memset(fault_ptr, random_csum,
-					csum_nr * ent->en_csum.cs_len);
-				memcpy(csum_ptr, fault_ptr,
-					csum_nr * ent->en_csum.cs_len);
-				D_FREE(fault_ptr);
-			} else {
+			else
 				memcpy(csum_ptr, ent->en_csum.cs_csum,
 					csum_nr * ent->en_csum.cs_len);
-			}
 
 			csum_copied += csum_nr * ent->en_csum.cs_len;
 
@@ -798,13 +778,10 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_inob = rsize;
 
 	if (daos_csum_isvalid(iod_csum)) {
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
-			ent.ei_csum = *iod_csum;
-			/* Zero the checksum field */
+		ent.ei_csum = *iod_csum;
+		/* Zero the checksum field for fault injection*/
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
 			memset(ent.ei_csum.cs_csum, 0, sizeof(uint8_t));
-		} else {
-			ent.ei_csum = *iod_csum;
-		}
 	}
 
 	biov = iod_update_biov(ioc);
