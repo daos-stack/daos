@@ -162,15 +162,32 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 }
 
 /**
+ * Callbacks called on NVMe device state transition
+ *
+ * \param tgt_ids[IN]	Affected target IDs
+ * \param tgt_cnt[IN]	Target count
+ *
+ * \return		0: Reaction finished;
+ *			1: Reaction is in progress;
+ *			-ve: Error happened;
+ */
+struct bio_reaction_ops {
+	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
+	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
+};
+
+/**
  * Global NVMe initialization.
  *
  * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
+ * \param[IN] ops		Reaction callback functions
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+		  struct bio_reaction_ops *ops);
 
 /**
  * Global NVMe finilization.

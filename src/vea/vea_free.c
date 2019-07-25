@@ -114,7 +114,7 @@ repeat:
 		else if (type == VEA_TYPE_AGGREGATE)
 			d_list_del_init(&entry->ve_link);
 
-		rc = dbtree_delete(btr_hdl, &key_out, NULL);
+		rc = dbtree_delete(btr_hdl, BTR_PROBE_EQ, &key_out, NULL);
 		if (rc)
 			return rc;
 	}
@@ -354,7 +354,7 @@ migrate_end_cb(void *data, bool noop)
 		 */
 		d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 		D_ASSERT(!daos_handle_is_inval(vsi->vsi_agg_btr));
-		rc = dbtree_delete(vsi->vsi_agg_btr, &key, NULL);
+		rc = dbtree_delete(vsi->vsi_agg_btr, BTR_PROBE_EQ, &key, NULL);
 		if (rc) {
 			D_ERROR("Remove ["DF_U64", %u] from aggregated "
 				"tree error: %d\n", vfe.vfe_blk_off,

@@ -159,16 +159,14 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		if (!inode->ie_dfs->dfs_ops->getattr) {
-			D_GOTO(decref, rc = ENOTSUP);
+		if (inode->ie_dfs->dfs_ops->getattr) {
+			inode->ie_dfs->dfs_ops->getattr(req, inode);
+		} else {
+			DFUSE_REPLY_ATTR(req, &inode->ie_stat);
 		}
-
-		inode->ie_dfs->dfs_ops->getattr(req, inode);
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	}
 	return;
-decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
@@ -358,6 +356,36 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
+void
+df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+	      const char *name)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!inode->ie_dfs->dfs_ops->symlink) {
+		D_GOTO(decref, rc = ENOTSUP);
+	}
+	inode->ie_dfs->dfs_ops->symlink(req, link, inode, name);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
 static void
 df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	     fuse_ino_t newparent, const char *newname, unsigned int flags)
@@ -426,6 +454,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
 	.rename		= dfuse_cb_rename,
+	.symlink	= dfuse_cb_symlink,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
@@ -458,6 +487,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->readdir	= df_ll_readdir;
 	fuse_ops->create	= df_ll_create;
 	fuse_ops->rename	= df_ll_rename;
+	fuse_ops->symlink	= df_ll_symlink;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;
@@ -480,6 +510,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->release	= dfuse_cb_release;
 	fuse_ops->write		= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
+	fuse_ops->readlink	= dfuse_cb_readlink;
 
 	return fuse_ops;
 }

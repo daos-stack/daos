@@ -31,6 +31,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_inode_entry	*ie;
 	d_list_t			*rlink;
 	struct dfuse_obj_hdl		*oh = NULL;
+	struct fuse_file_info	        fi_out = {0};
 	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
@@ -52,11 +53,11 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 
-	fi->direct_io = 1;
-	fi->fh = (uint64_t)oh;
+	fi_out.direct_io = 1;
+	fi_out.fh = (uint64_t)oh;
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	DFUSE_REPLY_OPEN(req, fi);
+	DFUSE_REPLY_OPEN(req, &fi_out);
 
 	return;
 err:
@@ -68,24 +69,17 @@ err:
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl	*oh;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
-
-	if (fi == NULL || fi->fh == 0) {
-		fuse_reply_err(req, 0);
-		return;
-	}
-
-	oh = (struct dfuse_obj_hdl *)((uint64_t)(fi->fh));
 
 	/** Files should not have readdir buffers */
 	D_ASSERT(oh->doh_buf == NULL);
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0) {
-		D_FREE(oh);
-		fi->fh = 0;
+		DFUSE_FUSE_REPLY_ZERO(req);
+	} else {
+		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
 	}
-
-	fuse_reply_err(req, -rc);
+	D_FREE(oh);
 }

@@ -197,7 +197,7 @@ cont_free(struct d_ulink *ulink)
 	D_ASSERT(cont->vc_open_count == 0);
 
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
-		dbtree_destroy(cont->vc_dtx_cos_hdl);
+		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
@@ -551,7 +551,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	}
 
 	d_iov_set(&iov, &key, sizeof(struct d_uuid));
-	rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
+	rc = dbtree_delete(vpool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
 
 end:
 	rc = vos_tx_end(vpool, rc);
