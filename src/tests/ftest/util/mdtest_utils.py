@@ -91,7 +91,7 @@ class MdtestCommand(object):
         self.items = MdtestParam("-I {}")              # number of items per
                                                        # directory in tree
         self.last_num_tasks = MdtestParam("-l {}")     # last number of tasks
-        self.num_of_tasks = MdtestParam("-n {}")       # every process will
+        self.num_of_files_dirs = MdtestParam("-n {}")       # every process will
                                                        # creat/stat/read/remove
                                                        # num of  directories and
                                                        # files

@@ -126,7 +126,7 @@ class MdtestSmall(MdtestBase):
     :avocado: recursive
     """
 
-    def test_singleserver(self):
+    def test_mdtest_small(self):
         """Jira ID: DAOS-2493.
         Test Description:
             Test Mdtest in small config.
