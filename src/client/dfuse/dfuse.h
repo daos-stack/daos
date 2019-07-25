@@ -92,7 +92,11 @@ struct dfuse_obj_hdl {
 	dfs_obj_t	*doh_obj;
 	/** an anchor to track listing in readdir */
 	daos_anchor_t	doh_anchor;
-	/** enumeration buffer to store missed entries from readdir */
+	/** current offset in dir stream (what is returned to fuse) */
+	off_t		doh_fuse_off;
+	/** current offset in dir stream (includes cached entries) */
+	off_t		doh_dir_off[READDIR_BLOCKS];
+	/** Buffer with all entries listed from DFS with the fuse dirents */
 	void		*doh_buf;
 	/** offset to start from of doh_buffer */
 	off_t		doh_start_off[READDIR_BLOCKS];
