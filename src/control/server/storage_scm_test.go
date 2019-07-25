@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -77,19 +78,22 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 		nil, []DeviceDiscovery{m}, false, config)
 }
 
-// newMockRunFn generates runFn mocks returning provided output.
-func newMockRunFn(out string) runCmdFn {
-	return func(in string) ([]byte, error) {
-		if out == "" {
-			return []byte(in), nil
-		}
-
-		return []byte(out), nil
-	}
-}
-
 func TestGetState(t *testing.T) {
 	defer ShowLogOnFailure(t)()
+
+	var tmpOut string
+
+	mockRun := func(in string) ([]byte, error) {
+		switch in {
+		case cmdScmShowRegions:
+			return []byte(tmpOut), nil
+		case cmdScmCreateNamespace:
+			// stimulate free capacity being used
+			tmpOut = strings.Replace(tmpOut, "3012.0", "0.0", 1)
+		}
+
+		return []byte(in), nil
+	}
 
 	tests := []struct {
 		desc          string
@@ -115,7 +119,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expState: freeCapacity,
-			expOut:   cmdScmCreateNamespace,
+			expOut:   cmdScmCreateNamespace + "\n" + cmdScmCreateNamespace + "\n",
 		},
 		{
 			desc: "single region with free capacity",
@@ -128,7 +132,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expState: freeCapacity,
-			expOut:   cmdScmCreateNamespace,
+			expOut:   cmdScmCreateNamespace + "\n",
 		},
 		{
 			desc: "regions with no capacity",
@@ -136,7 +140,7 @@ func TestGetState(t *testing.T) {
 				"---ISetID=0x2aba7f4828ef2ccc---\n" +
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.0 GiB\n" +
-				"---ISetID=0x81187f4881f02ccc---\n" +
+				"---ISetID=0x81187f4881f02ccb---\n" +
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
@@ -148,10 +152,11 @@ func TestGetState(t *testing.T) {
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
 		ss := defaultMockScmStorage(&config)
-		// not concerned with response
-		ss.Discover(new(pb.ScanStorageResp))
+		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
 
-		state, err := getState(newMockRunFn(tt.showRegionOut))
+		tmpOut = tt.showRegionOut // initial value
+
+		state, err := getState(mockRun)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -162,13 +167,13 @@ func TestGetState(t *testing.T) {
 
 		AssertEqual(t, state.String(), tt.expState.String(), tt.desc+": unexpected state")
 
-		out, err := progressState(state, newMockRunFn(""))
+		out, err := progressState(state, mockRun)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
 		}
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal(tt.desc + ": " + err.Error())
 		}
 
 		AssertEqual(t, string(out), tt.expOut, tt.desc+": unexpected command output")

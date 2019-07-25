@@ -205,6 +205,7 @@ func createNamespaces(runFn runCmdFn) (ba []byte, e error) {
 			return
 		}
 		ba = append(ba, out...)
+		ba = append(ba, []byte("\n")...)
 
 		state, err := getState(runFn)
 		if err != nil {
