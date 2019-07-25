@@ -133,12 +133,13 @@ class MdtestSmall(MdtestBase):
         Use Cases:
             Aim of this test is to test different combinations
             of following configs:
-            1/8 Clients
-            num of files/dirs: 100
+            8 Clients
+            num of files/dirs: 1000
             with/without unique working dir for each task
             write bytes: 0|4K
             read bytes: 0|4K
             depth of hierarchical directory structure: 0|5
+            branching factor: 1|2
         :avocado: tags=mdtest,mdtestsmall
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
