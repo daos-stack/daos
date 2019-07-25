@@ -244,10 +244,10 @@ static const ProtobufCFieldDescriptor mgmt__daos_resp__field_descriptors[1] =
     "status",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__DaosResp, status),
-    &mgmt__daos_request_status__descriptor,
+    NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -377,36 +377,4 @@ const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor =
   1,  mgmt__create_ms_req__number_ranges,
   (ProtobufCMessageInit) mgmt__create_ms_req__init,
   NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCEnumValue mgmt__daos_request_status__enum_values_by_number[4] =
-{
-  { "ERR_INVALID_UUID", "MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_UUID", -3 },
-  { "ERR_INVALID_RANK", "MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_RANK", -2 },
-  { "ERR_UNKNOWN", "MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN", -1 },
-  { "SUCCESS", "MGMT__DAOS_REQUEST_STATUS__SUCCESS", 0 },
-};
-static const ProtobufCIntRange mgmt__daos_request_status__value_ranges[] = {
-{-3, 0},{0, 4}
-};
-static const ProtobufCEnumValueIndex mgmt__daos_request_status__enum_values_by_name[4] =
-{
-  { "ERR_INVALID_RANK", 1 },
-  { "ERR_INVALID_UUID", 0 },
-  { "ERR_UNKNOWN", 2 },
-  { "SUCCESS", 3 },
-};
-const ProtobufCEnumDescriptor mgmt__daos_request_status__descriptor =
-{
-  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "mgmt.DaosRequestStatus",
-  "DaosRequestStatus",
-  "Mgmt__DaosRequestStatus",
-  "mgmt",
-  4,
-  mgmt__daos_request_status__enum_values_by_number,
-  4,
-  mgmt__daos_request_status__enum_values_by_name,
-  1,
-  mgmt__daos_request_status__value_ranges,
-  NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
