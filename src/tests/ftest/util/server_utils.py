@@ -192,6 +192,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
                     raise excpn
+                print("<SERVER> Got EAGAIN waiting for stdout, trying again")
                 continue
             match = re.findall(pattern, output)
             expected_data += output
@@ -202,6 +203,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
                 if result != server_count:
                     raise ServerFailed("Server didn't start!")
                 break
+            print("<SERVER> Skipping output \"{}\"".format(output))
         print("<SERVER> server started and took %s seconds to start" % \
               (time.time() - start_time))
     except Exception as error:
