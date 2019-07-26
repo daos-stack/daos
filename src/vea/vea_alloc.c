@@ -431,7 +431,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	if (found_end > vfe_end) {
 		frag.vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 		frag.vfe_blk_cnt = found_end - vfe_end;
-		rc = get_current_age(&frag.vfe_age);
+		rc = daos_gettime_coarse(&frag.vfe_age);
 		if (rc)
 			return rc;
 
