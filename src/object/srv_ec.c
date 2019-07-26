@@ -111,6 +111,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			unsigned long	recx_size = iod->iod_size *
 						 this_recx->rx_nr;
 
+
 			if ( iod->iod_recxs[idx].rx_idx & PARITY_INDICATOR) {
 				skip_list[i][sl_idx++] = -(long)oca->u.ec.e_len;
 				ec_del_recx(iod, idx);;
@@ -249,7 +250,6 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 out:
 	return rc;
 }
-
 
 /* Free the memory allocated on the leader for the copy of the IOD array
  */

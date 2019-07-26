@@ -749,7 +749,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	bool			rma;
 	bool			bulk_bind;
 	daos_iod_t		*iods = NULL;
-	int			rc, err;
+	int			i, rc, err;
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -766,6 +766,10 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
 		tag, orw->orw_epoch);
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
+		tag, orw->orw_epoch);
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
 
@@ -774,7 +778,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) {
 		bulk_op = CRT_BULK_GET;
 		if (oca->ca_resil == DAOS_RES_EC) {
-			int i;
 			unsigned int tgt_idx = orw->orw_oid.id_shard -
 						orw->orw_start_shard;
 
@@ -866,16 +869,13 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		if ((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) &&
 			oca->ca_resil == DAOS_RES_EC) {
-			D_INFO("Calling EC bulk transfer\n");
 			rc = ec_update_bulk_transfer(rpc, bulk_bind,
 			orw->orw_bulks.ca_arrays, ioh, skip_list, orw->orw_nr);
 		} else {
-			D_INFO("Calling regular bulk transfer\n");
 			rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind,
 			orw->orw_bulks.ca_arrays, ioh, NULL, orw->orw_nr);
 		}
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
-		D_INFO("Calling biod_copy\n");
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
 
@@ -889,6 +889,10 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	rc = rc ? : err;
 out:
 	rc = ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, dth);
+	for (i = 0; i < orw->orw_nr; i++)
+		D_FREE(skip_list[i]);
+	if (iods)
+		 ec_free_iods(&iods, orw->orw_nr);
 	return rc;
 }
 
