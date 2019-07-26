@@ -59,13 +59,11 @@ class EvictTests(TestWithServers):
         # Check that the pool was created
         status = pool.check_files(hostlist)
         if not status:
-            self.log.error("Invalid pool - pool data not detected on servers")
-            return None
+            self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
         status = pool.connect(1)
         if not status:
-            self.log.error("Pool connect failed or already connected")
-            return None
+            self.fail("Pool connect failed or already connected")
         # Return connected pool
         return pool
 
@@ -94,7 +92,10 @@ class EvictTests(TestWithServers):
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
             # Attempt to evict pool with invald UUID
-            bogus_uuid = str(uuid.uuid4())
+            bogus_uuid = self.pool.uuid
+            # in case uuid4() generates pool.uuid
+            while bogus_uuid == self.pool.uuid:
+                bogus_uuid = str(uuid.uuid4())
             # set the UUID directly
             self.pool.pool.set_uuid_str(bogus_uuid)
             self.log.info(
@@ -107,13 +108,15 @@ class EvictTests(TestWithServers):
             self.pool.pool.evict()
         # exception is expected
         except DaosApiError as result:
-            if "-1005" in str(result):
+            status = "-1005" in str(result)
+            if status:
                 self.log.info(
                     "Expected exception - invalid param %s\n %s\n",
                     test_param, str(result))
             else:
-                self.log.info("Unexpected exception \n %s", str(result))
-
+                self.log.info(
+                    "Unexpected exception - invalid param %s\n %s\n",
+                    test_param, str(result))
             # Restore the valid server group name or uuid and verify that
             # pool still exists and the handle is still valid.
             if "BAD_SERVER_NAME" in test_param:
@@ -121,13 +124,14 @@ class EvictTests(TestWithServers):
                     self.server_group)
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
+
             self.log.info("Check if pool handle still exist")
             if int(self.pool.pool.handle.value) == 0:
                 self.log.error(
                     "Pool handle was removed when evicting pool with %s",
                     test_param)
                 return False
-            return True
+            return status
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
         # still exists
@@ -180,18 +184,12 @@ class EvictTests(TestWithServers):
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))
-            if pool[count] is None:
-                self.fail("Failed to Create a connected pool")
-
             if len(non_pool_servers[count]) > 0:
                 self.assertFalse(
                     pool[count].check_files(non_pool_servers[count]),
                     "Pool # {} data detected on non pool servers {} ".format(
                         count+1, non_pool_servers[count]))
 
-            # # Connect to each pool
-            # self.assertTrue(pool[count].connect(1),
-            #                 "Pool connect failed before evict")
             self.log.info("Pool # %s is connected with handle %s",
                           count+1, pool[count].pool.handle.value)
 
