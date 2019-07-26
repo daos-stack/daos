@@ -64,7 +64,7 @@ def run_task(hosts, command, timeout=None):
     return task
 
 
-def cluster_cmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
+def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     """Run a command on each host in parallel and get the return codes.
 
     Args:

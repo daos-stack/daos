@@ -33,7 +33,7 @@ import errno
 import fcntl
 import re
 
-from general_utils import cluster_cmd, check_file_exists
+from general_utils import pcmd, check_file_exists
 
 
 class AgentFailed(Exception):
@@ -146,7 +146,7 @@ def stop_agent(sessions, client_list=None):
         client_list = [socket.gethostname().split('.', 1)[0]]
 
     # Kill the agents processes
-    cluster_cmd(client_list, "pkill daos_agent", False)
+    pcmd(client_list, "pkill daos_agent", False)
 
     # Kill any processes running in the sessions
     for client in sessions:
@@ -161,7 +161,7 @@ def stop_agent(sessions, client_list=None):
     #   2 - Syntax error in the command line.
     #   3 - Fatal error: out of memory etc.
     time.sleep(5)
-    result = cluster_cmd(client_list, "pgrep 'daos_agent'", False, expect_rc=1)
+    result = pcmd(client_list, "pgrep 'daos_agent'", False, expect_rc=1)
     if len(result) > 1 or 1 not in result:
         raise AgentFailed(
             "DAOS agent processes detected after attempted stop on {}".format(

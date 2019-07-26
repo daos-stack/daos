@@ -37,7 +37,7 @@ import errno
 import yaml
 
 from avocado.utils import genio
-from general_utils import cluster_cmd
+from general_utils import pcmd
 
 SESSIONS = {}
 
@@ -160,7 +160,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
 
         # clean the tmpfs on the servers
         print("Cleaning the server tmpfs directories")
-        result = cluster_cmd(
+        result = pcmd(
             servers,
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
             "xargs -0r rm -rf",
@@ -307,7 +307,7 @@ def stop_server(setname=None, hosts=None):
     #   2 - Syntax error in the command line.
     #   3 - Fatal error: out of memory etc.
     time.sleep(5)
-    result = cluster_cmd(
+    result = pcmd(
         hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
     if len(result) > 1 or 1 not in result:
         bad_hosts = [
@@ -337,4 +337,4 @@ def kill_server(hosts):
         "pkill '(daos_server|daos_io_server)' --signal KILL",
     ]
     # Intentionally ignoring the exit status of the command
-    cluster_cmd(hosts, "; ".join(kill_cmds), False)
+    pcmd(hosts, "; ".join(kill_cmds), False, None, None)
