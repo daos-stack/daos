@@ -2045,8 +2045,7 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id);
-	if (oca->ca_resil == DAOS_RES_EC) {
+	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
 		rc = ec_obj_update_encode(task, obj->cob_md.omd_id, oca,
 					  &tgt_set);
 		if (rc != 0) {

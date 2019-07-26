@@ -956,6 +956,11 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		D_ERROR("fetch failed: %d\n", rc);
 		goto out;
 
+	case -DER_INPROGRESS:
+		/* Log for -DER_INPROGRESS has already been handled by
+		 * dtx_inprogress().
+		 */
+		goto out;
 	case -DER_NONEXIST:
 		if (!(flags & SUBTR_CREATE))
 			goto out;

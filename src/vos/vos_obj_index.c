@@ -438,7 +438,11 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info\n");
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch oid infor because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Error while fetching oid info: %d\n", rc);
 		return rc;
 	}
 
@@ -624,7 +628,11 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info\n");
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch oid info because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Error while fetching oid info: %d\n", rc);
 		return rc;
 	}
 
