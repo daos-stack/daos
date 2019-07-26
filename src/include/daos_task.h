@@ -531,6 +531,7 @@ typedef struct {
 	daos_obj_id_t		oid;
 	daos_handle_t		th;
 	unsigned int		mode;
+	unsigned int		open_with_attr;
 	daos_size_t		*cell_size;
 	daos_size_t		*chunk_size;
 	daos_handle_t		*oh;

@@ -626,24 +626,27 @@ open_handle_cb(tse_task_t *task, void *data)
 	if (rc != 0)
 		D_GOTO(err_obj, rc);
 
-	/** Check magic value */
-	params = daos_task_get_priv(task);
-	D_ASSERT(params != NULL);
-	md_vals = params->md_vals;
-	if (md_vals[0] != AKEY_MAGIC_V) {
-		D_ERROR("DAOS Object is not an array object\n");
-		D_GOTO(err_obj, rc = -DER_NO_PERM);
-	}
+	/** check and set array metadata in case of array_open */
+	if (!args->open_with_attr) {
+		/** Check magic value */
+		params = daos_task_get_priv(task);
+		D_ASSERT(params != NULL);
+		md_vals = params->md_vals;
+		if (md_vals[0] != AKEY_MAGIC_V) {
+			D_ERROR("DAOS Object is not an array object\n");
+			D_GOTO(err_obj, rc = -DER_NO_PERM);
+		}
 
-	/** If no cell and chunk size, this isn't an array obj. */
-	if (md_vals[1] == 0 || md_vals[2] == 0) {
-		D_ERROR("Failed to retrieve array metadata\n");
-		D_GOTO(err_obj, rc = -DER_NO_PERM);
-	}
+		/** If no cell and chunk size, this isn't an array obj. */
+		if (md_vals[1] == 0 || md_vals[2] == 0) {
+			D_ERROR("Failed to retrieve array metadata\n");
+			D_GOTO(err_obj, rc = -DER_NO_PERM);
+		}
 
-	/** Set array open OUT params */
-	*args->cell_size	= md_vals[1];
-	*args->chunk_size	= md_vals[2];
+		/** Set array open OUT params */
+		*args->cell_size	= md_vals[1];
+		*args->chunk_size	= md_vals[2];
+	}
 
 	/** Create an array OH from the DAOS one */
 	array = array_alloc();
@@ -654,8 +657,8 @@ open_handle_cb(tse_task_t *task, void *data)
 	array->oid.hi		= args->oid.hi;
 	array->oid.lo		= args->oid.lo;
 	array->mode		= args->mode;
-	array->cell_size	= md_vals[1];
-	array->chunk_size	= md_vals[2];
+	array->cell_size	= *args->cell_size;
+	array->chunk_size	= *args->chunk_size;
 	array->daos_oh		= *args->oh;
 
 	array_hdl_link(array);
@@ -709,11 +712,15 @@ int
 dc_array_open(tse_task_t *task)
 {
 	daos_array_open_t	*args = daos_task_get_args(task);
-	tse_task_t		*open_task, *fetch_task;
+	tse_task_t		*open_task = NULL, *fetch_task = NULL;
 	daos_obj_open_t		*open_args;
 	struct md_params	*params;
 	daos_ofeat_t		ofeat;
 	int			rc;
+
+	if (args->open_with_attr)
+		if (*args->cell_size == 0 || *args->chunk_size == 0)
+			D_GOTO(err_ptask, rc = -DER_INVAL);
 
 	ofeat = daos_obj_id2feat(args->oid);
 	if (!(ofeat & DAOS_OF_DKEY_UINT64)) {
@@ -724,7 +731,7 @@ dc_array_open(tse_task_t *task)
 		D_ERROR("Array must be of type Flat KV (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
-	if (!(ofeat & DAOS_OF_ARRAY)) {
+	if (!args->open_with_attr && !(ofeat & DAOS_OF_ARRAY)) {
 		D_ERROR("Array Open must have DAOS_OF_ARRAY (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
@@ -744,6 +751,26 @@ dc_array_open(tse_task_t *task)
 	open_args->oh	= args->oh;
 
 	tse_task_schedule(open_task, false);
+
+	/** if this is an open_with_attr call, just add the handle CB */
+	if (args->open_with_attr) {
+		/** The upper task completes when the open task completes */
+		rc = tse_task_register_deps(task, 1, &open_task);
+		if (rc != 0) {
+			D_ERROR("Failed to register dependency\n");
+			D_GOTO(err_put2, rc);
+		}
+
+		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
+					       sizeof(args));
+		if (rc != 0) {
+			D_ERROR("Failed to register completion cb\n");
+			D_GOTO(err_put1, rc);
+		}
+
+		tse_sched_progress(tse_task2sched(task));
+		return rc;
+	}
 
 	/** Create task to fetch object metadata */
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),

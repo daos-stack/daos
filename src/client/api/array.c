@@ -77,9 +77,37 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 	args->oid	 = oid;
 	args->th	 = th;
 	args->mode	 = mode;
+	args->open_with_attr = 0;
 	args->cell_size	 = cell_size;
 	args->chunk_size = chunk_size;
 	args->oh	 = oh;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
+			  daos_handle_t th, unsigned int mode,
+			  daos_size_t cell_size, daos_size_t chunk_size,
+			  daos_handle_t *oh, daos_event_t *ev)
+{
+	daos_array_open_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	rc = dc_task_create(dc_array_open, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	 	= coh;
+	args->oid	 	= oid;
+	args->th	 	= th;
+	args->mode	 	= mode;
+	args->open_with_attr	= 1;
+	args->cell_size		= &cell_size;
+	args->chunk_size	= &chunk_size;
+	args->oh	 	= oh;
 
 	return dc_task_schedule(task, true);
 }

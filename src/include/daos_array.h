@@ -180,7 +180,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  */
 int
 daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
-		unsigned int mode, daos_size_t *elem_size,
+		unsigned int mode, daos_size_t *cell_size,
 		daos_size_t *chunk_size, daos_handle_t *oh, daos_event_t *ev);
 
 /**
@@ -188,7 +188,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  * the same as the create call if the object does not exist, except that nothing
  * is updated in the object, and the API just returns an OH to the user. If the
  * array was accessed with different cell_size and chunk_size before, accessing
- * it again will introduce corruption in the array.
+ * it again will introduce corruption in the array data.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
@@ -218,7 +218,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 int
 daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
 			  daos_handle_t th, unsigned int mode,
-			  daos_size_t elem_size, daos_size_t chunk_size,
+			  daos_size_t cell_size, daos_size_t chunk_size,
 			  daos_handle_t *oh, daos_event_t *ev);
 
 /**

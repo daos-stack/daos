@@ -90,8 +90,10 @@ enum {
 	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
 	/** reserved: 1-level flat KV store */
 	DAOS_OF_KV_FLAT		= (1 << 4),
-	/** reserved: Array with metadata stored in the DAOS object */
+	/** reserved: 1D Array with metadata stored in the DAOS object */
 	DAOS_OF_ARRAY		= (1 << 5),
+	/** reserved: Multi Dimensional Array */
+	DAOS_OF_ARRAY_MD	= (1 << 6),
 	/**
 	 * benchmark-only feature bit, I/O is a network echo, no data is going
 	 * to be stored/returned
