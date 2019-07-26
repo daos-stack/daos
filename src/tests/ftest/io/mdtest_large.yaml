@@ -33,7 +33,7 @@ pool:
         setname: daos_server
     createsize:
         scm_size: 15000000000
-        nvme_size: 50000000000
+        nvme_size: 30000000000
     createsvc:
         svcn: 1
 mdtest:
@@ -49,9 +49,6 @@ mdtest:
     iteration: 3
     num_of_files_dirs: 10000
     data: !mux
-        zero:
-            write_bytes: 0
-            read_bytes: 0
         1K:
             write_bytes: 1000
             read_bytes: 1000
@@ -66,5 +63,5 @@ mdtest:
     directory_depth: !mux
         depth_0:
             depth: 0
-        depth_20:
+        depth_100:
             depth: 100

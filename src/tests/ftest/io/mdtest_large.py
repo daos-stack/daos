@@ -21,16 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-#from __future__ import print_function
 
-#from apricot import TestWithServers
-#from daos_api import DaosPool
-#from mpio_utils import MpioUtils
-
-#import os
-#import write_host_file
-#import mdtest_utils
-from mdtest import MdtestBase
+from mdtest_test_base import MdtestBase 
 
 class MdtestLarge(MdtestBase):
     """
@@ -57,4 +49,5 @@ class MdtestLarge(MdtestBase):
         :avocado: tags=mdtest,mdtestlarge
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
-        self.execute_mdtest(mdtest_flags)
+        self.mdtest_cmd.flags.update(mdtest_flags)        
+        self.execute_mdtest()
