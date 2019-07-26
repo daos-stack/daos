@@ -1,8 +1,8 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       0.0.1
-Release:       5%{?dist}
+Version:       1.0.0
+Release:       1%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -122,6 +122,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Fri Jul 26 2019 Alexander A. Oganezov <alexander.a.oganezov@intel.com>
+- Libcart version 1.0.0
+
 * Fri Jun 21 2019 Brian J. Murrell <brian.murrell@intel.com>
 - add Requires: libyaml-devel to the -devel package
 
