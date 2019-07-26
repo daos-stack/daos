@@ -23,14 +23,12 @@
 '''
 from __future__ import print_function
 
+import os
+
 from apricot import TestWithServers
 from daos_api import DaosPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand, MdtestFailed
-
-import os
-import write_host_file
-# import mdtest_utils
 
 class MdtestBase(TestWithServers):
     """
@@ -50,10 +48,6 @@ class MdtestBase(TestWithServers):
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
-        # Recreate the client hostfile without slots defined
-#        self.hostfile_clients = write_host_file.write_host_file(
-#            self.hostlist_clients, self.workdir, None)
-
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
         self.mdtest_cmd.get_params(self)
@@ -69,7 +63,7 @@ class MdtestBase(TestWithServers):
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
 
-    def execute_mdtest(self, mdtest_flags=None, object_class=None):
+    def execute_mdtest(self):
         """
         Execute mdtest with optional overrides for mdtest flags
         and object_class.
@@ -94,38 +88,9 @@ class MdtestBase(TestWithServers):
         self.pool.create(
             mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
 
-        # Initialize MpioUtils if Mdtest is running in MPIIO mode
-#        mpio_util = MpioUtils()
-#        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-#            self.fail("Exiting Test: Mpich not installed")
-#        path = mpio_util.mpichinstall
-
-#        svc_list = ""
-#        for item in range(svcn):
-#            svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
-#        svc_list = svc_list[:-1]
-
-        # assign mdtest params
-#        self.mdtest_cmd.dfs_pool_uuid.value = self.pool.get_uuid_str()
-#        self.mdtest_cmd.dfs_svcl.value = svc_list
-
-        # Override the yaml Mdtest params with provided values
-#        if mdtest_flags:
-#            self.mdtest_cmd.flags.value = mdtest_flags
-#        if object_class:
-#            self.mdtest_cmd.daos_oclass.value = object_class
-
         # Run Mdtest
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
         self.run_ior(self.get_job_manager_command(self.manager), self.processes)
-
-#        try:
-#            self.mdtest_cmd.run(
-#                self.basepath, self.processes, self.hostfile_clients, True,
-#                path)
-#        except mdtest_utils.MdtestFailed as excep:
-#            print(excep)
-#            self.fail("Test was expected to pass but it failed.\n")
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.

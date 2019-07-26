@@ -24,7 +24,6 @@
 
 from __future__ import print_function
 
-import re
 import uuid
 
 from avocado.utils.process import run, CmdError
@@ -39,7 +38,7 @@ class MdtestCommand(CommandWithParameters):
     def __init__(self):
         """Create an MdtestCommand object."""
         super(MdtestCommand, self).__init__("mdtest")
-        self.flags = FormattedParameter("{}")               # mdtest flags
+        self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
         #  -a=STRING             API for I/O [POSIX|DUMMY]
         #  -b=1                  branching factor of hierarchical dir structure
@@ -67,7 +66,7 @@ class MdtestCommand(CommandWithParameters):
         #                        of iterations of the creation phase, can be
         #                        used to split phases across runs
         # -z=0                   depth of hierarchical directory structure
-        
+
         self.api = FormattedParameter("-a {}")
         self.branching_factor = FormattedParameter("-b {}")
         self.test_dir = FormattedParameter("-d {}")
@@ -79,14 +78,14 @@ class MdtestCommand(CommandWithParameters):
         self.last_num_tasks = FormattedParameter("-l {}")
         self.num_of_files_dirs = FormattedParameter("-n {}")
         self.pre_iter = FormattedParameter("-p {}")
-        self.random_seed = FormattedParameter("--random-seed {}") 
-        self.stride = FormattedParameter("-s {}") 
-        self.verbosity_value = FormattedParameter("-V {}") 
+        self.random_seed = FormattedParameter("--random-seed {}")
+        self.stride = FormattedParameter("-s {}")
+        self.verbosity_value = FormattedParameter("-V {}")
         self.write_bytes = FormattedParameter("-w {}")
-        self.stonewall_timer = FormattedParameter("-W {}") 
+        self.stonewall_timer = FormattedParameter("-W {}")
         self.stonewall_statusfile = FormattedParameter("-x {}")
         self.depth = FormattedParameter("-z {}")
-        
+
         # Module DAOS
         # Required arguments
         #  --daos.pool=STRING            pool uuid
@@ -106,8 +105,8 @@ class MdtestCommand(CommandWithParameters):
         self.daos_cont = FormattedParameter("--daos.cont {}")
         self.daos_group = FormattedParameter("--daos.group {}")
         self.daos_chunk_size = FormattedParameter(" --daos.chunk_size {}")
-        self.daos_oclass = FormattedParameter("--daos.oclass {}") 
-        
+        self.daos_oclass = FormattedParameter("--daos.oclass {}")
+
         # Module DFS
         # Required arguments
         #  --dfs.pool=STRING             DAOS pool uuid
@@ -119,7 +118,7 @@ class MdtestCommand(CommandWithParameters):
 
         # Optional arguments
         #  --dfs.group=STRING            DAOS server group
-         
+
         self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
         self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
@@ -128,15 +127,7 @@ class MdtestCommand(CommandWithParameters):
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
         # Sort the Mdtest parameter names to generate consistent mdtest commands
-        # all_param_names = super(MdtestCommand, self).get_param_names()
         param_names = super(MdtestCommand, self).get_param_names()
-
-        # List all of the common ior params first followed by any daos-specific
-        # params (except when using MPIIO).
-        #param_names = [name for name in all_param_names if "daos" not in name]
-        #if self.api.value != "MPIIO":
-        #    param_names.extend(
-        #        [name for name in all_param_names if "daos" in name])
 
         return param_names
 
@@ -153,7 +144,8 @@ class MdtestCommand(CommandWithParameters):
         super(MdtestCommand, self).get_params(test, path)
 
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
-        """Set the Mdtest parameters for the DAOS group, pool, and container uuid.
+        """Set the Mdtest parameters for the DAOS group, pool, and container
+           uuid.
         Args:
             group (str): DAOS server group name
             pool (DaosPool): DAOS pool API object
@@ -178,7 +170,7 @@ class MdtestCommand(CommandWithParameters):
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
-        """Set the IOR daos_svcl param from the ranks of a DAOS pool object.
+        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object
         Args:
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
@@ -198,7 +190,7 @@ class MdtestCommand(CommandWithParameters):
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
         Raises:
-            MdtestFailed: if an error occured building the IOR command
+            MdtestFailed: if an error occured building the Mdtest command
         Returns:
             str: mdtest launch command
         """
@@ -278,4 +270,4 @@ class MdtestCommand(CommandWithParameters):
 
         except CmdError as error:
             print("<MdtestRunFailed> Exception occurred: {}".format(error))
-            raise IorFailed("Mdtest Run process Failed: {}".format(error))
+            raise MdtestFailed("Mdtest Run process Failed: {}".format(error))
