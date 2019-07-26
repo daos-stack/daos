@@ -28,8 +28,10 @@ import json
 from multiprocessing import Process
 import os
 import re
+from shutil import rmtree
 import socket
 import subprocess
+from tempfile import mkdtemp
 import time
 import yaml
 
@@ -51,6 +53,28 @@ CLIENT_KEYS = (
     "test_clients",
     "clients",
     )
+
+
+class TemporaryDirectory(object):
+    """Create and return a temporary directory.
+
+    This is a quick and dirty implementation of the tempfile.TemporaryDirectory
+    class available in python 3.2+.  It should be replaced by the following
+    when we move from python 2.7:
+
+        from tempfile import TemporaryDirectory
+
+    When the last reference of this object goes out of scope the directory and
+    its contents are removed.
+    """
+
+    def __init__(self):
+        """Initialize a TemporaryDirectory object."""
+        self.name = mkdtemp()
+
+    def __del__(self):
+        """Destroy a TemporaryDirectory object."""
+        rmtree(self.name)
 
 
 def get_build_environment():
@@ -239,12 +263,14 @@ def get_test_list(tags):
     return " ".join(test_tags), test_list
 
 
-def get_test_files(test_list, args):
+def get_test_files(test_list, args, tmp_dir):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
+        tmp_dir (TemporaryDirectory): temporary directory object to use to
+            write modified yaml files
 
     Returns:
         list: a list of dictionaries of each test script and yaml file
@@ -253,12 +279,13 @@ def get_test_files(test_list, args):
     test_files = [{"py": test, "yaml": None} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        test_file["yaml"] = replace_yaml_file("{}.yaml".format(base), args)
+        test_file["yaml"] = replace_yaml_file(
+            "{}.yaml".format(base), args, tmp_dir)
 
     return test_files
 
 
-def replace_yaml_file(yaml_file, args):
+def replace_yaml_file(yaml_file, args, tmp_dir):
     """Replace the server/client yaml file placeholders.
 
     Replace any server or client yaml file placeholder names with the host
@@ -269,6 +296,8 @@ def replace_yaml_file(yaml_file, args):
     Args:
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
+        tmp_dir (TemporaryDirectory): temporary directory object to use to
+            write modified yaml files
 
     Returns:
         str: the test yaml file
@@ -311,11 +340,8 @@ def replace_yaml_file(yaml_file, args):
                 file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
 
         # Write the modified yaml file into a temporary file
-        home_tmp = os.path.join(os.path.expanduser("~"), "tmp")
-        if not os.path.exists(home_tmp):
-            os.makedirs(home_tmp)
         yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
-        yaml_file = os.path.join(home_tmp, "{}.yaml".format(yaml_name))
+        yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
         print("Creating {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:
             yaml_buffer.write(file_str)
@@ -379,11 +405,6 @@ def run_tests(test_files, tag_filter, args):
             # Optionally rename the test results directory for this test
             if args.rename:
                 rename_logs(avocado_logs_dir, test_file["py"])
-
-            # Remove the modified copy of the test's yaml file
-            if args.test_servers:
-                print("Removing {}".format(test_file["yaml"]))
-                os.remove(test_file["yaml"])
 
     return return_code
 
@@ -691,8 +712,11 @@ def main():
     if args.list:
         exit(0)
 
+    # Create a temporary directory
+    tmp_dir = TemporaryDirectory()
+
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(test_list, args)
+    test_files = get_test_files(test_list, args, tmp_dir)
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)
