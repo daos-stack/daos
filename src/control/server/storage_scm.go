@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -68,6 +69,31 @@ const (
 
 type runCmdFn func(string) ([]byte, error)
 
+type runCmdError struct {
+	wrapped error
+	stdout  []byte
+}
+
+func (rce *runCmdError) Error() string {
+	if ee, ok := rce.wrapped.(*exec.ExitError); ok {
+		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
+			rce.stdout, ee.Stderr)
+	}
+	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
+}
+
+// run wraps exec.Command().Output() to enable mocking of command output.
+func run(cmd string) ([]byte, error) {
+	out, err := exec.Command(cmd).Output()
+	if err != nil {
+		return nil, &runCmdError{
+			wrapped: err,
+			stdout:  out,
+		}
+	}
+	return out, nil
+}
+
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device
 // details.
@@ -78,8 +104,15 @@ type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *configuration // server configuration structure
 	modules     common.ScmModules
+	runCmd      runCmdFn
 	initialized bool
 	formatted   bool
+}
+
+func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
+	s.runCmd = runCmd
+
+	return s
 }
 
 // TODO: implement remaining methods for scmStorage
@@ -100,15 +133,15 @@ type scmStorage struct {
 // * regions exist but no free capacity -> no-op
 //
 // Command output from external tools will be returned.
-func (s *scmStorage) Prep(runFn runCmdFn) ([]byte, error) {
-	state, err := getState(runFn)
+func (s *scmStorage) Prep() ([]byte, error) {
+	state, err := getState(s.runCmd)
 	if err != nil {
 		return nil, errors.WithMessage(err, "establish scm state")
 	}
 
 	log.Debugf("scm in state %s\n", state)
 
-	return progressState(state, runFn)
+	return progressState(state, s.runCmd)
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
@@ -491,6 +524,6 @@ func newScmStorage(config *configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,
+		runCmd: run,
 	}
-
 }

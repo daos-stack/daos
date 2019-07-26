@@ -26,7 +26,6 @@ package server
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/pkg/errors"
 
@@ -157,11 +156,6 @@ func dryRun(cmd string) ([]byte, error) {
 	return []byte(cmd), nil
 }
 
-// run wraps exec.Command().Output() to enable mocking of command output.
-func run(cmd string) ([]byte, error) {
-	return exec.Command(cmd).Output()
-}
-
 // PrepScmCmd is the struct representing the command to prep SCM modules by
 // configuring in AppDirect mode and creating relevant namespaces.
 type PrepScmCmd struct {
@@ -186,13 +180,12 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	runFn := run
 	if p.DryRun {
-		runFn = dryRun
+		server.scm = server.scm.withRunCmd(dryRun)
 	}
 
 	if !p.Reset {
-		out, err := server.scm.Prep(runFn)
+		out, err := server.scm.Prep()
 		if err != nil {
 			return errors.WithMessage(err, "DCPM prep")
 		}

@@ -150,12 +150,12 @@ func TestGetState(t *testing.T) {
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		ss := defaultMockScmStorage(&config)
+		ss := defaultMockScmStorage(&config).withRunCmd(mockRun)
 		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
 
 		regionsOut = tt.showRegionOut // initial value
 
-		out, err := ss.Prep(mockRun)
+		out, err := ss.Prep()
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
