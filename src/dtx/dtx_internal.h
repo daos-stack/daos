@@ -57,6 +57,7 @@ enum dtx_operation {
 #define DAOS_ISEQ_DTX							\
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
+	((uint64_t)		(di_epoch)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)
 
 /* DTX RPC output fields */
@@ -65,17 +66,7 @@ enum dtx_operation {
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-/* If the count of committable DTXs on leader exceeds this threshold,
- * it will trigger batched DTX commit globally. We will optimize the
- * threshould with considering RPC limitation, PMDK transaction, and
- * CPU schedule efficiency, and so on.
- */
-#define DTX_THRESHOLD_COUNT		(1 << 9)
-
 /* The age unit is second. */
-
-/* The time threshould for batched DTX commit. */
-#define DTX_COMMIT_THRESHOLD_AGE	60
 
 /* The count threshould for triggerring DTX aggregation.
  * This threshould should consider the real SCM size.

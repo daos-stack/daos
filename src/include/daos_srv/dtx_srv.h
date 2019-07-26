@@ -176,7 +176,8 @@ int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
 void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
 
 int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		      struct dtx_id *dti, uint64_t dkey_hash, bool punch);
+		      struct dtx_id *dti, uint64_t dkey_hash,
+		      bool punch, daos_epoch_t *epoch);
 
 /* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
  *	logic clock that will be hidden when divided by NSEC_PER_SEC.

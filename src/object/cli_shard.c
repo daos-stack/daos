@@ -285,6 +285,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_t			 cont_hdl_uuid;
 	uuid_t			 cont_uuid;
 	bool			 cb_registered = false;
+	uint32_t		 flags = 0;
 	int			 rc;
 
 	obj_shard_addref(shard);
@@ -297,13 +298,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					  DAOS_FAIL_ONCE);
 		}
 	}
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE) &&
-	    srv_io_mode == DIM_CLIENT_DISPATCH) {
-		/* to trigger retry on all other shards */
-		if (args->auxi.shard != daos_fail_value_get()) {
-			D_INFO("complete shard %d update as -DER_TIMEDOUT.\n",
-				args->auxi.shard);
-			D_GOTO(out_obj, rc = -DER_TIMEDOUT);
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
+		if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+			/* to trigger retry on all other shards */
+			if (args->auxi.shard != daos_fail_value_get()) {
+				D_INFO("complete shard %d update as "
+				       "-DER_TIMEDOUT.\n", args->auxi.shard);
+				D_GOTO(out_obj, rc = -DER_TIMEDOUT);
+			}
+		} else {
+			flags = ORF_DTX_SYNC;
 		}
 	}
 
@@ -350,7 +354,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 	daos_dti_copy(&orw->orw_dti, &args->dti);
-	orw->orw_flags = args->auxi.flags;
+	orw->orw_flags = args->auxi.flags | flags;
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 

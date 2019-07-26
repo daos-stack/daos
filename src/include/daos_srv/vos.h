@@ -102,6 +102,29 @@ int
 vos_dtx_fetch_committable(daos_handle_t coh, int max, struct dtx_entry **dtes);
 
 /**
+ * Check whether the given DTX is resent one or not.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch operation or not.
+ * \param epoch		[OUT]	Address for saving the DTX epoch if exists.
+ *
+ * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
+ *					so the local modification has been done
+ *					on related replica(s). If all replicas
+ *					have 'prepared', then the whole DTX is
+ *					committable.
+ *			DTX_ST_COMMITTED means the DTX has been committed.
+ *			Negative value if error.
+ */
+int
+vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
+		     struct dtx_id *dti, uint64_t dkey_hash,
+		     bool punch, daos_epoch_t *epoch);
+
+/**
  * Check the specified DTX's persistent status.
  *
  * \param coh		[IN]	Container open handle.
