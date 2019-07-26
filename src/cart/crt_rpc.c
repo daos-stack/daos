@@ -919,7 +919,6 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	char			*uri = NULL;
 	crt_group_id_t		 grp_id;
 	struct crt_context	*crt_ctx;
-	d_rank_list_t		*membs;
 	bool			 naked_free = false;
 	int			 rc = 0;
 
@@ -931,8 +930,9 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	default_grp_priv = crt_grp_pub2priv(NULL);
 	D_ASSERT(default_grp_priv != NULL);
 
+
 	/* this is a remote group, contact the PSR */
-	if (grp_priv->gp_local == 0) {
+	if (grp_priv->gp_local == 0 && !crt_is_service()) {
 		/* send an RPC to the PSR */
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Querying PSR to find out target NA Address.\n");
@@ -951,9 +951,6 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	rank = tgt_ep->ep_rank;
 	tag = tgt_ep->ep_tag;
-	membs = grp_priv_get_membs(grp_priv);
-	if (grp_priv->gp_primary == 0)
-		rank = membs->rl_ranks[rank];
 
 	if (crt_req_is_self(rpc_priv)) {
 		/* rpc is sent to self */
@@ -977,7 +974,6 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		}
 		naked_free = true;
 	} else {
-
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Querying rank %d tag 0 for target NA address\n",
 			  rank);
@@ -991,7 +987,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_grp_lc_uri_insert(default_grp_priv, crt_ctx->cc_idx,
+	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx,
 			rank, tag, uri);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
@@ -1033,6 +1029,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	/* decref at crt_req_hg_addr_lookup_cb */
 	RPC_ADDREF(rpc_priv);
+
 	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
 				crt_req_hg_addr_lookup_cb, rpc_priv);
 	if (rc != 0) {

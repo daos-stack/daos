@@ -1210,13 +1210,15 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	init_work_contexts();
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);
 	}
 
-	rc = tc_load_group_from_file(grp_cfg_file, grp, 1, my_rank, true);
+	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
+				true);
 	if (rc != 0) {
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);
@@ -1233,7 +1235,6 @@ int main(int argc, char **argv)
 	rc = crt_group_size(NULL, &g_group_size);
 	assert(rc == 0);
 
-	init_work_contexts();
 	init_iv();
 
 	/* Wait for IV namespace attach before saving group config

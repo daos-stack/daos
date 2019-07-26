@@ -67,6 +67,8 @@ def scons():
     env.Install("$CRT_TSTDIR/group_tiers", Glob("group_tiers/*.yaml"))
     env.Install("$CRT_TSTDIR/nopmix_launcher", Glob("nopmix_launcher/*.py"))
     env.Install("$CRT_TSTDIR/nopmix_launcher", Glob("nopmix_launcher/*.yaml"))
+    env.Install("$CRT_TSTDIR/group_test", Glob("group_test/*.yaml"))
+    env.Install("$CRT_TSTDIR/group_test", Glob("group_test/*.py"))
 
 if __name__ == 'SCons.Script':
     scons()

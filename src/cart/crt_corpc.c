@@ -496,6 +496,7 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	parent_co_hdr = &parent_rpc_priv->crp_coreq_hdr;
 	child_co_hdr = &child_rpc_priv->crp_coreq_hdr;
 	child_co_hdr->coh_int_grpid = parent_co_hdr->coh_int_grpid;
+
 	/* child's coh_bulk_hdl is different with parent_co_hdr */
 	child_co_hdr->coh_bulk_hdl = parent_rpc_priv->crp_pub.cr_co_bulk_hdl;
 	child_co_hdr->coh_excluded_ranks = parent_co_hdr->coh_excluded_ranks;
@@ -771,6 +772,7 @@ out:
 int
 crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 {
+	d_rank_list_t		*membs;
 	struct crt_corpc_info	*co_info;
 	d_rank_list_t		*children_rank_list = NULL;
 	d_rank_t		 grp_rank;
@@ -817,13 +819,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
-
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
 				   co_info->co_excluded_ranks,
 				   co_info->co_tree_topo, co_info->co_root,
 				   co_info->co_grp_priv->gp_self,
 				   &children_rank_list, &ver_match);
-
 
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv,
@@ -850,12 +850,37 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(forward_done, rc);
 	}
 
+	membs = grp_priv_get_membs(co_info->co_grp_priv);
+
 	/* firstly forward RPC to children if any */
 	for (i = 0; i < co_info->co_child_num; i++) {
 		crt_rpc_t	*child_rpc;
 		crt_endpoint_t	 tgt_ep = {0};
 
-		tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
+		/*
+		 * This is a temporary workaround for PMIX case. For secondary
+		 * groups returned 'children_rank_list' contains primary ranks.
+		 * Convert here to secondary ranks.
+		 */
+		if (CRT_PMIX_ENABLED() && !co_info->co_grp_priv->gp_primary) {
+			uint32_t	 idx;
+
+			rc = d_idx_in_rank_list(membs,
+				children_rank_list->rl_ranks[i], &idx);
+
+			if (rc != 0) {
+				RPC_ERROR(rpc_priv, "rank %d not found\n",
+					children_rank_list->rl_ranks[i]);
+				crt_corpc_fail_child_rpc(rpc_priv,
+						co_info->co_child_num - i, rc);
+				D_GOTO(forward_done, rc);
+			}
+
+			tgt_ep.ep_rank = idx;
+		} else {
+			tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
+		}
+		tgt_ep.ep_grp = &co_info->co_grp_priv->gp_pub;
 
 		rc = crt_req_create_internal(rpc_priv->crp_pub.cr_ctx, &tgt_ep,
 					     rpc_priv->crp_pub.cr_opc,
@@ -869,7 +894,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(forward_done, rc);
 		}
 		D_ASSERT(child_rpc != NULL);
-		D_ASSERT(child_rpc->cr_output_size == rpc_priv->crp_pub.cr_output_size);
+		D_ASSERT(child_rpc->cr_output_size ==
+			rpc_priv->crp_pub.cr_output_size);
 		D_ASSERT(child_rpc->cr_output_size == 0 ||
 			 child_rpc->cr_output != NULL);
 		D_ASSERT(child_rpc->cr_input_size == 0);

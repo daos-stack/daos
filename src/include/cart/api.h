@@ -1744,26 +1744,6 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
 
-/***
- * Add rank to a group with provided information (uri or primary rank)
- *
- * \param[in] group             The group handle
- * \param[in] rank              Rank to add information about
- * \param[in] tag               Tag to add information about
- * \param[in] info              Information details to add
- *
- * \return                      DER_SUCCESS on success, negative value on
- *                              failure.
- *
- * \note                        This API is only available if PMIX is disabled.
- *                              See CRT_FLAG_BIT_PMIX_DISABLE flag.
- *
- * \note                        Currently only primary group is supported
- */
-int
-crt_group_node_add(crt_group_t *group, d_rank_t rank, int tag,
-		crt_node_info_t info);
-
 /**
  * Set self rank. This API is only available when PMIX is disabled. See \a
  * CRT_FLAG_BIT_PMIX_DISABLE for more details.
@@ -1908,6 +1888,64 @@ int crt_group_view_destroy(crt_group_t *grp);
  *                              on failure.
  */
 int crt_group_psr_set(crt_group_t *grp, d_rank_t rank);
+
+/**
+ * Add rank to the specified primary group.
+ *
+ * Passed ctx will be used to determine a provider for which the uri is
+ * being added in the case of the primary group.
+ *
+ * For primary groups when uri is specified, the uri is assumed
+ * to be 'base' URI, corresponding to tag=0 of the node being added.
+ *
+ * \param[in] ctx               Associated cart context
+ * \param[in] grp               Group handle
+ * \param[in] primary_rank      Primary rank to be added
+ * \param[in] uri               URI of the primary rank
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
+			d_rank_t primary_rank, char *uri);
+
+/**
+ * Add rank to the specified secondary group.
+ *
+ * \param[in] grp               Group handle
+ * \param[in] secondary_rank    Secondary rank
+ * \param[in] primary_rank      Primary rank to map to secondary
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t secondary_rank,
+				d_rank_t primary_rank);
+/**
+ * Create a secondary group.
+ *
+ * \param[in] grp_name           Name of the group
+ * \param[in] primary_grp        Primary group handle associated with this
+ *                               group.
+ * \param[in] ranks              Optional list of primary ranks
+ * \param[out] ret_grp           Returned group handle for the secondary group
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_secondary_create(crt_group_id_t grp_name,
+			crt_group_t *primary_grp, d_rank_list_t *ranks,
+			crt_group_t **ret_grp);
+
+/**
+ * Destroy a secondary group.
+ *
+ * \param[in] grp                Group handle.
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_secondary_destroy(crt_group_t *grp);
 
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_d_rank_t		crt_proc_uint32_t

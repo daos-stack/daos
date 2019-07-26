@@ -71,6 +71,8 @@ struct crt_rank_map {
 #define RANK_LIST_REALLOC_SIZE 32
 #define CRT_NO_RANK 0xFFFFFFFF
 
+#define CRT_MAX_SEC_GRPS 10
+
 /* Node for keeping info about free index */
 struct free_index {
 	/* Index to store */
@@ -93,10 +95,23 @@ struct crt_grp_membs {
 	d_rank_list_t	*cgm_linear_list;
 };
 
+struct crt_grp_priv;
+
+struct crt_sec_grp_info {
+	struct crt_grp_priv	*priv;
+	bool			inited;
+};
 
 struct crt_grp_priv {
 	d_list_t		 gp_link; /* link to crt_grp_list */
 	crt_group_t		 gp_pub; /* public grp handle */
+
+	/* Link to a primary group; only set for secondary groups  */
+	struct crt_grp_priv	*gp_priv_prim;
+
+	/* List of secondary groups associated with this group */
+	struct crt_grp_priv	*gp_priv_sec[CRT_MAX_SEC_GRPS];
+
 	/*
 	 * member ranks, should be unique and sorted, each member is the rank
 	 * number within the primary group.
@@ -159,6 +174,12 @@ struct crt_grp_priv {
 	/* uri lookup cache, only valid for primary group */
 	struct d_hash_table	 gp_uri_lookup_cache;
 
+	/* Primary to secondary rank mapping table */
+	struct d_hash_table	 gp_p2s_table;
+
+	/* Secondary to primary rank mapping table */
+	struct d_hash_table	 gp_s2p_table;
+
 	enum crt_grp_status	 gp_status; /* group status */
 	/* set of variables only valid in primary service groups */
 	uint32_t		 gp_primary:1, /* flag of primary group */
@@ -220,23 +241,8 @@ grp_priv_get_failed_ranks(struct crt_grp_priv *priv)
 	return priv->gp_failed_ranks;
 }
 
-static inline d_rank_t
-grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank)
-{
-	if (priv->gp_primary)
-		return rank;
-
-	if (CRT_PMIX_ENABLED()) {
-		D_ASSERT(rank < priv->gp_membs.cgm_list->rl_nr);
-
-		return priv->gp_membs.cgm_list->rl_ranks[rank];
-	}
-
-	D_ASSERT(rank < priv->gp_membs.cgm_linear_list->rl_nr);
-
-	/* NO PMIX, secondary group */
-	return priv->gp_membs.cgm_linear_list->rl_ranks[rank];
-}
+d_rank_t
+grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank);
 
 /*
  * This call is currently called only when group is created.
@@ -255,8 +261,9 @@ grp_priv_set_membs(struct crt_grp_priv *priv, d_rank_list_t *list)
 	/* PMIX disabled case */
 	if (!priv->gp_primary) {
 		/* For secondary groups we populate linear list */
-		return d_rank_list_dup_sort_uniq(&priv->gp_membs.cgm_linear_list,
-						list);
+		return d_rank_list_dup_sort_uniq(
+					&priv->gp_membs.cgm_linear_list,
+					list);
 	}
 
 	/* This case should be called with list == NULL */
@@ -347,6 +354,19 @@ grp_priv_set_default_failed_ranks(struct crt_grp_priv *priv,
 	priv->gp_failed_ranks = def->gp_failed_ranks;
 }
 
+
+
+struct crt_rank_mapping {
+	d_list_t	rm_link;
+	d_rank_t	rm_key;
+	d_rank_t	rm_value;
+
+	uint32_t	rm_ref;
+	uint32_t	rm_initialized;
+
+	pthread_mutex_t	rm_mutex;
+};
+
 /* uri info for each remote rank */
 struct crt_uri_item {
 	/* link to crt_grp_priv::gp_uri_lookup_cache */
@@ -355,6 +375,9 @@ struct crt_uri_item {
 	/* URI string for each remote tag */
 	/* TODO: in phase2 change this to hash table */
 	crt_phy_addr_t	ui_uri[CRT_SRV_CONTEXT_NUM];
+
+	/* Primary rank; for secondary groups only  */
+	d_rank_t	ui_pri_rank;
 
 	/* remote rank; used as a hash key */
 	d_rank_t	ui_rank;
@@ -547,8 +570,11 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc);
 
 	if (detach) {
-		D_ASSERT(grp_priv->gp_service == 1 &&
-			 grp_priv->gp_primary == 1);
+		if (CRT_PMIX_ENABLED()) {
+			D_ASSERT(grp_priv->gp_service == 1 &&
+				 grp_priv->gp_primary == 1);
+		}
+
 		rc = crt_grp_detach(&grp_priv->gp_pub);
 		if (rc == 0 && !crt_is_service() &&
 		    grp_gdata->gg_srv_pri_grp == grp_priv) {

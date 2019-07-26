@@ -476,8 +476,14 @@ client_cb(const struct crt_cb_info *cb_info)
 	case TEST_OPC_CORPC_VER_MISMATCH:
 		fprintf(stderr, "RPC failed, return code: %d.\n",
 			cb_info->cci_rc);
-		D_ASSERTF(cb_info->cci_rc == -DER_MISMATCH,
-			  "cb_info->cci_rc %d\n", cb_info->cci_rc);
+/*
+ * TODO: This needs to be investigated in a test. Depending on which
+ * rank is hit first, we might bet back -DER_NONEXIST instead
+ * if rank updated membership list but group version hasnt changed yet
+ */
+		D_ASSERTF((cb_info->cci_rc == -DER_MISMATCH ||
+			cb_info->cci_rc == -DER_NONEXIST),
+			"cb_info->cci_rc %d\n", cb_info->cci_rc);
 		corpc_ver_mismatch_cb(rpc_req);
 		break;
 	case TEST_OPC_RANK_EVICT:
@@ -513,7 +519,6 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 	crt_rpc_t			*rpc_req = NULL;
 	struct subgrp_ping_in		*rpc_req_input;
 	int				 rc = 0;
-
 
 	fprintf(stderr, "sub group created, grp %p, myrank %d, status %d.\n",
 		grp, *(int *) priv, status);

@@ -296,6 +296,7 @@ static void run_client(void)
 	char				*pchar;
 	int				rc = 0;
 	int				i, j;
+	int				num_retries;
 
 	rc = crt_group_rank(NULL, &myrank);
 	D_ASSERT(rc == 0);
@@ -376,8 +377,22 @@ static void run_client(void)
 	if (gecho.multi_tier_test == false)
 		goto send_shutdown;
 
-	rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &grp_tier2);
+
+	/*
+	 * In some cases 2nd tier server is started separately from the client
+	 * In such situations client must retry crt_group_attach() for a bit
+	 * to give tier2 server time to load up
+	 */
+	num_retries = 10;
+	while (num_retries-- > 0) {
+		rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &grp_tier2);
+		if (rc == 0)
+			break;
+		sleep(1);
+	}
 	assert(rc == 0 && grp_tier2 != NULL);
+
+
 	rc = crt_group_size(grp_tier2, &grp_size_tier2);
 	D_ASSERT(rc == 0 && grp_size_tier2 > 0);
 

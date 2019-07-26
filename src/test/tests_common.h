@@ -45,17 +45,13 @@
 #include <gurt/common.h>
 
 int
-tc_load_group_from_file(const char *grp_cfg_file, crt_group_t *grp,
-		int num_contexts,
+tc_load_group_from_file(const char *grp_cfg_file,
+		crt_context_t ctx, crt_group_t *grp,
 		d_rank_t my_rank, bool delete_file)
 {
 	FILE		*f;
 	int		parsed_rank;
 	char		parsed_addr[255];
-	int		parsed_port;
-	char		full_uri[511];
-	crt_node_info_t node_info;
-	int		i;
 	int		rc = 0;
 
 	f = fopen(grp_cfg_file, "r");
@@ -65,8 +61,7 @@ tc_load_group_from_file(const char *grp_cfg_file, crt_group_t *grp,
 	}
 
 	while (1) {
-		rc = fscanf(f, "%d %s %d", &parsed_rank,
-			parsed_addr, &parsed_port);
+		rc = fscanf(f, "%d %s", &parsed_rank, parsed_addr);
 		if (rc == EOF) {
 			rc = 0;
 			break;
@@ -75,18 +70,13 @@ tc_load_group_from_file(const char *grp_cfg_file, crt_group_t *grp,
 		if (parsed_rank == my_rank)
 			continue;
 
-		for (i = 0; i < num_contexts; i++) {
-			sprintf(full_uri, "%s:%d", parsed_addr,
-				parsed_port + i);
+		rc = crt_group_primary_rank_add(ctx, grp,
+					parsed_rank, parsed_addr);
 
-			node_info.uri = full_uri;
-			rc = crt_group_node_add(grp, parsed_rank, i,
-						node_info);
-			if (rc != 0) {
-				D_ERROR("Failed to add %d %s; rc=%d\n",
-					parsed_rank, full_uri, rc);
-				break;
-			}
+		if (rc != 0) {
+			D_ERROR("Failed to add %d %s; rc=%d\n",
+				parsed_rank, parsed_addr, rc);
+			break;
 		}
 	}
 

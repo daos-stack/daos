@@ -144,8 +144,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("Client starting with cfg_file=%s\n", grp_cfg_file);
 
 	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, grp, NUM_SERVER_CTX,
-				-1, true);
+	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx, grp, -1, true);
 	if (rc != 0) {
 		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);

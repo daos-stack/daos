@@ -175,6 +175,8 @@ get_self_uri(struct host *h)
 
 	len = strlen(uri);
 
+	strncpy(h->self_uri, uri, URI_MAX-1);
+
 	/* Find port number - first from the end number separated by :*/
 	/* URIs have a form of: ofi+sockets://10.8.1.55:48259 */
 	p = uri+len;
@@ -189,7 +191,6 @@ get_self_uri(struct host *h)
 
 	p++;
 	h->ofi_port = atoi(p);
-	strncpy(h->self_uri, uri, URI_MAX-1);
 
 	D_FREE(uri);
 

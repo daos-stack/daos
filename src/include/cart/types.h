@@ -106,6 +106,9 @@ typedef d_string_t	crt_group_id_t;
 /** max length of the group ID string including the trailing '\0' */
 #define CRT_GROUP_ID_MAX_LEN	(64)
 
+/** max length of the address string / URI including the trailing '\0' */
+#define CRT_ADDR_STR_MAX_LEN		(128)
+
 /** default group ID */
 #define CRT_DEFAULT_SRV_GRPID	"crt_default_srv_group"
 #define CRT_DEFAULT_CLI_GRPID	"crt_default_cli_group"
@@ -571,12 +574,6 @@ enum crt_init_flag_bits {
 	CRT_FLAG_BIT_PMIX_DISABLE = 1U << 3,
 };
 
-
-/** Union describing node information; either uri or primary rank */
-typedef union {
-	d_rank_t	rank;	/**< Primary rank */
-	char		*uri;	/**< URI string */
-} crt_node_info_t;
 
 
 /** @}

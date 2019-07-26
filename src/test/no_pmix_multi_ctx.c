@@ -80,7 +80,6 @@ int main(int argc, char **argv)
 {
 	crt_group_t	*grp;
 	crt_context_t	crt_ctx[NUM_CTX];
-	crt_node_info_t	node_info;
 	pthread_t	progress_thread[NUM_CTX];
 	int		i;
 	int		rc;
@@ -125,11 +124,11 @@ int main(int argc, char **argv)
 	}
 
 	/* NOTE: We have to pass valid uri or else group_node_add fails */
-	node_info.uri = my_uri;
 	for (i = 1; i < (NUM_RANKS + 1); i++) {
-		rc = crt_group_node_add(grp, i, 0, node_info);
+		rc = crt_group_primary_rank_add(crt_ctx[0], grp, i, my_uri);
 		if (rc != 0) {
-			D_ERROR("crt_group_node_add() failed; rc=%d\n", rc);
+			D_ERROR("crt_group_primary_rank_add() failed; rc=%d\n",
+				rc);
 			assert(0);
 		}
 	}

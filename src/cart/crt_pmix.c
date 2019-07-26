@@ -266,8 +266,13 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 				myproc->nspace, myproc->rank, rc);
 			D_GOTO(out, rc = -DER_PMIX);
 		}
+
 		grp_priv->gp_self = val->data.uint32;
 		PMIX_VALUE_RELEASE(val);
+
+		D_DEBUG(DB_ALL, "group = %s self_rank = %d, group_size = %d\n",
+			grp_priv->gp_pub.cg_grpid, grp_priv->gp_self,
+			grp_priv->gp_size);
 
 		D_ASSERT(grp_priv->gp_size == pmix_gdata->pg_univ_size);
 		for (i = 0; i < grp_priv->gp_size; i++) {

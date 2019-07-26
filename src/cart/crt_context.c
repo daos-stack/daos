@@ -822,6 +822,8 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	d_list_t		*rlink;
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
+	struct crt_grp_priv	*grp_priv;
+
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -830,8 +832,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 			  "bypass tracking for URI_LOOKUP.\n");
 		D_GOTO(out, rc = CRT_REQ_TRACK_IN_INFLIGHQ);
 	}
-	/* TODO use global rank */
-	ep_rank = rpc_priv->crp_pub.cr_ep.ep_rank;
+
+	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
+	ep_rank = grp_priv_get_primary_rank(grp_priv,
+				rpc_priv->crp_pub.cr_ep.ep_rank);
 
 	/* lookup the crt_ep_inflight (create one if not found) */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);

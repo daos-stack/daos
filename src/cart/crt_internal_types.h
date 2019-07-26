@@ -207,7 +207,6 @@ struct crt_ep_inflight {
 
 #define CRT_UNLOCK			(0)
 #define CRT_LOCKED			(1)
-#define CRT_ADDR_STR_MAX_LEN		(128)
 
 #define CRT_OPC_MAP_BITS	8
 #define CRT_OPC_MAP_BITS_LEGACY	12
