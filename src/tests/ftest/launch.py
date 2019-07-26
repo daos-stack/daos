@@ -56,6 +56,7 @@ CLIENT_KEYS = (
 
 
 class TemporaryDirectory(object):
+    # pylint: disable=too-few-public-methods
     """Create and return a temporary directory.
 
     This is a quick and dirty implementation of the tempfile.TemporaryDirectory
