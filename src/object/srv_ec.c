@@ -111,6 +111,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			unsigned long	recx_size = iod->iod_size *
 						 this_recx->rx_nr;
 
+
 			if ( iod->iod_recxs[idx].rx_idx & PARITY_INDICATOR) {
 				skip_list[i][sl_idx++] = -(long)oca->u.ec.e_len;
 				ec_del_recx(iod, idx);;
@@ -136,12 +137,12 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				int cell_start = dtgt_idx *
 							  oca->u.ec.e_len - so;
 
-				if (cell_start > recx_size) {
+				if (cell_start >= recx_size) {
 					/* this recx doesn't map to this target
 					 * so we need to remove the recx */
 					ec_del_recx(iod, idx);
 					skip_list[i][sl_idx++] =
-					      this_recx->rx_nr * iod->iod_size;
+					      -(this_recx->rx_nr * iod->iod_size);
 					continue;
 				}
 				skip_list[i][sl_idx++] = -cell_start;
@@ -248,6 +249,18 @@ out:
 	return rc;
 }
 
+/* Free the memory allocated on the leader for the copy of the IOD array
+ */
+void
+ec_free_iods(daos_iod_t **iods, int nr)
+{
+	int i;
+
+	for (i = 0; i < nr; i++)
+		D_FREE((*iods)[i].iod_recxs);
+	D_FREE(*iods);
+}
+
 /* Make a copy of the iod array submitted in the RPC. Needed on the leader,
  * since the original IOD contents must be forwarded to the slave targets.
  */
@@ -276,52 +289,3 @@ ec_copy_iods(daos_iod_t **out_iod, daos_iod_t *in_iod, int nr)
 out:
 	return rc;
 }
-
-#ifdef UNIT_TEST
-daos_oclass_attr_t oca =
-	{
-		.ca_schema		= DAOS_OS_SINGLE,
-		.ca_resil		= DAOS_RES_EC,
-		.ca_grp_nr		= 1,
-		.u.ec			= {
-			.e_k		= 2,
-			.e_p		= 2,
-			.e_len		= 1 << 15,
-		},
-	};
-
-int main(int argc, char* argv[])
-{
-	long* skip_list[1];
-        daos_handle_t oh = {0L};
-        daos_handle_t th = {1L};
-        daos_key_t dkey;
-        dkey.iov_buf = "42";
-        dkey.iov_buf_len = 3L;
-        dkey.iov_len = 2L;
-
-	skip_list[0] = NULL;
-        //daos_recx_t recx[1] = {{(1 << 18) + (1 << 15) + 16384, (1 << 18) - (1 << 16)}};
-        daos_recx_t recx[2] = {{PARITY_INDICATOR, 32768L}, {0, 1 << 16}};
-		//{(unsigned long)PARITY_INDICATOR | 32768L, 32768L}, {0, 1 << 18}};
-
-        daos_iod_t iod = { dkey,
-			   .iod_kcsum = { NULL, 0, 0, 0, 0, 0},
-                           DAOS_IOD_ARRAY, 1, 2, recx,
-                           NULL, NULL};
-	int i;
-	for (i = 0; i < iod.iod_nr; i++)
-	D_INFO("recxs[%d].rx_idx: %lu, , recxs[%d].rx_nr: %lu\n", 
-	       i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
-
-	D_INFO("\nstart\n");
-	int ret = ec_data_target(1, 1, &iod, &oca, skip_list);
-	for (i = 0; skip_list[0][i]; i++)
-		D_INFO("%d -> %ld\n", i, skip_list[0][i]);
-	D_INFO("iod.iod_nr == %u\n", iod.iod_nr);
-	for (i = 0; i < iod.iod_nr; i++)
-	D_INFO("recxs[%d].rx_idx: %lu, , recxs[%d].rx_nr: %lu\n", 
-	       i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
-
-}
-#endif

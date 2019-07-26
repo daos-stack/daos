@@ -435,7 +435,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	if (rc != 0)
 		return rc;
 
-	replicas = dtx_get_replicas(oid, layout);
+	replicas = dtx_get_tgt_cnt(oid, layout);
 	if (replicas < 0) {
 		rc = replicas;
 		goto out;

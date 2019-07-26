@@ -91,7 +91,6 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 static void
 ec_init_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl)
 {
-	D_INFO("ec_init_params\n");
 	params->niod            = *iod;
 	params->nsgl            = *sgl;
 	params->nr              = 0;
@@ -119,7 +118,6 @@ ec_set_head_params(struct ec_params *head, daos_obj_update_t *args,
 {
 	unsigned int i;
 
-	D_INFO("ec_set_head_params\n");
 	D_ALLOC_ARRAY(head->iods, args->nr);
 	if (head->iods == NULL)
 		return -DER_NOMEM;
@@ -141,7 +139,6 @@ static void
 ec_move_sgl_cursors(d_sg_list_t *sgl, size_t size, unsigned int *sg_idx,
 		 size_t *sg_off)
 {
-	D_INFO("ec_move_sgl_cursor\n");
 	if (size < sgl->sg_iovs[*sg_idx].iov_len - *sg_off) {
 		*sg_off += size;
 	} else {
@@ -166,7 +163,6 @@ ec_allocate_parity(struct obj_ec_parity *par, unsigned int len, unsigned int p,
 	unsigned int	i;
 	int		rc = 0;
 
-	D_INFO("ec_allocate_parity\n");
 	D_REALLOC_ARRAY(nbuf, par->p_bufs, (prior_cnt + p));
 	if (nbuf == NULL)
 		return -DER_NOMEM;
@@ -202,7 +198,6 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 	/* s_cur is the index (in bytes) into the recx where a full stripe
 	 * begins.
 	 */
-	D_INFO("ec_array_encode\n");
 	s_cur = recx_start_offset + (recx_start_offset % (len * k));
 	if (s_cur != recx_start_offset)
 		/* if the start of stripe is not at beginning of recx, move
@@ -226,7 +221,6 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 		/* Parity is prepended to the recx array, so we have to add
 		 * them here for each encoded stripe.
 		 */
-		D_INFO("realloc for params->niod.iod_recxs.\n");
 		D_REALLOC_ARRAY(nrecx, (params->niod.iod_recxs),
 				(params->niod.iod_nr+p));
 		if (nrecx == NULL)
@@ -503,11 +497,6 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 	if (rc != 0 && head != NULL) {
 		ec_free_params(head);
 	} else if (head != NULL) {
-		for (i = 0; i < head->iods[0].iod_nr; i++)
-		D_INFO("i: %u, rx_idx: %lu, rx_nr: %lu\n", i, 
-			head->iods[0].iod_recxs[i].rx_idx,
-			head->iods[0].iod_recxs[i].rx_nr);
-
 		args->iods = head->iods;
 		args->sgls = head->sgls;
 		tse_task_register_comp_cb(task, ec_free_params_cb, &head,
