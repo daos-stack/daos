@@ -25,8 +25,7 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from daos_api import DaosApiError
-from general_utils import get_container
-from test_utils import TestPool
+from test_utils import TestPool, TestContainer
 from conversion import c_uuid_to_str
 import ctypes
 import uuid
@@ -130,7 +129,7 @@ class EvictTests(TestWithServers):
                 self.log.error(
                     "Pool handle was removed when evicting pool with %s",
                     test_param)
-                return False
+                status &= False
             return status
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
@@ -172,7 +171,6 @@ class EvictTests(TestWithServers):
         """
         pool = []
         container = []
-        cont_uuid = []
         non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
@@ -194,11 +192,15 @@ class EvictTests(TestWithServers):
                           count+1, pool[count].pool.handle.value)
 
             # Create a container
-            container.append(get_container(
-                self.context, pool[count].pool, self.log))
-            cont_uuid.append(container[count].get_uuid_str())
-            self.log.info("Pool # %s has container %s",
-                          count+1, cont_uuid[count])
+            # container.append(get_container(
+            #     self.context, pool[count].pool, self.log))
+            # cont_uuid.append(container[count].get_uuid_str())
+            # self.log.info("Pool # %s has container %s",
+            #               count+1, cont_uuid[count])
+            container.append(TestContainer(pool[count]))
+            container[count].get_params(self)
+            container[count].create()
+            container[count].write_objects(target_list[-1])
 
         try:
             self.log.info(

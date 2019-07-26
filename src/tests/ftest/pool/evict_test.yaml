@@ -11,7 +11,12 @@ pool:
    mode: 146
    name: daos_server
    scm_size: 1073741824
+container:
+  akey_size: 5
+  dkey_size: 5
+  data_size: 32
+  object_qty: 1
+  record_qty: 1
 badparams:
     server_name: BAD_SERVER_NAME
     uuid: invalid_uuid
-
