@@ -23,7 +23,6 @@
 '''
 from __future__ import print_function
 
-import os
 import time
 import traceback
 import uuid
@@ -33,7 +32,7 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
-# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes, redefined-variable-type
 class OpenContainerTest(TestWithServers):
     """
     Tests DAOS container bad create (non existing pool handle, bad uuid)
@@ -163,9 +162,6 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
 
 if __name__ == "__main__":
     main()

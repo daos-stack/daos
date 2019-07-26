@@ -35,6 +35,7 @@ import server_utils
 import check_for_pool
 import write_host_file
 
+# pylint: disable = broad-except
 class MultipleCreatesTest(Test):
     """
     Tests DAOS pool creation, calling it repeatedly one after another

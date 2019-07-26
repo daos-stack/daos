@@ -24,15 +24,12 @@
 from __future__ import print_function
 
 import os
-import sys
-import json
 import traceback
 import uuid
 import re
 import avocado
 from apricot import TestWithServers
 
-import write_host_file
 import ior_utils
 
 from general_utils import DaosTestError

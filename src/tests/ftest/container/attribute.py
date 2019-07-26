@@ -34,6 +34,7 @@ from general_utils import DaosTestError
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+# pylint: disable = global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
 

@@ -31,6 +31,7 @@ from apricot import TestWithServers
 
 import check_for_pool
 
+# pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
     """
     Tests DAOS pool creation, calling it repeatedly one after another

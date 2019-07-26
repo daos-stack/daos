@@ -24,7 +24,6 @@
 from __future__ import print_function
 
 import os
-import distutils.spawn
 from apricot import TestWithServers
 
 import write_host_file

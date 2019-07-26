@@ -31,6 +31,7 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+# pylint: disable = redefined-variable-type
 class CreateContainerTest(TestWithServers):
     """
     Tests DAOS container create.
