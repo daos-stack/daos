@@ -26,6 +26,7 @@
 
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
+#include <spdk/bdev.h>
 
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
@@ -203,8 +204,6 @@ is_blob_valid(struct bio_io_context *ctxt)
 {
 	return ctxt->bic_blob != NULL && !ctxt->bic_closing;
 }
-
-struct spdk_bdev;
 
 enum {
 	BDEV_CLASS_NVME = 0,
