@@ -69,7 +69,7 @@ func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(tc.ClientCertDir))
+	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrv})
 

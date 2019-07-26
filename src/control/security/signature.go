@@ -40,7 +40,7 @@ type UnsupportedKeyError struct{}
 
 //Error is the implementation of the error interface.
 func (err *UnsupportedKeyError) Error() string {
-	return "Key contains an unsupported key type"
+	return "key contains an unsupported key type"
 }
 
 //TokenSigner serves to encapsulate the functionality needed
@@ -49,6 +49,7 @@ type TokenSigner struct {
 	randPool io.Reader
 }
 
+//DefaultTokenSigner creates a TokenSigner with an instantiated entropy pool.
 func DefaultTokenSigner() *TokenSigner {
 	return &TokenSigner{
 		randPool: rand.Reader,
@@ -56,11 +57,12 @@ func DefaultTokenSigner() *TokenSigner {
 }
 
 //Sign takes an unhashed set of bytes and hashes and signs the result with the
-//key located in the file specified by PrivateKeyPath
+//key passed in. If no key is specified it will return the unsigned digest.
 func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
-
 	hash := sha512.New()
-	hash.Write(data)
+	if _, err := hash.Write(data); err != nil {
+		return nil, errors.New("hash failed to write")
+	}
 	digest := hash.Sum(nil)
 
 	if key == nil {
@@ -80,11 +82,13 @@ func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
 }
 
 //Verify takes an unhashed set of bytes and hashes the data and verifies the
-//signature against the hash and the publickey located in CertificatePath
+//signature against the hash and the publickey passed in. If no key is passed it
+//will verify the signature against the unsigned digest.
 func (s *TokenSigner) Verify(key crypto.PublicKey, data []byte, sig []byte) error {
-
 	hash := sha512.New()
-	hash.Write(data)
+	if _, err := hash.Write(data); err != nil {
+		return errors.New("hash failed to write")
+	}
 	digest := hash.Sum(nil)
 
 	if key == nil {

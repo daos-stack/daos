@@ -109,7 +109,6 @@ func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {
 // LoadCertificate loads the certificate specified at the given path into an
 // x509 Certificate object
 func LoadCertificate(certPath string) (*x509.Certificate, error) {
-
 	pemData, err := LoadPEMData(certPath, SafeCertPerm)
 
 	if err != nil {
@@ -133,7 +132,6 @@ func LoadCertificate(certPath string) (*x509.Certificate, error) {
 // LoadPrivateKey loads the private key specified at the given patc into an
 // crypto.PrivateKey interface complient object.
 func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
-
 	pemData, err := LoadPEMData(keyPath, SafeKeyPerm)
 
 	if err != nil {
