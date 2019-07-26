@@ -117,8 +117,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
-		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(-rc));
-		D_GOTO(close, rc = -rc);
+		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(rc));
+		D_GOTO(close, rc);
 	}
 
 	dfs->dfs_ns = ddfs;
@@ -152,7 +152,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_root = ie->ie_stat.st_ino;
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
-	dfuse_reply_entry(fs_handle, ie, false, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
 
 release:

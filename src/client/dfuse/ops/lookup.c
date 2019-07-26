@@ -27,7 +27,7 @@
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
-		  bool create,
+		  struct fuse_file_info *fi_out,
 		  fuse_req_t req)
 {
 	struct fuse_entry_param	entry = {0};
@@ -69,10 +69,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		ie_close(fs_handle, ie);
 	}
 
-	if (create) {
-		struct fuse_file_info fi = {0};
-
-		DFUSE_REPLY_CREATE(req, entry, &fi);
+	if (fi_out) {
+		DFUSE_REPLY_CREATE(req, entry, fi_out);
 	} else {
 		DFUSE_REPLY_ENTRY(req, entry);
 	}
@@ -108,7 +106,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			    O_RDONLY, &ie->ie_obj, &mode);
 	if (rc) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
-			       strerror(-rc));
+			       strerror(rc));
 		D_GOTO(err, rc);
 	}
 
@@ -130,7 +128,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 						      1);
 	}
 
-	dfuse_reply_entry(fs_handle, ie, false, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
 
 err:

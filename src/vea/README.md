@@ -20,6 +20,7 @@ VOS update is executed in a 'delayed atomicity' manner, which consists of three 
 Obviously, the advantage of this manner is that the atomicity of allocation and index updating can be guaranteed without an undo log to revert the actions in first step.
 
 To support this delayed atomicity action, VEA maintains two sets of allocation metadata, one in DRAM for transient reservation, the other on SCM for persistent allocation.
+</ol>
 
 ## Allocation hint
 

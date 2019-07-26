@@ -222,6 +222,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
+	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
