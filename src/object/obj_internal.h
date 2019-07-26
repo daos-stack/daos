@@ -115,6 +115,12 @@ struct dc_object {
 	unsigned int		 cob_version;
 	unsigned int		 cob_shards_nr;
 	unsigned int		 cob_grp_size;
+	unsigned int		 cob_grp_nr;
+	/**
+	 * The array for the latest time (in second) of
+	 * being asked to fetch from leader.
+	 */
+	uint64_t		*cob_time_fetch_leader;
 	/** shard object ptrs */
 	struct dc_obj_layout	*cob_shards;
 };

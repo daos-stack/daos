@@ -602,7 +602,11 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	}
 
 	if (rc != 0) {
-		D_ERROR("Failed to prepare subtree: %d\n", rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot prepare subtree because "
+				"of conflict modification: %d\n", rc);
+		else
+			D_ERROR("Failed to prepare subtree: %d\n", rc);
 		return rc;
 	}
 
@@ -886,7 +890,13 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 					      DAOS_INTENT_UPDATE,
 					      &krec, &ak_toh);
 			if (rc != 0) {
-				D_ERROR("Error preparing dkey tree: %d\n", rc);
+				if (rc == -DER_INPROGRESS)
+					D_DEBUG(DB_TRACE, "Cannot preparing "
+						"dkey tree because of conflict "
+						"modification: %d\n", rc);
+				else
+					D_ERROR("Error preparing dkey tree: "
+						"%d\n", rc);
 				goto out;
 			}
 			subtr_created = true;
@@ -1420,7 +1430,13 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
 			     &ioh);
 	if (rc) {
-		D_ERROR("Fetch "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
+				"conflict modification: %d\n",
+				DP_UOID(oid), rc);
+		else
+			D_ERROR("Fetch "DF_UOID" failed %d\n",
+				DP_UOID(oid), rc);
 		return rc;
 	}
 
