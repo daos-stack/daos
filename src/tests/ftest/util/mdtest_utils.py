@@ -152,7 +152,7 @@ class MdtestCommand(CommandWithParameters):
         """
         super(MdtestCommand, self).get_params(test, path)
 
-    def set_dfs_params(self, group, pool, cont_uuid=None, display=True):
+    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest parameters for the DAOS group, pool, and container uuid.
         Args:
             group (str): DAOS server group name
@@ -173,7 +173,7 @@ class MdtestCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.dfs_pool.update(
+        self.dfs_pool_uuid.update(
             pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
@@ -211,8 +211,8 @@ class MdtestCommand(CommandWithParameters):
         }
         if manager.endswith("mpirun"):
             env.update({
-                "DAOS_POOL": self.daos_pool.value,
-                "DAOS_SVCL": self.daos_svcl.value,
+                "DAOS_POOL": self.dfs_pool_uuid.value,
+                "DAOS_SVCL": self.dfs_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
             })
             assign_env = ["{}={}".format(key, val) for key, val in env.items()]
@@ -233,8 +233,8 @@ class MdtestCommand(CommandWithParameters):
 
         elif manager.endswith("srun"):
             env.update({
-                "DAOS_POOL": self.daos_pool.value,
-                "DAOS_SVCL": self.daos_svcl.value,
+                "DAOS_POOL": self.dfs_pool_uuid.value,
+                "DAOS_SVCL": self.dfs_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
             })
             assign_env = ["{}={}".format(key, val) for key, val in env.items()]
