@@ -26,6 +26,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/pkg/errors"
 
@@ -56,6 +57,7 @@ type cliOptions struct {
 type StorCmd struct {
 	Scan     ScanStorCmd `command:"scan" alias:"l" description:"Scan SCM and NVMe storage attached to local server"`
 	PrepNvme PrepNvmeCmd `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
+	PrepScm  PrepScmCmd  `command:"prep-scm" alias:"ps" description:"Prep SCM modules into interleaved AppDirect and create the relevant namespace kernel devices"`
 }
 
 // ScanStorCmd is the struct representing the command to scan storage.
@@ -142,6 +144,66 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 		if err := server.nvme.spdk.prep(p.NrHugepages, tUsr, p.PCIWhiteList); err != nil {
 			return errors.WithMessage(err, "SPDK setup")
 		}
+	}
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
+// dryRun just returns the commands that should be run.
+func dryRun(cmd string) ([]byte, error) {
+	return []byte(cmd), nil
+}
+
+// run wraps exec.Command().Output() to enable mocking of command output.
+func run(cmd string) ([]byte, error) {
+	return exec.Command(cmd).Output()
+}
+
+// PrepScmCmd is the struct representing the command to prep SCM modules by
+// configuring in AppDirect mode and creating relevant namespaces.
+type PrepScmCmd struct {
+	DryRun bool `short:"n" long:"dry-run" description:"Print commands to be issued for next stage of SCM prep but don't actually execute"`
+	Reset  bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
+}
+
+// Execute is run when PrepScmCmd activates
+//
+// Perform task then exit immediately. No config parsing performed.
+func (p *PrepScmCmd) Execute(args []string) error {
+	ok, _ := common.CheckSudo()
+	if !ok {
+		return errors.New("subcommand must be run as root or sudo")
+	}
+
+	config := newConfiguration()
+
+	server, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
+	if err != nil {
+		return errors.WithMessage(err, "initialising ControlService")
+	}
+
+	runFn := run
+	if p.DryRun {
+		runFn = dryRun
+	}
+
+	if !p.Reset {
+		out, err := server.scm.Prep(runFn)
+		if err != nil {
+			return errors.WithMessage(err, "DCPM prep")
+		}
+		fmt.Printf("preparing SCM: %s\n", out)
+
+		return nil
+	}
+
+	// run reset to remove namespaces and clear regions
+	if err := server.scm.PrepReset(); err != nil {
+		return errors.WithMessage(err, "DCPM reset")
 	}
 
 	// exit immediately to avoid continuation of main

@@ -65,7 +65,6 @@ func newMockScmStorage(
 
 	return &scmStorage{
 		ipmctl:      &mockIpmctl{discoverModulesRet, mms},
-		scm:         &scmSetup{},
 		initialized: inited,
 		config:      c,
 	}
@@ -156,7 +155,7 @@ func TestGetState(t *testing.T) {
 
 		regionsOut = tt.showRegionOut // initial value
 
-		out, err := ss.scm.prep(mockRun)
+		out, err := ss.Prep(mockRun)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue

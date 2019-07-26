@@ -25,7 +25,6 @@ package server
 
 import (
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -69,24 +68,28 @@ const (
 
 type runCmdFn func(string) ([]byte, error)
 
-// run wraps exec.Command().Output() to enable mocking of command output.
-func run(cmd string) ([]byte, error) {
-	return exec.Command(cmd).Output()
+// scmStorage gives access to underlying storage interface implementation
+// for accessing SCM devices (API) in addition to storage of device
+// details.
+//
+// IpmCtl provides necessary methods to interact with Storage Class
+// Memory modules through libipmctl via go-ipmctl bindings.
+type scmStorage struct {
+	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
+	config      *configuration // server configuration structure
+	modules     common.ScmModules
+	initialized bool
+	formatted   bool
 }
 
-// ScmSetup is an interface to configure scm prerequisites via shell tools
-type ScmSetup interface {
-	prep(runCmdFn) ([]byte, error)
-	reset() error
-}
+// TODO: implement remaining methods for scmStorage
+// func (s *scmStorage) Update(req interface{}) interface{} {return nil}
+// func (s *scmStorage) BurnIn(req interface{}) (fioPath string, cmds []string, env string, err error) {
+// return
+// }
 
-// scmSetup is an implementation of the ScmSetup interface
-type scmSetup struct {
-	config *configuration
-}
-
-// prep executes commands to configure SCM modules into AppDirect
-// interleaved regions/sets hosting pmem kernel device namespaces.
+// Prep executes commands to configure SCM modules into AppDirect interleaved
+// regions/sets hosting pmem kernel device namespaces.
 //
 // Presents of nonvolatile memory modules is assumed in this method and state
 // is established based on presence and free capacity of regions.
@@ -97,7 +100,7 @@ type scmSetup struct {
 // * regions exist but no free capacity -> no-op
 //
 // Command output from external tools will be returned.
-func (s *scmSetup) prep(runFn runCmdFn) ([]byte, error) {
+func (s *scmStorage) Prep(runFn runCmdFn) ([]byte, error) {
 	state, err := getState(runFn)
 	if err != nil {
 		return nil, errors.WithMessage(err, "establish scm state")
@@ -109,7 +112,7 @@ func (s *scmSetup) prep(runFn runCmdFn) ([]byte, error) {
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
-func (s *scmSetup) reset() error {
+func (s *scmStorage) PrepReset() error {
 	return nil // TODO
 }
 
@@ -221,27 +224,6 @@ func createNamespaces(runFn runCmdFn) ([]byte, error) {
 func getNamespaces(runFn runCmdFn) ([]byte, error) {
 	return runFn(cmdScmListNamespaces)
 }
-
-// scmStorage gives access to underlying storage interface implementation
-// for accessing SCM devices (API) in addition to storage of device
-// details.
-//
-// IpmCtl provides necessary methods to interact with Storage Class
-// Memory modules through libipmctl via go-ipmctl bindings.
-type scmStorage struct {
-	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
-	scm         ScmSetup       // interact with SCM tools via shell
-	config      *configuration // server configuration structure
-	modules     common.ScmModules
-	initialized bool
-	formatted   bool
-}
-
-// TODO: implement remaining methods for scmStorage
-// func (s *scmStorage) Update(req interface{}) interface{} {return nil}
-// func (s *scmStorage) BurnIn(req interface{}) (fioPath string, cmds []string, env string, err error) {
-// return
-// }
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
@@ -508,7 +490,6 @@ func (s *scmStorage) Update(
 func newScmStorage(config *configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
-		scm:    &scmSetup{config: config},
 		config: config,
 	}
 
