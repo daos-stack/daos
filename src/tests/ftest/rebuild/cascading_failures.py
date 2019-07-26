@@ -59,7 +59,7 @@ class CascadingFailures(TestWithServers):
         node_qty = len(self.hostlist_servers)
 
         # Verify there are enough servers for the requested replica
-        min_required = 5 if obj_class == "OC_RP_3G1" else 4
+        min_required = 6 if obj_class == "OC_RP_3G1" else 5
         if node_qty < min_required:
             self.cancel(
                 "Not enough servers ({}) for object class {}".format(
@@ -99,7 +99,7 @@ class CascadingFailures(TestWithServers):
         for index in range(2):
             # Count the number of objects written to this rank
             rebuild_objs = container.get_target_rank_count(
-                target_rank_lists, exclude_rank_list[index])
+                exclude_rank_list[index], target_rank_lists)
             self.log.info(
                 "Expecting %s rebuilt objects for rank %s",
                 rebuild_objs, index)
