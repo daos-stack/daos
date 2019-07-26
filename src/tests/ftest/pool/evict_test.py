@@ -25,7 +25,8 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from daos_api import DaosApiError
-from general_utils import TestPool, get_container
+from general_utils import get_container
+from test_utils import TestPool
 from conversion import c_uuid_to_str
 import ctypes
 import uuid
@@ -76,11 +77,6 @@ class EvictTests(TestWithServers):
 
         Returns:
             TestPool (bool)
-
-<<<<<<< HEAD
-        :avocado: tags=all,pool,pr,small,poolevict
-=======
->>>>>>> origin/DAOS-2719
         """
         # setup pool and connect
         self.pool = self.connected_pool(self.hostlist_servers)
@@ -263,8 +259,8 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pr,pool,full_regression,small,
-                       poolevict,poolevict_bad_server_name
+        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=poolevict_bad_server_name
         """
         test_param = self.params.get("server_name", '/run/badparams/*')
         self.assertTrue(self.evict_badparam(test_param))
@@ -273,8 +269,8 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid uuid.
 
-        :avocado: tags=all,pool,pr,full_regression,small,
-                       poolevict,poolevict_bad_uuid
+        :avocado: tags=all,pool,pr,full_regression,small,poolevict
+        :avocado: tags=poolevict_bad_uuid
         """
         test_param = self.params.get("uuid", '/run/badparams/*')
         self.assertTrue(self.evict_badparam(test_param))
