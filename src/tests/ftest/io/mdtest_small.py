@@ -45,4 +45,5 @@ class MdtestSmall(MdtestBase):
         :avocado: tags=mdtest,mdtestsmall
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
-        self.execute_mdtest(mdtest_flags)
+        self.mdtest_cmd.flags.update(mdtest_flags)
+        self.execute_mdtest()
