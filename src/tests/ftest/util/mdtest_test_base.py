@@ -23,13 +23,12 @@
 '''
 from __future__ import print_function
 
+import os
+
 from apricot import TestWithServers
 from daos_api import DaosPool
 from mpio_utils import MpioUtils
-
-import os
-import write_host_file
-import mdtest_utils
+from mdtest_utils import MdtestCommand, MdtestFailed
 
 class MdtestBase(TestWithServers):
     """
@@ -42,20 +41,18 @@ class MdtestBase(TestWithServers):
         super(MdtestBase, self).__init__(*args, **kwargs)
         self.mdtest_cmd = None
         self.processes = None
+        self.hostfile_clients_slots = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
-        # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file.write_host_file(
-            self.hostlist_clients, self.workdir, None)
-
         # Get the parameters for Mdtest
-        self.mdtest_cmd = mdtest_utils.MdtestCommand()
-        self.mdtest_cmd.set_params(self)
+        self.mdtest_cmd = MdtestCommand()
+        self.mdtest_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
+        self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
     def tearDown(self):
         """Tear down each test case."""
@@ -66,7 +63,7 @@ class MdtestBase(TestWithServers):
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
 
-    def execute_mdtest(self, mdtest_flags=None, object_class=None):
+    def execute_mdtest(self):
         """
         Execute mdtest with optional overrides for mdtest flags
         and object_class.
@@ -91,55 +88,32 @@ class MdtestBase(TestWithServers):
         self.pool.create(
             mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
 
-        # Initialize MpioUtils if Mdtest is running in MPIIO mode
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-        path = mpio_util.mpichinstall
-
-        svc_list = ""
-        for item in range(svcn):
-            svc_list += str(int(self.pool.svc.rl_ranks[item])) + ":"
-        svc_list = svc_list[:-1]
-
-        # assign mdtest params
-        self.mdtest_cmd.dfs_pool_uuid.value = self.pool.get_uuid_str()
-        self.mdtest_cmd.dfs_svcl.value = svc_list
-
-        # Override the yaml Mdtest params with provided values
-        if mdtest_flags:
-            self.mdtest_cmd.flags.value = mdtest_flags
-        if object_class:
-            self.mdtest_cmd.daos_oclass.value = object_class
-
         # Run Mdtest
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
+        self.run_ior(self.get_job_manager_command(self.manager), self.processes)
+
+    def get_job_manager_command(self, manager):
+        """Get the MPI job manager command for Mdtest.
+        Returns:
+            str: the path for the mpi job manager command
+        """
+        # Initialize MpioUtils if mdtest needs to be run using mpich
+        if manager == "MPICH":
+            mpio_util = MpioUtils()
+            if mpio_util.mpich_installed(self.hostlist_clients) is False:
+                self.fail("Exiting Test: Mpich not installed")
+            return os.path.join(mpio_util.mpichinstall, "bin", "mpirun")
+        return self.orterun
+
+    def run_ior(self, manager, processes):
+        """Run the Mdtest command.
+        Args:
+            manager (str): mpi job manager command
+            processes (int): number of host processes
+        """
         try:
             self.mdtest_cmd.run(
-                self.basepath, self.processes, self.hostfile_clients, True,
-                path)
-        except mdtest_utils.MdtestFailed as excep:
-            print(excep)
+                manager, self.tmp, processes, self.hostfile_clients)
+        except MdtestFailed as error:
+            self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
-
-class MdtestSmall(MdtestBase):
-    """Test class Description: Runs Mdtest with in small config.
-    :avocado: recursive
-    """
-
-    def test_mdtest_small(self):
-        """Jira ID: DAOS-2493.
-        Test Description:
-            Test Mdtest in small config.
-        Use Cases:
-            Aim of this test is to test different combinations
-            of following configs:
-            1/8 Clients
-            num of files/dirs: 100
-            with/without unique working dir for each task
-            write bytes: 0|4K
-            read bytes: 0|4K
-            depth of hierarchical directory structure: 0|5
-        :avocado: tags=mdtest,mdtestsmall
-        """
-        mdtest_flags = self.params.get("flags", "/run/mdtest/*")
-        self.execute_mdtest(mdtest_flags)

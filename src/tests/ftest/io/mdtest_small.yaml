@@ -54,3 +54,4 @@ mdtest:
             flags: "--dfs.destroy"
             depth: 5
     dfs_cont: "`uuidgen`"
+    manager: "MPICH"

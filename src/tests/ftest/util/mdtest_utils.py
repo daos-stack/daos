@@ -23,194 +23,251 @@
 '''
 
 from __future__ import print_function
-import os
-import subprocess
-import json
+
+import uuid
+
+from avocado.utils.process import run, CmdError
+from command_utils import FormattedParameter, CommandWithParameters
 
 class MdtestFailed(Exception):
     """Raise if mdtest failed"""
 
-#pylint: disable=R0903
-class MdtestParam(object):
-    """
-    Defines a object representing a single mdtest command line parameter.
-    """
-
-    def __init__(self, str_format, default=None):
-        """Create a MdtestParam object.
-        Args:
-            str_format (str): format string used to convert the value into an
-                mdtest command line argument string
-            default (object): default value for the param
-        """
-        self.str_format = str_format
-        self.default = default
-        self.value = default
-
-    def __str__(self):
-        """Return a MdtestParam object as a string.
-        Returns:
-            str: if defined, the Mdtest parameter, otherwise an empty string
-        """
-        if isinstance(self.default, bool) and self.value:
-            return self.str_format
-        elif not isinstance(self.default, bool) and self.value:
-            return self.str_format.format(self.value)
-        else:
-            return ""
-
-    def set_yaml_value(self, name, test, path="/run/mdtest/*"):
-        """Set the value of the parameter using the test's yaml file value.
-        Args:
-            name (str): name associated with the value in the yaml file
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/mdtest/*"
-        """
-        self.value = test.params.get(name, path, self.default)
-
-
-class MdtestCommand(object):
+class MdtestCommand(CommandWithParameters):
     """Defines a object representing a mdtest command."""
 
     def __init__(self):
         """Create an MdtestCommand object."""
-        self.flags = MdtestParam("{}")                 # mdtest flags
-        self.api = MdtestParam("-a {}")                # API for I/O
-                                                       # [POSIX|DAOS|DFS]
-        self.branching_factor = MdtestParam("-b {}")   # branching factor
-        self.test_dir = MdtestParam("-d {}")           # test directory in
-                                                       # which tests should run
-        self.barriers = MdtestParam("-B {}")           # no barriers between
-                                                       # phases
-        self.read_bytes = MdtestParam("-e {}")         # bytes to read from
-                                                       # each file
-        self.first_num_tasks = MdtestParam("-f {}")    # first number of tasks
-                                                       # on which the test will
-                                                       # run
-        self.iteration = MdtestParam("-i {}")          # number of iterations
-        self.items = MdtestParam("-I {}")              # number of items per
-                                                       # directory in tree
-        self.last_num_tasks = MdtestParam("-l {}")     # last number of tasks
-        self.num_of_files_dirs = MdtestParam("-n {}")       # every process will
-                                                       # creat/stat/read/remove
-                                                       # num of  directories and
-                                                       # files
-        self.pre_iter = MdtestParam("-p {}")           # pre-iteration delay
-                                                       # (in seconds)
-        self.random_seed = MdtestParam("--random-seed {}") # random seed for -R
-                                                           # flag
-        self.stride = MdtestParam("-s {}")             # stride between the
-                                                       # number of tasks
-        self.verbosity_value = MdtestParam("-V {}")    # verbosity value
-        self.write_bytes = MdtestParam("-w {}")        # bytes to write to each
-                                                       # file
-        self.stonewall_timer = MdtestParam("-W {}")    # stonewall timer
-                                                       # (in secs)
-        self.stonewall_statusfile = MdtestParam("-x {}") # num of iter of the
-                                                       # creation phase,
-                                                       # StoneWallingStatusFile
-        self.depth = MdtestParam("-z {}")              # depth of hierarchical
-                                                       # directory structure
+        super(MdtestCommand, self).__init__("mdtest")
+        self.flags = FormattedParameter("{}")   # mdtest flags
+        # Optional arguments
+        #  -a=STRING             API for I/O [POSIX|DUMMY]
+        #  -b=1                  branching factor of hierarchical dir structure
+        #  -d=./out              the directory in which the tests will run
+        #  -B=0                  no barriers between phases
+        #  -e=0                  bytes to read from each file
+        #  -f=1                  first number of tasks on which test will run
+        #  -i=1                  number of iterations the test will run
+        #  -I=0                  number of items per directory in tree
+        #  -l=0                  last number of tasks on which test will run
+        #  -n=0                  every process will creat/stat/read/remove num
+        #                        of directories and files
+        #  -N=0                  stride num between neighbor tasks for file/dir
+        #                        operation (local=0)
+        #  -p=0                  pre-iteration delay (in seconds)
+        #  --random-seed=0       random seed for -R
+        #  -s=1                  stride between number of tasks for each test
+        #  -V=0                  verbosity value
+        #  -w=0                  bytes to write each file after it is created
+        #  -W=0                  number in seconds; stonewall timer, write as
+        #                        many seconds and ensure all processes did the
+        #                        same number of operations (currently only
+        #                        stops during create phase)
+        # -x=STRING              StoneWallingStatusFile; contains the number
+        #                        of iterations of the creation phase, can be
+        #                        used to split phases across runs
+        # -z=0                   depth of hierarchical directory structure
 
-        self.daos_pool_uuid = MdtestParam("--daos.pool {}") # pool uuid
-        self.daos_svcl = MdtestParam("--daos.svcl {}")      # pool svcl
-        self.daos_cont = MdtestParam("--daos.cont {}")      # cont uuid
-        self.daos_group = MdtestParam("--daos.group {}")    # server group
-        self.daos_chunk_size = MdtestParam(" --daos.chunk_size {}") # chunk
-                                                                    # size
-        self.daos_oclass = MdtestParam("--daos.oclass {}")  # object class
+        self.api = FormattedParameter("-a {}")
+        self.branching_factor = FormattedParameter("-b {}")
+        self.test_dir = FormattedParameter("-d {}")
+        self.barriers = FormattedParameter("-B {}")
+        self.read_bytes = FormattedParameter("-e {}")
+        self.first_num_tasks = FormattedParameter("-f {}")
+        self.iteration = FormattedParameter("-i {}")
+        self.items = FormattedParameter("-I {}")
+        self.last_num_tasks = FormattedParameter("-l {}")
+        self.num_of_files_dirs = FormattedParameter("-n {}")
+        self.pre_iter = FormattedParameter("-p {}")
+        self.random_seed = FormattedParameter("--random-seed {}")
+        self.stride = FormattedParameter("-s {}")
+        self.verbosity_value = FormattedParameter("-V {}")
+        self.write_bytes = FormattedParameter("-w {}")
+        self.stonewall_timer = FormattedParameter("-W {}")
+        self.stonewall_statusfile = FormattedParameter("-x {}")
+        self.depth = FormattedParameter("-z {}")
 
-        self.dfs_pool_uuid = MdtestParam("--dfs.pool {}") # pool uuid
-        self.dfs_svcl = MdtestParam("--dfs.svcl {}")      # pool svcl
-        self.dfs_cont = MdtestParam("--dfs.cont {}")      # cont uuid
-        self.dfs_group = MdtestParam("--dfs.group {}")    # server group
+        # Module DAOS
+        # Required arguments
+        #  --daos.pool=STRING            pool uuid
+        #  --daos.svcl=STRING            pool SVCL
+        #  --daos.cont=STRING            container uuid
 
-    def __str__(self):
-        """Return a MdtestCommand object as a string.
-        Returns:
-            str: the mdtest command with all the defined parameters
-        """
-        params = []
-        for value in self.__dict__.values():
-            value_str = str(value)
-            if value_str != "":
-                params.append(value_str)
-        return " ".join(["mdtest"] + sorted(params))
+        # Flags
+        #  --daos.destroy                Destroy Container
 
-    def set_params(self, test, path="/run/mdtest/*"):
-        """Set values for all of the mdtest command params using a yaml file.
+        # Optional arguments
+        #  --daos.group=STRING           server group
+        #  --daos.chunk_size=1048576     chunk size
+        #  --daos.oclass=STRING          object class
+
+        self.daos_pool_uuid = FormattedParameter("--daos.pool {}")
+        self.daos_svcl = FormattedParameter("--daos.svcl {}")
+        self.daos_cont = FormattedParameter("--daos.cont {}")
+        self.daos_group = FormattedParameter("--daos.group {}")
+        self.daos_chunk_size = FormattedParameter(" --daos.chunk_size {}")
+        self.daos_oclass = FormattedParameter("--daos.oclass {}")
+
+        # Module DFS
+        # Required arguments
+        #  --dfs.pool=STRING             DAOS pool uuid
+        #  --dfs.svcl=STRING             DAOS pool SVCL
+        #  --dfs.cont=STRING             DFS container uuid
+
+        # Flags
+        #  --dfs.destroy                 Destroy DFS Container
+
+        # Optional arguments
+        #  --dfs.group=STRING            DAOS server group
+
+        self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
+        self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
+        self.dfs_cont = FormattedParameter("--dfs.cont {}")
+        self.dfs_group = FormattedParameter("--dfs.group {}")
+
+    def get_param_names(self):
+        """Get a sorted list of the defined MdtestCommand parameters."""
+        # Sort the Mdtest parameter names to generate consistent mdtest commands
+        param_names = super(MdtestCommand, self).get_param_names()
+
+        return param_names
+
+    def get_params(self, test, path="/run/mdtest/*"):
+        """Get values for all of the mdtest command params using a yaml file.
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.depth.value will be set to the value in the yaml
+        file with the key 'depth'.
         Args:
             test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/mdtest/*"
+            path (str, optional): yaml namespace. Defaults to "/run/mdtest/*".
         """
-        for name, mdtest_param in self.__dict__.items():
-            mdtest_param.set_yaml_value(name, test, path)
+        super(MdtestCommand, self).get_params(test, path)
 
-    def get_launch_command(self, basepath, processes, hostfile, runpath=None):
-        """Get the process launch command used to run mdtest
+    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
+        """Set the Mdtest parameters for the DAOS group, pool, and container
+           uuid.
         Args:
-            basepath (str): DAOS base path
+            group (str): DAOS server group name
+            pool (DaosPool): DAOS pool API object
+            cont_uuid (str, optional): the container uuid. If not specified one
+                is generated. Defaults to None.
+            display (bool, optional): print updated params. Defaults to True.
+        """
+        self.set_daos_pool_params(pool, display)
+        self.dfs_group.update(group, "daos_group" if display else None)
+        self.dfs_cont.update(
+            cont_uuid if cont_uuid else uuid.uuid4(),
+            "daos_cont" if display else None)
+
+    def set_daos_pool_params(self, pool, display=True):
+        """Set the Mdtest parameters that are based on a DAOS pool.
+        Args:
+            pool (DaosPool): DAOS pool API object
+            display (bool, optional): print updated params. Defaults to True.
+        """
+        self.dfs_pool_uuid.update(
+            pool.get_uuid_str(), "daos_pool" if display else None)
+        self.set_daos_svcl_param(pool, display)
+
+    def set_daos_svcl_param(self, pool, display=True):
+        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object
+        Args:
+            pool (DaosPool): DAOS pool API object
+            display (bool, optional): print updated params. Defaults to True.
+        """
+        svcl = ":".join(
+            [str(item) for item in [
+                int(pool.svc.rl_ranks[index])
+                for index in range(pool.svc.rl_nr)]])
+        self.dfs_svcl.update(svcl, "daos_svcl" if display else None)
+
+    def get_launch_command(self, manager, attach_info, processes, hostfile):
+        """Get the process launch command used to run Mdtest
+        Args:
+            manager (str): mpi job manager command
+            attach_info (str): CART attach info path
+            mpi_prefix (str): path for the mpi launch command
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+        Raises:
+            MdtestFailed: if an error occured building the Mdtest command
         Returns:
-            str: returns mdtest command
+            str: mdtest launch command
         """
-        with open(os.path.join(basepath, ".build_vars.json")) as afile:
-            build_paths = json.load(afile)
-        attach_info_path = os.path.join(basepath, "install/tmp")
-
+        print("Getting launch command for {}".format(manager))
+        exports = ""
         env = {
-            "CRT_ATTACH_INFO_PATH": attach_info_path,
-            "MPI_LIB": "",
+            "CRT_ATTACH_INFO_PATH": attach_info,
+            "MPI_LIB": "\"\"",
             "DAOS_SINGLETON_CLI": 1,
         }
-        export_cmd = [
-            "export {}={}".format(key, val) for key, val in env.items()]
-        mpirun_cmd = [
-            "".join([runpath if runpath else build_paths["OMPI_PREFIX"],
-                     "/bin/mpirun"]),
-            "-np {}".format(processes),
-            "--hostfile {}".format(hostfile),
-        ]
-        command = " ".join(mpirun_cmd + [self.__str__()])
-        command = "; ".join(export_cmd + [command])
+        if manager.endswith("mpirun"):
+            env.update({
+                "DAOS_POOL": self.dfs_pool_uuid.value,
+                "DAOS_SVCL": self.dfs_svcl.value,
+                "FI_PSM2_DISCONNECT": 1,
+            })
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            exports = "export {}; ".format("; export ".join(assign_env))
+            args = [
+                "-np {}".format(processes),
+                "-hostfile {}".format(hostfile),
+            ]
 
-        return command
+        elif manager.endswith("orterun"):
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            args = [
+                "-np {}".format(processes),
+                "-hostfile {}".format(hostfile),
+                "-map-by node",
+            ]
+            args.extend(["-x {}".format(assign) for assign in assign_env])
 
-    def run(self, basepath, processes, hostfile, display=True, path=None):
-        """Run the mdtest command.
+        elif manager.endswith("srun"):
+            env.update({
+                "DAOS_POOL": self.dfs_pool_uuid.value,
+                "DAOS_SVCL": self.dfs_svcl.value,
+                "FI_PSM2_DISCONNECT": 1,
+            })
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            args = [
+                "-l",
+                "--mpi=pmi2",
+                "--export={}".format(",".join(["ALL"] + assign_env)),
+            ]
+            if processes is not None:
+                args.append("--ntasks={}".format(processes))
+                args.append("--distribution=cyclic")
+            if hostfile is not None:
+                args.append("--nodefile={}".format(hostfile))
+
+        else:
+            raise MdtestFailed("Unsupported job manager: {}".format(manager))
+
+        return "{}{} {} {}".format(
+            exports, manager, " ".join(args), self.__str__())
+
+    def run(self, manager, attach_info, processes, hostfile, display=True):
+        """Run the Mdtest command.
         Args:
-            basepath (str): DAOS base path
+            manager (str): mpi job manager command
+            attach_info (str): CART attach info path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
-            display (bool, optional): print mdtest output to the console.
+            display (bool, optional): print Mdtest output to the console.
                 Defaults to True.
         Raises:
-            MdtestFailed: if an error occured runnig the mdtest command
+            MdtestFailed: if an error occured runnig the Mdtest command
         """
-        command = self.get_launch_command(basepath, processes, hostfile, path)
+        command = self.get_launch_command(
+            manager, attach_info, processes, hostfile)
         if display:
-            print("<mdtest CMD>: {}".format(command))
+            print("<MDTEST CMD>: {}".format(command))
 
-        # Run mdtest
+        # Run Mdtest
         try:
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                shell=True)
-            while True:
-                output = process.stdout.readline()
-                if output == "" and process.poll() is not None:
-                    break
-                if output and display:
-                    print(output.strip())
-            if process.poll() != 0:
-                print("process.poll: {}".format(process.poll()))
-                raise MdtestFailed(
-                    "Mdtest run process failed: {}".format(
-                        process.poll()))
+            run(command, allow_output_check="combined", shell=True)
 
-        except (OSError, ValueError) as error:
-            print("<MdtestRunFailed> Exception occurred: {0}".
-                  format(str(error)))
-            raise MdtestFailed("Mdtest Run process Failed: {}".
-                               format(error))
+        except CmdError as error:
+            print("<MdtestRunFailed> Exception occurred: {}".format(error))
+            raise MdtestFailed("Mdtest Run process Failed: {}".format(error))
