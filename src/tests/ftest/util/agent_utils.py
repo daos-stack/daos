@@ -36,15 +36,14 @@ import re
 class AgentFailed(Exception):
     """ _ """
 
-# pylint: disable=too-few-public-methods
 class NodeListType:
+    # pylint: disable=too-few-public-methods
     """
     Simple enum to represent all possible node types. To be expanded if
     needed.
     """
     SERVER = 0
     CLIENT = 1
-# pylint: enable=too-few-public-methods
 
 def node_setup_okay(node_list, node_server_type):
     """
@@ -74,7 +73,6 @@ def node_setup_okay(node_list, node_server_type):
             break
     return okay, failed_node, socket_dir
 
-# pylint: disable=too-many-locals
 # Disabling check for this function as in this case, more variables is more
 # clear than encapsulating in dict or object
 def run_agent(basepath, server_list, client_list=None):
@@ -117,10 +115,9 @@ def run_agent(basepath, server_list, client_list=None):
     for client in client_list:
         cmd = ["ssh", client, "{} -i".format(daos_agent_bin)]
 
-        proc = subprocess.Popen(cmd,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
-        sessions[client] = proc
+        sessions[client] = subprocess.Popen(cmd,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
 
     # double check agent launched successfully
     timeout = 5
@@ -154,17 +151,16 @@ def run_agent(basepath, server_list, client_list=None):
                       "seconds".format(client, time.time() - start_time))
                 break
 
-        return_code = sessions[client].poll()
-        if return_code is not None:
-            print("Uh-oh, in agent startup, the ssh that started the agent "
-                  "on {} has exited with {}.\nStopping agents on {}".format(
-                      client, return_code, started_clients))
+        if sessions[client].returncode is not None:
+            print("<AGENT> uh-oh, in agent startup, the ssh that started the "
+                  "agent on {} has exited with {}.\nStopping agents on "
+                  "{}".format(client, sessions[client].returncode,
+                              started_clients))
             # kill the ones we started
             stop_agent(sessions, started_clients)
             raise AgentFailed("Failed to start agent on {}".format(client))
 
     return sessions
-# pylint: enable=too-many-locals
 
 
 def stop_agent(sessions, client_list=None):
