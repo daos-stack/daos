@@ -1448,7 +1448,8 @@ dfs_lookup_loop:
 			obj->mode = entry.mode;
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
-				entry.chunk_size : dfs->chunk_size, &obj->oh, NULL);
+				entry.chunk_size : dfs->chunk_size, &obj->oh,
+				NULL);
 			if (rc != 0) {
 				D_ERROR("daos_array_open() failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = -daos_der2errno(rc));

@@ -100,14 +100,14 @@ daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->coh	 	= coh;
-	args->oid	 	= oid;
-	args->th	 	= th;
-	args->mode	 	= mode;
+	args->coh		= coh;
+	args->oid		= oid;
+	args->th		= th;
+	args->mode		= mode;
 	args->open_with_attr	= 1;
 	args->cell_size		= &cell_size;
 	args->chunk_size	= &chunk_size;
-	args->oh	 	= oh;
+	args->oh		= oh;
 
 	return dc_task_schedule(task, true);
 }

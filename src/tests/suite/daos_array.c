@@ -173,6 +173,48 @@ simple_array_mgmt(void **state)
 
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
+
+
+	/** Test the open_with_attr interface */
+
+	/** Open_with_attr with DAOS_OF_ARRAY, should fail */
+	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
+				       4, chunk_size, &oh, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+
+	oid = dts_oid_gen(OC_SX, DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT,
+			  arg->myrank);
+	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
+				       4, chunk_size, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 265, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	if (size != 265) {
+		print_error("Size = %zu, expected: 265\n", size);
+		assert_int_equal(size, 265);
+	}
+
+	rc = daos_array_destroy(oh, DAOS_TX_NONE, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * even with array destroyed, array should be accessible since no
+	 * metadata is stored.
+	 */
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	if (size != 0) {
+		print_error("Size = %zu, expected: 0\n", size);
+		assert_int_equal(size, 0);
+	}
+
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End simple_array_mgmt */
 

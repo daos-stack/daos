@@ -735,6 +735,11 @@ dc_array_open(tse_task_t *task)
 		D_ERROR("Array Open must have DAOS_OF_ARRAY (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
+	if (args->open_with_attr && (ofeat & DAOS_OF_ARRAY)) {
+		D_ERROR("Array open_with_attr must not have DAOS_OF_ARRAY"
+			" (OID feats).\n");
+		D_GOTO(err_ptask, rc = -DER_INVAL);
+	}
 
 	/** Create task to open object */
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
