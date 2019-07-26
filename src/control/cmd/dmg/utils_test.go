@@ -88,7 +88,7 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvme(MockCtrlrs, MockServers).String(),
-			"1.2.3.4:10000:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Address:0000:81:00.0 Serial:123ABC Model:ABC\n\t\tNamespace: id:12345 capacity:99999 \n\n",
+			"1.2.3.4:10000:\n\tPCI Address:0000:81:00.0 Serial:123ABC\n\tModel:ABC Fwrev:E2010413\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Address:0000:81:00.0 Serial:123ABC\n\tModel:ABC Fwrev:E2010413\n\t\tNamespace: id:12345 capacity:99999 \n\n",
 		},
 		{
 			NewClientScm(MockModules, MockServers).String(),
@@ -100,7 +100,7 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}}.String(),
-			"1.2.3.4:10000:\nerror: unknown failure\n1.2.3.5:10001:\nerror: unknown failure\n",
+			"1.2.3.4:10000:\n\terror: unknown failure\n1.2.3.5:10001:\n\terror: unknown failure\n",
 		},
 		{
 			NewClientNvmeResults(

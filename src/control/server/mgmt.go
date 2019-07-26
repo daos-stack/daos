@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"syscall"
 
 	"github.com/pkg/errors"
 
@@ -89,57 +88,39 @@ func awaitStorageFormat(config *configuration) error {
 	msgSkip := "skipping " + msgFormat
 	msgWait := "waiting for " + msgFormat + "\n"
 
-	if syscall.Getuid() == 0 {
-		for i, srv := range config.Servers {
-			isMount, err := config.ext.isMountPoint(srv.ScmMount)
-			if err == nil && !isMount {
-				log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
+	for i, srv := range config.Servers {
+		isMount, err := config.ext.isMountPoint(srv.ScmMount)
+		if err == nil && !isMount {
+			log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
 
-				mntType, devPath, mntOpts, err := getMntParams(&srv)
-				if err != nil {
-					return errors.WithMessage(err, "getting scm mount params")
-				}
-
-				log.Debugf("mounting scm %s at %s (%s)...", devPath, srv.ScmMount, mntType)
-
-				err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
-				if err != nil {
-					return errors.WithMessage(err, "mounting existing scm dir")
-				}
-			} else if !os.IsNotExist(err) {
-				return errors.WithMessage(err, "checking scm mounted")
+			mntType, devPath, mntOpts, err := getMntParams(&srv)
+			if err != nil {
+				return errors.WithMessage(err, "getting scm mount params")
 			}
 
-			if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
-				return errors.WithMessage(err, "checking superblock exists")
-			} else if ok {
-				log.Debugf(msgSkip+" (server already formatted)\n", i)
-				continue
+			log.Debugf("mounting scm %s at %s (%s)...", devPath, srv.ScmMount, mntType)
+
+			err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
+			if err != nil {
+				return errors.WithMessage(err, "mounting existing scm dir")
 			}
-
-			// want this to be visible on stdout and log
-			fmt.Printf(msgWait, i)
-			log.Debugf(msgWait, i)
-
-			// wait on storage format client API call
-			<-srv.formatted
+		} else if !os.IsNotExist(err) {
+			return errors.WithMessage(err, "checking scm mounted")
 		}
 
-		if err := dropPrivileges(config); err != nil {
-			log.Errorf(
-				"Failed to drop privileges: %s, running as root "+
-					"is dangerous and is not advised!", err)
+		if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+			return errors.WithMessage(err, "checking superblock exists")
+		} else if ok {
+			log.Debugf(msgSkip+" (server already formatted)\n", i)
+			continue
 		}
 
-		return nil
-	}
+		// want this to be visible on stdout and log
+		fmt.Printf(msgWait, i)
+		log.Debugf(msgWait, i)
 
-	log.Debugf(
-		"skipping storage format (%s running as non-root user)\n",
-		os.Args[0])
-
-	for _, srv := range config.Servers {
-		close(srv.formatted)
+		// wait on storage format client API call
+		<-srv.formatted
 	}
 
 	return nil
