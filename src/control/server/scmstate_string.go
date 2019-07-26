@@ -8,15 +8,15 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[unknown-0]
-	_ = x[noRegions-1]
-	_ = x[freeCapacity-2]
-	_ = x[noCapacity-3]
+	_ = x[scmStateUnknown-0]
+	_ = x[scmStateNoRegions-1]
+	_ = x[scmStateFreeCapacity-2]
+	_ = x[scmStateNoCapacity-3]
 }
 
-const _scmState_name = "unknownnoRegionsfreeCapacitynoCapacity"
+const _scmState_name = "scmStateUnknownscmStateNoRegionsscmStateFreeCapacityscmStateNoCapacity"
 
-var _scmState_index = [...]uint8{0, 7, 16, 28, 38}
+var _scmState_index = [...]uint8{0, 15, 32, 52, 70}
 
 func (i scmState) String() string {
 	if i < 0 || i >= scmState(len(_scmState_index)-1) {

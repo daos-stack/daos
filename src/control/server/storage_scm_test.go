@@ -81,15 +81,15 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 func TestGetState(t *testing.T) {
 	defer ShowLogOnFailure(t)()
 
-	var tmpOut string
+	var regionsOut string // variable cmd output
 
 	mockRun := func(in string) ([]byte, error) {
 		switch in {
 		case cmdScmShowRegions:
-			return []byte(tmpOut), nil
+			return []byte(regionsOut), nil
 		case cmdScmCreateNamespace:
-			// stimulate free capacity being used
-			tmpOut = strings.Replace(tmpOut, "3012.0", "0.0", 1)
+			// stimulate free capacity of region being used
+			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
 		}
 
 		return []byte(in), nil
@@ -105,7 +105,7 @@ func TestGetState(t *testing.T) {
 		{
 			desc:          "modules but no regions",
 			showRegionOut: outScmNoRegions,
-			expState:      noRegions,
+			expState:      scmStateNoRegions,
 			expOut:        cmdScmCreateRegions,
 		},
 		{
@@ -118,7 +118,7 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
-			expState: freeCapacity,
+			expState: scmStateFreeCapacity,
 			expOut:   cmdScmCreateNamespace + "\n" + cmdScmCreateNamespace + "\n",
 		},
 		{
@@ -131,7 +131,7 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
-			expState: freeCapacity,
+			expState: scmStateFreeCapacity,
 			expOut:   cmdScmCreateNamespace + "\n",
 		},
 		{
@@ -144,7 +144,7 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
-			expState: noCapacity,
+			expState: scmStateNoCapacity,
 			expOut:   cmdScmListNamespaces,
 		},
 	}
@@ -154,20 +154,9 @@ func TestGetState(t *testing.T) {
 		ss := defaultMockScmStorage(&config)
 		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
 
-		tmpOut = tt.showRegionOut // initial value
+		regionsOut = tt.showRegionOut // initial value
 
-		state, err := getState(mockRun)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.desc)
-			continue
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		AssertEqual(t, state.String(), tt.expState.String(), tt.desc+": unexpected state")
-
-		out, err := progressState(state, mockRun)
+		out, err := ss.scm.prep(mockRun)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue

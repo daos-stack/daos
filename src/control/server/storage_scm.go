@@ -41,10 +41,10 @@ import (
 type scmState int
 
 const (
-	unknown scmState = iota
-	noRegions
-	freeCapacity
-	noCapacity
+	scmStateUnknown scmState = iota
+	scmStateNoRegions
+	scmStateFreeCapacity
+	scmStateNoCapacity
 
 	msgScmNoModules = "no scm modules to prepare"
 	msgScmPrepared  = "scm has been prepared"
@@ -69,9 +69,14 @@ const (
 
 type runCmdFn func(string) ([]byte, error)
 
+// run wraps exec.Command().Output() to enable mocking of command output.
+func run(cmd string) ([]byte, error) {
+	return exec.Command(cmd).Output()
+}
+
 // ScmSetup is an interface to configure scm prerequisites via shell tools
 type ScmSetup interface {
-	prep(common.ScmModules) ([]byte, error)
+	prep(runCmdFn) ([]byte, error)
 	reset() error
 }
 
@@ -83,29 +88,24 @@ type scmSetup struct {
 // prep executes commands to configure SCM modules into AppDirect
 // interleaved regions/sets hosting pmem kernel device namespaces.
 //
-// State will be established based on presence of modules, presence of
-// regions and free space on regions.
+// Presents of nonvolatile memory modules is assumed in this method and state
+// is established based on presence and free capacity of regions.
 //
 // Actions based on state:
-// * no modules -> no-op
 // * modules exist and no regions -> create all regions (needs reboot)
 // * regions exist and free capacity -> create all namespaces
 // * regions exist but no free capacity -> no-op
 //
 // Command output from external tools will be returned.
-func (s *scmSetup) prep(modules common.ScmModules) ([]byte, error) {
-	if len(modules) == 0 {
-		return []byte(msgScmNoModules), nil
-	}
-
-	state, err := getState(run)
+func (s *scmSetup) prep(runFn runCmdFn) ([]byte, error) {
+	state, err := getState(runFn)
 	if err != nil {
-		return []byte{}, errors.WithMessage(err, "establish scm state")
+		return nil, errors.WithMessage(err, "establish scm state")
 	}
 
 	log.Debugf("scm in state %s\n", state)
 
-	return progressState(state, run)
+	return progressState(state, runFn)
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
@@ -113,33 +113,28 @@ func (s *scmSetup) reset() error {
 	return nil // TODO
 }
 
-// run wraps exec.Command().Output() to enable mocking
-func run(cmd string) ([]byte, error) {
-	return exec.Command(cmd).Output()
-}
-
 // getState establishes state of SCM regions and namespaces on local server.
 func getState(runFn runCmdFn) (scmState, error) {
 	// TODO: discovery should provide SCM region details
 	out, err := runFn(cmdScmShowRegions)
 	if err != nil {
-		return unknown, err
+		return scmStateUnknown, err
 	}
 
 	outStr := string(out)
 	if outStr == outScmNoRegions {
-		return noRegions, nil
+		return scmStateNoRegions, nil
 	}
 
 	ok, err := hasFreeCapacity(outStr)
 	if err != nil {
-		return unknown, err
+		return scmStateUnknown, err
 	}
 	if ok {
-		return freeCapacity, nil
+		return scmStateFreeCapacity, nil
 	}
 
-	return noCapacity, nil
+	return scmStateNoCapacity, nil
 }
 
 // hasFreeCapacity takes output from ipmctl and checks for free capacity.
@@ -180,16 +175,16 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 // progressState performs relevant actions for transition to next state.
 func progressState(state scmState, runFn runCmdFn) ([]byte, error) {
 	switch state {
-	case noRegions:
+	case scmStateNoRegions:
 		return createRegions(runFn)
-	case freeCapacity:
+	case scmStateFreeCapacity:
 		return createNamespaces(runFn)
-	case noCapacity:
+	case scmStateNoCapacity:
 		log.Debugf(msgScmPrepared)
 		return getNamespaces(runFn)
 	}
 
-	return []byte{}, errors.New("unknown scm state")
+	return nil, errors.New("unknown scm state")
 }
 
 func createRegions(runFn runCmdFn) ([]byte, error) {
@@ -197,29 +192,28 @@ func createRegions(runFn runCmdFn) ([]byte, error) {
 }
 
 // createNamespaces runs create until no free capacity.
-func createNamespaces(runFn runCmdFn) (ba []byte, e error) {
+func createNamespaces(runFn runCmdFn) ([]byte, error) {
+	var ba []byte // record cmd output
+
 	for {
 		out, err := runFn(cmdScmCreateNamespace)
 		if err != nil {
-			e = err
-			return
+			return nil, err
 		}
 		ba = append(ba, out...)
 		ba = append(ba, []byte("\n")...)
 
 		state, err := getState(runFn)
 		if err != nil {
-			e = err
-			return
+			return nil, err
 		}
 
 		switch {
-		case state == noCapacity:
-			return
-		case state != freeCapacity:
-			e = errors.Errorf("unexpected state: want %s, got %s",
-				freeCapacity.String(), state.String())
-			return
+		case state == scmStateNoCapacity:
+			return ba, nil
+		case state != scmStateFreeCapacity:
+			return nil, errors.Errorf("unexpected state: want %s, got %s",
+				scmStateFreeCapacity.String(), state.String())
 		}
 	}
 }
