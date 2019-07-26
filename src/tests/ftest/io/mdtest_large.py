@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-from mdtest_test_base import MdtestBase 
+from mdtest_test_base import MdtestBase
 
 class MdtestLarge(MdtestBase):
     """
@@ -49,5 +49,5 @@ class MdtestLarge(MdtestBase):
         :avocado: tags=mdtest,mdtestlarge
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
-        self.mdtest_cmd.flags.update(mdtest_flags)        
+        self.mdtest_cmd.flags.update(mdtest_flags)
         self.execute_mdtest()
