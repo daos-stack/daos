@@ -953,7 +953,6 @@ struct obj_auxi_args {
 					 retry_with_leader:1;
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
-	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 bulk_nr;
 	d_list_t			 shard_task_head;
@@ -965,6 +964,7 @@ struct obj_auxi_args {
 		struct shard_punch_args	p_args;
 		struct shard_list_args	l_args;
 	};
+	struct obj_req_tgts		 req_tgts;
 };
 
 static int
