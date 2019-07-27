@@ -232,7 +232,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		unsigned int		 idx = 0;
 
 		if (remote_bulks[i] == NULL)
-			continue;
+			 continue;
 
 		if (sgls != NULL) {
 			sgl = sgls[i];
@@ -639,7 +639,6 @@ ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
 
 		if (remote_bulks[i] == NULL)
 			continue;
-
 
 		D_ASSERT(!daos_handle_is_inval(ioh));
 		bsgl = vos_iod_sgl_at(ioh, i);

@@ -304,7 +304,7 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		params->nsgl.sg_iovs[i].iov_len = len;
 		params->nsgl.sg_nr++;
 	}
-	for (i = 0; i < sgl->sg_nr; i++)
+	for (i = 0; i < sgl->sg_nr; i++) 
 		params->nsgl.sg_iovs[params->nsgl.sg_nr++] = sgl->sg_iovs[i];
 
 	return rc;
