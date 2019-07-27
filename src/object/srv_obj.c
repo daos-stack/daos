@@ -232,7 +232,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		unsigned int		 idx = 0;
 
 		if (remote_bulks[i] == NULL)
-			 continue;
+			continue;
 
 		if (sgls != NULL) {
 			sgl = sgls[i];
@@ -638,7 +638,7 @@ ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
 		unsigned int		 sl_idx = 0;
 
 		if (remote_bulks[i] == NULL)
-			 continue;
+			continue;
 
 
 		D_ASSERT(!daos_handle_is_inval(ioh));
@@ -789,8 +789,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 						    orw->orw_iods.ca_arrays,
 						    oca, skip_list);
 			} else if (tgt_idx == 0) {
-				rc = ec_copy_iods(&iods, orw->orw_iods.ca_arrays,
-					     orw->orw_nr);
+				rc = ec_copy_iods(&iods,
+						  orw->orw_iods.ca_arrays,
+						  orw->orw_nr);
 				if (rc == 0) {
 					rc = ec_parity_target(tgt_idx,
 							      orw->orw_nr,
@@ -892,7 +893,7 @@ out:
 	for (i = 0; i < orw->orw_nr; i++)
 		D_FREE(skip_list[i]);
 	if (iods)
-		 ec_free_iods(&iods, orw->orw_nr);
+		ec_free_iods(&iods, orw->orw_nr);
 	return rc;
 }
 
