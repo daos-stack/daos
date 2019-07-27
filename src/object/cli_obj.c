@@ -638,7 +638,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 			if (shard_idx == leader_shard ||
 			    (tgt_set && !(tgt_set & 1UL << j)))
 				continue;
-			}
 			rc = obj_shard_tgts_query(obj, map_ver, shard_idx,
 						  tgt++);
 			if (rc != 0)
