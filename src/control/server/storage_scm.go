@@ -24,6 +24,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -46,16 +47,16 @@ const (
 	scmStateFreeCapacity
 	scmStateNoCapacity
 
-	msgScmNoModules = "no scm modules to prepare"
-	msgScmPrepared  = "scm has been prepared"
-
 	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	outScmNoRegions       = "\nThere are no Regions defined in the system."
 	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
 	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
 
-	msgScmNotInited        = "scm storage not initialized"
+	msgRebootRequired      = "A reboot is required to process new memory allocation goals."
+	msgScmNoModules        = "no scm modules to prepare"
+	msgScmPrepared         = "scm has been prepared"
+	msgScmNotInited        = "scm storage could not be accessed"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
 		"reformat not implemented"
 	msgScmMountEmpty = "scm mount must be specified in config"
@@ -66,6 +67,8 @@ const (
 	msgIpmctlDiscoverFail   = "ipmctl module discovery"
 	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
+
+type PmemDev map[string]interface{} // FIXME, replace with the real-type
 
 type runCmdFn func(string) ([]byte, error)
 
@@ -103,8 +106,10 @@ func run(cmd string) ([]byte, error) {
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *configuration // server configuration structure
-	modules     common.ScmModules
 	runCmd      runCmdFn
+	modules     common.ScmModules
+	pmemDevs    PmemDevs
+	state       scmState
 	initialized bool
 	formatted   bool
 }
@@ -133,15 +138,25 @@ func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
 // * regions exist but no free capacity -> no-op
 //
 // Command output from external tools will be returned.
-func (s *scmStorage) Prep() ([]byte, error) {
-	state, err := getState(s.runCmd)
-	if err != nil {
-		return nil, errors.WithMessage(err, "establish scm state")
+func (s *scmStorage) Prep() (needsReboot bool, pmemDevs PmemDevs, err error) {
+	if err := s.getState(); err != nil {
+		return false, nil, errors.WithMessage(err, "establish scm state")
 	}
 
-	log.Debugf("scm in state %s\n", state)
+	log.Debugf("scm in state %s\n", s.state)
 
-	return progressState(state, s.runCmd)
+	switch s.state {
+	case scmStateNoRegions:
+		needsReboot, err = s.createRegions()
+	case scmStateFreeCapacity:
+		pmemDevs, err = s.createNamespaces()
+	case scmStateNoCapacity:
+		pmemDevs, err = s.getNamespaces()
+	default:
+		err = errors.New("unknown scm state")
+	}
+
+	return
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
@@ -150,30 +165,47 @@ func (s *scmStorage) PrepReset() error {
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
-func getState(runFn runCmdFn) (scmState, error) {
+func (s *scmStorage) getState() error {
+	s.state = scmStateUnknown
+
 	// TODO: discovery should provide SCM region details
-	out, err := runFn(cmdScmShowRegions)
+	out, err := s.runCmd(cmdScmShowRegions)
 	if err != nil {
-		return scmStateUnknown, err
+		return err
 	}
 
 	outStr := string(out)
 	if outStr == outScmNoRegions {
-		return scmStateNoRegions, nil
+		s.state = scmStateNoRegions
+		return nil
 	}
 
 	ok, err := hasFreeCapacity(outStr)
 	if err != nil {
-		return scmStateUnknown, err
+		return err
 	}
 	if ok {
-		return scmStateFreeCapacity, nil
+		s.state = scmStateFreeCapacity
+		return nil
 	}
+	s.state = scmStateNoCapacity
 
-	return scmStateNoCapacity, nil
+	return nil
 }
 
 // hasFreeCapacity takes output from ipmctl and checks for free capacity.
+//
+// external tool commands return:
+// $ ipmctl show -d PersistentMemoryType,FreeCapacity -region
+//
+// ---ISetID=0x2aba7f4828ef2ccc---
+//    PersistentMemoryType=AppDirect
+//    FreeCapacity=3012.0 GiB
+// ---ISetID=0x81187f4881f02ccc---
+//    PersistentMemoryType=AppDirect
+//    FreeCapacity=3012.0 GiB
+//
+// FIXME: implementation to be replaced by using libipmctl directly through bindings
 func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	lines := strings.Split(text, "\n")
 	if len(lines) < 4 {
@@ -208,46 +240,58 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	return
 }
 
-// progressState performs relevant actions for transition to next state.
-func progressState(state scmState, runFn runCmdFn) ([]byte, error) {
-	switch state {
-	case scmStateNoRegions:
-		return createRegions(runFn)
-	case scmStateFreeCapacity:
-		return createNamespaces(runFn)
-	case scmStateNoCapacity:
-		log.Debugf(msgScmPrepared)
-		return getNamespaces(runFn)
+// createRegions sets DCPM modules into regions in interleaved AppDirect mode.
+//
+// External tool command output will indicate whether a subsequent reboot is needed.
+func (s *scmStorage) createRegions() (bool, error) {
+	out, err := runFn(cmdScmCreateRegions)
+	if err != nil {
+		return false, err
 	}
 
-	return nil, errors.New("unknown scm state")
+	return strings.Contains(string(out), msgRebootRequired), nil
 }
 
-func createRegions(runFn runCmdFn) ([]byte, error) {
-	return runFn(cmdScmCreateRegions)
+// FIXME: unMarshal into a real type
+func parsePmemDev(jsonData []byte) (PmemDev, err) {
+	var v interface{}
+	json.Unmarshal(jsonData, &v)
+	data := v.(map[string]interface{})
+
+	return PmemDev(data)
 }
 
 // createNamespaces runs create until no free capacity.
-func createNamespaces(runFn runCmdFn) ([]byte, error) {
-	var ba []byte // record cmd output
-
+//
+// external tool commands return json format:
+// $ ndctl create-namespace
+// {
+//   "dev":"namespace1.0",
+//   "mode":"fsdax",
+//   "map":"dev",
+//   "size":"2964.94 GiB (3183.58 GB)",
+//   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+//   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+//   "sector_size":512,
+//   "blockdev":"pmem1",
+//   "numa_node":1
+//}
+func (s *scmStorage) createNamespaces(runFn runCmdFn) (devs PmemDevs, err error) {
 	for {
 		out, err := runFn(cmdScmCreateNamespace)
 		if err != nil {
 			return nil, err
 		}
-		ba = append(ba, out...)
-		ba = append(ba, []byte("\n")...)
+		devs = append(devs, parsePmemDev(out))
 
-		state, err := getState(runFn)
-		if err != nil {
+		if err := s.getState(); err != nil {
 			return nil, err
 		}
 
 		switch {
-		case state == scmStateNoCapacity:
+		case s.state == scmStateNoCapacity:
 			return ba, nil
-		case state != scmStateFreeCapacity:
+		case s.state != scmStateFreeCapacity:
 			return nil, errors.Errorf("unexpected state: want %s, got %s",
 				scmStateFreeCapacity.String(), state.String())
 		}

@@ -151,16 +151,10 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 	return nil
 }
 
-// dryRun just returns the commands that should be run.
-func dryRun(cmd string) ([]byte, error) {
-	return []byte(cmd), nil
-}
-
 // PrepScmCmd is the struct representing the command to prep SCM modules by
 // configuring in AppDirect mode and creating relevant namespaces.
 type PrepScmCmd struct {
-	DryRun bool `short:"n" long:"dry-run" description:"Print commands to be issued for next stage of SCM prep but don't actually execute"`
-	Reset  bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
+	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
 }
 
 // Execute is run when PrepScmCmd activates
@@ -180,23 +174,24 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	if p.DryRun {
-		server.scm = server.scm.withRunCmd(dryRun)
+	if server.scm.inited {
+		return errors.New(msgScmNotInited)
 	}
 
-	if !p.Reset {
-		out, err := server.scm.Prep()
-		if err != nil {
+	if len(server.scm.modules) == 0 {
+		return errors.New(msgScmNoModules)
+	}
+
+	if p.Reset {
+		// run reset to remove namespaces and clear regions
+		if err := server.scm.PrepReset(); err != nil {
+			return errors.WithMessage(err, "DCPM reset")
+		}
+	} else {
+		// transition to the next state in SCM preparation
+		if err := server.scm.Prep(); err != nil {
 			return errors.WithMessage(err, "DCPM prep")
 		}
-		fmt.Printf("preparing SCM: %s\n", out)
-
-		return nil
-	}
-
-	// run reset to remove namespaces and clear regions
-	if err := server.scm.PrepReset(); err != nil {
-		return errors.WithMessage(err, "DCPM reset")
 	}
 
 	// exit immediately to avoid continuation of main
