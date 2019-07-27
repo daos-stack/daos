@@ -382,7 +382,7 @@ btr_ops_t dbtree_dtx_cf_ops = {
 };
 
 #define DTX_CF_BTREE_ORDER	20
- 
+
 static int
 dtx_get_tgt_cnt(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 {
