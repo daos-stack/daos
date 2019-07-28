@@ -40,14 +40,14 @@ from write_host_file import write_host_file
 
 NO_OF_MAX_CONTAINER = 13180
 
-
-def ior_runner_thread(ior_cmd, uuids, basepath, procs, hostfile, results):
+def ior_runner_thread(ior_cmd, uuids, mgr, attach, procs, hostfile, results):
     """IOR run thread method.
 
     Args:
         ior_cmd (IorCommand): [description]
         uuids (list): [description]
-        basepath (str): DAOS base path
+        mgr (str): mpi job manager command
+        attach (str): CART attach info path
         procs (int): number of host processes
         hostfile (str): file defining host names and slots
         results (Queue): queue for returning thread results
@@ -55,7 +55,7 @@ def ior_runner_thread(ior_cmd, uuids, basepath, procs, hostfile, results):
     for index, cont_uuid in enumerate(uuids):
         ior_cmd.daos_cont.value = cont_uuid
         try:
-            ior_cmd.run(basepath, procs, hostfile, False)
+            ior_cmd.run(mgr, attach, procs, hostfile, False)
             results.put("PASS")
 
         except IorFailed as error:
@@ -227,7 +227,7 @@ class ObjectMetadata(TestWithServers):
             for index in range(total_ior_threads):
                 # Define the arguments for the ior_runner_thread method
                 ior_cmd = IorCommand()
-                ior_cmd.set_params(self)
+                ior_cmd.get_params(self)
                 ior_cmd.set_daos_params(self.server_group, self.pool)
                 ior_cmd.flags.value = self.params.get(
                     "F", "/run/ior/ior{}flags/".format(operation))
@@ -239,7 +239,8 @@ class ObjectMetadata(TestWithServers):
                         kwargs={
                             "ior_cmd": ior_cmd,
                             "uuids": list_of_uuid_lists[index],
-                            "basepath": self.basepath,
+                            "mgr": self.orterun,
+                            "attach": self.tmp,
                             "hostfile": self.hostfile_clients,
                             "procs": processes,
                             "results": self.out_queue}))

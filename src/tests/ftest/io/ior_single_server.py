@@ -41,4 +41,4 @@ class IorSingleServer(IorTestBase):
 
         :avocado: tags=ior,singleserver
         """
-        self.execute_ior()
+        self.run_ior_with_pool()

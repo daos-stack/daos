@@ -28,6 +28,7 @@ from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 from general_utils import TestPool
 
+
 class IorTestBase(TestWithServers):
     """Base IOR test class.
 
@@ -49,7 +50,7 @@ class IorTestBase(TestWithServers):
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
-        self.ior_cmd.set_params(self)
+        self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.mpiio_oclass = self.params.get("mpiio_oclass", '/run/ior/*')
 

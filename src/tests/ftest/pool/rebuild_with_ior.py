@@ -90,7 +90,7 @@ class RebuildWithIOR(IorTestBase):
 
         # Verify the pool information after rebuild
         checks["pi_ndisabled"] = targets
-        self.assertFalse(
+        self.assertTrue(
             self.pool.check_pool_info(**checks),
             "Invalid pool information detected after rebuild")
         self.assertTrue(
