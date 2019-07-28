@@ -1054,9 +1054,11 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	D_DEBUG(DB_IO, "Retrying task=%p for err=%d, io_retry=%d\n",
 		 task, result, obj_auxi->io_retry);
 
+	/* ignore returned value, error is reported by comp_cb */
 	if (pool_task != NULL)
-		/* ignore returned value, error is reported by comp_cb */
 		dc_task_schedule(pool_task, obj_auxi->io_retry);
+	else if (obj_auxi->io_retry)
+		dc_task_schedule(task, obj_auxi->io_retry);
 
 	return 0;
 err:
