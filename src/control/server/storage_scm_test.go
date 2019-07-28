@@ -80,45 +80,59 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 func TestGetState(t *testing.T) {
 	defer ShowLogOnFailure(t)()
 
-	var regionsOut string // variable cmd output
+	var regionsOut string  // variable cmd output
+	commands := []string{} // external commands issued
+	// ndctl create-namespace command return json format
+	pmemOut := `{
+   "dev":"namespace%d.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":"2964.94 GiB (3183.58 GB)",
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem%d",
+   "numa_node":1
+}
+`
+	pmemId := 1
+	createRegionsOut := msgScmRebootRequired + "\n"
 
 	mockRun := func(in string) ([]byte, error) {
+		retString := in
+
 		switch in {
+		case cmdScmCreateRegions:
+			retString = createRegionsOut // example successful output
 		case cmdScmShowRegions:
-			return []byte(regionsOut), nil
+			retString = regionsOut
 		case cmdScmCreateNamespace:
 			// stimulate free capacity of region being used
 			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
+			retString = fmt.Sprintf(pmemOut, pmemId, pmemId)
+			pmemId += 1
+		case cmdScmListNamespaces:
+			retString = "[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]"
 		}
 
-		return []byte(in), nil
+		commands = append(commands, in)
+		return []byte(retString), nil
 	}
 
 	tests := []struct {
-		desc          string
-		errMsg        string
-		showRegionOut string
-		expState      scmState
-		expOut        string
+		desc              string
+		errMsg            string
+		showRegionOut     string
+		createRegionOut   string
+		expRebootRequired bool
+		expPmemDevs       []PmemDev
+		expCommands       []string
 	}{
 		{
-			desc:          "modules but no regions",
-			showRegionOut: outScmNoRegions,
-			expState:      scmStateNoRegions,
-			expOut:        cmdScmCreateRegions,
-		},
-		{
-			desc: "regions with free capacity",
-			showRegionOut: "\n" +
-				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-				"   PersistentMemoryType=AppDirect\n" +
-				"   FreeCapacity=3012.0 GiB\n" +
-				"---ISetID=0x81187f4881f02ccc---\n" +
-				"   PersistentMemoryType=AppDirect\n" +
-				"   FreeCapacity=3012.0 GiB\n" +
-				"\n",
-			expState: scmStateFreeCapacity,
-			expOut:   cmdScmCreateNamespace + "\n" + cmdScmCreateNamespace + "\n",
+			desc:              "modules but no regions",
+			showRegionOut:     outScmNoRegions,
+			expRebootRequired: true,
+			expCommands:       []string{cmdScmShowRegions, cmdScmCreateRegions},
 		},
 		{
 			desc: "single region with free capacity",
@@ -130,8 +144,24 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
-			expState: scmStateFreeCapacity,
-			expOut:   cmdScmCreateNamespace + "\n",
+			expCommands: []string{cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions},
+			expPmemDevs: parsePmemDevs([]byte(fmt.Sprintf(pmemOut, 1, 1))),
+		},
+		{
+			desc: "regions with free capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"\n",
+			expCommands: []string{
+				cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions,
+				cmdScmCreateNamespace, cmdScmShowRegions,
+			},
+			expPmemDevs: parsePmemDevs([]byte("[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]")),
 		},
 		{
 			desc: "regions with no capacity",
@@ -143,8 +173,8 @@ func TestGetState(t *testing.T) {
 				"   PersistentMemoryType=AppDirect\n" +
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
-			expState: scmStateNoCapacity,
-			expOut:   cmdScmListNamespaces,
+			expCommands: []string{cmdScmShowRegions, cmdScmListNamespaces},
+			expPmemDevs: parsePmemDevs([]byte("[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]")),
 		},
 	}
 
@@ -153,9 +183,12 @@ func TestGetState(t *testing.T) {
 		ss := defaultMockScmStorage(&config).withRunCmd(mockRun)
 		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
 
-		regionsOut = tt.showRegionOut // initial value
+		// reset to initial values between tests
+		regionsOut = tt.showRegionOut
+		pmemId = 1
+		commands = nil
 
-		out, err := ss.Prep()
+		needsReboot, pmemDevs, err := ss.Prep()
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, tt.desc)
 			continue
@@ -164,7 +197,9 @@ func TestGetState(t *testing.T) {
 			t.Fatal(tt.desc + ": " + err.Error())
 		}
 
-		AssertEqual(t, string(out), tt.expOut, tt.desc+": unexpected command output")
+		AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
+		AssertEqual(t, needsReboot, tt.expRebootRequired, tt.desc+": unexpected value for is reboot required")
+		AssertEqual(t, pmemDevs, tt.expPmemDevs, tt.desc+": unexpected list of pmem kernel device names")
 	}
 }
 

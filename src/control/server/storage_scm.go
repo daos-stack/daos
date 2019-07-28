@@ -53,7 +53,7 @@ const (
 	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
 	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
 
-	msgRebootRequired      = "A reboot is required to process new memory allocation goals."
+	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
 	msgScmPrepared         = "scm has been prepared"
 	msgScmNotInited        = "scm storage could not be accessed"
@@ -108,7 +108,7 @@ type scmStorage struct {
 	config      *configuration // server configuration structure
 	runCmd      runCmdFn
 	modules     common.ScmModules
-	pmemDevs    PmemDevs
+	pmemDevs    []PmemDev
 	state       scmState
 	initialized bool
 	formatted   bool
@@ -138,7 +138,7 @@ func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
 // * regions exist but no free capacity -> no-op
 //
 // Command output from external tools will be returned.
-func (s *scmStorage) Prep() (needsReboot bool, pmemDevs PmemDevs, err error) {
+func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []PmemDev, err error) {
 	if err := s.getState(); err != nil {
 		return false, nil, errors.WithMessage(err, "establish scm state")
 	}
@@ -244,45 +244,40 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 //
 // External tool command output will indicate whether a subsequent reboot is needed.
 func (s *scmStorage) createRegions() (bool, error) {
-	out, err := runFn(cmdScmCreateRegions)
+	out, err := s.runCmd(cmdScmCreateRegions)
 	if err != nil {
 		return false, err
 	}
 
-	return strings.Contains(string(out), msgRebootRequired), nil
+	return strings.Contains(string(out), msgScmRebootRequired), nil
 }
 
 // FIXME: unMarshal into a real type
-func parsePmemDev(jsonData []byte) (PmemDev, err) {
-	var v interface{}
-	json.Unmarshal(jsonData, &v)
-	data := v.(map[string]interface{})
+func parsePmemDevs(jsonData []byte) (devs []PmemDev) {
+	// turn single entries into arrays
+	if !strings.HasPrefix(string(jsonData), "[") {
+		jsonData = []byte("[" + string(jsonData) + "]")
+	}
 
-	return PmemDev(data)
+	var v []interface{}
+	json.Unmarshal(jsonData, &v)
+
+	for _, m := range v {
+		data := m.(map[string]interface{})
+		devs = append(devs, PmemDev(data))
+	}
+
+	return devs
 }
 
 // createNamespaces runs create until no free capacity.
-//
-// external tool commands return json format:
-// $ ndctl create-namespace
-// {
-//   "dev":"namespace1.0",
-//   "mode":"fsdax",
-//   "map":"dev",
-//   "size":"2964.94 GiB (3183.58 GB)",
-//   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
-//   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
-//   "sector_size":512,
-//   "blockdev":"pmem1",
-//   "numa_node":1
-//}
-func (s *scmStorage) createNamespaces(runFn runCmdFn) (devs PmemDevs, err error) {
+func (s *scmStorage) createNamespaces() (devs []PmemDev, err error) {
 	for {
-		out, err := runFn(cmdScmCreateNamespace)
+		out, err := s.runCmd(cmdScmCreateNamespace)
 		if err != nil {
 			return nil, err
 		}
-		devs = append(devs, parsePmemDev(out))
+		devs = append(devs, parsePmemDevs(out)...)
 
 		if err := s.getState(); err != nil {
 			return nil, err
@@ -290,16 +285,21 @@ func (s *scmStorage) createNamespaces(runFn runCmdFn) (devs PmemDevs, err error)
 
 		switch {
 		case s.state == scmStateNoCapacity:
-			return ba, nil
+			return devs, nil
 		case s.state != scmStateFreeCapacity:
 			return nil, errors.Errorf("unexpected state: want %s, got %s",
-				scmStateFreeCapacity.String(), state.String())
+				scmStateFreeCapacity.String(), s.state.String())
 		}
 	}
 }
 
-func getNamespaces(runFn runCmdFn) ([]byte, error) {
-	return runFn(cmdScmListNamespaces)
+func (s *scmStorage) getNamespaces() (devs []PmemDev, err error) {
+	out, err := s.runCmd(cmdScmListNamespaces)
+	if err != nil {
+		return nil, err
+	}
+
+	return parsePmemDevs(out), nil
 }
 
 // Setup implementation for scmStorage providing initial device discovery

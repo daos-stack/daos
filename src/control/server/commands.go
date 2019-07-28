@@ -174,7 +174,7 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	if server.scm.inited {
+	if server.scm.initialized {
 		return errors.New(msgScmNotInited)
 	}
 
@@ -189,8 +189,15 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		}
 	} else {
 		// transition to the next state in SCM preparation
-		if err := server.scm.Prep(); err != nil {
+		needsReboot, pmemDevs, err := server.scm.Prep()
+		if err != nil {
 			return errors.WithMessage(err, "DCPM prep")
+		}
+
+		if needsReboot {
+			fmt.Println(msgScmRebootRequired)
+		} else {
+			fmt.Printf("persistent memory devices:\n\t%+v\n", pmemDevs)
 		}
 	}
 
