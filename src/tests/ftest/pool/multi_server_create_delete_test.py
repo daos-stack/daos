@@ -37,6 +37,7 @@ import server_utils
 import check_for_pool
 import write_host_file
 
+#pylint: disable=broad-except
 class MultiServerCreateDeleteTest(Test):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
