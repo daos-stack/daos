@@ -2446,7 +2446,7 @@ pool_find_all_targets_by_addr(uuid_t pool_uuid,
 	int		i;
 	int		rc;
 
-	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
