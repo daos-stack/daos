@@ -114,7 +114,7 @@ repeat:
 		else if (type == VEA_TYPE_AGGREGATE)
 			d_list_del_init(&entry->ve_link);
 
-		rc = dbtree_delete(btr_hdl, &key_out, NULL);
+		rc = dbtree_delete(btr_hdl, BTR_PROBE_EQ, &key_out, NULL);
 		if (rc)
 			return rc;
 	}
@@ -160,7 +160,7 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	dummy.ve_ext = *vfe;
 
 	if (flags & VEA_FL_GEN_AGE) {
-		rc = get_current_age(&cur_time);
+		rc = daos_gettime_coarse(&cur_time);
 		if (rc)
 			return rc;
 		dummy.ve_ext.vfe_age = cur_time;
@@ -268,7 +268,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	memset(&dummy, 0, sizeof(dummy));
 	D_INIT_LIST_HEAD(&dummy.ve_link);
 	dummy.ve_ext = *vfe;
-	rc = get_current_age(&dummy.ve_ext.vfe_age);
+	rc = daos_gettime_coarse(&dummy.ve_ext.vfe_age);
 	if (rc)
 		return rc;
 
@@ -325,7 +325,7 @@ migrate_end_cb(void *data, bool noop)
 	if (noop)
 		return;
 
-	rc = get_current_age(&cur_time);
+	rc = daos_gettime_coarse(&cur_time);
 	if (rc)
 		return;
 
@@ -354,7 +354,7 @@ migrate_end_cb(void *data, bool noop)
 		 */
 		d_iov_set(&key, &vfe.vfe_blk_off, sizeof(vfe.vfe_blk_off));
 		D_ASSERT(!daos_handle_is_inval(vsi->vsi_agg_btr));
-		rc = dbtree_delete(vsi->vsi_agg_btr, &key, NULL);
+		rc = dbtree_delete(vsi->vsi_agg_btr, BTR_PROBE_EQ, &key, NULL);
 		if (rc) {
 			D_ERROR("Remove ["DF_U64", %u] from aggregated "
 				"tree error: %d\n", vfe.vfe_blk_off,
@@ -436,7 +436,7 @@ migrate_free_exts(struct vea_space_info *vsi)
 	 * Check aggregation time in advance to avoid unnecessary
 	 * umem_tx_add_callback() calls.
 	 */
-	rc = get_current_age(&cur_time);
+	rc = daos_gettime_coarse(&cur_time);
 	if (rc)
 		return;
 

@@ -423,7 +423,7 @@ func (srv *iosrv) callCreateMS() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("CreateMS: %d\n", resp.Status)
 	}
 
@@ -440,7 +440,7 @@ func (srv *iosrv) callStartMS() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("StartMS: %d\n", resp.Status)
 	}
 
@@ -457,7 +457,7 @@ func (srv *iosrv) callSetRank(rank rank) error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
 	}
 
@@ -474,7 +474,7 @@ func (srv *iosrv) callSetUp() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetUp response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("SetUp: %d\n", resp.Status)
 	}
 
@@ -510,7 +510,7 @@ func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mg
 	if err != nil {
 		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return nil, errors.Errorf("join %s %v: %d\n", ap, *req, resp.Status)
 	}
 

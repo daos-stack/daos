@@ -46,7 +46,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 	if (rc)
 		D_GOTO(release, rc = -rc);
 
-	D_ALLOC(buf, size + 1);
+	D_ALLOC(buf, size);
 	if (!buf)
 		D_GOTO(release, rc = ENOMEM);
 
