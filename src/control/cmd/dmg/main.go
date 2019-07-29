@@ -143,7 +143,6 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 	opts := new(cliOptions)
 
 	p := flags.NewParser(opts, flags.Default)
-	p.SubcommandsOptional = true
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
 			return nil
@@ -181,23 +180,11 @@ func main() {
 
 	conns := client.NewConnect()
 
-	opts, err := parseOpts(os.Args[1:], conns)
+	_, err := parseOpts(os.Args[1:], conns)
 	if err != nil {
 		if err == cmdSuccess {
 			os.Exit(0)
 		}
 		exitWithError(err)
 	}
-
-	// If no subcommand has been specified, interactive shell is started
-	// with expected functionality (tab expansion and utility commands)
-	// after parsing config/opts and setting up connections.
-	if err := appSetup(true, opts, conns); err != nil {
-		fmt.Println(err.Error()) // notify of app setup errors
-		fmt.Println("")
-	}
-
-	shell := setupShell(conns)
-	shell.Println("DAOS Management Shell")
-	shell.Run()
 }
