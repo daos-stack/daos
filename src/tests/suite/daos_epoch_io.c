@@ -166,15 +166,15 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	struct test_update_fetch_arg	*uf_arg = &op->uf_arg;
 	const char			*dkey = key_rec->or_dkey;
 	const char			*akey = key_rec->or_akey;
-	daos_size_t			iod_size = key_rec->or_iod_size;
-	bool				array = uf_arg->ua_array;
-	daos_iod_type_t			iod_type;
-	daos_size_t			buf_size;
+	daos_size_t			 iod_size = key_rec->or_iod_size;
+	bool				 array = uf_arg->ua_array;
+	daos_iod_type_t			 iod_type;
+	daos_size_t			 buf_size;
 	char				*buf = NULL;
-	struct ioreq			req;
-	int				rc = 0;
-	daos_handle_t			th_open;
-	daos_epoch_t		        snap_epoch;
+	struct ioreq			 req;
+	int				 rc = 0;
+	daos_handle_t			 th_open;
+	daos_epoch_t		         snap_epoch;
 
 	if (array)
 		D_ASSERT(uf_arg->ua_recxs != NULL && uf_arg->ua_recx_num >= 1);
@@ -941,7 +941,7 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, int opc,
 		{"--recx",	true,	'r'},
 		{"--verify",	false,	'v'},
 		{"--value",	true,	'u'},
-		{"--snap", false, 't'},
+		{"--snap",      false,  't'},
 		{0}
 	};
 
@@ -1408,7 +1408,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	char			cmd_line[CMD_LINE_LEN_MAX] = {};
 	int			rc = 0;
 	/*Array for snapshot epoch*/
-	daos_epoch_t		sn_epoch[MAX_EPOCH_TIMES] = {};
+	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
 
 	if (io_conf == NULL || strlen(io_conf) == 0) {
 		print_message("invalid io_conf.\n");
@@ -1426,12 +1426,10 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 
 	do {
 		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
-
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
 		rc = cmd_line_parse(arg, cmd_line, &op);
-
 		if (rc != 0) {
 			print_message("bad cmd_line %s, exit.\n", cmd_line);
 			break;

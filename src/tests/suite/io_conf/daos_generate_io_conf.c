@@ -61,7 +61,7 @@ struct current_status {
 	int		cur_dkey_num;
 	int		cur_akey_num;
 	int		cur_rank;
-	int		cur_tx;
+	uint64_t	cur_tx;
 };
 
 enum rec_types {
@@ -94,9 +94,9 @@ struct record {
 };
 
 struct records {
-	int		eph;
+	uint64_t	eph;
 	int		records_num;
-	struct record	records[MAX_EXT_NUM];
+	struct record	records[DTS_MAX_EXT_NUM];
 };
 
 static struct option long_ops[] = {
@@ -137,7 +137,7 @@ extent_twist(struct extent *input, struct extent *output, int off, bool add)
 }
 
 static int
-update_array_internal(int index, int eph, struct extent *extents,
+update_array_internal(int index, uint64_t eph, struct extent *extents,
 		      int extents_num, int rec_size,
 		      struct records *records, char *output_buf, bool update)
 {
@@ -166,7 +166,7 @@ update_array_internal(int index, int eph, struct extent *extents,
 	/* Twist the extent if needed */
 	if (rand() % 2 == 0) {
 		twist = true;
-		twist_off = rand() % MAX_EXTENT_SIZE;
+		twist_off = rand() % DTS_MAX_EXTENT_SIZE;
 		twist_add = rand() % 2 == 0 ? true : false;
 	}
 
@@ -202,11 +202,11 @@ update_array_internal(int index, int eph, struct extent *extents,
 	}
 
 	if (update) {
-		sprintf(output_buf, "update --tx %d --snap --recx \"%s\"\n",
+		sprintf(output_buf, "update --tx %"PRId64" --snap --recx \"%s\"\n",
 			eph, rec_buf);
 		records[index].records[0].snap = true;
 	} else {
-		sprintf(output_buf, "punch --tx %d --recx \"%s\"\n",
+		sprintf(output_buf, "punch --tx %"PRId64" --recx \"%s\"\n",
 			eph, rec_buf);
 		records[index].records[0].snap = false;
 	}
@@ -215,7 +215,7 @@ update_array_internal(int index, int eph, struct extent *extents,
 }
 
 static int
-update_array(int index, int eph, struct extent *extents,
+update_array(int index, uint64_t eph, struct extent *extents,
 	     int extents_num, int rec_size, struct records *records,
 	     char *output_buf)
 {
@@ -224,7 +224,7 @@ update_array(int index, int eph, struct extent *extents,
 }
 
 static int
-punch_array(int index, int eph, struct extent *extents,
+punch_array(int index, uint64_t eph, struct extent *extents,
 	    int extents_num, int rec_size, struct records *records,
 	    char *output_buf)
 {
@@ -233,19 +233,19 @@ punch_array(int index, int eph, struct extent *extents,
 }
 
 static int
-_punch_akey(int index, int eph, struct extent *extents,
+_punch_akey(int index, uint64_t eph, struct extent *extents,
 	    int extents_num, int rec_size, struct records *records,
 	    char *output_buf)
 {
 	records[index].eph = eph;
 	records[index].records_num = 0;
-	sprintf(output_buf, "punch --tx %d\n", eph);
+	sprintf(output_buf, "punch --tx %" PRId64 "\n", eph);
 	return 0;
 }
 
 /* Update single record */
 static int
-update_single(int index, int eph, struct extent *extents,
+update_single(int index, uint64_t eph, struct extent *extents,
 	      int extents_num, int rec_size, struct records *records,
 	      char *output_buf)
 {
@@ -261,20 +261,21 @@ update_single(int index, int eph, struct extent *extents,
 	if (value % 2 != 0) {
 		records[index].records[0].snap = true;
 		sprintf(output_buf,
-			"update --tx %d --snap --single --value %d\n",
+			"update --tx %" PRId64 " --snap --single --value %d\n",
 			eph, value);
 	} else {
 		records[index].records[0].snap = false;
-		sprintf(output_buf, "update --tx %d --single --value %d\n", eph,
+		sprintf(output_buf, "update --tx %" PRId64 " --single --value %d\n", eph,
 			value);
 	}
 
 	return 0;
 }
 
-static int fetch_array(int index, int eph, struct extent *extents,
-	int extents_num, int rec_size, struct records *records,
-	char *output_buf)
+static int
+fetch_array(int index, uint64_t eph, struct extent *extents,
+	    int extents_num, int rec_size, struct records *records,
+	    char *output_buf)
 {
 	struct records *record;
 	char            rec_buf[512] = {0};
@@ -302,16 +303,16 @@ static int fetch_array(int index, int eph, struct extent *extents,
 	if (rec_length != 0) {
 		if (record->records[0].snap == true)
 			sprintf(output_buf,
-				"fetch --tx %d -v --snap --recx \"%s\"\n",
+				"fetch --tx %" PRId64 " -v --snap --recx \"%s\"\n",
 				record->eph, rec_buf);
 		else
-			sprintf(output_buf, "fetch --tx %d --recx \"%s\"\n",
+			sprintf(output_buf, "fetch --tx %" PRId64 " --recx \"%s\"\n",
 				record->eph, rec_buf);
 	}
 	return 0;
 }
 
-static int fetch_single(int index, int eph, struct extent *extents,
+static int fetch_single(int index, uint64_t eph, struct extent *extents,
 	int extents_num, int rec_size, struct records *records,
 	char *output_buf)
 {
@@ -341,11 +342,11 @@ static int fetch_single(int index, int eph, struct extent *extents,
 	if (rec_length != 0) {
 		if (record->records[0].snap == true)
 			sprintf(output_buf,
-				"fetch --tx %d -v --snap --single --value %d\n",
+				"fetch --tx %" PRId64 " -v --snap --single --value %d\n",
 				record->eph, record->records[0].single.value);
 		else
 			sprintf(output_buf,
-				"fetch --tx %d --single --value %d\n",
+				"fetch --tx %" PRId64 " --single --value %d\n",
 			    record->eph, record->records[0].single.value);
 
 	}
@@ -364,7 +365,7 @@ int choose_op(int index, int max_operation)
 }
 
 struct operation {
-	int (*op)(int index, int eph, struct extent *extents,
+	int (*op)(int index, uint64_t eph, struct extent *extents,
 		  int extents_num, int rec_size, struct records *records,
 		  char *output_buf);
 };
@@ -412,9 +413,10 @@ generate_io_conf_rec(int fd, struct current_status *status)
 {
 	char		line[256];
 	unsigned int	offset = 0;
-	struct extent	extents[MAX_EXT_NUM] = { 0 };
-	struct records recs[MAX_EPOCH_TIMES] = { 0 };
-	int		eph;
+	struct extent	extents[DTS_MAX_EXT_NUM] = { 0 };
+	struct records  recs[DTS_MAX_EPOCH_TIMES] = { 0 };
+	enum type	record_type;
+	uint64_t	eph;
 	int		dist;
 	int		extent_num;
 	int		extent_size;
@@ -431,11 +433,11 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	if (rc1 <= 0)
 		return -1;
 
-	extent_num = rand() % MAX_EXT_NUM + 1;
-	dist = rand() % MAX_DISTANCE;
-	extent_size = (rand() % MAX_EXTENT_SIZE + 1) * MAX_EXTENT_SIZE;
-	offset = rand() % MAX_OFFSET;
-	epoch_times = rand() % MAX_EPOCH_TIMES + 1;
+	extent_num = rand() % DTS_MAX_EXT_NUM + 1;
+	dist = rand() % DTS_MAX_DISTANCE;
+	extent_size = (rand() % DTS_MAX_EXTENT_SIZE + 1) * DTS_MAX_EXTENT_SIZE;
+	offset = rand() % DTS_MAX_OFFSET;
+	epoch_times = rand() % DTS_MAX_EPOCH_TIMES + 1;
 	/* create rec string */
 	for (i = 0; i < extent_num; i++) {
 		extents[i].start = offset;
@@ -446,7 +448,7 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	eph = status->cur_tx;
 	inject_fail_idx = rand() % epoch_times;
 	tgt = rand() % tgt_size;
-	enum type record_type = rand() % 2;
+	record_type = rand() % 2;
 
 	for (i = 0; i < epoch_times; i++) {
 		char	buffer[512];

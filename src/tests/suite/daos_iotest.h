@@ -40,12 +40,11 @@ extern int dts_obj_replica_cnt;
 #define IOREQ_SG_NR	5
 #define IOREQ_SG_IOD_NR	5
 
-#define MAX_EXT_NUM		5
-#define MAX_DISTANCE		10
-#define MAX_EXTENT_SIZE		50
-#define MAX_OFFSET		1048576
-#define SINGLE_REC_RATE		20
-#define MAX_EPOCH_TIMES		20
+#define DTS_MAX_EXT_NUM		5
+#define DTS_MAX_DISTANCE	10
+#define DTS_MAX_EXTENT_SIZE	50
+#define DTS_MAX_OFFSET		1048576
+#define DTS_MAX_EPOCH_TIMES	20
 
 struct ioreq {
 	daos_handle_t		oh;
@@ -167,8 +166,7 @@ enum test_op_type {
 	TEST_OP_ADD		= 5,
 	TEST_OP_EXCLUDE		= 6,
 	TEST_OP_POOL_QUERY	= 7,
-	TEST_OP_SNAPSHOT_CREATE = 8,
-	TEST_OP_MAX		= 8,
+	TEST_OP_MAX		= 7,
 };
 
 static inline bool
