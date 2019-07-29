@@ -175,15 +175,12 @@ func (p *PrepScmCmd) Execute(args []string) error {
 	}
 
 	fmt.Println("Scanning locally-attached SCM storage...")
-	resp := new(pb.ScanStorageResp)
-	server.scm.Discover(resp)
-
-	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		fmt.Fprintln(os.Stderr, "scm scan: "+resp.Scmstate.Error)
+	if err := server.scm.Setup(); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
-	if server.scm.initialized {
+	if !server.scm.initialized {
 		return errors.New(msgScmNotInited)
 	}
 
@@ -194,19 +191,19 @@ func (p *PrepScmCmd) Execute(args []string) error {
 	if p.Reset {
 		// run reset to remove namespaces and clear regions
 		if err := server.scm.PrepReset(); err != nil {
-			return errors.WithMessage(err, "DCPM reset")
+			return errors.WithMessage(err, "SCM prep reset")
 		}
 	} else {
 		// transition to the next state in SCM preparation
 		needsReboot, pmemDevs, err := server.scm.Prep()
 		if err != nil {
-			return errors.WithMessage(err, "DCPM prep")
+			return errors.WithMessage(err, "SCM prep")
 		}
 
 		if needsReboot {
 			fmt.Println(msgScmRebootRequired)
 		} else {
-			fmt.Printf("persistent memory devices:\n\t%+v\n", pmemDevs)
+			fmt.Printf("persistent memory kernel devices:\n\t%+v\n", pmemDevs)
 		}
 	}
 
