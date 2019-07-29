@@ -30,8 +30,7 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                                         distutils.sysconfig.get_python_inc()],
                                CPPFLAGS=svars["BASECFLAGS"] + " " + \
                                svars["OPT"] + " " + extra_flags)
-
-    base = new_env.SharedLibrary(target=base_name, source=[obj],
+    base = daos_build.library(new_env, target=base_name, source=[obj],
                                 LIBS=['daos'],
                                 CC=svars["CC"],
                                 SHLINK=svars["LDSHARED"],

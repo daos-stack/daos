@@ -33,11 +33,12 @@
 #include <Python.h>
 #endif
 
-#include <gurt/debug.h>
+// #include <gurt/debug.h>
 
 #include "daos_types.h"
 #include "daos.h"
 #include "daos_obj_class.h"
+#include <daos/object.h>
 
 #define PY_SHIM_MAGIC_NUMBER 0x7A89
 
@@ -144,9 +145,9 @@ do {				\
 } while (0)
 
 	DEFINE_OC_EXPL(S);		/** OC_S1, OC_S2, ... */
-	DEFINE_OC_EXPL(RP_2G);		/** OC_2G1, OC_2G2, ... */
-	DEFINE_OC_EXPL(RP_3G);		/** OC_3G1, OC_3G2, ... */
-	DEFINE_OC_EXPL(RP_8G);		/** OC_8G1, OC_8G2, ... */
+	DEFINE_OC_EXPL(RP_2G);		/** OC_RP_2G1, OC_RP_2G2, ... */
+	DEFINE_OC_EXPL(RP_3G);		/** OC_RP_3G1, OC_RP_3G2, ... */
+	DEFINE_OC_EXPL(RP_8G);		/** OC_RP_8G1, OC_RP_8G2, ... */
 	DEFINE_OC_EXPL(EC_2P1G);	/** OC_EC_2P1G1, OC_EC_2P1G2, ... */
 	DEFINE_OC_EXPL(EC_2P2G);	/** OC_EC_2P2G1, OC_EC_2P2G2, ... */
 	DEFINE_OC_EXPL(EC_4P1G);	/** OC_EC_4P1G1, OC_EC_4P1G2, ... */
@@ -156,6 +157,16 @@ do {				\
 	DEFINE_OC_EXPL(EC_16P1G);	/** OC_EC_16P1G1, OC_EC_16P1G2, ... */
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
+
+#define DEFINE_OC_INTERNAL(name)\
+do {				\
+	DEFINE_OC(name, 1);	\
+	DEFINE_OC(name, 2);	\
+	DEFINE_OC(name, 4);	\
+	DEFINE_OC(name, X);	\
+} while (0)
+
+	DEFINE_OC_INTERNAL(RP_4G);          /** OC_RP_4G1, OC_RP_4G2, ... */
 }
 
 /**
