@@ -21,42 +21,24 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-syntax = "proto3";
-package mgmt;
+package faults
 
-// Management Service Protobuf Definitions related to interactions between
-// DAOS control server and DAOS IO Servers.
+// Code represents a stable fault code.
+//
+// NB: All control plane errors should register their codes in the
+// following block in order to avoid conflicts.
+type Code int
 
-// Identifier for server rank within DAOS pool
-message DaosRank {
-	string pool_uuid = 1;	// UUID of the pool
-	uint32 rank = 2;	// Server rank
-}
+const (
+	// general fault codes
+	CodeUnknown Code = iota
 
-message DaosResp {
-	int32 status = 1; // DAOS error code
-}
+	// storage fault codes
+	CodeStorageUnknown Code = iota + 100
+	CodeStorageAlreadyFormatted
+	CodeStorageFilesystemMounted
+	CodeStorageFormatCheckFailed
 
-message SetRankReq {
-	uint32 rank = 1;
-}
-
-// SetRankResp is identical to DaosResp.
-
-message CreateMsReq {
-	bool bootstrap = 1;
-	// Server UUID of this MS replica.
-	string uuid = 2;
-	// Server management address of this MS replica.
-	string addr = 3;
-}
-
-// CreateMsResp is identical to DaosResp.
-
-// StartMsReq is nil.
-
-// StartMsResp is identical to DaosResp.
-
-// SetUpReq is nil.
-
-// SetUpResp is idential to DaosResp.
+	// security fault codes
+	CodeSecurityUnknown Code = iota + 200
+)

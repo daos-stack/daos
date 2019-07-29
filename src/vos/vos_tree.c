@@ -429,7 +429,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
-			dbtree_destroy(toh);
+			dbtree_destroy(toh, NULL);
 	} /* It's possible that neither tree is created in case of punch only */
 exit:
 	umem_free(&tins->ti_umm, rec->rec_off);
@@ -956,6 +956,11 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		D_ERROR("fetch failed: %d\n", rc);
 		goto out;
 
+	case -DER_INPROGRESS:
+		/* Log for -DER_INPROGRESS has already been handled by
+		 * dtx_inprogress().
+		 */
+		goto out;
 	case -DER_NONEXIST:
 		if (!(flags & SUBTR_CREATE))
 			goto out;
@@ -1086,7 +1091,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 		kbund2.kb_key	= kbund->kb_key;
 		kbund2.kb_epoch	= DAOS_EPOCH_MAX;
 
-		rc = dbtree_delete(toh, &tmp, NULL);
+		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, NULL);
 		if (rc)
 			D_ERROR("Failed to delete: %d\n", rc);
 	} else {

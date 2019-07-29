@@ -423,13 +423,8 @@ test_rmdir(const char *path, bool force)
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	D_ALLOC(fullpath, PATH_MAX);
-	if (fullpath == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	dir = opendir(path);
 	if (dir == NULL) {
-		D_FREE(fullpath);
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
 		D_ERROR("can't open directory %s, %d (%s)",
@@ -441,21 +436,28 @@ test_rmdir(const char *path, bool force)
 		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 			continue;   /* skips the dots */
 
-		sprintf(fullpath, "%s/%s", path, ent->d_name);
+		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
+		if (fullpath == NULL)
+			D_GOTO(out, -DER_NOMEM);
+
 		switch (ent->d_type) {
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
+			if (rc != 0)
+				D_ERROR("test_rmdir %s failed, rc %d",
+						fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
+			if (rc != 0)
+				D_ERROR("unlink %s failed, rc %d",
+						fullpath, rc);
 			break;
 		default:
 			D_WARN("find unexpected type %d", ent->d_type);
 		}
-		if (rc != 0)
-			D_ERROR("unlink %s failed, rc %d", fullpath, rc);
 
-		memset(fullpath, 0, PATH_MAX);
+		D_FREE(fullpath);
 	}
 
 	rc = closedir(dir);
@@ -464,9 +466,9 @@ test_rmdir(const char *path, bool force)
 		if (rc != 0)
 			rc = errno;
 	}
-	D_FREE(fullpath);
 
 out:
+	D_FREE(fullpath);
 	return rc;
 }
 
