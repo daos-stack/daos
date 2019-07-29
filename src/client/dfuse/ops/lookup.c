@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-void
+bool
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
 		  struct fuse_file_info *fi_out,
@@ -34,6 +34,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	d_list_t		*rlink;
 	daos_obj_id_t		oid;
 	int			rc;
+	bool new_file = true;
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
@@ -74,10 +75,11 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	} else {
 		DFUSE_REPLY_ENTRY(req, entry);
 	}
-	return;
+	return new_file;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
+	return false;
 }
 
 bool
@@ -129,7 +131,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return false;
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);

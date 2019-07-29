@@ -77,7 +77,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(req, entry);
-		return true;
+		return false;
 	}
 
 	rc = daos_pool_connect(pool_uuid, dfuse_info->di_group,
@@ -150,8 +150,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_root = ie->ie_stat.st_ino;
 	dfs->dfs_ops = &dfuse_cont_ops;
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return dfuse_reply_entry(fs_handle, ie, NULL, req);
 close:
 	daos_pool_disconnect(dfs->dfs_poh, NULL);
 	D_FREE(ie);

@@ -60,9 +60,7 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
-
-	return true;
+	return dfuse_reply_entry(fs_handle, ie, NULL, req);
 release:
 	dfs_release(ie->ie_obj);
 err:

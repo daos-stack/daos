@@ -508,7 +508,7 @@ dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
  *
  * Adds inode to the hash table and calls fuse_reply_entry()
  */
-void
+bool
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,

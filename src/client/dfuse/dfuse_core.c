@@ -219,7 +219,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 		D_GOTO(err, 0);
 
 	ie->ie_dfs = dfs;
-	ie->ie_parent = 1;
+	ie->ie_parent = 0;
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
@@ -334,6 +334,17 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
+
+		/* Drop all-but-one reference here, there should be no other
+		 * threads running at this point, and this makes it slightly
+		 * quicker but also makes the logs a lot easier to read.
+		 */
+		atomic_fetch_sub(&ie->ie_ref, ref -1);
+
+		/* Overwrite the parent here as the entire table is being
+		 * dropped, and we don't want ih_free() to try to lookup
+		 * parents to drop references in the callback
+		 */
 		ie->ie_parent = 0;
 		d_hash_rec_ndecref(&fs_handle->dpi_iet, ref, rlink);
 		handles++;
@@ -352,6 +363,22 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
 	}
+
+	DFUSE_TRA_INFO(fs_handle, "Draining inode record table");
+	do {
+		struct dfuse_inode_record *ir;
+
+		rlink = d_hash_rec_first(&fs_handle->dpi_irt);
+
+		if (!rlink)
+			break;
+
+		ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+		d_hash_rec_delete_at(&fs_handle->dpi_irt, rlink);
+
+		D_FREE(ir);
+	} while (rlink);
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, true);
 	if (rc) {

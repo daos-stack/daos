@@ -98,7 +98,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			entry.generation = 1;
 			entry.ino = entry.attr.st_ino;
 			DFUSE_REPLY_ENTRY(req, entry);
-			return true;
+			return false;
 		}
 	}
 
@@ -152,8 +152,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_root = ie->ie_stat.st_ino;
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return dfuse_reply_entry(fs_handle, ie, NULL, req);
 
 release:
 	dfs_release(ie->ie_obj);
