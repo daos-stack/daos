@@ -174,6 +174,15 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
+	fmt.Println("Scanning locally-attached SCM storage...")
+	resp := new(pb.ScanStorageResp)
+	server.scm.Discover(resp)
+
+	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		fmt.Fprintln(os.Stderr, "scm scan: "+resp.Scmstate.Error)
+		os.Exit(1)
+	}
+
 	if server.scm.initialized {
 		return errors.New(msgScmNotInited)
 	}
