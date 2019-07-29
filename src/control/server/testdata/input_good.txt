@@ -10,6 +10,7 @@ access_points:
 - bar1.com:1111
 port: 11111
 transport_config:
+  client_cert_dir: /tmp/clients
   ca_cert: /tmp/ca.crt
   cert: /tmp/serv.crt
   key: /tmp/serv.key
