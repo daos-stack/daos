@@ -481,7 +481,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d (pc_tgt_dev: %s).\n",
 			rc, pc_in->pc_tgt_dev);
-	if (pc_out->pc_rc != 0)
+	if (pc_out->pc_rc == 0)
 		d_rank_list_free(pc_out->pc_svc);
 }
 
