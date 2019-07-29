@@ -38,7 +38,7 @@ class PoolSvc(TestWithServers):
 
     def tearDown(self):
         try:
-            if self.pool is not None and self.pool.attached:
+            if self.pool is not None:
                 self.pool.destroy(1)
         finally:
             super(PoolSvc, self).tearDown()

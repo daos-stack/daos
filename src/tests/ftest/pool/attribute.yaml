@@ -2,7 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_machines:
-    - boro-64
+    - boro-A
 timeout: 40
 server_config:
   name: daos_server
