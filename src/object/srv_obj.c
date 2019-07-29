@@ -871,6 +871,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			oca->ca_resil == DAOS_RES_EC) {
 			rc = ec_update_bulk_transfer(rpc, bulk_bind,
 			orw->orw_bulks.ca_arrays, ioh, skip_list, orw->orw_nr);
+			for (i = 0; i < orw->orw_nr; i++)
+				D_FREE(skip_list[i]);
 		} else {
 			rc = ds_bulk_transfer(rpc, bulk_op, bulk_bind,
 			orw->orw_bulks.ca_arrays, ioh, NULL, orw->orw_nr);
@@ -889,8 +891,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	rc = rc ? : err;
 out:
 	rc = ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, dth);
-	for (i = 0; i < orw->orw_nr; i++)
-		D_FREE(skip_list[i]);
 	if (iods)
 		ec_free_iods(&iods, orw->orw_nr);
 	return rc;
