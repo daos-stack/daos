@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 )
 
 // Log levels.
@@ -37,6 +38,11 @@ const (
 
 // global default logger
 var logger *Logger
+
+func init() {
+	// Always provide a logger, but this can be overridden
+	NewDefaultLogger(Debug, "default", os.Stdout)
+}
 
 // NewLogger creates a Logger instance and returns reference
 //
