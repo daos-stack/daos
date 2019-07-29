@@ -95,10 +95,12 @@ func TestGetState(t *testing.T) {
    "numa_node":1
 }
 `
-	pmemId := 1
+	onePmemJson := fmt.Sprintf(pmemOut, 1, 1)
+	twoPmemsJson := "[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]"
 	createRegionsOut := msgScmRebootRequired + "\n"
+	pmemId := 1
 
-	mockRun := func(in string) ([]byte, error) {
+	mockRun := func(in string) (string, error) {
 		retString := in
 
 		switch in {
@@ -112,11 +114,11 @@ func TestGetState(t *testing.T) {
 			retString = fmt.Sprintf(pmemOut, pmemId, pmemId)
 			pmemId += 1
 		case cmdScmListNamespaces:
-			retString = "[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]"
+			retString = twoPmemsJson
 		}
 
 		commands = append(commands, in)
-		return []byte(retString), nil
+		return retString, nil
 	}
 
 	tests := []struct {
@@ -145,7 +147,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expCommands: []string{cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions},
-			expPmemDevs: parsePmemDevs([]byte(fmt.Sprintf(pmemOut, 1, 1))),
+			expPmemDevs: parsePmemDevs(onePmemJson),
 		},
 		{
 			desc: "regions with free capacity",
@@ -161,7 +163,7 @@ func TestGetState(t *testing.T) {
 				cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions,
 				cmdScmCreateNamespace, cmdScmShowRegions,
 			},
-			expPmemDevs: parsePmemDevs([]byte("[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]")),
+			expPmemDevs: parsePmemDevs(twoPmemsJson),
 		},
 		{
 			desc: "regions with no capacity",
@@ -174,7 +176,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
 			expCommands: []string{cmdScmShowRegions, cmdScmListNamespaces},
-			expPmemDevs: parsePmemDevs([]byte("[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]")),
+			expPmemDevs: parsePmemDevs(twoPmemsJson),
 		},
 	}
 

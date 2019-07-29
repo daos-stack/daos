@@ -70,11 +70,11 @@ const (
 
 type PmemDev map[string]interface{} // FIXME, replace with the real-type
 
-type runCmdFn func(string) ([]byte, error)
+type runCmdFn func(string) (string, error)
 
 type runCmdError struct {
 	wrapped error
-	stdout  []byte
+	stdout  string
 }
 
 func (rce *runCmdError) Error() string {
@@ -86,15 +86,15 @@ func (rce *runCmdError) Error() string {
 }
 
 // run wraps exec.Command().Output() to enable mocking of command output.
-func run(cmd string) ([]byte, error) {
+func run(cmd string) (string, error) {
 	out, err := exec.Command(cmd).Output()
 	if err != nil {
-		return nil, &runCmdError{
+		return "", &runCmdError{
 			wrapped: err,
-			stdout:  out,
+			stdout:  string(out),
 		}
 	}
-	return out, nil
+	return string(out), nil
 }
 
 // scmStorage gives access to underlying storage interface implementation
@@ -174,13 +174,12 @@ func (s *scmStorage) getState() error {
 		return err
 	}
 
-	outStr := string(out)
-	if outStr == outScmNoRegions {
+	if out == outScmNoRegions {
 		s.state = scmStateNoRegions
 		return nil
 	}
 
-	ok, err := hasFreeCapacity(outStr)
+	ok, err := hasFreeCapacity(out)
 	if err != nil {
 		return err
 	}
@@ -249,18 +248,18 @@ func (s *scmStorage) createRegions() (bool, error) {
 		return false, err
 	}
 
-	return strings.Contains(string(out), msgScmRebootRequired), nil
+	return strings.Contains(out, msgScmRebootRequired), nil
 }
 
 // FIXME: unMarshal into a real type
-func parsePmemDevs(jsonData []byte) (devs []PmemDev) {
+func parsePmemDevs(jsonData string) (devs []PmemDev) {
 	// turn single entries into arrays
-	if !strings.HasPrefix(string(jsonData), "[") {
-		jsonData = []byte("[" + string(jsonData) + "]")
+	if !strings.HasPrefix(jsonData, "[") {
+		jsonData = "[" + jsonData + "]"
 	}
 
 	var v []interface{}
-	json.Unmarshal(jsonData, &v)
+	json.Unmarshal([]byte(jsonData), &v)
 
 	for _, m := range v {
 		data := m.(map[string]interface{})
