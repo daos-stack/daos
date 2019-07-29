@@ -506,13 +506,15 @@ func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mg
 
 	client := mgmtpb.NewMgmtSvcClient(conn)
 
-	resp, err := client.Join(context.Background(), req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
+	for {
+		resp, err := client.Join(context.Background(), req)
+		if err == nil {
+			// TODO: Stop retrying upon certain errors (e.g., "not
+			// MS", "rank unavailable", and "excluded").
+			if resp.Status == 0 {
+				return resp, nil
+			}
+		}
+		time.Sleep(3 * time.Second)
 	}
-	if resp.Status != 0 {
-		return nil, errors.Errorf("join %s %v: %d\n", ap, *req, resp.Status)
-	}
-
-	return resp, nil
 }
