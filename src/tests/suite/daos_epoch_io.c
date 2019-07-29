@@ -798,8 +798,8 @@ cmd_parse_add_exclude(test_arg_t *arg, int argc, char **argv,
 {
 	struct test_op_record		*op_rec = NULL;
 	struct test_add_exclude_arg	*ae_arg;
-	int				opt;
-	int				rc = 0;
+	int				 opt;
+	int				 rc = 0;
 
 	static struct epoch_io_cmd_option options[] = {
 		{"--rank",	true,	'r'},
@@ -851,10 +851,10 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 	char			*dkey = NULL;
 	char			*akey = NULL;
 	daos_recx_t		*recxs = NULL;
-	unsigned int		recxs_num;
-	int			tx = 1;
-	int			opt;
-	int			rc = 0;
+	unsigned int		 recxs_num;
+	int			 tx = 1;
+	int			 opt;
+	int			 rc = 0;
 
 	static struct epoch_io_cmd_option options[] = {
 		{"--dkey",	true,	'd'},
@@ -925,13 +925,13 @@ cmd_parse_update_fetch(test_arg_t *arg, int argc, char **argv, int opc,
 	struct test_update_fetch_arg	*uf_arg;
 	daos_recx_t			*recxs = NULL;
 	int				*values = NULL;
-	unsigned int			recx_num = 0;
+	unsigned int			 recx_num = 0;
 	char				*dkey = NULL;
 	char				*akey = NULL;
-	int				tx = 1;
-	bool				array = true;
-	int				opt;
-	int				rc = 0;
+	int				 tx = 1;
+	bool				 array = true;
+	int				 opt;
+	int				 rc = 0;
 
 	static struct epoch_io_cmd_option options[] = {
 		{"--dkey",	true,	'd'},
@@ -1031,11 +1031,11 @@ static int
 cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 {
 	struct epoch_io_args	*eio_arg = &arg->eio_args;
-	int			opt;
+	int			 opt;
 	char			*obj_class = NULL;
-	int			type;
-	d_rank_t		rank = -1;
-	int			rc = 0;
+	int			 type;
+	d_rank_t		 rank = -1;
+	int			 rc = 0;
 
 	static struct epoch_io_cmd_option options[] = {
 		{"--type",	true,	't'},
@@ -1126,10 +1126,10 @@ static int
 cmd_parse_pool(test_arg_t *arg, int argc, char *argv[],
 	       struct test_op_record **op)
 {
-	struct test_op_record		*op_rec = NULL;
-	int				opc = -1;
-	int				opt;
-	int				rc = 0;
+	struct test_op_record	*op_rec = NULL;
+	int			 opc = -1;
+	int			 opt;
+	int			 rc = 0;
 
 	static struct epoch_io_cmd_option options[] = {
 		{"--query",	false,	'q'},
@@ -1405,8 +1405,8 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 {
 	struct test_op_record	*op = NULL;
 	FILE			*fp;
-	char			cmd_line[CMD_LINE_LEN_MAX] = {};
-	int			rc = 0;
+	char			 cmd_line[CMD_LINE_LEN_MAX] = {};
+	int			 rc = 0;
 	/*Array for snapshot epoch*/
 	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
 
