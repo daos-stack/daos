@@ -92,7 +92,11 @@ struct dfuse_obj_hdl {
 	dfs_obj_t	*doh_obj;
 	/** an anchor to track listing in readdir */
 	daos_anchor_t	doh_anchor;
-	/** enumeration buffer to store missed entries from readdir */
+	/** current offset in dir stream (what is returned to fuse) */
+	off_t		doh_fuse_off;
+	/** current offset in dir stream (includes cached entries) */
+	off_t		doh_dir_off[READDIR_BLOCKS];
+	/** Buffer with all entries listed from DFS with the fuse dirents */
 	void		*doh_buf;
 	/** offset to start from of doh_buffer */
 	off_t		doh_start_off[READDIR_BLOCKS];
@@ -267,7 +271,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning attr");			\
+		DFUSE_TRA_DEBUG(req, "Returning attr mode %x dir:%d",	\
+				(attr)->st_mode,			\
+				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr, 0);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(req,				\
@@ -323,7 +329,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ENTRY(req, entry)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning entry");		\
+		DFUSE_TRA_DEBUG(req, "Returning entry mode %x dir:%d",	\
+				(entry).attr.st_mode,			\
+				S_ISDIR((entry).attr.st_mode));		\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(req,				\
@@ -515,7 +523,7 @@ dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
-		  bool create,
+		  struct fuse_file_info *fi_out,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */

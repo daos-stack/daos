@@ -217,7 +217,6 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
-	dth->dth_sync = 0;
 	dth->dth_leader = leader ? 1 : 0;
 	dth->dth_non_rep = 0;
 	dth->dth_dti_cos = dti_cos;
@@ -225,6 +224,14 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_conflict = conflict;
 	dth->dth_ent = UMOFF_NULL;
 	dth->dth_obj = UMOFF_NULL;
+	/**
+	 * XXX, for EC obj, now works in synchronous commit mode, to simplify
+	 * the EC fetch handling. Can refine it as async commit later.
+	 */
+	if (leader && daos_oclass_is_ec(oid->id_pub, NULL))
+		dth->dth_sync = 1;
+	else
+		dth->dth_sync = 0;
 }
 
 static inline void
@@ -267,47 +274,47 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	int			dti_cos_count = 0;
 	int			i;
 
+	dlh->dlh_handled_time = crt_hlc_get();
+	dlh->dlh_future = ABT_FUTURE_NULL;
+	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
+	if (dlh->dlh_subs == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i < tgts_cnt; i++)
+		dlh->dlh_subs[i].dss_tgt = tgts[i];
+	dlh->dlh_sub_cnt = tgts_cnt;
+
+	if (daos_is_zero_dti(dti)) {
+		daos_dti_gen(&dth->dth_xid, true); /* zero it */
+		return 0;
+	}
+
 	/* XXX: For leader case, we need to find out the potential
 	 *	conflict DTXs in the CoS cache, and append them to
 	 *	the dispatched RPC to non-leaders. Then non-leader
 	 *	replicas can commit them before real modifications
 	 *	to avoid availability trouble.
 	 */
-	if (!daos_is_zero_dti(dti)) {
-		dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
-				intent == DAOS_INTENT_UPDATE ?
-				DCLT_PUNCH : DCLT_PUNCH | DCLT_UPDATE,
-				DTX_THRESHOLD_COUNT, &dti_cos);
-		if (dti_cos_count < 0)
-			return dti_cos_count;
-
-		if (dti_cos_count > 0 && dti_cos == NULL) {
-			/* There are too many conflict DTXs to be committed,
-			 * as to cannot be taken via the normal IO RPC. The
-			 * background dedicated DTXs batched commit ULT has
-			 * not committed them in time. Let's retry later.
-			 */
-			D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
-				" for the given "DF_DTI", let's retry later.\n",
-				DP_DTI(dti));
-			return -DER_INPROGRESS;
-		}
+	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
+			intent == DAOS_INTENT_UPDATE ? DCLT_PUNCH :
+						       DCLT_PUNCH | DCLT_UPDATE,
+			DTX_THRESHOLD_COUNT, &dti_cos);
+	if (dti_cos_count < 0) {
+		D_FREE(dlh->dlh_subs);
+		return dti_cos_count;
 	}
 
-	dlh->dlh_handled_time = crt_hlc_get();
-	dlh->dlh_future = ABT_FUTURE_NULL;
-	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
-	if (dlh->dlh_subs == NULL) {
-		if (dti_cos != NULL)
-			D_FREE(dti_cos);
-		return -DER_NOMEM;
+	if (dti_cos_count > 0 && dti_cos == NULL) {
+		/* There are too many conflict DTXs to be committed,
+		 * as to cannot be taken via the normal IO RPC. The
+		 * background dedicated DTXs batched commit ULT has
+		 * not committed them in time. Let's retry later.
+		 */
+		D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
+			" for the given "DF_DTI", let's retry later.\n",
+			DP_DTI(dti));
+		D_FREE(dlh->dlh_subs);
+		return -DER_INPROGRESS;
 	}
-	for (i = 0; i < tgts_cnt; i++)
-		dlh->dlh_subs[i].dss_tgt = tgts[i];
-	dlh->dlh_sub_cnt = tgts_cnt;
-
-	if (daos_is_zero_dti(dti))
-		return 0;
 
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
 			NULL, dti_cos, dti_cos_count, true, dth);
@@ -640,7 +647,7 @@ out:
  * \param coh		[IN]	Container open handle.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
- * \param conflict	[IN]	Hash of the dkey to be modified if applicable.
+ * \param conflict	[IN]	The pointer to record conflict dtx
  * \param dti_cos	[IN,OUT]The DTX array to be committed because of shared.
  * \param dti_cos_count [IN,OUT]The @dti_cos array size.
  * \param pm_ver	[IN]	Pool map version for the DTX.

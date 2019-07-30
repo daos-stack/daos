@@ -30,7 +30,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 )
 
-func TestDropPrivileges(t *testing.T) {
+func TestChangeFilePermissions(t *testing.T) {
 	tests := []struct {
 		desc        string
 		username    string
@@ -41,20 +41,20 @@ func TestDropPrivileges(t *testing.T) {
 		lGrpErr     error       // lookup group error
 		listGrpsRet []string    // list of user's groups
 		listGrpsErr error       // list groups error
-		sUIDErr     error       // set uid error
-		sGIDErr     error       // set gid error
 		expHistory  []string
 		errMsg      string
 	}{
 		{
-			desc:     "drop success uid",
+			desc:     "chown success",
 			username: "bob",
 			lUsrRet: &user.User{
 				Uid: "1001", Gid: "1001", Username: "bob",
 			},
 			expHistory: []string{
-				"os: chown /mnt/daos 1001 1001",
-				"C: setgid 1001", "C: setuid 1001",
+				"os: walk /tmp/daos_sockets chown 1001 1001",
+				"os: walk /tmp/daos_control.log chown 1001 1001",
+				"os: walk /mnt/daos chown 1001 1001",
+				"os: walk /tmp/server.log chown 1001 1001",
 			},
 		},
 		{
@@ -69,8 +69,10 @@ func TestDropPrivileges(t *testing.T) {
 			},
 			listGrpsRet: []string{"1001", "1002"},
 			expHistory: []string{
-				"os: chown /mnt/daos 1001 1002",
-				"C: setgid 1002", "C: setuid 1001",
+				"os: walk /tmp/daos_sockets chown 1001 1002",
+				"os: walk /tmp/daos_control.log chown 1001 1002",
+				"os: walk /mnt/daos chown 1001 1002",
+				"os: walk /tmp/server.log chown 1001 1002",
 			},
 		},
 		{
@@ -84,10 +86,7 @@ func TestDropPrivileges(t *testing.T) {
 				Gid: "1002", Name: "builders",
 			},
 			listGrpsRet: []string{"1001"},
-			expHistory: []string{
-				"os: chown /mnt/daos 1001 1001",
-				"C: setgid 1001", "C: setuid 1001",
-			},
+			errMsg:      "group lookup: user bob not member of group builders",
 		},
 	}
 
@@ -96,21 +95,19 @@ func TestDropPrivileges(t *testing.T) {
 			lUsrRet: tt.lUsrRet, lUsrErr: tt.lUsrErr,
 			lGrpRet: tt.lGrpRet, lGrpErr: tt.lGrpErr,
 			listGrpsRet: tt.listGrpsRet, listGrpsErr: tt.listGrpsErr,
-			sUIDErr: tt.sUIDErr, sGIDErr: tt.sGIDErr,
 		}
 
 		config := mockConfigFromFile(t, &ext, socketsExample)
 		config.UserName = tt.username
 		config.GroupName = tt.groupname
 
-		// TODO: verify chown gets called
-		err := dropPrivileges(&config)
+		err := changeFileOwnership(&config)
 		if err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
 				continue
 			}
-			t.Fatal(err)
+			t.Fatalf("%s: %v", tt.desc, err.Error())
 		}
 		AssertEqual(t, ext.getHistory(), tt.expHistory, tt.desc)
 	}

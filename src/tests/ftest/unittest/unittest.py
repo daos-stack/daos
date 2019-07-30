@@ -51,7 +51,7 @@ def unittest_runner(self, unit_testname):
     return_code = process.system(cmd, ignore_status=True,
                                  allow_output_check="both")
 
-    if return_code is not 0:
+    if return_code != 0:
         self.fail("{0} unittest failed with return code={1}.\n"
                   .format(unit_testname, return_code))
 
@@ -69,7 +69,7 @@ class UnitTestWithoutServers(Test):
                   nvme_get_pool, nvme_set_pool_info, nvme_add_pool,
                   nvme_get_device, nvme_set_device_status,
                   nvme_add_stream_bond, nvme_get_stream_bond
-        :avocado: tags=all,unittest,pr,tiny,hw,smd_ut
+        :avocado: tags=all,unittest,tiny,regression,vm,smd_ut
         """
         unittest_runner(self, "smd_ut")
 
@@ -79,7 +79,7 @@ class UnitTestWithoutServers(Test):
         Use Case: This tests vea's following functions: load, format,
                   query, hint_load, reserve, cancel, tx_publish,
                   free, unload, hint_unload
-        :avocado: tags=all,unittest,pr,tiny,hw,vea_ut
+        :avocado: tags=all,unittest,tiny,regression,vm,vea_ut
         """
         unittest_runner(self, "vea_ut")
 
@@ -87,7 +87,7 @@ class UnitTestWithoutServers(Test):
         """
         Test Description: Test pl_map unittest.
         Use Case: This tests placement map
-        :avocado: tags=all,unittest,pr,tiny,hw,pl_map
+        :avocado: tags=all,unittest,tiny,regression,vm,pl_map
         """
         unittest_runner(self, "pl_map")
 
@@ -96,7 +96,7 @@ class UnitTestWithoutServers(Test):
         """
         Test Description: Test eq_tests unittest.
         Use Case: This tests Daos Event queue
-        :avocado: tags=all,unittest,pr,tiny,hw,eq_tests
+        :avocado: tags=all,unittest,tiny,regression,vm,eq_tests
         """
         unittest_runner(self, "eq_tests")
 
@@ -105,7 +105,7 @@ class UnitTestWithoutServers(Test):
         Test Description: Test vos_tests unittest.
         Use Cases: Performs following set of tests - pool_tests,
                    container_tests, io_tests, dtx_tests, aggregate-tests
-        :avocado: tags=all,unittest,pr,tiny,hw,vos_tests
+        :avocado: tags=all,unittest,tiny,regression,vm,vos_tests
         """
         unittest_runner(self, "vos_tests")
 
@@ -121,6 +121,6 @@ class UnittestWithServers(TestWithServers):
         Test Description: Test daos_addons unittest.
         Use Case: This tests Daos Addons Array unit tests
                   and Daos Addons HL tests.
-        :avocado: tags=all,unittest,pr,tiny,hw,daos_addons_test
+        :avocado: tags=all,unittest,tiny,regression,vm,daos_addons_test
         """
         unittest_runner(self, "daos_addons_test")
