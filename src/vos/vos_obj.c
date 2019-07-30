@@ -319,7 +319,11 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 
 	rc = key_iter_fetch(oiter, ent, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch the entry: %d\n", rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch the entry because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Failed to fetch the entry: %d\n", rc);
 		return rc;
 	}
 
@@ -494,7 +498,11 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 			      VOS_BTR_DKEY, dkey, 0,
 			      vos_iter_intent(&oiter->it_iter), NULL, &toh);
 	if (rc != 0) {
-		D_ERROR("Cannot load the akey tree: %d\n", rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot load the akey tree because "
+				"of some conflict modification: %d\n", rc);
+		else
+			D_ERROR("Cannot load the akey tree: %d\n", rc);
 		return rc;
 	}
 
