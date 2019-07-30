@@ -514,7 +514,8 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 			dcr->dcr_update_count--;
 
 		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0)
-			dbtree_delete(cont->vc_dtx_cos_hdl, &kiov, NULL);
+			dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
+				      &kiov, NULL);
 
 		return;
 	}
