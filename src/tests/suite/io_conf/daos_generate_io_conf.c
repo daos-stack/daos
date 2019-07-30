@@ -202,11 +202,13 @@ update_array_internal(int index, uint64_t eph, struct extent *extents,
 	}
 
 	if (update) {
-		sprintf(output_buf, "update --tx %"PRId64" --snap --recx \"%s\"\n",
+		sprintf(output_buf,
+			"update --tx %"PRId64" --snap --recx \"%s\"\n",
 			eph, rec_buf);
 		records[index].records[0].snap = true;
 	} else {
-		sprintf(output_buf, "punch --tx %"PRId64" --recx \"%s\"\n",
+		sprintf(output_buf,
+			"punch --tx %"PRId64" --recx \"%s\"\n",
 			eph, rec_buf);
 		records[index].records[0].snap = false;
 	}
@@ -265,8 +267,9 @@ update_single(int index, uint64_t eph, struct extent *extents,
 			eph, value);
 	} else {
 		records[index].records[0].snap = false;
-		sprintf(output_buf, "update --tx %" PRId64 " --single --value %d\n", eph,
-			value);
+		sprintf(output_buf,
+			"update --tx %" PRId64 " --single --value %d\n",
+			eph, value);
 	}
 
 	return 0;
@@ -303,10 +306,12 @@ fetch_array(int index, uint64_t eph, struct extent *extents,
 	if (rec_length != 0) {
 		if (record->records[0].snap == true)
 			sprintf(output_buf,
-				"fetch --tx %" PRId64 " -v --snap --recx \"%s\"\n",
+				"fetch --tx %" PRId64 " -v "
+				"--snap --recx \"%s\"\n",
 				record->eph, rec_buf);
 		else
-			sprintf(output_buf, "fetch --tx %" PRId64 " --recx \"%s\"\n",
+			sprintf(output_buf,
+				"fetch --tx %" PRId64 " --recx \"%s\"\n",
 				record->eph, rec_buf);
 	}
 	return 0;
@@ -342,7 +347,8 @@ static int fetch_single(int index, uint64_t eph, struct extent *extents,
 	if (rec_length != 0) {
 		if (record->records[0].snap == true)
 			sprintf(output_buf,
-				"fetch --tx %" PRId64 " -v --snap --single --value %d\n",
+				"fetch --tx %" PRId64 " -v --snap"
+				" --single --value %d\n",
 				record->eph, record->records[0].single.value);
 		else
 			sprintf(output_buf,
