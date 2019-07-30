@@ -27,7 +27,6 @@ import os
 import time
 import subprocess
 import json
-import signal
 import getpass
 import socket
 import errno
@@ -35,9 +34,10 @@ import fcntl
 import re
 
 class AgentFailed(Exception):
-    pass
+    """ _ """
 
 class NodeListType:
+    # pylint: disable=too-few-public-methods
     """
     Simple enum to represent all possible node types. To be expanded if
     needed.
@@ -55,9 +55,9 @@ def node_setup_okay(node_list, node_server_type):
                 lists are expected to contain exclusively agent or
                 exclusively server nodes; they may not be mixed.
     """
-    if NodeListType.SERVER:
+    if node_server_type == NodeListType.SERVER:
         socket_dir = "/var/run/daos_server"
-    elif NodeListType.CLIENT:
+    elif node_server_type == NodeListType.CLIENT:
         socket_dir = "/var/run/daos_agent"
     else:
         raise AgentFailed("Unknown node type, exiting")
@@ -73,7 +73,6 @@ def node_setup_okay(node_list, node_server_type):
             break
     return okay, failed_node, socket_dir
 
-# pylint: disable=too-many-locals
 # Disabling check for this function as in this case, more variables is more
 # clear than encapsulating in dict or object
 def run_agent(basepath, server_list, client_list=None):
@@ -114,28 +113,23 @@ def run_agent(basepath, server_list, client_list=None):
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 
     for client in client_list:
-        cmd = [
-            "ssh",
-            client,
-            daos_agent_bin,
-            "-i"
-        ]
+        cmd = ["ssh", client, "{} -i".format(daos_agent_bin)]
 
-        p = subprocess.Popen(cmd,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        sessions[client] = p
+        sessions[client] = subprocess.Popen(cmd,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
 
     # double check agent launched successfully
     timeout = 5
+    started_clients = []
     for client in client_list:
         file_desc = sessions[client].stderr.fileno()
         flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
         fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         start_time = time.time()
-        pattern = "Starting daos_agent"
+        pattern = "Using logfile"
         expected_data = ""
-        while True:
+        while not sessions[client].poll():
             if time.time() - start_time > timeout:
                 print("<AGENT>: {}".format(expected_data))
                 raise AgentFailed("DAOS Agent didn't start!")
@@ -151,13 +145,22 @@ def run_agent(basepath, server_list, client_list=None):
             expected_data += output
 
             match = re.findall(pattern, output)
-            if len(match) > 0:
+            if match:
+                started_clients.append(client)
                 print("<AGENT> agent started on node {} in {} "
                       "seconds".format(client, time.time() - start_time))
                 break
 
+        if sessions[client].returncode is not None:
+            print("<AGENT> uh-oh, in agent startup, the ssh that started the "
+                  "agent on {} has exited with {}.\nStopping agents on "
+                  "{}".format(client, sessions[client].returncode,
+                              started_clients))
+            # kill the ones we started
+            stop_agent(sessions, started_clients)
+            raise AgentFailed("Failed to start agent on {}".format(client))
+
     return sessions
-# pylint: enable=too-many-locals
 
 
 def stop_agent(sessions, client_list=None):

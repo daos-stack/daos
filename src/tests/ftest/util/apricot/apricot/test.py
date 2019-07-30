@@ -82,8 +82,10 @@ class Test(avocadoTest):
         self.container = None
         self.hostlist_servers = None
         self.hostfile_servers = None
+        self.hostfile_servers_slots = 1
         self.hostlist_clients = None
         self.hostfile_clients = None
+        self.hostfile_clients_slots = 1
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
@@ -204,10 +206,11 @@ class TestWithServers(TestWithoutServers):
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
+            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
         if self.hostlist_clients:
             self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir)
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
 
         self.agent_sessions = agent_utils.run_agent(
             self.basepath, self.hostlist_servers, self.hostlist_clients)
