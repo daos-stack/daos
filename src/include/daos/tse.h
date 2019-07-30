@@ -40,8 +40,8 @@
 
 typedef struct tse_task {
 	int			dt_result;
-	/** padding bytes */
-	int			dt_pad32;
+	/** generation */
+	uint32_t		dt_gen;
 	/* daos schedule internal */
 	struct {
 		char		dt_space[TSE_PRIV_SIZE];

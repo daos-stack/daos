@@ -102,10 +102,10 @@ tse_task_buf_embedded(tse_task_t *task, int size)
 	/** MSC - should malloc if size requested is bigger */
 	avail_size = sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
 	D_ASSERTF(tse_task_buf_size(size) <= avail_size,
-		  "req size %u avail size %u (all_size %lu stack_top %u)\n",
-		  tse_task_buf_size(size), avail_size, sizeof(dtp->dtp_buf),
-		  dtp->dtp_stack_top);
-	dtp->dtp_embed_top = size;
+		  "req size %u/%u avail size %u (all_size %lu stack_top %u)\n",
+		  size, tse_task_buf_size(size), avail_size,
+		  sizeof(dtp->dtp_buf), dtp->dtp_stack_top);
+	dtp->dtp_embed_top = tse_task_buf_size(size);
 	return (void *)dtp->dtp_buf;
 }
 
@@ -118,12 +118,13 @@ tse_task_stack_push(tse_task_t *task, uint32_t size)
 
 	avail_size = sizeof(dtp->dtp_buf) -
 		     (dtp->dtp_stack_top + dtp->dtp_embed_top);
-	D_ASSERTF(size <= avail_size, "push size %u exceed avail size %u "
-		   "(all_size %lu, stack_top %u, embed_top %u).\n",
-		   size, avail_size, sizeof(dtp->dtp_buf),
-		   dtp->dtp_stack_top, dtp->dtp_embed_top);
+	D_ASSERTF(tse_task_buf_size(size) <= avail_size,
+		  "push size %u/%u exceed avail size %u "
+		  "(all_size %lu, stack_top %u, embed_top %u).\n",
+		  size, tse_task_buf_size(size), avail_size,
+		  sizeof(dtp->dtp_buf), dtp->dtp_stack_top, dtp->dtp_embed_top);
 
-	dtp->dtp_stack_top += size;
+	dtp->dtp_stack_top += tse_task_buf_size(size);
 	pushed_ptr = dtp->dtp_buf + sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
 	D_ASSERT((dtp->dtp_stack_top + dtp->dtp_embed_top) <=
 		  sizeof(dtp->dtp_buf));
@@ -137,12 +138,12 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	void			*poped_ptr;
 
-	D_ASSERTF(size <= dtp->dtp_stack_top,
-		   "pop size %u exceed stack_top %u.\n",
-		   size, dtp->dtp_stack_top);
+	D_ASSERTF(tse_task_buf_size(size) <= dtp->dtp_stack_top,
+		  "pop size %u/%u exceed stack_top %u.\n",
+		  size, tse_task_buf_size(size), dtp->dtp_stack_top);
 
 	poped_ptr = dtp->dtp_buf + sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
-	dtp->dtp_stack_top -= size;
+	dtp->dtp_stack_top -= tse_task_buf_size(size);
 	D_ASSERT((dtp->dtp_stack_top + dtp->dtp_embed_top) <=
 		  sizeof(dtp->dtp_buf));
 
@@ -534,7 +535,6 @@ tse_task_post_process(tse_task_t *task)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);
 	struct tse_sched_private *dsp = dtp->dtp_sched;
-	int rc = 0;
 
 	D_ASSERT(dtp->dtp_completed == 1);
 
@@ -606,10 +606,7 @@ tse_task_post_process(tse_task_t *task)
 	dsp->dsp_inflight--;
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
-	if (task->dt_result == 0)
-		task->dt_result = rc;
-
-	return rc;
+	return 0;
 }
 
 int
@@ -764,13 +761,18 @@ tse_task_complete(tse_task_t *task, int ret)
 	bool				bumped  = false;
 	bool				done;
 
-	if (dtp->dtp_completed)
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	if (dtp->dtp_completed) {
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		return;
+	}
 
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
 	dtp->dtp_completing = 1;
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
 
@@ -797,7 +799,7 @@ tse_task_complete(tse_task_t *task, int ret)
 	else if (bumped)
 		tse_sched_decref(dsp);
 
-	/** -1 from tse_task_create() if it has not been reinitialized */
+	/** -1 from tse_task_schedule() if it has not been reinitialized */
 	if (done)
 		tse_sched_decref(dsp);
 }

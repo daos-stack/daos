@@ -25,16 +25,28 @@
 #include <daos/rpc.h>
 #include <daos/event.h>
 
+struct daos_task_wrap {
+	tse_task_t	*task;
+	uint32_t	 gen;
+};
+
 static void
 daos_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	tse_task_t	*task = cb_info->cci_arg;
-	int		rc = cb_info->cci_rc;
+	struct daos_task_wrap	*arg = cb_info->cci_arg;
+	tse_task_t		*task = arg->task;
+	int			 rc = cb_info->cci_rc;
 
-	if (cb_info->cci_rc == -DER_TIMEDOUT)
+	if (rc == -DER_TIMEDOUT)
 		/** TODO */
 		;
 
+	D_ASSERTF(task->dt_gen == arg->gen,
+		  "FFFFFFFFFF: task is resued by others: %u/%u\n",
+		  task->dt_gen, arg->gen);
+
+	D_FREE_PTR(arg);
+	task->dt_gen = 0;
 	tse_task_complete(task, rc);
 }
 
@@ -42,9 +54,12 @@ int
 daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task)
 {
 	struct crt_cb_info      cbinfo;
+	struct daos_task_wrap	arg;
 
+	arg.task = task;
+	arg.gen = task->dt_gen = rand();
 	memset(&cbinfo, 0, sizeof(cbinfo));
-	cbinfo.cci_arg = task;
+	cbinfo.cci_arg = &arg;
 	cbinfo.cci_rc  = 0;
 	daos_rpc_cb(&cbinfo);
 	crt_req_decref(rpc);
@@ -54,9 +69,16 @@ daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task)
 int
 daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task)
 {
-	int rc;
+	struct daos_task_wrap	*arg;
+	int			 rc;
 
-	rc = crt_req_send(rpc, daos_rpc_cb, task);
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return -DER_NOMEM;
+
+	arg->task = task;
+	arg->gen = task->dt_gen = rand();
+	rc = crt_req_send(rpc, daos_rpc_cb, arg);
 	if (rc != 0) {
 		/** task will be completed in CB above */
 		rc = 0;
