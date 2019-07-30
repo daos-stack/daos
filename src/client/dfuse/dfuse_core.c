@@ -339,7 +339,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		 * threads running at this point, and this makes it slightly
 		 * quicker but also makes the logs a lot easier to read.
 		 */
-		atomic_fetch_sub(&ie->ie_ref, ref -1);
+		atomic_fetch_sub(&ie->ie_ref, ref - 1);
 
 		/* Overwrite the parent here as the entire table is being
 		 * dropped, and we don't want ih_free() to try to lookup
