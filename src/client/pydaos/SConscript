@@ -31,16 +31,16 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                                CPPFLAGS=svars["BASECFLAGS"] + " " + \
                                svars["OPT"] + " " + extra_flags)
     base = daos_build.library(new_env, target=base_name, source=[obj],
-                                LIBS=['daos'],
-                                CC=svars["CC"],
-                                SHLINK=svars["LDSHARED"],
-                                SHLINKFLAGS=[],
-                                SHLIBPREFIX="",
-                                SHLIBSUFFIX=svars["SO"],
-                                CPPPATH=["$CPPPATH",
-                                         distutils.sysconfig.get_python_inc()],
-                                CPPFLAGS=svars["BASECFLAGS"] + " " + \
-                                svars["OPT"] + " " + extra_flags)
+                              LIBS=['daos'],
+                              CC=svars["CC"],
+                              SHLINK=svars["LDSHARED"],
+                              SHLINKFLAGS=[],
+                              SHLIBPREFIX="",
+                              SHLIBSUFFIX=svars["SO"],
+                              CPPPATH=["$CPPPATH",
+                                       distutils.sysconfig.get_python_inc()],
+                              CPPFLAGS=svars["BASECFLAGS"] + " " + \
+                              svars["OPT"] + " " + extra_flags)
     install_path = lib_prefix + "/python" + version + "/site-packages"
     new_env.Install(install_path, base)
     # For new wrappers, once available
@@ -48,13 +48,13 @@ def build_shim_module(py_env, svars, lib_prefix, version):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     svars = {}
     for item in ['CC', 'OPT', 'BASECFLAGS', 'LDSHARED', 'SO']:
         svars[item] = distutils.sysconfig.get_config_var(item)
     if svars[item] is None:
-            svars[item] = ""
+        svars[item] = ""
 
     py_env = env.Clone()
 

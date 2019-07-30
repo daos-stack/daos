@@ -33,8 +33,6 @@
 #include <Python.h>
 #endif
 
-// #include <gurt/debug.h>
-
 #include "daos_types.h"
 #include "daos.h"
 #include "daos_obj_class.h"
@@ -122,7 +120,7 @@ do {				\
 	DEFINE_OC_PROT();		/** OC_TINY, OC_SMALL, ... */
 	DEFINE_OC_PROT(RP_);		/** OC_RP_TINY, OC_RP_SMALL, ... */
 	DEFINE_OC_PROT(RP_SF_);		/** OC_RP_SF_TINY, ... */
-	DEFINE_OC(RP_XSF, );		/** OC_RP_XSF */
+	DEFINE_OC(RP_XSF,);		/** OC_RP_XSF */
 	DEFINE_OC_PROT(EC_);		/** OC_EC_TINY, OC_EC_SMALL, ... */
 
 #define DEFINE_OC_EXPL(name)	\
