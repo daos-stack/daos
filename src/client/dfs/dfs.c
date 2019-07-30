@@ -45,7 +45,7 @@
 #define SB_MAGIC	0xda05df50da05df50
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	5
+#define INODE_AKEYS	6
 /** A-key name of mode_t value */
 #define MODE_NAME	"mode"
 /** A-key name of object ID value */
@@ -257,9 +257,9 @@ static int
 fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	    bool fetch_sym, bool *exists, struct dfs_entry *entry)
 {
-	d_sg_list_t	sgls[INODE_AKEYS + 1];
-	d_iov_t	sg_iovs[INODE_AKEYS + 1];
-	daos_iod_t	iods[INODE_AKEYS + 1];
+	d_sg_list_t	sgls[INODE_AKEYS];
+	d_iov_t	sg_iovs[INODE_AKEYS];
+	daos_iod_t	iods[INODE_AKEYS];
 	char		*value = NULL;
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
@@ -279,7 +279,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
 	i++;
 
-	/** Set Akey for OID; if entry is symlink, this value will be bogus */
+	/** Set Akey for OID */
 	d_iov_set(&sg_iovs[i], &entry->oid, sizeof(daos_obj_id_t));
 	d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
 	i++;
@@ -332,7 +332,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	}
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
-		size_t sym_len = iods[INODE_AKEYS].iod_size;
+		size_t sym_len = iods[INODE_AKEYS - 1].iod_size;
 
 		if (sym_len != 0) {
 			D_ASSERT(value);
@@ -404,16 +404,10 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	iods[i].iod_size = sizeof(mode_t);
 	i++;
 
-	/** If entry is a symlink add the value, otherwise add the oid */
-	if (S_ISLNK(entry.mode)) {
-		d_iov_set(&sg_iovs[i], entry.value, strlen(entry.value) + 1);
-		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
-		iods[i].iod_size = strlen(entry.value) + 1;
-	} else {
-		d_iov_set(&sg_iovs[i], &entry.oid, sizeof(daos_obj_id_t));
-		d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
-		iods[i].iod_size = sizeof(daos_obj_id_t);
-	}
+	/** Add the oid */
+	d_iov_set(&sg_iovs[i], &entry.oid, sizeof(daos_obj_id_t));
+	d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
+	iods[i].iod_size = sizeof(daos_obj_id_t);
 	i++;
 
 	/** Add the access time */
@@ -433,6 +427,14 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_iov_set(&iods[i].iod_name, CTIME_NAME, strlen(CTIME_NAME));
 	iods[i].iod_size = sizeof(time_t);
 	i++;
+
+	/** Add symlink value if Symlink */
+	if (S_ISLNK(entry.mode)) {
+		d_iov_set(&sg_iovs[i], entry.value, strlen(entry.value) + 1);
+		d_iov_set(&iods[i].iod_name, SYML_NAME, strlen(SYML_NAME));
+		iods[i].iod_size = strlen(entry.value) + 1;
+		i++;
+	}
 
 	akeys_nr = i;
 
@@ -842,8 +844,9 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 			return EEXIST;
 
 		entry.value = (char *)value;
-		entry.oid.hi = 0;
-		entry.oid.lo = 0;
+		rc = oid_gen(dfs, 0, false, &sym->oid);
+		if (rc != 0)
+			return rc;
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 
