@@ -92,11 +92,11 @@ func TestGetState(t *testing.T) {
    "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
    "sector_size":512,
    "blockdev":"pmem%d",
-   "numa_node":1
+   "numa_node":%d
 }
 `
-	onePmemJson := fmt.Sprintf(pmemOut, 1, 1)
-	twoPmemsJson := "[" + fmt.Sprintf(pmemOut, 1, 1) + "," + fmt.Sprintf(pmemOut, 2, 2) + "]"
+	onePmemJson := fmt.Sprintf(pmemOut, 1, 1, 0)
+	twoPmemsJson := "[" + fmt.Sprintf(pmemOut, 1, 1, 0) + "," + fmt.Sprintf(pmemOut, 2, 2, 1) + "]"
 	createRegionsOut := msgScmRebootRequired + "\n"
 	pmemId := 1
 
@@ -111,7 +111,7 @@ func TestGetState(t *testing.T) {
 		case cmdScmCreateNamespace:
 			// stimulate free capacity of region being used
 			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
-			retString = fmt.Sprintf(pmemOut, pmemId, pmemId)
+			retString = fmt.Sprintf(pmemOut, pmemId, pmemId, pmemId-1)
 			pmemId += 1
 		case cmdScmListNamespaces:
 			retString = twoPmemsJson
@@ -127,7 +127,7 @@ func TestGetState(t *testing.T) {
 		showRegionOut     string
 		createRegionOut   string
 		expRebootRequired bool
-		expPmemDevs       []PmemDev
+		expPmemDevs       []pmemDev
 		expCommands       []string
 	}{
 		{

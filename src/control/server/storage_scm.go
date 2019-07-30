@@ -68,7 +68,15 @@ const (
 	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
-type PmemDev map[string]interface{} // FIXME, replace with the real-type
+type pmemDev struct {
+	UUID     string
+	Blockdev string
+	NumaNode int `json:"numa_node"`
+}
+
+func (pd *pmemDev) String() string {
+	return fmt.Sprintf("%s, numa %d", pd.Blockdev, pd.NumaNode)
+}
 
 type runCmdFn func(string) (string, error)
 
@@ -87,7 +95,7 @@ func (rce *runCmdError) Error() string {
 
 // run wraps exec.Command().Output() to enable mocking of command output.
 func run(cmd string) (string, error) {
-	out, err := exec.Command(cmd).Output()
+	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		return "", &runCmdError{
 			wrapped: err,
@@ -108,7 +116,7 @@ type scmStorage struct {
 	config      *configuration // server configuration structure
 	runCmd      runCmdFn
 	modules     common.ScmModules
-	pmemDevs    []PmemDev
+	pmemDevs    []pmemDev
 	state       scmState
 	initialized bool
 	formatted   bool
@@ -138,7 +146,7 @@ func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
 // * regions exist but no free capacity -> no-op
 //
 // Command output from external tools will be returned.
-func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []PmemDev, err error) {
+func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 	if err := s.getState(); err != nil {
 		return false, nil, errors.WithMessage(err, "establish scm state")
 	}
@@ -251,26 +259,19 @@ func (s *scmStorage) createRegions() (bool, error) {
 	return strings.Contains(out, msgScmRebootRequired), nil
 }
 
-// FIXME: unMarshal into a real type
-func parsePmemDevs(jsonData string) (devs []PmemDev) {
+func parsePmemDevs(jsonData string) (devs []pmemDev) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"
 	}
 
-	var v []interface{}
-	json.Unmarshal([]byte(jsonData), &v)
+	json.Unmarshal([]byte(jsonData), &devs)
 
-	for _, m := range v {
-		data := m.(map[string]interface{})
-		devs = append(devs, PmemDev(data))
-	}
-
-	return devs
+	return
 }
 
 // createNamespaces runs create until no free capacity.
-func (s *scmStorage) createNamespaces() (devs []PmemDev, err error) {
+func (s *scmStorage) createNamespaces() (devs []pmemDev, err error) {
 	for {
 		out, err := s.runCmd(cmdScmCreateNamespace)
 		if err != nil {
@@ -292,7 +293,7 @@ func (s *scmStorage) createNamespaces() (devs []PmemDev, err error) {
 	}
 }
 
-func (s *scmStorage) getNamespaces() (devs []PmemDev, err error) {
+func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 	out, err := s.runCmd(cmdScmListNamespaces)
 	if err != nil {
 		return nil, err
