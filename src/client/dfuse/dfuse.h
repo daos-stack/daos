@@ -300,7 +300,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_BUF(handle, req, buf, size)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(handle, "Returning buffer(%p %#zx)", buf, size); \
+		DFUSE_TRA_DEBUG(handle, "Returning buffer(%p %#zx)",	\
+				buf, size);				\
 		__rc = fuse_reply_buf(req, buf, size);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
