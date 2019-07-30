@@ -33,9 +33,8 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false);
 
-	if (rc == 0) {
+	if (rc == 0)
 		DFUSE_REPLY_ZERO(req);
-	} else {
+	else
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, -rc);
-	}
 }
