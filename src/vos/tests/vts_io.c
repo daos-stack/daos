@@ -689,7 +689,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	/* Act */
 	if (fault_injection_flag == FAULT_INJECT) {
 		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
-		daos_fail_num_set(2);
 	}
 	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
 				NULL, true);
@@ -712,7 +711,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	if (fault_injection_flag == FAULT_INJECT) {
 		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
-		daos_fail_num_set(2);
 	}
 	/* Act again */
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);

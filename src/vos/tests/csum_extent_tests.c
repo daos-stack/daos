@@ -992,14 +992,12 @@ csum_fault_injection_multiple_extents_tests(void **state)
 		       update_extents, fetch_extents);
 
 		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
-		daos_fail_num_set(1);
 		rc = update(&test, update_extents, i);
 		if (!SUCCESS(rc))
 			fail_msg("Error updating extent with csum: %s\n",
 				 d_errstr(rc));
 
 		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
-		daos_fail_num_set(1);
 		rc = fetch(&test, fetch_extents, &csum_count_per_extent,
 			   &csum_len, &csums_count_total, i);
 		if (!SUCCESS(rc))
