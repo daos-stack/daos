@@ -291,7 +291,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it.. eph "
+	D_DEBUG(DB_TRACE, "Object "DF_UOID" not found adding it.. eph "
 		DF_U64"\n", DP_UOID(oid), epoch);
 
 	hkey = &key.oi_hkey;

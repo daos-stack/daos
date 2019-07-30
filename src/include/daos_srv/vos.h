@@ -102,6 +102,31 @@ int
 vos_dtx_fetch_committable(daos_handle_t coh, int max, struct dtx_entry **dtes);
 
 /**
+ * Check whether the given DTX is resent one or not.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch operation or not.
+ * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
+ *				 if the DTX exists, then the DTX's epoch will
+ *				 be saved in it.
+ *
+ * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
+ *					so the local modification has been done
+ *					on related replica(s).
+ *			DTX_ST_COMMITTED means the DTX has been committed.
+ *			-DER_MISMATCH	means that the DTX has ever been
+ *					processed with different epoch.
+ *			Other negative value if error.
+ */
+int
+vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
+		     struct dtx_id *dti, uint64_t dkey_hash,
+		     bool punch, daos_epoch_t *epoch);
+
+/**
  * Check the specified DTX's persistent status.
  *
  * \param coh		[IN]	Container open handle.
@@ -137,6 +162,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * Abort the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
+ * \param epoch	[IN]	The max epoch for the DTX to be aborted.
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
  * \param force [IN]	Force abort even if some replica(s) have not
@@ -145,8 +171,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, struct dtx_id *dtis, int count,
-	      bool force);
+vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
+	      int count, bool force);
 
 /**
  * Aggregate the committed DTXs.

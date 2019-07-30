@@ -55,6 +55,7 @@ struct ioreq {
 	daos_iod_t		iod[IOREQ_SG_IOD_NR];
 	daos_iod_type_t		iod_type;
 	uint64_t		fail_loc;
+	int			result;
 };
 
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
@@ -130,6 +131,9 @@ void
 lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req);
+
+void
+close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid);
 
 int
 obj_setup(void **state);
