@@ -491,11 +491,10 @@ daos_event_complete(struct daos_event *ev, int rc)
 
 	daos_event_complete_locked(eqx, evx, rc);
 
-	if (eqx != NULL)
+	if (eqx != NULL) {
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
-
-	if (eqx != NULL)
 		daos_eq_putref(eqx);
+	}
 }
 
 struct ev_progress_arg {
