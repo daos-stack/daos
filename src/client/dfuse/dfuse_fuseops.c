@@ -427,7 +427,6 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode->ie_dfs->dfs_ops->rename(req, parent_inode, name,
 					      newparent_inode, newname, flags);
-
 	if (newparent_inode)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
 
