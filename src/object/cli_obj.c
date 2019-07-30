@@ -617,7 +617,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 	}
 	req_tgts->ort_grp_nr = grp_nr;
-	req_tgts->ort_grp_size = shard_nr;
+	req_tgts->ort_grp_size = shard_nr == shard_cnt ? grp_size : shard_nr;
 	for (i = 0; i < grp_nr; i++) {
 		shard_idx = start_shard + i * grp_size;
 		tgt = req_tgts->ort_shard_tgts + i * grp_size;
