@@ -43,10 +43,7 @@ def unittest_runner(self, unit_testname):
     server = self.params.get("test_machines", "/run/hosts/*")
     bin_path = get_file_path(name, "install/bin")
 
-    if type(self).__name__ == "UnittestWithServers":
-        cmd = ("{}".format(bin_path[0]))
-    else:
-        cmd = ("ssh {} {}".format(server[0], bin_path[0]))
+    cmd = ("ssh {} {}".format(server[0], bin_path[0]))
 
     return_code = process.system(cmd, ignore_status=True,
                                  allow_output_check="both")
@@ -108,19 +105,3 @@ class UnitTestWithoutServers(Test):
         :avocado: tags=all,unittest,tiny,regression,vm,vos_tests
         """
         unittest_runner(self, "vos_tests")
-
-class UnittestWithServers(TestWithServers):
-    """
-    Test Class Description: Avocado Unit Test class for tests which
-                            need servers.
-    :avocado: recursive
-    """
-    def test_daos_addons(self):
-        """
-        Jira ID: DAOS-2326
-        Test Description: Test daos_addons unittest.
-        Use Case: This tests Daos Addons Array unit tests
-                  and Daos Addons HL tests.
-        :avocado: tags=all,unittest,tiny,regression,vm,daos_addons_test
-        """
-        unittest_runner(self, "daos_addons_test")

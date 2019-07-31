@@ -21,31 +21,24 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * Addons task functions.
+ * Array task functions.
  */
 
-#ifndef __DAOS_ADDONSX_H__
-#define  __DAOS_ADDONSX_H__
+#ifndef __DAOS_ARRAYX_H__
+#define  __DAOS_ARRAYX_H__
 
 /* task functions for array operations */
-int dac_array_create(tse_task_t *task);
-int dac_array_open(tse_task_t *task);
-int dac_array_close(tse_task_t *task);
-int dac_array_destroy(tse_task_t *task);
-int dac_array_read(tse_task_t *task);
-int dac_array_write(tse_task_t *task);
-int dac_array_punch(tse_task_t *task);
-int dac_array_get_size(tse_task_t *task);
-int dac_array_set_size(tse_task_t *task);
-int dac_array_local2global(daos_handle_t oh, d_iov_t *glob);
-int dac_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
-			   daos_handle_t *oh);
+int dc_array_create(tse_task_t *task);
+int dc_array_open(tse_task_t *task);
+int dc_array_close(tse_task_t *task);
+int dc_array_destroy(tse_task_t *task);
+int dc_array_read(tse_task_t *task);
+int dc_array_write(tse_task_t *task);
+int dc_array_punch(tse_task_t *task);
+int dc_array_get_size(tse_task_t *task);
+int dc_array_set_size(tse_task_t *task);
+int dc_array_local2global(daos_handle_t oh, d_iov_t *glob);
+int dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
+			  daos_handle_t *oh);
 
-/* task function for HL operations */
-int dac_kv_get(tse_task_t *task);
-int dac_kv_put(tse_task_t *task);
-int dac_kv_remove(tse_task_t *task);
-int dac_kv_list(tse_task_t *task);
-int dac_obj_fetch_multi(tse_task_t *task);
-int dac_obj_update_multi(tse_task_t *task);
-#endif /* __DAOS_ADDONSX_H__ */
+#endif /* __DAOS_ARRAYX_H__ */

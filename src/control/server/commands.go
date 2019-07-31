@@ -45,8 +45,6 @@ type cliOptions struct {
 	FirstCore   uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
 	Group       string  `short:"g" long:"group" description:"Server group name"`
 	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	Storage     StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
 	Insecure    bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
@@ -56,6 +54,7 @@ type cliOptions struct {
 type StorCmd struct {
 	Scan     ScanStorCmd `command:"scan" alias:"l" description:"Scan SCM and NVMe storage attached to local server"`
 	PrepNvme PrepNvmeCmd `command:"prep-nvme" alias:"pn" description:"Prep NVMe devices for use with SPDK as current user"`
+	PrepScm  PrepScmCmd  `command:"prep-scm" alias:"ps" description:"Prep SCM modules into interleaved AppDirect and create the relevant namespace kernel devices"`
 }
 
 // ScanStorCmd is the struct representing the command to scan storage.
@@ -141,6 +140,68 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 	if !p.Reset {
 		if err := server.nvme.spdk.prep(p.NrHugepages, tUsr, p.PCIWhiteList); err != nil {
 			return errors.WithMessage(err, "SPDK setup")
+		}
+	}
+
+	// exit immediately to avoid continuation of main
+	os.Exit(0)
+	// never reached
+	return nil
+}
+
+// PrepScmCmd is the struct representing the command to prep SCM modules by
+// configuring in AppDirect mode and creating relevant namespaces.
+type PrepScmCmd struct {
+	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
+}
+
+// Execute is run when PrepScmCmd activates
+//
+// Perform task then exit immediately. No config parsing performed.
+func (p *PrepScmCmd) Execute(args []string) error {
+	ok, _ := common.CheckSudo()
+	if !ok {
+		return errors.New("subcommand must be run as root or sudo")
+	}
+
+	config := newConfiguration()
+
+	server, err := newControlService(
+		&config, getDrpcClientConnection(config.SocketDir))
+	if err != nil {
+		return errors.WithMessage(err, "initialising ControlService")
+	}
+
+	fmt.Println("Scanning locally-attached SCM storage...")
+	if err := server.scm.Setup(); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+
+	if !server.scm.initialized {
+		return errors.New(msgScmNotInited)
+	}
+
+	if len(server.scm.modules) == 0 {
+		return errors.New(msgScmNoModules)
+	}
+
+	if p.Reset {
+		// run reset to remove namespaces and clear regions
+		if err := server.scm.PrepReset(); err != nil {
+			return errors.WithMessage(err, "SCM prep reset")
+		}
+	} else {
+		// transition to the next state in SCM preparation
+		needsReboot, pmemDevs, err := server.scm.Prep()
+		if err != nil {
+			return errors.WithMessage(err, "SCM prep")
+		}
+
+		if needsReboot {
+			fmt.Println(msgScmRebootRequired)
+		} else {
+			fmt.Printf("persistent memory kernel devices:\n\t%+v\n", pmemDevs)
 		}
 	}
 

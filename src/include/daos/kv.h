@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2017 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,49 +20,17 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+/**
+ * Kv task functions.
+ */
 
-#include "dfuse_common.h"
-#include "dfuse.h"
+#ifndef __DAOS_KVX_H__
+#define  __DAOS_KVX_H__
 
-void
-dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ino,
-		 struct fuse_file_info *fi)
-{
-	struct dfuse_obj_hdl		*oh = NULL;
-	int				rc;
+/* task function for HL operations */
+int dc_kv_get(tse_task_t *task);
+int dc_kv_put(tse_task_t *task);
+int dc_kv_remove(tse_task_t *task);
+int dc_kv_list(tse_task_t *task);
 
-	D_ALLOC_PTR(oh);
-	if (!oh)
-		D_GOTO(err, rc = ENOMEM);
-
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ino->ie_dfs->dfs_ns, ino->ie_obj, fi->flags,
-		     &oh->doh_obj);
-	if (rc)
-		D_GOTO(err, rc = -rc);
-
-	oh->doh_dfs = ino->ie_dfs->dfs_ns;
-	fi->fh = (uint64_t)oh;
-
-	DFUSE_REPLY_OPEN(req, fi);
-	return;
-err:
-	D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, rc);
-}
-
-void
-dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
-		    struct fuse_file_info *fi)
-{
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int			rc;
-
-	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
-		DFUSE_REPLY_ZERO(req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
-	D_FREE(oh->doh_buf);
-	D_FREE(oh);
-};
+#endif /* __DAOS_KVX_H__ */
