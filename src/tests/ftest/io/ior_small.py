@@ -36,7 +36,7 @@ class IorSmall(IorTestBase):
 
         Test Description:
             Purpose of this test is to have small ior test to check basic
-            functionality.
+            functionality for both DAOS and MPIIO api
 
         Use case:
             Run ior with read, write, CheckWrite, CheckRead in ssf mode.
@@ -46,10 +46,6 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,daosio,small,iorsmall
+        :avocado: tags=all,daosio,small,pr,hw,iorsmall,iorsmalldaos
         """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/*/')
-        object_class = self.params.get("o", '/run/ior/objectclass/*/')
-        self.ior_cmd.flags.update(ior_flags)
-        self.ior_cmd.daos_oclass.update(object_class)
         self.run_ior_with_pool()
