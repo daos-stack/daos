@@ -30,8 +30,8 @@
 #include "daos_test.h"
 
 /** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceiACoROdr";
-static const char *all_tests_defined = "mpceixACoROdr";
+static const char *all_tests = "mpceiADKCoROdr";
+static const char *all_tests_defined = "mpceixADKCoROdr";
 
 static void
 print_usage(int rank)
@@ -48,6 +48,8 @@ print_usage(int rank)
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
+	print_message("daos_test -D|--daos_array\n");
+	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--daos_epoch_tests\n");
 	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
@@ -112,9 +114,21 @@ run_specified_tests(const char *tests, int rank, int size,
 			break;
 		case 'A':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS Array test..");
+			daos_test_print(rank, "DAOS Object Array test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_obj_array_test(rank, size);
+			break;
+		case 'D':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS 1-D Array test..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_array_test(rank, size);
+			break;
+		case 'K':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS Flat KV test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_kv_test(rank, size);
 			break;
 		case 'e':
 			daos_test_print(rank, "\n\n=================");
@@ -195,7 +209,9 @@ main(int argc, char **argv)
 		{"capa",	no_argument,		NULL,	'C'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
-		{"array",	no_argument,		NULL,	'A'},
+		{"obj_array",	no_argument,		NULL,	'A'},
+		{"array",	no_argument,		NULL,	'D'},
+		{"daos_kv",	no_argument,		NULL,	'K'},
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
 		{"mdr",		no_argument,		NULL,	'R'},
@@ -219,7 +235,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdixAeoROg:s:u:E:w:W:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdixADKeoROg:s:u:E:w:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

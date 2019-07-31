@@ -26,6 +26,8 @@
 #include <daos_event.h>
 
 #include <daos_obj.h>
+#include <daos_array.h>
+#include <daos_kv.h>
 #include <daos_prop.h>
 
 #include <daos_mgmt.h>
