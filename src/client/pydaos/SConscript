@@ -11,9 +11,9 @@ def build_shim_module(py_env, svars, lib_prefix, version):
     if version == "2.7":
         tgt_name = 'pydaos_shim_27'
         base_name = 'pydaos_shim_27'
-    elif version == "3.6":
-        tgt_name = 'pydaos_shim_36'
-        base_name = 'pydaos_shim_36'
+    elif version == "3":
+        tgt_name = 'pydaos_shim_3'
+        base_name = 'pydaos_shim_3'
         extra_flags = ' -D__USE_PYTHON3__==1'
     else:
         print("Unsupported python version %s" % version)
@@ -53,13 +53,13 @@ def scons():
     svars = {}
     for item in ['CC', 'OPT', 'BASECFLAGS', 'LDSHARED', 'SO']:
         svars[item] = distutils.sysconfig.get_config_var(item)
-    if svars[item] is None:
-        svars[item] = ""
+        if svars[item] is None:
+            svars[item] = ""
 
     py_env = env.Clone()
 
     build_shim_module(py_env, svars, '$PREFIX/lib/', "2.7")
-    build_shim_module(py_env, svars, '$PREFIX/lib/', "3.6")
+    build_shim_module(py_env, svars, '$PREFIX/lib/', "3")
 
 if __name__ == "SCons.Script":
     scons()

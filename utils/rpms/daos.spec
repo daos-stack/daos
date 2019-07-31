@@ -203,7 +203,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/python2.7/site-packages/pydaos_shim_27.so
-%{_libdir}/python3.6/site-packages/pydaos_shim_36.so
+%{_libdir}/python3/site-packages/pydaos_shim_3.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml

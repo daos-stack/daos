@@ -216,7 +216,7 @@ static struct PyModuleDef moduledef = {
 	NULL
 };
 
-PyMODINIT_FUNC PyInit_pydaos_shim_36(void)
+PyMODINIT_FUNC PyInit_pydaos_shim_3(void)
 #else
 void
 initpydaos_shim_27(void)
