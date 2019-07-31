@@ -190,6 +190,7 @@ struct shard_auxi_args {
 	uint16_t		 grp_idx;
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
+	uint32_t		 padding;
 };
 
 struct shard_rw_args {
@@ -208,6 +209,7 @@ struct shard_punch_args {
 	uint64_t		 pa_dkey_hash;
 	struct dtx_id		 pa_dti;
 	uint32_t		 pa_opc;
+	uint32_t		 pa_padding;
 };
 
 struct shard_list_args {
