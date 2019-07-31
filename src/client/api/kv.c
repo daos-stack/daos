@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,16 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_m
+ * This file is part of daos
  *
- * src/addons/daos_obj.c
+ * src/client/api/daos_kv.c
  */
-#define D_LOGFAC	DD_FAC(addons)
+#define D_LOGFAC	DD_FAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>
-#include <daos/addons.h>
-#include <daos_addons.h>
+#include <daos/kv.h>
+#include <daos_kv.h>
 
 int
 daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
@@ -40,7 +40,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
 	tse_task_t	*task;
 	int		 rc;
 
-	rc = dc_task_create(dac_kv_put, NULL, ev, &task);
+	rc = dc_task_create(dc_kv_put, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -62,7 +62,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
 	tse_task_t	*task;
 	int		 rc;
 
-	rc = dc_task_create(dac_kv_get, NULL, ev, &task);
+	rc = dc_task_create(dc_kv_get, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -84,7 +84,7 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	tse_task_t		*task;
 	int			rc;
 
-	rc = dc_task_create(dac_kv_remove, NULL, ev, &task);
+	rc = dc_task_create(dc_kv_remove, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -105,7 +105,7 @@ daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_task_create(dac_kv_list, NULL, ev, &task);
+	rc = dc_task_create(dc_kv_list, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -116,56 +116,6 @@ daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 	args->kds	= kds;
 	args->sgl	= sgl;
 	args->anchor	= anchor;
-
-	return dc_task_schedule(task, true);
-}
-
-int
-daos_obj_fetch_multi(daos_handle_t oh, daos_handle_t th,
-		     unsigned int num_dkeys, daos_dkey_io_t *io_array,
-		     daos_event_t *ev)
-{
-	daos_obj_multi_io_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	if (num_dkeys == 0)
-		return 0;
-
-	rc = dc_task_create(dac_obj_fetch_multi, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->th	= th;
-	args->num_dkeys	= num_dkeys;
-	args->io_array	= io_array;
-
-	return dc_task_schedule(task, true);
-}
-
-int
-daos_obj_update_multi(daos_handle_t oh, daos_handle_t th,
-		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
-		      daos_event_t *ev)
-{
-	daos_obj_multi_io_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	if (num_dkeys == 0)
-		return 0;
-
-	rc = dc_task_create(dac_obj_update_multi, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->oh	= oh;
-	args->th	= th;
-	args->num_dkeys	= num_dkeys;
-	args->io_array	= io_array;
 
 	return dc_task_schedule(task, true);
 }

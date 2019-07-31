@@ -397,14 +397,14 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  *
  * \param[in]	obj	Open object handle to update.
  * \param[in]	parent_oid
- *			new oid of parent.
+ *			Open object handle of new parent.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
  *
  * \return		0 on Success. Negative errno on Failure.
  */
 int
-dfs_update_parent(dfs_obj_t *obj, daos_obj_id_t parent_oid, const char *name);
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
 
 /**
  * stat attributes of an entry. If object is a symlink, the link itself is
