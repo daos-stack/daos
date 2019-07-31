@@ -340,11 +340,9 @@ out:
 
 #define SYS_BUF_MAGIC 0x98234ad3
 
-#define ADDR_STR_MAX_LEN 128
-
 struct psr_buf {
 	uint32_t	psrb_rank;
-	char		psrb_uri[ADDR_STR_MAX_LEN];
+	char		psrb_uri[CRT_ADDR_STR_MAX_LEN];
 };
 
 struct sys_buf {
@@ -423,10 +421,8 @@ attach_group(const char *name, bool pmixless, int npsrs,
 	}
 
 	for (i = 0; i < npsrs; i++) {
-		crt_node_info_t	info;
-
-		info.uri = psrs[i].uri;
-		rc = crt_group_node_add(group, psrs[i].rank, 0 /* tag */, info);
+		rc = crt_group_primary_rank_add(daos_get_crt_ctx(), group,
+						psrs[i].rank, psrs[i].uri);
 		if (rc != 0) {
 			D_ERROR("failed to add rank %u URI %s to group %s: "
 				"%d\n", psrs[i].rank, psrs[i].uri, name, rc);
