@@ -1346,7 +1346,7 @@ out:
 
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
-	   mode_t *mode)
+	   mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
@@ -1373,6 +1373,9 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	rem = strdup(path);
 	if (rem == NULL)
 		return -ENOMEM;
+
+	if (stbuf)
+		memset(stbuf, 0, sizeof(struct stat));
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -1448,6 +1451,20 @@ dfs_lookup_loop:
 				D_GOTO(err_obj, -EINVAL);
 			}
 
+			if (stbuf) {
+				daos_size_t size;
+
+				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE,
+							 &size, NULL);
+				if (rc) {
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj,
+					       rc = -daos_der2errno(rc));
+				}
+				stbuf->st_size = size;
+				stbuf->st_blocks =
+					(stbuf->st_size + (1 << 9) - 1) >> 9;
+			}
 			break;
 		}
 
@@ -1464,7 +1481,7 @@ dfs_lookup_loop:
 				dfs_obj_t *sym;
 
 				rc = dfs_lookup(dfs, obj->value, flags, &sym,
-						NULL);
+						NULL, NULL);
 				if (rc) {
 					D_DEBUG(DB_TRACE,
 						"Failed to lookup symlink %s\n",
@@ -1484,6 +1501,8 @@ dfs_lookup_loop:
 				goto dfs_lookup_loop;
 			}
 
+			if (stbuf)
+				stbuf->st_size = strlen(entry.value) + 1;
 			/** return the symlink obj if this is the last entry */
 			break;
 		}
@@ -1495,6 +1514,8 @@ dfs_lookup_loop:
 			D_GOTO(err_obj, rc = -daos_der2errno(rc));
 		}
 
+		if (stbuf)
+			stbuf->st_size = sizeof(entry);
 		oid_cp(&parent.oid, obj->oid);
 		oid_cp(&parent.parent_oid, obj->parent_oid);
 		parent.oh = obj->oh;
@@ -1503,6 +1524,17 @@ dfs_lookup_loop:
 
 	if (mode)
 		*mode = obj->mode;
+
+	if (stbuf) {
+		stbuf->st_nlink = 1;
+		stbuf->st_mode = obj->mode;
+		stbuf->st_uid = dfs->uid;
+		stbuf->st_gid = dfs->gid;
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_ctim.tv_sec = entry.ctime;
+	}
+
 out:
 	D_FREE(rem);
 	*_obj = obj;
@@ -1670,7 +1702,7 @@ out:
 
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode)
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		*obj;
 	struct dfs_entry	entry = {0};
@@ -1697,17 +1729,20 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (daos_mode == -1)
 		return -EINVAL;
 
-	D_ALLOC_PTR(obj);
-	if (obj == NULL)
-		return -ENOMEM;
-
 	rc = fetch_entry(parent->oh, DAOS_TX_NONE, name, true, &exists,
 			 &entry);
 	if (rc)
-		D_GOTO(err_obj, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(err_obj, rc = -ENOENT);
+		return -ENOENT;
+
+	if (stbuf)
+		memset(stbuf, 0, sizeof(struct stat));
+
+	D_ALLOC_PTR(obj);
+	if (obj == NULL)
+		return -ENOMEM;
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
 	obj->name[DFS_MAX_PATH] = '\0';
@@ -1732,8 +1767,22 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			daos_array_close(obj->oh, NULL);
 			D_GOTO(err_obj, -EINVAL);
 		}
+		if (stbuf) {
+			daos_size_t size;
+
+			rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size,
+						 NULL);
+			if (rc) {
+				daos_array_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = -daos_der2errno(rc));
+			}
+			stbuf->st_size = size;
+			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;			
+		}
 	} else if (S_ISLNK(entry.mode)) {
 		obj->value = entry.value;
+		if (stbuf)
+			stbuf->st_size = strlen(entry.value) + 1;
 	} else {
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
@@ -1741,10 +1790,23 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 			D_GOTO(err_obj, rc = -daos_der2errno(rc));
 		}
+		if (stbuf)
+			stbuf->st_size = sizeof(entry);
 	}
 
 	if (mode)
 		*mode = obj->mode;
+
+	if (stbuf) {
+		stbuf->st_nlink = 1;
+		stbuf->st_mode = obj->mode;
+		stbuf->st_uid = dfs->uid;
+		stbuf->st_gid = dfs->gid;
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_ctim.tv_sec = entry.ctime;
+	}
+
 	*_obj = obj;
 
 	return rc;
@@ -2158,7 +2220,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return -EIO;
 	}
 
-	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL);
+	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		return rc;
@@ -2236,7 +2298,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 			return -EIO;
 		}
 
-		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL);
+		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL, NULL);
 		if (rc) {
 			D_ERROR("Failed to lookup Symlink %s\n", entry.value);
 			return rc;
