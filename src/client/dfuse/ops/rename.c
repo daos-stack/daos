@@ -47,7 +47,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_INFO(parent, "Renamed %s to %s in %p",
 		       name, newname, newparent);
 
-	DFUSE_FUSE_REPLY_ZERO(req);
+	DFUSE_REPLY_ZERO(req);
 	return;
 
 out:
