@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,104 +20,45 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
+"""
+from ior_test_base import IorTestBase
 
-import os
-import ior_utils
+class IorEightServersMpiio(IorTestBase):
+    """Test class Description: Runs IOR with 8 servers with MPIIO.
 
-from apricot import TestWithServers
-from mpio_utils import MpioUtils, MpioFailed
-from daos_api import DaosPool, DaosApiError
-
-class EightServers(TestWithServers):
-    """
-    Test class Description: Runs IOR with 8 servers.
     :avocado: recursive
     """
 
-    def setUp(self):
-        # set required variables
-        self.mpio = None
-        self.num_procs = self.params.get("np", '/run/ior/client_processes/*')
-        self.number_of_slots = None
-
-        super(EightServers, self).setUp()
-
-    def tearDown(self):
-        try:
-            if self.pool is not None:
-                self.pool.destroy(1)
-        finally:
-            super(EightServers, self).tearDown()
-
-    def executable(self, iorflags=None):
-        """
-        Executable function to run ior for ssf and fpp
-        """
-
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/pool/createmode/*/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname", '/run/pool/createset/')
-        createscm_size = self.params.get("size", '/run/pool/createsize/scm/')
-        createnvme_size = self.params.get("size", '/run/pool/createsize/nvme/')
-        createsvc = self.params.get("svcn", '/run/pool/createsvc/')
-        iteration = self.params.get("iter", '/run/ior/iteration/')
-        block_size = self.params.get("b", '/run/ior/transfersize_blocksize/*/')
-        transfer_size = self.params.get("t",
-                                        '/run/ior/transfersize_blocksize/*/')
-
-        try:
-            # initialize MpioUtils
-            self.mpio = MpioUtils()
-            if self.mpio.mpich_installed(self.hostlist_clients) is False:
-                self.fail("Exiting Test: Mpich not installed")
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createscm_size, createsetid, None, None, createsvc,
-                             createnvme_size)
-
-            pool_uuid = self.pool.get_uuid_str()
-            svc_list = ""
-            for i in range(createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
-            svc_list = svc_list[:-1]
-
-            print ("svc_list: {}".format(svc_list))
-
-            ior_utils.run_ior_mpiio(self.basepath, self.mpio.mpichinstall,
-                                    pool_uuid, svc_list, self.num_procs,
-                                    self.hostfile_clients, iorflags, iteration,
-                                    transfer_size, block_size, True)
-
-        except (DaosApiError, MpioFailed) as excep:
-            print(excep)
-
     def test_ssf(self):
-        """
-        Test ID: DAOS-2121
-        Test Description: Run IOR with 1,64 and 128 clients config in ssf mode.
-        Use Cases: Different combinations of 1/64/128 Clients,
-                   1K/4K/32K/128K/512K/1M transfersize and block size of 32M
-                   for 1K transfer size and 128M for rest.
+        """Test ID: DAOS-2121.
+
+        Test Description:
+            Run IOR with 1,64 and 128 clients config in ssf mode.
+
+        Use Cases:
+            Different combinations of 1/64/128 Clients, 1K/4K/32K/128K/512K/1M
+            transfersize and block size of 32M for 1K transfer size and 128M
+            for rest.
+
         :avocado: tags=ior,mpiio,eightservers,ior_ssf
         """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/ssf/')
-        self.executable(ior_flags)
+        ior_flags = self.params.get("F", "/run/ior/iorflags/ssf/")
+        self.ior_cmd.flags.update(ior_flags)
+        self.run_ior_with_pool()
 
     def test_fpp(self):
-        """
-        Test ID: DAOS-2121
-        Test Description: Run IOR with 1,64 and 128 clients config in fpp mode.
-        Use Cases: Different combinations of 1/64/128 Clients,
-                   1K/4K/32K/128K/512K/1M transfersize and block size of 32M
-                   for 1K transfer size and 128M for rest.
+        """Test ID: DAOS-2121.
+
+        Test Description:
+            Run IOR with 1,64 and 128 clients config in fpp mode.
+
+        Use Cases:
+            Different combinations of 1/64/128 Clients, 1K/4K/32K/128K/512K/1M
+            transfersize and block size of 32M for 1K transfer size and 128M
+            for rest.
+
         :avocado: tags=ior,mpiio,eightservers,ior_fpp
         """
-        ior_flags = self.params.get("F", '/run/ior/iorflags/fpp/')
-        self.executable(ior_flags)
+        ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
+        self.ior_cmd.flags.update(ior_flags)
+        self.run_ior_with_pool()

@@ -10,7 +10,7 @@ hosts:
             - boro-F
             - boro-G
             - boro-H
-timeout: 300
+timeout: 500
 server_config:
     name: daos_server
 pool:
@@ -20,37 +20,48 @@ pool:
     createset:
         setname: daos_server
     createsize:
-        scm:
-            size: 3000000000
-        nvme:
-            size: 0
+        scm_size: 3000000000
     createsvc:
         svcn: 1
 ior:
     client_processes:
         np_16:
             np: 16
-    iteration:
-        iter: 2
+    test_file: daos:testFile
+    repetitions: 2
     iorflags: !mux
         ssf:
-          F: "-v -W -w -r -R"
+          flags: "-v -W -w -r -R"
+          ior_api: !mux
+            daos:
+              api: DAOS
+            mpiio:
+              api: MPIIO         
+          transfersize_blocksize: !mux
+            256B:
+              transfer_size: '256B'
+              block_size: '4M'
+            1M:
+              transfer_size: '1M'
+              block_size: '32M'
+
+          objectclass: !mux
+            oclass_SX:
+              daos_oclass: "SX"
+              mpiio_oclass: 214
+            oclass_RP_2GX:
+              daos_oclass: "RP_2GX"
+              mpiio_oclass: 234
         fpp:
-          F: "-v -W -w -r -R -F"
+          flags: "-v -W -w -r -R -F"
+          api: DAOS
+          transfer_size: '1M'
+          block_size: '32M'
+          daos_oclass: "SX"
 # Uncomment when DAOS-1733 is resolved
 #        random:
-#          F: "-v -W -w -r -z"
-    transfersize_blocksize: !mux
-        256B:
-            t: '256B'
-            b: '4M'
-        1M:
-            t: '1M'
-            b: '32M'
-    objectclass: !mux
-        oclass_Large:
-            o: "SX"
-# Uncomment when DAOS-2305 is resolved
-#        oclass_R2:
-#            o: "R2"
-
+#          flags: "-v -W -w -r -z"
+#          api: MPIIO
+#          transfer_size: '1M'
+#          block_size: '32M'
+#          mpiio_oclass: "234"

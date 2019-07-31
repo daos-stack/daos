@@ -33,15 +33,8 @@ message DaosRank {
 	uint32 rank = 2;	// Server rank
 }
 
-enum DaosRequestStatus {
-	SUCCESS = 0;
-	ERR_UNKNOWN = -1;		// Unknown error
-	ERR_INVALID_RANK = -2;		// Rank requested is invalid
-	ERR_INVALID_UUID = -3;		// Pool UUID requested is invalid
-}
-
 message DaosResp {
-	DaosRequestStatus status = 1;
+	int32 status = 1; // DAOS error code
 }
 
 message SetRankReq {
@@ -63,3 +56,7 @@ message CreateMsReq {
 // StartMsReq is nil.
 
 // StartMsResp is identical to DaosResp.
+
+// SetUpReq is nil.
+
+// SetUpResp is idential to DaosResp.

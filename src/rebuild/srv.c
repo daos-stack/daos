@@ -993,7 +993,7 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(rpt->rt_refcount == 0);
 	D_ASSERT(d_list_empty(&rpt->rt_list));
 	if (!daos_handle_is_inval(rpt->rt_tobe_rb_root_hdl)) {
-		dbtree_destroy(rpt->rt_tobe_rb_root_hdl);
+		dbtree_destroy(rpt->rt_tobe_rb_root_hdl, NULL);
 		rpt->rt_tobe_rb_root_hdl = DAOS_HDL_INVAL;
 	}
 	if (!daos_handle_is_inval(rpt->rt_rebuilt_root_hdl)) {

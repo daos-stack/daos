@@ -253,7 +253,7 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df)
 		rc = dbtree_open_inplace(&dtab_df->tt_active_btr,
 					 &pool->vp_uma, &hdl);
 		if (rc == 0)
-			rc = dbtree_destroy(hdl);
+			rc = dbtree_destroy(hdl, NULL);
 
 		if (rc != 0)
 			D_ERROR("Fail to destroy DTX active dbtree for pool"
@@ -264,7 +264,7 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df)
 		rc = dbtree_open_inplace(&dtab_df->tt_committed_btr,
 					 &pool->vp_uma, &hdl);
 		if (rc == 0)
-			rc = dbtree_destroy(hdl);
+			rc = dbtree_destroy(hdl, NULL);
 
 		if (rc != 0)
 			D_ERROR("Fail to destroy DTX committed dbtree for pool"
@@ -295,8 +295,11 @@ dtx_obj_rec_exchange(struct umem_instance *umm, struct vos_obj_df *obj,
 		return;
 	}
 
-	if (rec->tr_flags != DTX_RF_EXCHANGE_SRC)
+	if (rec->tr_flags != DTX_RF_EXCHANGE_SRC) {
+		D_ERROR(DF_UOID" with OBJ DTX ("DF_DTI") missed SRC flag\n",
+			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
 		return;
+	}
 
 	if (!(obj->vo_oi_attr & VOS_OI_REMOVED)) {
 		D_ERROR(DF_UOID" with OBJ DTX ("DF_DTI") missed REMOVED flag\n",
@@ -335,6 +338,12 @@ dtx_obj_rec_exchange(struct umem_instance *umm, struct vos_obj_df *obj,
 	 * aggregation or some special cleanup.
 	 */
 	tgt_obj = umem_off2ptr(umm, tgt_rec->tr_record);
+	if (!(tgt_obj->vo_oi_attr & VOS_OI_PUNCHED)) {
+		D_ERROR(DF_UOID" with OBJ DTX ("DF_DTI") missed PUNCHED flag\n",
+			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
+		return;
+	}
+
 	umem_tx_add_ptr(umm, tgt_obj, sizeof(*tgt_obj));
 
 	/* The @tgt_obj which epoch is current DTX's epoch will be
@@ -345,12 +354,14 @@ dtx_obj_rec_exchange(struct umem_instance *umm, struct vos_obj_df *obj,
 	tgt_obj->vo_earliest = obj->vo_earliest;
 	tgt_obj->vo_latest = dtx->te_epoch;
 	tgt_obj->vo_incarnation = obj->vo_incarnation;
+	tgt_obj->vo_dtx = UMOFF_NULL;
 
 	/* The @obj which epoch is MAX will be removed later. */
 	memset(&obj->vo_tree, 0, sizeof(obj->vo_tree));
 	obj->vo_latest = 0;
 	obj->vo_earliest = DAOS_EPOCH_MAX;
 	obj->vo_incarnation++; /* cache should be revalidated */
+	obj->vo_dtx = UMOFF_NULL;
 
 	D_DEBUG(DB_TRACE, "Exchanged OBJ DTX records for "DF_DTI"\n",
 		DP_DTI(&dtx->te_xid));
@@ -443,8 +454,14 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 		return;
 	}
 
-	if (rec->tr_flags != DTX_RF_EXCHANGE_SRC)
+	/* For the case of DAOS_EPOCH_MAX does not exist when punch. */
+	if (rec->tr_flags != DTX_RF_EXCHANGE_SRC) {
+		if (abort)
+			dtx_set_aborted(&key->kr_dtx);
+		else
+			key->kr_dtx = UMOFF_NULL;
 		return;
+	}
 
 	if (!(key->kr_bmap & KREC_BF_REMOVED)) {
 		D_ERROR(DF_UOID" with KEY DTX ("DF_DTI") missed REMOVED flag\n",
@@ -483,15 +500,23 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 	 * aggregation or some special cleanup.
 	 */
 	tgt_key = umem_off2ptr(umm, tgt_rec->tr_record);
+	if (!(tgt_key->kr_bmap & KREC_BF_PUNCHED)) {
+		D_ERROR(DF_UOID" with KEY DTX ("DF_DTI") missed PUNCHED flag\n",
+			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
+		return;
+	}
+
 	umem_tx_add_ptr(umm, tgt_key, sizeof(*tgt_key));
 
 	if (key->kr_bmap & KREC_BF_EVT) {
+		tgt_key->kr_bmap |= KREC_BF_EVT;
 		tgt_key->kr_evt = key->kr_evt;
 		/* The @key which epoch is MAX will be removed later. */
 		memset(&key->kr_evt, 0, sizeof(key->kr_evt));
 	} else {
 		D_ASSERT(key->kr_bmap & KREC_BF_BTR);
 
+		tgt_key->kr_bmap |= KREC_BF_BTR;
 		tgt_key->kr_btr = key->kr_btr;
 		/* The @key which epoch is MAX will be removed later. */
 		memset(&key->kr_btr, 0, sizeof(key->kr_btr));
@@ -503,10 +528,11 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 	 */
 	tgt_key->kr_earliest = key->kr_earliest;
 	tgt_key->kr_latest = dtx->te_epoch;
-	tgt_key->kr_bmap = (key->kr_bmap | KREC_BF_PUNCHED) & ~KREC_BF_REMOVED;
+	tgt_key->kr_dtx = UMOFF_NULL;
 
 	key->kr_latest = 0;
 	key->kr_earliest = DAOS_EPOCH_MAX;
+	key->kr_dtx = UMOFF_NULL;
 
 	D_DEBUG(DB_TRACE, "Exchanged KEY DTX records for "DF_DTI"\n",
 		DP_DTI(&dtx->te_xid));
@@ -707,7 +733,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	int				 rc = 0;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	rc = dbtree_delete(cont->vc_dtx_active_hdl, &kiov, &umoff);
+	rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
+			   &kiov, &umoff);
 	if (rc == -DER_NONEXIST) {
 		d_iov_set(&riov, NULL, 0);
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
@@ -772,7 +799,7 @@ vos_dtx_abort_one(struct vos_container *cont, struct dtx_id *dti,
 	int		 rc;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
-	rc = dbtree_delete(cont->vc_dtx_active_hdl, &kiov, &dtx);
+	rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, &dtx);
 	if (rc == 0)
 		dtx_rec_release(&cont->vc_pool->vp_umm, dtx, true, true);
 
@@ -1138,11 +1165,13 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	}
 
 	if (intent == DAOS_INTENT_CHECK) {
-		/* Check whether the DTX is aborted or not. */
 		if (dtx_is_aborted(entry))
 			return ALB_UNAVAILABLE;
-		else
-			return ALB_AVAILABLE_CLEAN;
+
+		if (dtx_is_null(entry) && hidden)
+			return ALB_UNAVAILABLE;
+
+		return ALB_AVAILABLE_CLEAN;
 	}
 
 	/* Committed */
@@ -1515,8 +1544,8 @@ vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
 			  bool punch)
 {
 	struct vos_container	*cont;
-	d_iov_t		 kiov;
-	d_iov_t		 riov;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
 
 	cont = vos_hdl2cont(coh);
@@ -1526,6 +1555,12 @@ vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
 		rc = vos_dtx_lookup_cos(coh, oid, dti, dkey_hash, punch);
 		if (rc == 0)
 			return DTX_ST_COMMITTED;
+		if (rc != -DER_NONEXIST) {
+			D_ERROR(DF_UOID" DTX ("DF_DTI") vos_dtx_lookup_cos "
+				"failed, %d.\n", DP_UOID(*oid), DP_DTI(dti),
+				rc);
+			return rc;
+		}
 	}
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
@@ -1640,7 +1675,8 @@ vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age)
 			break;
 
 		d_iov_set(&kiov, &dtx->te_xid, sizeof(dtx->te_xid));
-		rc = dbtree_delete(cont->vc_dtx_committed_hdl, &kiov, &umoff);
+		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
+				   &kiov, &umoff);
 		D_ASSERT(rc == 0);
 
 		tab->tt_count--;

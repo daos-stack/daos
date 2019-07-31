@@ -23,7 +23,6 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "dfuse_da.h"
 
 /* Inode record hash table operations */
 
@@ -202,7 +201,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!args.argv[1])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[2], "-osubtype=pam", 32);
+	D_STRNDUP(args.argv[2], "-osubtype=daos", 32);
 	if (!args.argv[2])
 		D_GOTO(err, 0);
 
@@ -223,7 +222,18 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
+	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_root = ie->ie_stat.st_ino;
+
+	if (dfs->dfs_ops == &dfuse_dfs_ops) {
+		mode_t mode;
+
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, &mode);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(-rc));
+			D_GOTO(err, 0);
+		}
+	}
 
 	rc = d_hash_rec_insert(&fs_handle->dpi_iet,
 			       &ie->ie_stat.st_ino,
