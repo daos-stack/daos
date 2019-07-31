@@ -145,9 +145,9 @@ class ObjectDataValidation(avocado.Test):
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=single_object,neg_tx_commit,medium,vm
+        :avocado: tags=negative_test,neg_tx_commit,medium,vm
         """
-        self.d_log.info("Writing the Single Dataset...")
+        self.d_log.info("==Writing the Single Dataseti for negative test...")
         record_index = 0
         transaction = []
         expected_error = "RC: -1002"
@@ -161,35 +161,39 @@ class ObjectDataValidation(avocado.Test):
         c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
         new_transaction = self.container.get_new_tx()
         invalid_transaction = new_transaction + random.randint(1000,383838)
-        print("==new_transaction=    ",new_transaction)
-        print("==invalid_transaction=",invalid_transaction)
+        self.log.info("==new_transaction=     %s",new_transaction)
+        self.log.info("==invalid_transaction= %s",invalid_transaction)
         self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
                                  new_transaction)
         try:
             self.container.commit_tx(invalid_transaction)
-            self.fail("##(1.1)Container.commit_tx passing with invalid handle")
+            self.fail(
+                "##(1.1)Container.commit_tx passing with invalid handle")
         except DaosApiError as excep:
-            print(excep)
-            print("==(1)Expecting failure: invalid Container.commit_tx.")
+            self.log.info(str(excep))
+            self.log.info(
+                "==(1)Expecting failure: invalid Container.commit_tx.")
             if expected_error not in str(excep):
                 self.fail(
                     "##(1.2)Expecting error RC: -1002  did not show.")
         try:
             self.container.close_tx(invalid_transaction)
-            self.fail("##(2.1)Container.close_tx passing with invalid handle")
+            self.fail(
+                "##(2.1)Container.close_tx passing with invalid handle")
         except DaosApiError as excep:
-            print(excep)
-            print("==(2)Expecting failure: invalid Container.commit_tx.")
+            self.log.info(str(excep))
+            self.log.info(
+                "==(2)Expecting failure: invalid Container.commit_tx.")
             if expected_error not in str(excep):
                 self.fail(
                     "##(2.2)Expecting error RC: -1002  did not show.")
         try:
             self.container.close_tx(new_transaction)
-            print("==(3)container.close_tx test passed.")
+            self.log.info("==(3)container.close_tx test passed.")
         except DaosApiError as excep:
-            print(excep)
-            print("##(3)Failed on close_tx.")
-        print("==Negative tests completed==================")
+            self.log.info(str(excep))
+            self.log.info("##(3)Failed on close_tx.")
+        self.log.info("==Negative tests completed==================")
 
 
     @avocado.fail_on(DaosApiError)
