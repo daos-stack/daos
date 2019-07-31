@@ -229,6 +229,10 @@ dss_sched_run(ABT_sched sched)
 	}
 
 	while (1) {
+		unit = unit_pop(pools, DSS_POOL_PROGRESS, &pool);
+		if (unit != ABT_UNIT_NULL)
+			ABT_xstream_run_unit(unit, pool);
+
 		/* Execute one work unit from the scheduler's pool */
 		unit = dss_sched_unit_pop(pools, &pool);
 		if (unit != ABT_UNIT_NULL && pool != ABT_UNIT_NULL)
@@ -583,7 +587,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 		 * is fine.
 		 */
 		access = (i == DSS_POOL_SHARE || i == DSS_POOL_REBUILD ||
-			  i == DSS_POOL_URGENT) ?
+			  i == DSS_POOL_URGENT || i == DSS_POOL_PROGRESS) ?
 			 ABT_POOL_ACCESS_MPSC : ABT_POOL_ACCESS_PRIV;
 
 		rc = ABT_pool_create_basic(ABT_POOL_FIFO, access, ABT_TRUE,
@@ -639,7 +643,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_PROGRESS],
 			       dss_srv_handler, dx, attr,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {

@@ -163,6 +163,7 @@ void dss_unregister_key(struct dss_module_key *key);
  *  DSS_POOL_REBUILD	rebuild pool: pools specially for rebuild tasks.
  */
 enum {
+	DSS_POOL_PROGRESS,
 	DSS_POOL_URGENT,
 	DSS_POOL_PRIV,
 	DSS_POOL_SHARE,
