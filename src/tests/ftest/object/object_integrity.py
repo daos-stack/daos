@@ -29,7 +29,6 @@ import ctypes
 import time
 import avocado
 import random
-import string
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -136,7 +135,7 @@ class ObjectDataValidation(avocado.Test):
                                objtype=4)
 
     @avocado.fail_on(DaosApiError)
-    def test_object_validation_with_negative(self):
+    def test_invalid_tx_commit_close(self):
         """
         Test ID:
             (1)DAOS-1346: Verify commit tx bad parameter behavior.
@@ -147,9 +146,8 @@ class ObjectDataValidation(avocado.Test):
                           bad parameter behavior.
         :avocado: tags=negative_test,neg_tx_commit,medium,vm
         """
-        self.d_log.info("==Writing the Single Dataseti for negative test...")
+        self.d_log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
-        transaction = []
         expected_error = "RC: -1002"
         dkey = 0
         akey = 0
@@ -160,9 +158,9 @@ class ObjectDataValidation(avocado.Test):
         c_value = ctypes.create_string_buffer(indata)
         c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
         new_transaction = self.container.get_new_tx()
-        invalid_transaction = new_transaction + random.randint(1000,383838)
-        self.log.info("==new_transaction=     %s",new_transaction)
-        self.log.info("==invalid_transaction= %s",invalid_transaction)
+        invalid_transaction = new_transaction + random.randint(1000, 383838)
+        self.log.info("==new_transaction=     %s", new_transaction)
+        self.log.info("==invalid_transaction= %s", invalid_transaction)
         self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
                                  new_transaction)
         try:
@@ -193,7 +191,6 @@ class ObjectDataValidation(avocado.Test):
         except DaosApiError as excep:
             self.log.info(str(excep))
             self.log.info("##(3)Failed on close_tx.")
-        self.log.info("==Negative tests completed==================")
 
 
     @avocado.fail_on(DaosApiError)
