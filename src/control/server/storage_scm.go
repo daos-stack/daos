@@ -47,8 +47,9 @@ const (
 	scmStateFreeCapacity
 	scmStateNoCapacity
 
-	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions       = "\nThere are no Regions defined in the system."
+	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
+	outScmNoRegions   = "\nThere are no Regions defined in the system."
+	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
 	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
@@ -90,6 +91,7 @@ func (rce *runCmdError) Error() string {
 		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
 			rce.stdout, ee.Stderr)
 	}
+
 	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
 }
 
@@ -102,6 +104,7 @@ func run(cmd string) (string, error) {
 			stdout:  string(out),
 		}
 	}
+
 	return string(out), nil
 }
 
@@ -142,8 +145,8 @@ func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
 //
 // Actions based on state:
 // * modules exist and no regions -> create all regions (needs reboot)
-// * regions exist and free capacity -> create all namespaces
-// * regions exist but no free capacity -> no-op
+// * regions exist and free capacity -> create all namespaces, return created
+// * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned.
 func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
@@ -155,7 +158,10 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 
 	switch s.state {
 	case scmStateNoRegions:
-		needsReboot, err = s.createRegions()
+		// if successful, resource allocation change read by BIOS on reboot.
+		if _, err = s.runCmd(cmdScmCreateRegions); err == nil {
+			needsReboot = true
+		}
 	case scmStateFreeCapacity:
 		pmemDevs, err = s.createNamespaces()
 	case scmStateNoCapacity:
@@ -245,18 +251,6 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	}
 
 	return
-}
-
-// createRegions sets DCPM modules into regions in interleaved AppDirect mode.
-//
-// External tool command output will indicate whether a subsequent reboot is needed.
-func (s *scmStorage) createRegions() (bool, error) {
-	out, err := s.runCmd(cmdScmCreateRegions)
-	if err != nil {
-		return false, err
-	}
-
-	return strings.Contains(out, msgScmRebootRequired), nil
 }
 
 func parsePmemDevs(jsonData string) (devs []pmemDev) {
