@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,10 +60,6 @@ struct dss_thread_local_storage *dss_tls_init(int tag);
 /* server_iv.c */
 void ds_iv_init(void);
 void ds_iv_fini(void);
-
-/* system.c */
-int dss_sys_map_load(const char *path, crt_group_id_t grpid, d_rank_t self_rank,
-		     int ntags);
 
 /** To schedule ULT on caller's self XS */
 #define DSS_XS_SELF		(-1)
