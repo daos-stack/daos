@@ -89,7 +89,6 @@ class Test(avocadoTest):
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
-        self.number_of_slots = 1
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):

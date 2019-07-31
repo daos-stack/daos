@@ -36,7 +36,7 @@ ior:
             daos:
               api: DAOS
             mpiio:
-              api: MPIIO         
+              api: MPIIO
           transfersize_blocksize: !mux
             256B:
               transfer_size: '256B'
