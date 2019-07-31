@@ -182,6 +182,8 @@ pipeline {
                     }
                 }
                 stage('Build RPM on SLES 12.3') {
+                    when { beforeAgent true
+                           environment name: 'SLES12_3_DOCKER', value: 'true' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile-rpmbuild.sles.12.3'
@@ -285,8 +287,122 @@ pipeline {
                         }
                     }
                 }
+                stage('Build DEB on Ubuntu 18.04') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-debbuild.ubuntu.18.04'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '--build-arg UID=$(id -u) ' +
+                              ' --build-arg JENKINS_URL=' + env.JENKINS_URL +
+                              ' --build-arg CACHEBUST=' +
+                              currentBuild.startTimeInMillis
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/ubuntu18.04/
+                              mkdir -p artifacts/ubuntu18.04/
+                              : "${DEBEMAIL:="$env.DAOS_EMAIL"}"
+                              : "${DEBFULLNAME:="$env.DAOS_FULLNAME"}"
+                              export DEBEMAIL
+                              export DEBFULLNAME
+                              make debs'''
+                    }
+                    post {
+                        success {
+                            sh '''ln -v \
+                                   _topdir/BUILD/*{.build,.changes,.deb,.dsc,.gz,.xz} \
+                                   artifacts/ubuntu18.04/
+                                  pushd artifacts/ubuntu18.04/
+                                    dpkg-scanpackages . /dev/null | \
+                                      gzip -9c > Packages.gz
+                                  popd'''
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.04/**'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            sh script: "cat _topdir/BUILD/*.build",
+                               returnStatus: true
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.04/**'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            sh script: "cat _topdir/BUILD/*.build",
+                               returnStatus: true
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.04/**'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
+                    }
+                }
+                stage('Build DEB on Ubuntu 18.10') {
+                    when { expression { true } }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-debbuild.ubuntu.18.10'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '--build-arg UID=$(id -u) ' +
+                              ' --build-arg JENKINS_URL=' + env.JENKINS_URL +
+                              ' --build-arg CACHEBUST=' +
+                              currentBuild.startTimeInMillis
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/ubuntu18.10/
+                              mkdir -p artifacts/ubuntu18.10/
+                              : "${DEBEMAIL:="$env.DAOS_EMAIL"}"
+                              : "${DEBFULLNAME:="$env.DAOS_FULLNAME"}"
+                              export DEBEMAIL
+                              export DEBFULLNAME
+                              make debs'''
+                    }
+                    post {
+                        success {
+                            sh '''ln -v \
+                                   _topdir/BUILD/*{.build,.changes,.deb,.dsc,.gz,.xz} \
+                                   artifacts/ubuntu18.10/
+                                  pushd artifacts/ubuntu18.10/
+                                    dpkg-scanpackages . /dev/null | \
+                                      gzip -9c > Packages.gz
+                                  popd'''
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.10/**'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            sh script: "cat _topdir/BUILD/*.build",
+                               returnStatus: true
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.10/**'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            sh script: "cat _topdir/BUILD/*.build",
+                               returnStatus: true
+                            archiveArtifacts artifacts: 'artifacts/ubuntu18.10/**'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
+                    }
+                }
                 stage('Build master CentOS 7') {
-                    when { branch 'master' }
+                    when { beforeAgent true
+                           branch 'master' }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'

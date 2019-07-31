@@ -1,0 +1,4 @@
+usr/include/cart/*
+usr/include/gurt/*
+usr/lib/*/lib*.so
+
