@@ -45,7 +45,7 @@
 #define SB_MAGIC	0xda05df50da05df50
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	6
+#define INODE_AKEYS	7
 /** A-key name of mode_t value */
 #define MODE_NAME	"mode"
 /** A-key name of object ID value; will be stored only if not a syml */
