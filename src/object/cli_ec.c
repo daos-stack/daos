@@ -315,7 +315,6 @@ static void
 ec_free_params(struct ec_params *head)
 {
 	D_FREE(head->iods);
-	/*
 	D_FREE(head->sgls);
 	while (head != NULL) {
 		int i;
@@ -329,7 +328,6 @@ ec_free_params(struct ec_params *head)
 		head = current->next;
 		D_FREE(current);
 	}
-	*/
 }
 
 

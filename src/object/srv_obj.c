@@ -747,8 +747,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
-	daos_iod_t		*iods = NULL;
-	int			i, rc, err;
+	daos_iod_t		*cpy_iods = NULL;
+	daos_iod_t		*tmp_iods = orw->orw_iods.ca_arrays;
+	int			i, err, rc = 0;
 
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -765,10 +766,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
 		tag, orw->orw_epoch);
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" dkey %d %s tag %d eph "DF_U64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
-		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
-		tag, orw->orw_epoch);
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
 
@@ -777,27 +774,26 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) {
 		bulk_op = CRT_BULK_GET;
 		if (oca->ca_resil == DAOS_RES_EC) {
-			unsigned int tgt_idx = orw->orw_oid.id_shard -
-						orw->orw_start_shard;
+			unsigned int	tgt_idx = orw->orw_oid.id_shard -
+							orw->orw_start_shard;
 
 			for (i = 0; i < orw->orw_nr; i++)
 				skip_list[i] = NULL;
+
 			if (tgt_idx >= oca->u.ec.e_p) {
 				rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
-						    orw->orw_nr,
-						    orw->orw_iods.ca_arrays,
+						    orw->orw_nr, tmp_iods,
 						    oca, skip_list);
 			} else if (tgt_idx == 0) {
-				rc = ec_copy_iods(&iods,
-						  orw->orw_iods.ca_arrays,
+				rc = ec_copy_iods(&cpy_iods, tmp_iods,
 						  orw->orw_nr);
-				if (rc == 0) {
-					rc = ec_parity_target(tgt_idx,
-							      orw->orw_nr,
-							      iods, oca,
-							      skip_list);
+				if (rc) {
+					D_ERROR(DF_UOID"EC update failed: %d\n",
+					DP_UOID(orw->orw_oid), rc);
+					goto out;
+				} else {
+					tmp_iods = cpy_iods;
 				}
-			} else {
 				rc = ec_parity_target(tgt_idx,
 						      orw->orw_nr,
 						      orw->orw_iods.ca_arrays,
@@ -809,18 +805,10 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				goto out;
 			}
 		}
-		if (iods) {
-			rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-					      orw->orw_epoch, &orw->orw_dkey,
-					      orw->orw_nr, iods,
-					      &ioh, dth);
-		} else {
-			rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-					      orw->orw_epoch, &orw->orw_dkey,
-					      orw->orw_nr,
-					      orw->orw_iods.ca_arrays, &ioh,
-					      dth);
-		}
+		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
+				      orw->orw_epoch, &orw->orw_dkey,
+				      orw->orw_nr, tmp_iods,
+				      &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -891,8 +879,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	rc = rc ? : err;
 out:
 	rc = ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, dth);
-	if (iods)
-		ec_free_iods(&iods, orw->orw_nr);
+	if (cpy_iods)
+		ec_free_iods(&cpy_iods, orw->orw_nr);
 	return rc;
 }
 
