@@ -1008,6 +1008,28 @@ test_ace_from_str_too_many_fields(void **state)
 	assert_null(ace);
 }
 
+static void
+test_ace_from_str_too_long(void **state)
+{
+	size_t		i;
+	size_t		len = DAOS_ACL_MAX_ACE_STR_LEN * 2;
+	char		input[len];
+	struct daos_ace	*ace = NULL;
+
+	i = snprintf(input, len, "AUL:SG:somelongergroupname@:");
+
+	/* Pad out with the same permissions over and over... */
+	for (; i < len; i++) {
+		input[i] = 'r';
+	}
+	input[len - 1] = '\0';
+
+	/* Ensure the overly-long string doesn't crash us */
+	assert_int_equal(daos_ace_from_str(input, &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
 int
 main(void)
 {
@@ -1068,7 +1090,8 @@ main(void)
 		cmocka_unit_test(test_ace_from_str_invalid_perms),
 		cmocka_unit_test(test_ace_from_str_empty_str),
 		cmocka_unit_test(test_ace_from_str_not_all_fields),
-		cmocka_unit_test(test_ace_from_str_too_many_fields)
+		cmocka_unit_test(test_ace_from_str_too_many_fields),
+		cmocka_unit_test(test_ace_from_str_too_long)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

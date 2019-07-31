@@ -544,6 +544,7 @@ int
 daos_ace_from_str(const char *str, struct daos_ace **ace)
 {
 	int		rc;
+	size_t		len;
 	char		*tmpstr;
 	struct daos_ace	*new_ace = NULL;
 
@@ -552,8 +553,14 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 		return -DER_INVAL;
 	}
 
+	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN + 1);
+	if (len > DAOS_ACL_MAX_ACE_STR_LEN) {
+		D_INFO("Input string is too long\n");
+		return -DER_INVAL;
+	}
+
 	/* Will be mangling the string during processing */
-	D_STRNDUP(tmpstr, str, DAOS_ACL_MAX_ACE_STR_LEN);
+	D_STRNDUP(tmpstr, str, len);
 	if (tmpstr == NULL) {
 		D_ERROR("Couldn't allocate temporary string\n");
 		return -DER_NOMEM;
