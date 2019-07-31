@@ -2030,12 +2030,12 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
 }
 
 int
-dfs_update_parent(dfs_obj_t *obj, daos_obj_id_t parent_oid, const char *name)
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name)
 {
 	if (obj == NULL)
 		return -EINVAL;
 
-	oid_cp(&obj->parent_oid, parent_oid);
+	oid_cp(&obj->parent_oid, parent_obj->parent_oid);
 	if (name) {
 		strncpy(obj->name, name, DFS_MAX_PATH);
 		obj->name[DFS_MAX_PATH] = '\0';

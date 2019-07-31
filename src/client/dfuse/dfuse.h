@@ -123,6 +123,10 @@ struct dfuse_inode_ops {
 			   struct fuse_file_info *fi);
 	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			size_t size, off_t offset, struct fuse_file_info *fi);
+	void (*rename)(fuse_req_t req, struct dfuse_inode_entry *parent_inode,
+		       const char *name,
+		       struct dfuse_inode_entry *newparent_inode,
+		       const char *newname, unsigned int flags);
 	void (*symlink)(fuse_req_t req, const char *link,
 			struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
@@ -487,8 +491,8 @@ dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
 		 struct fuse_file_info *);
 
 void
-dfuse_cb_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,
-		const char *, unsigned int);
+dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
+		struct dfuse_inode_entry *, const char *, unsigned int);
 
 void
 dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,

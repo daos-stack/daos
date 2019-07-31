@@ -504,6 +504,60 @@ err:
 }
 
 static void
+df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
+	     fuse_ino_t newparent, const char *newname, unsigned int flags)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*parent_inode;
+	struct dfuse_inode_entry	*newparent_inode = NULL;
+	d_list_t			*rlink;
+	d_list_t			*rlink2;
+	int rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", parent);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!parent_inode->ie_dfs->dfs_ops->rename)
+		D_GOTO(decref, rc = EXDEV);
+
+	if (parent != newparent) {
+		rlink2 = d_hash_rec_find(&fs_handle->dpi_iet, &newparent,
+					 sizeof(newparent));
+		if (!rlink2) {
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+					newparent);
+			D_GOTO(decref, rc = ENOENT);
+		}
+
+		newparent_inode = container_of(rlink2, struct dfuse_inode_entry,
+					       ie_htl);
+
+
+		if (parent_inode->ie_dfs != newparent_inode->ie_dfs)
+			D_GOTO(decref_both, rc = EXDEV);
+	}
+
+	parent_inode->ie_dfs->dfs_ops->rename(req, parent_inode, name,
+					      newparent_inode, newname, flags);
+	if (newparent_inode)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref_both:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+static void
 dfuse_fuse_destroy(void *userdata)
 {
 	DFUSE_TRA_INFO(userdata, "destroy callback");
@@ -521,6 +575,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.unlink		= dfuse_cb_unlink,
 	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
+	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
 	.setxattr	= dfuse_cb_setxattr,
 	.getxattr	= dfuse_cb_getxattr,
@@ -557,6 +612,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
 	fuse_ops->create	= df_ll_create;
+	fuse_ops->rename	= df_ll_rename;
 	fuse_ops->symlink	= df_ll_symlink;
 	fuse_ops->setxattr	= df_ll_setxattr;
 	fuse_ops->getxattr	= df_ll_getxattr;
