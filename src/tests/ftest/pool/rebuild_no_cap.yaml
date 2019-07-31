@@ -21,9 +21,7 @@ pool:
   createset:
     name: daos_server
   createsize:
-    scm_size: 16428800
+    scm_size: 16777216
 testparams:
   ranks:
     rank_to_kill: 0
-  datatowrite:
-    datasize: 90144000

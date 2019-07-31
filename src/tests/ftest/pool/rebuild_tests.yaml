@@ -13,12 +13,9 @@ server_config:
   name: daos_server
   targets: 8
 pool:
-  createmode:
-    mode: 511
-  createset:
-    name: daos_server
-  createsize:
-    scm_size: 1073741824
+  mode: 511
+  name: daos_server
+  scm_size: 1073741824
 container:
   akey_size: 5
   dkey_size: 5
@@ -42,10 +39,11 @@ container:
 testparams:
   ranks: !mux
     rank1:
-      rank: 5
+      rank: 1
     rank4:
       rank: 4
     rank3:
       rank: 3
   quantity: 2
+  object_class: DAOS_OC_R3_RW
 

@@ -28,7 +28,6 @@ from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 from general_utils import TestPool
 
-
 class IorTestBase(TestWithServers):
     """Base IOR test class.
 
@@ -64,7 +63,7 @@ class IorTestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.pool is not None:
+            if self.pool is not None and self.pool.pool.attached:
                 self.pool.destroy(1)
         finally:
             # Stop the servers and agents

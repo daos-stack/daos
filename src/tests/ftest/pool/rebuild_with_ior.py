@@ -46,7 +46,7 @@ class RebuildWithIOR(IorTestBase):
           -- single pool, single client performing continous read/write/verify
              sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=pool,rebuild,rebuildwithior
+        :avocado: tags=all,pr,small,pool,rebuild,rebuildwithior
         """
 
         # set params

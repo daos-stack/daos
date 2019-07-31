@@ -23,6 +23,7 @@
 """
 from ior_test_base import IorTestBase
 
+
 class IorSingleServer(IorTestBase):
     """Test class Description: Runs IOR with 1 server.
 

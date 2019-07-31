@@ -243,6 +243,7 @@ class IorCommand(CommandWithParameters):
             mpi_prefix (str): path for the mpi launch command
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+
         Raises:
             IorFailed: if an error occured building the IOR command
 
