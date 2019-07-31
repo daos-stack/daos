@@ -2786,7 +2786,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	/** Open parent object and get xattr from the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
-		return -daos_der2errno(rc);
+		D_GOTO(out, rc = -daos_der2errno(rc));
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -2819,17 +2819,19 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	}
 	if (rc) {
 		D_ERROR("Failed to fetch xattr %s (%d)\n", name, rc);
-		D_GOTO(out, rc = -daos_der2errno(rc));
+		D_GOTO(close, rc = -daos_der2errno(rc));
 	}
 
 	*size = iod.iod_size;
 	if (iod.iod_size == 0)
-		D_GOTO(out, rc = -ENOENT);
+		D_GOTO(close, rc = -ENODATA);
 
-out:
-	if (xname)
-		D_FREE(xname);
+close:
 	daos_obj_close(oh, NULL);
+out:
+	D_FREE(xname);
+	if (rc == -ENOENT)
+		rc = -ENODATA;
 	return rc;
 }
 

@@ -127,6 +127,16 @@ struct dfuse_inode_ops {
 			struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
+	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 const char *name, const char *value, size_t size,
+			 int flags);
+	void (*getxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 const char *name, size_t size);
+	void (*listxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			  size_t size);
+	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			    const char *name);
+
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -246,7 +256,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define DFUSE_FUSE_REPLY_ZERO(req)					\
+#define DFUSE_REPLY_ZERO(req)						\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(req, "Returning 0");			\
@@ -256,18 +266,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
 		DFUSE_TRA_DOWN(req);					\
-	} while (0)
-
-#define DFUSE_REPLY_ZERO(dfuse_req)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning 0");		\
-		__rc = fuse_reply_err((dfuse_req)->ir_req, 0);		\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
-					"fuse_reply_err returned %d:%s", \
-					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
 #define DFUSE_REPLY_ATTR(req, attr)					\
@@ -503,6 +501,20 @@ dfuse_cb_setattr(fuse_req_t, fuse_ino_t, struct stat *, int,
 void
 dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 		 const char *);
+
+void
+dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
+		  const char *, size_t, int);
+
+void
+dfuse_cb_getxattr(fuse_req_t, struct dfuse_inode_entry *,
+		  const char *, size_t);
+
+void
+dfuse_cb_listxattr(fuse_req_t, struct dfuse_inode_entry *, size_t);
+
+void
+dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 /* Return inode information to fuse
  *
