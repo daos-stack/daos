@@ -178,8 +178,6 @@ typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
  * shard_rw_args and shard_punch_args.
  */
 struct shard_auxi_args {
-	struct dc_object	*obj;
-	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
 	uint64_t		 epoch;
 	uint32_t		 shard;
@@ -190,6 +188,9 @@ struct shard_auxi_args {
 	uint16_t		 grp_idx;
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
+	uint32_t		 padding;
+	struct dc_object	*obj;
+	struct obj_auxi_args	*obj_auxi;
 };
 
 struct shard_rw_args {
@@ -208,6 +209,7 @@ struct shard_punch_args {
 	uint64_t		 pa_dkey_hash;
 	struct dtx_id		 pa_dti;
 	uint32_t		 pa_opc;
+	uint32_t		 pa_padding;
 };
 
 struct shard_list_args {
