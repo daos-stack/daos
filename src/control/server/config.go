@@ -190,13 +190,6 @@ func (c *configuration) populateCliOpts(i int) error {
 		srv.CliOpts = append(
 			srv.CliOpts, "-f", strconv.Itoa(srv.FirstCore))
 	}
-	if c.SystemMap != "" {
-		srv.CliOpts = append(srv.CliOpts, "-y", c.SystemMap)
-	}
-	if srv.Rank != nil {
-		srv.CliOpts = append(
-			srv.CliOpts, "-r", srv.Rank.String())
-	}
 	if c.SocketDir != "" {
 		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
 	}
@@ -222,10 +215,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	// Populate options that can be provided on both the commandline and config.
 	if opts.Port > 0 {
 		c.Port = int(opts.Port)
-	}
-	if opts.Rank != nil {
-		// global rank parameter should only apply to first I/O service
-		c.Servers[0].Rank = opts.Rank
 	}
 	if opts.Insecure {
 		c.TransportConfig.AllowInsecure = true
@@ -270,9 +259,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	}
 	if opts.Attach != nil {
 		c.Attach = *opts.Attach
-	}
-	if opts.Map != nil {
-		c.SystemMap = *opts.Map
 	}
 }
 
