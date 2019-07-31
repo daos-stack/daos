@@ -548,6 +548,7 @@ tse_task_post_process(tse_task_t *task)
 		struct tse_task_link	*tlink;
 		tse_task_t		*task_tmp;
 		struct tse_task_private	*dtp_tmp;
+		bool			 zombie;
 
 		tlink = d_list_entry(dtp->dtp_dep_list.next,
 				     struct tse_task_link, tl_link);
@@ -591,7 +592,8 @@ tse_task_post_process(tse_task_t *task)
 			 */
 			if (!done) {
 				/* -1 for tlink (addref by add_dependent) */
-				tse_task_decref_locked(dtp_tmp);
+				zombie = tse_task_decref_locked(dtp_tmp);
+				D_ASSERT(!zombie);
 				continue;
 			}
 
@@ -599,7 +601,8 @@ tse_task_post_process(tse_task_t *task)
 		}
 
 		/* -1 for tlink (addref by add_dependent) */
-		tse_task_decref_locked(dtp_tmp);
+		zombie = tse_task_decref_locked(dtp_tmp);
+		D_ASSERT(!zombie);
 	}
 
 	D_ASSERT(dsp->dsp_inflight > 0);
@@ -786,7 +789,10 @@ tse_task_complete(tse_task_t *task, int ret)
 		if (done)
 			tse_task_complete_locked(dtp, dsp);
 	} else {
-		tse_task_decref_locked(dtp);
+		bool zombie;
+
+		zombie = tse_task_decref_locked(dtp);
+		D_ASSERT(zombie);
 	}
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 

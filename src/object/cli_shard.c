@@ -422,9 +422,10 @@ out_req:
 out_pool:
 	dc_pool_put(pool);
 out_obj:
-	if (!cb_registered)
+	if (!cb_registered) {
 		obj_shard_decref(shard);
-	tse_task_complete(task, rc);
+		tse_task_complete(task, rc);
+	}
 	return rc;
 }
 
@@ -464,6 +465,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	struct obj_punch_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
 	crt_endpoint_t			 tgt_ep;
+	bool			 cb_registered = false;
 	int				 rc;
 
 	pool = obj_shard_ptr2pool(shard);
@@ -519,6 +521,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
 
+	cb_registered = true;
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
 		D_ERROR("punch rpc failed rc %d\n", rc);
@@ -531,7 +534,8 @@ out_req:
 out:
 	if (pool != NULL)
 		dc_pool_put(pool);
-	tse_task_complete(task, rc);
+	if (!cb_registered)
+		tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -790,9 +794,10 @@ out_req:
 out_pool:
 	dc_pool_put(pool);
 out_put:
-	if (!cb_registered)
+	if (!cb_registered) {
 		obj_shard_decref(obj_shard);
-	tse_task_complete(task, rc);
+		tse_task_complete(task, rc);
+	}
 	return rc;
 }
 
@@ -930,6 +935,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	daos_unit_oid_t			 oid;
 	crt_endpoint_t			 tgt_ep;
 	uint64_t			 dkey_hash;
+	bool			 cb_registered = false;
 	int				 rc;
 
 	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
@@ -982,6 +988,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
 
+	cb_registered = true;
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
 		D_ERROR("query_key rpc failed rc %d\n", rc);
@@ -994,6 +1001,7 @@ out_req:
 out:
 	if (pool)
 		dc_pool_put(pool);
-	tse_task_complete(task, rc);
+	if (!cb_registered)
+		tse_task_complete(task, rc);
 	return rc;
 }
