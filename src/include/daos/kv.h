@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2017 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,16 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of DAOS
- * src/tests/addons/daos_addons_test.h
+ * Kv task functions.
  */
-#ifndef __DAOS_ADDONS_TEST_H
-#define __DAOS_ADDONS_TEST_H
 
-/** Addons tests */
-int run_array_test(int rank, int size);
-int run_hl_test(int rank, int size);
+#ifndef __DAOS_KVX_H__
+#define  __DAOS_KVX_H__
 
-#endif
+/* task function for HL operations */
+int dc_kv_get(tse_task_t *task);
+int dc_kv_put(tse_task_t *task);
+int dc_kv_remove(tse_task_t *task);
+int dc_kv_list(tse_task_t *task);
+
+#endif /* __DAOS_KVX_H__ */

@@ -1,4 +1,4 @@
-"""Build addons test"""
+"""Build security test"""
 
 def scons():
     """Execute build"""
