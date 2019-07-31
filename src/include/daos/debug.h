@@ -39,7 +39,8 @@
  */
 #define DAOS_FOREACH_LOG_FAC(ACTION, arg)	\
 	ACTION(daos,      daos,      arg)	\
-	ACTION(addons,    addons,    arg)	\
+	ACTION(array,     array,     arg)	\
+	ACTION(kv,        kv,        arg)	\
 	ACTION(common,    common,    arg)	\
 	ACTION(tree,      tree,      arg)	\
 	ACTION(vos,       vos,       arg)	\

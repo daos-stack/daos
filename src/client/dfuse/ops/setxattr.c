@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,23 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * This file is part of DAOS
- * src/tests/addons/daos_addons_test.h
- */
-#ifndef __DAOS_ADDONS_TEST_H
-#define __DAOS_ADDONS_TEST_H
 
-/** Addons tests */
-int run_array_test(int rank, int size);
-int run_hl_test(int rank, int size);
+#include "dfuse_common.h"
+#include "dfuse.h"
 
-#endif
+void
+dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
+		  const char *name, const char *value, size_t size,
+		  int flags)
+{
+	int rc;
+
+	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
+
+	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
+			  size, flags);
+	if (rc == 0)
+		DFUSE_REPLY_ZERO(req);
+	else
+		DFUSE_REPLY_ERR_RAW(inode, req, -rc);
+}

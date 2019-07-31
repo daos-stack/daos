@@ -9,9 +9,9 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
     prereqs.require(denv, 'ompi')
 
-    addons_tgts = denv.SharedObject(['dac_array.c', 'dac_hl.c'])
-    addons_tgts += denv.SharedObject(['daos_array.c', 'daos_hl.c'])
-    Export('addons_tgts')
+    dc_array_tgts = denv.SharedObject(['dc_array.c'])
+
+    Export('dc_array_tgts')
 
 if __name__ == "SCons.Script":
     scons()
