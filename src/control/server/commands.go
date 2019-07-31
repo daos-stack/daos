@@ -45,8 +45,6 @@ type cliOptions struct {
 	FirstCore   uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread (default 0)"`
 	Group       string  `short:"g" long:"group" description:"Server group name"`
 	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client, default /tmp)"`
-	Map         *string `short:"y" long:"map" description:"[Temporary] System map file"`
-	Rank        *rank   `short:"r" long:"rank" description:"[Temporary] Self rank"`
 	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	Storage     StorCmd `command:"storage" alias:"st" description:"Perform tasks related to locally-attached storage"`
 	Insecure    bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
