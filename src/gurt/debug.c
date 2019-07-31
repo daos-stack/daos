@@ -426,7 +426,7 @@ debug_prio_err_load_env(void)
 static void
 debug_mask_load_env(void)
 {
-	char		    *mask_env;
+	char	*mask_env;
 
 	mask_env = getenv(DD_MASK_ENV);
 	if (mask_env == NULL)

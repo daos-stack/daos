@@ -64,17 +64,22 @@
 #define D_LOGFAC	DD_GURT_FAC(misc)
 #endif
 
-/** Arguments to priority bit macros are
+/**
+ * Arguments to priority bit macros are
  *      flag            Variable name of the priority bit flag
  *      s_name          Short name of the flag
  *      l_name          Long name of the flag
  *      default_mask    Should always be 0 for debug bits
  *      arg             Argument passed along.  Use D_NOOP when not required
+ *
+ * \note DB_ALL is special in that it sets all bits in the bitfield. If one
+ *       wants to always log, when any debug is enabled, use DB_ALL instead of
+ *       DB_ANY.
  */
 #define D_FOREACH_GURT_DB(ACTION, arg)          \
-	/** All debug streams */                \
+	/** Set all debug bits */               \
 	ACTION(DB_ALL,   all,   all,   0, arg)  \
-	/** Generic debug stream */             \
+	/** Stream for uncategorized messages */\
 	ACTION(DB_ANY,   any,   any,   0, arg)  \
 	/** Extremely verbose debug stream */   \
 	ACTION(DB_TRACE, trace, trace, 0, arg)  \
@@ -198,13 +203,15 @@
 
 /** Internal macro for initializing facility cache defined by DD_*_CACHE */
 #define _D_LOG_INITIALIZE_FIELD(flag, s_name, l_name, mask, fac) DLOG_UNINIT,
-/** These macros are used intended to be used with FOREACH macros that define
- *  log facilities in your library.   It will utilize internal FOREACH macros
- *  to define debug bits as well as user defined macros.  See
- *  D_FOREACH_GURT_FAC for an example.
+
+/**
+ * These macros are intended to be used with FOREACH macros that define log
+ * facilities in your library.   It will utilize internal FOREACH macros to
+ * define debug bits as well as user defined macros.  See D_FOREACH_GURT_FAC for
+ * an example.
  *
- * These macros can also be used standalone but are not quite as convenient
- * due to required but unused arguments
+ * These macros can also be used standalone but are not quite as convenient due
+ * to required but unused arguments
  */
 
 #ifdef D_LOG_USE_V2 /* Macros for D_DEBUG version 2 */
