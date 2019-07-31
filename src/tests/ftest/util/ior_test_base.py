@@ -26,7 +26,7 @@ import os
 from apricot import TestWithServers
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
-from general_utils import TestPool
+from test_utils import TestPool
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
