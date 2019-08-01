@@ -24,7 +24,6 @@
 package security
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -56,17 +55,21 @@ func DefaultTokenSigner() *TokenSigner {
 	}
 }
 
-//Sign takes an unhashed set of bytes and hashes and signs the result with the
-//key passed in. If no key is specified it will return the unsigned digest.
-func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
+//Hash returns the SHA-512 hash of the byte array passed in.
+func (s *TokenSigner) Hash(data []byte) ([]byte, error) {
 	hash := sha512.New()
 	if _, err := hash.Write(data); err != nil {
 		return nil, errors.New("hash failed to write")
 	}
-	digest := hash.Sum(nil)
+	return hash.Sum(nil), nil
+}
 
-	if key == nil {
-		return digest, nil
+//Sign takes an unhashed set of bytes and hashes and signs the result with the
+//key passed in. If no key is specified it will return the unsigned digest.
+func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
+	digest, err := s.Hash(data)
+	if err != nil {
+		return nil, err
 	}
 
 	if s.randPool == nil {
@@ -85,17 +88,9 @@ func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
 //signature against the hash and the publickey passed in. If no key is passed it
 //will verify the signature against the unsigned digest.
 func (s *TokenSigner) Verify(key crypto.PublicKey, data []byte, sig []byte) error {
-	hash := sha512.New()
-	if _, err := hash.Write(data); err != nil {
-		return errors.New("hash failed to write")
-	}
-	digest := hash.Sum(nil)
-
-	if key == nil {
-		if bytes.Equal(digest, sig) {
-			return nil
-		}
-		return errors.Errorf("Unsigned hash failed to verify.")
+	digest, err := s.Hash(data)
+	if err != nil {
+		return err
 	}
 
 	switch signingKey := key.(type) {

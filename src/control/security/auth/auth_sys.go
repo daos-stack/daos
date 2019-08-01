@@ -24,6 +24,7 @@
 package auth
 
 import (
+	"bytes"
 	"crypto"
 	"os"
 	"os/user"
@@ -48,7 +49,8 @@ type UserExt interface {
 
 //VerifierFromToken will return a SHA512 hash of the token data. If a signing key
 //is passed in it will additionally sign the hash of the token.
-func VerifierFromToken(signingKey crypto.PublicKey, token *Token) ([]byte, error) {
+func VerifierFromToken(key crypto.PublicKey, token *Token) ([]byte, error) {
+	var sig []byte
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to marshal Token")
@@ -56,17 +58,17 @@ func VerifierFromToken(signingKey crypto.PublicKey, token *Token) ([]byte, error
 
 	signer := security.DefaultTokenSigner()
 
-	sig, err := signer.Sign(signingKey, tokenBytes)
-	if err != nil {
-		return nil, errors.Wrap(err, "signing verifier failed")
+	if key == nil {
+		return signer.Hash(tokenBytes)
 	}
-	return sig, err
+	sig, err = signer.Sign(key, tokenBytes)
+	return sig, errors.Wrap(err, "signing verifier failed")
 }
 
 //VerifyToken takes the auth token and the signature bytes in the verifier and
 //verifies it against the public key provided for the agent who claims to have
 //provided the token.
-func VerifyToken(pubKey crypto.PublicKey, token *Token, sig []byte) error {
+func VerifyToken(key crypto.PublicKey, token *Token, sig []byte) error {
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
 		return errors.Wrap(err, "unable to marshal Token")
@@ -74,11 +76,19 @@ func VerifyToken(pubKey crypto.PublicKey, token *Token, sig []byte) error {
 
 	signer := security.DefaultTokenSigner()
 
-	err = signer.Verify(pubKey, tokenBytes, sig)
-	if err != nil {
-		return errors.Wrap(err, "token verification Failed")
+	if key == nil {
+		digest, err := signer.Hash(tokenBytes)
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(digest, sig) {
+			return nil
+		}
+		return errors.Errorf("unsigned hash failed to verify.")
 	}
-	return nil
+
+	err = signer.Verify(key, tokenBytes, sig)
+	return errors.Wrap(err, "token verification Failed")
 }
 
 func sysNameToPrincipalName(name string) string {

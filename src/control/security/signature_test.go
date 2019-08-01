@@ -69,7 +69,6 @@ func TestSign(t *testing.T) {
 		data []byte
 		key  crypto.PrivateKey
 	}{
-		{"NoSignature", source, nil},
 		{"RSA", source, rsaKey},
 		{"ImproperKey", source, ecdsaKey},
 	}
@@ -130,7 +129,6 @@ func TestVerify(t *testing.T) {
 		data []byte
 		key  crypto.PublicKey
 	}{
-		{"NoSignature", source, nil},
 		{"RSA", source, rsaKey},
 		{"ImproperKey", source, ecdsaKey},
 	}
