@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"os/user"
 	"strings"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -129,11 +129,11 @@ func calcStorage(scmSize string, nvmeSize string) (
 	}
 
 	if ratio < 0.01 {
-		fmt.Printf(
+		log.Infof(
 			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
 				"will suffer!\n")
 	}
-	fmt.Printf(
+	log.Infof(
 		"Creating DAOS pool with %s SCM and %s NvMe storage "+
 			"(%.3f ratio)\n",
 		scmBytes.Format("%.0f", "", false),
@@ -202,9 +202,9 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 		User: usr, Usergroup: grp,
 	}
 
-	fmt.Printf("Creating DAOS pool: %+v\n", req)
+	log.Infof("Creating DAOS pool: %+v\n", req)
 
-	fmt.Printf("pool create command results:\n%s\n", conns.CreatePool(req))
+	log.Infof("pool create command results:\n%s\n", conns.CreatePool(req))
 
 	return nil
 }
@@ -213,9 +213,9 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 func destroyPool(conns client.Connect, uuid string, force bool) error {
 	req := &pb.DestroyPoolReq{Uuid: uuid, Force: force}
 
-	fmt.Printf("Destroying DAOS pool: %+v\n", req)
+	log.Infof("Destroying DAOS pool: %+v\n", req)
 
-	fmt.Printf("pool destroy command results:\n%s\n", conns.DestroyPool(req))
+	log.Infof("pool destroy command results:\n%s\n", conns.DestroyPool(req))
 
 	return nil
 }

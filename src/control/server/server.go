@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
 )
@@ -63,6 +63,15 @@ func Main() error {
 		return err
 	}
 
+	if opts.Debug {
+		log.SetLevel(log.LogLevelDebug)
+		log.Debug("debug output enabled")
+	}
+	if opts.JSON {
+		log.SetJSONOutput()
+		log.Info("JSON output enabled")
+	}
+
 	host, err := os.Hostname()
 	if err != nil {
 		return err
@@ -77,7 +86,7 @@ func Main() error {
 	// Backup active config.
 	saveActiveConfig(config)
 
-	ctlLogFile, err := config.setLogging(host)
+	ctlLogFile, err := config.setLogging(host, opts.JSON)
 	if err != nil {
 		return errors.Wrap(err, "configure logging")
 	}
@@ -100,7 +109,7 @@ func Main() error {
 	if err != nil {
 		return errors.Wrap(err, "unable to listen on management interface")
 	}
-	log.Debugf("DAOS control server listening on %s", addr)
+	log.Infof("DAOS control server listening on %s", addr)
 
 	// Create new grpc server, register services and start serving.
 	var sOpts []grpc.ServerOption
@@ -144,7 +153,7 @@ func Main() error {
 			return errors.WithMessage(err, "changing file ownership")
 		}
 
-		log.Debugf("formatting complete and file ownership changed,"+
+		log.Infof("formatting complete and file ownership changed,"+
 			"please rerun %s as user %s\n", os.Args[0], config.UserName)
 
 		return nil
@@ -172,7 +181,7 @@ func Main() error {
 	if err != nil {
 		return errors.Wrap(err, "unable to determine if management service replica")
 	}
-	log.Debugf("DAOS I/O server running %s", extraText)
+	log.Infof("DAOS I/O server running %s", extraText)
 
 	// Wait for I/O server to return.
 	err = iosrv.wait()
