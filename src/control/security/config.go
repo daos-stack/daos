@@ -24,9 +24,7 @@
 package security
 
 import (
-	"bytes"
 	"crypto"
-	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 
@@ -62,7 +60,6 @@ type CertificateConfig struct {
 	PrivateKeyPath  string           `yaml:"key"`
 	tlsKeypair      *tls.Certificate `yaml:"-"`
 	caPool          *x509.CertPool   `yaml:"-"`
-	tokenSigner     *TokenSigner     `yaml:"-"`
 }
 
 //DefaultClientTransportConfig provides a default transport config disabling
@@ -80,7 +77,6 @@ func DefaultClientTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultClientKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
-			tokenSigner:     &TokenSigner{},
 		},
 	}
 }
@@ -97,7 +93,6 @@ func DefaultServerTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultServerKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
-			tokenSigner:     &TokenSigner{},
 		},
 	}
 }
@@ -161,51 +156,4 @@ func (cfg *TransportConfig) PublicKey() (crypto.PublicKey, error) {
 		}
 	}
 	return cfg.tlsKeypair.Leaf.PublicKey, nil
-}
-
-//Sign takes an unhashed set of bytes and hashes and signs the result with the
-//key located in the file specified by PrivateKeyPath
-func (cfg *TransportConfig) Sign(data []byte) ([]byte, error) {
-
-	if cfg.AllowInsecure == true {
-		return cfg.tokenSigner.Sign(nil, data)
-	}
-
-	signingKey := cfg.tlsKeypair.PrivateKey
-	sig, err := cfg.tokenSigner.Sign(signingKey, data)
-
-	switch realErr := err.(type) {
-	case *UnsupportedKeyError:
-		return nil, errors.WithMessagef(realErr, "%s contains an", cfg.PrivateKeyPath)
-	default:
-		return nil, err
-	}
-	return sig, nil
-}
-
-//Verify takes an unhashed set of bytes and hashes the data and verifies the
-//signature against the hash and the publickey located in CertificatePath
-func (cfg *TransportConfig) Verify(data []byte, sig []byte) error {
-
-	hash := sha512.New()
-	hash.Write(data)
-	digest := hash.Sum(nil)
-
-	if cfg.AllowInsecure == true {
-		if bytes.Equal(digest, sig) {
-			return nil
-		}
-		return errors.Errorf("Unsigned hash failed to verify.")
-	}
-
-	pubKey := cfg.tlsKeypair.Leaf.PublicKey
-	err := cfg.tokenSigner.Verify(pubKey, digest, sig)
-
-	switch realErr := err.(type) {
-	case *UnsupportedKeyError:
-		return errors.WithMessagef(realErr, "%s contains an", cfg.CertificatePath)
-	default:
-		return err
-	}
-	return nil
 }

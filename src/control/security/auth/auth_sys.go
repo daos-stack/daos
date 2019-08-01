@@ -51,14 +51,14 @@ type UserExt interface {
 func VerifierFromToken(signingKey crypto.PublicKey, token *Token) ([]byte, error) {
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to marshal AuthToken")
+		return nil, errors.Wrap(err, "unable to marshal Token")
 	}
 
 	signer := security.DefaultTokenSigner()
 
 	sig, err := signer.Sign(signingKey, tokenBytes)
 	if err != nil {
-		return nil, errors.Wrap(err, "digning verifier failed")
+		return nil, errors.Wrap(err, "signing verifier failed")
 	}
 	return sig, err
 }
@@ -69,14 +69,14 @@ func VerifierFromToken(signingKey crypto.PublicKey, token *Token) ([]byte, error
 func VerifyToken(pubKey crypto.PublicKey, token *Token, sig []byte) error {
 	tokenBytes, err := proto.Marshal(token)
 	if err != nil {
-		return errors.Wrap(err, "Unable to marshal AuthToken")
+		return errors.Wrap(err, "unable to marshal Token")
 	}
 
 	signer := security.DefaultTokenSigner()
 
 	err = signer.Verify(pubKey, tokenBytes, sig)
 	if err != nil {
-		return errors.Wrap(err, "Token Verification Failed")
+		return errors.Wrap(err, "token verification Failed")
 	}
 	return nil
 }
