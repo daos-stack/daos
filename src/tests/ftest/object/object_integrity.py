@@ -144,7 +144,7 @@ class ObjectDataValidation(avocado.Test):
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=negative_test,neg_tx_commit,medium,vm
+        :avocado: tags=all,pr,small,negative_test,neg_tx_commit,medium,vm
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
@@ -157,7 +157,11 @@ class ObjectDataValidation(avocado.Test):
         c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
         c_value = ctypes.create_string_buffer(indata)
         c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
-        new_transaction = self.container.get_new_tx()
+        try:
+            new_transaction = self.container.get_new_tx()
+        except DaosApiError as excep:
+            #initial container get_new_tx failed, skip rest of the test
+            self.cancel("##container get_new_tx failed: {}".format(excep))
         invalid_transaction = new_transaction + random.randint(1000, 383838)
         self.log.info("==new_transaction=     %s", new_transaction)
         self.log.info("==invalid_transaction= %s", invalid_transaction)
@@ -190,7 +194,7 @@ class ObjectDataValidation(avocado.Test):
             self.log.info("==(3)container.close_tx test passed.")
         except DaosApiError as excep:
             self.log.info(str(excep))
-            self.log.info("##(3)Failed on close_tx.")
+            self.fail("##(3)Failed on close_tx.")
 
 
     @avocado.fail_on(DaosApiError)
