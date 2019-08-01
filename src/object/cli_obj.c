@@ -991,10 +991,6 @@ struct obj_auxi_args {
 					 retry_with_leader:1;
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
-	struct obj_req_tgts		 req_tgts;
-	crt_bulk_t			*bulks;
-	uint32_t			 bulk_nr;
-	d_list_t			 shard_task_head;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
@@ -1003,6 +999,11 @@ struct obj_auxi_args {
 		struct shard_punch_args	p_args;
 		struct shard_list_args	l_args;
 	};
+	struct obj_req_tgts		 req_tgts;
+	d_list_t			 shard_task_head;
+	crt_bulk_t			*bulks;
+	uint32_t			 bulk_nr;
+	uint32_t			 padding;
 };
 
 static int
@@ -1716,6 +1717,8 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
+			D_ASSERT(shard_auxi->obj == obj);
+
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch);
 			shard_auxi->shard_io_cb = io_cb;
