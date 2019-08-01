@@ -784,19 +784,20 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
 						    orw->orw_nr, tmp_iods,
 						    oca, skip_list);
-			} else if (tgt_idx == 0) {
-				rc = ec_copy_iods(&cpy_iods, tmp_iods,
-						  orw->orw_nr);
-				if (rc) {
-					D_ERROR(DF_UOID"EC update failed: %d\n",
-					DP_UOID(orw->orw_oid), rc);
-					goto out;
-				} else {
+			} else {
+				if (tgt_idx == 0) {
+					rc = ec_copy_iods(&cpy_iods, tmp_iods,
+							  orw->orw_nr);
+					if (rc) {
+						D_ERROR(
+						DF_UOID"EC update failed: %d\n",
+						DP_UOID(orw->orw_oid), rc);
+						goto out;
+					}
 					tmp_iods = cpy_iods;
 				}
 				rc = ec_parity_target(tgt_idx,
-						      orw->orw_nr,
-						      orw->orw_iods.ca_arrays,
+						      orw->orw_nr, tmp_iods,
 						      oca, skip_list);
 			}
 			if (rc) {
