@@ -65,7 +65,7 @@ func (s *TokenSigner) Hash(data []byte) ([]byte, error) {
 }
 
 //Sign takes an unhashed set of bytes and hashes and signs the result with the
-//key passed in. If no key is specified it will return the unsigned digest.
+//key passed in.
 func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
 	digest, err := s.Hash(data)
 	if err != nil {
@@ -85,8 +85,7 @@ func (s *TokenSigner) Sign(key crypto.PrivateKey, data []byte) ([]byte, error) {
 }
 
 //Verify takes an unhashed set of bytes and hashes the data and verifies the
-//signature against the hash and the publickey passed in. If no key is passed it
-//will verify the signature against the unsigned digest.
+//signature against the hash and the publickey passed in.
 func (s *TokenSigner) Verify(key crypto.PublicKey, data []byte, sig []byte) error {
 	digest, err := s.Hash(data)
 	if err != nil {
