@@ -23,19 +23,13 @@
 
 #define D_LOGFAC	DD_FAC(dfs)
 
-#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <daos/common.h>
-#include <daos/debug.h>
-#include <daos/container.h>
 
-#include "daos_types.h"
 #include "daos.h"
-#include "daos_array.h"
 #include "daos_fs.h"
-#include "daos_security.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"
@@ -1451,13 +1445,12 @@ dfs_lookup_loop:
 				D_GOTO(err_obj, rc = -ENOENT);
 			}
 
-			obj->mode = entry.mode;
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 				entry.chunk_size : dfs->chunk_size, &obj->oh,
 				NULL);
 			if (rc != 0) {
-				D_ERROR("daos_array_open() failed (%d)\n", rc);
+				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = -daos_der2errno(rc));
 			}
 
@@ -1479,9 +1472,6 @@ dfs_lookup_loop:
 		}
 
 		if (S_ISLNK(entry.mode)) {
-			obj->mode = entry.mode;
-			obj->value = entry.value;
-
 			/*
 			 * If there is a token after the sym link entry, treat
 			 * the sym link as a directory and look up it's value.
@@ -1490,12 +1480,12 @@ dfs_lookup_loop:
 			if (token) {
 				dfs_obj_t *sym;
 
-				rc = dfs_lookup(dfs, obj->value, flags, &sym,
+				rc = dfs_lookup(dfs, entry.value, flags, &sym,
 						NULL, NULL);
 				if (rc) {
 					D_DEBUG(DB_TRACE,
 						"Failed to lookup symlink %s\n",
-						obj->value);
+						entry.value);
 					D_FREE(sym);
 					D_GOTO(err_obj, rc);
 				}
@@ -1511,12 +1501,19 @@ dfs_lookup_loop:
 				goto dfs_lookup_loop;
 			}
 
+			obj->value = entry.value;
 			if (stbuf)
 				stbuf->st_size = strlen(entry.value) + 1;
 			/** return the symlink obj if this is the last entry */
 			break;
 		}
 
+		if (!S_ISDIR(entry.mode)) {
+			D_ERROR("Invalid entry type in path.\n");
+			D_GOTO(err_obj, rc = -EINVAL);
+		}
+
+		/* open the directory object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -1766,11 +1763,12 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 			entry.chunk_size : dfs->chunk_size, &obj->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
+			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
 				rc);
 			D_GOTO(err_obj, rc = -daos_der2errno(rc));
 		}
 
+		/** we need the file size if stat struct is needed */
 		if (stbuf) {
 			daos_size_t size;
 
@@ -1778,6 +1776,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 						 NULL);
 			if (rc) {
 				daos_array_close(obj->oh, NULL);
+				D_ERROR("daos_array_get_size() Failed (%d)\n",
+					rc);
 				D_GOTO(err_obj, rc = -daos_der2errno(rc));
 			}
 			stbuf->st_size = size;
@@ -1787,7 +1787,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		obj->value = entry.value;
 		if (stbuf)
 			stbuf->st_size = strlen(entry.value) + 1;
-	} else {
+	} else if (S_ISDIR(entry.mode)) {
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -1796,6 +1796,9 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		if (stbuf)
 			stbuf->st_size = sizeof(entry);
+	} else {
+		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
+		D_GOTO(err_obj, rc = -EINVAL);
 	}
 
 	if (mode)
@@ -3102,6 +3105,3 @@ dfs_umount_root_cont(dfs_t *dfs)
 	rc = daos_cont_close(coh, NULL);
 	return -daos_der2errno(rc);
 }
-
-/*  LocalWords:  EINVAL
- */
