@@ -63,12 +63,12 @@ __shim_handle__test(PyObject *self, PyObject *args)
 	int magic;
 
 	if (!PyArg_ParseTuple(args, "i", &magic)) {
-		 D_ERROR("Bad arguments passed to %s\n", __func__);
-		 return NULL;
-	 }
-	 if (!__is_magic_valid(magic)) {
-		 return NULL;
-	 }
+		D_ERROR("Bad arguments passed to %s\n", __func__);
+		return NULL;
+	}
+	if (!__is_magic_valid(magic)) {
+		return NULL;
+	}
 
 	/* Call C function */
 	ret = 1;
@@ -87,7 +87,7 @@ oc_define(PyObject *module)
 #define DEFINE_OC(pref, suf) \
 	PyModule_AddIntConstant(module, "OC_" #pref #suf, OC_##pref##suf)
 
-        DEFINE_OC(RP_, XSF);           /** OC_RP_XSF */
+	DEFINE_OC(RP_, XSF);		/** OC_RP_XSF */
 
 #define DEFINE_OC_PROT(prot)	\
 do {				\
