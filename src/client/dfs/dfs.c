@@ -45,10 +45,10 @@
 #define SB_MAGIC	0xda05df50da05df50
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	6
+#define INODE_AKEYS	7
 /** A-key name of mode_t value */
 #define MODE_NAME	"mode"
-/** A-key name of object ID value; will be stored only if not a syml */
+/** A-key name of object ID value */
 #define OID_NAME	"oid"
 /** A-key name of chunk size; will be stored only if not default */
 #define CSIZE_NAME	"chunk_size"
@@ -754,7 +754,7 @@ create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 	int			rc;
 
 	if (!daos_handle_is_inval(parent_oh)) {
-		struct dfs_entry	entry;
+		struct dfs_entry	entry = {0};
 		bool			exists;
 
 		/* Check if parent has the dirname entry */
@@ -1599,7 +1599,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
 	uint32_t	num, keys_nr;
-	char		*enum_buf;
+	char		*enum_buf, *ptr;
 	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1632,10 +1632,10 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	d_iov_set(&iov, enum_buf, size);
 	sgl.sg_iovs = &iov;
 	keys_nr = 0;
+	ptr = enum_buf;
 
 	while (!daos_anchor_is_eof(anchor)) {
-		char		*ptr;
-		uint32_t	i;
+		uint32_t i;
 
 		/*
 		 * list num or less entries, but not more than we can fit in
@@ -1647,7 +1647,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 			D_GOTO(out, rc = -daos_der2errno(rc));
 
 		/** for every entry, issue the filler cb */
-		for (ptr = enum_buf, i = 0; i < num; i++) {
+		for (i = 0; i < num; i++) {
 			char name[DFS_MAX_PATH];
 
 			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
