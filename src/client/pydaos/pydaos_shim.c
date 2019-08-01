@@ -52,37 +52,6 @@ __is_magic_valid(int input)
 	return 1;
 }
 
-#if 0 /* avoid flow control in MACRO in order to pass CI */
-/** Macro that parses out magic value and verifies it */
-#define RETURN_NULL_IF_BAD_MAGIC(args)					\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i", &magic)) {			\
-		D_ERROR("Bad arguments passed to %s\n", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
-
-
-/** Parse arguments and magic number out*/
-#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)		\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i"format, &magic, x)) {		\
-		D_ERROR("Bad arguments passed to %s\n", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
- } while (0)
-#endif
-
 /**
  * Implementations of shim functions
  */
@@ -92,16 +61,14 @@ __shim_handle__test(PyObject *self, PyObject *args)
 {
 	long ret;
 	int magic;
-                                                      \
-        if (!PyArg_ParseTuple(args, "i", &magic)) {                     \
-                D_ERROR("Bad arguments passed to %s\n", __func__);      \
-                return NULL;                                            \
-        }                                                               \
-                                                                        \
-        if (!__is_magic_valid(magic)) {                                 \
-                return NULL;                                            \
-        }
-	/* RETURN_NULL_IF_BAD_MAGIC(args); */
+
+	if (!PyArg_ParseTuple(args, "i", &magic)) {
+		 D_ERROR("Bad arguments passed to %s\n", __func__);
+		 return NULL;
+	 }
+	 if (!__is_magic_valid(magic)) {
+		 return NULL;
+	 }
 
 	/* Call C function */
 	ret = 1;
@@ -120,6 +87,8 @@ oc_define(PyObject *module)
 #define DEFINE_OC(pref, suf) \
 	PyModule_AddIntConstant(module, "OC_" #pref #suf, OC_##pref##suf)
 
+        DEFINE_OC(RP_, XSF);           /** OC_RP_XSF */
+
 #define DEFINE_OC_PROT(prot)	\
 do {				\
 	DEFINE_OC(prot, TINY);	\
@@ -131,7 +100,6 @@ do {				\
 	DEFINE_OC_PROT();		/** OC_TINY, OC_SMALL, ... */
 	DEFINE_OC_PROT(RP_);		/** OC_RP_TINY, OC_RP_SMALL, ... */
 	DEFINE_OC_PROT(RP_SF_);		/** OC_RP_SF_TINY, ... */
-	DEFINE_OC(RP_XSF,  );		/** OC_RP_XSF */
 	DEFINE_OC_PROT(EC_);		/** OC_EC_TINY, OC_EC_SMALL, ... */
 
 #define DEFINE_OC_EXPL(name)	\
