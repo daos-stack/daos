@@ -994,7 +994,7 @@ struct obj_auxi_args {
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 bulk_nr;
-	d_list_t			 shard_task_head;
+	uint32_t			 padding;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
@@ -1003,7 +1003,32 @@ struct obj_auxi_args {
 		struct shard_punch_args	p_args;
 		struct shard_list_args	l_args;
 	};
+	d_list_t			 shard_task_head;
 };
+
+static struct shard_auxi_args *
+obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
+{
+	switch (obj_auxi->opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		return &obj_auxi->rw_args.auxi;
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		return &obj_auxi->p_args.pa_auxi;
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
+		return &obj_auxi->l_args.la_auxi;
+	default:
+		D_ERROR("bad opc %d.\n", obj_auxi->opc);
+		return NULL;
+	};
+}
+
+#include "../common/tse_internal.h"
 
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
@@ -1013,6 +1038,14 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	tse_task_t	 *pool_task = NULL;
 	int		  result = task->dt_result;
 	int		  rc;
+
+	{
+		struct tse_task_private		*dtp;
+
+		dtp = tse_task2priv(task);
+		D_ASSERTF(dtp->dtp_refcnt >= 1, "invalid ref %d, opc %d\n",
+			  dtp->dtp_refcnt, obj_auxi->opc);
+	}
 
 	/* For the case of retry with leader, if it is for modification,
 	 * since we always send modification RPC to the leader, then no
@@ -1031,9 +1064,30 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		rc = obj_pool_query_task(sched, obj, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
+
+		D_ASSERTF(task != pool_task, "task reused opc = %d\n",
+			  obj_auxi->opc);
+		D_ASSERTF(labs((char *)task - (char *)pool_task) >=
+			  sizeof(*task), "overlap, opc = %d, %ld, %p/%p\n",
+			  obj_auxi->opc, sizeof(*task), task, pool_task);
 	}
 
 	if (obj_auxi->io_retry) {
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+			struct tse_task_private	*dtp;
+			struct shard_auxi_args	*shard_auxi;
+
+			dtp = tse_task2priv(task);
+			shard_auxi = obj_embedded_shard_arg(obj_auxi);
+
+			D_ASSERT(shard_auxi != NULL);
+			D_ASSERTF(shard_auxi->obj != NULL,
+				  "invalid auxi, ref %d, list %s\n",
+				  dtp->dtp_refcnt,
+				  d_list_empty(&obj_auxi->shard_task_head) ?
+				  "empty" : "no-empty");
+		}
+
 		/* Let's reset task result before retry */
 		rc = dc_task_resched(task);
 		if (rc != 0) {
@@ -1566,28 +1620,6 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi, uint64_t epoch)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }
 
-static struct shard_auxi_args *
-obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
-{
-	switch (obj_auxi->opc) {
-	case DAOS_OBJ_RPC_UPDATE:
-	case DAOS_OBJ_RPC_FETCH:
-		return &obj_auxi->rw_args.auxi;
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-		return &obj_auxi->p_args.pa_auxi;
-	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
-	case DAOS_OBJ_RPC_ENUMERATE:
-	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
-	case DAOS_OBJ_RECX_RPC_ENUMERATE:
-		return &obj_auxi->l_args.la_auxi;
-	default:
-		D_ERROR("bad opc %d.\n", obj_auxi->opc);
-		return NULL;
-	};
-}
-
 static int
 shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 {
@@ -1716,6 +1748,14 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
+			{
+				struct tse_task_private		*dtp;
+
+				dtp = tse_task2priv(obj_task);
+				D_ASSERTF(shard_auxi->obj != NULL,
+					  "invalid obj, opc = %d, ref %d\n",
+					  obj_auxi->opc, dtp->dtp_refcnt);
+			}
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch);
 			shard_auxi->shard_io_cb = io_cb;
