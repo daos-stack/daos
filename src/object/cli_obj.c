@@ -994,7 +994,7 @@ struct obj_auxi_args {
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 bulk_nr;
-	d_list_t			 shard_task_head;
+	uint32_t			 padding;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
@@ -1003,7 +1003,10 @@ struct obj_auxi_args {
 		struct shard_punch_args	p_args;
 		struct shard_list_args	l_args;
 	};
+	d_list_t			 shard_task_head;
 };
+
+#include "../common/tse_internal.h"
 
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
@@ -1013,6 +1016,14 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	tse_task_t	 *pool_task = NULL;
 	int		  result = task->dt_result;
 	int		  rc;
+
+	{
+		struct tse_task_private		*dtp;
+
+		dtp = tse_task2priv(task);
+		D_ASSERTF(dtp->dtp_refcnt >= 1, "invalid ref %d, opc %d\n",
+			  dtp->dtp_refcnt, obj_auxi->opc);
+	}
 
 	/* For the case of retry with leader, if it is for modification,
 	 * since we always send modification RPC to the leader, then no
@@ -1031,6 +1042,11 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		rc = obj_pool_query_task(sched, obj, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
+
+		D_ASSERTF(task != pool_task, "opc = %d\n", obj_auxi->opc);
+		D_ASSERTF(labs((char *)task - (char *)pool_task) >=
+			  sizeof(*task), "overlap, opc = %d, %ld, %p/%p\n",
+			  obj_auxi->opc, sizeof(*task), task, pool_task);
 	}
 
 	if (obj_auxi->io_retry) {
@@ -1716,6 +1732,14 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
+			{
+				struct tse_task_private		*dtp;
+
+				dtp = tse_task2priv(obj_task);
+				D_ASSERTF(shard_auxi->obj != NULL,
+					  "opc = %d, ref %d\n",
+					  obj_auxi->opc, dtp->dtp_refcnt);
+			}
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch);
 			shard_auxi->shard_io_cb = io_cb;
