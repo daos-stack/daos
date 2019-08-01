@@ -82,6 +82,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(release1, rc = -rc);
 
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
+	oh->doh_ie = ie;
 
 	fi_out.direct_io = 1;
 	fi_out.fh = (uint64_t)oh;

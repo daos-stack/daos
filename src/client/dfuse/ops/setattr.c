@@ -24,62 +24,24 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME dpi_fsh
-#define TYPE_NAME common_req
-
-static bool
-dfuse_setattr_result_fn(struct dfuse_request *request)
-{
-	struct dfuse_attr_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-
-	if (request->ir_rc == 0)
-		DFUSE_REPLY_ATTR(request->ir_req, &out->stat);
-	else
-		DFUSE_REPLY_ERR(request, request->ir_rc);
-
-	dfuse_da_release(request->ir_fsh->POOL_NAME, CONTAINER(request));
-	return false;
-}
-
-static const struct dfuse_request_api setattr_api = {
-	.on_result	= dfuse_setattr_result_fn,
-};
-
 void
-dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
-		 struct fuse_file_info *fi)
+dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
+		 struct stat *attr, int to_set)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_file_handle	*handle = NULL;
-	struct TYPE_NAME		*desc = NULL;
+	struct stat	stat = {};
 	int rc;
 
-	if (fi)
-		handle = (void *)fi->fh;
-
-	DFUSE_TRA_INFO(fs_handle, "inode %lu handle %p", ino, handle);
-
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, setattr_api, req, rc);
-	if (rc)
-		D_GOTO(err, rc);
-
-	if (handle) {
-		desc->request.ir_ht = RHS_FILE;
-		desc->request.ir_file = handle;
-	} else {
-		desc->request.ir_ht = RHS_INODE_NUM;
-		desc->request.ir_inode_num = ino;
+	rc = dfs_osetstat(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, to_set);
+	if (rc) {
+		DFUSE_REPLY_ERR_RAW(ie, req, -rc);
+		return;
 	}
 
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, rc);
-	return;
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (desc)
-		dfuse_da_release(fs_handle->POOL_NAME, desc);
+	rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &stat);
+	if (rc) {
+		DFUSE_REPLY_ERR_RAW(ie, req, -rc);
+		return;
+	}
+
+	DFUSE_REPLY_ATTR(req, &stat);
 }

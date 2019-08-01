@@ -441,6 +441,22 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
+#define DFS_SET_ATTR_MODE	(1 << 0)
+
+/**
+ * set stat attributes for a file.  If the object is a symlink the link itself
+ * is modified.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object (File, dir or syml) to modify.
+ * \param[in]	stbuf	Stat struct with the members set.
+ * \param[in]	flags	Bitmask of flags to set
+ *
+ * \return		0 on Success. Negative errno on Failure.
+ */
+int
+dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
+
 /**
  * Check access permissions on an object. Similar to Linux access(2).
  * Symlinks are dereferenced.

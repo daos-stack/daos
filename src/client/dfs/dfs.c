@@ -2285,6 +2285,12 @@ out:
 }
 
 int
+dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
+{
+	return -EIO;
+}
+
+int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
 	int rc;
