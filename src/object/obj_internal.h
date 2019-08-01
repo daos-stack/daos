@@ -179,10 +179,11 @@ typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
  */
 struct shard_auxi_args {
 	struct dc_object	*obj;
+	uint32_t		 gen;
+	uint32_t		 shard;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
 	uint64_t		 epoch;
-	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
 	uint16_t		 flags;
