@@ -54,7 +54,6 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	 * fields are ignored." So we only need to lookup the entry for the
 	 * mode.
 	 */
-	DFUSE_TRA_DEBUG(udata->inode, "Adding entry name '%s'", name);
 
 	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode);
 	if (rc)
@@ -77,11 +76,12 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 		/** try to add the entry within the 4k size limit. */
 		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
 				       udata->fuse_size - udata->b_off, name,
-				       &stbuf, (off_t)(&oh->doh_anchor));
+				       &stbuf, oh->doh_fuse_off + 1);
 
-		/** if entry fits, increment the fuse buf offset and return */
+		/** if entry fits, increment the stream and fuse buf offset. */
 		if (ns <= udata->fuse_size - udata->b_off) {
 			udata->b_off += ns;
+			oh->doh_fuse_off++;
 			D_GOTO(out, rc = 0);
 		}
 
@@ -94,14 +94,16 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 		 */
 		oh->doh_start_off[oh->doh_idx] = udata->b_off;
 		oh->doh_cur_off = udata->b_off;
+		oh->doh_dir_off[oh->doh_idx] = oh->doh_fuse_off;
 
 		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
 				       udata->size - udata->b_off, name, &stbuf,
-				       (off_t)(&oh->doh_anchor));
+				       oh->doh_dir_off[oh->doh_idx] + 1);
 
 		/** Entry should fit now */
 		D_ASSERT(ns <= udata->size - udata->b_off);
 		oh->doh_cur_off += ns;
+		oh->doh_dir_off[oh->doh_idx]++;
 
 		/** no need to issue futher dfs_iterate() calls. */
 		udata->stop = 1;
@@ -115,7 +117,7 @@ insert:
 	 */
 	ns = fuse_add_direntry(udata->req, oh->doh_buf + oh->doh_cur_off,
 			       udata->size - oh->doh_cur_off, name, &stbuf,
-			       (off_t)(&oh->doh_anchor));
+			       oh->doh_dir_off[oh->doh_idx] + 1);
 	/*
 	 * In the case where the OH handle does not fit, we still need to add
 	 * the entry since DFS already enumerated it. So, realloc to fit the
@@ -142,8 +144,10 @@ insert:
 	if (oh->doh_cur_off - oh->doh_start_off[oh->doh_idx] >
 	    udata->fuse_size) {
 		oh->doh_idx++;
+		oh->doh_dir_off[oh->doh_idx] = oh->doh_dir_off[oh->doh_idx - 1];
 		oh->doh_start_off[oh->doh_idx] = oh->doh_cur_off - ns;
 	}
+	oh->doh_dir_off[oh->doh_idx]++;
 
 out:
 	dfs_release(obj);
@@ -166,23 +170,58 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	D_ASSERT(oh);
 
+	/*
+	 * the DFS size should be less than what we want in fuse to account for
+	 * the fuse metadata for each entry, so just use 1/2 for now.
+	 */
+	buf_size = size * READDIR_BLOCKS / 2;
+
 	if (offset == 0) {
 		/*
 		 * if starting from the begnning, reset the anchor attached to
 		 * the open handle.
 		 */
 		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
-	} else {
+
+		/** also reset dir stream and buffer offsets */
+		oh->doh_fuse_off = 0;
+		oh->doh_cur_off = 0;
+		oh->doh_idx = 0;
+	} else if (offset != oh->doh_fuse_off) {
+		uint32_t num, keys;
+
 		/*
-		 * otherwise the offset itself should be the anchor that was
-		 * returned from the last call on the OH, otherwise the offset
-		 * was corrupted.
+		 * otherwise we are starting at an earlier offset where we left
+		 * off on last readdir, so restart by first enumerating that
+		 * many entries. This is the telldir/seekdir use case.
 		 */
-		if (offset != (off_t)&oh->doh_anchor)
-			D_GOTO(err, rc = EIO);
+
+		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
+		num = (uint32_t)offset;
+		keys = 0;
+		while (num) {
+			rc = dfs_iterate(oh->doh_dfs, oh->doh_obj,
+					 &oh->doh_anchor, &num, buf_size,
+					 NULL, NULL);
+			if (rc)
+				D_GOTO(err, rc = -rc);
+
+			if (daos_anchor_is_eof(&oh->doh_anchor))
+				return;
+
+			keys += num;
+			num = offset - keys;
+		}
+		/** set the dir stream to 'offset' elements enumerated */
+		oh->doh_fuse_off = offset;
+
+		/** discard everything in the OH buffers we have cached. */
+		oh->doh_cur_off = 0;
+		oh->doh_idx = 0;
 	}
 
-	/* On a subsequent calls to readdir, if there was anything to consume on
+	/*
+	 * On subsequent calls to readdir, if there was anything to consume on
 	 * the buffer attached to the dir handle from the previous call, either
 	 * consume a 4k block or whatever remains.
 	 */
@@ -197,6 +236,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				       oh->doh_start_off[oh->doh_idx],
 				       oh->doh_start_off[oh->doh_idx + 1] -
 				       oh->doh_start_off[oh->doh_idx]);
+			oh->doh_fuse_off = oh->doh_dir_off[oh->doh_idx];
 			oh->doh_idx++;
 			return;
 		}
@@ -207,17 +247,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			       oh->doh_cur_off -
 			       oh->doh_start_off[oh->doh_idx]);
 
-		/** reset offset counters */
+		oh->doh_fuse_off = oh->doh_dir_off[oh->doh_idx];
+
+		/** reset buffer offset counters to reuse the OH buffer. */
 		oh->doh_cur_off = 0;
 		oh->doh_idx = 0;
 		return;
 	}
-
-	/*
-	 * the DFS size should be less than what we want in fuse to account for
-	 * the fuse metadata for each entry, so just use 1/2 for now.
-	 */
-	buf_size = size * READDIR_BLOCKS / 2;
 
 	/** Allocate readdir buffer on OH if it has not been allocated before */
 	if (oh->doh_buf == NULL) {
