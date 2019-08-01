@@ -182,6 +182,7 @@ struct shard_auxi_args {
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
 	uint64_t		 epoch;
+	uint32_t		 gen;
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;

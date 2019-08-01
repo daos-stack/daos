@@ -1716,6 +1716,10 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
+			D_ASSERTF(obj_task->dt_gen == shard_auxi->gen,
+				  "gen unmatch: %u/%u\n",
+				  obj_task->dt_gen, shard_auxi->gen);
+			D_ASSERT(obj_task->dt_gen != 0);
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch);
 			shard_auxi->shard_io_cb = io_cb;
@@ -1728,6 +1732,10 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	if (tgts_nr == 1) {
 		shard_auxi = obj_embedded_shard_arg(obj_auxi);
 		D_ASSERT(shard_auxi != NULL);
+		D_ASSERTF(obj_task->dt_gen == 0, "invalid gen %u\n",
+			  obj_task->dt_gen);
+
+		obj_task->dt_gen = shard_auxi->gen = rand();
 		shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 				     tgt->st_tgt_id, epoch);
 		shard_auxi->grp_idx = 0;
