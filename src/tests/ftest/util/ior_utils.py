@@ -196,7 +196,7 @@ class IorCommand(CommandWithParameters):
             item = getattr(self, name).value
             if item:
                 sub_item = re.split(r"([^\d])", str(item))
-                if len(sub_item) > 0:
+                if sub_item > 0:
                     total *= int(sub_item[0])
                     if len(sub_item) > 1:
                         key = sub_item[1].lower()
