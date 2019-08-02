@@ -60,7 +60,6 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -80,7 +79,6 @@ class IorTestBase(TestWithServers):
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
         """
-        # set params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      mpiio_oclass=self.mpiio_oclass)
 

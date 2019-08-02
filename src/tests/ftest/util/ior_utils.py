@@ -172,6 +172,7 @@ class IorCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
+        #self.daos_pool.value = pool.uuid
         self.daos_pool.update(
             pool.pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
