@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,44 +25,41 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ino,
-		 struct fuse_file_info *fi)
+dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
+		  const char *name, size_t size)
 {
-	struct dfuse_obj_hdl		*oh = NULL;
-	int				rc;
+	size_t out_size = 0;
+	char *value;
+	int rc;
 
-	D_ALLOC_PTR(oh);
-	if (!oh)
+	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
+
+	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL,
+			  &out_size);
+	if (rc != 0) {
+		D_GOTO(err, rc = -rc);
+	}
+
+	if (size == 0) {
+		fuse_reply_xattr(req, out_size);
+		return;
+	}
+
+	if (size < out_size)
+		D_GOTO(err, rc = ERANGE);
+
+	D_ALLOC(value, out_size);
+	if (!value)
 		D_GOTO(err, rc = ENOMEM);
 
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ino->ie_dfs->dfs_ns, ino->ie_obj, fi->flags,
-		     &oh->doh_obj);
-	if (rc)
+	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
+			  &out_size);
+	if (rc != 0)
 		D_GOTO(err, rc = -rc);
 
-	oh->doh_dfs = ino->ie_dfs->dfs_ns;
-	fi->fh = (uint64_t)oh;
-
-	DFUSE_REPLY_OPEN(req, fi);
+	fuse_reply_buf(req, value, out_size);
+	D_FREE(value);
 	return;
 err:
-	D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, rc);
+	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }
-
-void
-dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
-		    struct fuse_file_info *fi)
-{
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int			rc;
-
-	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
-		DFUSE_REPLY_ZERO(req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
-	D_FREE(oh->doh_buf);
-	D_FREE(oh);
-};
