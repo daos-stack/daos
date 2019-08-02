@@ -324,7 +324,7 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc < 0)
 		return rc;
 
-	rc = dbtree_destroy(root->root_hdl);
+	rc = dbtree_destroy(root->root_hdl, NULL);
 	if (rc)
 		return rc;
 
@@ -393,7 +393,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 out:
 	if (rc < 0) {
 		if (!daos_handle_is_inval(root.root_hdl))
-			dbtree_destroy(root.root_hdl);
+			dbtree_destroy(root.root_hdl, NULL);
 	}
 	return rc;
 }
@@ -738,7 +738,7 @@ put_plmap:
 	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
 	rebuild_pool_map_put(map);
-	dbtree_destroy(arg->rebuild_tree_hdl);
+	dbtree_destroy(arg->rebuild_tree_hdl, NULL);
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
@@ -866,7 +866,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	D_GOTO(out, rc);
 out_tree:
-	dbtree_destroy(scan_arg->rebuild_tree_hdl);
+	dbtree_destroy(scan_arg->rebuild_tree_hdl, NULL);
 out_lock:
 	ABT_mutex_free(&scan_arg->scan_lock);
 out_arg:

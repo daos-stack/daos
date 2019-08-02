@@ -143,12 +143,12 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 		return rc;
 
 	if (btr_check_tx(&attr) == BTR_NO_TX) {
-		rc = dbtree_destroy(hdl);
+		rc = dbtree_destroy(hdl, NULL);
 		if (rc != 0) {
 			dbtree_close(hdl);
 			D_GOTO(out, rc);
 		}
-		rc = dbtree_delete(tree, key, NULL);
+		rc = dbtree_delete(tree, BTR_PROBE_EQ, key, NULL);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
@@ -163,10 +163,10 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 			return rc_tmp;
 		}
 
-		rc_tmp = dbtree_destroy(hdl_tmp);
+		rc_tmp = dbtree_destroy(hdl_tmp, NULL);
 		if (rc_tmp == 0) {
 			hdl_tmp = DAOS_HDL_INVAL;
-			rc_tmp = dbtree_delete(tree, key, NULL);
+			rc_tmp = dbtree_delete(tree, BTR_PROBE_EQ, key, NULL);
 		}
 
 		if (!daos_handle_is_inval(hdl_tmp))
@@ -462,7 +462,7 @@ dbtree_nv_delete(daos_handle_t tree, const void *key, size_t key_size)
 
 	d_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = dbtree_delete(tree, &key_iov, NULL);
+	rc = dbtree_delete(tree, BTR_PROBE_EQ, &key_iov, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
@@ -784,7 +784,7 @@ dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 
 	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
-	rc = dbtree_delete(tree, &key, NULL);
+	rc = dbtree_delete(tree, BTR_PROBE_EQ, &key, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
@@ -1046,7 +1046,7 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 
 	d_iov_set(&key, &epoch, sizeof(epoch));
 
-	rc = dbtree_delete(tree, &key, NULL);
+	rc = dbtree_delete(tree, BTR_PROBE_EQ, &key, NULL);
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)

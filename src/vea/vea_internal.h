@@ -141,19 +141,6 @@ static inline bool ext_is_idle(struct vea_free_extent *vfe)
 	return vfe->vfe_age == VEA_EXT_AGE_MAX;
 }
 
-static inline int get_current_age(uint64_t *age)
-{
-	struct timespec now;
-	int rc;
-
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc != 0)
-		return rc;
-	*age = now.tv_sec;
-
-	return 0;
-}
-
 enum vea_free_flags {
 	VEA_FL_NO_MERGE		= (1 << 0),
 	VEA_FL_GEN_AGE		= (1 << 1),

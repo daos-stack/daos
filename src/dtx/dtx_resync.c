@@ -40,6 +40,7 @@ struct dtx_resync_entry {
 	struct dtx_entry	dre_dte;
 	uint64_t		dre_hash;
 	uint32_t		dre_intent;
+	uint32_t		dre_in_cache:1;
 };
 
 #define dre_oid		dre_dte.dte_oid
@@ -73,6 +74,7 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 	struct dtx_entry		*dte = NULL;
 	int				 rc = 0;
 	int				 i = 0;
+	int				 j = 0;
 
 	D_ASSERT(drh->drh_count >= count);
 
@@ -80,29 +82,66 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 	if (dte == NULL)
 		return -DER_NOMEM;
 
-	do {
+	for (i = 0; i < count; i++) {
 		dre = d_list_entry(drh->drh_list.next,
 				   struct dtx_resync_entry, dre_link);
-		dte[i].dte_xid = dre->dre_xid;
-		dte[i].dte_oid = dre->dre_oid;
+		/* Someone (the DTX owner or batched commit ULT) may have
+		 * committed or aborted the DTX during we handling other
+		 * DTXs. So double check the on-disk status before current
+		 * commit.
+		 */
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid);
 
-		rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid, &dre->dre_xid,
-				     dre->dre_hash, crt_hlc_get(),
-				     dre->dre_intent == DAOS_INTENT_PUNCH ?
-				     true : false);
-		if (rc != 0)
-			D_WARN("Fail to add DTX "DF_DTI" to CoS cache: %d.\n",
+		/* Skip this DTX since it has been committed or aggregated. */
+		if (rc == DTX_ST_COMMITTED || rc == -DER_NONEXIST)
+			goto next;
+
+		if (rc != DTX_ST_PREPARED) {
+			/* If we failed to check the on-disk status, commit
+			 * it again, that is harmless. But we cannot add it
+			 * to CoS cache.
+			 */
+			D_WARN("Fail to check DTX "DF_DTI" status: %d.\n",
 			       DP_DTI(&dre->dre_xid), rc);
+			goto commit;
+		}
 
+		if (dre->dre_in_cache)
+			goto commit;
+
+		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
+					&dre->dre_xid, dre->dre_hash,
+					dre->dre_intent == DAOS_INTENT_PUNCH ?
+					true : false);
+		if (rc == -DER_NONEXIST) {
+			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
+				&dre->dre_xid, dre->dre_hash, crt_hlc_get(),
+				dre->dre_intent == DAOS_INTENT_PUNCH ?
+				true : false);
+			if (rc < 0)
+				D_WARN("Fail to add DTX "DF_DTI" to CoS cache: "
+				       "rc = %d\n",  DP_DTI(&dre->dre_xid), rc);
+		}
+
+commit:
+		dte[j].dte_xid = dre->dre_xid;
+		dte[j].dte_oid = dre->dre_oid;
+		++j;
+
+next:
 		dtx_dre_release(drh, dre);
-	} while (++i < count);
+	}
 
-	rc = dtx_commit(po_uuid, cont->sc_uuid, dte, count, version);
+	if (j > 0) {
+		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, version);
+		if (rc < 0)
+			D_ERROR("Failed to commit the DTXs: rc = %d\n", rc);
+	} else {
+		rc = 0;
+	}
+
 	D_FREE(dte);
-	if (rc < 0)
-		D_ERROR("Failed to commit the DTX: rc = %d\n", rc);
-
-	return rc > 0 ? 0 : rc;
+	return rc;
 }
 
 static int
@@ -121,11 +160,19 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		return 0;
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		int	rc1;
-
 		if (layout != NULL) {
 			pl_obj_layout_free(layout);
 			layout = NULL;
+		}
+
+		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
+					&dre->dre_xid, dre->dre_hash,
+					dre->dre_intent == DAOS_INTENT_PUNCH ?
+					true : false);
+		/* If it is in CoS cache, no need to check remote replicas. */
+		if (rc == 0) {
+			dre->dre_in_cache = 1;
+			goto commit;
 		}
 
 		rc = ds_pool_check_leader(dra->po_uuid, &dre->dre_oid,
@@ -148,46 +195,55 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		rc = dtx_check(dra->po_uuid, cont->sc_uuid,
 			       &dre->dre_dte, layout);
-		if (rc != DTX_ST_COMMITTED && rc != DTX_ST_PREPARED) {
+
+		/* The DTX has been committed (or) ready to be committed on
+		 * some remote replica(s), let's commit the it globally.
+		 */
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_PREPARED)
+			goto commit;
+
+		if (rc != -DER_NONEXIST) {
 			/* We are not sure about whether the DTX can be
 			 * committed or not, then we have to skip it.
 			 */
 			D_WARN("Not sure about whether the DTX "DF_UOID
-			       "/"DF_DTI" can be committed or not: %d (1)\n",
+			       "/"DF_DTI" can be committed or not: %d\n",
 			       DP_UOID(dre->dre_oid),
 			       DP_DTI(&dre->dre_xid), rc);
 			dtx_dre_release(drh, dre);
 			continue;
 		}
 
-		/* It is possible that the current DTX becomes committable (in
-		 * CoS cache) or has been committed (on-disk) during above dtx
-		 * check remotely. Let's re-check its state locally.
+		/* Someone (the DTX owner or batched commit ULT) may have
+		 * committed or aborted the DTX during we handling other
+		 * DTXs. So double check the on-disk status before current
+		 * commit.
 		 */
-		rc1 = vos_dtx_check_committable(cont->sc_hdl, &dre->dre_oid,
-					&dre->dre_xid, dre->dre_hash,
-					dre->dre_intent == DAOS_INTENT_PUNCH ?
-					true : false);
-		if (rc1 == DTX_ST_COMMITTED) {
-			/* The DTX is in CoS cache (committable), do nothing. */
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid);
+
+		/* Skip this DTX since it has been committed or aborted or
+		 * fail to get the status.
+		 */
+		if (rc != DTX_ST_PREPARED) {
+			if (rc < 0 && rc != -DER_NONEXIST)
+				D_WARN("Not sure about whether the DTX "DF_UOID
+				       "/"DF_DTI" can be abort or not: %d\n",
+				       DP_UOID(dre->dre_oid),
+				       DP_DTI(&dre->dre_xid), rc);
 			dtx_dre_release(drh, dre);
 			continue;
 		}
 
-		/* The DTX has been committed on some remote replica(s), let's
-		 * commit the it globally.
-		 */
-		if (rc == DTX_ST_COMMITTED)
+		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_oid,
+					&dre->dre_xid, dre->dre_hash,
+					dre->dre_intent == DAOS_INTENT_PUNCH ?
+					true : false);
+		if (rc == 0) {
+			dre->dre_in_cache = 1;
 			goto commit;
+		}
 
-		switch (rc1) {
-		case DTX_ST_PREPARED:
-			/* Both local and remote replicas are 'prepared', then
-			 * it is committable.
-			 */
-			if (rc == DTX_ST_PREPARED)
-				goto commit;
-
+		if (rc == -DER_NONEXIST) {
 			/* If we abort multiple non-ready DTXs together, then
 			 * there is race that one DTX may become committable
 			 * when we abort some other DTX(s). To avoid complex
@@ -195,18 +251,12 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			 */
 			rc = dtx_abort(dra->po_uuid, cont->sc_uuid,
 				       &dre->dre_dte, 1, dra->version);
-			dtx_dre_release(drh, dre);
 			if (rc < 0)
 				err = rc;
-			continue;
-		default:
-			D_WARN("Not sure about whether the DTX "DF_UOID
-			       "/"DF_DTI" can be committed or not: %d (3)\n",
-			       DP_UOID(dre->dre_oid),
-			       DP_DTI(&dre->dre_xid), rc);
-			dtx_dre_release(drh, dre);
-			continue;
 		}
+
+		dtx_dre_release(drh, dre);
+		continue;
 
 commit:
 		if (++count >= DTX_THRESHOLD_COUNT) {

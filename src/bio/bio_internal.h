@@ -26,10 +26,11 @@
 
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
+#include <spdk/bdev.h>
 
-#define BIO_DMA_PAGE_SHIFT	12		/* 4K */
+#define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
-#define BIO_XS_CNT_MAX		48
+#define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
 
 /* DMA buffer is managed in chunks */
 struct bio_dma_chunk {
@@ -60,16 +61,31 @@ struct bio_dma_buffer {
 enum bio_bs_state {
 	/* Healthy and fully functional */
 	BIO_BS_STATE_NORMAL	= 0,
-	/* Being marked as faulty by monitor, rebuilding pool targets */
+	/* Being detected as faulty */
 	BIO_BS_STATE_FAULTY,
-	/* Rebuild triggered, tearing down SPDK resources */
+	/* Affected targets are marked as DOWN, safe to tear down blobstore */
 	BIO_BS_STATE_TEARDOWN,
-	/* SPDK blobs, blobstore and bdev are torn down */
+	/* Blobstore is torn down */
 	BIO_BS_STATE_OUT,
-	/* New device hotplugged, initializing SPDK resources */
+	/* New device hotplugged, start to initialize blobstore & blobs */
 	BIO_BS_STATE_REPLACED,
-	/* SPDK blobstore, blobs initialized, reintegrating pool targets */
+	/* Blobstore & blobs initialized, start to reint affected targets */
 	BIO_BS_STATE_REINT
+};
+
+/*
+ * SPDK device health monitoring.
+ */
+struct bio_dev_health {
+	struct bio_dev_state	 bdh_health_state;
+	/* writable open descriptor for health info polling */
+	struct spdk_bdev_desc	*bdh_desc;
+	struct spdk_io_channel	*bdh_io_channel;
+	void			*bdh_health_buf; /* health info logs */
+	void			*bdh_ctrlr_buf; /* controller data */
+	void			*bdh_error_buf; /* device error logs */
+	uint64_t		 bdh_stat_age;
+	unsigned int		 bdh_inflights;
 };
 
 /*
@@ -77,24 +93,26 @@ enum bio_bs_state {
  * blobstore for certain NVMe device.
  */
 struct bio_blobstore {
-	ABT_mutex		  bb_mutex;
-	ABT_cond		  bb_barrier;
-	struct spdk_blob_store	 *bb_bs;
+	ABT_mutex		 bb_mutex;
+	ABT_cond		 bb_barrier;
+	struct spdk_blob_store	*bb_bs;
 	/*
 	 * The xstream resposible for blobstore load/unload, monitor
 	 * and faulty/reint reaction.
 	 */
-	struct bio_xs_context	 *bb_owner_xs;
+	struct bio_xs_context	*bb_owner_xs;
 	/* All the xstreams using the blobstore */
 	struct bio_xs_context	**bb_xs_ctxts;
-	enum bio_bs_state	  bb_state;
+	/* Device/blobstore health monitoring info */
+	struct bio_dev_health	 bb_dev_health;
+	enum bio_bs_state	 bb_state;
 	/* Blobstore used by how many xstreams */
-	int			  bb_ref;
+	int			 bb_ref;
 	/*
 	 * Blobstore is held and being accessed by requests from upper
 	 * layer, teardown procedure needs be postponed.
 	 */
-	int			  bb_holdings;
+	int			 bb_holdings;
 };
 
 /* Per-xstream NVMe context */
@@ -107,8 +125,8 @@ struct bio_xs_context {
 	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
-	struct spdk_bdev_desc	*bxc_desc; /* for io stat only */
-	uint64_t		 bxc_stat_age;
+	struct spdk_bdev_desc	*bxc_desc; /* for io stat only, read-only */
+	uint64_t		 bxc_io_stat_age;
 };
 
 /* Per VOS instance I/O context */
@@ -187,15 +205,38 @@ is_blob_valid(struct bio_io_context *ctxt)
 	return ctxt->bic_blob != NULL && !ctxt->bic_closing;
 }
 
+enum {
+	BDEV_CLASS_NVME = 0,
+	BDEV_CLASS_MALLOC,
+	BDEV_CLASS_AIO,
+	BDEV_CLASS_UNKNOWN
+};
+
 /* bio_xstream.c */
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
+extern uint64_t		io_stat_period;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
+int get_bdev_type(struct spdk_bdev *bdev);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
+
+/* bio_monitor.c */
+int bio_init_health_monitoring(struct bio_blobstore *bb,
+			       struct spdk_bdev *bdev);
+void bio_fini_health_monitoring(struct bio_blobstore *bb);
+void bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
+
+/* bio_context.c */
+int bio_blob_close(struct bio_io_context *ctxt, bool async);
+
+/* bio_recovery.c */
+extern struct bio_reaction_ops *ract_ops;
+int bio_bs_state_transit(struct bio_blobstore *bbs);
 
 #endif /* __BIO_INTERNAL_H__ */

@@ -2436,9 +2436,10 @@ out:
 
 static int
 pool_find_all_targets_by_addr(uuid_t pool_uuid,
-			struct pool_target_addr_list *list,
-			struct pool_target_id_list *tgt_list,
-			struct pool_target_addr_list *out_list)
+			      struct pool_target_addr_list *list,
+			      struct pool_target_id_list *tgt_list,
+			      struct pool_target_addr_list *out_list,
+			      struct rsvc_hint *hint)
 {
 	struct pool_svc	*svc;
 	struct rdb_tx	tx;
@@ -2446,7 +2447,7 @@ pool_find_all_targets_by_addr(uuid_t pool_uuid,
 	int		i;
 	int		rc;
 
-	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2538,7 +2539,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 
 	/* Convert target address list to target id list */
 	rc = pool_find_all_targets_by_addr(pool_uuid, list, &target_list,
-					   out_list);
+					   out_list, hint);
 	if (rc)
 		D_GOTO(out, rc);
 

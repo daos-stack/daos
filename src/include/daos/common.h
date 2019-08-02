@@ -461,6 +461,9 @@ enum {
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
 
+#define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
+#define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
+
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
 static inline int __is_po2(unsigned long long val)
@@ -536,6 +539,18 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "unknown");
 		break;
 	}
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
 }
 
 #endif /* __DAOS_COMMON_H__ */

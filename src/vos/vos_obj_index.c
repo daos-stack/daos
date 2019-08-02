@@ -183,7 +183,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (rc != 0)
 			D_ERROR("Failed to open OI tree: %d\n", rc);
 		else
-			dbtree_destroy(toh);
+			dbtree_destroy(toh, NULL);
 	}
 	umem_free(umm, rec->rec_off);
 	return rc;
@@ -438,7 +438,11 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info\n");
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch oid infor because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Error while fetching oid info: %d\n", rc);
 		return rc;
 	}
 
@@ -624,7 +628,11 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info\n");
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch oid info because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Error while fetching oid info: %d\n", rc);
 		return rc;
 	}
 
@@ -740,7 +748,7 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
-	rc = dbtree_destroy(btr_hdl);
+	rc = dbtree_destroy(btr_hdl, NULL);
 	if (rc)
 		D_ERROR("OI BTREE destroy failed\n");
 exit:
