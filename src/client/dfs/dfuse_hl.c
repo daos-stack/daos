@@ -159,7 +159,7 @@ dfuse_access(const char *path, int mask)
 		return rc;
 
 	if (strcmp(dir_name, "/") != 0) {
-		rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
+		rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode, NULL);
 		if (rc) {
 			fprintf(stderr, "Failed to lookup path %s (%d)\n",
 				dir_name, rc);
@@ -210,7 +210,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 		return rc;
 
 	if (strcmp(dir_name, "/") != 0) {
-		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 		if (rc) {
 			fprintf(stderr, "Failed to lookup path %s (%d)\n",
 				dir_name, rc);
@@ -257,7 +257,7 @@ dfuse_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 	if (rc)
 		return rc;
 
-	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -297,7 +297,7 @@ dfuse_truncate(const char *path, off_t size, struct fuse_file_info *fi)
 	if (path == NULL)
 		return -ENOENT;
 
-	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL);
+	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -333,7 +333,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	} else {
 		if (path == NULL)
 			return -ENOENT;
-		rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL);
+		rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL, NULL);
 		if (rc) {
 			fprintf(stderr, "Failed to lookup path %s (%d)\n",
 				path, rc);
@@ -383,7 +383,7 @@ dfuse_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -431,7 +431,7 @@ dfuse_open(const char *path, struct fuse_file_info *fi)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -477,7 +477,7 @@ dfuse_opendir(const char *path, struct fuse_file_info *fi)
 
 	D_ASSERT(dir_name);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -582,7 +582,7 @@ dfuse_mkdir(const char *path, mode_t mode)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -625,7 +625,7 @@ dfuse_symlink(const char *from, const char *to)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -661,7 +661,7 @@ dfuse_readlink(const char *path, char *buf, size_t size)
 
 	FUNC_ENTER("path = %s\n", path);
 
-	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, &mode);
+	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, &mode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", path, rc);
 		D_GOTO(out, rc);
@@ -699,7 +699,7 @@ dfuse_unlink(const char *path)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -743,7 +743,7 @@ dfuse_rmdir(const char *path)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -803,7 +803,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 	if (name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode);
+	rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", dir_name, rc);
 		D_GOTO(out, rc);
@@ -821,7 +821,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 	if (new_name == NULL)
 		D_GOTO(out, rc = -EINVAL);
 
-	rc = dfs_lookup(dfs, new_dir_name, O_RDWR, &new_parent, &pmode);
+	rc = dfs_lookup(dfs, new_dir_name, O_RDWR, &new_parent, &pmode, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed path lookup %s (%d)\n", new_dir_name,
 			rc);
@@ -847,7 +847,8 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 		if (flags & RENAME_NOREPLACE) {
 			dfs_obj_t *obj = NULL;
 
-			rc = dfs_lookup(dfs, new_path, O_RDWR, &obj, &pmode);
+			rc = dfs_lookup(dfs, new_path, O_RDWR, &obj, &pmode,
+					NULL);
 			if (rc != -ENOENT) {
 				if (rc == 0)
 					dfs_release(obj);
@@ -907,7 +908,7 @@ dfuse_setxattr(const char *path, const char *name, const char *val,
 
 	FUNC_ENTER("path = %s, xattr name = %s, val = %s\n", path, name, val);
 
-	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL);
+	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -924,7 +925,7 @@ dfuse_getxattr(const char *path, const char *name, char *val, size_t size)
 
 	FUNC_ENTER("path = %s, xattr name = %s\n", path, name);
 
-	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL);
+	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -946,7 +947,7 @@ dfuse_listxattr(const char *path, char *list, size_t size)
 
 	FUNC_ENTER("path = %s\n", path);
 
-	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL);
+	rc = dfs_lookup(dfs, path, O_RDONLY, &obj, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -968,7 +969,7 @@ dfuse_removexattr(const char *path, const char *name)
 
 	FUNC_ENTER("path = %s, xattr name = %s\n", path, name);
 
-	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL);
+	rc = dfs_lookup(dfs, path, O_RDWR, &obj, NULL, NULL);
 	if (rc)
 		return rc;
 

@@ -697,7 +697,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	if (tgt_cnt < 0)
 		return tgt_cnt;
 
-	/* If no other target, then currnet target is the unique
+	/* If no other target, then current target is the unique
 	 * one that can be committed if it is 'prepared'.
 	 */
 	if (tgt_cnt == 1)
@@ -743,7 +743,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		length++;
 	}
 
-	/* If no other available targets, then currnet target is the
+	/* If no other available targets, then current target is the
 	 * unique valid one, it can be committed if it is also 'prepared'.
 	 */
 	if (d_list_empty(&head))
