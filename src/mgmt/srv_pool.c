@@ -438,8 +438,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	ds_mgmt_pool_list();
 
 out_svcp:
-	if (rc != 0)
+	if (rc) {
 		d_rank_list_free(*svcp);
+		*svcp = NULL;
+	}
 out_uuids:
 	D_FREE(tgt_uuids);
 tgt_fail:
@@ -479,7 +481,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d (pc_tgt_dev: %s).\n",
 			rc, pc_in->pc_tgt_dev);
-	if (pc_out->pc_svc != NULL)
+	if (pc_out->pc_rc == 0)
 		d_rank_list_free(pc_out->pc_svc);
 }
 

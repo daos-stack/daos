@@ -201,7 +201,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!args.argv[1])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[2], "-osubtype=pam", 32);
+	D_STRNDUP(args.argv[2], "-osubtype=daos", 32);
 	if (!args.argv[2])
 		D_GOTO(err, 0);
 
