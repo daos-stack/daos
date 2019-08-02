@@ -25,41 +25,41 @@ daos_tests:
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
-    test_m:
-      daos_test: m
-      test_name: Management tests
-    test_p:
-      daos_test: p
-      test_name: Pool tests
-    test_c:
-      daos_test: c
-      test_name: DAOS container tests
-    test_e:
-      daos_test: e
-      test_name: DAOS epoch tests
-    test_i:
-      daos_test: i
-      test_name: IO test
-      test_timeout: 900
-    test_A:
-      daos_test: A
-      test_name: DAOS Object Array tests
-    test_D:
-      daos_test: D
-      test_name: DAOS Array tests
-    test_K:
-      daos_test: K
-      test_name: DAOS KV tests
-    test_C:
-      daos_test: C
-      test_name: DAOS capability tests
-    test_o:
-      daos_test: o
-      test_name: Epoch recovery tests
-    test_R:
-      daos_test: R
-      test_name: DAOS MD replication tests
-    test_O:
-      daos_test: O
-      test_name: OID Allocator tests
-      test_timeout: 1350
+#    test_m:
+#      daos_test: m
+#      test_name: Management tests
+#    test_p:
+#      daos_test: p
+#      test_name: Pool tests
+#    test_c:
+#      daos_test: c
+#      test_name: DAOS container tests
+#    test_e:
+#      daos_test: e
+#      test_name: DAOS epoch tests
+#    test_i:
+#      daos_test: i
+#      test_name: IO test
+#      test_timeout: 900
+#    test_A:
+#      daos_test: A
+#      test_name: DAOS Object Array tests
+#    test_D:
+#      daos_test: D
+#      test_name: DAOS Array tests
+#    test_K:
+#      daos_test: K
+#      test_name: DAOS KV tests
+#    test_C:
+#      daos_test: C
+#      test_name: DAOS capability tests
+#    test_o:
+#      daos_test: o
+#      test_name: Epoch recovery tests
+#    test_R:
+#      daos_test: R
+#      test_name: DAOS MD replication tests
+#    test_O:
+#      daos_test: O
+#      test_name: OID Allocator tests
+#      test_timeout: 1350

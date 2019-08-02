@@ -1667,6 +1667,23 @@ shard_task_reset_param(tse_task_t *shard_task, void *arg)
 }
 
 static int
+shard_auxi_init(struct dc_object *obj, struct shard_auxi_args *shard_auxi,
+		struct obj_auxi_args *obj_auxi, shard_io_cb_t io_cb,
+		shard_io_prep_cb_t io_prep_cb, uint64_t dkey_hash,
+		uint64_t epoch, uint32_t map_ver, uint32_t shard,
+		uint32_t start_shard, uint32_t tgt_id, uint16_t grp_idx)
+{
+	shard_auxi_set_param(shard_auxi, map_ver, shard, tgt_id, epoch);
+	shard_auxi->obj = obj;
+	shard_auxi->obj_auxi = obj_auxi;
+	shard_auxi->shard_io_cb = io_cb;
+	shard_auxi->grp_idx = grp_idx;
+	shard_auxi->start_shard = start_shard;
+
+	return io_prep_cb(shard_auxi, obj, obj_auxi, dkey_hash);
+}
+
+static int
 obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	       uint64_t dkey_hash, uint32_t map_ver, daos_epoch_t epoch,
 	       shard_io_prep_cb_t io_prep_cb, shard_io_cb_t io_cb,
@@ -1716,9 +1733,15 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
-			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
-					     tgt->st_tgt_id, epoch);
-			shard_auxi->shard_io_cb = io_cb;
+
+			rc = shard_auxi_init(obj, shard_auxi, obj_auxi, io_cb,
+					     io_prep_cb, dkey_hash, epoch,
+					     map_ver, tgt->st_shard,
+					     req_tgts->ort_start_shard,
+					     tgt->st_tgt_id, 0);
+			if (rc)
+				goto out_task;
+
 			rc = shard_io(obj_task, shard_auxi);
 			return rc;
 		}
@@ -1728,14 +1751,11 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	if (tgts_nr == 1) {
 		shard_auxi = obj_embedded_shard_arg(obj_auxi);
 		D_ASSERT(shard_auxi != NULL);
-		shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
-				     tgt->st_tgt_id, epoch);
-		shard_auxi->grp_idx = 0;
-		shard_auxi->start_shard = req_tgts->ort_start_shard;
-		shard_auxi->obj = obj;
-		shard_auxi->obj_auxi = obj_auxi;
-		shard_auxi->shard_io_cb = io_cb;
-		rc = io_prep_cb(shard_auxi, obj, obj_auxi, dkey_hash);
+
+		rc = shard_auxi_init(obj, shard_auxi, obj_auxi, io_cb,
+				     io_prep_cb, dkey_hash, epoch, map_ver,
+				     tgt->st_shard, req_tgts->ort_start_shard,
+				     tgt->st_tgt_id, 0);
 		if (rc)
 			goto out_task;
 
@@ -1753,15 +1773,12 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 
 		shard_auxi = tse_task_buf_embedded(shard_task,
 						   sizeof(*shard_auxi));
-		shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
-				     tgt->st_tgt_id, epoch);
-		shard_auxi->grp_idx = req_tgts->ort_srv_disp ? i :
-				      (i / req_tgts->ort_grp_size);
-		shard_auxi->start_shard = req_tgts->ort_start_shard;
-		shard_auxi->obj = obj;
-		shard_auxi->obj_auxi = obj_auxi;
-		shard_auxi->shard_io_cb = io_cb;
-		rc = io_prep_cb(shard_auxi, obj, obj_auxi, dkey_hash);
+		rc = shard_auxi_init(obj, shard_auxi, obj_auxi, io_cb,
+				     io_prep_cb, dkey_hash, epoch, map_ver,
+				     tgt->st_shard, req_tgts->ort_start_shard,
+				     tgt->st_tgt_id,
+				     req_tgts->ort_srv_disp ? i :
+				     (i / req_tgts->ort_grp_size));
 		if (rc) {
 			tse_task_complete(shard_task, rc);
 			goto out_task;
@@ -1999,12 +2016,16 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	shard_arg = container_of(shard_auxi, struct shard_rw_args, auxi);
-	shard_arg->api_args		= obj_args;
-	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
+	if (shard_arg->api_args != obj_args) {
+		D_ASSERT(shard_arg->api_args == NULL);
+		D_ASSERT(daos_is_zero_dti(&shard_arg->dti));
+
 		daos_dti_gen(&shard_arg->dti,
 			     srv_io_mode != DIM_DTX_FULL_ENABLED);
-	shard_arg->dkey_hash		= dkey_hash;
-	shard_arg->bulks		= obj_auxi->bulks;
+		shard_arg->api_args	= obj_args;
+		shard_arg->dkey_hash	= dkey_hash;
+		shard_arg->bulks	= obj_auxi->bulks;
+	}
 
 	return 0;
 }
@@ -2285,12 +2306,18 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	shard_arg = container_of(shard_auxi, struct shard_punch_args, pa_auxi);
-	shard_arg->pa_api_args		= obj_args;
-	daos_dti_gen(&shard_arg->pa_dti, srv_io_mode != DIM_DTX_FULL_ENABLED);
-	shard_arg->pa_opc		= obj_auxi->opc;
-	shard_arg->pa_dkey_hash		= dkey_hash;
-	uuid_copy(shard_arg->pa_coh_uuid, coh_uuid);
-	uuid_copy(shard_arg->pa_cont_uuid, cont_uuid);
+	if (shard_arg->pa_api_args != obj_args) {
+		D_ASSERT(shard_arg->pa_api_args == NULL);
+		D_ASSERT(daos_is_zero_dti(&shard_arg->pa_dti));
+
+		daos_dti_gen(&shard_arg->pa_dti,
+			     srv_io_mode != DIM_DTX_FULL_ENABLED);
+		shard_arg->pa_api_args		= obj_args;
+		shard_arg->pa_opc		= obj_auxi->opc;
+		shard_arg->pa_dkey_hash		= dkey_hash;
+		uuid_copy(shard_arg->pa_coh_uuid, coh_uuid);
+		uuid_copy(shard_arg->pa_cont_uuid, cont_uuid);
+	}
 
 	return 0;
 }
