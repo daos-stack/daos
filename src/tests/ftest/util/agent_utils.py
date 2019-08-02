@@ -117,13 +117,13 @@ def run_agent(basepath, server_list, client_list=None):
 
         sessions[client] = subprocess.Popen(cmd,
                                             stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE)
+                                            stderr=subprocess.STDOUT)
 
     # double check agent launched successfully
     timeout = 5
     started_clients = []
     for client in client_list:
-        file_desc = sessions[client].stderr.fileno()
+        file_desc = sessions[client].stdout.fileno()
         flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
         fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         start_time = time.time()
@@ -137,7 +137,7 @@ def run_agent(basepath, server_list, client_list=None):
                                   "start".format(expected_data))
             output = ""
             try:
-                output = sessions[client].stderr.read()
+                output = sessions[client].stdout.read()
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
                     raise AgentFailed("Error in starting daos_agent: "
