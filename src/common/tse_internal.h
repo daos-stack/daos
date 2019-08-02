@@ -89,8 +89,8 @@ struct tse_task_private {
 	 * The sum of dtp_stack_top and dtp_embed_top should not exceed
 	 * TSE_TASK_ARG_LEN.
 	 */
-	uint32_t			 dtp_stack_top;
-	uint32_t			 dtp_embed_top;
+	int32_t				 dtp_stack_top;
+	int32_t				 dtp_embed_top;
 	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };
 
