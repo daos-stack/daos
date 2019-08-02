@@ -56,7 +56,7 @@ function setup_directories () {
 function generate_ca_cert () {
 	# Generate Private key and set permissions
 	openssl genrsa -out $PRIVATE/daosCA.key 4096
-	chmod 400 $PRIVATE/daosCA.key
+	chmod 0400 $PRIVATE/daosCA.key
 	# Generate CA Certificate
 	openssl req -new -x509 -config ca.cnf -days 3650 -sha512 \
 		-key $PRIVATE/daosCA.key \
@@ -71,7 +71,7 @@ function generate_agent_cert () {
 	echo "Generating Agent Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/agent.key 4096
-	chmod 400 $CERTS/agent.key
+	chmod 0400 $CERTS/agent.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config agent.cnf -key $CERTS/agent.key \
 		-out agent.csr -batch
@@ -91,7 +91,7 @@ function generate_admin_cert () {
 	echo "Generating Admin Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/admin.key 4096
-	chmod 400 $CERTS/admin.key
+	chmod 0400 $CERTS/admin.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config admin.cnf -key $CERTS/admin.key \
 		-out admin.csr -batch
@@ -111,7 +111,7 @@ function generate_server_cert () {
 	echo "Generating Server Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/server.key 4096
-	chmod 400 $CERTS/server.key
+	chmod 0400 $CERTS/server.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config server.cnf -key $CERTS/server.key \
 		-out server.csr -batch
@@ -134,12 +134,18 @@ function cleanup () {
 	rm -f server.csr
 }
 
+function fixup_permissions() {
+	chmod 0400 $CERTS/*.key
+	chmod 0644 $CERTS/*.crt 
+}
+
 function main () {
 	setup_directories
 	generate_ca_cert
 	generate_agent_cert
 	generate_admin_cert
 	generate_server_cert
+	fixup_permissions
 	cleanup
 }
 
