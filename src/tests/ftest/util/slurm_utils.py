@@ -31,7 +31,7 @@ import threading
 import pyslurm # pylint: disable=import-error
 from avocado.utils import process
 
-w_lock = threading.Lock()
+wlock = threading.Lock()
 
 
 class SlurmFailed(Exception):
@@ -225,5 +225,5 @@ def watch_job(handle, maxwait, test_obj):
     print("FINAL STATE: slurm job {} completed with : {} at {}\n".format(
         handle, state, time.ctime()))
     params = {"handle": handle, "state": state}
-    with w_lock:
+    with wlock:
         test_obj.job_done(params)
