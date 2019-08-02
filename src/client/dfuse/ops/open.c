@@ -76,10 +76,9 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	D_ASSERT(oh->doh_buf == NULL);
 
 	rc = dfs_release(oh->doh_obj);
-	if (rc == 0) {
-		DFUSE_FUSE_REPLY_ZERO(req);
-	} else {
+	if (rc == 0)
+		DFUSE_REPLY_ZERO(req);
+	else
 		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
-	}
 	D_FREE(oh);
 }

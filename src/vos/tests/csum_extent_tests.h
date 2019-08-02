@@ -49,4 +49,7 @@ evt_csum_helper_functions_tests(void **state);
 void
 csum_invalid_input_tests(void **state);
 
+void
+csum_fault_injection_multiple_extents_tests(void **state);
+
 #endif
