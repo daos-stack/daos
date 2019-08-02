@@ -32,11 +32,11 @@
 #include <gurt/list.h>
 /**
  * tse_task is used to track single asynchronous operation.
- * 512 bytes all together.
+ * 512 * 3 bytes all together.
  */
-#define TSE_TASK_SIZE		1024
+#define TSE_TASK_SIZE		(512 * 3)
 /* 8 bytes used for public members */
-#define TSE_PRIV_SIZE		1016
+#define TSE_PRIV_SIZE		(TSE_TASK_SIZE - 8)
 
 typedef struct tse_task {
 	int			dt_result;

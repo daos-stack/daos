@@ -33,8 +33,8 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-/* NB: tse_task_private is TSE_PRIV_SIZE = 1016 bytes for now */
-#define TSE_TASK_ARG_LEN		888
+/* NB: tse_task_private is TSE_PRIV_SIZE = 1528 bytes for now */
+#define TSE_TASK_ARG_LEN		1344
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
@@ -56,6 +56,13 @@ struct tse_task_private {
 
 	/* daos complete task callback list */
 	d_list_t			 dtp_comp_cb_list;
+	/* Take it before callback to block new tse_task_complete
+	 * that may be triggered by current in-processing callback.
+	 */
+	pthread_mutex_t			 dtp_callback_lock;
+
+	/* The one that holds dtp_callback_lock to avoid self-deadlock. */
+	int64_t				 dtp_callback_lock_owner;
 
 	uint32_t			/* task has been completed, no chance to
 					 * be re-initialized.
@@ -69,10 +76,13 @@ struct tse_task_private {
 					 */
 					 dtp_completing:1,
 					/* task is in running state */
-					 dtp_running:1,
-					 dtp_dep_cnt:29;
+					 dtp_running:1;
+	/* refcount for task dependency. */
+	uint32_t			 dtp_dep_cnt;
 	/* refcount of the task */
 	uint32_t			 dtp_refcnt;
+	/* For 64-bits alignment. */
+	uint32_t			 dtp_padding;
 	/**
 	 * task parameter pointer, it can be assigned while creating task,
 	 * or explicitly call API tse_task_priv_set. User can just use

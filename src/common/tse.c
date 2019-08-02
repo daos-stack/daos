@@ -237,6 +237,8 @@ tse_task_decref(tse_task_t *task)
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 
+	D_MUTEX_DESTROY(&dtp->dtp_callback_lock);
+
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
 	 * user also free it. This now requires task to be on the heap all the
@@ -631,7 +633,7 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 
 		tse_task_post_process(task);
 		d_list_del_init(&dtp->dtp_list);
-		tse_task_decref(task);  /* drop final ref */
+		tse_task_decref(task);
 		processed++;
 	}
 	return processed;
@@ -761,20 +763,57 @@ tse_task_complete(tse_task_t *task, int ret)
 {
 	struct tse_task_private		*dtp	= tse_task2priv(task);
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
-	bool				bumped  = false;
-	bool				done;
+	pthread_t			 self	= pthread_self();
+	bool				 locked	= false;
+	bool				 bumped	= false;
+	bool				 zombie	= false;
+	bool				 done;
 
 	if (dtp->dtp_completed)
 		return;
 
+	if (dtp->dtp_callback_lock_owner != self) {
+		D_MUTEX_LOCK(&dtp->dtp_callback_lock);
+		dtp->dtp_callback_lock_owner = self;
+		locked = true;
+	}
+
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	if (dtp->dtp_completed) {
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+		if (locked) {
+			dtp->dtp_callback_lock_owner = -1;
+			D_MUTEX_UNLOCK(&dtp->dtp_callback_lock);
+		}
+		goto out;
+	}
+
+	/* Hold reference to avoid @task being freed by
+	 * tse_sched_process_complete() if re-entered.
+	 */
+	tse_task_addref_locked(dtp);
+
+	dtp->dtp_completing = 1;
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
-	dtp->dtp_completing = 1;
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
 
+	if (locked) {
+		dtp->dtp_callback_lock_owner = -1;
+		D_MUTEX_UNLOCK(&dtp->dtp_callback_lock);
+	}
+
 	D_MUTEX_LOCK(&dsp->dsp_lock);
+
+	if (dtp->dtp_completed) {
+		zombie = tse_task_decref_locked(dtp);
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+		goto out;
+	}
 
 	if (!dsp->dsp_cancelling) {
 		/** +1 for tse_sched_run() */
@@ -788,6 +827,8 @@ tse_task_complete(tse_task_t *task, int ret)
 	} else {
 		tse_task_decref_locked(dtp);
 	}
+
+	zombie = tse_task_decref_locked(dtp);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/** update task in scheduler lists. */
@@ -800,6 +841,15 @@ tse_task_complete(tse_task_t *task, int ret)
 	/** -1 from tse_task_create() if it has not been reinitialized */
 	if (done)
 		tse_sched_decref(dsp);
+
+out:
+	/* This may be the last reference. */
+	if (zombie) {
+		D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+
+		D_MUTEX_DESTROY(&dtp->dtp_callback_lock);
+		D_FREE(task);
+	}
 }
 
 /**
@@ -869,6 +919,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	struct tse_sched_private *dsp = tse_sched2priv(sched);
 	struct tse_task_private	 *dtp;
 	tse_task_t		 *task;
+	int			  rc;
 
 	D_ALLOC_PTR(task);
 	if (task == NULL)
@@ -876,6 +927,12 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 
 	dtp = tse_task2priv(task);
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
+
+	rc = D_MUTEX_INIT(&dtp->dtp_callback_lock, NULL);
+	if (rc != 0) {
+		D_FREE(task);
+		return rc;
+	}
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_task_list);
