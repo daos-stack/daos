@@ -401,7 +401,7 @@ func (srv *iosrv) setRank(ready *srvpb.NotifyReadyReq) error {
 	}
 
 	if !srv.super.ValidRank || !srv.super.MS {
-		resp, err := mgmtJoin(srv.config.AccessPoints[0],
+		resp, err := mgmtJoin(context.Background(), srv.config.AccessPoints[0],
 			srv.config.TransportConfig,
 			&mgmtpb.JoinReq{
 				Uuid:  srv.super.UUID,
@@ -513,10 +513,14 @@ func (srv *iosrv) writeSuper() error {
 	return writeIosrvSuper(iosrvSuperPath(srv.config.Servers[srv.index].ScmMount), srv.super)
 }
 
-// mgmtJoin sends the Join request to MS, retrying indefinitely until MS
-// responses.
-func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
-	log.Debugf("join(%s, %+v)", ap, *req)
+// mgmtJoin sends Join request(s) to MS.
+func mgmtJoin(ctx context.Context, ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+	prefix := fmt.Sprintf("join(%s, %+v)", ap, *req)
+	log.Debugf(prefix + " begin")
+	defer log.Debugf(prefix + " end")
+
+	const delay = 3 * time.Second
+
 	var opts []grpc.DialOption
 	authDialOption, err := security.DialOptionForTransportConfig(tc)
 	if err != nil {
@@ -524,9 +528,9 @@ func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mg
 	}
 
 	// Setup Dial Options that will always be included.
-	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(5*time.Second),
+	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(delay),
 		grpc.WithDefaultCallOptions(grpc.FailFast(false)), authDialOption)
-	conn, err := grpc.Dial(ap, opts...)
+	conn, err := grpc.DialContext(ctx, ap, opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", ap)
 	}
@@ -535,14 +539,30 @@ func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mg
 	client := mgmtpb.NewMgmtSvcClient(conn)
 
 	for {
-		resp, err := client.Join(context.Background(), req)
-		if err == nil {
+		select {
+		case <-ctx.Done():
+			return nil, errors.Wrap(ctx.Err(), prefix)
+		default:
+		}
+
+		resp, err := client.Join(ctx, req)
+		if err != nil {
+			log.Debugf(prefix+": %v", err)
+		} else {
 			// TODO: Stop retrying upon certain errors (e.g., "not
 			// MS", "rank unavailable", and "excluded").
-			if resp.Status == 0 {
+			if resp.Status != 0 {
+				log.Debugf(prefix+": %d", resp.Status)
+			} else {
 				return resp, nil
 			}
 		}
-		time.Sleep(3 * time.Second)
+
+		// Delay next retry.
+		delayCtx, cancelDelayCtx := context.WithTimeout(ctx, delay)
+		select {
+		case <-delayCtx.Done():
+		}
+		cancelDelayCtx()
 	}
 }
