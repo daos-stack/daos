@@ -95,9 +95,13 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO mode
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
+        if self.ior_cmd.api.value in ["MPIIO", "DAOS"]:
+            mpio_util = MpioUtils()
+            if mpio_util.mpich_installed(self.hostlist_clients) is False:
+                self.fail("Exiting Test: Mpich not installed")
+        else:
+            self.fail("Unsupported IOR API")
+
         return os.path.join(mpio_util.mpichinstall, "bin", "mpirun")
 
     def run_ior(self, manager, processes):
