@@ -83,12 +83,6 @@ int			dss_core_offset;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
-/** System map path */
-static const char      *sys_map_path;
-
-/** Self rank */
-static d_rank_t		self_rank = -1;
-
 d_rank_t
 dss_self_rank(void)
 {
@@ -405,28 +399,12 @@ server_init(int argc, char *argv[])
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	if (sys_map_path != NULL || dss_pmixless())
+	if (dss_pmixless())
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
 	rc = crt_init_opt(daos_sysname, flags,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
-	if (sys_map_path != NULL) {
-		if (self_rank == -1) {
-			D_ERROR("self rank required\n");
-			D_GOTO(exit_crt_init, rc = -DER_INVAL);
-		}
-		rc = crt_rank_self_set(self_rank);
-		if (rc != 0)
-			D_ERROR("failed to set self rank %u: %d\n", self_rank,
-				rc);
-		rc = dss_sys_map_load(sys_map_path, daos_sysname, self_rank,
-				      DSS_CTX_NR_TOTAL);
-		if (rc) {
-			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
-			D_GOTO(exit_crt_init, rc);
-		}
-	}
 	D_INFO("Network successfully initialized\n");
 
 	ds_iv_init();
@@ -484,8 +462,6 @@ server_init(int argc, char *argv[])
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	if (sys_map_path != NULL)
-		D_ASSERTF(rank == self_rank, "%u == %u\n", rank, self_rank);
 	rc = crt_group_size(NULL, &size);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
@@ -535,7 +511,6 @@ exit_srv_init:
 exit_mod_loaded:
 	dss_module_unload_all();
 	ds_iv_fini();
-exit_crt_init:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
@@ -596,10 +571,6 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
-  --map=path, -y path\n\
-      [Temporary] System map configuration file (default none)\n\
-  --rank=rank, -r rank\n\
-      [Temporary] Self rank (default none; ignored if no --map|-y)\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -619,11 +590,9 @@ parse(int argc, char **argv)
 		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
-		{ "rank",		required_argument,	NULL,	'r' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
-		{ "map",		required_argument,	NULL,	'y' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -631,8 +600,8 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:r:t:s:x:y:",
-			opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:t:s:x:", opts,
+				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
 
@@ -706,12 +675,6 @@ parse(int argc, char **argv)
 		case 'a':
 			save_attach_info = true;
 			attach_info_path = optarg;
-			break;
-		case 'y':
-			sys_map_path = optarg;
-			break;
-		case 'r':
-			self_rank = atoi(optarg);
 			break;
 		default:
 			usage(argv[0], stderr);

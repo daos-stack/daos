@@ -1539,23 +1539,15 @@ vos_dtx_prepared(struct dtx_handle *dth)
 }
 
 int
-vos_dtx_check_committable(daos_handle_t coh, daos_unit_oid_t *oid,
-			  struct dtx_id *dti, uint64_t dkey_hash,
-			  bool punch)
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti)
 {
 	struct vos_container	*cont;
-	d_iov_t		 kiov;
-	d_iov_t		 riov;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
-
-	if (oid != NULL) {
-		rc = vos_dtx_lookup_cos(coh, oid, dti, dkey_hash, punch);
-		if (rc == 0)
-			return DTX_ST_COMMITTED;
-	}
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	d_iov_set(&riov, NULL, 0);
