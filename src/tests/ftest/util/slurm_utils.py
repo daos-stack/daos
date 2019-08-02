@@ -28,7 +28,7 @@ import random
 import time
 import subprocess
 import threading
-import pyslurm
+import pyslurm # pylint: disable=import-error
 from avocado.utils import process
 
 w_lock = threading.Lock()
