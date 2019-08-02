@@ -92,7 +92,11 @@ struct dfuse_obj_hdl {
 	dfs_obj_t	*doh_obj;
 	/** an anchor to track listing in readdir */
 	daos_anchor_t	doh_anchor;
-	/** enumeration buffer to store missed entries from readdir */
+	/** current offset in dir stream (what is returned to fuse) */
+	off_t		doh_fuse_off;
+	/** current offset in dir stream (includes cached entries) */
+	off_t		doh_dir_off[READDIR_BLOCKS];
+	/** Buffer with all entries listed from DFS with the fuse dirents */
 	void		*doh_buf;
 	/** offset to start from of doh_buffer */
 	off_t		doh_start_off[READDIR_BLOCKS];
@@ -119,10 +123,24 @@ struct dfuse_inode_ops {
 			   struct fuse_file_info *fi);
 	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			size_t size, off_t offset, struct fuse_file_info *fi);
+	void (*rename)(fuse_req_t req, struct dfuse_inode_entry *parent_inode,
+		       const char *name,
+		       struct dfuse_inode_entry *newparent_inode,
+		       const char *newname, unsigned int flags);
 	void (*symlink)(fuse_req_t req, const char *link,
 			struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
+	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 const char *name, const char *value, size_t size,
+			 int flags);
+	void (*getxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 const char *name, size_t size);
+	void (*listxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			  size_t size);
+	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			    const char *name);
+
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -242,7 +260,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DOWN(dfuse_req);				\
 	} while (0)
 
-#define DFUSE_FUSE_REPLY_ZERO(req)					\
+#define DFUSE_REPLY_ZERO(req)						\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(req, "Returning 0");			\
@@ -254,22 +272,12 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
-#define DFUSE_REPLY_ZERO(dfuse_req)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(dfuse_req, "Returning 0");		\
-		__rc = fuse_reply_err((dfuse_req)->ir_req, 0);		\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(dfuse_req,			\
-					"fuse_reply_err returned %d:%s", \
-					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(dfuse_req);				\
-	} while (0)
-
 #define DFUSE_REPLY_ATTR(req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning attr");			\
+		DFUSE_TRA_DEBUG(req, "Returning attr mode %x dir:%d",	\
+				(attr)->st_mode,			\
+				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr, 0);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(req,				\
@@ -325,7 +333,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ENTRY(req, entry)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning entry");		\
+		DFUSE_TRA_DEBUG(req, "Returning entry mode %x dir:%d",	\
+				(entry).attr.st_mode,			\
+				S_ISDIR((entry).attr.st_mode));		\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(req,				\
@@ -481,8 +491,8 @@ dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
 		 struct fuse_file_info *);
 
 void
-dfuse_cb_rename(fuse_req_t, fuse_ino_t, const char *, fuse_ino_t,
-		const char *, unsigned int);
+dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
+		struct dfuse_inode_entry *, const char *, unsigned int);
 
 void
 dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
@@ -496,6 +506,20 @@ void
 dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 		 const char *);
 
+void
+dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
+		  const char *, size_t, int);
+
+void
+dfuse_cb_getxattr(fuse_req_t, struct dfuse_inode_entry *,
+		  const char *, size_t);
+
+void
+dfuse_cb_listxattr(fuse_req_t, struct dfuse_inode_entry *, size_t);
+
+void
+dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
+
 /* Return inode information to fuse
  *
  * Adds inode to the hash table and calls fuse_reply_entry()
@@ -503,7 +527,7 @@ dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
-		  bool create,
+		  struct fuse_file_info *fi_out,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */

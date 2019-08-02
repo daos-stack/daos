@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       2%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -226,10 +226,13 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Thu Jul 25 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Add git hash and commit count to release
+
 * Thu Jul 18 2019 David Quigley <david.quigley@intel.com>
 - Add certificate generation files to packaging.
 
-* Tue Jul 9 2019 Johann Lombardi <johann.lombardi@intel.com>
+* Tue Jul 09 2019 Johann Lombardi <johann.lombardi@intel.com>
 - Version bump up to 0.6.0
 
 * Fri Jun 21 2019 David Quigley <dquigley@intel.com>

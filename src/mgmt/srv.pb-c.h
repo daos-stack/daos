@@ -23,22 +23,6 @@ typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
 
 /* --- enums --- */
 
-typedef enum _Mgmt__DaosRequestStatus {
-  MGMT__DAOS_REQUEST_STATUS__SUCCESS = 0,
-  /*
-   * Unknown error
-   */
-  MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN = -1,
-  /*
-   * Rank requested is invalid
-   */
-  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_RANK = -2,
-  /*
-   * Pool UUID requested is invalid
-   */
-  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_UUID = -3
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__DAOS_REQUEST_STATUS)
-} Mgmt__DaosRequestStatus;
 
 /* --- messages --- */
 
@@ -65,11 +49,14 @@ struct  _Mgmt__DaosRank
 struct  _Mgmt__DaosResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus status;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
 };
 #define MGMT__DAOS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_resp__descriptor) \
-    , MGMT__DAOS_REQUEST_STATUS__SUCCESS }
+    , 0 }
 
 
 struct  _Mgmt__SetRankReq
@@ -196,7 +183,6 @@ typedef void (*Mgmt__CreateMsReq_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCEnumDescriptor    mgmt__daos_request_status__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__daos_rank__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
