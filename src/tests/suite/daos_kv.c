@@ -21,10 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_m
+ * This file is part of daos
  *
- * src/tests/addons/
+ * src/tests/suite/daos_kv.c
  */
+
 #if !defined(__has_warning)  /* gcc */
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #else
@@ -32,10 +33,10 @@
 		#pragma GCC diagnostic ignored "-Wframe-larger-than="
 	#endif
 #endif
+
 #include <daos.h>
-#include <daos_addons.h>
+#include <daos_kv.h>
 #include "daos_test.h"
-#include "daos_addons_test.h"
 
 static void simple_put_get(void **state);
 
@@ -231,152 +232,27 @@ simple_put_get(void **state)
 	print_message("all good\n");
 } /* End simple_put_get */
 
-
-static void
-simple_multi_io(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	daos_handle_t	oh;
-	daos_size_t	buf_size = 128;
-	daos_event_t	ev;
-	d_iov_t	sg_iov[NUM_KEYS];
-	daos_recx_t	recx;
-	const char      *key_fmt = "key%d";
-	char		*buf[NUM_KEYS];
-	char		*buf_out[NUM_KEYS];
-	char		*keys[NUM_KEYS];
-	daos_dkey_io_t	io_array[NUM_KEYS];
-	int		i;
-	int		rc;
-
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
-
-	if (arg->async) {
-		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
-	}
-
-	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
-
-	recx.rx_idx	= 0;
-	recx.rx_nr	= buf_size;
-
-	for (i = 0; i < NUM_KEYS; i++) {
-		D_ALLOC(io_array[i].ioa_iods, sizeof(daos_iod_t));
-		D_ALLOC(io_array[i].ioa_sgls, sizeof(d_sg_list_t));
-		D_ALLOC(io_array[i].ioa_dkey, sizeof(daos_key_t));
-		io_array[i].ioa_nr = 1;
-
-		D_ALLOC(buf[i], buf_size);
-		assert_non_null(buf[i]);
-		dts_buf_render(buf[i], buf_size);
-
-		D_ALLOC(buf_out[i], buf_size);
-		assert_non_null(buf_out[i]);
-
-		/** init dkey */
-		rc = asprintf(&keys[i], key_fmt, i);
-		assert_non_null(keys[i]);
-		assert_int_not_equal(rc, -1);
-
-		d_iov_set(io_array[i].ioa_dkey, keys[i], strlen(keys[i]));
-		/** init scatter/gather */
-		d_iov_set(&sg_iov[i], buf[i], buf_size);
-		io_array[i].ioa_sgls[0].sg_nr		= 1;
-		io_array[i].ioa_sgls[0].sg_nr_out	= 0;
-		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
-		/** init I/O descriptor */
-		d_iov_set(&io_array[i].ioa_iods[0].iod_name, "akey",
-			     strlen("akey"));
-		daos_csum_set(&io_array[i].ioa_iods[0].iod_kcsum, NULL, 0);
-		io_array[i].ioa_iods[0].iod_nr	= 1;
-		io_array[i].ioa_iods[0].iod_size	= 1;
-		io_array[i].ioa_iods[0].iod_recxs	= &recx;
-		io_array[i].ioa_iods[0].iod_eprs	= NULL;
-		io_array[i].ioa_iods[0].iod_csums	= NULL;
-		io_array[i].ioa_iods[0].iod_type	= DAOS_IOD_ARRAY;
-	}
-
-	rc = daos_obj_update_multi(oh, DAOS_TX_NONE, NUM_KEYS, io_array,
-				   arg->async ? &ev : NULL);
-	if (arg->async) {
-		bool ev_flag;
-
-		rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-		assert_int_equal(rc, 0);
-		assert_int_equal(ev_flag, true);
-		assert_int_equal(ev.ev_error, 0);
-	}
-
-	for (i = 0; i < NUM_KEYS; i++) {
-		/** init scatter/gather */
-		d_iov_set(&sg_iov[i], buf_out[i], buf_size);
-		io_array[i].ioa_sgls[0].sg_nr		= 1;
-		io_array[i].ioa_sgls[0].sg_nr_out	= 0;
-		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
-	}
-
-	rc = daos_obj_fetch_multi(oh, DAOS_TX_NONE, NUM_KEYS, io_array,
-				  arg->async ? &ev : NULL);
-	if (arg->async) {
-		bool ev_flag;
-
-		rc = daos_event_test(&ev, DAOS_EQ_WAIT, &ev_flag);
-		assert_int_equal(rc, 0);
-		assert_int_equal(ev_flag, true);
-		assert_int_equal(ev.ev_error, 0);
-	}
-
-	for (i = 0; i < NUM_KEYS; i++) {
-		assert_int_equal(io_array[i].ioa_iods[0].iod_size, 1);
-		assert_memory_equal(buf_out[i], buf[i], buf_size);
-	}
-
-	rc = daos_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
-	for (i = 0; i < NUM_KEYS; i++) {
-		D_FREE(io_array[i].ioa_iods);
-		D_FREE(io_array[i].ioa_dkey);
-		D_FREE(io_array[i].ioa_sgls);
-		D_FREE(buf_out[i]);
-		D_FREE(buf[i]);
-	}
-
-	if (arg->async) {
-		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
-	}
-	print_message("all good\n");
-} /* End simple_multi_io */
-
-static const struct CMUnitTest hl_tests[] = {
-	{"HL: Object Put/GET (blocking)",
+static const struct CMUnitTest kv_tests[] = {
+	{"KV: Object Put/GET (blocking)",
 	 simple_put_get, async_disable, NULL},
-	{"HL: Object Put/GET (non-blocking)",
+	{"KV: Object Put/GET (non-blocking)",
 	 simple_put_get, async_enable, NULL},
-	{"HL: Multi DKEY Update/Fetch (blocking)",
-	 simple_multi_io, async_disable, NULL},
-	{"HL: Multi DKEY Update/Fetch (non-blocking)",
-	 simple_multi_io, async_enable, NULL},
 };
 
 int
-hl_setup(void **state)
+kv_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
 			  NULL);
 }
 
 int
-run_hl_test(int rank, int size)
+run_daos_kv_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("High Level API tests", hl_tests,
-					 hl_setup, test_teardown);
+	rc = cmocka_run_group_tests_name("DAOS KV API tests", kv_tests,
+					 kv_setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

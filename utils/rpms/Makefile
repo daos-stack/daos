@@ -9,7 +9,13 @@ PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 
 dist: $(SOURCES)
 
-COMMON_RPM_ARGS := --define "%_topdir $$PWD/_topdir"
+GIT_SHORT       := $(shell git rev-parse --short HEAD)
+GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
+
+BUILD_DEFINES := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
+MOCK_OPTIONS  := $(BUILD_DEFINES)
+COMMON_RPM_ARGS := --define "%_topdir $$PWD/_topdir" $(BUILD_DEFINES)
+
 DIST    := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 ifeq ($(DIST),)
 SED_EXPR := 1p
