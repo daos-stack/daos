@@ -16,5 +16,3 @@ UnitTest:
     testname: eq_tests
   vos_tests:
     testname: vos_tests
-  daos_addons_test:
-    testname: daos_addons_test

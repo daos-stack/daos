@@ -59,11 +59,10 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 	int			rc;
 
 	rc = dfs_release(oh->doh_obj);
-	if (rc == 0) {
-		DFUSE_FUSE_REPLY_ZERO(req);
-	} else {
+	if (rc == 0)
+		DFUSE_REPLY_ZERO(req);
+	else
 		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
-	}
 	D_FREE(oh->doh_buf);
 	D_FREE(oh);
 };

@@ -397,9 +397,10 @@ dtx_get_tgt_cnt(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 
 	/* XXX: Need some special handling for EC case in the future. */
 
-	if (oc_attr->ca_resil != DAOS_RES_REPL && oc_attr->ca_resil != DAOS_RES_EC)
+	if (oc_attr->ca_resil != DAOS_RES_REPL &&
+					 oc_attr->ca_resil != DAOS_RES_EC)
 		return -DER_NOTAPPLICABLE;
-	if ( oc_attr->ca_resil == DAOS_RES_REPL)
+	if (oc_attr->ca_resil == DAOS_RES_REPL)
 		tgt_cnt = oc_attr->u.rp.r_num;
 	else {
 		D_ASSERT(oc_attr->ca_resil == DAOS_RES_EC);
@@ -699,7 +700,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	if (tgt_cnt < 0)
 		return tgt_cnt;
 
-	/* If no other target, then currnet target is the unique
+	/* If no other target, then current target is the unique
 	 * one that can be committed if it is 'prepared'.
 	 */
 	if (tgt_cnt == 1)
@@ -745,7 +746,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		length++;
 	}
 
-	/* If no other available targets, then currnet target is the
+	/* If no other available targets, then current target is the
 	 * unique valid one, it can be committed if it is also 'prepared'.
 	 */
 	if (d_list_empty(&head))

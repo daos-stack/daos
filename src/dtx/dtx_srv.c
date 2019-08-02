@@ -64,12 +64,8 @@ dtx_handler(crt_rpc_t *rpc)
 		if (din->di_dtx_array.ca_count != 1)
 			rc = -DER_PROTO;
 		else
-			/* For the remote query about DTX check, it is NOT
-			 * necessary to lookup CoS cache, so set the 'oid'
-			 * as zero to bypass CoS cache.
-			 */
-			rc = vos_dtx_check_committable(cont->sc_hdl, NULL,
-					din->di_dtx_array.ca_arrays, 0, false);
+			rc = vos_dtx_check(cont->sc_hdl,
+					   din->di_dtx_array.ca_arrays);
 		break;
 	default:
 		rc = -DER_INVAL;
