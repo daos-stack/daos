@@ -212,9 +212,9 @@ dss_tgt_nr_get(int ncores, int nr)
 	 * as creating more threads than #cores may hurt performance.
 	 */
 	if (nr_default < nr)
-		D_PRINT("%d target XS(xstream) requested (#cores %d) "
-			"exceeded available XS (%d); Will use "
-			"the requested target XS\n", nr, ncores, nr_default);
+		D_PRINT("%d target XS(xstream) requested (#cores %d) exceeded "
+			"available XS (%d), Will try best effort to use %d "
+			"target XS\n", nr, ncores, nr_default, nr);
 	if (nr >= 1)
 		nr_default = nr;
 
