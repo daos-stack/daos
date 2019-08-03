@@ -1005,14 +1005,53 @@ struct obj_auxi_args {
 	};
 };
 
+static struct shard_auxi_args *
+obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
+{
+	switch (obj_auxi->opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		return &obj_auxi->rw_args.auxi;
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		return &obj_auxi->p_args.pa_auxi;
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
+		return &obj_auxi->l_args.la_auxi;
+	default:
+		D_ERROR("bad opc %d.\n", obj_auxi->opc);
+		return NULL;
+	};
+}
+
+#include "../common/tse_internal.h"
+
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
+	struct tse_task_private		*dtp;
 	int		  result = task->dt_result;
 	int		  rc;
+
+	dtp = tse_task2priv(task);
+	D_ASSERTF(dtp->dtp_refcnt >= 1, "invalid ref %d, opc %d (1)\n",
+		  dtp->dtp_refcnt, obj_auxi->opc);
+
+	if (obj_auxi->io_retry &&
+	    obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+		struct shard_auxi_args		*shard_auxi;
+
+		shard_auxi = obj_embedded_shard_arg(obj_auxi);
+		D_ASSERTF(shard_auxi->obj != NULL,
+			  "Bad auxi, ref %d, err %d\n",
+			  dtp->dtp_refcnt, result);
+	}
 
 	/* For the case of retry with leader, if it is for modification,
 	 * since we always send modification RPC to the leader, then no
@@ -1031,6 +1070,11 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		rc = obj_pool_query_task(sched, obj, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
+
+		D_ASSERTF(task != pool_task, "opc = %d\n", obj_auxi->opc);
+		D_ASSERTF(labs((char *)task - (char *)pool_task) >=
+			  sizeof(*task), "overlap, opc = %d, %ld, %p/%p\n",
+			  obj_auxi->opc, sizeof(*task), task, pool_task);
 	}
 
 	if (obj_auxi->io_retry) {
@@ -1054,9 +1098,22 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	D_DEBUG(DB_IO, "Retrying task=%p for err=%d, io_retry=%d\n",
 		 task, result, obj_auxi->io_retry);
 
-	if (pool_task != NULL)
+	if (pool_task != NULL) {
 		/* ignore returned value, error is reported by comp_cb */
 		dc_task_schedule(pool_task, obj_auxi->io_retry);
+
+		D_ASSERTF(dtp->dtp_refcnt >= 1, "invalid ref %d, opc %d (2)\n",
+			  dtp->dtp_refcnt, obj_auxi->opc);
+
+		if (obj_auxi->io_retry &&
+		    obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+			struct shard_auxi_args		*shard_auxi;
+
+			shard_auxi = obj_embedded_shard_arg(obj_auxi);
+			D_ASSERTF(shard_auxi->obj != NULL,
+				  "Bad auxi, ref %d (2)\n", dtp->dtp_refcnt);
+		}
+	}
 
 	return 0;
 err:
@@ -1566,28 +1623,6 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi, uint64_t epoch)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }
 
-static struct shard_auxi_args *
-obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
-{
-	switch (obj_auxi->opc) {
-	case DAOS_OBJ_RPC_UPDATE:
-	case DAOS_OBJ_RPC_FETCH:
-		return &obj_auxi->rw_args.auxi;
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-		return &obj_auxi->p_args.pa_auxi;
-	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
-	case DAOS_OBJ_RPC_ENUMERATE:
-	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
-	case DAOS_OBJ_RECX_RPC_ENUMERATE:
-		return &obj_auxi->l_args.la_auxi;
-	default:
-		D_ERROR("bad opc %d.\n", obj_auxi->opc);
-		return NULL;
-	};
-}
-
 static int
 shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 {
@@ -1716,6 +1751,14 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
+			{
+				struct tse_task_private		*dtp;
+
+				dtp = tse_task2priv(obj_task);
+				D_ASSERTF(shard_auxi->obj != NULL,
+					  "opc = %d, ref %d\n",
+					  obj_auxi->opc, dtp->dtp_refcnt);
+			}
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch);
 			shard_auxi->shard_io_cb = io_cb;
@@ -2045,12 +2088,15 @@ dc_obj_fetch(tse_task_t *task)
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, NULL, dkey_hash, 0,
 			      map_ver, obj_auxi->retry_with_leader,
 			      &obj_auxi->req_tgts);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ASSERTF(!obj_retry_error(rc), "AA(1) rc %d\n", rc);
 		D_GOTO(out_task, rc);
+	}
 
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
 			      false, false, task, obj_auxi);
 	if (rc != 0) {
+		D_ASSERTF(!obj_retry_error(rc), "AA(2) rc %d\n", rc);
 		D_ERROR("fetch "DF_OID", obj_rw_bulk_prep failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
 		goto out_task;
@@ -2114,8 +2160,10 @@ dc_obj_update(tse_task_t *task)
 	dkey_hash = obj_dkey2hash(args->dkey);
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_UPDATE, NULL, dkey_hash,
 			      tgt_set, map_ver, false, &obj_auxi->req_tgts);
-	if (rc)
+	if (rc) {
+		D_ASSERTF(!obj_retry_error(rc), "AA(3) rc %d\n", rc);
 		goto out_task;
+	}
 
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), dkey_hash);
@@ -2123,6 +2171,7 @@ dc_obj_update(tse_task_t *task)
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr, true,
 			      obj_auxi->req_tgts.ort_srv_disp, task, obj_auxi);
 	if (rc != 0) {
+		D_ASSERTF(!obj_retry_error(rc), "AA(4) rc %d\n", rc);
 		D_ERROR("update "DF_OID", bulk_prep failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
 		goto out_task;
@@ -2203,8 +2252,11 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	}
 	rc = obj_req_get_tgts(obj, opc, &shard, dkey_hash, 0, map_ver,
 			      to_leader, &obj_auxi->req_tgts);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ASSERTF(!obj_retry_error(rc), "AA(5) rc %d\n", rc);
 		goto out_task;
+	}
+
 	if (args->dkey == NULL)
 		dc_obj_shard2anchor(args->dkey_anchor, shard);
 
@@ -2331,8 +2383,10 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 	dkey_hash = obj_dkey2hash(api_args->dkey);
 	rc = obj_req_get_tgts(obj, opc, NULL, dkey_hash, 0, map_ver, false,
 			      &obj_auxi->req_tgts);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ASSERTF(!obj_retry_error(rc), "AA(6) rc %d\n", rc);
 		goto out_task;
+	}
 
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
