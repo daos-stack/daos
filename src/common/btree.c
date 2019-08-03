@@ -1495,7 +1495,8 @@ again:
 	case BTR_PROBE_GT:
 		if (cmp & BTR_CMP_GT) {
 			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH) &&
+			     intent == DAOS_INTENT_PUNCH ||
+			     probe_opc & BTR_PROBE_MATCHED) &&
 			    !(cmp & BTR_CMP_MATCHED))
 				break;
 
@@ -1548,7 +1549,8 @@ again:
 	case BTR_PROBE_LT:
 		if (cmp & BTR_CMP_LT) {
 			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH) &&
+			     intent == DAOS_INTENT_PUNCH ||
+			     probe_opc & BTR_PROBE_MATCHED) &&
 			    !(cmp & BTR_CMP_MATCHED))
 				break;
 
