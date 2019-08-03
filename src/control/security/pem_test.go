@@ -122,6 +122,54 @@ func TestLoadPrivateKey(t *testing.T) {
 		})
 	}
 }
+func TestLoadCertificate(t *testing.T) {
+	goodPath := "testdata/certs/daosCA.crt"
+	badPerm := "testdata/certs/badperms.crt"
+	malformed := "testdata/certs/bad.crt"
+	toomany := "testdata/certs/toomanypem.crt"
+	badError := &insecureError{badPerm, SafeCertPerm}
+	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
+	toomanyError := "Only one cert allowed per file"
+
+	// Setup permissions for tests below.
+	if err := os.Chmod(goodPath, SafeCertPerm); err != nil {
+		t.Fatal(err)
+	}
+	// Intentionallly safe cert perm as it should be incorrect
+	if err := os.Chmod(badPerm, SafeKeyPerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(malformed, SafeCertPerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(toomany, SafeCertPerm); err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		filename string
+		testname string
+		expected string
+	}{
+		{goodPath, "GoodKey", ""},
+		{badPerm, "ImproperPermissions", badError.Error()},
+		{malformed, "Malformed Key", malformedError},
+		{toomany, "InvalidPEMCount", toomanyError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.testname, func(t *testing.T) {
+			result := ""
+			_, err := LoadCertificate(tc.filename)
+			if err != nil {
+				result = err.Error()
+			}
+			if strings.Compare(result, tc.expected) != 0 {
+				t.Errorf("result %s; expected %s", result, tc.expected)
+			}
+		})
+	}
+}
 func TestValidateCertDirectory(t *testing.T) {
 	goodDirPath := "testdata/certs/goodperms"
 	badDirPerm := "testdata/certs/badperms"
