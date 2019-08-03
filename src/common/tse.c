@@ -123,12 +123,21 @@ tse_task_stack_push(tse_task_t *task, uint32_t size)
 		   size, avail_size, sizeof(dtp->dtp_buf),
 		   dtp->dtp_stack_top, dtp->dtp_embed_top);
 
+	dtp->dtp_pushed++;
 	dtp->dtp_stack_top += size;
 	pushed_ptr = dtp->dtp_buf + sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
 	D_ASSERT((dtp->dtp_stack_top + dtp->dtp_embed_top) <=
 		  sizeof(dtp->dtp_buf));
 
 	return pushed_ptr;
+}
+
+int
+tse_task_stack_pushed(tse_task_t *task)
+{
+	struct tse_task_private	*dtp = tse_task2priv(task);
+
+	return dtp->dtp_pushed;
 }
 
 void *
@@ -143,6 +152,7 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size)
 
 	poped_ptr = dtp->dtp_buf + sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
 	dtp->dtp_stack_top -= size;
+	dtp->dtp_pushed--;
 	D_ASSERT((dtp->dtp_stack_top + dtp->dtp_embed_top) <=
 		  sizeof(dtp->dtp_buf));
 

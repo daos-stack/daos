@@ -986,6 +986,7 @@ struct obj_auxi_args {
 	int				 result;
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
+	int				 io_retried;
 	uint32_t			 io_retry:1,
 					 shard_task_scheded:1,
 					 retry_with_leader:1;
@@ -1629,10 +1630,15 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 static int
 shard_io_task(tse_task_t *task)
 {
-	struct shard_auxi_args		*shard_auxi;
+	struct shard_auxi_args	*shard_auxi;
+	struct obj_auxi_args	*obj_auxi;
 
 	shard_auxi = tse_task_buf_embedded(task, sizeof(*shard_auxi));
+	obj_auxi = shard_auxi->obj_auxi;
 
+	D_ASSERT(obj_auxi);
+	D_ASSERTF(shard_auxi->obj, "retried=%d, pushed=%d\n",
+		  obj_auxi->io_retried, tse_task_stack_pushed(task));
 	return shard_io(task, shard_auxi);
 }
 
@@ -1716,6 +1722,10 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
+			D_ASSERTF(shard_auxi->obj, "retried=%d, pushed=%d\n",
+				  obj_auxi->io_retried,
+				  tse_task_stack_pushed(obj_task));
+
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch);
 			shard_auxi->shard_io_cb = io_cb;
@@ -1834,10 +1844,8 @@ shard_task_remove(tse_task_t *task, void *arg)
 static void
 shard_task_list_init(struct obj_auxi_args *auxi)
 {
-	if (auxi->io_retry == 0) {
+	if (!auxi->io_retry)
 		D_INIT_LIST_HEAD(&auxi->shard_task_head);
-		return;
-	}
 }
 
 static void
@@ -1952,6 +1960,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	}
 	if (obj_retry_error(task->dt_result)) {
 		obj_auxi->io_retry = 1;
+		obj_auxi->io_retried++;
 		if (task->dt_result == -DER_INPROGRESS)
 			obj_auxi->retry_with_leader = 1;
 	}

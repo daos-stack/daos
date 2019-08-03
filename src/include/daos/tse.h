@@ -265,6 +265,9 @@ tse_task_stack_push(tse_task_t *task, uint32_t size);
 void *
 tse_task_stack_pop(tse_task_t *task, uint32_t size);
 
+int
+tse_task_stack_pushed(tse_task_t *task);
+
 /**
  * Push data to task stack space, will copy the data to stack.
  *
