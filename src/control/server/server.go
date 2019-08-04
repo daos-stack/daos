@@ -161,7 +161,7 @@ func Main() error {
 	if err != nil {
 		return errors.WithMessage(err, "load server")
 	}
-	if err = drpcSetup(config.SocketDir, iosrv); err != nil {
+	if err = drpcSetup(config.SocketDir, iosrv, config.TransportConfig); err != nil {
 		return errors.WithMessage(err, "set up dRPC")
 	}
 	if err = iosrv.start(); err != nil {
