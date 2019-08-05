@@ -122,6 +122,17 @@ dss_sleep(int ms)
 }
 
 int
+drpc_progress_init(void)
+{
+	return 0;
+}
+
+int drpc_progress_fini(void)
+{
+	return 0;
+}
+
+int
 drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
 {
 	return 0;

@@ -78,6 +78,22 @@ drpc_progress_context_create(struct drpc *listener);
 void drpc_progress_context_close(struct drpc_progress_context *ctx);
 
 /**
+ * Initialize internal variables required for drpc_progress.
+ *
+ * \return	0		Success
+ *		-DER_NOMEM	Out of memory
+ */
+int drpc_progress_init(void);
+
+/**
+ * Clean up internal drpc_progress state.
+ *
+ * \return	0		Success
+ *		-DER_NOMEM	Out of memory
+ */
+int drpc_progress_fini(void);
+
+/**
  * Check drpc contexts for activity, and handle that activity.
  *
  * Incoming messages are processed using the dRPC handler.

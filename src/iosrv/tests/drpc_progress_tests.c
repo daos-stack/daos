@@ -34,6 +34,17 @@
 #include "../drpc_internal.h"
 
 /*
+ * Mocks
+ */
+int
+dss_ult_create_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
+		       void *cb_args, int ult_type, int tgt_id,
+		       size_t stack_size)
+{
+	return 0;
+}
+
+/*
  * Setup and teardown
  */
 static int
@@ -46,6 +57,8 @@ drpc_progress_test_setup(void **state)
 	mock_drpc_handler_setup();
 	mock_close_setup();
 
+	drpc_progress_init();
+
 	return 0;
 }
 
@@ -54,6 +67,8 @@ drpc_progress_test_teardown(void **state)
 {
 	mock_poll_teardown();
 	mock_drpc_handler_teardown();
+
+	drpc_progress_fini();
 
 	return 0;
 }

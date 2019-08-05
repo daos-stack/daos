@@ -356,6 +356,8 @@ enum dss_ult_type {
 	DSS_ULT_DRPC,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
+	/** drpc handler ULT */
+	DSS_ULT_DRPC_HANDLER,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);

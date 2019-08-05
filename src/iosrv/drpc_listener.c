@@ -187,6 +187,10 @@ drpc_listener_init(void)
 		return dss_abterr2der(rc);
 	}
 
+	rc = drpc_progress_init();
+	if (rc != 0)
+		return rc;
+
 	return drpc_listener_start_ult(&status.thread);
 }
 
@@ -216,6 +220,10 @@ drpc_listener_fini(void)
 	int	tmp_rc;
 
 	rc = drpc_listener_stop();
+
+	tmp_rc = drpc_progress_fini();
+	if (tmp_rc != 0)
+		rc = tmp_rc;
 
 	tmp_rc = ABT_thread_free(&status.thread);
 	if (tmp_rc != ABT_SUCCESS) {
