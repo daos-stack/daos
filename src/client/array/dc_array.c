@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,18 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * This file is part of daos_m
+ * This file is part of daos
  *
- * src/addons/dac_array.c
+ * src/array/dc_array.c
  */
-#define D_LOGFAC	DD_FAC(addons)
+#define D_LOGFAC	DD_FAC(array)
 
 #include <daos.h>
 #include <daos/tse.h>
 #include <daos/object.h>
 #include <daos/container.h>
-#include <daos/addons.h>
-#include <daos_addons.h>
+#include <daos/array.h>
+#include <daos_array.h>
 #include <daos_task.h>
 
 #define AKEY_MAGIC_V	0xdaca55a9daca55a9
@@ -40,7 +40,7 @@
 #define CELL_SIZE	"daos_array_cell_size"
 #define CHUNK_SIZE	"daos_array_chunk_size"
 
-struct dac_array {
+struct dc_array {
 	/** link chain in the global handle hash table */
 	struct d_hlink		hlink;
 	/** DAOS KV object handle */
@@ -60,10 +60,10 @@ struct dac_array {
 struct md_params {
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
-	char			*akey_str;
+	char			akey_str;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	d_iov_t		sg_iov;
+	d_iov_t			sg_iov;
 	uint64_t		md_vals[3];
 };
 
@@ -82,9 +82,9 @@ struct io_params {
 static void
 array_free(struct d_hlink *hlink)
 {
-	struct dac_array *array;
+	struct dc_array *array;
 
-	array = container_of(hlink, struct dac_array, hlink);
+	array = container_of(hlink, struct dc_array, hlink);
 	D_ASSERT(daos_hhash_link_empty(&array->hlink));
 	D_FREE(array);
 }
@@ -93,10 +93,10 @@ static struct d_hlink_ops array_h_ops = {
 	.hop_free	= array_free,
 };
 
-static struct dac_array *
+static struct dc_array *
 array_alloc(void)
 {
-	struct dac_array *array;
+	struct dc_array *array;
 
 	D_ALLOC_PTR(array);
 	if (array == NULL)
@@ -107,13 +107,13 @@ array_alloc(void)
 }
 
 static void
-array_decref(struct dac_array *array)
+array_decref(struct dc_array *array)
 {
 	daos_hhash_link_putref(&array->hlink);
 }
 
 static daos_handle_t
-array_ptr2hdl(struct dac_array *array)
+array_ptr2hdl(struct dc_array *array)
 {
 	daos_handle_t oh;
 
@@ -121,7 +121,7 @@ array_ptr2hdl(struct dac_array *array)
 	return oh;
 }
 
-static struct dac_array *
+static struct dc_array *
 array_hdl2ptr(daos_handle_t oh)
 {
 	struct d_hlink *hlink;
@@ -130,17 +130,17 @@ array_hdl2ptr(daos_handle_t oh)
 	if (hlink == NULL)
 		return NULL;
 
-	return container_of(hlink, struct dac_array, hlink);
+	return container_of(hlink, struct dc_array, hlink);
 }
 
 static void
-array_hdl_link(struct dac_array *array)
+array_hdl_link(struct dc_array *array)
 {
 	daos_hhash_link_insert(&array->hlink, DAOS_HTYPE_ARRAY);
 }
 
 static void
-array_hdl_unlink(struct dac_array *array)
+array_hdl_unlink(struct dc_array *array)
 {
 	daos_hhash_link_delete(&array->hlink);
 }
@@ -193,7 +193,7 @@ static int
 create_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_create_t	*args = *((daos_array_create_t **)data);
-	struct dac_array	*array;
+	struct dc_array		*array;
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
@@ -236,7 +236,7 @@ static int
 free_handle_cb(tse_task_t *task, void *data)
 {
 	daos_handle_t		*oh = (daos_handle_t *)data;
-	struct dac_array	*array;
+	struct dc_array		*array;
 	int			rc = task->dt_result;
 
 	if (rc != 0)
@@ -252,10 +252,10 @@ free_handle_cb(tse_task_t *task, void *data)
 	return 0;
 }
 
-#define DAC_ARRAY_GLOB_MAGIC	(0xdaca0387)
+#define DC_ARRAY_GLOB_MAGIC	(0xdaca0387)
 
-/* Structure of global buffer for dac_array */
-struct dac_array_glob {
+/* Structure of global buffer for dc_array */
+struct dc_array_glob {
 	uint32_t	magic;
 	uint32_t	mode;
 	daos_obj_id_t	oid;
@@ -266,13 +266,13 @@ struct dac_array_glob {
 };
 
 static inline daos_size_t
-dac_array_glob_buf_size()
+dc_array_glob_buf_size()
 {
-	return sizeof(struct dac_array_glob);
+	return sizeof(struct dc_array_glob);
 }
 
 static inline void
-swap_array_glob(struct dac_array_glob *array_glob)
+swap_array_glob(struct dc_array_glob *array_glob)
 {
 	D_ASSERT(array_glob != NULL);
 
@@ -287,14 +287,14 @@ swap_array_glob(struct dac_array_glob *array_glob)
 }
 
 static int
-dac_array_l2g(daos_handle_t oh, d_iov_t *glob)
+dc_array_l2g(daos_handle_t oh, d_iov_t *glob)
 {
-	struct dac_array	*array;
-	struct dac_array_glob	*array_glob;
-	uuid_t			 coh_uuid;
-	uuid_t			 cont_uuid;
-	daos_size_t		 glob_buf_size;
-	int			 rc = 0;
+	struct dc_array		*array;
+	struct dc_array_glob	*array_glob;
+	uuid_t			coh_uuid;
+	uuid_t			cont_uuid;
+	daos_size_t		glob_buf_size;
+	int			rc = 0;
 
 	D_ASSERT(glob != NULL);
 
@@ -306,7 +306,7 @@ dac_array_l2g(daos_handle_t oh, d_iov_t *glob)
 	if (rc != 0)
 		D_GOTO(out_array, rc);
 
-	glob_buf_size = dac_array_glob_buf_size();
+	glob_buf_size = dc_array_glob_buf_size();
 
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
@@ -323,8 +323,8 @@ dac_array_l2g(daos_handle_t oh, d_iov_t *glob)
 	glob->iov_len = glob_buf_size;
 
 	/* init global handle */
-	array_glob = (struct dac_array_glob *)glob->iov_buf;
-	array_glob->magic	= DAC_ARRAY_GLOB_MAGIC;
+	array_glob = (struct dc_array_glob *)glob->iov_buf;
+	array_glob->magic	= DC_ARRAY_GLOB_MAGIC;
 	array_glob->cell_size	= array->cell_size;
 	array_glob->chunk_size	= array->chunk_size;
 	array_glob->mode	= array->mode;
@@ -342,7 +342,7 @@ out:
 }
 
 int
-dac_array_local2global(daos_handle_t oh, d_iov_t *glob)
+dc_array_local2global(daos_handle_t oh, d_iov_t *glob)
 {
 	int rc = 0;
 
@@ -359,17 +359,17 @@ dac_array_local2global(daos_handle_t oh, d_iov_t *glob)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dac_array_l2g(oh, glob);
+	rc = dc_array_l2g(oh, glob);
 
 out:
 	return rc;
 }
 
 static int
-dac_array_g2l(daos_handle_t coh, struct dac_array_glob *array_glob,
+dc_array_g2l(daos_handle_t coh, struct dc_array_glob *array_glob,
 	      unsigned int mode, daos_handle_t *oh)
 {
-	struct dac_array	*array;
+	struct dc_array		*array;
 	uuid_t			coh_uuid;
 	uuid_t			cont_uuid;
 	unsigned int		array_mode;
@@ -420,10 +420,10 @@ out:
 }
 
 int
-dac_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
+dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 		       daos_handle_t *oh)
 {
-	struct dac_array_glob	*array_glob;
+	struct dc_array_glob	*array_glob;
 	int			 rc = 0;
 
 	if (oh == NULL) {
@@ -432,19 +432,19 @@ dac_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 	}
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
-	    glob.iov_len != dac_array_glob_buf_size()) {
+	    glob.iov_len != dc_array_glob_buf_size()) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, "
 			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	array_glob = (struct dac_array_glob *)glob.iov_buf;
-	if (array_glob->magic == D_SWAP32(DAC_ARRAY_GLOB_MAGIC)) {
+	array_glob = (struct dc_array_glob *)glob.iov_buf;
+	if (array_glob->magic == D_SWAP32(DC_ARRAY_GLOB_MAGIC)) {
 		swap_array_glob(array_glob);
-		D_ASSERT(array_glob->magic == DAC_ARRAY_GLOB_MAGIC);
+		D_ASSERT(array_glob->magic == DC_ARRAY_GLOB_MAGIC);
 
-	} else if (array_glob->magic != DAC_ARRAY_GLOB_MAGIC) {
+	} else if (array_glob->magic != DC_ARRAY_GLOB_MAGIC) {
 		D_ERROR("Bad magic value: 0x%x.\n", array_glob->magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -455,9 +455,9 @@ dac_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dac_array_g2l(coh, array_glob, mode, oh);
+	rc = dc_array_g2l(coh, array_glob, mode, oh);
 	if (rc != 0)
-		D_ERROR("dac_array_g2l failed (%d).\n", rc);
+		D_ERROR("dc_array_g2l failed (%d).\n", rc);
 
 out:
 	return rc;
@@ -477,9 +477,8 @@ set_md_params(struct md_params *params)
 	params->sgl.sg_iovs	= &params->sg_iov;
 
 	/** set IOD */
-	params->akey_str = ARRAY_MD_KEY;
-	d_iov_set(&params->iod.iod_name, (void *)params->akey_str,
-		     strlen(params->akey_str));
+	params->akey_str = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
 	daos_csum_set(&params->iod.iod_kcsum, NULL, 0);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_size	= sizeof(params->md_vals);
@@ -532,7 +531,7 @@ write_md_cb(tse_task_t *task, void *data)
 }
 
 int
-dac_array_create(tse_task_t *task)
+dc_array_create(tse_task_t *task)
 {
 	daos_array_create_t	*args = daos_task_get_args(task);
 	tse_task_t		*open_task, *update_task;
@@ -542,7 +541,15 @@ dac_array_create(tse_task_t *task)
 
 	ofeat = daos_obj_id2feat(args->oid);
 	if (!(ofeat & DAOS_OF_DKEY_UINT64)) {
-		D_ERROR("Array Dkeys must be UINT64 Typed (OID features).\n");
+		D_ERROR("Array Dkeys must be UINT64 Typed (OID feats).\n");
+		D_GOTO(err_ptask, rc = -DER_INVAL);
+	}
+	if (!(ofeat & DAOS_OF_KV_FLAT)) {
+		D_ERROR("Array must be of type Flat KV (OID feats).\n");
+		D_GOTO(err_ptask, rc = -DER_INVAL);
+	}
+	if (!(ofeat & DAOS_OF_ARRAY)) {
+		D_ERROR("Array Create must have DAOS_OF_ARRAY (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
 
@@ -611,7 +618,7 @@ static int
 open_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_open_t	*args = *((daos_array_open_t **)data);
-	struct dac_array	*array;
+	struct dc_array		*array;
 	struct md_params	*params;
 	uint64_t		*md_vals;
 	int			rc = task->dt_result;
@@ -619,24 +626,23 @@ open_handle_cb(tse_task_t *task, void *data)
 	if (rc != 0)
 		D_GOTO(err_obj, rc);
 
-	/** Check magic value */
-	params = daos_task_get_priv(task);
-	D_ASSERT(params != NULL);
-	md_vals = params->md_vals;
-	if (md_vals[0] != AKEY_MAGIC_V) {
-		D_ERROR("DAOS Object is not an array object\n");
-		D_GOTO(err_obj, rc = -DER_NO_PERM);
-	}
+	/** check and set array metadata in case of array_open */
+	if (!args->open_with_attr) {
+		/** Check magic value */
+		params = daos_task_get_priv(task);
+		D_ASSERT(params != NULL);
+		md_vals = params->md_vals;
+		if (md_vals[0] != AKEY_MAGIC_V)
+			D_GOTO(err_obj, rc = -DER_NO_PERM);
 
-	/** If no cell and chunk size, this isn't an array obj. */
-	if (md_vals[1] == 0 || md_vals[2] == 0) {
-		D_ERROR("Failed to retrieve array metadata\n");
-		D_GOTO(err_obj, rc = -DER_NO_PERM);
-	}
+		/** If no cell and chunk size, this isn't an array obj. */
+		if (md_vals[1] == 0 || md_vals[2] == 0)
+			D_GOTO(err_obj, rc = -DER_NO_PERM);
 
-	/** Set array open OUT params */
-	*args->cell_size	= md_vals[1];
-	*args->chunk_size	= md_vals[2];
+		/** Set array open OUT params */
+		*args->cell_size	= md_vals[1];
+		*args->chunk_size	= md_vals[2];
+	}
 
 	/** Create an array OH from the DAOS one */
 	array = array_alloc();
@@ -647,8 +653,8 @@ open_handle_cb(tse_task_t *task, void *data)
 	array->oid.hi		= args->oid.hi;
 	array->oid.lo		= args->oid.lo;
 	array->mode		= args->mode;
-	array->cell_size	= md_vals[1];
-	array->chunk_size	= md_vals[2];
+	array->cell_size	= *args->cell_size;
+	array->chunk_size	= *args->chunk_size;
 	array->daos_oh		= *args->oh;
 
 	array_hdl_link(array);
@@ -699,18 +705,35 @@ fetch_md_cb(tse_task_t *task, void *data)
 }
 
 int
-dac_array_open(tse_task_t *task)
+dc_array_open(tse_task_t *task)
 {
 	daos_array_open_t	*args = daos_task_get_args(task);
-	tse_task_t		*open_task, *fetch_task;
+	tse_task_t		*open_task = NULL, *fetch_task = NULL;
 	daos_obj_open_t		*open_args;
 	struct md_params	*params;
 	daos_ofeat_t		ofeat;
 	int			rc;
 
+	if (args->open_with_attr)
+		if (*args->cell_size == 0 || *args->chunk_size == 0)
+			D_GOTO(err_ptask, rc = -DER_INVAL);
+
 	ofeat = daos_obj_id2feat(args->oid);
 	if (!(ofeat & DAOS_OF_DKEY_UINT64)) {
-		D_ERROR("Array Dkeys must be UINT64 Typed (OID features).\n");
+		D_ERROR("Array Dkeys must be UINT64 Typed (OID feats).\n");
+		D_GOTO(err_ptask, rc = -DER_INVAL);
+	}
+	if (!(ofeat & DAOS_OF_KV_FLAT)) {
+		D_ERROR("Array must be of type Flat KV (OID feats).\n");
+		D_GOTO(err_ptask, rc = -DER_INVAL);
+	}
+	if (!args->open_with_attr && !(ofeat & DAOS_OF_ARRAY)) {
+		D_ERROR("Array Open must have DAOS_OF_ARRAY (OID feats).\n");
+		D_GOTO(err_ptask, rc = -DER_INVAL);
+	}
+	if (args->open_with_attr && (ofeat & DAOS_OF_ARRAY)) {
+		D_ERROR("Array open_with_attr must not have DAOS_OF_ARRAY"
+			" (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
 
@@ -729,6 +752,26 @@ dac_array_open(tse_task_t *task)
 	open_args->oh	= args->oh;
 
 	tse_task_schedule(open_task, false);
+
+	/** if this is an open_with_attr call, just add the handle CB */
+	if (args->open_with_attr) {
+		/** The upper task completes when the open task completes */
+		rc = tse_task_register_deps(task, 1, &open_task);
+		if (rc != 0) {
+			D_ERROR("Failed to register dependency\n");
+			D_GOTO(err_put2, rc);
+		}
+
+		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
+					       sizeof(args));
+		if (rc != 0) {
+			D_ERROR("Failed to register completion cb\n");
+			D_GOTO(err_put1, rc);
+		}
+
+		tse_sched_progress(tse_task2sched(task));
+		return rc;
+	}
 
 	/** Create task to fetch object metadata */
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
@@ -797,10 +840,10 @@ err_ptask:
 }
 
 int
-dac_array_close(tse_task_t *task)
+dc_array_close(tse_task_t *task)
 {
 	daos_array_close_t	*args = daos_task_get_args(task);
-	struct dac_array	*array;
+	struct dc_array		*array;
 	tse_task_t		*close_task;
 	daos_obj_close_t	*close_args;
 	int			rc;
@@ -849,10 +892,10 @@ err_ptask:
 }
 
 int
-dac_array_destroy(tse_task_t *task)
+dc_array_destroy(tse_task_t *task)
 {
 	daos_array_destroy_t	*args = daos_task_get_args(task);
-	struct dac_array	*array;
+	struct dc_array		*array;
 	tse_task_t		*punch_task;
 	daos_obj_punch_t	*punch_args;
 	int			rc;
@@ -936,7 +979,7 @@ io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl,
  * writing. - the record index relative to the dkey.
  */
 static int
-compute_dkey(struct dac_array *array, daos_off_t array_idx,
+compute_dkey(struct dc_array *array, daos_off_t array_idx,
 	     daos_size_t *num_records, daos_off_t *record_i, uint64_t *dkey)
 {
 	daos_size_t	dkey_val;	/* dkey number */
@@ -955,7 +998,7 @@ compute_dkey(struct dac_array *array, daos_off_t array_idx,
 	if (num_records)
 		*num_records = array->chunk_size - rec_i;
 
-	*dkey = dkey_val;
+	*dkey = dkey_val + 1;
 	return 0;
 }
 
@@ -1019,11 +1062,11 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 }
 
 static int
-dac_array_io(daos_handle_t array_oh, daos_handle_t th,
-	     daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
-	     daos_opc_t op_type, tse_task_t *task)
+dc_array_io(daos_handle_t array_oh, daos_handle_t th,
+	    daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
+	    daos_opc_t op_type, tse_task_t *task)
 {
-	struct dac_array *array = NULL;
+	struct dc_array *array = NULL;
 	daos_handle_t	oh;
 	daos_off_t	cur_off; /* offset into user buf to track current pos */
 	daos_size_t	cur_i; /* index into user sgl to track current pos */
@@ -1334,30 +1377,30 @@ err_task:
 }
 
 int
-dac_array_read(tse_task_t *task)
+dc_array_read(tse_task_t *task)
 {
 	daos_array_io_t *args = daos_task_get_args(task);
 
-	return dac_array_io(args->oh, args->th, args->iod, args->sgl,
-			    DAOS_OPC_ARRAY_READ, task);
+	return dc_array_io(args->oh, args->th, args->iod, args->sgl,
+			   DAOS_OPC_ARRAY_READ, task);
 }
 
 int
-dac_array_write(tse_task_t *task)
+dc_array_write(tse_task_t *task)
 {
 	daos_array_io_t *args = daos_task_get_args(task);
 
-	return dac_array_io(args->oh, args->th, args->iod, args->sgl,
-			    DAOS_OPC_ARRAY_WRITE, task);
+	return dc_array_io(args->oh, args->th, args->iod, args->sgl,
+			   DAOS_OPC_ARRAY_WRITE, task);
 }
 
 int
-dac_array_punch(tse_task_t *task)
+dc_array_punch(tse_task_t *task)
 {
 	daos_array_io_t *args = daos_task_get_args(task);
 
-	return dac_array_io(args->oh, args->th, args->iod, NULL,
-			    DAOS_OPC_ARRAY_PUNCH, task);
+	return dc_array_io(args->oh, args->th, args->iod, NULL,
+			   DAOS_OPC_ARRAY_PUNCH, task);
 }
 
 #define ENUM_KEY_BUF	32
@@ -1365,7 +1408,7 @@ dac_array_punch(tse_task_t *task)
 #define ENUM_DESC_NR	5
 
 struct key_query_props {
-	struct dac_array	*array;
+	struct dc_array		*array;
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
 	daos_key_t		akey;
@@ -1399,17 +1442,23 @@ get_array_size_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_IO, "Key Query: dkey %zu, IDX %"PRIu64", NR %"PRIu64"\n",
 		props->dkey_val, props->recx.rx_idx, props->recx.rx_nr);
-	*props->size = props->array->chunk_size * props->dkey_val +
+
+	if (props->dkey_val == 0) {
+		*props->size = 0;
+		return rc;
+	}
+
+	*props->size = props->array->chunk_size * (props->dkey_val - 1) +
 		props->recx.rx_idx + props->recx.rx_nr;
 
 	return rc;
 }
 
 int
-dac_array_get_size(tse_task_t *task)
+dc_array_get_size(tse_task_t *task)
 {
 	daos_array_get_size_t	*args = daos_task_get_args(task);
-	struct dac_array	*array;
+	struct dc_array		*array;
 	daos_obj_query_key_t	*query_args;
 	struct key_query_props	*kqp = NULL;
 	tse_task_t		*query_task = NULL;
@@ -1484,7 +1533,7 @@ err_task:
 } /* end daos_array_get_size */
 
 struct set_size_props {
-	struct dac_array *array;
+	struct dc_array *array;
 	char		buf[ENUM_DESC_BUF];
 	daos_key_desc_t kds[ENUM_DESC_NR];
 	char		*val;
@@ -1539,13 +1588,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	/** Punch this entire dkey */
 	D_DEBUG(DB_IO, "Punching Key %zu\n", dkey_val);
 
-	/*
-	 * If this is dkey "0", punch only the akey "0" because
-	 * it contains other metadata keys that we don't want to
-	 * punch.
-	 */
-	if (dkey_val == 0)
-		opc = DAOS_OPC_OBJ_PUNCH_AKEYS;
+	D_ASSERT(dkey_val != 0);
 
 	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
@@ -1557,17 +1600,6 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	p_args->oh	= oh;
 	p_args->th	= th;
 	p_args->dkey	= dkey;
-
-	/** set akey if we punch akey "0" only */
-	if (dkey_val == 0) {
-		daos_key_t *akey;
-
-		akey = &params->iod.iod_name;
-		params->akey_str = '0';
-		d_iov_set(akey, &params->akey_str, 1);
-		p_args->akey_nr = 1;
-		p_args->akeys = akey;
-	}
 
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
 				       sizeof(params));
@@ -1728,10 +1760,10 @@ check_record_cb(tse_task_t *task, void *data)
 	if (rc)
 		D_GOTO(err, rc);
 
-	/* params->task is the original task of dac_array_set_size, should make
+	/* params->task is the original task of dc_array_set_size, should make
 	 * io_task as dep task of params->task rather than the passed in task
 	 * (which is the check_record's OBJ_FETCH task) to make sure the io_task
-	 * complete before original task of dac_array_set_size's completion.
+	 * complete before original task of dc_array_set_size's completion.
 	 */
 	rc = tse_task_register_deps(params->task, 1, &io_task);
 	if (rc)
@@ -1936,6 +1968,9 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		ptr += args->kds[i].kd_key_len;
 
 		if (props->size == 0 || dkey_val > props->dkey_val) {
+			/** Do nothing for DKEY 0 (metadata) */
+			if (dkey_val == 0)
+				continue;
 			/*
 			 * Punch the entire dkey since it's in a higher dkey
 			 * group than the intended size.
@@ -2009,11 +2044,11 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 }
 
 int
-dac_array_set_size(tse_task_t *task)
+dc_array_set_size(tse_task_t *task)
 {
 	daos_array_set_size_t	*args;
 	daos_handle_t		oh;
-	struct dac_array	*array;
+	struct dc_array		*array;
 	uint64_t		dkey_val;
 	daos_size_t		num_records;
 	daos_off_t		record_i;
@@ -2031,7 +2066,7 @@ dac_array_set_size(tse_task_t *task)
 
 	/** get key information for the last record */
 	if (args->size == 0) {
-		dkey_val = 0;
+		dkey_val = 1;
 		num_records = array->chunk_size;
 		record_i = 0;
 	} else {

@@ -36,7 +36,7 @@ func GetServerTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 		return nil, errors.New("nil TransportConfig")
 	}
 
-	if cfg.TLSKeypair == nil || cfg.CAPool == nil {
+	if cfg.tlsKeypair == nil || cfg.caPool == nil {
 		err := cfg.PreLoadCertData()
 		if err != nil {
 			return nil, err
@@ -45,8 +45,8 @@ func GetServerTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 
 	tlsConfig := tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
-		Certificates: []tls.Certificate{*cfg.TLSKeypair},
-		ClientCAs:    cfg.CAPool,
+		Certificates: []tls.Certificate{*cfg.tlsKeypair},
+		ClientCAs:    cfg.caPool,
 	}
 	creds := credentials.NewTLS(&tlsConfig)
 	return creds, nil
@@ -57,7 +57,7 @@ func GetClientTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 		return nil, errors.New("nil TransportConfig")
 	}
 
-	if cfg.TLSKeypair == nil || cfg.CAPool == nil {
+	if cfg.tlsKeypair == nil || cfg.caPool == nil {
 		err := cfg.PreLoadCertData()
 		if err != nil {
 			return nil, err
@@ -66,8 +66,8 @@ func GetClientTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 
 	tlsConfig := tls.Config{
 		ServerName:   cfg.ServerName,
-		Certificates: []tls.Certificate{*cfg.TLSKeypair},
-		RootCAs:      cfg.CAPool,
+		Certificates: []tls.Certificate{*cfg.tlsKeypair},
+		RootCAs:      cfg.caPool,
 	}
 	creds := credentials.NewTLS(&tlsConfig)
 	return creds, nil

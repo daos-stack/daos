@@ -33,7 +33,6 @@ def scons():
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
-    SConscript('addons/SConscript', exports=['denv'])
 
     # Build daosctl
     SConscript('daosctl/SConscript')

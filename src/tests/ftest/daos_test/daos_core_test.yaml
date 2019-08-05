@@ -43,7 +43,13 @@ daos_tests:
       test_timeout: 900
     test_A:
       daos_test: A
+      test_name: DAOS Object Array tests
+    test_D:
+      daos_test: D
       test_name: DAOS Array tests
+    test_K:
+      daos_test: K
+      test_name: DAOS KV tests
     test_C:
       daos_test: C
       test_name: DAOS capability tests

@@ -25,8 +25,7 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from daos_api import DaosApiError
-from general_utils import get_container
-from test_utils import TestPool
+from test_utils import TestPool, TestContainer
 from conversion import c_uuid_to_str
 import ctypes
 import uuid
@@ -59,13 +58,11 @@ class EvictTests(TestWithServers):
         # Check that the pool was created
         status = pool.check_files(hostlist)
         if not status:
-            self.log.error("Invalid pool - pool data not detected on servers")
-            return None
+            self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
         status = pool.connect(1)
         if not status:
-            self.log.error("Pool connect failed or already connected")
-            return None
+            self.fail("Pool connect failed or already connected")
         # Return connected pool
         return pool
 
@@ -77,6 +74,7 @@ class EvictTests(TestWithServers):
 
         Returns:
             TestPool (bool)
+
         """
         # setup pool and connect
         self.pool = self.connected_pool(self.hostlist_servers)
@@ -93,7 +91,10 @@ class EvictTests(TestWithServers):
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
             # Attempt to evict pool with invald UUID
-            bogus_uuid = str(uuid.uuid4())
+            bogus_uuid = self.pool.uuid
+            # in case uuid4() generates pool.uuid
+            while bogus_uuid == self.pool.uuid:
+                bogus_uuid = str(uuid.uuid4())
             # set the UUID directly
             self.pool.pool.set_uuid_str(bogus_uuid)
             self.log.info(
@@ -106,13 +107,15 @@ class EvictTests(TestWithServers):
             self.pool.pool.evict()
         # exception is expected
         except DaosApiError as result:
-            if "-1005" in str(result):
+            status = "-1005" in str(result)
+            if status:
                 self.log.info(
                     "Expected exception - invalid param %s\n %s\n",
                     test_param, str(result))
             else:
-                self.log.info("Unexpected exception \n %s", str(result))
-
+                self.log.info(
+                    "Unexpected exception - invalid param %s\n %s\n",
+                    test_param, str(result))
             # Restore the valid server group name or uuid and verify that
             # pool still exists and the handle is still valid.
             if "BAD_SERVER_NAME" in test_param:
@@ -120,13 +123,14 @@ class EvictTests(TestWithServers):
                     self.server_group)
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
+
             self.log.info("Check if pool handle still exist")
             if int(self.pool.pool.handle.value) == 0:
                 self.log.error(
                     "Pool handle was removed when evicting pool with %s",
                     test_param)
-                return False
-            return True
+                status &= False
+            return status
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
         # still exists
@@ -167,7 +171,6 @@ class EvictTests(TestWithServers):
         """
         pool = []
         container = []
-        cont_uuid = []
         non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
@@ -179,27 +182,25 @@ class EvictTests(TestWithServers):
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))
-            if pool[count] is None:
-                self.fail("Failed to Create a connected pool")
-
             if len(non_pool_servers[count]) > 0:
                 self.assertFalse(
                     pool[count].check_files(non_pool_servers[count]),
                     "Pool # {} data detected on non pool servers {} ".format(
                         count+1, non_pool_servers[count]))
 
-            # # Connect to each pool
-            # self.assertTrue(pool[count].connect(1),
-            #                 "Pool connect failed before evict")
             self.log.info("Pool # %s is connected with handle %s",
                           count+1, pool[count].pool.handle.value)
 
             # Create a container
-            container.append(get_container(
-                self.context, pool[count].pool, self.log))
-            cont_uuid.append(container[count].get_uuid_str())
-            self.log.info("Pool # %s has container %s",
-                          count+1, cont_uuid[count])
+            # container.append(get_container(
+            #     self.context, pool[count].pool, self.log))
+            # cont_uuid.append(container[count].get_uuid_str())
+            # self.log.info("Pool # %s has container %s",
+            #               count+1, cont_uuid[count])
+            container.append(TestContainer(pool[count]))
+            container[count].get_params(self)
+            container[count].create()
+            container[count].write_objects(target_list[-1])
 
         try:
             self.log.info(

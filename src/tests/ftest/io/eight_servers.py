@@ -23,6 +23,7 @@
 """
 from ior_test_base import IorTestBase
 
+
 class IorEightServers(IorTestBase):
     """Test class Description: Runs IOR with 8 servers.
 
