@@ -100,8 +100,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
-	mode_t				mode;
-	int rc;
+	int				rc;
 
 	DFUSE_TRA_INFO(fs_handle,
 		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
@@ -117,7 +116,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			    O_RDONLY, &ie->ie_obj, &mode);
+			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
 			       strerror(-rc));
@@ -127,10 +126,6 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
-
-	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc)
-		D_GOTO(err, rc = -rc);
 
 	/* If the new entry is a link allocate an inode number here, as dfs
 	 * does not assign it an object id to be able to save an inode.
