@@ -217,7 +217,6 @@ out:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-
 static void
 df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {

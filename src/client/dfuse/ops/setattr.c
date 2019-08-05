@@ -44,24 +44,22 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	if (to_set & FUSE_SET_ATTR_ATIME) {
 		DFUSE_TRA_DEBUG(ie, "atime %#lx",
 				attr->st_atime);
-		to_set &= ~(FUSE_SET_ATTR_ATIME|FUSE_SET_ATTR_ATIME_NOW);
+		to_set &= ~(FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW);
 		dfs_flags |= DFS_SET_ATTR_ATIME;
 	}
 
 	if (to_set & FUSE_SET_ATTR_MTIME) {
 		DFUSE_TRA_DEBUG(ie, "mtime %#lx",
 				attr->st_mtime);
-		to_set &= ~(FUSE_SET_ATTR_MTIME|FUSE_SET_ATTR_MTIME_NOW);
+		to_set &= ~(FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_MTIME_NOW);
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
 
-	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
-
 	if (to_set) {
-		/* Ignore this for now, but we should refuse the
-		 * operation
-		 */
 		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
+		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);
+		return;
+
 	}
 
 	rc = dfs_osetstat(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);

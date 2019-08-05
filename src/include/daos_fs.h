@@ -446,14 +446,16 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_MODE	(1 << 0)
 #define DFS_SET_ATTR_ATIME	(1 << 1)
 #define DFS_SET_ATTR_MTIME	(1 << 2)
-
 /**
- * set stat attributes for a file.  If the object is a symlink the link itself
- * is modified.
+ * set stat attributes for a file and fetch new values.  If the object is a
+ * symlink the link itself is modified.  See dfs_stat() for which entries
+ * are filled.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object (File, dir or syml) to modify.
- * \param[in]	stbuf	Stat struct with the members set.
+ * \param[in,out]
+ *		stbuf	[in]: Stat struct with the members set.
+ *			[out]: Stat struct with all valid members filled.
  * \param[in]	flags	Bitmask of flags to set
  *
  * \return		0 on Success. Negative errno on Failure.
