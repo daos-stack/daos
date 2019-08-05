@@ -165,8 +165,7 @@ shift || true
 args+=" $*"
 
 # shellcheck disable=SC2029
-# shellcheck disable=SC2086
-if ! ssh $SSH_KEY_ARGS "${REMOTE_ACCT:-jenkins}"@"${nodes[0]}" "set -ex
+if ! ssh "$SSH_KEY_ARGS" "${REMOTE_ACCT:-jenkins}@${nodes[0]}" "set -ex
 ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp

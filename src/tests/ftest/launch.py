@@ -39,8 +39,8 @@ try:
 
 except ImportError:
     # Basic implementation of TemporaryDirectory for python versions < 3.2
-    from shutil import rmtree
     from tempfile import mkdtemp
+    from shutil import rmtree
 
     class TemporaryDirectory(object):
         # pylint: disable=too-few-public-methods
