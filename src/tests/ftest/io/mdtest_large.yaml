@@ -60,7 +60,7 @@ mdtest:
                     write_bytes: 0
                     read_bytes: 0
                     depth: 0
-                1K: 
+                1K:
                     write_bytes: 1000
                     read_bytes: 1000
                     depth: 0
