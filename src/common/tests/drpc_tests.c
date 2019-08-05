@@ -568,7 +568,7 @@ test_drpc_recv_fails_if_incoming_call_malformed(void **state)
 	recvmsg_return = sizeof(recvmsg_msg_content);
 	memset(recvmsg_msg_content, 1, sizeof(recvmsg_msg_content));
 
-	assert_int_equal(drpc_recv(ctx), -DER_MISC);
+	assert_int_equal(drpc_recv(ctx), -DER_PROTO);
 
 	free_drpc(ctx);
 }
