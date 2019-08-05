@@ -39,6 +39,7 @@
 #include <errno.h>
 
 #define TEST_EXPECTED_BUF_SIZE	1024
+#define TEST_DEFAULT_ACE_STR	"A::user@:rw"
 
 /*
  * Mocks
@@ -732,6 +733,303 @@ test_acl_principal_to_gid_getgrnam_buf_too_small(void **state)
 	free_test_group(grp);
 }
 
+static void
+test_ace_from_str_null_str(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str(NULL, &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_null_ptr(void **state)
+{
+	assert_int_equal(daos_ace_from_str(TEST_DEFAULT_ACE_STR, NULL),
+			 -DER_INVAL);
+}
+
+static void
+check_ace_from_valid_str(const char *str, uint8_t access,
+			 enum daos_acl_principal_type type,
+			 uint16_t flags, uint64_t allow_perms,
+			 uint64_t audit_perms, uint64_t alarm_perms,
+			 const char *identity)
+{
+	struct daos_ace	*ace = NULL;
+	size_t		exp_principal_len = 0;
+
+	if (identity != NULL) {
+		exp_principal_len = strnlen(identity,
+					    DAOS_ACL_MAX_PRINCIPAL_LEN) + 1;
+		exp_principal_len = D_ALIGNUP(exp_principal_len, 8);
+	}
+
+	assert_int_equal(daos_ace_from_str(str, &ace), 0);
+
+	assert_non_null(ace);
+	assert_int_equal(ace->dae_access_types, access);
+	assert_int_equal(ace->dae_principal_type, type);
+	assert_int_equal(ace->dae_access_flags, flags);
+	assert_int_equal(ace->dae_allow_perms, allow_perms);
+	assert_int_equal(ace->dae_audit_perms, audit_perms);
+	assert_int_equal(ace->dae_alarm_perms, alarm_perms);
+	assert_int_equal(ace->dae_principal_len, exp_principal_len);
+
+	if (identity != NULL)
+		assert_string_equal(ace->dae_principal, identity);
+
+	daos_ace_free(ace);
+}
+
+static void
+test_ace_from_str_owner(void **state)
+{
+	check_ace_from_valid_str("A::OWNER@:rw",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_OWNER,
+				 0,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, 0, NULL);
+}
+
+static void
+test_ace_from_str_owner_group(void **state)
+{
+	check_ace_from_valid_str("A:G:GROUP@:rw",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_OWNER_GROUP,
+				 DAOS_ACL_FLAG_GROUP,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, 0, NULL);
+}
+
+static void
+test_ace_from_str_group_needs_flag(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("A::GROUP@:rw", &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_owner_is_not_group(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("A:G:OWNER@:rw", &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_everyone(void **state)
+{
+	check_ace_from_valid_str("A::EVERYONE@:rw",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_EVERYONE,
+				 0,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, 0, NULL);
+}
+
+static void
+test_ace_from_str_everyone_is_not_group(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("A:G:EVERYONE@:rw", &ace),
+			 -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_user(void **state)
+{
+	check_ace_from_valid_str("A::someuser@:rw",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_USER,
+				 0,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, 0, "someuser@");
+}
+
+static void
+test_ace_from_str_group(void **state)
+{
+	check_ace_from_valid_str("A:G:somegrp@:rw",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_GROUP,
+				 DAOS_ACL_FLAG_GROUP,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, 0, "somegrp@");
+}
+
+static void
+test_ace_from_str_audit_access(void **state)
+{
+	check_ace_from_valid_str("U:S:someuser@:rw",
+				 DAOS_ACL_ACCESS_AUDIT,
+				 DAOS_ACL_USER,
+				 DAOS_ACL_FLAG_ACCESS_SUCCESS,
+				 0,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, "someuser@");
+}
+
+static void
+test_ace_from_str_alarm_access(void **state)
+{
+	check_ace_from_valid_str("L:S:someuser@:rw",
+				 DAOS_ACL_ACCESS_ALARM,
+				 DAOS_ACL_USER,
+				 DAOS_ACL_FLAG_ACCESS_SUCCESS,
+				 0, 0,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 "someuser@");
+}
+
+static void
+test_ace_from_str_multiple_access(void **state)
+{
+	uint64_t expected_perm = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+	check_ace_from_valid_str("ALU:S:someuser@:rw",
+				 DAOS_ACL_ACCESS_ALLOW | DAOS_ACL_ACCESS_AUDIT |
+				 DAOS_ACL_ACCESS_ALARM,
+				 DAOS_ACL_USER,
+				 DAOS_ACL_FLAG_ACCESS_SUCCESS,
+				 expected_perm,
+				 expected_perm,
+				 expected_perm,
+				 "someuser@");
+}
+
+static void
+test_ace_from_str_invalid_access(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("Ux:S:someuser@:rw", &ace),
+			 -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_multiple_flags(void **state)
+{
+	check_ace_from_valid_str("U:SFGP:somegrp@:rw",
+				 DAOS_ACL_ACCESS_AUDIT,
+				 DAOS_ACL_GROUP,
+				 DAOS_ACL_FLAG_ACCESS_SUCCESS |
+				 DAOS_ACL_FLAG_ACCESS_FAIL |
+				 DAOS_ACL_FLAG_GROUP |
+				 DAOS_ACL_FLAG_POOL_INHERIT,
+				 0,
+				 DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				 0, "somegrp@");
+}
+
+static void
+test_ace_from_str_invalid_flags(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("U:SFbG:somegrp@:rw", &ace),
+			 -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_perm_read_only(void **state)
+{
+	check_ace_from_valid_str("A::someuser@:r",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_USER,
+				 0,
+				 DAOS_ACL_PERM_READ,
+				 0, 0, "someuser@");
+}
+
+static void
+test_ace_from_str_perm_none(void **state)
+{
+	check_ace_from_valid_str("A::someuser@:",
+				 DAOS_ACL_ACCESS_ALLOW,
+				 DAOS_ACL_USER,
+				 0, 0, 0, 0, "someuser@");
+}
+
+static void
+test_ace_from_str_invalid_perms(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("A::someuser@:rz", &ace),
+			 -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_empty_str(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("", &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_not_all_fields(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("A::someuser@", &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_too_many_fields(void **state)
+{
+	struct daos_ace *ace = NULL;
+
+	assert_int_equal(daos_ace_from_str("A::someuser@:rw:r", &ace),
+			 -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
+test_ace_from_str_too_long(void **state)
+{
+	size_t		i;
+	size_t		len = DAOS_ACL_MAX_ACE_STR_LEN * 2;
+	char		input[len];
+	struct daos_ace	*ace = NULL;
+
+	i = snprintf(input, len, "AUL:SG:somelongergroupname@:");
+
+	/* Pad out with the same permissions over and over... */
+	for (; i < len; i++) {
+		input[i] = 'r';
+	}
+	input[len - 1] = '\0';
+
+	/* Ensure the overly-long string doesn't crash us */
+	assert_int_equal(daos_ace_from_str(input, &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
 int
 main(void)
 {
@@ -771,6 +1069,29 @@ main(void)
 		cmocka_unit_test(test_acl_principal_to_gid_getgrnam_err),
 		cmocka_unit_test(
 			test_acl_principal_to_gid_getgrnam_buf_too_small),
+		cmocka_unit_test(test_ace_from_str_null_str),
+		cmocka_unit_test(test_ace_from_str_null_ptr),
+		cmocka_unit_test(test_ace_from_str_owner),
+		cmocka_unit_test(test_ace_from_str_owner_group),
+		cmocka_unit_test(test_ace_from_str_group_needs_flag),
+		cmocka_unit_test(test_ace_from_str_owner_is_not_group),
+		cmocka_unit_test(test_ace_from_str_everyone),
+		cmocka_unit_test(test_ace_from_str_everyone_is_not_group),
+		cmocka_unit_test(test_ace_from_str_user),
+		cmocka_unit_test(test_ace_from_str_group),
+		cmocka_unit_test(test_ace_from_str_audit_access),
+		cmocka_unit_test(test_ace_from_str_alarm_access),
+		cmocka_unit_test(test_ace_from_str_multiple_access),
+		cmocka_unit_test(test_ace_from_str_invalid_access),
+		cmocka_unit_test(test_ace_from_str_multiple_flags),
+		cmocka_unit_test(test_ace_from_str_invalid_flags),
+		cmocka_unit_test(test_ace_from_str_perm_read_only),
+		cmocka_unit_test(test_ace_from_str_perm_none),
+		cmocka_unit_test(test_ace_from_str_invalid_perms),
+		cmocka_unit_test(test_ace_from_str_empty_str),
+		cmocka_unit_test(test_ace_from_str_not_all_fields),
+		cmocka_unit_test(test_ace_from_str_too_many_fields),
+		cmocka_unit_test(test_ace_from_str_too_long)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
