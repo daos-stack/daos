@@ -17,6 +17,8 @@ control_log_file: /tmp/daos_control.log
 #transport_config:
 #  # Specify to bypass loading certificates and use insecure communications channnels
 #  allow_insecure: false
+#  # Location where daos_server will look for Client certificates
+#  client_cert_dir: .daos/clients
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Server certificate for use in TLS handshakes

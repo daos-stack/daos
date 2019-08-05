@@ -90,7 +90,6 @@ class TestDaosApiBase(ObjectWithParameters):
                 the API methods. Defaults to None.
         """
         self.cb_handler = cb_handler
-        self.debug = False
 
     def _call_method(self, method, kwargs):
         """Call the DAOS API class method with the optional callback method.
@@ -101,10 +100,6 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         if self.cb_handler:
             kwargs["cb_func"] = self.cb_handler.callback
-        if self.debug:
-            print(
-                "<DEBUG> Calling {}({})".format(
-                    method, kwargs if kwargs is not None else ""))
         method(**kwargs)
         if self.cb_handler:
             # Wait for the call back if one is provided

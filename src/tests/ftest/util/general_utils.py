@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
@@ -33,8 +33,6 @@ from errno import ENOENT
 from time import sleep
 
 from avocado import fail_on
-from avocado.utils import process
-from conversion import c_uuid_to_str
 from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
@@ -334,13 +332,13 @@ def check_pool_files(log, hosts, uuid):
     task = task_self()
 
     log.info("Checking for pool data on %s", nodeset)
-    for fname in file_list:
+    for filename in file_list:
         task.run(
-            "test -e /mnt/daos/{}; echo $?".format(fname), nodes=nodeset)
+            "test -e /mnt/daos/{}; echo $?".format(filename), nodes=nodeset)
         for output, node_list in task.iter_buffers():
             if output == "0":
                 actual += len(node_list)
             else:
                 nodes = NodeSet.fromlist(node_list)
-                log.error("%s: /mnt/daos/%s not found", nodes, fname)
+                log.error("%s: /mnt/daos/%s not found", nodes, filename)
     return expect == actual
