@@ -980,8 +980,7 @@ dtx_18(void **state)
 
 	/* Aggregate the first 4 DTXs. */
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -990,14 +989,12 @@ dtx_18(void **state)
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 4; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, -DER_NONEXIST);
 	}
 
 	for (; i < 10; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -1006,8 +1003,7 @@ dtx_18(void **state)
 	assert_int_equal(rc, 1);
 
 	for (i = 4; i < 10; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, -DER_NONEXIST);
 	}
 
