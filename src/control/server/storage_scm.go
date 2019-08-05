@@ -24,8 +24,11 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -35,8 +38,25 @@ import (
 	"github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
-var (
-	msgScmNotInited        = "scm storage not initialized"
+//go:generate stringer -type=scmState
+type scmState int
+
+const (
+	scmStateUnknown scmState = iota
+	scmStateNoRegions
+	scmStateFreeCapacity
+	scmStateNoCapacity
+
+	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
+	outScmNoRegions       = "\nThere are no Regions defined in the system."
+	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
+	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
+	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
+
+	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
+	msgScmNoModules        = "no scm modules to prepare"
+	msgScmPrepared         = "scm has been prepared"
+	msgScmNotInited        = "scm storage could not be accessed"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
 		"reformat not implemented"
 	msgScmMountEmpty = "scm mount must be specified in config"
@@ -48,6 +68,43 @@ var (
 	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
+type pmemDev struct {
+	UUID     string
+	Blockdev string
+	NumaNode int `json:"numa_node"`
+}
+
+func (pd *pmemDev) String() string {
+	return fmt.Sprintf("%s, numa %d", pd.Blockdev, pd.NumaNode)
+}
+
+type runCmdFn func(string) (string, error)
+
+type runCmdError struct {
+	wrapped error
+	stdout  string
+}
+
+func (rce *runCmdError) Error() string {
+	if ee, ok := rce.wrapped.(*exec.ExitError); ok {
+		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
+			rce.stdout, ee.Stderr)
+	}
+	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
+}
+
+// run wraps exec.Command().Output() to enable mocking of command output.
+func run(cmd string) (string, error) {
+	out, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		return "", &runCmdError{
+			wrapped: err,
+			stdout:  string(out),
+		}
+	}
+	return string(out), nil
+}
+
 // scmStorage gives access to underlying storage interface implementation
 // for accessing SCM devices (API) in addition to storage of device
 // details.
@@ -57,9 +114,18 @@ var (
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *configuration // server configuration structure
+	runCmd      runCmdFn
 	modules     common.ScmModules
+	pmemDevs    []pmemDev
+	state       scmState
 	initialized bool
 	formatted   bool
+}
+
+func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
+	s.runCmd = runCmd
+
+	return s
 }
 
 // TODO: implement remaining methods for scmStorage
@@ -67,6 +133,174 @@ type scmStorage struct {
 // func (s *scmStorage) BurnIn(req interface{}) (fioPath string, cmds []string, env string, err error) {
 // return
 // }
+
+// Prep executes commands to configure SCM modules into AppDirect interleaved
+// regions/sets hosting pmem kernel device namespaces.
+//
+// Presents of nonvolatile memory modules is assumed in this method and state
+// is established based on presence and free capacity of regions.
+//
+// Actions based on state:
+// * modules exist and no regions -> create all regions (needs reboot)
+// * regions exist and free capacity -> create all namespaces
+// * regions exist but no free capacity -> no-op
+//
+// Command output from external tools will be returned.
+func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
+	if err := s.getState(); err != nil {
+		return false, nil, errors.WithMessage(err, "establish scm state")
+	}
+
+	log.Debugf("scm in state %s\n", s.state)
+
+	switch s.state {
+	case scmStateNoRegions:
+		needsReboot, err = s.createRegions()
+	case scmStateFreeCapacity:
+		pmemDevs, err = s.createNamespaces()
+	case scmStateNoCapacity:
+		pmemDevs, err = s.getNamespaces()
+	default:
+		err = errors.New("unknown scm state")
+	}
+
+	return
+}
+
+// reset executes commands to remove namespaces and regions on SCM models.
+func (s *scmStorage) PrepReset() error {
+	return nil // TODO
+}
+
+// getState establishes state of SCM regions and namespaces on local server.
+func (s *scmStorage) getState() error {
+	s.state = scmStateUnknown
+
+	// TODO: discovery should provide SCM region details
+	out, err := s.runCmd(cmdScmShowRegions)
+	if err != nil {
+		return err
+	}
+
+	if out == outScmNoRegions {
+		s.state = scmStateNoRegions
+		return nil
+	}
+
+	ok, err := hasFreeCapacity(out)
+	if err != nil {
+		return err
+	}
+	if ok {
+		s.state = scmStateFreeCapacity
+		return nil
+	}
+	s.state = scmStateNoCapacity
+
+	return nil
+}
+
+// hasFreeCapacity takes output from ipmctl and checks for free capacity.
+//
+// external tool commands return:
+// $ ipmctl show -d PersistentMemoryType,FreeCapacity -region
+//
+// ---ISetID=0x2aba7f4828ef2ccc---
+//    PersistentMemoryType=AppDirect
+//    FreeCapacity=3012.0 GiB
+// ---ISetID=0x81187f4881f02ccc---
+//    PersistentMemoryType=AppDirect
+//    FreeCapacity=3012.0 GiB
+//
+// FIXME: implementation to be replaced by using libipmctl directly through bindings
+func hasFreeCapacity(text string) (hasCapacity bool, err error) {
+	lines := strings.Split(text, "\n")
+	if len(lines) < 4 {
+		return false, errors.Errorf("expecting at least 4 lines, got %d",
+			len(lines))
+	}
+
+	for _, line := range lines {
+		entry := strings.TrimSpace(line)
+
+		kv := strings.Split(entry, "=")
+		if len(kv) != 2 {
+			continue
+		}
+
+		if kv[0] == "PersistentMemoryType" && kv[1] == "AppDirect" {
+			hasCapacity = true
+			continue
+		}
+
+		if kv[0] != "FreeCapacity" {
+			continue
+		}
+
+		if hasCapacity && kv[1] != "0.0 GiB" {
+			return
+		}
+
+		hasCapacity = false
+	}
+
+	return
+}
+
+// createRegions sets DCPM modules into regions in interleaved AppDirect mode.
+//
+// External tool command output will indicate whether a subsequent reboot is needed.
+func (s *scmStorage) createRegions() (bool, error) {
+	out, err := s.runCmd(cmdScmCreateRegions)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.Contains(out, msgScmRebootRequired), nil
+}
+
+func parsePmemDevs(jsonData string) (devs []pmemDev) {
+	// turn single entries into arrays
+	if !strings.HasPrefix(jsonData, "[") {
+		jsonData = "[" + jsonData + "]"
+	}
+
+	json.Unmarshal([]byte(jsonData), &devs)
+
+	return
+}
+
+// createNamespaces runs create until no free capacity.
+func (s *scmStorage) createNamespaces() (devs []pmemDev, err error) {
+	for {
+		out, err := s.runCmd(cmdScmCreateNamespace)
+		if err != nil {
+			return nil, err
+		}
+		devs = append(devs, parsePmemDevs(out)...)
+
+		if err := s.getState(); err != nil {
+			return nil, err
+		}
+
+		switch {
+		case s.state == scmStateNoCapacity:
+			return devs, nil
+		case s.state != scmStateFreeCapacity:
+			return nil, errors.Errorf("unexpected state: want %s, got %s",
+				scmStateFreeCapacity.String(), s.state.String())
+		}
+	}
+}
+
+func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
+	out, err := s.runCmd(cmdScmListNamespaces)
+	if err != nil {
+		return nil, err
+	}
+
+	return parsePmemDevs(out), nil
+}
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
@@ -334,6 +568,6 @@ func newScmStorage(config *configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,
+		runCmd: run,
 	}
-
 }

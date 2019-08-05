@@ -21,48 +21,32 @@ pool:
     createset:
         setname: daos_server
     createsize:
-        size: 60000000000
+        scm_size: 60000000000
     createsvc:
         svcn: 3
 ior:
-    clientslots: !mux
+    client_processes: !mux
         slots_16:
-            slots: 16
+            np: 16
         slots_32:
-            slots: 32
+            np: 32
         slots_64:
-            slots: 64
-    iteration:
-        iter: 3
-    iorflags:
-        F: "-v -W -w -r -R"
-    recordsize: !mux
-        recordsize_8b:
-            r: '8b'
-        recordsize_1k:
-            r: '1k'
-        recordsize_4k:
-            r: '4k'
+            np: 64
+    repetitions: 3
+    flags: "-v -W -w -r -R"
     blocksize_transfersize_stripesize: !mux
         4k:
-            b: '4k'
-            s: '4k'
-            t: '4k'
+            block_size: '4k'
+            transfer_size: '4k'
         1m:
-            b: '1m'
-            s: '1m'
-            t: '1m'
+            block_size: '1m'
+            transfer_size: '1m'
         4m:
-            b: '4m'
-            s: '4m'
-            t: '4m'
-    stripecount:
-        c: 1024
-    asyncio:
-        a: 16
+            block_size: '4m'
+            transfer_size: '4m'
     objectclass: !mux
-        LARGE:
-            o: "LARGE"
+        SX:
+            daos_oclass: "SX"
         2-way_Replication:
-            o: "R2"
+            daos_oclass: "RP_2GX"
 

@@ -53,10 +53,11 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
     """Enable/Disable NVMe Mode.
 
     NVMe is enabled by default in yaml file.So disable it for CI runs.
+
     Args:
-     - default_value_set: Default dictionary value.
-     - bdev : Block device name.
-     - enabled: Set True/False for enabling NVMe, disabled by default.
+        default_value_set (dict): dictionary of default values
+        bdev (str): block device name
+        enabled (bool, optional): enable NVMe. Defaults to False.
     """
     if 'bdev_class' in default_value_set['servers'][0]:
         if (default_value_set['servers'][0]['bdev_class'] == bdev and
@@ -67,12 +68,14 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
 
 
 def create_server_yaml(basepath):
-    """Create a DAOS server configuration YAML file.
-
-    Base the yaml file on server parameters in the avocado test Yaml file.
+    """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
     Args:
         basepath (str): DAOS install basepath
+
+    Raises:
+        ServerFailed: if there is an reading/writing yaml files
+
     """
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
@@ -128,22 +131,24 @@ def create_server_yaml(basepath):
                                                           AVOCADO_FILE))
 
 
-def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
+def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
+               clean=True):
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
-        hostfile (str): file defining on which hosts to start daos servers
-        setname (str): daos server group name
-        basepath (str): root directory for DAOS repo or installation
-        uri_path (str, optional): path to the uri file. Defaults to None.
-        env_dict (dict, optional): dictionary of environment names and values.
+        hostfile (str): hostfile defining on which hosts to start servers
+        setname (str): session name
+        basepath (str): DAOS install basepath
+        uri_path (str, optional): path to uri file. Defaults to None.
+        env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
+        clean (bool, optional): remove files in /mnt/daos. Defaults to True.
 
     Raises:
-        ServerFailed: if there is an error starting the daos servers
+        ServerFailed: if there is an error starting the servers
 
     """
-    global SESSIONS
+    global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
         servers = (
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
@@ -171,7 +176,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
                     ", ".join(
                         [str(result[key]) for key in result if key != 0])))
 
-        # pile of build time variables
+        # Pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
@@ -236,7 +241,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None):
     except Exception as error:
         print("<SERVER> Exception occurred: {0}".format(str(error)))
         traceback.print_exception(error.__class__, error, sys.exc_info()[2])
-        # we need to end the session now -- exit the shell
+        # We need to end the session now -- exit the shell
         try:
             SESSIONS[setname].send_signal(signal.SIGINT)
             time.sleep(5)
@@ -276,7 +281,7 @@ def stop_server(setname=None, hosts=None):
             there are processes stiull running.
 
     """
-    global SESSIONS
+    global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
         if setname is None:
             for _key, val in SESSIONS.items():
@@ -311,7 +316,7 @@ def stop_server(setname=None, hosts=None):
         hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
     if len(result) > 1 or 1 not in result:
         bad_hosts = [
-            node for node in list(result[key]) for key in result if key != 1]
+            node for key in result if key != 1 for node in list(result[key])]
         kill_server(bad_hosts)
         raise ServerFailed(
             "DAOS server processes detected after attempted stop on {}".format(

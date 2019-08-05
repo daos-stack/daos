@@ -94,17 +94,20 @@ def run_agent(basepath, server_list, client_list=None):
 
     # double check agent launched successfully
     timeout = 5
+    started_clients = []
     for client in client_list:
         file_desc = sessions[client].stderr.fileno()
         flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
         fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         start_time = time.time()
-        pattern = "Starting daos_agent"
+        pattern = "Using logfile"
         expected_data = ""
-        while True:
+        while not sessions[client].poll():
             if time.time() - start_time > timeout:
                 print("<AGENT>: {}".format(expected_data))
-                raise AgentFailed("DAOS Agent didn't start!")
+                raise AgentFailed("DAOS Agent didn't start!  Agent reported:\n"
+                                  "{}before we gave up waiting for it to "
+                                  "start".format(expected_data))
             output = ""
             try:
                 output = sessions[client].stderr.read()
@@ -122,6 +125,15 @@ def run_agent(basepath, server_list, client_list=None):
                     "<AGENT> agent started on node {} in {} seconds".format(
                         client, time.time() - start_time))
                 break
+
+        if sessions[client].returncode is not None:
+            print("<AGENT> uh-oh, in agent startup, the ssh that started the "
+                  "agent on {} has exited with {}.\nStopping agents on "
+                  "{}".format(client, sessions[client].returncode,
+                              started_clients))
+            # kill the ones we started
+            stop_agent(sessions, started_clients)
+            raise AgentFailed("Failed to start agent on {}".format(client))
 
     return sessions
 
