@@ -93,8 +93,6 @@ struct daos_task_args {
 		daos_kv_put_t		kv_put;
 		daos_kv_remove_t	kv_remove;
 		daos_kv_list_t		kv_list;
-		daos_obj_multi_io_t	obj_fetch_multi;
-		daos_obj_multi_io_t	obj_update_multi;
 	}		 ta_u;
 	daos_event_t	*ta_ev;
 };

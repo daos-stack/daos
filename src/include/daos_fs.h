@@ -94,13 +94,14 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  * \param[in]	path	Path to lookup.
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
  * \param[out]	obj	Pointer to the object looked up.
- * \params[out]	mode	mode_t (permissions + type).
+ * \param[out]	mode	Optional mode_t of object looked up.
+ * \param[out]	stbuf	Optional stat struct of object looked up.
  *
  * \return		0 on Success. Negative errno on Failure.
  */
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
-	   mode_t *mode);
+	   mode_t *mode, struct stat *stbuf);
 
 /**
  * Lookup an entry in the parent object and return the associated open object
@@ -116,13 +117,14 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  * \param[in]	name	Link name of the object to create/open.
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
  * \param[out]	obj	Pointer to the object looked up.
- * \params[out]	mode	Optional mode_t (permissions + type).
+ * \param[out]	mode	Optional mode_t of object looked up.
+ * \param[out]	stbuf	Optional stat struct of object looked up.
  *
  * \return		0 on Success. Negative errno on Failure.
  */
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode);
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -395,14 +397,14 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  *
  * \param[in]	obj	Open object handle to update.
  * \param[in]	parent_oid
- *			new oid of parent.
+ *			Open object handle of new parent.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
  *
  * \return		0 on Success. Negative errno on Failure.
  */
 int
-dfs_update_parent(dfs_obj_t *obj, daos_obj_id_t parent_oid, const char *name);
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
 
 /**
  * stat attributes of an entry. If object is a symlink, the link itself is

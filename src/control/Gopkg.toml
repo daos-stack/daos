@@ -9,12 +9,6 @@
   go-tests = true
   unused-packages = true
 
-# ishell: MIT License used for the frontend shell interface for Go components.
-# This is our ishell fork - we control the accepted patches.
-[[constraint]]
-  name = "github.com/daos-stack/ishell"
-  branch = "master"
-
 # protobuf: 3 Clause BSD Licensed and provides go GRPC compiler support
 [[constraint]]
   name = "github.com/golang/protobuf"

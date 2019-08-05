@@ -25,6 +25,8 @@ package drpc
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 // ModuleState is an interface to allow a module to pass in private
@@ -116,6 +118,7 @@ func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, erro
 	}
 	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())
 	if err != nil {
+		log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), rpcMsg.GetMethod(), err)
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
 

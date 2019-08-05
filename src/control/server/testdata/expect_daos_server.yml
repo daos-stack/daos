@@ -7,6 +7,7 @@ access_points:
 port: 10000
 transport_config:
   allow_insecure: false
+  client_cert_dir: .daos/clients
   ca_cert: .daos/daosCA.crt
   cert: .daos/daos_server.crt
   key: .daos/daos_server.key
