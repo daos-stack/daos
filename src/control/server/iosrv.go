@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -49,6 +50,28 @@ import (
 	"github.com/daos-stack/daos/src/control/log"
 	"github.com/daos-stack/daos/src/control/security"
 )
+
+const ioServerBin = "daos_io_server"
+
+func findBinary(binName string) (string, error) {
+	// Try the direct route first
+	binPath, err := exec.LookPath(binName)
+	if err == nil {
+		return binPath, nil
+	}
+
+	// If that fails, look to see if it's adjacent to
+	// this binary
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+	binPath = path.Join(path.Dir(selfPath), binName)
+	if _, err := os.Stat(binPath); err != nil {
+		return "", errors.Errorf("unable to locate %s", binName)
+	}
+	return binPath, nil
+}
 
 func formatIosrvs(config *configuration, reformat bool) error {
 	// Determine if an I/O server needs to createMS or bootstrapMS.
@@ -330,7 +353,12 @@ func (srv *iosrv) wait() error {
 
 func (srv *iosrv) startCmd() error {
 	// Exec io_server with generated cli opts from config context.
-	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
+	binPath, err := findBinary(ioServerBin)
+	if err != nil {
+		return errors.Wrapf(err, "can't start %s", ioServerBin)
+	}
+
+	srv.cmd = exec.Command(binPath, srv.config.Servers[srv.index].CliOpts...)
 	srv.cmd.Stdout = os.Stdout
 	srv.cmd.Stderr = os.Stderr
 	srv.cmd.Env = os.Environ()
@@ -346,7 +374,7 @@ func (srv *iosrv) startCmd() error {
 	signal.Notify(srv.sigchld, syscall.SIGCHLD)
 
 	// Start the DAOS I/O server.
-	err := srv.cmd.Start()
+	err = srv.cmd.Start()
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -423,7 +451,7 @@ func (srv *iosrv) callCreateMS() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("CreateMS: %d\n", resp.Status)
 	}
 
@@ -440,7 +468,7 @@ func (srv *iosrv) callStartMS() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("StartMS: %d\n", resp.Status)
 	}
 
@@ -457,7 +485,7 @@ func (srv *iosrv) callSetRank(rank rank) error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
 	}
 
@@ -474,7 +502,7 @@ func (srv *iosrv) callSetUp() error {
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetUp response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("SetUp: %d\n", resp.Status)
 	}
 
@@ -510,7 +538,7 @@ func mgmtJoin(ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mg
 	if err != nil {
 		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return nil, errors.Errorf("join %s %v: %d\n", ap, *req, resp.Status)
 	}
 

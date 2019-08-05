@@ -36,7 +36,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_dfs		*dfs;
 	uuid_t				co_uuid;
 	dfs_t				*ddfs;
-	mode_t				mode;
 	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
@@ -123,7 +122,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs->dfs_ns = ddfs;
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, &mode);
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, NULL,
+			&ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(-rc));
 		D_GOTO(close, rc = -rc);
@@ -132,12 +132,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-
-	rc = dfs_ostat(dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)", strerror(-rc));
-		D_GOTO(release, rc = -rc);
-	}
 
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
@@ -152,7 +146,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_root = ie->ie_stat.st_ino;
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
-	dfuse_reply_entry(fs_handle, ie, false, req);
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
 
 release:

@@ -309,10 +309,10 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_resp__field_descriptors[
     "status",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CreatePoolResp, status),
-    &mgmt__daos_request_status__descriptor,
+    NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -437,10 +437,10 @@ static const ProtobufCFieldDescriptor mgmt__destroy_pool_resp__field_descriptors
     "status",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__DestroyPoolResp, status),
-    &mgmt__daos_request_status__descriptor,
+    NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
