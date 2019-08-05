@@ -28,12 +28,35 @@ import json
 from multiprocessing import Process
 import os
 import re
-from shutil import rmtree
 import socket
 import subprocess
-from tempfile import mkdtemp
 import time
 import yaml
+
+try:
+    # For python versions >= 3.2
+    from tempfile import TemporaryDirectory
+
+except ImportError:
+    # Basic implementation of TemporaryDirectory for python versions < 3.2
+    from shutil import rmtree
+    from tempfile import mkdtemp
+
+    class TemporaryDirectory(object):
+        # pylint: disable=too-few-public-methods
+        """Create a temporary directory.
+
+        When the last reference of this object goes out of scope the directory
+        and its contents are removed.
+        """
+
+        def __init__(self):
+            """Initialize a TemporaryDirectory object."""
+            self.name = mkdtemp()
+
+        def __del__(self):
+            """Destroy a TemporaryDirectory object."""
+            rmtree(self.name)
 
 
 TEST_LOG_FILE_YAML = "./data/daos_avocado_test.yaml"
@@ -53,29 +76,6 @@ CLIENT_KEYS = (
     "test_clients",
     "clients",
     )
-
-
-class TemporaryDirectory(object):
-    # pylint: disable=too-few-public-methods
-    """Create and return a temporary directory.
-
-    This is a quick and dirty implementation of the tempfile.TemporaryDirectory
-    class available in python 3.2+.  It should be replaced by the following
-    when we move from python 2.7:
-
-        from tempfile import TemporaryDirectory
-
-    When the last reference of this object goes out of scope the directory and
-    its contents are removed.
-    """
-
-    def __init__(self):
-        """Initialize a TemporaryDirectory object."""
-        self.name = mkdtemp()
-
-    def __del__(self):
-        """Destroy a TemporaryDirectory object."""
-        rmtree(self.name)
 
 
 def get_build_environment():
@@ -540,6 +540,7 @@ def clean_logs(test_yaml):
         return False
 
     return True
+
 
 def archive_logs(avocado_logs_dir, test_yaml):
     """Copy all of the host test log files to the avocado results directory.
