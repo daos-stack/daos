@@ -90,7 +90,8 @@ class MdtestBase(TestWithServers):
 
         # Run Mdtest
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
-        self.run_mdtest(self.get_job_manager_command(self.manager), self.processes)
+        self.run_mdtest(self.get_job_manager_command(self.manager),
+                        self.processes)
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
