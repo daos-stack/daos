@@ -204,7 +204,7 @@ export OFI_INTERFACE=eth0
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
-export D_LOG_FILE=\"$TEST_TAG_DIR/server_daos.log\"
+export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
