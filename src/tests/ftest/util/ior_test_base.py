@@ -24,10 +24,9 @@
 import os
 
 from apricot import TestWithServers
-from daos_api import DaosPool
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
-
+from test_utils import TestPool
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -41,6 +40,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
+        self.mpiio_oclass = None
 
     def setUp(self):
         """Set up each test case."""
@@ -51,11 +51,19 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.mpiio_oclass = self.params.get("mpiio_oclass", '/run/ior/*')
+
+        # Get the test params
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+
+        # Create a pool
+        self.pool.create()
 
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.pool is not None and self.pool.attached:
+            if self.pool is not None and self.pool.pool.attached:
                 self.pool.destroy(1)
         finally:
             # Stop the servers and agents
@@ -71,21 +79,8 @@ class IorTestBase(TestWithServers):
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
         """
-        # Get the parameters used to create a pool
-        mode = self.params.get("mode", "/run/pool/*")
-        uid = os.geteuid()
-        gid = os.getegid()
-        group = self.params.get("setname", "/run/pool/*", self.server_group)
-        scm_size = self.params.get("scm_size", "/run/pool/*")
-        nvme_size = self.params.get("nvme_size", "/run/pool/*", 0)
-        svcn = self.params.get("svcn", "/run/pool/*", 1)
-
-        # Initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = DaosPool(self.context)
-        self.pool.create(
-            mode, uid, gid, scm_size, group, None, None, svcn, nvme_size)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool,
+                                     mpiio_oclass=self.mpiio_oclass)
 
         # Run IOR
         self.run_ior(self.get_job_manager_command(), self.processes)
@@ -127,7 +122,7 @@ class IorTestBase(TestWithServers):
             processes (int): number of processes
         """
         # Get the current pool size for comparison
-        current_pool_info = self.pool.pool_query()
+        current_pool_info = self.pool.pool.pool_query()
 
         # If Transfer size is < 4K, Pool size will verified against NVMe, else
         # it will be checked against SCM
