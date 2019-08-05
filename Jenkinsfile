@@ -362,7 +362,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc'
+                                      mv config.log config.log-centos7-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
@@ -375,7 +375,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc'
+                                      mv config.log config.log-centos7-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
@@ -431,7 +431,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang'
+                                      mv config.log config.log-centos7-clang
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-centos7-clang',
                                              allowEmptyArchive: true
@@ -444,7 +444,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang'
+                                      mv config.log config.log-centos7-clang
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-centos7-clang',
                                              allowEmptyArchive: true
@@ -500,7 +500,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-ubuntu18.04-gcc'
+                                      mv config.log config.log-ubuntu18.04-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc',
                                              allowEmptyArchive: true
@@ -513,7 +513,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-ubuntu18.04-gcc'
+                                      mv config.log config.log-ubuntu18.04-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc',
                                              allowEmptyArchive: true
@@ -567,7 +567,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-ubuntu18.04-clang'
+                                      mv config.log config.log-ubuntu18.04-clang
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
                                              allowEmptyArchive: true
@@ -580,7 +580,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-ubuntu18.04-clang'
+                                      mv config.log config.log-ubuntu18.04-clang
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
                                              allowEmptyArchive: true
@@ -638,7 +638,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-sles12.3-gcc'
+                                      mv config.log config.log-sles12.3-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-sles12.3-gcc',
                                              allowEmptyArchive: true
@@ -651,7 +651,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-sles12.3-gcc'
+                                      mv config.log config.log-sles12.3-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-sles12.3-gcc',
                                              allowEmptyArchive: true
@@ -709,7 +709,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap42.3-gcc'
+                                      mv config.log config.log-leap42.3-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap42.3-gcc',
                                              allowEmptyArchive: true
@@ -722,7 +722,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap42.3-gcc'
+                                      mv config.log config.log-leap42.3-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap42.3-gcc',
                                              allowEmptyArchive: true
@@ -778,7 +778,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc'
+                                      mv config.log config.log-leap15-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
@@ -791,7 +791,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc'
+                                      mv config.log config.log-leap15-gcc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
@@ -847,7 +847,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-clang'
+                                      mv config.log config.log-leap15-clang
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-clang',
                                              allowEmptyArchive: true
@@ -860,7 +860,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-clang'
+                                      mv config.log config.log-leap15-clang
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-clang',
                                              allowEmptyArchive: true
@@ -915,7 +915,7 @@ pipeline {
                         }
                         unstable {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc'
+                                      mv config.log config.log-leap15-intelc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
@@ -928,7 +928,7 @@ pipeline {
                         }
                         failure {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc'
+                                      mv config.log config.log-leap15-intelc
                                   fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
