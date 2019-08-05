@@ -442,6 +442,8 @@ int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
 #define DFS_SET_ATTR_MODE	(1 << 0)
+#define DFS_SET_ATTR_ATIME	(1 << 1)
+#define DFS_SET_ATTR_MTIME	(1 << 2)
 
 /**
  * set stat attributes for a file.  If the object is a symlink the link itself

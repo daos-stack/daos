@@ -2287,7 +2287,95 @@ out:
 int
 dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
-	return -EIO;
+	daos_handle_t		th = DAOS_TX_NONE;
+	uid_t			euid;
+	daos_key_t		dkey;
+	daos_handle_t           oh;
+	int			rc;
+	d_sg_list_t		sgls[3];
+	d_iov_t			sg_iovs[3];
+	daos_iod_t		iods[3];
+	int i = 0;
+	int akeys_nr;
+
+	if (dfs == NULL || !dfs->mounted)
+		return -EINVAL;
+	if (obj == NULL)
+		return -EINVAL;
+	if (dfs->amode != O_RDWR)
+		return -EPERM;
+
+	euid = geteuid();
+	/** only root or owner can change mode */
+	if (euid != 0 && dfs->uid != euid)
+		return -EPERM;
+
+	/** Open parent object and fetch entry of obj from it */
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return -daos_der2errno(rc);
+
+	/** set dkey as the entry name */
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+
+	if (flags & DFS_SET_ATTR_MODE) {
+		/** set akey as the mode attr name */
+		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
+		d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
+		iods[i].iod_size = sizeof(mode_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_MODE;
+	}
+	if (flags & DFS_SET_ATTR_ATIME) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_atim, sizeof(time_t));
+		d_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
+		iods[i].iod_size = sizeof(time_t);
+
+		flags &= ~DFS_SET_ATTR_ATIME;
+		i++;
+	}
+	if (flags & DFS_SET_ATTR_MTIME) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_mtim, sizeof(time_t));
+		d_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
+		iods[i].iod_size = sizeof(time_t);
+
+		flags &= ~DFS_SET_ATTR_MTIME;
+		i++;
+	}
+
+	if (flags) {
+		D_GOTO(out, rc = -EINVAL);
+	}
+
+	akeys_nr = i;
+
+	for (i = 0; i < akeys_nr; i++) {
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		iods[i].iod_nr		= 1;
+		iods[i].iod_recxs	= NULL;
+		iods[i].iod_eprs	= NULL;
+		iods[i].iod_csums	= NULL;
+		iods[i].iod_type	= DAOS_IOD_SINGLE;
+	}
+
+	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
+	if (rc) {
+		D_ERROR("Failed to update attr (rc = %d)\n", rc);
+		D_GOTO(out, rc = -daos_der2errno(rc));
+	}
+
+	rc = entry_stat(dfs, th, oh, obj->name, stbuf);
+	if (rc)
+		D_GOTO(out, rc);
+
+out:
+	daos_obj_close(oh, NULL);
+	return rc;
+
 }
 
 int
