@@ -23,19 +23,13 @@
 
 #define D_LOGFAC	DD_FAC(dfs)
 
-#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <daos/common.h>
-#include <daos/debug.h>
-#include <daos/container.h>
 
-#include "daos_types.h"
 #include "daos.h"
-#include "daos_addons.h"
 #include "daos_fs.h"
-#include "daos_security.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"
@@ -45,11 +39,13 @@
 #define SB_MAGIC	0xda05df50da05df50
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	6
+#define INODE_AKEYS	7
 /** A-key name of mode_t value */
 #define MODE_NAME	"mode"
 /** A-key name of object ID value */
 #define OID_NAME	"oid"
+/** A-key name of chunk size; will be stored only if not default */
+#define CSIZE_NAME	"chunk_size"
 /** A-key name of last access time */
 #define ATIME_NAME	"atime"
 /** A-key name of last modify time */
@@ -116,6 +112,8 @@ struct dfs {
 	daos_handle_t		super_oh;
 	/** Root object info */
 	dfs_obj_t		root;
+	/** Default Chunk Size in this container */
+	daos_size_t		chunk_size;
 };
 
 struct dfs_entry {
@@ -123,6 +121,8 @@ struct dfs_entry {
 	mode_t		mode;
 	/** Object ID if not a symbolic link */
 	daos_obj_id_t	oid;
+	/** chunk size of file */
+	daos_size_t	chunk_size;
 	/** Sym Link value */
 	char		*value;
 	/* Time of last access */
@@ -223,7 +223,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 	int		rc;
 
 	if (oclass == 0)
-		oclass = OC_RP_XSF;
+		oclass = OC_SX;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -245,7 +245,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64;
+		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
 	daos_obj_generate_id(oid, feat, oclass, 0);
@@ -258,7 +258,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	    bool fetch_sym, bool *exists, struct dfs_entry *entry)
 {
 	d_sg_list_t	sgls[INODE_AKEYS];
-	d_iov_t	sg_iovs[INODE_AKEYS];
+	d_iov_t		sg_iovs[INODE_AKEYS];
 	daos_iod_t	iods[INODE_AKEYS];
 	char		*value = NULL;
 	daos_key_t	dkey;
@@ -282,6 +282,11 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	/** Set Akey for OID */
 	d_iov_set(&sg_iovs[i], &entry->oid, sizeof(daos_obj_id_t));
 	d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
+	i++;
+
+	/** Set Akey for chunk size */
+	d_iov_set(&sg_iovs[i], &entry->chunk_size, sizeof(daos_size_t));
+	d_iov_set(&iods[i].iod_name, CSIZE_NAME, strlen(CSIZE_NAME));
 	i++;
 
 	/** Set Akey for ATIME */
@@ -388,7 +393,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	     struct dfs_entry entry)
 {
 	d_sg_list_t	sgls[INODE_AKEYS];
-	d_iov_t	sg_iovs[INODE_AKEYS];
+	d_iov_t		sg_iovs[INODE_AKEYS];
 	daos_iod_t	iods[INODE_AKEYS];
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
@@ -409,6 +414,14 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	d_iov_set(&iods[i].iod_name, OID_NAME, strlen(OID_NAME));
 	iods[i].iod_size = sizeof(daos_obj_id_t);
 	i++;
+
+	/** Add the chunk size if set */
+	if (entry.chunk_size) {
+		d_iov_set(&sg_iovs[i], &entry.chunk_size, sizeof(daos_size_t));
+		d_iov_set(&iods[i].iod_name, CSIZE_NAME, strlen(CSIZE_NAME));
+		iods[i].iod_size = sizeof(daos_size_t);
+		i++;
+	}
 
 	/** Add the access time */
 	d_iov_set(&sg_iovs[i], &entry.atime, sizeof(time_t));
@@ -526,19 +539,14 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	case S_IFREG:
 	{
 		daos_handle_t	file_oh;
-		daos_size_t	elem_size, chunk_size;
 
-		rc = daos_array_open(dfs->coh, entry.oid, th, DAOS_OO_RO,
-				     &elem_size, &chunk_size, &file_oh, NULL);
+		rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
+			DAOS_OO_RO, 1, entry.chunk_size ? entry.chunk_size :
+			dfs->chunk_size, &file_oh, NULL);
 		if (rc) {
-			D_ERROR("daos_array_open() failed (%d)\n", rc);
+			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
+				rc);
 			return daos_der2errno(rc);
-		}
-		if (elem_size != 1) {
-			daos_array_close(file_oh, NULL);
-			D_ERROR("Elem size is not 1 in a byte array (%zu)\n",
-				 elem_size);
-			return EINVAL;
 		}
 
 		rc = daos_array_get_size(file_oh, th, &size, NULL);
@@ -638,7 +646,6 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
-	daos_size_t		elem_size;
 	int			daos_mode;
 	int			rc;
 
@@ -667,19 +674,21 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 			return rc;
 		oid_cp(&entry.oid, file->oid);
 
-		/** Create array object for the file */
-		rc = daos_array_create(dfs->coh, file->oid, th, 1,
-				       (chunk_size ? chunk_size :
-					DFS_DEFAULT_CHUNK_SIZE),
-				       &file->oh, NULL);
+		/** Open the array object for the file */
+		rc = daos_array_open_with_attr(dfs->coh, file->oid, th,
+			DAOS_OO_RW, 1, chunk_size ? chunk_size :
+			dfs->chunk_size, &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_create() failed (%d)\n", rc);
+			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
+				rc);
 			return daos_der2errno(rc);
 		}
 
 		/** Create and insert entry in parent dir object. */
 		entry.mode = file->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
+		if (chunk_size)
+			entry.chunk_size = chunk_size;
 
 		rc = insert_entry(parent->oh, th, file->name, entry);
 		if (rc != 0) {
@@ -715,18 +724,14 @@ open_file:
 		return rc;
 
 	file->mode = entry.mode;
-	rc = daos_array_open(dfs->coh, entry.oid, th, daos_mode,
-			     &elem_size, &chunk_size, &file->oh, NULL);
+	rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, daos_mode, 1,
+			entry.chunk_size ? entry.chunk_size : dfs->chunk_size,
+			&file->oh, NULL);
 	if (rc != 0) {
-		D_ERROR("daos_array_open() failed (%d)\n", rc);
+		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
 		return daos_der2errno(rc);
 	}
-	if (elem_size != 1) {
-		daos_array_close(file->oh, NULL);
-		D_ERROR("Elem size is not 1 in a byte array (%zu)\n",
-			elem_size);
-		return EINVAL;
-	}
+
 	oid_cp(&file->oid, entry.oid);
 
 	return 0;
@@ -740,11 +745,12 @@ static int
 create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 	   daos_oclass_id_t cid, dfs_obj_t *dir)
 {
-	struct dfs_entry	entry;
-	bool			exists;
 	int			rc;
 
 	if (!daos_handle_is_inval(parent_oh)) {
+		struct dfs_entry	entry = {0};
+		bool			exists;
+
 		/* Check if parent has the dirname entry */
 		rc = fetch_entry(parent_oh, th, dir->name, false, &exists,
 				 &entry);
@@ -771,7 +777,7 @@ static int
 open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	 daos_oclass_id_t cid, dfs_obj_t *dir)
 {
-	struct dfs_entry	entry;
+	struct dfs_entry	entry = {0};
 	bool			exists;
 	int			daos_mode;
 	int			rc;
@@ -784,6 +790,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 		entry.oid = dir->oid;
 		entry.mode = dir->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
+		entry.chunk_size = 0;
 
 		rc = insert_entry(parent_oh, th, dir->name, entry);
 		if (rc != 0) {
@@ -830,7 +837,7 @@ static int
 open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 	     const char *value, dfs_obj_t *sym)
 {
-	struct dfs_entry	entry;
+	struct dfs_entry	entry = {0};
 	bool			exists;
 	int			rc;
 
@@ -849,6 +856,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 			return rc;
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
+		entry.chunk_size = 0;
 
 		rc = insert_entry(parent->oh, th, sym->name, entry);
 		if (rc)
@@ -856,11 +864,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 				sym->name, rc);
 		return rc;
 	}
-
-	D_ASSERT(0);
-	if (!exists)
-		return ENOENT;
-	return rc;
+	return ENOTSUP;
 }
 
 static int
@@ -948,6 +952,10 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->poh = poh;
 	dfs->coh = coh;
 	dfs->amode = amode;
+
+	/** TODO - this will be fetched from container attributes */
+	dfs->chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
 		return daos_der2errno(rc);
@@ -1073,7 +1081,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		dfs->root.mode = S_IFDIR | 0777;
 		dfs->root.oid.lo = RESERVED_LO;
 		dfs->root.oid.hi = ROOT_HI;
-		daos_obj_generate_id(&dfs->root.oid, 0, OC_RP_XSF, 0);
+		daos_obj_generate_id(&dfs->root.oid, 0, OC_SX, 0);
 
 		rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh,
 				   NULL);
@@ -1086,6 +1094,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		oid_cp(&entry.oid, dfs->root.oid);
 		entry.mode = S_IFDIR | 0777;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
+		entry.chunk_size = 0;
+
 		rc = insert_entry(dfs->super_oh, th, dfs->root.name, entry);
 		if (rc) {
 			D_ERROR("Failed to insert root entry (%d).", rc);
@@ -1196,6 +1206,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	entry.oid = new_dir.oid;
 	entry.mode = S_IFDIR | mode;
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
+	entry.chunk_size = 0;
 
 	rc = insert_entry(parent->oh, th, name, entry);
 	if (rc != 0)
@@ -1243,7 +1254,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			struct dfs_entry child_entry;
+			struct dfs_entry child_entry = {0};
 			char entry_name[DFS_MAX_PATH + 1];
 			bool exists;
 
@@ -1346,15 +1357,15 @@ out:
 
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
-	   mode_t *mode)
+	   mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
-	struct dfs_entry	entry = {0};
 	char			*token;
 	char			*rem, *sptr;
 	bool			exists;
 	int			daos_mode;
+	struct dfs_entry	entry = {0};
 	uid_t			uid = geteuid();
 	gid_t			gid = getegid();
 	int			rc;
@@ -1373,6 +1384,9 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	rem = strdup(path);
 	if (rem == NULL)
 		return ENOMEM;
+
+	if (stbuf)
+		memset(stbuf, 0, sizeof(struct stat));
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -1402,6 +1416,7 @@ dfs_lookup_loop:
 		if (rc)
 			return rc;
 
+		entry.chunk_size = 0;
 		rc = fetch_entry(parent.oh, DAOS_TX_NONE, token, true,
 				 &exists, &entry);
 		if (rc)
@@ -1424,37 +1439,39 @@ dfs_lookup_loop:
 
 		/** if entry is a file, open the array object and return */
 		if (S_ISREG(entry.mode)) {
-			daos_size_t elem_size, chunk_size;
-
 			/* if there are more entries, then file is not a dir */
 			if (strtok_r(NULL, "/", &sptr) != NULL) {
 				D_ERROR("%s is not a directory\n", obj->name);
 				D_GOTO(err_obj, rc = ENOENT);
 			}
 
-			obj->mode = entry.mode;
-			rc = daos_array_open(dfs->coh, entry.oid,
-					     DAOS_TX_NONE, daos_mode,
-					     &elem_size, &chunk_size, &obj->oh,
-					     NULL);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
+				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
+				entry.chunk_size : dfs->chunk_size, &obj->oh,
+				NULL);
 			if (rc != 0) {
-				D_ERROR("daos_array_open() failed (%d)\n", rc);
+				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
-			if (elem_size != 1) {
-				D_ERROR("Invalid Byte array elem size (%zu)\n",
-					elem_size);
-				daos_array_close(obj->oh, NULL);
-				D_GOTO(err_obj, EINVAL);
-			}
 
+			if (stbuf) {
+				daos_size_t size;
+
+				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE,
+							 &size, NULL);
+				if (rc) {
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj,
+					       rc = daos_der2errno(rc));
+				}
+				stbuf->st_size = size;
+				stbuf->st_blocks =
+					(stbuf->st_size + (1 << 9) - 1) >> 9;
+			}
 			break;
 		}
 
 		if (S_ISLNK(entry.mode)) {
-			obj->mode = entry.mode;
-			obj->value = entry.value;
-
 			/*
 			 * If there is a token after the sym link entry, treat
 			 * the sym link as a directory and look up it's value.
@@ -1463,12 +1480,12 @@ dfs_lookup_loop:
 			if (token) {
 				dfs_obj_t *sym;
 
-				rc = dfs_lookup(dfs, obj->value, flags, &sym,
-						NULL);
+				rc = dfs_lookup(dfs, entry.value, flags, &sym,
+						NULL, NULL);
 				if (rc) {
 					D_DEBUG(DB_TRACE,
 						"Failed to lookup symlink %s\n",
-						obj->value);
+						entry.value);
 					D_FREE(sym);
 					D_GOTO(err_obj, rc);
 				}
@@ -1484,10 +1501,19 @@ dfs_lookup_loop:
 				goto dfs_lookup_loop;
 			}
 
+			obj->value = entry.value;
+			if (stbuf)
+				stbuf->st_size = strlen(entry.value) + 1;
 			/** return the symlink obj if this is the last entry */
 			break;
 		}
 
+		if (!S_ISDIR(entry.mode)) {
+			D_ERROR("Invalid entry type in path.\n");
+			D_GOTO(err_obj, rc = -EINVAL);
+		}
+
+		/* open the directory object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -1495,6 +1521,8 @@ dfs_lookup_loop:
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
+		if (stbuf)
+			stbuf->st_size = sizeof(entry);
 		oid_cp(&parent.oid, obj->oid);
 		oid_cp(&parent.parent_oid, obj->parent_oid);
 		parent.oh = obj->oh;
@@ -1503,6 +1531,17 @@ dfs_lookup_loop:
 
 	if (mode)
 		*mode = obj->mode;
+
+	if (stbuf) {
+		stbuf->st_nlink = 1;
+		stbuf->st_mode = obj->mode;
+		stbuf->st_uid = dfs->uid;
+		stbuf->st_gid = dfs->gid;
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_ctim.tv_sec = entry.ctime;
+	}
+
 out:
 	D_FREE(rem);
 	*_obj = obj;
@@ -1589,7 +1628,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
 	uint32_t	num, keys_nr;
-	char		*enum_buf;
+	char		*enum_buf, *ptr;
 	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1622,10 +1661,10 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	d_iov_set(&iov, enum_buf, size);
 	sgl.sg_iovs = &iov;
 	keys_nr = 0;
+	ptr = enum_buf;
 
 	while (!daos_anchor_is_eof(anchor)) {
-		char		*ptr;
-		uint32_t	i;
+		uint32_t i;
 
 		/*
 		 * list num or less entries, but not more than we can fit in
@@ -1637,7 +1676,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 			D_GOTO(out, rc = daos_der2errno(rc));
 
 		/** for every entry, issue the filler cb */
-		for (ptr = enum_buf, i = 0; i < num; i++) {
+		for (i = 0; i < num; i++) {
 			char name[DFS_MAX_PATH];
 
 			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
@@ -1670,7 +1709,7 @@ out:
 
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode)
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		*obj;
 	struct dfs_entry	entry = {0};
@@ -1697,17 +1736,20 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (daos_mode == -1)
 		return EINVAL;
 
-	D_ALLOC_PTR(obj);
-	if (obj == NULL)
-		return ENOMEM;
-
 	rc = fetch_entry(parent->oh, DAOS_TX_NONE, name, true, &exists,
 			 &entry);
 	if (rc)
-		D_GOTO(err_obj, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(err_obj, rc = ENOENT);
+		return ENOENT;
+
+	if (stbuf)
+		memset(stbuf, 0, sizeof(struct stat));
+
+	D_ALLOC_PTR(obj);
+	if (obj == NULL)
+		return ENOMEM;
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
 	obj->name[DFS_MAX_PATH] = '\0';
@@ -1717,34 +1759,61 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 
 	/** if entry is a file, open the array object and return */
 	if (S_ISREG(entry.mode)) {
-		daos_size_t elem_size, chunk_size;
-
-		rc = daos_array_open(dfs->coh, entry.oid, DAOS_TX_NONE,
-				     daos_mode, &elem_size, &chunk_size,
-				     &obj->oh, NULL);
+		rc = daos_array_open_with_attr(dfs->coh, entry.oid,
+			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
+			entry.chunk_size : dfs->chunk_size, &obj->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open() failed (%d)\n", rc);
+			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
+				rc);
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
-		if (elem_size != 1) {
-			D_ERROR("Invalid Byte array elem size (%zu)\n",
-				elem_size);
-			daos_array_close(obj->oh, NULL);
-			D_GOTO(err_obj, EINVAL);
+
+		/** we need the file size if stat struct is needed */
+		if (stbuf) {
+			daos_size_t size;
+
+			rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size,
+						 NULL);
+			if (rc) {
+				daos_array_close(obj->oh, NULL);
+				D_ERROR("daos_array_get_size() Failed (%d)\n",
+					rc);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+			stbuf->st_size = size;
+			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		}
 	} else if (S_ISLNK(entry.mode)) {
 		obj->value = entry.value;
-	} else {
+		if (stbuf)
+			stbuf->st_size = strlen(entry.value) + 1;
+	} else if (S_ISDIR(entry.mode)) {
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
 			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
+		if (stbuf)
+			stbuf->st_size = sizeof(entry);
+	} else {
+		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
+		D_GOTO(err_obj, rc = -EINVAL);
 	}
 
 	if (mode)
 		*mode = obj->mode;
+
+	if (stbuf) {
+		stbuf->st_nlink = 1;
+		stbuf->st_mode = obj->mode;
+		stbuf->st_uid = dfs->uid;
+		stbuf->st_gid = dfs->gid;
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_ctim.tv_sec = entry.ctime;
+	}
+
 	*_obj = obj;
 
 	return rc;
@@ -2030,12 +2099,12 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
 }
 
 int
-dfs_update_parent(dfs_obj_t *obj, daos_obj_id_t parent_oid, const char *name)
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name)
 {
 	if (obj == NULL)
 		return EINVAL;
 
-	oid_cp(&obj->parent_oid, parent_oid);
+	oid_cp(&obj->parent_oid, parent_obj->parent_oid);
 	if (name) {
 		strncpy(obj->name, name, DFS_MAX_PATH);
 		obj->name[DFS_MAX_PATH] = '\0';
@@ -2109,7 +2178,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 {
 	daos_handle_t		oh;
 	bool			exists;
-	struct dfs_entry	entry;
+	struct dfs_entry	entry = {0};
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -2158,7 +2227,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return EIO;
 	}
 
-	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL);
+	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		return rc;
@@ -2178,9 +2247,9 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
-	struct dfs_entry	entry;
+	struct dfs_entry	entry = {0};
 	d_sg_list_t		sgl;
-	d_iov_t		sg_iov;
+	d_iov_t			sg_iov;
 	daos_iod_t		iod;
 	daos_key_t		dkey;
 	int			rc;
@@ -2236,7 +2305,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 			return EIO;
 		}
 
-		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL);
+		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL, NULL);
 		if (rc) {
 			D_ERROR("Failed to lookup Symlink %s\n", entry.value);
 			return rc;
@@ -2786,7 +2855,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	/** Open parent object and get xattr from the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -2819,17 +2888,19 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	}
 	if (rc) {
 		D_ERROR("Failed to fetch xattr %s (%d)\n", name, rc);
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
 	*size = iod.iod_size;
 	if (iod.iod_size == 0)
-		D_GOTO(out, rc = ENOENT);
+		D_GOTO(close, rc = ENODATA);
 
-out:
-	if (xname)
-		D_FREE(xname);
+close:
 	daos_obj_close(oh, NULL);
+out:
+	D_FREE(xname);
+	if (rc == -ENOENT)
+		rc = -ENODATA;
 	return rc;
 }
 
@@ -3034,6 +3105,3 @@ dfs_umount_root_cont(dfs_t *dfs)
 	rc = daos_cont_close(coh, NULL);
 	return daos_der2errno(rc);
 }
-
-/*  LocalWords:  EINVAL
- */

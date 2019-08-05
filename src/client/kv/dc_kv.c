@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,18 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_m
+ * This file is part of daos
  *
- * src/addons/dac_hl.c
+ * src/kv/dc_kv.c
  */
-#define D_LOGFAC	DD_FAC(addons)
+#define D_LOGFAC	DD_FAC(kv)
 
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <daos/object.h>
-#include <daos/addons.h>
+#include <daos/kv.h>
 #include <daos_api.h>
-#include <daos_addons.h>
+#include <daos_kv.h>
 #include <daos_task.h>
 
 struct io_params {
@@ -63,7 +63,7 @@ set_size_cb(tse_task_t *task, void *data)
 }
 
 int
-dac_kv_put(tse_task_t *task)
+dc_kv_put(tse_task_t *task)
 {
 	daos_kv_put_t		*args = daos_task_get_args(task);
 	daos_obj_update_t	*update_args;
@@ -136,7 +136,7 @@ err_task:
 }
 
 int
-dac_kv_get(tse_task_t *task)
+dc_kv_get(tse_task_t *task)
 {
 	daos_kv_get_t		*args = daos_task_get_args(task);
 	daos_obj_fetch_t	*fetch_args;
@@ -227,7 +227,7 @@ err_task:
 }
 
 int
-dac_kv_remove(tse_task_t *task)
+dc_kv_remove(tse_task_t *task)
 {
 	daos_kv_remove_t	*args = daos_task_get_args(task);
 	daos_obj_punch_t	*punch_args;
@@ -283,7 +283,7 @@ err_task:
 }
 
 int
-dac_kv_list(tse_task_t *task)
+dc_kv_list(tse_task_t *task)
 {
 	daos_kv_list_t		*args = daos_task_get_args(task);
 	daos_obj_list_dkey_t	*list_args;
@@ -320,75 +320,4 @@ err_task:
 		tse_task_complete(list_task, rc);
 	tse_task_complete(task, rc);
 	return rc;
-}
-
-static int
-dac_multi_io(daos_handle_t oh, daos_handle_t th, unsigned int num_dkeys,
-	     daos_dkey_io_t *io_array, daos_opc_t opc, tse_task_t *task)
-{
-	daos_opc_t	d_opc;
-	d_list_t	head;
-	int		i;
-	int		rc = 0;
-
-	d_opc = (opc == DAOS_OPC_OBJ_FETCH_MULTI ? DAOS_OPC_OBJ_FETCH :
-		DAOS_OPC_OBJ_UPDATE);
-	D_INIT_LIST_HEAD(&head);
-
-	for (i = 0; i < num_dkeys; i++) {
-		tse_task_t	 *io_task;
-		daos_obj_fetch_t *args;
-
-		rc = daos_task_create(d_opc, tse_task2sched(task), 0, NULL,
-				      &io_task);
-		if (rc != 0)
-			D_GOTO(err_task, rc);
-
-		args = daos_task_get_args(io_task);
-		args->oh	= oh;
-		args->th	= th;
-		args->dkey	= io_array[i].ioa_dkey;
-		args->nr	= io_array[i].ioa_nr;
-		args->iods	= io_array[i].ioa_iods;
-		args->sgls	= io_array[i].ioa_sgls;
-		args->maps	= io_array[i].ioa_maps;
-
-		tse_task_list_add(io_task, &head);
-	}
-
-	rc = tse_task_depend_list(task, &head);
-	if (rc != 0)
-		D_GOTO(err_task, rc);
-
-	tse_task_list_sched(&head, false);
-	tse_sched_progress(tse_task2sched(task));
-	return 0;
-
-err_task:
-	while (!d_list_empty(&head)) {
-		tse_task_t *tmp = tse_task_list_first(&head);
-
-		tse_task_list_del(tmp);
-		tse_task_decref(tmp);
-	}
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
-dac_obj_fetch_multi(tse_task_t *task)
-{
-	daos_obj_multi_io_t *args = daos_task_get_args(task);
-
-	return dac_multi_io(args->oh, args->th, args->num_dkeys,
-			    args->io_array, DAOS_OPC_OBJ_FETCH_MULTI, task);
-}
-
-int
-dac_obj_update_multi(tse_task_t *task)
-{
-	daos_obj_multi_io_t *args = daos_task_get_args(task);
-
-	return dac_multi_io(args->oh, args->th, args->num_dkeys,
-			    args->io_array, DAOS_OPC_OBJ_UPDATE_MULTI, task);
 }

@@ -59,21 +59,34 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 				       &ie->ie_htl);
 
 	if (rlink != &ie->ie_htl) {
+		struct dfuse_inode_entry *inode;
+
+		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
 		 * keep a reference on the parent.
 		 */
+
+		/* Update the existing object with the new name/parent */
+		rc = dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+		if (rc != -DER_SUCCESS)
+			DFUSE_TRA_ERROR(inode, "dfs_update_parent() failed %d",
+					rc);
+
+		inode->ie_parent = ie->ie_parent;
+		strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
+
 		atomic_fetch_sub(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
 
 		ie_close(fs_handle, ie);
 	}
 
-	if (fi_out) {
+	if (fi_out)
 		DFUSE_REPLY_CREATE(req, entry, fi_out);
-	} else {
+	else
 		DFUSE_REPLY_ENTRY(req, entry);
-	}
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -86,8 +99,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
-	mode_t				mode;
-	int rc;
+	int				rc;
 
 	DFUSE_TRA_INFO(fs_handle,
 		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
@@ -95,15 +107,14 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_INFO(parent, "parent");
 
 	D_ALLOC_PTR(ie);
-	if (!ie) {
-		D_GOTO(err, rc = -ENOMEM);
-	}
+	if (!ie)
+		D_GOTO(err, rc = ENOMEM);
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			    O_RDONLY, &ie->ie_obj, &mode);
+			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
 			       strerror(rc));
@@ -114,19 +125,14 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc)
-		D_GOTO(err, rc);
-
 	/* If the new entry is a link allocate an inode number here, as dfs
 	 * does not assign it an object id to be able to save an inode.
 	 *
 	 * see comment in symlink.c
 	 */
-	if (S_ISLNK(ie->ie_stat.st_mode)) {
+	if (S_ISLNK(ie->ie_stat.st_mode))
 		ie->ie_stat.st_ino = atomic_fetch_add(&fs_handle->dpi_ino_next,
 						      1);
-	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
