@@ -476,11 +476,11 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 
 		D_ASSERT(bdev != NULL);
 
-		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
+		D_PRINT("SPDK IO STAT: tgt[%d] dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
 			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
 			"write_latency_ticks["DF_U64"]\n",
-			ctxt->bxc_xs_id, spdk_bdev_get_name(bdev),
+			ctxt->bxc_tgt_id, spdk_bdev_get_name(bdev),
 			stat.bytes_read, stat.num_read_ops, stat.bytes_written,
 			stat.num_write_ops, stat.read_latency_ticks,
 			stat.write_latency_ticks);

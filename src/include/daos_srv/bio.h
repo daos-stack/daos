@@ -218,11 +218,11 @@ void bio_nvme_fini(void);
  * Initialize SPDK env and per-xstream NVMe context.
  *
  * \param[OUT] pctxt	Per-xstream NVMe context to be returned
- * \param[IN] xs_id	xstream ID
+ * \param[IN] tgt_id	Target ID (mapped to a VOS xstream)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.

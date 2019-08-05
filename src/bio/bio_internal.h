@@ -117,7 +117,7 @@ struct bio_blobstore {
 
 /* Per-xstream NVMe context */
 struct bio_xs_context {
-	int			 bxc_xs_id;
+	int			 bxc_tgt_id;
 	struct spdk_ring	*bxc_msg_ring;
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
