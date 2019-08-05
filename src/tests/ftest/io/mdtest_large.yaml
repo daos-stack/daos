@@ -40,28 +40,40 @@ mdtest:
     client_processes: !mux
         np_1:
             np: 1
+            num_of_files_dirs: 100000
         np_64:
             np: 64
+            num_of_files_dirs: 100000
         np_128:
             np: 128
+            num_of_files_dirs: 10000
     api: 'DFS'
     test_dir: "/"
     iteration: 3
-    num_of_files_dirs: 10000
-    data: !mux
-        1K:
-            write_bytes: 1000
-            read_bytes: 1000
-        32K:
-            write_bytes: 32000
-            read_bytes: 32000
+    dfs_cont: "`uuidgen`"
+    manager: "MPICH"
     diff_flags: !mux
         flags_ssf:
             flags: "--dfs.destroy"
+            data: !mux
+                zero:
+                    write_bytes: 0
+                    read_bytes: 0
+                    depth: 0
+                1K: 
+                    write_bytes: 1000
+                    read_bytes: 1000
+                    depth: 0
+                32K:
+                    write_bytes: 32000
+                    read_bytes: 32000
+                    directory_depth: !mux
+                        depth_zero:
+                            depth: 0
+                        depth_100:
+                            depth: 100
         flags_fpp:
             flags: "-u --dfs.destroy"
-    directory_depth: !mux
-        depth_0:
+            write_bytes: 32000
+            read_bytes: 32000
             depth: 0
-        depth_100:
-            depth: 100

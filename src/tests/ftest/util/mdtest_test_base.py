@@ -90,7 +90,8 @@ class MdtestBase(TestWithServers):
 
         # Run Mdtest
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
-        self.run_ior(self.get_job_manager_command(self.manager), self.processes)
+        self.run_mdtest(self.get_job_manager_command(self.manager),
+                        self.processes)
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
@@ -105,7 +106,7 @@ class MdtestBase(TestWithServers):
             return os.path.join(mpio_util.mpichinstall, "bin", "mpirun")
         return self.orterun
 
-    def run_ior(self, manager, processes):
+    def run_mdtest(self, manager, processes):
         """Run the Mdtest command.
         Args:
             manager (str): mpi job manager command
