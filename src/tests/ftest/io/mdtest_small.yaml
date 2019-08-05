@@ -17,7 +17,7 @@ pool:
     createset:
         setname: daos_server
     createsize:
-        scm_size: 15000000000
+        scm_size: 14000000000
     createsvc:
         svcn: 1
 mdtest:
