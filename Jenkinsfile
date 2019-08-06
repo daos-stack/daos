@@ -216,11 +216,11 @@ pipeline {
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                                       result: "UNSTABLE", ignore_failure: true
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -267,11 +267,11 @@ pipeline {
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                                       result: "UNSTABLE", ignore_failure: true
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -1111,7 +1111,7 @@ pipeline {
                                         sudo yum -y install daos-tests\n''' +
                                         "${rpm_test_daos_test}" + '"',
                                 junit_files: null,
-                                failure_artifacts: env.STAGE_NAME
+                                failure_artifacts: env.STAGE_NAME, ignore_failure: true
                     }
                 }
                 stage('Test SLES12.3 RPMs') {
@@ -1136,7 +1136,7 @@ pipeline {
                                         sudo zypper --non-interactive in daos-tests\n''' +
                                         "${rpm_test_daos_test}" + '"',
                                 junit_files: null,
-                                failure_artifacts: env.STAGE_NAME
+                                failure_artifacts: env.STAGE_NAME, ignore_failure: true
                     }
                 }
             }
