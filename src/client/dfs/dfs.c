@@ -857,6 +857,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
+		oid_cp(&entry.oid, sym->oid);
 
 		rc = insert_entry(parent->oh, th, sym->name, entry);
 		if (rc)
