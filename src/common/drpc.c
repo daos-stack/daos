@@ -199,8 +199,8 @@ unixcomm_listen(char *sockaddr, int flags)
 	fill_socket_address(sockaddr, &address);
 	if (bind(comm->fd, (struct sockaddr *)&address,
 		 sizeof(struct sockaddr_un)) < 0) {
-		D_ERROR("Failed to bind socket fd %d, errno=%d\n",
-			comm->fd, errno);
+		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
+			sockaddr, comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
