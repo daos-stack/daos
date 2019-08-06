@@ -58,7 +58,7 @@ typedef struct dfs dfs_t;
  * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR).
  * \param[out]	dfs	Pointer to the file system object created.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
@@ -70,7 +70,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_umount(dfs_t *dfs);
@@ -81,7 +81,7 @@ dfs_umount(dfs_t *dfs);
  * \param[in]	obj	Object to convert
  * \param[out]	oid	Daos object ID.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
@@ -97,7 +97,7 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  * \param[out]	mode	Optional mode_t of object looked up.
  * \param[out]	stbuf	Optional stat struct of object looked up.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
@@ -120,7 +120,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  * \param[out]	mode	Optional mode_t of object looked up.
  * \param[out]	stbuf	Optional stat struct of object looked up.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
@@ -147,7 +147,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  * \param[in]	value	Symlink value (NULL if not syml).
  * \param[out]	obj	Pointer to object opened.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
@@ -164,7 +164,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
  * \param[out]	new_obj	DFS object that is duplicated/opened.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
@@ -174,7 +174,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
  *
  * \param[in]	obj	Object to release.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_release(dfs_obj_t *obj);
@@ -189,7 +189,7 @@ dfs_release(dfs_obj_t *obj);
  * \param[out]	read_size
  *			How much data is actually read.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
@@ -203,7 +203,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[in]	off	Offset into the file to write to.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off);
@@ -215,7 +215,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off);
  * \param[in]	obj	Opened file object.
  * \param[out]	size	Size of file.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
@@ -231,7 +231,7 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
  * \param[in]	offset	offset of file to punch at.
  * \param[in]	len	number of bytes to punch.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
@@ -252,7 +252,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
  *		dirs	[in] preallocated array of dirents.
  *			[out]: dirents returned with d_name filled only.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
@@ -282,7 +282,7 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  * \param[in]	op	Optional callback to be issued on every entry.
  * \param[in]	udata	Pointer to user data to be passed to \a op.
  *
- * \return		0 on Success. Negative on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
@@ -296,7 +296,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * \param[in]	name	Link name of new dir.
  * \param[in]	mode	mkdir mode.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
@@ -311,7 +311,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  * \param[in]	name	Name of object to remove in parent dir.
  * \param[in]	force	If true, remove dir even if non-empty.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
@@ -326,7 +326,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	name	New link name of object.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
@@ -341,7 +341,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
  * \param[in]	parent2	Parent directory object of name2. If NULL, use root obj.
  * \param[in]	name2	link name of second object.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
@@ -353,7 +353,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
  * \param[in]	obj	Open object to query.
  * \param[out]	mode	mode_t (permissions + type).
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
@@ -367,7 +367,7 @@ dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
  * \param[in]	obj	Open object.
  * \param[out]	oh	DAOS object open handle.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
@@ -383,7 +383,7 @@ dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
  *		size	[in]: Size of buffer pased in. [out]: Actual size of
  *			value.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
@@ -401,7 +401,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on Success. errno code on Failure.
  */
 int
 dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
@@ -425,7 +425,7 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
  *			which means operation will be on root object.
  * \param[out]	stbuf	Stat struct with the members above filled.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
@@ -438,7 +438,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
  * \param[in]	obj	Open object (File, dir or syml) to stat.
  * \param[out]	stbuf	Stat struct with the members above filled.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
@@ -455,7 +455,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  *			It should be either the value F_OK, or a mask with
  *			bitwise OR of one or more of R_OK, W_OK, and X_OK.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
@@ -470,7 +470,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  * \param[in]	mode	New permission access modes. For now, we don't support
  *			the sticky bit, setuid, and setgid.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
@@ -483,7 +483,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_sync(dfs_t *dfs);
@@ -501,7 +501,7 @@ dfs_sync(dfs_t *dfs);
  *			XATTR_CREATE: create or fail if xattr exists.
  *			XATTR_REPLACE: replace or fail if xattr does not exist.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
@@ -518,7 +518,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
  * \param[in,out]
  *		size	[in]: Size of buffer value. [out]: Actual size of xattr.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
@@ -532,7 +532,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
  * \param[in]	obj	Open object where xattr will be removed.
  * \param[in]	name	Name of xattr to remove.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
@@ -550,7 +550,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  * \param[in,out]
  *		size    [in]: Size of list. [out]: Actual size of list.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
@@ -562,7 +562,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
  * \param[in]   poh     Pool connection handle
  * \param[out]  dfs     Pointer to the root DFS created.
  *
- * \return              0 on Success. Negative errno on Failure.
+ * \return              0 on success, errno code on failure.
  */
 int
 dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
@@ -572,7 +572,7 @@ dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
  *
  * \param[in]	dfs	Pointer to the root DFS file system.
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on success, errno code on failure.
  */
 int
 dfs_umount_root_cont(dfs_t *dfs);
