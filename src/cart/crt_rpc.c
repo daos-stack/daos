@@ -659,6 +659,10 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 	/* extract uri */
 	ul_out = crt_reply_get(cb_info->cci_rpc);
 	D_ASSERT(ul_out != NULL);
+
+	if (ul_out->ul_rc != 0)
+		D_GOTO(out, rc = ul_out->ul_rc);
+
 	uri = ul_out->ul_uri;
 
 	/* insert uri to hash table */
@@ -681,6 +685,7 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
+
 out:
 	if (rc != 0) {
 		crt_context_req_untrack(rpc_priv);
