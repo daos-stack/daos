@@ -33,7 +33,6 @@ from command_utils import FormattedParameter, CommandWithParameters
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
-# pylint: disable=attribute-defined-outside-init
 class IorCommand(CommandWithParameters):
     """Defines a object for executing an IOR command.
 
