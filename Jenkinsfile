@@ -268,8 +268,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true
-                        runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: 'exit 0'
+                        runTest script: 'exit 0'
                     }
                 }
             }
