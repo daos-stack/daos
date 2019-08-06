@@ -136,13 +136,14 @@ new_unixcomm_socket(int flags)
 
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
-		D_ERROR("Failed to open socket\n");
+		D_ERROR("Failed to open socket, errno=%d\n", errno);
 		D_FREE(comm);
 		return NULL;
 	}
 
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
-		D_ERROR("Failed to set flags on socket fd %d\n", comm->fd);
+		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
@@ -176,7 +177,8 @@ unixcomm_connect(char *sockaddr, int flags)
 	ret = connect(handle->fd, (struct sockaddr *) &address,
 			sizeof(address));
 	if (ret < 0) {
-		D_ERROR("Failed to connect to socket fd %d\n", handle->fd);
+		D_ERROR("Failed to connect to socket fd %d, errno=%d\n",
+			handle->fd, errno);
 		unixcomm_close(handle);
 		return NULL;
 	}
@@ -197,14 +199,15 @@ unixcomm_listen(char *sockaddr, int flags)
 	fill_socket_address(sockaddr, &address);
 	if (bind(comm->fd, (struct sockaddr *)&address,
 		 sizeof(struct sockaddr_un)) < 0) {
-		D_ERROR("Failed to bind socket fd %d\n", comm->fd);
+		D_ERROR("Failed to bind socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
 
 	if (listen(comm->fd, SOMAXCONN) < 0) {
-		D_ERROR("Failed to start listening on socket fd %d\n",
-			comm->fd);
+		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
@@ -225,8 +228,8 @@ unixcomm_accept(struct unixcomm *listener)
 
 	comm->fd = accept(listener->fd, NULL, NULL);
 	if (comm->fd < 0) {
-		D_ERROR("Failed to accept connection on listener fd %d\n",
-			listener->fd);
+		D_ERROR("Failed to accept connection on listener fd %d, "
+			"errno=%d\n", listener->fd, errno);
 		D_FREE(comm);
 		return NULL;
 	}
@@ -246,7 +249,8 @@ unixcomm_close(struct unixcomm *handle)
 	D_FREE(handle);
 
 	if (ret < 0) {
-		D_ERROR("Failed to close socket fd %d\n", handle->fd);
+		D_ERROR("Failed to close socket fd %d, errno=%d\n",
+			handle->fd, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -271,7 +275,8 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
-		D_ERROR("Failed to sendmsg on socket fd %d\n", hndl->fd);
+		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
+			hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
 		if (sent != NULL)
@@ -299,7 +304,8 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
-		D_ERROR("Failed to recvmsg on socket fd %d\n", hndl->fd);
+		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
+			hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
 		if (rcvd != NULL)
