@@ -30,9 +30,9 @@ import (
 	"sort"
 	"time"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-
 	"golang.org/x/net/context"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // FeatureMap is an alias for mgmt features supported by gRPC server.
@@ -99,7 +99,6 @@ func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
 	for {
 		f, err = stream.Recv()
 		if err == io.EOF {
-			err = nil
 			break
 		} else if err != nil {
 			ch <- ClientResult{mc.getAddress(), nil, err}

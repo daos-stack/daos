@@ -28,10 +28,10 @@ void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
-	d_iov_t			iov = {};
-	d_sg_list_t		sgl = {};
-	int			rc;
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	d_iov_t				iov = {};
+	d_sg_list_t			sgl = {};
+	int				rc;
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
@@ -39,7 +39,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, sgl, position);
 	if (rc == 0)
-		DFUSE_REPLY_WRITE(NULL, req, len);
+		DFUSE_REPLY_WRITE(oh, req, len);
 	else
-		DFUSE_REPLY_ERR_RAW(NULL, req, -rc);
+		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
 }

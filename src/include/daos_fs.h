@@ -94,13 +94,14 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  * \param[in]	path	Path to lookup.
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
  * \param[out]	obj	Pointer to the object looked up.
- * \params[out]	mode	mode_t (permissions + type).
+ * \param[out]	mode	Optional mode_t of object looked up.
+ * \param[out]	stbuf	Optional stat struct of object looked up.
  *
  * \return		0 on Success. Negative errno on Failure.
  */
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
-	   mode_t *mode);
+	   mode_t *mode, struct stat *stbuf);
 
 /**
  * Lookup an entry in the parent object and return the associated open object
@@ -116,13 +117,14 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  * \param[in]	name	Link name of the object to create/open.
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
  * \param[out]	obj	Pointer to the object looked up.
- * \params[out]	mode	Optional mode_t (permissions + type).
+ * \param[out]	mode	Optional mode_t of object looked up.
+ * \param[out]	stbuf	Optional stat struct of object looked up.
  *
  * \return		0 on Success. Negative errno on Failure.
  */
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode);
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -233,18 +235,6 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
  */
 int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
-
-/**
- * Query number of link in dir object.
- *
- * \param[in]	dfs	Pointer to the mounted file system.
- * \param[in]	obj	Opened directory object.
- * \param[out]	nlinks	Number of links returned.
- *
- * \return		0 on Success. Negative errno on Failure.
- */
-int
-dfs_nlinks(dfs_t *dfs, dfs_obj_t *obj, uint32_t *nlinks);
 
 /**
  * directory readdir.
@@ -397,6 +387,24 @@ dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
  */
 int
 dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
+
+/**
+ * A DFS object open handle has links to its parent (oid) and the entry name of
+ * that object in that parent. In some cases a user would want to update the oh
+ * of an object in case of a rename. This API would allow modifying an existing
+ * open handle of an object to change it's parent and it's entry name. Note this
+ * is a local operation and doesn't change anything on the storage.
+ *
+ * \param[in]	obj	Open object handle to update.
+ * \param[in]	parent_oid
+ *			Open object handle of new parent.
+ * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
+ *			the entry name unchanged.
+ *
+ * \return		0 on Success. Negative errno on Failure.
+ */
+int
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
 
 /**
  * stat attributes of an entry. If object is a symlink, the link itself is

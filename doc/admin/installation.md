@@ -1,219 +1,297 @@
-DAOS Software Installation
-==========================
+# DAOS Software Installation
 
-DAOS runs on both Intel 64 and ARM64 platforms and has been
-successfully tested on CentOS7, OpenSUSE 42.2 and Ubuntu 18.04
-distributions.
+DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
+on CentOS7, OpenSUSE 42.2 and Ubuntu 18.04 distributions.
 
-Software Dependencies
----------------------
+## Software Dependencies
 
-DAOS requires a C99-capable compiler, a golang compiler, and the scons
-build tool. Moreover, the DAOS stack leverages the following open source
-projects:
+DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool.
+Moreover, the DAOS stack leverages the following open source projects:
 
--   [*CaRT*](https://github.com/daos-stack/cart) for rank-based
-    transport services that rely on
-    both [*Mercury*](https://mercury-hpc.github.io/) and [*Libfabric*](https://ofiwg.github.io/libfabric/) for
-    lightweight network transport
-    and [*PMIx*](https://github.com/pmix/master) for process set
-    management. See the CaRT repository for more information on how to
-    build the CaRT library.
+-   [*CaRT*](https://github.com/daos-stack/cart) for high-performance
+    communication leveraging advanced network capabilities.
+
+-   [*gRPC*](https://grpc.io/) provides an secured out-of-band channel for
+    DAOS administration.
 
 -   [*PMDK*](https://github.com/pmem/pmdk.git) for persistent memory
     programming.
 
--   [*SPDK*](http://spdk.io/) for userspace NVMe device access and
-    management.
+-   [*SPDK*](http://spdk.io/) for userspace NVMe device access and management.
 
--   [*FIO*](https://github.com/axboe/fio) for flexible testing of Linux
-    I/O subsystems, specifically enabling validation of userspace NVMe
-    device performance through fio-spdk plugin.
+-   [*FIO*](https://github.com/axboe/fio) for flexible testing of Linux I/O
+    subsystems, specifically enabling validation of userspace NVMe device
+    performance through fio-spdk plugin.
 
--   [*ISA-L*](https://github.com/01org/isa-l) for checksum and erasure
-    code computation.
+-   [*ISA-L*](https://github.com/01org/isa-l) for checksum and erasure code
+    computation.
 
--   [*Argobots*](https://github.com/pmodels/argobots) for thread
-    management.
+-   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
 
-The DAOS build system can be configured to download and build any
-missing dependencies automatically.
+The DAOS build system can be configured to download and build any missing
+dependencies automatically.
 
-Distribution Packages
----------------------
+## Distribution Packages
 
-DAOS RPM packaging is under development and will be available for DAOS
-v1.0. Integration with the [Spack](https://spack.io/) package manager is
-also under consideration.
+DAOS RPM and deb packaging is under development and will be available for DAOS
+v1.0. Integration with the [Spack](https://spack.io/) package manager is also
+under consideration.
 
-DAOS Source Code
-----------------
+## DAOS Source Code
 
 To check out the DAOS source code, run the following command:
 
-git clone https://github.com/daos-stack/daos.git
+    git clone https://github.com/daos-stack/daos.git
 
-This command clones the DAOS git repository (path referred as
-\${daospath} below). Then initialize the submodules with:
+This command clones the DAOS git repository (path referred as ${daospath}
+below). Then initialize the submodules with:
 
-cd \${daospath}
+    cd ${daospath}
+    git submodule init
+    git submodule update
 
-git submodule init
+## DAOS from Scratch
 
-git submodule update
-
-Building DAOS from Scratch
---------------------------
-
-The below instructions have been verified with CentOS. Installations on
-other Linux distributions might be similar with some variations.
-Developers of DAOS may want to check additional sections below before
-beginning for suggestions related specifically to development. Please
-contact us in our [*forum*](https://daos.groups.io/g/daos) if running
-into issues.
+The below instructions have been verified with CentOS. Installations on other
+Linux distributions might be similar with some variations.
+Developers of DAOS may want to check additional sections below before beginning
+for suggestions related specifically to development. Please contact us in our
+[*forum*](https://daos.groups.io/g/daos) if running into issues.
 
 ### Build Prerequisites
 
-Please install the following software packages (or equivalent for other
-distros):
-
-**On CentOS and OpenSUSE:**
-
-    yum install -y epel-release
-
-    yum install -y git gcc gcc-c++ make cmake golang libtool scons
-    boost-devel
-
-    yum install -y libuuid-devel openssl-devel libevent-devel
-    libtool-ltdl-devel
-
-    yum install -y librdmacm-devel libcmocka libcmocka-devel readline-devel
-
-    yum install -y doxygen pandoc flex patch nasm yasm
-
-    yum install -y ninja-build meson libyaml-devel
-
-    \# Required SPDK packages for managing NVMe SSDs
-
-    yum install -y CUnit-devel libaio-devel astyle-devel python-pep8 lcov
-
-    yum install -y python clang-analyzer sg3\_utils libiscsi-devel
-
-    yum install -y libibverbs-devel numactl-devel doxygen mscgen graphviz
-
-    \# Required IpmCtl packages for managing SCM Modules
-
-    yum install -y yum-plugin-copr epel-release
-
-    yum copr -y enable jhli/ipmctl
-
-    yum copr -y enable jhli/safeclib
-
-    yum install -y libipmctl-devel
-
-**On Ubuntu and Debian:**
-
-    apt-get install -y git gcc golang make cmake libtool-bin scons autoconf
-
-    apt-get install -y libboost-dev uuid-dev libssl-dev libevent-dev
-    libltdl-dev
-
-    apt-get install -y librdmacm-dev libcmocka0 libcmocka-dev
-    libreadline6-dev
-
-    apt-get install -y curl doxygen pandoc flex patch nasm yasm
-
-    apt-get install -y ninja-build meson libyaml-dev python2.7-dev
-
-    \# Required SPDK packages for managing NVMe SSDs
-
-    apt-get install -y libibverbs-dev librdmacm-dev libcunit1-dev graphviz
-
-    apt-get install -y libaio-dev sg3-utils libiscsi-dev doxygen mscgen
-    libnuma-dev
-
-    \# Required IpmCtl packages for managing SCM Modules
-
-    apt-get install -y software-properties-common
-
-    add-apt-repository ppa:jhli/libsafec
-
-    add-apt-repository ppa:jhli/ipmctl
-
-    apt-get update
-
-    apt-get install -y libipmctl-dev
-
-Verify that all the auto tools listed below are at the appropriate
-versions:
-
+First of all, please verify that the autotools packages listed below are at the
+appropriate versions (or above):
 -   m4 (GNU M4) 1.4.16
-
 -   flex 2.5.37
-
 -   autoconf (GNU Autoconf) 2.69
-
 -   automake (GNU automake) 1.13.4
-
 -   libtool (GNU libtool) 2.4.2
 
-### Protobuf Compiler
+Moreover, a Go version of at least 1.10 is required.
 
-The DAOS control plane infrastructure will be using protobuf as the data
-serialization format for its RPC requests. The DAOS proto files use
-protobuf 3 syntax which is not supported by the platform protobuf
-compiler in all cases. Not all developers will need to build the proto
-files into the various source files. However, if changes are made to the
-proto files, they will need to be regenerated with a protobuf 3.\* or
-higher compiler. To set up support for compiling protobuf files,
-download the following precompiled package for Linux and install it
-somewhere accessible by your PATH variable.
+To build DAOS and its dependencies, several software packages must be installed
+on the system. This includes scons, libuuid, cmocka, ipmctl and several other
+packages usually available on all the Linux distributions.
 
-https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86\_64.zip
+A exhaustive list of packages for each supported Linux distribution is
+maintained in the Docker files:
+- [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
+- [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L40)
+- [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
+
+The command lines to install the required packages can be easily extracted from
+the Docker files by removing the "RUN" command which is specific to Docker.
+Please check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+directory for different Linux distribution versions.
 
 ### Building DAOS & Dependencies
 
-If all the software dependencies listed previously are already
-satisfied, then type the following command in the top source directory
-to build the DAOS stack:
+If all the software dependencies listed previously are already satisfied, then
+type the following command in the top source directory to build the DAOS stack:
 
+```
     scons --config=force install
+```
 
-If you are a developer of DAOS, we recommend following the instructions
-in Section 4.4.4 below.
+If you are a developer of DAOS, we recommend following the instructions in the
+last section of this chapter.
 
-Otherwise, the missing dependencies can be built automatically by
-invoking scons with the following parameters:
+Otherwise, the missing dependencies can be built automatically by invoking scons
+with the following parameters:
 
-    scons --config=force --build-deps=yes USE\_INSTALLED=all install
+```
+    scons --config=force --build-deps=yes install
+```
 
-By default, DAOS and its dependencies are installed under
-\${daospath}/install. The installation path can be modified by adding
-the PREFIX= option to the above command line (e.g., PREFIX=/usr/local).
+By default, DAOS and its dependencies are installed under ${daospath}/install.
+The installation path can be modified by adding the PREFIX= option to the above
+command line (e.g., PREFIX=/usr/local).
 
 ### Environment setup
 
-Once built, the environment must be modified to search for binaries and
-header files in the installation path. This step is not required if
-standard locations (e.g. /bin, /sbin, /usr/lib, ...) are used.
+Once built, the environment must be modified to search for binaries and header
+files in the installation path. This step is not required if standard locations
+(e.g. /bin, /sbin, /usr/lib, ...) are used.
 
-    CPATH=\${daospath}/install/include/:\$CPATH
-
-    PATH=\${daospath}/install/bin/:\${daospath}/install/sbin:\$PATH
-
+```
+    CPATH=${daospath}/install/include/:$CPATH
+    PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
     export CPATH PATH
+```
 
-If using bash, PATH can be set up for you after a build by sourcing the
-script scons\_local/utils/setup\_local.sh from the daos root. This
-script utilizes a file generated by the build to determine the location
-of daos and its dependencies.
+If using bash, PATH can be set up for you after a build by sourcing the script
+scons_local/utils/setup_local.sh from the daos root. This script utilizes a file
+generated by the build to determine the location of daos and its dependencies.
 
-If required, \${daospath}/install must be replaced with the alternative
-path specified through PREFIX. The network type to use as well the debug
-log location can be selected as follows:
+If required, ${daospath}/install must be replaced with the alternative path
+specified through PREFIX.
 
-export CRT\_PHY\_ADDR\_STR="ofi+sockets",
+## DAOS in Docker
 
-OFI\_INTERFACE=eth0, where eth0 is the network device you want to use.
+To build the Docker image directly from GitHub, run the following command:
 
-For infiniband you could use ib0 or whichever label points to IB device.
+```
+    $ docker build -t daos -f Dockerfile.centos.7 github.com/daos-stack/daos#:utils/docker
+```
+
+This creates a CentOS7 image, fetches the latest DAOS version from GitHub and
+builds it in the container. For Ubuntu and other Linux distributions, replace
+Dockerfile.centos.7 with Dockerfile.ubuntu.18.04 and the appropriate version
+of interest.
+
+To build from a local tree stored on the host, a volume must be created to share
+the source tree with the Docker container. To do so, please execute the following
+command to create a docker image without checking out the DAOS source tree:
+
+```
+    $ docker build -t daos -f utils/docker/Dockerfile.centos.7 --build-arg NOBUILD=1 .
+```
+
+Then please execute the following command to export the DAOS source tree to the
+docker container and build it:
+
+```
+    $ docker run -v ${daospath}:/home/daos/daos:Z daos /bin/bash -c "scons --config=force --build-deps=yes install"
+```
+
+${daospath} should be replaced with the full path to your DAOS source tree.
+
+## DAOS for Development
+
+This section covers specific instructions to create a developer-friendly
+environment to contribute to the DAOS development. This includes how to
+regenerate the protobuf files or add new Go package dependencies which is
+only required for development purpose.
+
+### Building DAOS for Development
+
+For development, it is recommended to build and install each dependency in a
+unique subdirectory. The DAOS build system supports this through the
+TARGET\_PREFIX variable. Once the submodules have been initialized and updated,
+run the following commands:
+
+```
+    scons PREFIX=${daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install --build-deps=yes --config=force
+```
+
+Installing the components into seperate directories allow to upgrade the
+components individually replacing --build-deps=yes with
+--update-prereq={component\_name}. This requires change to the environment
+configuration from before. For automated environment setup, source
+scons_local/utils/setup_local.sh.
+
+```
+    ARGOBOTS=${daos_prefix_path}/opt/argobots
+    CART=${daos_prefix_path}/opt/cart
+    HWLOC=${daos_prefix_path}/opt/hwloc
+    MERCURY=${daos_prefix_path}/opt/mercury
+    PMDK=${daos_prefix_path}/opt/pmdk
+    OMPI=${daos_prefix_path}/opt/ompi
+    OPA=${daos_prefix_path}/opt/openpa
+    PMIX=${daos_prefix_path}/opt/pmix
+    FIO=${daos_prefix_path}/opt/fio
+    SPDK=${daos_prefix_path}/opt/spdk
+
+    PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
+```
+
+With this approach DAOS would get built using the prebuilt dependencies in
+${daos_prefix_path}/opt and required options are saved for future compilations.
+So, after the first time, during development, a mere "scons --config=force" and
+"scons --config=force install" would suffice for compiling changes to DAOS
+source code.
+
+If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
+the scons command line.   This option is also saved for future compilations.
+
+### Go dependencies
+
+Developers contributing Go code may need to change the external dependencies
+located in the src/control/vendor directory. The DAOS codebase uses
+[dep](https://github.com/golang/dep) to manage these dependencies.
+
+On EL7 and later:
+
+```
+    yum install yum-plugin-copr
+    yum copr enable hnakamur/golang-dep
+    yum install golang-dep
+```
+
+On Fedora 27 and later:
+
+```
+    dnf install dep
+```
+
+On Ubuntu 18.04 and later:
+
+```
+    apt-get install go-dep
+```
+
+For OSes that don't supply a package:
+- Ensure that you have a personal GOPATH (see "go env GOPATH", referred to as
+"$GOPATH" in this document) and a GOBIN ($GOPATH/bin) set up and included in
+your PATH:
+
+```
+    mkdir -p $GOPATH/bin
+    export PATH=$GOPATH/bin:$PATH
+```
+
+- Then follow the [installation instructions on Github](https://github.com/golang/dep).
+
+To update the vendor directory using dep after changing Gopkg.toml, first make
+sure DAOS is cloned into
+
+```
+    $GOPATH/src/github.com/daos-stack/daos
+```
+
+Then:
+
+```
+    cd $GOPATH/src/github.com/daos-stack/daos/src/control
+    dep ensure
+```
+
+### Protobuf Compiler
+
+The DAOS control plane infrastructure use protobuf as the data serialization
+format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is
+not supported by the platform protobuf compiler in all cases. Not all developers
+will need to build the proto files into the various source files.
+However, if changes are made to the proto files, the corresponding C and Go
+source files will need to be regenerated with a protobuf 3.\* or higher
+compiler.
+
+The recommended installation method is to clone the git repositories, check out
+the tagged releases noted below, and install from source. Later versions may
+work, but are not guaranteed.
+
+- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.5.1.
+  [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
+- [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.1.
+  [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.2.0.
+  Must match the proto version in src/control/Gopkg.toml.
+  Install the specific version using GIT_TAG instructions [here](https://github.com/golang/protobuf/blob/master/README.md).
+
+Generate the Go file using the gRPC plugin. You can designate the directory
+location:
+
+```
+	protoc myfile.proto --go_out=plugins=grpc:<go_file_dir>
+```
+
+Generate the C files using Protobuf-C. As the header and source files in DAOS
+are typically kept in separate locations, you will need to move them manually
+to their destination directories:
+
+```
+	protoc-c myfile.proto --c_out=.
+	mv myfile.pb-c.h <c_file_include_dir>
+	mv myfile.pb-c.c <c_file_src_dir>
+```

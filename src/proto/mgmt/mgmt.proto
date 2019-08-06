@@ -24,8 +24,6 @@
 syntax = "proto3";
 package mgmt;
 
-// Import DaosRequestStatus.
-import "srv.proto";
 // Import Pool request and response
 import "pool.proto";
 
@@ -35,6 +33,8 @@ service MgmtSvc {
 	rpc Join(JoinReq) returns (JoinResp) {}
 	// Create a DAOS pool allocated across a number of ranks
 	rpc CreatePool(CreatePoolReq) returns (CreatePoolResp) {}
+	// Destroy a DAOS pool allocated across a number of ranks
+	rpc DestroyPool(DestroyPoolReq) returns (DestroyPoolResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 }
@@ -53,7 +53,8 @@ message JoinReq {
 }
 
 message JoinResp {
-	DaosRequestStatus status = 1;
+	// DAOS error code
+	int32 status = 1;
 	// Server rank assigned.
 	uint32 rank = 2;
 	// Server state in the system map.
@@ -72,7 +73,8 @@ message GetAttachInfoReq {
 }
 
 message GetAttachInfoResp {
-	DaosRequestStatus status = 1;
+	// DAOS error code
+	int32 status = 1;
 	// CaRT PSR.
 	message Psr {
 		uint32 rank = 1;

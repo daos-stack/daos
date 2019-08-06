@@ -25,21 +25,56 @@ package client
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
+
+	"github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-func init() {
-	log.NewDefaultLogger(log.Error, "connect_test: ", os.Stderr)
+func connectSetup(
+	state State, features []*pb.Feature, ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults, modules ScmModules,
+	moduleResults ScmModuleResults, mountResults ScmMountResults,
+	scanRet error, formatRet error, updateRet error, burninRet error,
+	killRet error, connectRet error) Connect {
+
+	connect := newMockConnect(
+		state, features, ctrlrs, ctrlrResults, modules,
+		moduleResults, mountResults, scanRet, formatRet,
+		updateRet, burninRet, killRet, connectRet)
+
+	_ = connect.ConnectClients(MockServers)
+
+	return connect
+}
+
+func defaultClientSetup() Connect {
+	cc := defaultMockConnect()
+
+	_ = cc.ConnectClients(MockServers)
+
+	return cc
+}
+
+func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
+	AssertEqual(
+		t, len(results), len(addrs), // duplicates ignored
+		"unexpected number of results")
+
+	for _, res := range results {
+		AssertEqual(
+			t, res.Err, e,
+			"unexpected error value in results")
+	}
 }
 
 func TestConnectClients(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	eMsg := "socket connection is not active (%s)"
 
 	var conntests = []struct {
@@ -84,44 +119,9 @@ func TestConnectClients(t *testing.T) {
 	}
 }
 
-func connectSetup(
-	state State, features []*pb.Feature, ctrlrs NvmeControllers,
-	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, mountResults ScmMountResults,
-	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error, connectRet error) Connect {
-
-	connect := newMockConnect(
-		state, features, ctrlrs, ctrlrResults, modules,
-		moduleResults, mountResults, scanRet, formatRet,
-		updateRet, burninRet, killRet, connectRet)
-
-	_ = connect.ConnectClients(MockServers)
-
-	return connect
-}
-
-func defaultClientSetup() Connect {
-	cc := defaultMockConnect()
-
-	_ = cc.ConnectClients(MockServers)
-
-	return cc
-}
-
-func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
-	AssertEqual(
-		t, len(results), len(addrs), // duplicates ignored
-		"unexpected number of results")
-
-	for _, res := range results {
-		AssertEqual(
-			t, res.Err, e,
-			"unexpected error value in results")
-	}
-}
-
 func TestDuplicateConns(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	cc := defaultMockConnect()
 	results := cc.ConnectClients(append(MockServers, MockServers...))
 
@@ -129,6 +129,8 @@ func TestDuplicateConns(t *testing.T) {
 }
 
 func TestGetClearConns(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	cc := defaultClientSetup()
 
 	results := cc.GetActiveConns(ResultMap{})
@@ -148,6 +150,8 @@ func TestGetClearConns(t *testing.T) {
 }
 
 func TestListFeatures(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	cc := defaultClientSetup()
 
 	clientFeatures := cc.ListFeatures()
@@ -158,6 +162,8 @@ func TestListFeatures(t *testing.T) {
 }
 
 func TestScanStorage(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	cc := defaultClientSetup()
 
 	clientNvme, clientScm := cc.ScanStorage()
@@ -172,6 +178,8 @@ func TestScanStorage(t *testing.T) {
 }
 
 func TestFormatStorage(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	tests := []struct {
 		formatRet error
 	}{
@@ -216,6 +224,8 @@ func TestFormatStorage(t *testing.T) {
 }
 
 func TestUpdateStorage(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	tests := []struct {
 		updateRet error
 	}{
@@ -260,6 +270,8 @@ func TestUpdateStorage(t *testing.T) {
 }
 
 func TestKillRank(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	tests := []struct {
 		killRet error
 	}{

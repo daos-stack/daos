@@ -4,8 +4,8 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 Name:          daos
-Version:       0.5.0
-Release:       3%{?dist}
+Version:       0.6.0
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -54,6 +54,7 @@ Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
+Requires: openssl
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -128,7 +129,8 @@ PREFIX="%{?_prefix}"
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
 mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
-mkdir -p %{?buildroot}/%{daoshome}
+mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
+mv %{?buildroot}%{_prefix}/lib64/daos %{?buildroot}/%{_exec_prefix}/lib/
 mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
@@ -162,6 +164,8 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libdaos_common.so
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
+# Certificate generation files
+%{daoshome}/certgen/
 %doc
 
 %files server
@@ -186,7 +190,6 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont
-%{_bindir}/duns
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/dmg
@@ -199,6 +202,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libioil.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
+%{_prefix}%{_sysconfdir}/daos_agent.yml
 
 %files tests
 %{daoshome}/utils/py
@@ -222,7 +226,19 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
-* Thu Jun 12 2019 Brian J. Murrell <brian.murrell@intel.com>
+* Thu Jul 25 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Add git hash and commit count to release
+
+* Thu Jul 18 2019 David Quigley <david.quigley@intel.com>
+- Add certificate generation files to packaging.
+
+* Tue Jul 09 2019 Johann Lombardi <johann.lombardi@intel.com>
+- Version bump up to 0.6.0
+
+* Fri Jun 21 2019 David Quigley <dquigley@intel.com>
+- Add daos_agent.yml to the list of packaged files
+
+* Thu Jun 13 2019 Brian J. Murrell <brian.murrell@intel.com>
 - move obj_ctl daos_gen_io_conf daos_run_io_conf to
   daos-tests sub-package
 - daos-server needs spdk-tools

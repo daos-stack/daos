@@ -519,16 +519,16 @@ main(int argc, char **argv)
 	handle_share(&coh, HANDLE_CO, rank, poh, 1);
 
 	/** generate objid */
-	daos_obj_generate_id(&oid, 0, cid);
+	daos_obj_generate_id(&oid, 0, cid, 0);
 
 	if (rank == 0) {
-		daos_oclass_attr_t	cattr = {
+		struct daos_oclass_attr	cattr = {
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil_degree	= 0 /* TBD */,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 4,
-			.u.repl			= {
-				.r_method	= 0 /* TBD */,
+			.u.rp			= {
+				.r_proto	= 0 /* TBD */,
 				.r_num		= 2 /* TBD */,
 			},
 		};

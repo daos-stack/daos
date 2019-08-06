@@ -320,7 +320,7 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open object */
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+		oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
 		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 		assert_int_equal(rc, 0);
 
@@ -411,7 +411,7 @@ io_invalid_coh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open object */
-		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+		oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
 		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 		assert_int_equal(rc, 0);
 
@@ -490,7 +490,7 @@ update_ro(void **state)
 	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, false);
 
 	/** open object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, 0, arg->myrank);
+	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
 	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 

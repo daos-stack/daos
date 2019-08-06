@@ -31,6 +31,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_obj_hdl		*oh = NULL;
+	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
 	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
@@ -69,19 +70,21 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
-	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
 	if (rc)
 		D_GOTO(err, rc = -rc);
 
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(parent->ie_dfs->dffs_dfs, ie->ie_obj, fi->flags,
+	rc = dfs_dup(parent->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
 		     &oh->doh_obj);
 	if (rc)
 		D_GOTO(release1, rc = -rc);
 
-	fi->direct_io = 1;
-	fi->fh = (uint64_t)oh;
+	oh->doh_dfs = parent->ie_dfs->dfs_ns;
+
+	fi_out.direct_io = 1;
+	fi_out.fh = (uint64_t)oh;
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
@@ -89,7 +92,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
+	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);
 	if (rc)
 		D_GOTO(release2, rc = -rc);
 
@@ -97,7 +100,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	LOG_MODES(ie, mode);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, true, req);
+	dfuse_reply_entry(fs_handle, ie, &fi_out, req);
 
 	return true;
 release2:

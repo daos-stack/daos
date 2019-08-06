@@ -84,6 +84,8 @@ co_create(void **state)
 
 	/** destroy container */
 	if (arg->myrank == 0) {
+		/* XXX check if this is a real leak or out-of-sync close */
+		sleep(5);
 		print_message("destroying container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
 		rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */,
@@ -213,6 +215,7 @@ co_properties(void **state)
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
+	daos_pool_info_t	 info;
 	int			 rc;
 
 	print_message("create container with properties, and query/verify.\n");
@@ -229,6 +232,15 @@ co_properties(void **state)
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
 	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+			DSS_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	prop_query = daos_prop_alloc(4);
 	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
@@ -261,6 +273,11 @@ co_properties(void **state)
 		print_message("encrypt verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);

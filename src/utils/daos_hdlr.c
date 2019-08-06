@@ -37,6 +37,7 @@
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
+#include <daos/object.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
@@ -70,7 +71,7 @@ pool_query_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_QUERY);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->group,
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
 			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -187,7 +188,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	dattr.da_oclass = ap->oclass;
 	dattr.da_chunk_size = ap->chunk_size;
 
-	rc = duns_link_path(ap->path, ap->group, ap->mdsrv, &dattr);
+	rc = duns_link_path(ap->path, ap->sysname, ap->mdsrv, &dattr);
 	if (rc) {
 		fprintf(stderr, "duns_link_path() error: rc=%d\n", rc);
 		D_GOTO(err_rc, rc);
@@ -207,30 +208,43 @@ err_rc:
 int
 cont_query_hdlr(struct cmd_args_s *ap)
 {
+	daos_cont_info_t	cont_info;
 	char			oclass[10], type[10];
-	int	rc = 0;
+	int			rc;
+
+	rc = daos_cont_query(ap->cont, &cont_info, NULL, NULL);
+	if (rc) {
+		fprintf(stderr, "Container query failed, result: %d\n", rc);
+		D_GOTO(err_out, rc);
+	}
+
+	printf("Pool UUID:\t"DF_UUIDF"\n", DP_UUID(ap->p_uuid));
+	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
+	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
+	printf("Latest Persistent Snapshot: %i\n",
+		(int)cont_info.ci_lsnapshot);
+	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->path != NULL) {
 		/* cont_op_hdlr() already did resolve_by_path()
 		 * all resulting fields should be populated
 		 */
 		assert(ap->type != DAOS_PROP_CO_LAYOUT_UNKOWN);
-		assert(ap->oclass != DAOS_OC_UNKNOWN);
+		assert(ap->oclass != OC_UNKNOWN);
 		assert(ap->chunk_size != 0);
 
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		daos_unparse_oclass(ap->oclass, oclass);
+		daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
-		printf("Pool UUID:\t"DF_UUIDF"\n", DP_UUID(ap->p_uuid));
-		printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 		printf("Object Class:\t%s\n", oclass);
 		printf("Chunk Size:\t%zu\n", ap->chunk_size);
 	}
 
-	/* TODO: add container query API call and print */
+	return 0;
 
+err_out:
 	return rc;
 }
 
@@ -239,8 +253,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 {
 	int	rc;
 
-	assert(ap->c_op == CONT_DESTROY);
-
+	/* TODO: when API supports, change arg 3 to ap->force_destroy. */
 	rc = daos_cont_destroy(ap->pool, ap->c_uuid, 1, NULL);
 	if (rc != 0)
 		fprintf(stderr, "failed to destroy container: %d\n", rc);
@@ -248,5 +261,39 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "Successfully destroyed container "
 				DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
+	return rc;
+}
+
+int
+obj_query_hdlr(struct cmd_args_s *ap)
+{
+	struct daos_obj_layout *layout;
+	int			i;
+	int			j;
+	int			rc;
+
+	rc = daos_obj_layout_get(ap->cont, ap->oid, &layout);
+	if (rc) {
+		fprintf(stderr, "daos_obj_layout_get failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Print the object layout */
+	fprintf(stdout, "oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(ap->oid),
+		layout->ol_ver, layout->ol_nr);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		struct daos_obj_shard *shard;
+
+		shard = layout->ol_shards[i];
+		fprintf(stdout, "grp: %d\n", i);
+		for (j = 0; j < shard->os_replica_nr; j++)
+			fprintf(stdout, "replica %d %d\n", j,
+				shard->os_ranks[j]);
+	}
+
+	daos_obj_layout_free(layout);
+
+out:
 	return rc;
 }

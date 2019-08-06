@@ -49,7 +49,8 @@ enum pool_op {
 };
 
 enum obj_op {
-	OBJ_GET_LAYOUT,
+	OBJ_QUERY,
+	OBJ_LIST_KEYS,
 	OBJ_DUMP
 };
 
@@ -60,15 +61,15 @@ enum obj_op {
 struct cmd_args_s {
 	enum pool_op		p_op;		/* pool sub-command */
 	enum cont_op		c_op;		/* cont sub-command */
-	char			*group;		/* --group */
-	char			*p_uuid_str;	/* --pool */
-	uuid_t			p_uuid;
+	enum obj_op		o_op;		/* obj sub-command */
+	char			*sysname;	/* --sys-name or --sys */
+	uuid_t			p_uuid;		/* --pool */
 	daos_handle_t		pool;
-	char			*c_uuid_str;	/* --cont */
-	uuid_t			c_uuid;
+	uuid_t			c_uuid;		/* --cont */
 	daos_handle_t		cont;
 	char			*mdsrv_str;	/* --svc */
 	d_rank_list_t		*mdsrv;
+	int			force_destroy;	/* --force (cont destroy) */
 	char			*attrname_str;	/* --attr attribute name */
 	char			*value_str;	/* --value attribute value */
 
@@ -84,6 +85,7 @@ struct cmd_args_s {
 	char			*epcrange_str;	/* --epcrange cont epochs */
 	daos_epoch_t		epcrange_begin;
 	daos_epoch_t		epcrange_end;
+	daos_obj_id_t		oid;
 
 	FILE			*ostream;	/* help_hdlr() stream */
 };
@@ -121,10 +123,18 @@ struct cmd_args_s {
 		}							\
 	} while (0)
 
+#define ARGS_VERIFY_OID(ap, label, rcexpr)				\
+	do {								\
+		if (((ap)->oid.hi == 0) && ((ap)->oid.lo == 0)) {	\
+			fprintf(stderr, "object ID required\n");	\
+			D_GOTO(label, (rcexpr));			\
+		}							\
+	} while (0)
+
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
 	do {								\
 		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
-		    ((ap)->oclass == DAOS_OC_UNKNOWN)	||		\
+		    ((ap)->oclass == OC_UNKNOWN)	||		\
 		    ((ap)->chunk_size == 0)) {				\
 			fprintf(stderr, "create by --path : must also "	\
 					"specify --type, --oclass, "	\
@@ -136,7 +146,7 @@ struct cmd_args_s {
 #define ARGS_VERIFY_PATH_NON_CREATE(ap, label, rcexpr)			\
 	do {								\
 		if (((ap)->type != DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
-		    ((ap)->oclass != DAOS_OC_UNKNOWN)	||		\
+		    ((ap)->oclass != OC_UNKNOWN)	||		\
 		    ((ap)->chunk_size != 0)) {				\
 			fprintf(stderr, "query by --path : do not "	\
 					"specify --type, --oclass, "	\
@@ -192,3 +202,4 @@ int cont_destroy_hdlr(struct cmd_args_s *ap);
  * int cont_rollback_hdlr()
  */
 
+int obj_query_hdlr(struct cmd_args_s *ap);

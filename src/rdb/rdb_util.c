@@ -179,16 +179,15 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 void
 rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	daos_ofeat_t feat;
+	daos_ofeat_t feat = 0;
 
 	memset(uoid, 0, sizeof(*uoid));
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
 	/* Since we don't really use d-keys, use HASHED for both classes. */
-	if ((oid & RDB_OID_CLASS_MASK) == RDB_OID_CLASS_GENERIC)
-		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_HASHED;
-	else
-		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_UINT64;
-	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */);
+	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
+		feat = DAOS_OF_AKEY_UINT64;
+
+	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */, 0);
 }
 
 void

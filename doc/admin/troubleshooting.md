@@ -1,40 +1,37 @@
-DAOS Troubleshooting
-====================
+# DAOS Troubleshooting
 
-DAOS Errors
------------
+## DAOS Errors
 
 DAOS has its own error numbering that starts at 1000. The most common
 errors are documented in the table below.
 
-|DAOS Error       |Value   |Description
-|  ---------------- |------- |---------------------------------------
-|DER\_NO\_PERM    |1001    |No permission
-|DER\_NO\_HDL     |1002    |Invalid handle
-|DER\_INVAL       |1003    |Invalid parameters
-|DER\_NOSPACE     |1007    |No space left on storage target
-|DER\_NOSYS       |1010    |Function not implemented
-|DER\_IO          |2001    |Generic I/O error
-|DER\_ENOENT      |2003    |Entry not found
-|DER\_KEY2BIG     |2012    |Key is too large
-|DER\_IO\_INVAL   |2014    |IO buffers can't match object extents
+|DAOS Error|Value|Description
+|-|-|-|
+|DER_NO_PERM|1001|No permission
+|DER_NO_HDL|1002|Invalid handle
+|DER_INVAL|1003|Invalid parameters
+|DER_NOSPACE|1007|No space left on storage target
+|DER_NOSYS|1010|Function not implemented
+|DER_IO|2001|Generic I/O error
+|DER_ENOENT|2003|Entry not found
+|DER_KEY2BIG|2012|Key is too large
+|DER_IO_INVAL|2014|IO buffers can't match object extents
 
 When an operation fails, DAOS returns a negative DER error. For a full
 list of errors, please check
 <https://github.com/daos-stack/cart/blob/master/src/include/gurt/errno.h>
-(DER\_ERR\_GURT\_BASE is equal to 1000 and DER\_ERR\_DAOS\_BASE is equal
+(DER_ERR_GURT_BASE is equal to 1000 and DER_ERR_DAOS_BASE is equal
 to 2000).
 
-The function d\_errstr() is provided in the API to convert an error
+The function d_errstr() is provided in the API to convert an error
 number to an error message.
 
-Debugging System
-----------------
+## Debugging System
 
 DAOS uses the debug system defined in
 [CaRT](https://github.com/daos-stack/cart) but more specifically the
 GURT library. Log files for both client and server are written to
-"/tmp/daos.log" unless otherwise set by D\_LOG\_FILE.
+"/tmp/daos.log" unless otherwise set by D_LOG_FILE.
 
 ### Registered Subsystems/Facilities
 
@@ -42,17 +39,17 @@ The debug logging system includes a series of subsystems or facilities
 which define groups for related log messages (defined per source file).
 There are common facilities which are defined in GURT, as well as other
 facilities that can be defined on a per-project basis (such as those for
-CaRT and DAOS). DD\_SUBSYS can be used to set which subsystems to enable
-logging. By default all subsystems are enabled ("DD\_SUBSYS=all").
+CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
+logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
--   DAOS Facilities:\
+-   DAOS Facilities:
     common, tree, vos, client, server, rdb, pool, container, object,
     placement, rebuild, tier, mgmt, bio, tests
 
--   Common Facilities (GURT):\
+-   Common Facilities (GURT):
     MISC, MEM
 
--   CaRT Facilities:\
+-   CaRT Facilities:
     RPC, BULK, CORPC, GRP, LM, HG, PMIX, ST, IV
 
 ### Priority Logging
@@ -60,40 +57,40 @@ logging. By default all subsystems are enabled ("DD\_SUBSYS=all").
 All macros that output logs have a priority level, shown in descending
 order below.
 
--   D\_FATAL(fmt, ...) FATAL
+-   D_FATAL(fmt, ...) FATAL
 
--   D\_CRIT(fmt, ...) CRIT
+-   D_CRIT(fmt, ...) CRIT
 
--   D\_ERROR(fmt, ...) ERR
+-   D_ERROR(fmt, ...) ERR
 
--   D\_WARN(fmt, ...) WARN
+-   D_WARN(fmt, ...) WARN
 
--   D\_NOTE(fmt, ...) NOTE
+-   D_NOTE(fmt, ...) NOTE
 
--   D\_INFO(fmt, ...) INFO
+-   D_INFO(fmt, ...) INFO
 
--   D\_DEBUG(mask, fmt, ...) DEBUG
+-   D_DEBUG(mask, fmt, ...) DEBUG
 
-The priority level that outputs to stderr is set with DD\_STDERR. By
+The priority level that outputs to stderr is set with DD_STDERR. By
 default in DAOS (specific to the project), this is set to CRIT
-("DD\_STDERR=CRIT") meaning that all CRIT and more severe log messages
+("DD_STDERR=CRIT") meaning that all CRIT and more severe log messages
 will dump to stderr. This, however, is separate from the priority of
 logging to "/tmp/daos.log". The priority level of logging can be set
-with D\_LOG\_MASK, which by default is set to INFO
-("D\_LOG\_MASK=INFO"), which will result in all messages excluding DEBUG
-messages being logged. D\_LOG\_MASK can also be used to specify the
+with D_LOG_MASK, which by default is set to INFO
+("D_LOG_MASK=INFO"), which will result in all messages excluding DEBUG
+messages being logged. D_LOG_MASK can also be used to specify the
 level of logging on a per-subsystem basis as well
-("D\_LOG\_MASK=DEBUG,MEM=ERR").
+("D_LOG_MASK=DEBUG,MEM=ERR").
 
 ### Debug Masks/Streams:
 
 DEBUG messages account for a majority of the log messages, and
 finer-granularity might be desired. Mask bits are set as the first
-argument passed in D\_DEBUG(mask, ...). To accomplish this, DD\_MASK can
+argument passed in D_DEBUG(mask, ...). To accomplish this, DD_MASK can
 be set to enable different debug streams. Similar to facilities, there
 are common debug streams defined in GURT, as well as other streams that
 can be defined on a per-project basis (CaRT and DAOS). All debug streams
-are enabled by default ("DD\_MASK=all").
+are enabled by default ("DD_MASK=all").
 
 -   DAOS Debug Masks:
 
@@ -109,7 +106,7 @@ are enabled by default ("DD\_MASK=all").
 
     -   rebuild = rebuild process
 
-    -   daos\_default = (group mask) io, md, pl, and rebuild operations
+    -   daos_default = (group mask) io, md, pl, and rebuild operations
 
 -   Common Debug Masks (GURT):
 
@@ -127,55 +124,43 @@ are enabled by default ("DD\_MASK=all").
 
 -   Generic setup for all messages (default settings)
 
-1.  \$ D\_LOG\_MASK=DEBUG
-
-    \$ DD\_SUBSYS=all
-
-    \$ DD\_MASK=all
+        $ D_LOG_MASK=DEBUG
+        $ DD_SUBSYS=all
+        $ DD_MASK=all
 
 -   Disable all logs for performance tuning
 
-1.  \$ D\_LOG\_MASK=ERR -&gt; will only log error messages from all
-    facilities
-
-    \$ D\_LOG\_MASK=FATAL -&gt; will only log system fatal messages
+        $ D_LOG_MASK=ERR -> will only log error messages from all facilities
+        $ D_LOG_MASK=FATAL -> will only log system fatal messages
 
 -   Disable a noisy debug logging subsystem
 
-1.  \$ D\_LOG\_MASK=DEBUG,MEM=ERR -&gt; disables MEM facility by
-    restricting all
-
-    logs from that facility to ERROR or higher priority only
+        $ D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by 
+        restricting all logs from that facility to ERROR or higher priority only
 
 -   Enable a subset of facilities of interest
 
-1.  \$ DD\_SUBSYS=rpc,tests
-
-    \$ D\_LOG\_MASK=DEBUG -&gt; required to see logs for RPC and TESTS
-    less severe
-
-    than INFO (the majority of log messages)
+        $ DD_SUBSYS=rpc,tests
+        $ D_LOG_MASK=DEBUG -> required to see logs for RPC and TESTS
+        less severe than INFO (the majority of log messages)
 
 -   Fine-tune the debug messages by setting a debug mask
 
-1.  \$ D\_LOG\_MASK=DEBUG
+        $ D_LOG_MASK=DEBUG
+        $ DD_MASK=mgmt -> only logs DEBUG messages related to pool
+        management
 
-    \$ DD\_MASK=mgmt -&gt; only logs DEBUG messages related to pool
-    management
-
-Refer to the DAOS Environment Variables documentation (Appendix B) for
+Refer to the DAOS Environment Variables documentation for
 more information about the debug system environment.
 
-Common DAOS Problems
---------------------
+## Common DAOS Problems
 
 This section to be updated in a future revision.
 
-Bug Report
-----------
+## Bug Report
 
 Bugs should be reported through our issue tracker[^1] with a test case
 to reproduce the issue (when applicable) and debug
-logs.[]{#_Ref491351170 .anchor}
+logs.
 
 [^1]: https://jira.hpdd.intel.com

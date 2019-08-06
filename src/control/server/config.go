@@ -21,10 +21,9 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
-	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -32,10 +31,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/log"
 )
 
 const (
@@ -55,11 +55,12 @@ func (c *configuration) loadConfig() error {
 
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "reading file")
 	}
 
 	if err = c.parse(bytes); err != nil {
-		return err
+		return errors.WithMessage(err, "parse failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples")
 	}
 
 	return nil
@@ -93,37 +94,40 @@ func (c *configuration) setPath(path string) error {
 
 // loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions, host string) (
-	config configuration, err error) {
-
-	config = newConfiguration()
+func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
+	config := newConfiguration()
 
 	if err := config.setPath(cliOpts.ConfigPath); err != nil {
-		return config, errors.WithMessage(err, "set path")
+		return nil, errors.WithMessage(err, "set path")
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return config, errors.Wrap(err, "read config file")
+		return nil, errors.WithMessagef(err, "loading %s", config.Path)
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
+
+	// Override certificate support if specified in cliOpts
+	if cliOpts.Insecure {
+		config.TransportConfig.AllowInsecure = true
+	}
 
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
-	if err = config.getIOParams(cliOpts); err != nil {
-		return config, errors.Wrap(
+	if err := config.getIOParams(cliOpts); err != nil {
+		return nil, errors.Wrap(
 			err, "failed to retrieve I/O service params")
 	}
 
 	if len(config.Servers) == 0 {
-		return config, errors.New("missing I/O service params")
+		return nil, errors.New("missing I/O service params")
 	}
 
 	for idx := range config.Servers {
 		config.Servers[idx].Hostname = host
 	}
 
-	return config, nil
+	return &config, nil
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
@@ -186,13 +190,6 @@ func (c *configuration) populateCliOpts(i int) error {
 		srv.CliOpts = append(
 			srv.CliOpts, "-f", strconv.Itoa(srv.FirstCore))
 	}
-	if c.SystemMap != "" {
-		srv.CliOpts = append(srv.CliOpts, "-y", c.SystemMap)
-	}
-	if srv.Rank != nil {
-		srv.CliOpts = append(
-			srv.CliOpts, "-r", srv.Rank.String())
-	}
 	if c.SocketDir != "" {
 		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
 	}
@@ -219,11 +216,9 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	if opts.Port > 0 {
 		c.Port = int(opts.Port)
 	}
-	if opts.Rank != nil {
-		// global rank parameter should only apply to first I/O service
-		c.Servers[0].Rank = opts.Rank
+	if opts.Insecure {
+		c.TransportConfig.AllowInsecure = true
 	}
-
 	// override each per-server config
 	for i := range c.Servers {
 		srv := &c.Servers[i]
@@ -237,7 +232,7 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 			srv.ScmMount = c.ScmMountPath
 		}
 		if opts.Cores > 0 {
-			fmt.Println("-c option deprecated, please use -t instead")
+			log.Debugf("-c option deprecated, please use -t instead")
 			srv.Targets = int(opts.Cores)
 		}
 		// Targets should override Cores if specified in cmdline or
@@ -264,9 +259,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	}
 	if opts.Attach != nil {
 		c.Attach = *opts.Attach
-	}
-	if opts.Map != nil {
-		c.SystemMap = *opts.Map
 	}
 }
 
@@ -374,9 +366,17 @@ func (c *configuration) setLogging(name string) (*os.File, error) {
 		return f, nil
 	}
 
+	log.Errorf("no control log file specified")
+
 	// if no logfile specified, output from multiple hosts
 	// may get aggregated, prefix entries with hostname
 	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+
+	for i, srv := range c.Servers {
+		if srv.LogFile == "" {
+			log.Errorf("no daos log file specified for server %d", i)
+		}
+	}
 
 	return nil, nil
 }

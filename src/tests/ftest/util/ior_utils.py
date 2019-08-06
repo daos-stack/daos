@@ -23,114 +23,170 @@
 """
 from __future__ import print_function
 
-import os
-import subprocess
-import json
 import re
+import uuid
+
+from avocado.utils.process import run, CmdError
+from command_utils import FormattedParameter, CommandWithParameters
 
 
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
 
-# pylint: disable=too-few-public-methods
-class IorParam(object):
-    """Defines a object representing a single IOR command line parameter."""
+class IorCommand(CommandWithParameters):
+    """Defines a object for executing an IOR command.
 
-    def __init__(self, str_format, default=None):
-        """Create a IorParam object.
-
-        Args:
-            str_format (str): format string used to convert the value into an
-                ior command line argument string
-            default (object): default value for the param
-        """
-        self.str_format = str_format
-        self.default = default
-        self.value = default
-
-    def __str__(self):
-        """Return a IorParam object as a string.
-
-        Returns:
-            str: if defined, the IOR parameter, otherwise an empty string
-
-        """
-        if isinstance(self.default, bool) and self.value:
-            return self.str_format
-        elif not isinstance(self.default, bool) and self.value:
-            return self.str_format.format(self.value)
-        else:
-            return ""
-
-    def set_yaml_value(self, name, test, path="/run/ior/*"):
-        """Set the value of the parameter using the test's yaml file value.
-
-        Args:
-            name (str): name associated with the value in the yaml file
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/ior/*".
-
-        """
-        self.value = test.params.get(name, path, self.default)
-# pylint: enable=too-few-public-methods
-
-
-class IorCommand(object):
-    """Defines a object representing a IOR command."""
+    Example:
+        >>> # Typical use inside of a DAOS avocado test method.
+        >>> ior_cmd = IorCommand()
+        >>> ior_cmd.get_params(self)
+        >>> ior_cmd.set_daos_params(self.server_group, self.pool)
+        >>> ior_cmd.run(
+                self.basepath, len(self.hostlist_clients),
+                self.hostfile_clients)
+    """
 
     def __init__(self):
         """Create an IorCommand object."""
-        self.flags = IorParam("{}")                 # IOR flags
-        self.api = IorParam("-a {}", "DAOS")        # API for I/O
-        self.block_size = IorParam("-b {}")         # bytes to write per task
-        self.test_delay = IorParam("-d {}")         # sec delay between reps
-        self.script = IorParam("-f {}")             # test script name
-        self.signatute = IorParam("-G {}")          # set value for rand seed
-        self.repetitions = IorParam("-i {}")        # number of repetitions
-        self.outlier_threshold = IorParam("-j {}")  # warn if N sec from mean
-        self.alignment = IorParam("-J {}")          # HDF5 alignment in bytes
-        self.data_packet_type = IorParam("-l {}")   # type of packet created
-        self.memory_per_node = IorParam("-M {}")    # hog memory on the node
-        self.num_tasks = IorParam("-N {}")          # number of tasks
-        self.test_file = IorParam("-o {}")          # full name for test
-        self.directives = IorParam("-O {}")         # IOR directives
-        self.task_offset = IorParam("-Q {}")        # for -C & -Z read tests
-        self.segment_count = IorParam("-s {}")      # number of segments
-        self.transfer_size = IorParam("-t {}")      # bytes to transfer
-        self.max_duration = IorParam("-T {}")       # max mins executing test
-        self.daos_pool = IorParam("--daos.pool {}")             # pool uuid
-        self.daos_svcl = IorParam("--daos.svcl {}")             # pool SVCL
-        self.daos_cont = IorParam("--daos.cont {}")             # cont uuid
-        self.daos_destroy = IorParam("--daos.destroy", True)    # destroy cont
-        self.daos_group = IorParam("--daos.group {}")           # server group
-        self.daos_chunk = IorParam("--daos.chunk_size {}", 1048576)
-        self.daos_oclass = IorParam("--daos.oclass {}")         # object class
+        super(IorCommand, self).__init__("ior")
 
-    def __str__(self):
-        """Return a IorCommand object as a string.
+        # Flags
+        self.flags = FormattedParameter("{}")
 
-        Returns:
-            str: the ior command with all the defined parameters
+        # Optional arguments
+        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DAOS|DFS]
+        #   -b=1048576      blockSize -- contiguous bytes to write per task
+        #   -d=0            interTestDelay -- delay between reps in seconds
+        #   -f=STRING       scriptFile -- test script name
+        #   -G=0            setTimeStampSignature -- time stamp signature
+        #   -i=1            repetitions -- number of repetitions of test
+        #   -j=0            outlierThreshold -- warn on outlier N sec from mean
+        #   -J=1            setAlignment -- HDF5 alignment in bytes
+        #   -l=STRING       datapacket type-- type of packet created
+        #   -M=STRING       memoryPerNode -- hog memory on the node
+        #   -N=0            numTasks -- num of participating tasks in the test
+        #   -o=testFile     testFile -- full name for test
+        #   -O=STRING       string of IOR directives
+        #   -Q=1            taskPerNodeOffset for read tests
+        #   -s=1            segmentCount -- number of segments
+        #   -t=262144       transferSize -- size of transfer in bytes
+        #   -T=0            maxTimeDuration -- max time in minutes executing
+        #                      repeated test; it aborts only between iterations
+        #                      and not within a test!
+        self.api = FormattedParameter("-a {}", "DAOS")
+        self.block_size = FormattedParameter("-b {}")
+        self.test_delay = FormattedParameter("-d {}")
+        self.script = FormattedParameter("-f {}")
+        self.signatute = FormattedParameter("-G {}")
+        self.repetitions = FormattedParameter("-i {}")
+        self.outlier_threshold = FormattedParameter("-j {}")
+        self.alignment = FormattedParameter("-J {}")
+        self.data_packet_type = FormattedParameter("-l {}")
+        self.memory_per_node = FormattedParameter("-M {}")
+        self.num_tasks = FormattedParameter("-N {}")
+        self.test_file = FormattedParameter("-o {}")
+        self.directives = FormattedParameter("-O {}")
+        self.task_offset = FormattedParameter("-Q {}")
+        self.segment_count = FormattedParameter("-s {}")
+        self.transfer_size = FormattedParameter("-t {}")
+        self.max_duration = FormattedParameter("-T {}")
 
-        """
-        params = []
-        for value in self.__dict__.values():
-            value_str = str(value)
-            if value_str != "":
-                params.append(value_str)
-        return " ".join(["ior"] + sorted(params))
+        # Module DAOS
+        #   Required arguments
+        #       --daos.pool=STRING            pool uuid
+        #       --daos.svcl=STRING            pool SVCL
+        #       --daos.cont=STRING            container uuid
+        #   Flags
+        #       --daos.destroy                Destroy Container
+        #   Optional arguments
+        #       --daos.group=STRING           server group
+        #       --daos.chunk_size=1048576     chunk size
+        #       --daos.oclass=STRING          object class
+        self.daos_pool = FormattedParameter("--daos.pool {}")
+        self.daos_svcl = FormattedParameter("--daos.svcl {}")
+        self.daos_cont = FormattedParameter("--daos.cont {}")
+        self.daos_destroy = FormattedParameter("--daos.destroy", True)
+        self.daos_group = FormattedParameter("--daos.group {}")
+        self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
+        self.daos_oclass = FormattedParameter("--daos.oclass {}")
 
-    def set_params(self, test, path="/run/ior/*"):
-        """Set values for all of the ior command params using a yaml file.
+    def get_param_names(self):
+        """Get a sorted list of the defined IorCommand parameters."""
+        # Sort the IOR parameter names to generate consistent ior commands
+        all_param_names = super(IorCommand, self).get_param_names()
+
+        # List all of the common ior params first followed by any daos-specific
+        # params (except when using MPIIO).
+        param_names = [name for name in all_param_names if "daos" not in name]
+        if self.api.value != "MPIIO":
+            param_names.extend(
+                [name for name in all_param_names if "daos" in name])
+
+        return param_names
+
+    def get_params(self, test, path="/run/ior/*"):
+        """Get values for all of the ior command params using a yaml file.
+
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.block_size.value will be set to the value in the yaml
+        file with the key 'block_size'.
 
         Args:
             test (Test): avocado Test object
             path (str, optional): yaml namespace. Defaults to "/run/ior/*".
 
         """
-        for name, ior_param in self.__dict__.items():
-            ior_param.set_yaml_value(name, test, path)
+        super(IorCommand, self).get_params(test, path)
+
+    def set_daos_params(self, group, pool, cont_uuid=None, display=True,
+                        mpiio_oclass=None):
+        """Set the IOR parameters for the DAOS group, pool, and container uuid.
+
+        Args:
+            group (str): DAOS server group name
+            pool (DaosPool): DAOS pool API object
+            cont_uuid (str, optional): the container uuid. If not specified one
+                is generated. Defaults to None.
+            display (bool, optional): print updated params. Defaults to True.
+        """
+        self.set_daos_pool_params(pool, display)
+        self.daos_group.update(group, "daos_group" if display else None)
+        self.daos_cont.update(
+            cont_uuid if cont_uuid else uuid.uuid4(),
+            "daos_cont" if display else None)
+
+        # assigning obj class as SX in None else
+        # the desired one
+        if mpiio_oclass is None:
+            self.mpiio_oclass = 214
+        else:
+            self.mpiio_oclass = mpiio_oclass
+
+    def set_daos_pool_params(self, pool, display=True):
+        """Set the IOR parameters that are based on a DAOS pool.
+
+        Args:
+            pool (DaosPool): DAOS pool API object
+            display (bool, optional): print updated params. Defaults to True.
+        """
+        self.daos_pool.update(
+            pool.pool.get_uuid_str(), "daos_pool" if display else None)
+        self.set_daos_svcl_param(pool, display)
+
+    def set_daos_svcl_param(self, pool, display=True):
+        """Set the IOR daos_svcl param from the ranks of a DAOS pool object.
+
+        Args:
+            pool (DaosPool): DAOS pool API object
+            display (bool, optional): print updated params. Defaults to True.
+        """
+        svcl = ":".join(
+            [str(item) for item in [
+                int(pool.pool.svc.rl_ranks[index])
+                for index in range(pool.pool.svc.rl_nr)]])
+        self.daos_svcl.update(svcl, "daos_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -148,7 +204,7 @@ class IorCommand(object):
             item = getattr(self, name).value
             if item:
                 sub_item = re.split(r"([^\d])", str(item))
-                if len(sub_item) > 0:
+                if sub_item > 0:
                     total *= int(sub_item[0])
                     if len(sub_item) > 1:
                         key = sub_item[1].lower()
@@ -163,17 +219,29 @@ class IorCommand(object):
                     raise IorFailed(
                         "Error obtaining the IOR aggregate total from the {}: "
                         "value: {}, split: {}".format(name, item, sub_item))
+
+        # Account for any replicas
+        try:
+            # Extract the replica quantity from the object class string
+            replica_qty = int(re.findall(r"\d+", self.daos_oclass.value)[0])
+        except (TypeError, IndexError):
+            # If the daos object class is undefined (TypeError) or it does not
+            # contain any numbers (IndexError) then there is only one replica
+            replica_qty = 1
+        finally:
+            total *= replica_qty
+
         return total
 
-    def get_launch_command(self, basepath, processes, hostfile, runpath=None):
+    def get_launch_command(self, manager, attach_info, processes, hostfile):
         """Get the process launch command used to run IOR.
 
         Args:
-            basepath (str): DAOS base path
+            manager (str): mpi job manager command
+            attach_info (str): CART attach info path
+            mpi_prefix (str): path for the mpi launch command
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
-            runpath (str, optional): Optional path to the mpirun/oretrun
-                command. Defaults to None.
 
         Raises:
             IorFailed: if an error occured building the IOR command
@@ -182,155 +250,85 @@ class IorCommand(object):
             str: ior launch command
 
         """
-        with open(os.path.join(basepath, ".build_vars.json")) as afile:
-            build_paths = json.load(afile)
-        attach_info_path = os.path.join(basepath, "install/tmp")
-
-        if self.api.value == "MPIIO":
-            env = {
-                "CRT_ATTACH_INFO_PATH": attach_info_path,
-                "DAOS_POOL": str(self.daos_pool),
-                "MPI_LIB": "",
-                "DAOS_SVCL": str(self.daos_svcl),
-                "DAOS_SINGLETON_CLI": 1,
+        print("Getting launch command for {}".format(manager))
+        exports = ""
+        env = {
+            "CRT_ATTACH_INFO_PATH": attach_info,
+            "MPI_LIB": "\"\"",
+            "DAOS_SINGLETON_CLI": 1,
+        }
+        if manager.endswith("mpirun"):
+            env.update({
+                "DAOS_POOL": self.daos_pool.value,
+                "DAOS_SVCL": self.daos_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
-            }
-            export_cmd = [
-                "export {}={}".format(key, val) for key, val in env.items()]
-            mpirun_cmd = [
-                os.path.join(
-                    runpath if runpath else build_paths["OMPI_PREFIX"],
-                    "bin/mpirun"),
+                "IOR_HINT__MPI__romio_daos_obj_class": self.mpiio_oclass,
+            })
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            exports = "export {}; ".format("; export ".join(assign_env))
+            args = [
                 "-np {}".format(processes),
-                "--hostfile {}".format(hostfile),
+                "-hostfile {}".format(hostfile),
+                # "-map-by node",
             ]
-            command = " ".join(mpirun_cmd + [self.__str__()])
-            command = "; ".join(export_cmd + command)
 
-        elif self.api.value == "DAOS":
-            orterun_cmd = [
-                os.path.join(
-                    runpath if runpath else build_paths["OMPI_PREFIX"],
-                    "bin/orterun"),
+        elif manager.endswith("orterun"):
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            args = [
                 "-np {}".format(processes),
-                "--hostfile {}".format(hostfile),
-                "--map-by node",
-                "-x DAOS_SINGLETON_CLI=1",
-                "-x CRT_ATTACH_INFO_PATH={}".format(attach_info_path),
+                "-hostfile {}".format(hostfile),
+                "-map-by node",
             ]
-            command = " ".join(orterun_cmd + [self.__str__()])
+            args.extend(["-x {}".format(assign) for assign in assign_env])
+
+        elif manager.endswith("srun"):
+            env.update({
+                "DAOS_POOL": self.daos_pool.value,
+                "DAOS_SVCL": self.daos_svcl.value,
+                "FI_PSM2_DISCONNECT": 1,
+            })
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            args = [
+                "-l",
+                "--mpi=pmi2",
+                "--export={}".format(",".join(["ALL"] + assign_env)),
+            ]
+            if processes is not None:
+                args.append("--ntasks={}".format(processes))
+                args.append("--distribution=cyclic")            # --map-by node
+            if hostfile is not None:
+                args.append("--nodefile={}".format(hostfile))
 
         else:
-            raise IorFailed("Unsupported IOR API: {}".format(self.api))
+            raise IorFailed("Unsupported job manager: {}".format(manager))
 
-        return command
+        return "{}{} {} {}".format(
+            exports, manager, " ".join(args), self.__str__())
 
-    def run(self, basepath, processes, hostfile, display=True, path=None):
+    def run(self, manager, attach_info, processes, hostfile, display=True):
         """Run the IOR command.
 
         Args:
-            basepath (str): DAOS base path
+            manager (str): mpi job manager command
+            attach_info (str): CART attach info path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
             display (bool, optional): print IOR output to the console.
                 Defaults to True.
-            path (str, optional): Optional path to the mpirun/oretrun command.
-                Defaults to None.
 
         Raises:
             IorFailed: if an error occured runnig the IOR command
 
         """
-        command = self.get_launch_command(basepath, processes, hostfile, path)
+        command = self.get_launch_command(
+            manager, attach_info, processes, hostfile)
         if display:
             print("<IOR CMD>: {}".format(command))
 
         # Run IOR
         try:
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, shell=True)
-            while True:
-                output = process.stdout.readline()
-                if output == "" and process.poll() is not None:
-                    break
-                if output and display:
-                    print(output.strip())
-            if process.poll() != 0:
-                raise IorFailed(
-                    "IOR Run process Failed with non zero exit code:{}".format(
-                        process.poll()))
+            run(command, allow_output_check="combined", shell=True)
 
-        except (OSError, ValueError) as error:
-            print("<IorRunFailed> Exception occurred: {0}".format(str(error)))
+        except CmdError as error:
+            print("<IorRunFailed> Exception occurred: {}".format(error))
             raise IorFailed("IOR Run process Failed: {}".format(error))
-
-
-def run_ior_daos(client_file, ior_flags, iteration, block_size, transfer_size,
-                 pool_uuid, svc_list, object_class, basepath, client_processes,
-                 cont_uuid="`uuidgen`", seg_count=1, chunk_size=1048576,
-                 display_output=True):
-    """Run IOR test.
-
-    Args:
-        client_file (str): file holding client hostname and slots
-        ior_flags (str): all ior specific flags
-        iteration (int): number of iterations for ior run
-        block_size (int): contiguous bytes to write per task
-        transfer_size (int): size of transfer in bytes
-        pool_uuid (str): DAOS pool uuid
-        svc_list (str): DAOS pool svcl
-        object_class (str): DAOS object class designation
-        basepath (str): DAOS base path
-        client_processes (int): number of client processes
-        cont_uuid (str, optional): container uuid. Defaults to "`uuidgen`".
-        seg_count (int, optional): segment count. Defaults to 1.
-        chunk_size (int, optional): chunk size in bytes. Defaults to 1048576.
-        display_output (bool, optional): print IOR output. Defaults to True.
-    """
-    ior_cmd = IorCommand()
-    ior_cmd.api.value = "DAOS"
-    ior_cmd.flags.value = ior_flags
-    ior_cmd.repetitions.value = iteration
-    ior_cmd.block_size.value = block_size
-    ior_cmd.transfer_size.value = transfer_size
-    ior_cmd.daos_pool.value = pool_uuid
-    ior_cmd.daos_svcl.value = svc_list
-    ior_cmd.daos_oclass.value = object_class
-    ior_cmd.daos_cont.value = cont_uuid
-    ior_cmd.segment_count.value = seg_count
-    ior_cmd.daos_chunk.value = chunk_size
-
-    ior_cmd.run(
-        basepath, client_processes, client_file, display_output)
-
-
-def run_ior_mpiio(basepath, mpichinstall, pool_uuid, svcl, np, hostfile,
-                  ior_flags, iteration, transfer_size, block_size,
-                  display_output=True):
-    """Run IOR over mpich.
-
-    Args:
-        basepath (str): DAOS base path
-        mpichinstall (str): location of installed mpich
-        pool_uuid (str): DAOS pool uuid
-        svcl (str): DAOS pool svcl
-        np (int): number of client processes
-        hostfile (str): file holding client hostname and slots
-        ior_flags (str): all ior specific flags
-        iteration (int): number of iterations for ior run
-        transfer_size (int): size of transfer in bytes
-        block_size (int): contiguous bytes to write per task
-        display_output (bool, optional): print IOR output. Defaults to True.
-    """
-    ior_cmd = IorCommand()
-    ior_cmd.api.value = "MPIIO"
-    ior_cmd.flags.value = ior_flags
-    ior_cmd.repetitions.value = iteration
-    ior_cmd.block_size.value = block_size
-    ior_cmd.transfer_size.value = transfer_size
-    ior_cmd.daos_pool.value = pool_uuid
-    ior_cmd.daos_svcl.value = svcl
-    ior_cmd.test_file.value = "daos:testFile"
-
-    ior_cmd.run(
-        basepath, np, hostfile, display_output, mpichinstall)

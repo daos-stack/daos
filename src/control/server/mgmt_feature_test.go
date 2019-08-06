@@ -21,14 +21,13 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"context"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 

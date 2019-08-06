@@ -165,7 +165,7 @@ dss_tls_init(int tag)
 void
 dss_tls_fini(struct dss_thread_local_storage *dtls)
 {
-	pthread_setspecific(dss_tls_key, NULL);
 	dss_thread_local_storage_fini(dtls);
 	D_FREE(dtls);
+	pthread_setspecific(dss_tls_key, NULL);
 }

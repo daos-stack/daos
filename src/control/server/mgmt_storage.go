@@ -21,14 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
+
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 // addState creates, populates and returns ResponseState in addition
@@ -78,8 +79,13 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 		serverFormatted = true
 	}
 
-	c.nvme.Format(i, &resp.Crets)
-	c.scm.Format(i, &resp.Mrets)
+	ctrlrResults := common.NvmeControllerResults{}
+	c.nvme.Format(i, &ctrlrResults)
+	resp.Crets = ctrlrResults
+
+	mountResults := common.ScmMountResults{}
+	c.scm.Format(i, &mountResults)
+	resp.Mrets = mountResults
 
 	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
 		// storage subsystem format successful, broadcast formatted
@@ -130,8 +136,13 @@ func (c *controlService) UpdateStorage(
 	resp := new(pb.UpdateStorageResp)
 
 	for i := range c.config.Servers {
-		c.nvme.Update(i, req.Nvme, &resp.Crets)
-		c.scm.Update(i, req.Scm, &resp.Mrets)
+		ctrlrResults := common.NvmeControllerResults{}
+		c.nvme.Update(i, req.Nvme, &ctrlrResults)
+		resp.Crets = ctrlrResults
+
+		moduleResults := common.ScmModuleResults{}
+		c.scm.Update(i, req.Scm, &moduleResults)
+		resp.Mrets = moduleResults
 	}
 
 	if err := stream.Send(resp); err != nil {

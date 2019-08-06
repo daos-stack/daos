@@ -21,17 +21,18 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"context"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security/acl"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 // mockDrpcClient is a mock of the DomainSocketClient interface

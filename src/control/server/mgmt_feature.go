@@ -21,12 +21,13 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // FeatureMap is a type alias

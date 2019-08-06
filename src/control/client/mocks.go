@@ -27,18 +27,20 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 var (
 	MockServers  = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	MockFeatures = []*pb.Feature{common.MockFeaturePB()}
-	MockCtrlrs   = NvmeControllers{common.MockControllerPB("")}
+	MockFeatures = []*pb.Feature{MockFeaturePB()}
+	MockCtrlrs   = NvmeControllers{MockControllerPB("E2010413")}
 	MockState    = pb.ResponseState{
 		Status: pb.ResponseStatus_CTRL_ERR_APP,
 		Error:  "example application error",
@@ -49,14 +51,14 @@ var (
 			State:   &MockState,
 		},
 	}
-	MockModules       = ScmModules{common.MockModulePB()}
+	MockModules       = ScmModules{MockModulePB()}
 	MockModuleResults = ScmModuleResults{
 		&pb.ScmModuleResult{
 			Loc:   &pb.ScmModule_Location{},
 			State: &MockState,
 		},
 	}
-	MockMounts       = ScmMounts{common.MockMountPB()}
+	MockMounts       = ScmMounts{MockMountPB()}
 	MockMountResults = ScmMountResults{
 		&pb.ScmMountResult{
 			Mntpoint: "/mnt/daos",
@@ -221,17 +223,24 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(
 
 func (m *mockMgmtCtlClient) KillRank(
 	ctx context.Context, req *pb.DaosRank, o ...grpc.CallOption) (
-	*pb.DaosResponse, error) {
+	*pb.DaosResp, error) {
 
-	return &pb.DaosResponse{}, m.killRet
+	return &pb.DaosResp{}, m.killRet
 }
 
 func newMockMgmtCtlClient(
-	features []*pb.Feature, ctrlrs NvmeControllers,
-	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, mountResults ScmMountResults,
-	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error) pb.MgmtCtlClient {
+	features []*pb.Feature,
+	ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults,
+	modules ScmModules,
+	moduleResults ScmModuleResults,
+	mountResults ScmMountResults,
+	scanRet error,
+	formatRet error,
+	updateRet error,
+	burninRet error,
+	killRet error,
+) pb.MgmtCtlClient {
 
 	return &mockMgmtCtlClient{
 		MockFeatures, ctrlrs, ctrlrResults, modules, moduleResults,
@@ -242,12 +251,25 @@ func newMockMgmtCtlClient(
 type mockMgmtSvcClient struct{}
 
 func (m *mockMgmtSvcClient) CreatePool(
-	ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (
-	*pb.CreatePoolResp, error) {
+	ctx context.Context,
+	req *pb.CreatePoolReq,
+	o ...grpc.CallOption,
+) (*pb.CreatePoolResp, error) {
 
 	// return successful pool creation results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
 	return &pb.CreatePoolResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) DestroyPool(
+	ctx context.Context,
+	req *pb.DestroyPoolReq,
+	o ...grpc.CallOption,
+) (*pb.DestroyPoolResp, error) {
+
+	// return successful pool destroy results
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.DestroyPoolResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(
@@ -274,7 +296,7 @@ type mockControl struct {
 	svcClient  pb.MgmtSvcClient
 }
 
-func (m *mockControl) connect(addr string) error {
+func (m *mockControl) connect(addr string, cfg *security.TransportConfig) error {
 	if m.connectRet == nil {
 		m.address = addr
 	}
@@ -322,7 +344,7 @@ type mockControllerFactory struct {
 	connectRet error
 }
 
-func (m *mockControllerFactory) create(address string) (Control, error) {
+func (m *mockControllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
 	// returns controller with mock properties specified in constructor
 	cClient := newMockMgmtCtlClient(
 		m.features, m.ctrlrs, m.ctrlrResults,
@@ -334,7 +356,7 @@ func (m *mockControllerFactory) create(address string) (Control, error) {
 	controller := newMockControl(
 		address, m.state, m.connectRet, cClient, sClient)
 
-	err := controller.connect(address)
+	err := controller.connect(address, cfg)
 
 	return controller, err
 }

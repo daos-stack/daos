@@ -28,17 +28,22 @@
 
 #include <getopt.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <errno.h>
+#include <stdint.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
+#include <daos/object.h>
 
 #include "daos_types.h"
 #include "daos_api.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
 
-const char		*default_group = DAOS_DEFAULT_GROUP_ID;
+const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
 static enum cont_op
 cont_op_parse(const char *str)
@@ -99,6 +104,18 @@ pool_op_parse(const char *str)
 	return -1;
 }
 
+static enum obj_op
+obj_op_parse(const char *str)
+{
+	if (strcmp(str, "query") == 0)
+		return OBJ_QUERY;
+	else if (strcmp(str, "list-keys") == 0)
+		return OBJ_LIST_KEYS;
+	else if (strcmp(str, "dump") == 0)
+		return OBJ_DUMP;
+	return -1;
+}
+
 static void
 cmd_args_print(struct cmd_args_s *ap)
 {
@@ -107,10 +124,10 @@ cmd_args_print(struct cmd_args_s *ap)
 	if (ap == NULL)
 		return;
 
-	daos_unparse_oclass(ap->oclass, oclass);
+	daos_oclass_id2name(ap->oclass, oclass);
 	daos_unparse_ctype(ap->type, type);
 
-	D_INFO("\tgroup=%s\n", ap->group);
+	D_INFO("\tDAOS system name: %s\n", ap->sysname);
 	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
 	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
@@ -130,6 +147,7 @@ cmd_args_print(struct cmd_args_s *ap)
 		ap->epc,
 		ap->epcrange_str ? ap->epcrange_str : "NULL",
 		ap->epcrange_begin, ap->epcrange_end);
+	D_INFO("\toid: "DF_OID"\n", DP_OID(ap->oid));
 }
 
 static daos_size_t
@@ -216,11 +234,54 @@ out_invalid_format:
 	return -1;
 }
 
+/* oid str: oid_hi.oid_lo */
+static int
+daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
+{
+	const char *ptr = oid_str;
+	char *end;
+	uint64_t hi = 0;
+	uint64_t lo = 0;
+
+	/* parse hi
+	 * errors if: negative numbers, no digits, exceeds maximum value
+	 */
+	hi = strtoull(ptr, &end, 10);
+	if (ptr[0] == '-')
+		return -1;
+	if ((hi == 0) && (end == ptr))
+		return -1;
+	if ((hi == ULLONG_MAX) && (errno == ERANGE))
+		return -1;
+
+	/* parse lo after the '.' */
+	if (*end != '.')
+		return -1;
+
+	ptr = end+1;
+
+	lo = strtoull(ptr, &end, 10);
+	if (ptr[0] == '-')
+		return -1;
+	if ((lo == 0) && (end == ptr))
+		return -1;
+	if ((lo == ULLONG_MAX) && (errno == ERANGE))
+		return -1;
+
+	oid->hi = hi;
+	oid->lo = lo;
+
+	return 0;
+}
+
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 {
+	/* Note: will rely on getopt_long() substring matching for shorter
+	 * option variants. Specifically --sys= for --sys-name=
+	 */
 	struct option		options[] = {
-		{"group",	required_argument,	NULL,	'G'},
+		{"sys-name",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
 		{"svc",		required_argument,	NULL,	'm'},
 		{"cont",	required_argument,	NULL,	'c'},
@@ -233,6 +294,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"snap",	required_argument,	NULL,	's'},
 		{"epc",		required_argument,	NULL,	'e'},
 		{"epcrange",	required_argument,	NULL,	'r'},
+		{"oid",		required_argument,	NULL,	'i'},
+		{"force",	no_argument,		NULL,	'f'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -243,8 +306,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	assert(ap != NULL);
 	ap->p_op = -1;
 	ap->c_op = -1;
-	D_STRNDUP(ap->group, default_group, strlen(default_group));
-	if (ap->group == NULL)
+	ap->o_op = -1;
+	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
+	if (ap->sysname == NULL)
 		return RC_NO_HELP;
 
 	if ((strcmp(argv[1], "container") == 0) ||
@@ -262,10 +326,18 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				argv[2]);
 			return RC_PRINT_HELP;
 		}
+	} else if ((strcmp(argv[1], "object") == 0) ||
+		   (strcmp(argv[1], "obj") == 0)) {
+		ap->o_op = obj_op_parse(argv[2]);
+		if (ap->o_op == -1) {
+			fprintf(stderr, "invalid object command: %s\n",
+				argv[2]);
+			return RC_PRINT_HELP;
+		}
 	} else {
 		/* main() may catch error. Keep this code just in case. */
 		fprintf(stderr, "resource (%s): must be "
-				 "pool or container\n", argv[1]);
+				 "pool, container or object\n", argv[1]);
 		return RC_PRINT_HELP;
 	}
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
@@ -278,8 +350,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
-			D_STRNDUP(ap->group, optarg, strlen(optarg));
-			if (ap->group == NULL)
+			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
+			if (ap->sysname == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'p':
@@ -329,8 +401,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			}
 			break;
 		case 'o':
-			daos_parse_oclass(optarg, &ap->oclass);
-			if (ap->oclass == DAOS_OC_UNKNOWN) {
+			ap->oclass = daos_oclass_name2id(optarg);
+			if (ap->oclass == OC_UNKNOWN) {
 				fprintf(stderr, "unknown object class: %s\n",
 						optarg);
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
@@ -368,6 +440,18 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				fprintf(stderr, "failed to parse epcrange\n");
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
+			break;
+		case 'i':
+			rc = daos_obj_id_parse(optarg, &ap->oid);
+			if (rc != 0) {
+				fprintf(stderr, "oid format should be "
+						"oid_hi.oid_lo\n");
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
+			break;
+		case 'f':
+			/* only applies to cont destroy */
+			ap->force_destroy = 1;
 			break;
 		default:
 			fprintf(stderr, "unknown option : %d\n", rc);
@@ -407,15 +491,23 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
+	if (ap->o_op != -1 &&
+	    ((ap->o_op == OBJ_LIST_KEYS) ||
+	     (ap->o_op == OBJ_DUMP))) {
+		fprintf(stderr,
+			"object %s not yet implemented\n", cmdname);
+		D_GOTO(out_free, rc = RC_NO_HELP);
+	}
+
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
 	return 0;
 
 out_free:
-	daos_rank_list_free(ap->mdsrv);
-	if (ap->group != NULL)
-		D_FREE(ap->group);
+	d_rank_list_free(ap->mdsrv);
+	if (ap->sysname != NULL)
+		D_FREE(ap->sysname);
 	if (ap->mdsrv_str != NULL)
 		D_FREE(ap->mdsrv_str);
 	if (ap->attrname_str != NULL)
@@ -432,7 +524,7 @@ out_free:
 	return rc;
 }
 
-/* For operations that take <pool_uuid, pool_group, pool_svc_ranks>
+/* For operations that take <pool_uuid, pool_sysname, pool_svc_ranks>
  * invoke op-specific handler function.
  */
 static int
@@ -488,18 +580,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	op = ap->c_op;
 
-	/* Container operations require a UUID. Scenarios:
-	 * 1) provided directly by user in --cont= argument.
-	 * 2) provided indirectly by user in -path= argument
-	 *    (UUID generated [create] or looked up from extended attributes
-	 *     associated with path).
-	 * 3) neither --cont nor --path specified
-	 *    (container UUID will be generated).
-	 *
-	 * If both UUID and path are provided return an error.
-	 * TODO: restrict --path use to ops CREATE, DESTROY, QUERY only?
-	 */
-
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
@@ -524,7 +604,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->group, ap->mdsrv,
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname, ap->mdsrv,
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -617,13 +697,79 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		rc2 = daos_cont_close(ap->cont, NULL);
 		if (rc2 != 0)
-			fprintf(stderr, "Container close faile: %d\n", rc2);
+			fprintf(stderr, "Container close failed: %d\n", rc2);
 		if (rc == 0)
 			rc = rc2;
 	}
 
 out_disconnect:
-	/* Pool disconnect  in normal and error flows: preserve rc */
+	/* Pool disconnect in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+	if (rc == 0)
+		rc = rc2;
+
+out:
+	return rc;
+}
+
+/* For operations that take <oid>
+ * invoke op-specific handler function.
+ */
+static int
+obj_op_hdlr(struct cmd_args_s *ap)
+{
+	daos_cont_info_t	cont_info;
+	int			rc;
+	int			rc2;
+	enum obj_op		op;
+	const int		RC_PRINT_HELP = 2;
+
+	assert(ap != NULL);
+	op = ap->o_op;
+
+	rc = 0;
+	ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+	ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+	ARGS_VERIFY_OID(ap, out, rc = RC_PRINT_HELP);
+
+	/* TODO: support container lookup by path? */
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname, ap->mdsrv,
+			       DAOS_PC_RW, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
+			&ap->cont, &cont_info, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont open failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	switch (op) {
+	case OBJ_QUERY:
+		rc = obj_query_hdlr(ap);
+		break;
+	case OBJ_DUMP:
+		break;
+	default:
+		break;
+	}
+
+	/* Container close in normal and error flows: preserve rc */
+	rc2 = daos_cont_close(ap->cont, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Container close failed: %d\n", rc2);
+	if (rc == 0)
+		rc = rc2;
+
+out_disconnect:
+	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
 		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
@@ -662,10 +808,11 @@ help_hdlr(struct cmd_args_s *ap)
 	fprintf(stream,
 "pool options:\n"
 "	--pool=UUID        pool UUID\n"
-"	--group=STR        pool server process group (\"%s\")\n"
+"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
+"	--sys=STR\n"
 "	--svc=RANKS        pool service replicas like 1,2,3\n"
 "	--attr=NAME        pool attribute name to get\n",
-	default_group);
+	default_sysname);
 
 	fprintf(stream, "\n"
 "container (cont) commands:\n"
@@ -686,9 +833,10 @@ help_hdlr(struct cmd_args_s *ap)
 "			   by name, epoch or range\n"
 "	  rollback         roll back container to specified snapshot\n");
 
+#if 0
 	fprintf(stream,
 "container (cont) options:\n"
-"	  <pool options>   (--pool, --group, --svc)\n"
+"	  <pool options>   (--pool, --sys-name, --svc)\n"
 "	--cont=UUID        container UUID\n"
 "	--attr=NAME        container attribute name to set, get, del\n"
 "	--value=VALUESTR   container attribute value to set\n"
@@ -700,7 +848,48 @@ help_hdlr(struct cmd_args_s *ap)
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 "	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
+"	--eprange=B-E      container epoch range (destroy-snap)\n"
+"	--force            destroy container regardless of state\n");
+#endif
+
+	fprintf(stream,
+"container options (create by UUID):\n"
+"	  <pool options>   (--pool, --sys-name, --svc)\n"
+"	--cont=UUID        (optional) container UUID (or generated)\n"
+"container options (create and link to namespace path):\n"
+"	  <pool/cont opts> (--pool, --sys-name, --svc, --cont [optional])\n"
+"	--path=PATHSTR     container namespace path\n"
+"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
+"	--oclass=OCLSSTR   container object class\n"
+"			   (tiny, small, large, R2, R2S, repl_max)\n"
+"	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
+"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
+"container options (destroy):\n"
+"	--force            destroy container regardless of state\n"
+"container options (query, and all commands except create):\n"
+"	  <pool options>   with --cont use: (--pool, --sys-name, --svc)\n"
+"	  <pool options>   with --path use: (--sys-name, --svc)\n"
+"	--cont=UUID        (mandatory, or use --path)\n"
+"	--path=PATHSTR     (mandatory, or use --cont)\n"
+"container options (attribute-related):\n"
+"	--attr=NAME        container attribute name to set, get, del\n"
+"	--value=VALUESTR   container attribute value to set\n"
+"container options (snapshot and rollback-related):\n"
+"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
+"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 "	--eprange=B-E      container epoch range (destroy-snap)\n");
+
+	fprintf(stream, "\n"
+"object (obj) commands:\n"
+"	  query            query an object's layout\n"
+"	  list-keys        list an object's keys\n"
+"	  dump             dump an object's contents\n");
+
+	fprintf(stream,
+"object (obj) options:\n"
+"	  <pool options>   (--pool, --sys-name, --svc)\n"
+"	  <cont options>   (--cont)\n"
+"	--oid=HI.LO        object ID\n");
 	return 0;
 }
 
@@ -721,6 +910,9 @@ main(int argc, char *argv[])
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "pool") == 0)
 		hdlr = pool_op_hdlr;
+	else if ((strcmp(argv[1], "object") == 0) ||
+		 (strcmp(argv[1], "obj") == 0))
+		hdlr = obj_op_hdlr;
 
 	if (hdlr == NULL) {
 		dargs.ostream = stderr;
@@ -756,7 +948,7 @@ main(int argc, char *argv[])
 	rc = hdlr(&dargs);
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
-	daos_rank_list_free(dargs.mdsrv);
+	d_rank_list_free(dargs.mdsrv);
 
 	daos_fini();
 

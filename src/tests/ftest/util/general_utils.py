@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,8 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+"""
+from __future__ import print_function
 
 import os
 import re
@@ -30,8 +30,12 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
-from avocado import fail_on
 from time import sleep
+
+from avocado import fail_on
+from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from ClusterShell.Task import task_self
+from ClusterShell.NodeSet import NodeSet
 
 
 class DaosTestError(Exception):
@@ -308,3 +312,35 @@ def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
                 "Unexpected {} value: expected={}, detected={}".format(
                     key, expected, detected))
     return messages
+
+
+def check_pool_files(log, hosts, uuid):
+    """Check if pool files exist on the specified list of hosts.
+
+    Args:
+        log (logging): logging object used to display messages
+        hosts (list): list of hosts
+        uuid (str): uuid file name to look for in /mnt/daos.
+
+    Returns:
+        bool: True if the files for this pool exist on each host; False
+            otherwise
+
+    """
+    file_list = (uuid, "superblock")
+    expect = len(file_list) * len(hosts)
+    actual = 0
+    nodeset = NodeSet.fromlist(hosts)
+    task = task_self()
+
+    log.info("Checking for pool data on %s", nodeset)
+    for filename in file_list:
+        task.run(
+            "test -e /mnt/daos/{}; echo $?".format(filename), nodes=nodeset)
+        for output, node_list in task.iter_buffers():
+            if output == "0":
+                actual += len(node_list)
+            else:
+                nodes = NodeSet.fromlist(node_list)
+                log.error("%s: /mnt/daos/%s not found", nodes, filename)
+    return expect == actual
