@@ -1611,7 +1611,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise DaosApiError("Container needs to be open.")
+            raise DaosApiError("###Container needs to be opened, exiting..")
 
         txn = 0
         c_tx = ctypes.c_uint64(txn)
@@ -1629,7 +1629,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise DaosApiError("Container needs to be open.")
+            raise DaosApiError("###Container needs to be opened, exiting..")
 
         c_tx = ctypes.c_uint64(txn)
 
@@ -1644,7 +1644,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise DaosApiError("Container needs to be open.")
+            raise DaosApiError("###Container needs to be opened, exiting..")
 
         c_tx = ctypes.c_uint64(txn)
 

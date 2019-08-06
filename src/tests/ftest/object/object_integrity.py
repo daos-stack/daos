@@ -161,7 +161,7 @@ class ObjectDataValidation(avocado.Test):
             new_transaction = self.container.get_new_tx()
         except DaosApiError as excep:
             #initial container get_new_tx failed, skip rest of the test
-            self.cancel("##container get_new_tx failed: {}".format(excep))
+            self.fail("##container get_new_tx failed: {}".format(excep))
         invalid_transaction = new_transaction + random.randint(1000, 383838)
         self.log.info("==new_transaction=     %s", new_transaction)
         self.log.info("==invalid_transaction= %s", invalid_transaction)
@@ -177,7 +177,8 @@ class ObjectDataValidation(avocado.Test):
                 "==(1)Expecting failure: invalid Container.commit_tx.")
             if expected_error not in str(excep):
                 self.fail(
-                    "##(1.2)Expecting error RC: -1002  did not show.")
+                    "##(1.2)Expecting error RC: -1002, but got {}."
+                    .format(str(excep)))
         try:
             self.container.close_tx(invalid_transaction)
             self.fail(
@@ -188,7 +189,8 @@ class ObjectDataValidation(avocado.Test):
                 "==(2)Expecting failure: invalid Container.commit_tx.")
             if expected_error not in str(excep):
                 self.fail(
-                    "##(2.2)Expecting error RC: -1002  did not show.")
+                    "##(2.2)Expecting error RC: -1002, but got {}."
+                    .format(str(excep)))
         try:
             self.container.close_tx(new_transaction)
             self.log.info("==(3)container.close_tx test passed.")
