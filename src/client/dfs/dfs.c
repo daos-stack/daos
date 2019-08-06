@@ -592,7 +592,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return -EINVAL;
-	if (strlen(name) > DFS_MAX_PATH)
+	if (strnlen(name, DFS_MAX_PATH) > DFS_MAX_PATH)
 		return -EINVAL;
 	return 0;
 }
@@ -850,19 +850,25 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (exists)
 			return -EEXIST;
 
-		entry.value = (char *)value;
+		if (value == NULL || strnlen(value, PATH_MAX-1) > PATH_MAX-1)
+			return -DER_INVAL;
+
 		rc = oid_gen(dfs, 0, false, &sym->oid);
 		if (rc != 0)
 			return rc;
+		oid_cp(&entry.oid, sym->oid);
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
-		oid_cp(&entry.oid, sym->oid);
+		sym->value = strdup(value);
+		entry.value = sym->value;
 
 		rc = insert_entry(parent->oh, th, sym->name, entry);
-		if (rc)
+		if (rc) {
+			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
 				sym->name, rc);
+		}
 		return rc;
 	}
 	return -ENOTSUP;
@@ -2449,6 +2455,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 	daos_size_t val_size;
 
 	if (obj == NULL || !S_ISLNK(obj->mode))
+		return -EINVAL;
+	if (obj->value == NULL)
 		return -EINVAL;
 
 	val_size = strlen(obj->value) + 1;
