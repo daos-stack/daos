@@ -84,6 +84,8 @@ func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificat
 	return &certificate, certPool, nil
 }
 
+// LoadPEMData handles security checking on the PEM file based on perms and
+// returns the bytes in the PEM file
 func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {
 	statInfo, err := os.Stat(filePath)
 	if err != nil {
@@ -104,8 +106,32 @@ func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {
 	return fileContents, nil
 }
 
-func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
+// LoadCertificate loads the certificate specified at the given path into an
+// x509 Certificate object
+func LoadCertificate(certPath string) (*x509.Certificate, error) {
+	pemData, err := LoadPEMData(certPath, SafeCertPerm)
 
+	if err != nil {
+		return nil, err
+	}
+
+	block, extra := pem.Decode(pemData)
+
+	if block == nil {
+		return nil, fmt.Errorf("%s does not contain PEM data", certPath)
+	}
+
+	if len(extra) != 0 {
+		return nil, fmt.Errorf("Only one cert allowed per file")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	return cert, err
+}
+
+// LoadPrivateKey loads the private key specified at the given patc into an
+// crypto.PrivateKey interface complient object.
+func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	pemData, err := LoadPEMData(keyPath, SafeKeyPerm)
 
 	if err != nil {
@@ -149,6 +175,8 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	return nil, fmt.Errorf("Invalid key data in PRIVATE KEY block")
 }
 
+// ValidateCertDirectory ensures the certificate directory has safe permissions
+// set on it.
 func ValidateCertDirectory(certDir string) error {
 	statInfo, err := os.Stat(certDir)
 	if err != nil {

@@ -23,19 +23,13 @@
 
 #define D_LOGFAC	DD_FAC(dfs)
 
-#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <daos/common.h>
-#include <daos/debug.h>
-#include <daos/container.h>
 
-#include "daos_types.h"
 #include "daos.h"
-#include "daos_array.h"
 #include "daos_fs.h"
-#include "daos_security.h"
 
 /** D-key name of SB info in the SB object */
 #define SB_DKEY		"DFS_SB_DKEY"
@@ -1363,7 +1357,7 @@ out:
 
 int
 dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
-	   mode_t *mode)
+	   mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		parent;
 	dfs_obj_t		*obj = NULL;
@@ -1371,6 +1365,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	char			*rem, *sptr;
 	bool			exists;
 	int			daos_mode;
+	struct dfs_entry	entry = {0};
 	uid_t			uid = geteuid();
 	gid_t			gid = getegid();
 	int			rc;
@@ -1389,6 +1384,9 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	rem = strdup(path);
 	if (rem == NULL)
 		return -ENOMEM;
+
+	if (stbuf)
+		memset(stbuf, 0, sizeof(struct stat));
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -1418,8 +1416,7 @@ dfs_lookup_loop:
 		if (rc)
 			return rc;
 
-		struct dfs_entry entry = {0};
-
+		entry.chunk_size = 0;
 		rc = fetch_entry(parent.oh, DAOS_TX_NONE, token, true,
 				 &exists, &entry);
 		if (rc)
@@ -1448,23 +1445,33 @@ dfs_lookup_loop:
 				D_GOTO(err_obj, rc = -ENOENT);
 			}
 
-			obj->mode = entry.mode;
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 				entry.chunk_size : dfs->chunk_size, &obj->oh,
 				NULL);
 			if (rc != 0) {
-				D_ERROR("daos_array_open() failed (%d)\n", rc);
+				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = -daos_der2errno(rc));
 			}
 
+			if (stbuf) {
+				daos_size_t size;
+
+				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE,
+							 &size, NULL);
+				if (rc) {
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj,
+					       rc = -daos_der2errno(rc));
+				}
+				stbuf->st_size = size;
+				stbuf->st_blocks =
+					(stbuf->st_size + (1 << 9) - 1) >> 9;
+			}
 			break;
 		}
 
 		if (S_ISLNK(entry.mode)) {
-			obj->mode = entry.mode;
-			obj->value = entry.value;
-
 			/*
 			 * If there is a token after the sym link entry, treat
 			 * the sym link as a directory and look up it's value.
@@ -1473,12 +1480,12 @@ dfs_lookup_loop:
 			if (token) {
 				dfs_obj_t *sym;
 
-				rc = dfs_lookup(dfs, obj->value, flags, &sym,
-						NULL);
+				rc = dfs_lookup(dfs, entry.value, flags, &sym,
+						NULL, NULL);
 				if (rc) {
 					D_DEBUG(DB_TRACE,
 						"Failed to lookup symlink %s\n",
-						obj->value);
+						entry.value);
 					D_FREE(sym);
 					D_GOTO(err_obj, rc);
 				}
@@ -1494,10 +1501,19 @@ dfs_lookup_loop:
 				goto dfs_lookup_loop;
 			}
 
+			obj->value = entry.value;
+			if (stbuf)
+				stbuf->st_size = strlen(entry.value) + 1;
 			/** return the symlink obj if this is the last entry */
 			break;
 		}
 
+		if (!S_ISDIR(entry.mode)) {
+			D_ERROR("Invalid entry type in path.\n");
+			D_GOTO(err_obj, rc = -EINVAL);
+		}
+
+		/* open the directory object */
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
@@ -1505,6 +1521,8 @@ dfs_lookup_loop:
 			D_GOTO(err_obj, rc = -daos_der2errno(rc));
 		}
 
+		if (stbuf)
+			stbuf->st_size = sizeof(entry);
 		oid_cp(&parent.oid, obj->oid);
 		oid_cp(&parent.parent_oid, obj->parent_oid);
 		parent.oh = obj->oh;
@@ -1513,6 +1531,17 @@ dfs_lookup_loop:
 
 	if (mode)
 		*mode = obj->mode;
+
+	if (stbuf) {
+		stbuf->st_nlink = 1;
+		stbuf->st_mode = obj->mode;
+		stbuf->st_uid = dfs->uid;
+		stbuf->st_gid = dfs->gid;
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_ctim.tv_sec = entry.ctime;
+	}
+
 out:
 	D_FREE(rem);
 	*_obj = obj;
@@ -1680,7 +1709,7 @@ out:
 
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode)
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf)
 {
 	dfs_obj_t		*obj;
 	struct dfs_entry	entry = {0};
@@ -1707,17 +1736,20 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (daos_mode == -1)
 		return -EINVAL;
 
-	D_ALLOC_PTR(obj);
-	if (obj == NULL)
-		return -ENOMEM;
-
 	rc = fetch_entry(parent->oh, DAOS_TX_NONE, name, true, &exists,
 			 &entry);
 	if (rc)
-		D_GOTO(err_obj, rc);
+		return rc;
 
 	if (!exists)
-		D_GOTO(err_obj, rc = -ENOENT);
+		return -ENOENT;
+
+	if (stbuf)
+		memset(stbuf, 0, sizeof(struct stat));
+
+	D_ALLOC_PTR(obj);
+	if (obj == NULL)
+		return -ENOMEM;
 
 	strncpy(obj->name, name, DFS_MAX_PATH);
 	obj->name[DFS_MAX_PATH] = '\0';
@@ -1731,23 +1763,57 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
 			entry.chunk_size : dfs->chunk_size, &obj->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
+			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
 				rc);
 			D_GOTO(err_obj, rc = -daos_der2errno(rc));
 		}
+
+		/** we need the file size if stat struct is needed */
+		if (stbuf) {
+			daos_size_t size;
+
+			rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size,
+						 NULL);
+			if (rc) {
+				daos_array_close(obj->oh, NULL);
+				D_ERROR("daos_array_get_size() Failed (%d)\n",
+					rc);
+				D_GOTO(err_obj, rc = -daos_der2errno(rc));
+			}
+			stbuf->st_size = size;
+			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
+		}
 	} else if (S_ISLNK(entry.mode)) {
 		obj->value = entry.value;
-	} else {
+		if (stbuf)
+			stbuf->st_size = strlen(entry.value) + 1;
+	} else if (S_ISDIR(entry.mode)) {
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
 				   NULL);
 		if (rc) {
 			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 			D_GOTO(err_obj, rc = -daos_der2errno(rc));
 		}
+		if (stbuf)
+			stbuf->st_size = sizeof(entry);
+	} else {
+		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
+		D_GOTO(err_obj, rc = -EINVAL);
 	}
 
 	if (mode)
 		*mode = obj->mode;
+
+	if (stbuf) {
+		stbuf->st_nlink = 1;
+		stbuf->st_mode = obj->mode;
+		stbuf->st_uid = dfs->uid;
+		stbuf->st_gid = dfs->gid;
+		stbuf->st_atim.tv_sec = entry.atime;
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_ctim.tv_sec = entry.ctime;
+	}
+
 	*_obj = obj;
 
 	return rc;
@@ -2161,7 +2227,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return -EIO;
 	}
 
-	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL);
+	rc = dfs_lookup(dfs, entry.value, O_RDONLY, &sym, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		return rc;
@@ -2239,7 +2305,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 			return -EIO;
 		}
 
-		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL);
+		rc = dfs_lookup(dfs, entry.value, O_RDWR, &sym, NULL, NULL);
 		if (rc) {
 			D_ERROR("Failed to lookup Symlink %s\n", entry.value);
 			return rc;
@@ -3039,6 +3105,3 @@ dfs_umount_root_cont(dfs_t *dfs)
 	rc = daos_cont_close(coh, NULL);
 	return -daos_der2errno(rc);
 }
-
-/*  LocalWords:  EINVAL
- */

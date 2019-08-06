@@ -132,7 +132,9 @@ def run_agent(basepath, server_list, client_list=None):
         while not sessions[client].poll():
             if time.time() - start_time > timeout:
                 print("<AGENT>: {}".format(expected_data))
-                raise AgentFailed("DAOS Agent didn't start!")
+                raise AgentFailed("DAOS Agent didn't start!  Agent reported:\n"
+                                  "{}before we gave up waiting for it to "
+                                  "start".format(expected_data))
             output = ""
             try:
                 output = sessions[client].stderr.read()
