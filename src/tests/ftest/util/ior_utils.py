@@ -111,6 +111,9 @@ class IorCommand(CommandWithParameters):
         self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
         self.daos_oclass = FormattedParameter("--daos.oclass {}")
 
+        # Setting object class for MPIIO as SX by default
+        self.mpiio_oclass = 214
+
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
         # Sort the IOR parameter names to generate consistent ior commands
@@ -160,9 +163,7 @@ class IorCommand(CommandWithParameters):
 
         # assigning obj class as SX in None else
         # the desired one
-        if mpiio_oclass is None:
-            self.mpiio_oclass = 214
-        else:
+        if mpiio_oclass is not None:
             self.mpiio_oclass = mpiio_oclass
 
     def set_daos_pool_params(self, pool, display=True):
