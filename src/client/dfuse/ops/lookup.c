@@ -75,7 +75,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 					rc);
 		}
 		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
+		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
 
 		atomic_fetch_sub(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
