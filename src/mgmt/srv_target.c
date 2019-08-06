@@ -780,89 +780,6 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
-/*
- * Return a URI string, like "ofi+sockets://192.168.1.70:44821", that callers
- * are responsible for freeing with D_FREE.
- */
-static int
-create_tag_uri(const char *base_uri, int i, char **uri)
-{
-	char   *type = "ofi+sockets:";
-	char   *u;
-	char   *p;
-	int	port;
-
-	/* TODO: Support other URI types. */
-	if (strncmp(base_uri, type, strlen(type)) != 0) {
-		D_ERROR("URI %s type not supported\n", base_uri);
-		return -DER_NOSYS;
-	}
-
-	/* Locate the ":" between the host and the port. */
-	p = strrchr(base_uri, ':');
-	if (p == NULL) {
-		D_ERROR("no ':' in base URI %s\n", base_uri);
-		return -DER_INVAL;
-	}
-
-	/* Calculate the port. */
-	port = atoi(p + 1) + i;
-	if (port > 65535 /* maximal port number */) {
-		D_ERROR("port %d out of range\n", port);
-		return -DER_INVAL;
-	}
-
-	/* Print the base URI with the port into u. */
-	D_ASPRINTF(u, "%.*s%d", (int)(p + 1 - base_uri), base_uri, port);
-	if (u == NULL)
-		return -DER_NOMEM;
-
-	*uri = u;
-	return 0;
-}
-
-static int
-add_server(crt_group_t *group, struct server_entry *server)
-{
-	int i;
-
-	D_DEBUG(DB_MGMT, "rank=%u uri=%s nctxs=%u\n", server->se_rank,
-		server->se_uri, server->se_nctxs);
-
-	for (i = 0; i < server->se_nctxs; i++) {
-		crt_node_info_t	info;
-		int		rc;
-
-		rc = create_tag_uri(server->se_uri, i, &info.uri);
-		if (rc != 0)
-			return rc;
-		rc = crt_group_node_add(group, server->se_rank, i, info);
-		if (rc != 0)
-			D_ERROR("failed to add rank=%u tag=%d uri=%s: %d\n",
-				server->se_rank, i, info.uri, rc);
-		D_FREE(info.uri);
-		if (rc != 0)
-			return rc;
-	}
-
-	return 0;
-}
-
-static int
-remove_server(crt_group_t *group, struct server_entry *server)
-{
-	int rc;
-
-	D_DEBUG(DB_MGMT, "rank=%u uri=%s nctxs=%u\n", server->se_rank,
-		server->se_uri, server->se_nctxs);
-
-	rc = crt_group_rank_remove(group, server->se_rank);
-	if (rc != 0)
-		D_ERROR("failed to remove rank=%u: %d\n", server->se_rank, rc);
-
-	return rc;
-}
-
 /* State of the local system map (i.e., the CaRT PG membership) */
 static uint32_t sys_map_version;
 
@@ -899,11 +816,26 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 		if (servers[i].se_flags & SERVER_IN) {
 			if (existing)
 				continue;
-			rc = add_server(group, &servers[i]);
+			D_DEBUG(DB_MGMT, "add rank=%u uri=%s nctxs=%u\n",
+				servers[i].se_rank, servers[i].se_uri,
+				servers[i].se_nctxs);
+			rc = crt_group_primary_rank_add(rpc->cr_ctx, group,
+							servers[i].se_rank,
+							servers[i].se_uri);
+			if (rc != 0)
+				D_ERROR("failed to add rank=%u uri=%s: %d\n",
+					servers[i].se_rank, servers[i].se_uri,
+					rc);
 		} else {
 			if (!existing)
 				continue;
-			rc = remove_server(group, &servers[i]);
+			D_DEBUG(DB_MGMT, "remove rank=%u uri=%s nctxs=%u\n",
+				servers[i].se_rank, servers[i].se_uri,
+				servers[i].se_nctxs);
+			rc = crt_group_rank_remove(group, servers[i].se_rank);
+			if (rc != 0)
+				D_ERROR("failed to remove rank=%u: %d\n",
+					servers[i].se_rank, rc);
 		}
 		/*
 		 * Commit suicide upon errors, so that others can detect and

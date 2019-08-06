@@ -39,6 +39,21 @@ type DomainInfo struct {
 	ctx   string
 }
 
+// Uid returns the UID obtained from the domain socket
+func (d *DomainInfo) Uid() uint32 {
+	return d.creds.Uid
+}
+
+// Gid returns the GID obtained from the domain socket
+func (d *DomainInfo) Gid() uint32 {
+	return d.creds.Gid
+}
+
+// Ctx returns the additional security information obtained from the domain socket
+func (d *DomainInfo) Ctx() string {
+	return d.ctx
+}
+
 // InitDomainInfo returns an initialized DomainInfo structure
 func InitDomainInfo(creds *syscall.Ucred, ctx string) *DomainInfo {
 	return &DomainInfo{creds, ctx}
