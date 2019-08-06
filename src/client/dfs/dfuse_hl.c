@@ -709,7 +709,7 @@ dfuse_unlink(const char *path)
 		D_GOTO(out, rc = -ENOTDIR);
 	}
 
-	rc = dfs_remove(dfs, parent, name, false);
+	rc = dfs_remove(dfs, parent, name, false, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed to remove file %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -753,7 +753,7 @@ dfuse_rmdir(const char *path)
 		D_GOTO(out, rc = -ENOTDIR);
 	}
 
-	rc = dfs_remove(dfs, parent, name, false);
+	rc = dfs_remove(dfs, parent, name, false, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed to remove dir %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -856,7 +856,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 			}
 		}
 
-		rc = dfs_move(dfs, parent, name, new_parent, new_name);
+		rc = dfs_move(dfs, parent, name, new_parent, new_name, NULL);
 		if (rc) {
 			fprintf(stderr, "Failed to move %s to %s (%d)\n",
 				old_path, new_path, rc);
@@ -864,7 +864,7 @@ dfuse_rename(const char *old_path, const char *new_path, unsigned int flags)
 		}
 	}
 #else
-	rc = dfs_move(dfs, parent, name, new_parent, new_name);
+	rc = dfs_move(dfs, parent, name, new_parent, new_name, NULL);
 	if (rc) {
 		fprintf(stderr, "Failed to move %s to %s (%d)\n",
 			old_path, new_path, rc);

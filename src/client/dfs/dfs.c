@@ -1286,7 +1286,8 @@ out:
 }
 
 int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
+	   daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0};
 	daos_handle_t           th = DAOS_TX_NONE;
@@ -1351,6 +1352,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (oid)
+		oid_cp(oid, entry.oid);
 out:
 	return rc;
 }
@@ -2464,7 +2467,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 
 int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name)
+	 char *new_name, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -2565,6 +2568,9 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				new_name, rc);
 			D_GOTO(out, rc);
 		}
+
+		if (oid)
+			oid_cp(oid, new_entry.oid);
 	}
 
 	/** rename symlink */
@@ -2790,21 +2796,20 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 		iod.iod_size	= DAOS_REC_ANY;
 		rc = daos_obj_fetch(oh, th, &dkey, 1, &iod, NULL, NULL, NULL);
-		if (rc)
+		if (rc) {
+			D_ERROR("Failed to get extended attribute %s\n", name);
 			D_GOTO(out, rc = -daos_der2errno(rc));
+		}
 
 		if (iod.iod_size == 0)
 			exists = false;
 		else
 			exists = true;
 
-		if (flags == XATTR_CREATE && exists) {
-			D_ERROR("Xattribute already exists (XATTR_CREATE)");
+		if (flags == XATTR_CREATE && exists)
 			D_GOTO(out, rc = -EEXIST);
-		} else if (flags == XATTR_REPLACE && !exists) {
-			D_ERROR("Xattribute does not exist (XATTR_REPLACE)");
+		if (flags == XATTR_REPLACE && !exists)
 			D_GOTO(out, rc = -ENOENT);
-		}
 	}
 
 	/** set sgl for update */
