@@ -160,9 +160,6 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
-	D_ASSERT(inode);
-	D_ASSERT(inode->ie_dfs);
-	D_ASSERT(inode->ie_dfs->dfs_ops);
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
