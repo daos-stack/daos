@@ -140,9 +140,7 @@ func agentMain() error {
 		return err
 	}
 
-	module := &SecurityModule{}
-	module.InitModule(nil)
-	drpcServer.RegisterRPCModule(module)
+	drpcServer.RegisterRPCModule(NewSecurityModule(config.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0], config.TransportConfig})
 
 	err = drpcServer.Start()

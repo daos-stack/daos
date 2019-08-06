@@ -226,11 +226,11 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		mode_t mode;
-
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, &mode);
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
+				NULL, NULL);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(-rc));
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
+					strerror(-rc));
 			D_GOTO(err, 0);
 		}
 	}
