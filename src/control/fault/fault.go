@@ -21,13 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package faults
+package fault
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
 const (
@@ -49,7 +51,7 @@ const (
 var (
 	// UnknownFault represents an unknown fault.
 	UnknownFault = &Fault{
-		Code:       CodeUnknown,
+		Code:       code.Unknown,
 		Resolution: ResolutionUnknown,
 	}
 )
@@ -65,7 +67,7 @@ type Fault struct {
 	// when displaying the fault.
 	Domain string
 	// Code is the unique numeric identifier for known faults.
-	Code Code
+	Code code.Code
 	// Description is the main description of the fault. It usually
 	// includes the reason for the fault, and therefore it is not
 	// necessary to display both Description and Reason.
@@ -122,7 +124,7 @@ func ShowResolutionFor(raw error) string {
 
 	f, ok := errors.Cause(raw).(*Fault)
 	if !ok {
-		return fmt.Sprintf(fmtStr, UnknownDomainStr, CodeUnknown, ResolutionUnknown)
+		return fmt.Sprintf(fmtStr, UnknownDomainStr, code.Unknown, ResolutionUnknown)
 	}
 	if f.Resolution == ResolutionEmpty {
 		return fmt.Sprintf(fmtStr, sanitizeDomain(f.Domain), f.Code, ResolutionUnknown)
