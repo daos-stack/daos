@@ -45,6 +45,7 @@ test_setup_pool_create(void **state, struct test_pool *pool, daos_prop_t *prop)
 		assert_int_equal(pool->slave, 0);
 		arg->pool.pool_size = pool->pool_size;
 		uuid_copy(arg->pool.pool_uuid, pool->pool_uuid);
+		arg->pool.alive_svc.rl_nr = pool->alive_svc.rl_nr;
 		arg->pool.svc.rl_nr = pool->svc.rl_nr;
 		memcpy(arg->pool.ranks, pool->ranks,
 		       sizeof(arg->pool.ranks[0]) * TEST_RANKS_MAX_NUM);
@@ -274,6 +275,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
 
+		arg->pool.alive_svc.rl_nr = svc_nreplicas;
+		arg->pool.alive_svc.rl_ranks = arg->pool.ranks;
 		arg->pool.svc.rl_nr = svc_nreplicas;
 		arg->pool.svc.rl_ranks = arg->pool.ranks;
 		arg->pool.slave = false;
