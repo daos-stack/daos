@@ -73,7 +73,7 @@ class MultiServerCreateDeleteTest(Test):
     def test_create(self):
         """
         Test basic pool creation.
-        :avocado: tags=all,pool,pr,small,multitarget
+        :avocado: tags=all,pool,full_regression,small,multitarget
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
