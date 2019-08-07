@@ -42,7 +42,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_move(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
 		      newparent->ie_obj, (char *)newname, NULL);
 	if (rc)
-		D_GOTO(out, rc = -rc);
+		D_GOTO(out, rc);
 
 	DFUSE_TRA_INFO(parent, "Renamed %s to %s in %p",
 		       name, newname, newparent);

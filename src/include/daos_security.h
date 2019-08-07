@@ -437,9 +437,27 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid);
  *
  * @return	0		Success
  *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
  */
 int
 daos_ace_from_str(const char *str, struct daos_ace **ace);
+
+/**
+ * Convert an Access Control Entry in the form of a daos_ace structure to a
+ * compact string.
+ *
+ * Limitation: A valid ACE with different permissions for different access types
+ * cannot be formatted as a single string, and will be rejected as invalid.
+ *
+ * \param[in]	ace		ACE structure
+ * \param[out]	buf		Buffer to write the string
+ * \param[out]	buf_len		Size of buffer
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ */
+int
+daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
 
 #if defined(__cplusplus)
 }

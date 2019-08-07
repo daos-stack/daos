@@ -49,11 +49,8 @@ static int
 ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		   daos_handle_t ioh, int status, struct dtx_handle *dth)
 {
-	struct obj_tls		*tls = obj_tls_get();
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
 	int			 rc;
-
-	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_END);
 
 	if (!daos_handle_is_inval(ioh)) {
 		uint32_t map_version = cont_hdl->sch_pool->spc_map_version;
@@ -86,8 +83,6 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		}
 	}
 
-	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_END);
-
 	return status;
 }
 
@@ -95,10 +90,7 @@ static void
 ds_obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 		struct dtx_conflict_entry *dce)
 {
-	struct obj_tls		*tls = obj_tls_get();
-	int			 rc;
-
-	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_REPLY);
+	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
@@ -126,7 +118,6 @@ ds_obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 		}
 	}
 
-	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_REPLY);
 }
 
 struct ds_bulk_async_args {
@@ -620,12 +611,15 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
 	uint32_t		tag = dss_get_module_info()->dmi_tgt_id;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
+	uint64_t		time_start = 0;
+	struct obj_tls		*tls = obj_tls_get();
 	struct bio_desc		*biod;
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
 	int			rc, err;
 
+	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
@@ -713,6 +707,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	rc = rc ? : err;
 out:
 	rc = ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, dth);
+	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;
 }
 
@@ -893,14 +888,13 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_leader_handle	dlh = { 0 };
 	struct obj_tls			*tls = obj_tls_get();
 	struct ds_obj_exec_arg		exec_arg = { 0 };
+	uint64_t			time_start = 0;
 	uint32_t			map_ver = 0;
 	uint32_t			flags = 0;
 	int				rc;
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
-
-	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE);
 
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
@@ -927,7 +921,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	/* Single replica update or fetch. */
 	if (orw->orw_shard_tgts.ca_arrays == NULL) {
 		/* No resend case for single replica yet XXX */
-		D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_LOCAL);
 		rc = obj_local_rw(rpc, cont_hdl, cont, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": rw_local (update) failed %d.\n",
@@ -935,7 +928,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 		}
 
-		D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_LOCAL);
 		D_GOTO(out, rc);
 	}
 
@@ -955,7 +947,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	D_TIME_START(tls->ot_sp, OBJ_PF_UPDATE_PREP);
+	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE);
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -978,7 +970,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			DP_UOID(orw->orw_oid), rc);
 		D_GOTO(out, rc);
 	}
-	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE_PREP);
 
 	exec_arg.rpc = rpc;
 	exec_arg.cont_hdl = cont_hdl;
@@ -996,7 +987,7 @@ out:
 	}
 
 	ds_obj_rw_reply(rpc, rc, map_ver, NULL);
-	D_TIME_END(tls->ot_sp, OBJ_PF_UPDATE);
+	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE);
 
 	if (cont_hdl)
 		ds_cont_hdl_put(cont_hdl);

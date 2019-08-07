@@ -41,5 +41,5 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	if (rc == 0)
 		DFUSE_REPLY_WRITE(oh, req, len);
 	else
-		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
+		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }

@@ -32,6 +32,34 @@
 #include <pwd.h>
 #include <grp.h>
 
+/*
+ * String values for special principal types
+ */
+#define PRINCIPAL_OWNER_STR	"OWNER@"
+#define PRINCIPAL_OWNER_GRP_STR	"GROUP@"
+#define PRINCIPAL_EVERYONE_STR	"EVERYONE@"
+
+/*
+ * Characters representing access flags
+ */
+#define FLAG_GROUP_CH		'G'
+#define FLAG_SUCCESS_CH		'S'
+#define FLAG_FAIL_CH		'F'
+#define FLAG_POOL_INHERIT_CH	'P'
+
+/*
+ * Characters representing access types
+ */
+#define ACCESS_ALLOW_CH		'A'
+#define ACCESS_AUDIT_CH		'U'
+#define ACCESS_ALARM_CH		'L'
+
+/*
+ * Characters representing permissions
+ */
+#define PERM_READ_CH		'r'
+#define PERM_WRITE_CH		'w'
+
 static size_t DEFAULT_BUF_LEN = 1024;
 
 /*
@@ -366,13 +394,13 @@ process_access_types(const char *str, uint8_t *access_types)
 	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN);
 	for (i = 0; i < len; i++) {
 		switch (str[i]) {
-		case 'A':
+		case ACCESS_ALLOW_CH:
 			*access_types |= DAOS_ACL_ACCESS_ALLOW;
 			break;
-		case 'U':
+		case ACCESS_AUDIT_CH:
 			*access_types |= DAOS_ACL_ACCESS_AUDIT;
 			break;
-		case 'L':
+		case ACCESS_ALARM_CH:
 			*access_types |= DAOS_ACL_ACCESS_ALARM;
 			break;
 		default:
@@ -393,16 +421,16 @@ process_flags(const char *str, uint16_t *flags)
 	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN);
 	for (i = 0; i < len; i++) {
 		switch (str[i]) {
-		case 'G':
+		case FLAG_GROUP_CH:
 			*flags |= DAOS_ACL_FLAG_GROUP;
 			break;
-		case 'S':
+		case FLAG_SUCCESS_CH:
 			*flags |= DAOS_ACL_FLAG_ACCESS_SUCCESS;
 			break;
-		case 'F':
+		case FLAG_FAIL_CH:
 			*flags |= DAOS_ACL_FLAG_ACCESS_FAIL;
 			break;
-		case 'P':
+		case FLAG_POOL_INHERIT_CH:
 			*flags |= DAOS_ACL_FLAG_POOL_INHERIT;
 			break;
 		default:
@@ -423,10 +451,10 @@ process_perms(const char *str, uint64_t *perms)
 	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN);
 	for (i = 0; i < len; i++) {
 		switch (str[i]) {
-		case 'r':
+		case PERM_READ_CH:
 			*perms |= DAOS_ACL_PERM_READ;
 			break;
-		case 'w':
+		case PERM_WRITE_CH:
 			*perms |= DAOS_ACL_PERM_WRITE;
 			break;
 		default:
@@ -443,13 +471,13 @@ get_ace_from_identity(const char *identity, uint16_t flags)
 {
 	enum daos_acl_principal_type type;
 
-	if (strncmp(identity, "OWNER@",
+	if (strncmp(identity, PRINCIPAL_OWNER_STR,
 		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_OWNER;
-	else if (strncmp(identity, "GROUP@",
+	else if (strncmp(identity, PRINCIPAL_OWNER_GRP_STR,
 			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_OWNER_GROUP;
-	else if (strncmp(identity, "EVERYONE@",
+	else if (strncmp(identity, PRINCIPAL_EVERYONE_STR,
 			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_EVERYONE;
 	else if (flags & DAOS_ACL_FLAG_GROUP)
@@ -580,4 +608,138 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	*ace = new_ace;
 
 	return 0;
+}
+
+static const char *
+get_principal_name_str(struct daos_ace *ace)
+{
+	switch (ace->dae_principal_type) {
+	case DAOS_ACL_OWNER:
+		return PRINCIPAL_OWNER_STR;
+	case DAOS_ACL_OWNER_GROUP:
+		return PRINCIPAL_OWNER_GRP_STR;
+	case DAOS_ACL_EVERYONE:
+		return PRINCIPAL_EVERYONE_STR;
+	case DAOS_ACL_USER:
+	case DAOS_ACL_GROUP:
+	default:
+		break;
+	}
+
+	return ace->dae_principal;
+}
+
+static int
+write_char(char **pen, char ch, ssize_t *remaining_len)
+{
+	if (*remaining_len <= 1) /* leave a null termination char in buffer */
+		return -DER_TRUNC;
+
+	**pen = ch;
+	(*remaining_len)--;
+	(*pen)++;
+
+	return 0;
+}
+
+static uint64_t
+get_perms(struct daos_ace *ace)
+{
+	if (ace->dae_access_types & DAOS_ACL_ACCESS_ALLOW)
+		return ace->dae_allow_perms;
+	if (ace->dae_access_types & DAOS_ACL_ACCESS_AUDIT)
+		return ace->dae_audit_perms;
+	if (ace->dae_access_types & DAOS_ACL_ACCESS_ALARM)
+		return ace->dae_alarm_perms;
+
+	return 0;
+}
+
+static bool
+perms_unified(struct daos_ace *ace)
+{
+	uint64_t perms_union;
+
+	perms_union = ace->dae_allow_perms |
+		      ace->dae_audit_perms |
+		      ace->dae_alarm_perms;
+
+	if ((ace->dae_access_types & DAOS_ACL_ACCESS_ALLOW) &&
+	    (ace->dae_allow_perms != perms_union))
+		return false;
+
+	if ((ace->dae_access_types & DAOS_ACL_ACCESS_AUDIT) &&
+	    (ace->dae_audit_perms != perms_union))
+		return false;
+
+	if ((ace->dae_access_types & DAOS_ACL_ACCESS_ALARM) &&
+	    (ace->dae_alarm_perms != perms_union))
+		return false;
+
+	return true;
+}
+
+int
+daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
+{
+	ssize_t		remaining_len = buf_len;
+	char		*pen = buf;
+	uint64_t	perms;
+	ssize_t		written;
+	int		rc = 0;
+
+	if (ace == NULL || buf == NULL || buf_len == 0) {
+		D_INFO("Invalid input, ace=%p, buf=%p, buf_len=%lu\n",
+		       ace, buf, buf_len);
+		return -DER_INVAL;
+	}
+
+	if (!daos_ace_is_valid(ace)) {
+		D_INFO("ACE structure is not valid\n");
+		return -DER_INVAL;
+	}
+
+
+	if (!perms_unified(ace)) {
+		D_INFO("Can't create string for ACE with different perms for "
+		       "different access types\n");
+		return -DER_INVAL;
+	}
+
+	memset(buf, 0, buf_len);
+
+	if (ace->dae_access_types & DAOS_ACL_ACCESS_ALLOW)
+		rc = write_char(&pen, ACCESS_ALLOW_CH, &remaining_len);
+	if (ace->dae_access_types & DAOS_ACL_ACCESS_AUDIT)
+		rc = write_char(&pen, ACCESS_AUDIT_CH, &remaining_len);
+	if (ace->dae_access_types & DAOS_ACL_ACCESS_ALARM)
+		rc = write_char(&pen, ACCESS_ALARM_CH, &remaining_len);
+
+	rc = write_char(&pen, ':', &remaining_len);
+
+	if (ace->dae_access_flags & DAOS_ACL_FLAG_GROUP)
+		rc = write_char(&pen, FLAG_GROUP_CH, &remaining_len);
+	if (ace->dae_access_flags & DAOS_ACL_FLAG_ACCESS_SUCCESS)
+		rc = write_char(&pen, FLAG_SUCCESS_CH, &remaining_len);
+	if (ace->dae_access_flags & DAOS_ACL_FLAG_ACCESS_FAIL)
+		rc = write_char(&pen, FLAG_FAIL_CH, &remaining_len);
+	if (ace->dae_access_flags & DAOS_ACL_FLAG_POOL_INHERIT)
+		rc = write_char(&pen, FLAG_POOL_INHERIT_CH, &remaining_len);
+
+	written = snprintf(pen, remaining_len, ":%s:",
+			   get_principal_name_str(ace));
+	if (written > remaining_len) {
+		remaining_len = 0;
+	} else {
+		pen += written;
+		remaining_len -= written;
+	}
+
+	perms = get_perms(ace);
+	if (perms & DAOS_ACL_PERM_READ)
+		rc = write_char(&pen, PERM_READ_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_WRITE)
+		rc = write_char(&pen, PERM_WRITE_CH, &remaining_len);
+
+	return rc;
 }
