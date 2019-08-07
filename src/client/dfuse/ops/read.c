@@ -49,6 +49,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	if (rc == 0)
 		DFUSE_REPLY_BUF(oh, req, buff, size);
 	else
-		DFUSE_REPLY_ERR_RAW(oh, req, -rc);
+		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(buff);
 }

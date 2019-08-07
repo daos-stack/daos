@@ -236,7 +236,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 				NULL, NULL);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
-					strerror(-rc));
+					strerror(rc));
 			D_GOTO(err, 0);
 		}
 	}
