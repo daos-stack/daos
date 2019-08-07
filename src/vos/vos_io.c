@@ -285,9 +285,10 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	/* Get the iod_csum pointer and
 	* manipulate the checksum value
 	* for fault injection.
+	* random value : 1,2...(not zero)
 	*/
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-		memset(rbund.rb_csum->cs_csum, random(),
+		memset(rbund.rb_csum->cs_csum, (random() + 1),
 			rbund.rb_csum->cs_len);
 
 	memset(&biov, 0, sizeof(biov));
@@ -405,7 +406,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 				(uint32_t) ((lo - recx->rx_idx) * rsize));
 
 			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-				memset(csum_ptr, random(),
+				memset(csum_ptr, (random() + 1),
 					csum_nr * ent->en_csum.cs_len);
 			else
 				memcpy(csum_ptr, ent->en_csum.cs_csum,
