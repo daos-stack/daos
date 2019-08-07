@@ -451,3 +451,29 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 	}
 	return 0;
 }
+
+/** The caller are responsible for freeing the ranks */
+int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
+		      d_rank_list_t *ranks)
+{
+	struct ds_pool	*pool;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL)
+		return 0;
+
+	/* This may not be the pool leader node, so down targets
+	 * may not be updated, then the following collective RPC
+	 * might be timeout. XXX
+	 */
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = map_ranks_init(pool->sp_map, status, ranks);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to create rank list: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+
+	ds_pool_put(pool);
+	return rc;
+}
