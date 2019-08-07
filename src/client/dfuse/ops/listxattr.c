@@ -35,7 +35,7 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	rc = dfs_listxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, NULL,
 			  &out_size);
 	if (rc != 0)
-		D_GOTO(err, rc = -rc);
+		D_GOTO(err, rc);
 
 	if (size == 0) {
 		fuse_reply_xattr(req, out_size);
@@ -52,7 +52,7 @@ dfuse_cb_listxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	rc = dfs_listxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, value,
 			   &out_size);
 	if (rc != 0)
-		D_GOTO(err, rc = -rc);
+		D_GOTO(err, rc);
 
 	fuse_reply_buf(req, value, out_size);
 	D_FREE(value);

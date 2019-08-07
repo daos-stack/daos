@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,16 +130,20 @@ new_unixcomm_socket(int flags)
 
 	D_ALLOC_PTR(comm);
 	if (comm == NULL) {
+		D_ERROR("Failed to allocate unixcomm\n");
 		return NULL;
 	}
 
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
+		D_ERROR("Failed to open socket, errno=%d\n", errno);
 		D_FREE(comm);
 		return NULL;
 	}
 
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
+		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
@@ -166,14 +170,15 @@ unixcomm_connect(char *sockaddr, int flags)
 	struct unixcomm		*handle = NULL;
 
 	handle = new_unixcomm_socket(flags);
-	if (handle == NULL) {
+	if (handle == NULL)
 		return NULL;
-	}
 
 	fill_socket_address(sockaddr, &address);
 	ret = connect(handle->fd, (struct sockaddr *) &address,
 			sizeof(address));
 	if (ret < 0) {
+		D_ERROR("Failed to connect to socket fd %d, errno=%d\n",
+			handle->fd, errno);
 		unixcomm_close(handle);
 		return NULL;
 	}
@@ -188,18 +193,21 @@ unixcomm_listen(char *sockaddr, int flags)
 	struct unixcomm		*comm;
 
 	comm = new_unixcomm_socket(flags);
-	if (comm == NULL) {
+	if (comm == NULL)
 		return NULL;
-	}
 
 	fill_socket_address(sockaddr, &address);
 	if (bind(comm->fd, (struct sockaddr *)&address,
-			sizeof(struct sockaddr_un)) < 0) {
+		 sizeof(struct sockaddr_un)) < 0) {
+		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
+			sockaddr, comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
 
 	if (listen(comm->fd, SOMAXCONN) < 0) {
+		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
@@ -214,12 +222,14 @@ unixcomm_accept(struct unixcomm *listener)
 
 	D_ALLOC_PTR(comm);
 	if (comm == NULL) {
+		D_ERROR("Failed to allocate new unixcomm\n");
 		return NULL;
 	}
 
 	comm->fd = accept(listener->fd, NULL, NULL);
 	if (comm->fd < 0) {
-		/* couldn't get a connection */
+		D_ERROR("Failed to accept connection on listener fd %d, "
+			"errno=%d\n", listener->fd, errno);
 		D_FREE(comm);
 		return NULL;
 	}
@@ -234,10 +244,13 @@ unixcomm_close(struct unixcomm *handle)
 
 	if (!handle)
 		return 0;
+
 	ret = close(handle->fd);
 	D_FREE(handle);
 
 	if (ret < 0) {
+		D_ERROR("Failed to close socket fd %d, errno=%d\n",
+			handle->fd, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -262,11 +275,12 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
+		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
+			hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
-		if (sent != NULL) {
+		if (sent != NULL)
 			*sent = bsent;
-		}
 		ret = 0;
 	}
 	return ret;
@@ -290,11 +304,12 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
+		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
+			hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
-		if (rcvd != NULL) {
+		if (rcvd != NULL)
 			*rcvd = brcvd;
-		}
 		ret = 0;
 	}
 	return ret;
@@ -307,6 +322,7 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	uint8_t	*buf;
 
 	if (!msg) {
+		D_ERROR("NULL Drpc__Call\n");
 		return -DER_INVAL;
 	}
 
@@ -314,6 +330,7 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 
 	D_ALLOC(buf, buf_len);
 	if (!buf) {
+		D_ERROR("Failed to allocate buffer of size %d\n", buf_len);
 		return -DER_NOMEM;
 	}
 
@@ -356,16 +373,14 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 
 	msg->sequence = ctx->sequence++;
 	pbLen = drpc_marshal_call(msg, &messagePb);
-	if (pbLen < 0) {
-		return -DER_NOMEM;
-	}
+	if (pbLen < 0)
+		return pbLen;
 
 	ret = unixcomm_send(ctx->comm, messagePb, pbLen, &sent);
 	D_FREE(messagePb);
 
-	if (ret < 0) {
+	if (ret < 0)
 		return ret;
-	}
 
 	if (!(flags & R_SYNC)) {
 		response = drpc_response_create(msg);
@@ -376,6 +391,7 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 
 	D_ALLOC(responseBuf, UNIXCOMM_MAXMSGSIZE);
 	if (!responseBuf) {
+		D_ERROR("Failed to allocate response buffer\n");
 		return -DER_NOMEM;
 	}
 
@@ -406,6 +422,7 @@ drpc_connect(char *sockaddr)
 
 	D_ALLOC_PTR(ctx);
 	if (!ctx) {
+		D_ERROR("Failed to allocate drpc context\n");
 		return NULL;
 	}
 
@@ -438,11 +455,14 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	struct drpc *ctx;
 
 	if (sockaddr == NULL || handler == NULL) {
+		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
+			sockaddr, handler);
 		return NULL;
 	}
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL) {
+		D_ERROR("Failed to allocate drpc context\n");
 		return NULL;
 	}
 
@@ -488,11 +508,13 @@ drpc_accept(struct drpc *listener_ctx)
 	struct drpc *session_ctx;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
+		D_ERROR("dRPC context is not a listener\n");
 		return NULL;
 	}
 
 	D_ALLOC_PTR(session_ctx);
 	if (session_ctx == NULL) {
+		D_ERROR("Failed to allocate a session context\n");
 		return NULL;
 	}
 
@@ -518,6 +540,7 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 
 	D_ALLOC(buffer, buffer_len);
 	if (buffer == NULL) {
+		D_ERROR("Failed to allocate buffer of size %lu\n", buffer_len);
 		return -DER_NOMEM;
 	}
 
@@ -539,6 +562,7 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 
 	D_ALLOC(buffer, buffer_size);
 	if (buffer == NULL) {
+		D_ERROR("Failed to allocate buffer of size %lu\n", buffer_size);
 		return -DER_NOMEM;
 	}
 
@@ -553,7 +577,7 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 	D_FREE(buffer);
 	if (request == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
-		return -DER_MISC;
+		return -DER_PROTO;
 	}
 
 	*response = drpc_response_create(request);
@@ -579,7 +603,7 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
  *		-DER_NOMEM	Out of memory
  *		-DER_AGAIN	Listener socket is nonblocking and there was no
  *					pending message on the pipe.
- *		-DER_MISC	Error processing message
+ *		-DER_PROTO	Error processing message
  */
 int
 drpc_recv(struct drpc *session_ctx)
@@ -588,13 +612,13 @@ drpc_recv(struct drpc *session_ctx)
 	Drpc__Response	*response;
 
 	if (!drpc_is_valid_listener(session_ctx)) {
+		D_ERROR("dRPC context isn't a valid listener\n");
 		return -DER_INVAL;
 	}
 
 	rc = handle_incoming_message(session_ctx, &response);
-	if (rc != DER_SUCCESS) {
+	if (rc != 0)
 		return rc;
-	}
 
 	rc = send_response(session_ctx, response);
 
@@ -615,6 +639,7 @@ drpc_close(struct drpc *ctx)
 	int ret;
 
 	if (!ctx || !ctx->comm) {
+		D_ERROR("Context is already closed\n");
 		return -DER_INVAL;
 	}
 
