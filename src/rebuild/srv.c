@@ -1220,12 +1220,24 @@ done:
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
 			DP_UUID(task->dst_pool_uuid));
 
+		if (rgt->rgt_abort && rgt->rgt_status.rs_errno == 0) {
+			/* If the leader is stopped due to the leader change,
+			 * then let's do not stop the real rebuild(scan/pull
+			 * ults), because the new leader will resend the
+			 * scan requests, which will then become the new
+			 * leader to track the rebuild.
+			 */
+			D_DEBUG(DB_REBUILD, DF_UUID" Only stop the leader\n",
+				DP_UUID(task->dst_pool_uuid));
+			D_GOTO(out_put, rc);
+		}
+
 		/* Merge the targets to following rebuild task, try again */
 		ret = rebuild_try_merge_tgts(task->dst_pool_uuid,
 					     task->dst_map_ver,
 					     &task->dst_tgts);
 		if (ret == 1)
-			D_GOTO(out, rc);
+			D_GOTO(iv_stop, rc);
 
 		/* Otherwise let's exclude the targets to avoid blocking
 		 * following rebuild. Probably we should do better job
@@ -1240,7 +1252,7 @@ done:
 		" as DOWNOUT: %d\n", task->dst_tgts.pti_ids[0].pti_id,
 		DP_UUID(task->dst_pool_uuid), rc);
 
-out:
+iv_stop:
 	/* NB: even if there are some failures, the leader should
 	 * still notify all other servers to stop their local
 	 * rebuild.
@@ -1259,18 +1271,27 @@ out:
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
 			       CRT_IV_SYNC_LAZY);
-	ds_pool_put(pool);
+
 	if (rgt) {
+		int rc1;
+
+		/* Update the rebuild status, so query can get the rebuild
+		 * status.
+		 */
 		rgt->rgt_status.rs_version = rgt->rgt_rebuild_ver;
-		rc = rebuild_status_completed_update(task->dst_pool_uuid,
+		rc1 = rebuild_status_completed_update(task->dst_pool_uuid,
 						     &rgt->rgt_status);
-		if (rc != 0) {
+		if (rc1 != 0) {
 			D_ERROR("rebuild_status_completed_update, "DF_UUID" "
 				"failed, rc %d.\n",
-				DP_UUID(task->dst_pool_uuid), rc);
+				DP_UUID(task->dst_pool_uuid), rc1);
 		}
-		rebuild_global_pool_tracker_destroy(rgt);
 	}
+
+out_put:
+	ds_pool_put(pool);
+	if (rgt)
+		rebuild_global_pool_tracker_destroy(rgt);
 
 	rebuild_task_destroy(task);
 	rebuild_gst.rg_inflight--;
