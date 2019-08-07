@@ -1510,7 +1510,7 @@ dfs_lookup_loop:
 
 		if (!S_ISDIR(entry.mode)) {
 			D_ERROR("Invalid entry type in path.\n");
-			D_GOTO(err_obj, rc = -EINVAL);
+			D_GOTO(err_obj, rc = EINVAL);
 		}
 
 		/* open the directory object */
@@ -1798,7 +1798,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_size = sizeof(entry);
 	} else {
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(err_obj, rc = -EINVAL);
+		D_GOTO(err_obj, rc = EINVAL);
 	}
 
 	if (mode)
@@ -2365,16 +2365,16 @@ dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	int akeys_nr;
 
 	if (dfs == NULL || !dfs->mounted)
-		return -EINVAL;
+		return EINVAL;
 	if (obj == NULL)
-		return -EINVAL;
+		return EINVAL;
 	if (dfs->amode != O_RDWR)
-		return -EPERM;
+		return EPERM;
 
 	euid = geteuid();
 	/** only root or owner can change mode */
 	if (euid != 0 && dfs->uid != euid)
-		return -EPERM;
+		return EPERM;
 
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
@@ -2410,7 +2410,7 @@ dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	}
 
 	if (flags) {
-		D_GOTO(out, rc = -EINVAL);
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	akeys_nr = i;
@@ -2993,8 +2993,8 @@ close:
 	daos_obj_close(oh, NULL);
 out:
 	D_FREE(xname);
-	if (rc == -ENOENT)
-		rc = -ENODATA;
+	if (rc == ENOENT)
+		rc = ENODATA;
 	return rc;
 }
 
