@@ -587,6 +587,210 @@ test_drpc_recv_fails_if_sendmsg_fails(void **state)
 	free_drpc(ctx);
 }
 
+/*
+ * drpc_recv_call unit tests
+ */
+static void
+test_drpc_recv_call_null_ctx(void **state)
+{
+	Drpc__Call *msg = NULL;
+
+	assert_int_equal(drpc_recv_call(NULL, &msg), -DER_INVAL);
+}
+
+static void
+test_drpc_recv_call_bad_handler(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(12);
+	Drpc__Call	*call = NULL;
+
+	ctx->handler = NULL;
+
+	assert_int_equal(drpc_recv_call(ctx, &call), -DER_INVAL);
+	assert_null(call);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_recv_call_null_call(void **state)
+{
+	struct drpc *ctx = new_drpc_with_fd(12);
+
+	assert_int_equal(drpc_recv_call(ctx, NULL), -DER_INVAL);
+
+	free_drpc(ctx);
+}
+
+static void
+assert_drpc_recv_call_fails_with_recvmsg_errno(int recvmsg_errno,
+		int expected_retval)
+{
+	struct drpc	*ctx = new_drpc_with_fd(3);
+	Drpc__Call	*call = NULL;
+
+	mock_valid_drpc_call_in_recvmsg();
+
+	recvmsg_call_count = 0;
+	recvmsg_return = -1;
+	errno = recvmsg_errno;
+
+	assert_int_equal(drpc_recv_call(ctx, &call), expected_retval);
+
+	assert_null(call);
+	assert_int_equal(recvmsg_call_count, 1);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_recv_call_recvmsg_fails(void **state)
+{
+	assert_drpc_recv_call_fails_with_recvmsg_errno(ENOMEM, -DER_NOMEM);
+}
+
+static void
+test_drpc_recv_call_recvmsg_would_block(void **state)
+{
+	assert_drpc_recv_call_fails_with_recvmsg_errno(EWOULDBLOCK, -DER_AGAIN);
+	assert_drpc_recv_call_fails_with_recvmsg_errno(EAGAIN, -DER_AGAIN);
+}
+
+static void
+test_drpc_recv_call_malformed(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(6);
+	Drpc__Call	*call = NULL;
+
+	/* Incoming message is weird garbage */
+	recvmsg_return = sizeof(recvmsg_msg_content);
+	memset(recvmsg_msg_content, 1, sizeof(recvmsg_msg_content));
+
+	assert_int_equal(drpc_recv_call(ctx, &call), -DER_PROTO);
+
+	assert_null(call);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_recv_call_success(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(6);
+	Drpc__Call	*call = NULL;
+	Drpc__Call	*expected_call = new_drpc_call();
+
+	mock_valid_drpc_call_in_recvmsg();
+
+	assert_int_equal(drpc_recv_call(ctx, &call), 0);
+
+	assert_int_equal(call->module, expected_call->module);
+	assert_int_equal(call->method, expected_call->method);
+	assert_int_equal(call->sequence, expected_call->sequence);
+	assert_int_equal(call->body.len, expected_call->body.len);
+
+	/*
+	 * Called recvmsg()
+	 */
+	assert_int_equal(recvmsg_call_count, 1);
+	assert_int_equal(recvmsg_sockfd, ctx->comm->fd);
+	assert_non_null(recvmsg_msg_ptr);
+	assert_non_null(recvmsg_msg_iov_base_ptr);
+	assert_int_equal(recvmsg_msg_iov_len, UNIXCOMM_MAXMSGSIZE);
+	assert_int_equal(recvmsg_flags, 0);
+
+	free_drpc(ctx);
+	drpc_call_free(call);
+	drpc_call_free(expected_call);
+}
+
+/*
+ * drpc_send_resp unit tests
+ */
+static void
+test_drpc_send_response_null_ctx(void **state)
+{
+	Drpc__Response *resp = new_drpc_response();
+
+	assert_int_equal(drpc_send_response(NULL, resp), -DER_INVAL);
+
+	drpc_response_free(resp);
+}
+
+static void
+test_drpc_send_response_bad_handler(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(12);
+	Drpc__Response	*resp = new_drpc_response();
+
+	ctx->handler = NULL;
+
+	assert_int_equal(drpc_send_response(ctx, resp), -DER_INVAL);
+
+	free_drpc(ctx);
+	drpc_response_free(resp);
+}
+
+static void
+test_drpc_send_response_null_resp(void **state)
+{
+	struct drpc *ctx = new_drpc_with_fd(12);
+
+	assert_int_equal(drpc_send_response(ctx, NULL), -DER_INVAL);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_send_response_sendmsg_fails(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(122);
+	Drpc__Response	*resp = new_drpc_response();
+
+	sendmsg_return = -1;
+	errno = ENOMEM;
+
+	assert_int_equal(drpc_send_response(ctx, resp), -DER_NOMEM);
+
+	free_drpc(ctx);
+	drpc_response_free(resp);
+}
+
+static void
+test_drpc_send_response_success(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(6);
+	Drpc__Response	*resp = new_drpc_response();
+	uint8_t		expected_response[UNIXCOMM_MAXMSGSIZE];
+	size_t		expected_response_size;
+
+	assert_int_equal(drpc_send_response(ctx, resp), DER_SUCCESS);
+
+	/*
+	 * Sent response message - should be the one returned from
+	 * the handler
+	 */
+	memset(expected_response, 0, sizeof(expected_response));
+	drpc__response__pack(resp, expected_response);
+	expected_response_size =
+			drpc__response__get_packed_size(
+					mock_drpc_handler_resp_return);
+
+	assert_int_equal(sendmsg_call_count, 1);
+	assert_int_equal(sendmsg_sockfd, ctx->comm->fd);
+	assert_non_null(sendmsg_msg_ptr);
+	assert_non_null(sendmsg_msg_iov_base_ptr);
+	assert_int_equal(sendmsg_msg_iov_len, expected_response_size);
+	assert_memory_equal(sendmsg_msg_content, expected_response,
+			expected_response_size);
+
+	free_drpc(ctx);
+	drpc_response_free(resp);
+}
+
+/*
+ * drpc_call_create/free tests
+ */
 static void
 test_drpc_call_create_null_ctx(void **state)
 {
@@ -699,6 +903,18 @@ main(void)
 		DRPC_UTEST(test_drpc_recv_fails_if_recvmsg_would_block),
 		DRPC_UTEST(test_drpc_recv_fails_if_incoming_call_malformed),
 		DRPC_UTEST(test_drpc_recv_fails_if_sendmsg_fails),
+		DRPC_UTEST(test_drpc_recv_call_null_ctx),
+		DRPC_UTEST(test_drpc_recv_call_bad_handler),
+		DRPC_UTEST(test_drpc_recv_call_null_call),
+		DRPC_UTEST(test_drpc_recv_call_recvmsg_fails),
+		DRPC_UTEST(test_drpc_recv_call_recvmsg_would_block),
+		DRPC_UTEST(test_drpc_recv_call_malformed),
+		DRPC_UTEST(test_drpc_recv_call_success),
+		DRPC_UTEST(test_drpc_send_response_null_ctx),
+		DRPC_UTEST(test_drpc_send_response_bad_handler),
+		DRPC_UTEST(test_drpc_send_response_null_resp),
+		DRPC_UTEST(test_drpc_send_response_sendmsg_fails),
+		DRPC_UTEST(test_drpc_send_response_success),
 		cmocka_unit_test(test_drpc_call_create_null_ctx),
 		cmocka_unit_test(test_drpc_call_create_free),
 		cmocka_unit_test(test_drpc_call_free_null),

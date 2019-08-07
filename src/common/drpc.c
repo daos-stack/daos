@@ -552,13 +552,12 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 }
 
 static int
-handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
+get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 {
 	int		rc;
 	uint8_t		*buffer;
 	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
 	ssize_t		message_len = 0;
-	Drpc__Call	*request;
 
 	D_ALLOC(buffer, buffer_size);
 	if (buffer == NULL) {
@@ -573,12 +572,25 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 		return rc;
 	}
 
-	request = drpc__call__unpack(NULL, message_len, buffer);
+	*call = drpc__call__unpack(NULL, message_len, buffer);
 	D_FREE(buffer);
-	if (request == NULL) {
+	if (*call == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
 		return -DER_PROTO;
 	}
+
+	return 0;
+}
+
+static int
+handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
+{
+	int		rc;
+	Drpc__Call	*request;
+
+	rc = get_incoming_call(ctx, &request);
+	if (rc != 0)
+		return rc;
 
 	*response = drpc_response_create(request);
 	if (*response == NULL) {
@@ -624,6 +636,66 @@ drpc_recv(struct drpc *session_ctx)
 
 	drpc_response_free(response);
 	return rc;
+}
+
+/**
+ * Listen for a client message on a dRPC session and return the Drpc__Call
+ * received.
+ *
+ * \param[in]	session_ctx	Valid dRPC session context
+ * \param[out]	call		Newly allocated Drpc__Call
+ *
+ * \return	0		Successfully got a message
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Out of memory
+ *		-DER_AGAIN	Listener socket is nonblocking and there was no
+ *				pending message on the pipe
+ *		-DER_PROTO	Badly-formed incoming message
+ */
+int
+drpc_recv_call(struct drpc *session_ctx, Drpc__Call **call)
+{
+	if (call == NULL) {
+		D_ERROR("Call pointer is NULL\n");
+		return -DER_INVAL;
+	}
+
+	if (!drpc_is_valid_listener(session_ctx)) {
+		D_ERROR("dRPC context isn't a valid listener\n");
+		return -DER_INVAL;
+	}
+
+	return get_incoming_call(session_ctx, call);
+}
+
+/**
+ * Send a given Drpc__Response to the client on a dRPC session.
+ *
+ * \param[in]	ctx	Valid dRPC session context
+ * \param[in]	resp	Response to be sent
+ *
+ * \return	0		Successfully sent message
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Out of memory
+ *		-DER_NO_PERM	Bad socket permissions
+ *		-DER_NO_HDL	Invalid socket fd in ctx
+ *		-DER_AGAIN	Operation blocked, try again
+ *		-DER_MISC	Miscellaneous error sending response
+ */
+int
+drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
+{
+	if (resp == NULL) {
+		D_ERROR("Response was NULL\n");
+		return -DER_INVAL;
+	}
+
+	if (!drpc_is_valid_listener(session_ctx)) {
+		D_ERROR("dRPC context isn't a valid listener\n");
+		return -DER_INVAL;
+	}
+
+	return send_response(session_ctx, resp);
 }
 
 /**
