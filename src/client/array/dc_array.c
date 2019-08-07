@@ -27,6 +27,7 @@
  */
 #define D_LOGFAC	DD_FAC(array)
 
+#include <daos/daos_checksum.h>
 #include <daos.h>
 #include <daos/tse.h>
 #include <daos/object.h>
@@ -479,7 +480,7 @@ set_md_params(struct md_params *params)
 	/** set IOD */
 	params->akey_str = '0';
 	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
-	daos_csum_set(&params->iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&params->iod.iod_kcsum);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_size	= sizeof(params->md_vals);
 	params->iod.iod_recxs	= NULL;
@@ -1107,7 +1108,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	num_ios = 0;
 	records = rg_iod->arr_rgs[0].rg_len;
 	array_idx = rg_iod->arr_rgs[0].rg_idx;
-	daos_csum_set(&null_csum, NULL, 0);
+	dcb_set_null(&null_csum);
 
 	head = NULL;
 
@@ -1645,7 +1646,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		return -DER_NOMEM;
 	}
 
-	daos_csum_set(&null_csum, NULL, 0);
+	dcb_set_null(&null_csum);
 
 	iod = &params->iod;
 	sgl = NULL;
@@ -1814,7 +1815,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	/* set descriptor for KV object */
 	d_iov_set(&iod->iod_name, &params->akey_str, 1);
-	daos_csum_set(&null_csum, NULL, 0);
+	dcb_set_null(&null_csum);
 	iod->iod_kcsum = null_csum;
 	iod->iod_nr = 1;
 	iod->iod_csums = NULL;
@@ -1875,7 +1876,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	tse_task_t		*io_task = NULL;
 	int			rc;
 
-	daos_csum_set(&null_csum, NULL, 0);
+	dcb_set_null(&null_csum);
 
 	D_ALLOC_PTR(params);
 	if (params == NULL) {

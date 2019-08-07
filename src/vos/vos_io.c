@@ -28,9 +28,11 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/daos_checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
+#include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
 
@@ -396,8 +398,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			daos_size_t  csum_nr;
 
 			D_ASSERT(lo >= recx->rx_idx);
-			csum_ptr = daos_csum_from_offset(csum,
-						((lo - recx->rx_idx) * rsize));
+			csum_ptr = dcb_off2csum(csum,
+				(uint32_t) ((lo - recx->rx_idx) * rsize));
 			csum_nr = csum_chunk_count(csum->cs_chunksize,
 						   lo, hi, rsize);
 
@@ -708,16 +710,16 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_csum_buf_t		 csum;
-	d_iov_t		 kiov, riov;
+	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
 	umem_off_t		 umoff;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int			 rc;
 
+	memset(&csum, 0, sizeof(csum));
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
-	daos_csum_set(&csum, NULL, 0);
 
 	umoff = iod_update_umoff(ioc);
 	D_ASSERT(!UMOFF_IS_NULL(umoff));
@@ -770,7 +772,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
-	if (daos_csum_isvalid(iod_csum)) {
+	if (dcb_is_valid(iod_csum)) {
 		ent.ei_csum = *iod_csum;
 		/* change the checksum for fault injection*/
 		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))

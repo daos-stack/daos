@@ -3,7 +3,9 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'prereqs')
+
+    prereqs.require(denv, 'mchecksum')
 
     common_test_utils = denv.SharedObject(['test_mocks.c', 'test_utils.c'])
     Export('common_test_utils')
@@ -19,8 +21,12 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(denv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.test(denv, 'checksum', 'checksum.c',
-                    LIBS=['daos_common', 'gurt', 'cart'])
+    daos_build.test(denv, 'common_test_runner',
+    			['common_test_runner.c', 'daos_checksum_tests.c',
+    			'misc_tests.c'],
+                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
+    daos_build.test(denv, 'checksum_timing', 'checksum_timing.c',
+                    LIBS=['daos_common', 'mchecksum'])
     daos_build.test(denv, 'lru', 'lru.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(denv, 'sched', 'sched.c',

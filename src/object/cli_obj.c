@@ -32,6 +32,7 @@
 #include <daos/pool.h>
 #include <daos_task.h>
 #include <daos_types.h>
+#include <daos.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -1878,6 +1879,22 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 	}
 }
 
+void obj_update_csum_destroy(const struct dc_object *obj,
+			     const daos_obj_update_t *args) {
+	int i;
+	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
+
+	if (!daos_csummer_get_is_set(csummer))
+		return;
+
+	for (i = 0; i < args->nr; i++) {
+		daos_iod_t *iod = &args->iods[i];
+
+		daos_csummer_destroy_csum_buf(csummer,
+					      &iod->iod_csums);
+	}
+}
+
 static int
 obj_comp_cb(tse_task_t *task, void *data)
 {
@@ -1922,6 +1939,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		obj = *((struct dc_object **)data);
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+			/** checksums sent, need to destroy now */
+			daos_obj_update_t *args = dc_task_get_args(task);
+
+			obj_update_csum_destroy(obj, args);
+		}
 		if (task->dt_result != 0)
 			break;
 		if (d_list_empty(&obj_auxi->shard_task_head)) {
@@ -2017,6 +2040,34 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg->bulks		= obj_auxi->bulks;
 
 	return 0;
+}
+
+void
+obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
+	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
+
+	if (!daos_csummer_get_is_set(csummer)) /** Not configured */
+		return;
+
+	int i;
+
+	for (i = 0; i < args->nr; i++) {
+		/**
+		 * TODO: Turn this into an assert after csums are
+		 * removed from public interface. csums should always be
+		 * cleaned up/freed internally, so might be a memory leak if
+		 * not NULL. But user can pass in right now so don't assert.
+		 * (D_ASSERT(args->iods[i].iod_csums == NULL)
+		 */
+		if (args->iods[i].iod_csums != NULL)
+			D_WARN("args->iods[i].iod_csums not NULL\n");
+		daos_csummer_calc_csum(csummer,
+				       &args->sgls[i],
+				       args->iods[i].iod_size,
+				       args->iods[i].iod_recxs,
+				       args->iods[i].iod_nr,
+				       &args->iods[i].iod_csums);
+	}
 }
 
 int
@@ -2124,6 +2175,9 @@ dc_obj_update(tse_task_t *task)
 	dkey_hash = obj_dkey2hash(args->dkey);
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_UPDATE, NULL, dkey_hash,
 			      tgt_set, map_ver, false, &obj_auxi->req_tgts);
+
+	obj_update_csums(obj, args);
+
 	if (rc)
 		goto out_task;
 

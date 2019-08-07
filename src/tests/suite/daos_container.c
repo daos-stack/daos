@@ -242,15 +242,19 @@ co_properties(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	prop_query = daos_prop_alloc(4);
+	const int prop_count = 6;
+
+	prop_query = daos_prop_alloc(prop_count);
 	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	prop_query->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
-	prop_query->dpp_entries[2].dpe_type = DAOS_PROP_CO_ENCRYPT;
-	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	prop_query->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	prop_query->dpp_entries[4].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	prop_query->dpp_entries[5].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, 4);
+	assert_int_equal(prop_query->dpp_nr, prop_count);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -266,6 +270,17 @@ co_properties(void **state)
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_OFF) {
 		print_message("csum verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	if (entry == NULL || entry->dpe_val != 32 * 1024) {
+		print_message("csum chunk size verification filed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_CSUM_SERVER_VERIFY);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_OFF) {
+		print_message("csum server verify verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);

@@ -26,6 +26,8 @@
  * tests/suite/daos_test_common
  */
 #define D_LOGFAC	DD_FAC(tests)
+
+#include <daos.h>
 #include "daos_test.h"
 
 /** Server crt group ID */
@@ -256,6 +258,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	struct timeval	 now;
 	unsigned int	 seed;
 	int		 rc = 0;
+	daos_prop_t	 co_props = {0};
+
 
 	/* feed a seed for pseudo-random number generator */
 	gettimeofday(&now, NULL);
@@ -296,8 +300,25 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.destroyed = false;
 	}
 
+	/**
+	 * A way to inject different checksum behavior. Right now just
+	 * enabled/disabled.
+	 */
+	char *env_checksum = getenv("DAOS_CHECKSUM");
+
+	if (env_checksum) {
+		printf("Checksum enabled in test!\n");
+		struct daos_prop_entry csum_entry;
+
+		csum_entry.dpe_val = DAOS_PROP_CO_CSUM_SHA1;
+		csum_entry.dpe_type = DAOS_PROP_CO_CSUM;
+
+		co_props.dpp_nr = 1;
+		co_props.dpp_entries = &csum_entry;
+	}
+
 	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool, NULL, NULL);
+		rc = test_setup_next_step(state, pool, NULL, &co_props);
 
 	 if (rc) {
 		D_FREE(arg);

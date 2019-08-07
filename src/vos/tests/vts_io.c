@@ -32,6 +32,7 @@
 #include "vts_io.h"
 #include "csum_extent_tests.h"
 #include <daos_api.h>
+#include <daos/daos_checksum.h>
 
 #define NO_FLAGS	    (0)
 
@@ -627,10 +628,10 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		if (arg->ta_flags & TF_USE_CSUM) {
 			csum_count = UPDATE_CSUM_MAX_COUNT;
 			dts_buf_render(expected_csum_buf, UPDATE_CSUM_BUF_SIZE);
-			daos_csum_set_multiple(&csum, expected_csum_buf,
-					       UPDATE_CSUM_BUF_SIZE,
-					       UPDATE_CSUM_SIZE, csum_count,
-					       UPDATE_BUF_SIZE / csum_count);
+			dcb_set(&csum, expected_csum_buf,
+				UPDATE_CSUM_BUF_SIZE,
+				UPDATE_CSUM_SIZE, csum_count,
+				UPDATE_BUF_SIZE / csum_count);
 
 			iod.iod_csums = &csum;
 		}
@@ -642,8 +643,9 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		if (arg->ta_flags & TF_USE_CSUM) {
 			csum_count = 1;
 			dts_buf_render(expected_csum_buf, UPDATE_CSUM_SIZE);
-			daos_csum_set(&csum, expected_csum_buf,
-				      UPDATE_CSUM_SIZE);
+			dcb_set(&csum, expected_csum_buf,
+				UPDATE_CSUM_SIZE, UPDATE_CSUM_SIZE, 1,
+				0);
 			iod.iod_csums = &csum;
 		}
 	}
@@ -704,10 +706,10 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_size = DAOS_REC_ANY;
 	memset(actual_csum_buf, 0, sizeof(actual_csum_buf));
 	if (arg->ta_flags & TF_USE_CSUM)
-		daos_csum_set_multiple(&csum, actual_csum_buf,
-				       UPDATE_CSUM_BUF_SIZE,
-				       UPDATE_CSUM_SIZE, csum_count,
-				       UPDATE_BUF_SIZE / csum_count);
+		dcb_set(&csum, actual_csum_buf,
+			UPDATE_CSUM_BUF_SIZE,
+			UPDATE_CSUM_SIZE, csum_count,
+			UPDATE_BUF_SIZE / csum_count);
 
 	if (fault_injection_flag == FAULT_INJECT) {
 		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
@@ -2442,19 +2444,17 @@ static const struct CMUnitTest io_tests[] = {
 		csum_test_csum_buffer_of_0_during_fetch, NULL, NULL},
 	{ "VOS302: Extent checksums with holes",
 		csum_test_holes, NULL, NULL},
-	{ "VOS303: Test some checksum helper functions",
-		csum_helper_functions_tests, NULL, NULL},
-	{ "VOS304: Test checksums when extent index doesn't start at 0",
+	{ "VOS303: Test checksums when extent index doesn't start at 0",
 		csum_extent_not_starting_at_0, NULL, NULL},
-	{ "VOS305: Test checksums with chunk-unaligned extents",
+	{ "VOS304: Test checksums with chunk-unaligned extents",
 		csum_extent_not_chunk_aligned, NULL, NULL},
-	{ "VOS306: Some EVT Checksum Helper Functions",
+	{ "VOS305: Some EVT Checksum Helper Functions",
 		evt_csum_helper_functions_tests, NULL, NULL},
-	{ "VOS307: Some input validation",
+	{ "VOS306: Some input validation",
 		csum_invalid_input_tests, NULL, NULL},
-	{ "VOS308: Checksum fault injection test : Multiple extents",
+	{ "VOS350: Checksum fault injection test : Multiple extents",
 		csum_fault_injection_multiple_extents_tests, NULL, NULL},
-	{ "VOS350: Checksum fault injection test : Single Value",
+	{ "VOS351: Checksum fault injection test : Single Value",
 		io_csum_fault_injection_single_value, NULL, NULL},
 };
 

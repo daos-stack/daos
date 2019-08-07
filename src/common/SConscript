@@ -14,17 +14,15 @@ def scons():
     prereqs.require(env, 'pmdk', 'argobots', 'cart', 'readline',
                     'protobufc', pmdk_libs=['pmemobj', 'pmem'])
 
-    if platform_arm:
-        prereqs.require(env, 'mchecksum')
-    else:
-        prereqs.require(env, 'isal')
+    if not platform_arm:
+    	prereqs.require(env, 'isal', 'isal_crypto')
 
     denv = env.Clone()
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c',
-                  'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
-                  'drpc.c', 'drpc.pb-c.c', 'proc.c', 'acl_api.c',
-                  'acl_util.c']
+                  'btree_class.c', 'tse.c', 'rsvc.c',  'daos_checksum.c',
+                  'drpc.c', 'drpc.pb-c.c', 'proc.c',
+                  'acl_api.c', 'acl_util.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib/', common)

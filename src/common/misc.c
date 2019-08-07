@@ -27,8 +27,10 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos_types.h>
 #include <daos/dtx.h>
 #include <daos_security.h>
+#include <daos/daos_checksum.h>
 
 /**
  * Initialise a scatter/gather list, create an array to store @nr iovecs.
@@ -243,6 +245,56 @@ daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 	}
 
 	return size;
+}
+bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
+			size_t buf_len_req,
+			uint8_t **buf, size_t *buf_len)
+{
+	/** Point to current idx */
+	*buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
+
+	/**
+	 * Determine how many bytes to be used from buf by using
+	 * minimum between requested bytes and bytes left in IOV buffer
+	 */
+	*buf_len = MIN(buf_len_req,
+		       sgl->sg_iovs[idx->iov_idx].iov_len - idx->iov_offset);
+
+	/** Increment index */
+	idx->iov_offset += *buf_len;
+
+	/** If end of iov was reached, go to next iov */
+	if (idx->iov_offset == sgl->sg_iovs[idx->iov_idx].iov_len) {
+		idx->iov_idx++;
+		idx->iov_offset = 0;
+	}
+
+	return idx->iov_idx >= sgl->sg_nr;
+}
+
+int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
+		       size_t bytes,
+		       daos_sgl_process_cb process_cb, void *cb_args)
+{
+	uint8_t		*buf;
+	size_t		 len;
+	bool		 end = false;
+	int		 rc  = 0;
+
+	/**
+	 * loop until all bytes are consumed, the end of the sgl is reached,
+	 *  or an error occurs
+	 */
+	while (bytes > 0 && !end && !rc) {
+		end = daos_sgl_get_bytes(sgl, idx, bytes, &buf, &len);
+		bytes -= len;
+		rc = process_cb(buf, len, cb_args);
+	}
+
+	if (bytes)
+		D_WARN("WARN: Not enough in SGL to satisfy requested bytes");
+
+	return rc;
 }
 
 /**
@@ -754,13 +806,21 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_CSUM:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_CSUM_OFF &&
-			    val != DAOS_PROP_CO_CSUM_CRC16 &&
-			    val != DAOS_PROP_CO_CSUM_CRC32 &&
-			    val != DAOS_PROP_CO_CSUM_SHA1 &&
-			    val != DAOS_PROP_CO_CSUM_SHA2) {
+			if (!daos_cont_csum_prop_is_valid(val)) {
 				D_ERROR("invalid checksum type "DF_U64".\n",
 					val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			/** Accepting anything right now */
+			break;
+		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
+			    val != DAOS_PROP_CO_CSUM_SV_ON) {
+				D_ERROR("invalid csum Server Verify Property"
+					 DF_U64".\n", val);
 				return false;
 			}
 			break;

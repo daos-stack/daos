@@ -22,6 +22,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos/daos_checksum.h>
 #include "evt_priv.h"
 #include "vos_internal.h"
 
@@ -1341,7 +1342,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (daos_csum_isvalid(csum)) {
+	if (dcb_is_valid(csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum

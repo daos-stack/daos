@@ -28,6 +28,7 @@
 
 #include <daos.h>
 #include <daos_array.h>
+#include <daos/daos_checksum.h>
 #include "daos_test.h"
 
 /** number of elements to write to array */

@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <daos/common.h>
+#include <daos/daos_checksum.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -321,7 +322,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
 
-		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		dcb_set_null(&iods[i].iod_kcsum);
 		iods[i].iod_nr		= 1;
 		iods[i].iod_size	= DAOS_REC_ANY;
 		iods[i].iod_recxs	= NULL;
@@ -456,7 +457,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
 
-		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		dcb_set_null(&iods[i].iod_kcsum);
 		iods[i].iod_nr		= 1;
 		iods[i].iod_recxs	= NULL;
 		iods[i].iod_eprs	= NULL;
@@ -892,7 +893,7 @@ check_sb(dfs_t *dfs, daos_handle_t th, bool insert, bool *exists)
 	sgl.sg_iovs = &sg_iov;
 
 	d_iov_set(&iod.iod_name, SB_AKEY, strlen(SB_AKEY));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= DAOS_REC_ANY;
 	iod.iod_recxs	= NULL;
@@ -2333,7 +2334,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	/** set akey as the mode attr name */
 	d_iov_set(&iod.iod_name, MODE_NAME, strlen(MODE_NAME));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
 	iod.iod_eprs	= NULL;
@@ -2792,7 +2793,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 	/** set akey as the xattr name */
 	d_iov_set(&iod.iod_name, xname, strlen(xname));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
 	iod.iod_eprs	= NULL;
@@ -2876,7 +2877,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 
 	/** set akey as the xattr name */
 	d_iov_set(&iod.iod_name, xname, strlen(xname));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
 	iod.iod_eprs	= NULL;

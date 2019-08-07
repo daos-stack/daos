@@ -30,6 +30,8 @@
 #include <daos/pool.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos.h>
+#include <daos/daos_checksum.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 

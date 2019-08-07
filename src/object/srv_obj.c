@@ -39,6 +39,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -443,7 +444,7 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 
 /**
  * Lookup and return the container handle, if it is a rebuild handle, which
- * will never associate a particular container, then the contaier structure
+ * will never associate a particular container, then the container structure
  * will be returned to \a contp.
  */
 static int
