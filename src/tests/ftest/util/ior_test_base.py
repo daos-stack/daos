@@ -40,7 +40,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        self.mpiio_oclass = None
 
     def setUp(self):
         """Set up each test case."""
@@ -51,14 +50,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
-        self.mpiio_oclass = self.params.get("mpiio_oclass", '/run/ior/*')
-
-        # Get the test params
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
 
     def tearDown(self):
         """Tear down each test case."""
@@ -68,6 +59,15 @@ class IorTestBase(TestWithServers):
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
+
+    def create_pool(self):
+        """Create a TestPool object to use with ior."""
+        # Get the pool params
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+
+        # Create a pool
+        self.pool.create()
 
     def run_ior_with_pool(self):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -79,8 +79,12 @@ class IorTestBase(TestWithServers):
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
         """
-        self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     mpiio_oclass=self.mpiio_oclass)
+        # Create a pool if one does not already exist
+        if self.pool is None:
+            self.create_pool()
+
+        # Update IOR params with the pool
+        self.ior_cmd.set_daos_params(self.server_group, self.pool)
 
         # Run IOR
         self.run_ior(self.get_job_manager_command(), self.processes)
@@ -92,7 +96,7 @@ class IorTestBase(TestWithServers):
             str: the path for the mpi job manager command
 
         """
-        # Initialize MpioUtils if IOR is running in MPIIO mode
+        # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
         if self.ior_cmd.api.value in ["MPIIO", "DAOS"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
