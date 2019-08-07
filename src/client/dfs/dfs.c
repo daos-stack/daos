@@ -341,7 +341,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 
 		if (sym_len != 0) {
 			D_ASSERT(value);
-			entry->value = strdup(value);
+			entry->value = strndup(value, PATH_MAX-1);
 			if (entry->value == NULL)
 				D_GOTO(out, rc = ENOMEM);
 		}
@@ -860,7 +860,7 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
-		sym->value = strdup(value);
+		sym->value = strndup(value, PATH_MAX-1);
 		entry.value = sym->value;
 
 		rc = insert_entry(parent->oh, th, sym->name, entry);
@@ -1384,14 +1384,14 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (_obj == NULL)
 		return EINVAL;
-	if (path == NULL)
+	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
 		return EINVAL;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rem = strdup(path);
+	rem = strndup(path, PATH_MAX-1);
 	if (rem == NULL)
 		return ENOMEM;
 
@@ -1956,7 +1956,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		break;
 	}
 	case S_IFLNK:
-		new_obj->value = strdup(obj->value);
+		new_obj->value = strndup(obj->value, PATH_MAX-1);
 		break;
 	default:
 		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
