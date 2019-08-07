@@ -2,7 +2,7 @@
 
 Name:          cart
 Version:       1.0.0
-Release:       1%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -122,6 +122,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Wed Aug 07 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Add git hash and commit count to release
+
 * Fri Jul 26 2019 Alexander A. Oganezov <alexander.a.oganezov@intel.com>
 - Libcart version 1.0.0
 

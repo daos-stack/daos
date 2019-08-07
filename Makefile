@@ -12,19 +12,26 @@ endif
 
 dist: $(SOURCES)
 
-DIST    := $(shell rpm --eval %{?dist})
+GIT_SHORT       := $(shell git rev-parse --short HEAD)
+GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
+
+BUILD_DEFINES := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
+MOCK_OPTIONS  := $(BUILD_DEFINES)
+COMMON_RPM_ARGS := --define "%_topdir $$PWD/_topdir" $(BUILD_DEFINES)
+
+DIST    := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 ifeq ($(DIST),)
 SED_EXPR := 1p
 else
 SED_EXPR := 1s/$(DIST)//p
 endif
 SPEC    := $(NAME).spec
-VERSION := $(shell rpm --specfile --qf '%{version}\n' $(SPEC) | sed -n '1p')
+VERSION := $(shell rpm $(COMMON_RPM_ARGS) --specfile --qf '%{version}\n' $(SPEC) | sed -n '1p')
 DOT     := .
 DEB_VERS := $(subst rc,~rc,$(VERSION))
 DEB_RVERS := $(subst $(DOT),\$(DOT),$(DEB_VERS))
 DEB_BVERS := $(basename $(subst ~rc,$(DOT)rc,$(DEB_VERS)))
-RELEASE := $(shell rpm --specfile --qf '%{release}\n' $(SPEC) | sed -n '$(SED_EXPR)')
+RELEASE := $(shell rpm $(COMMON_RPM_ARGS) --specfile --qf '%{release}\n' $(SPEC) | sed -n '$(SED_EXPR)')
 SRPM    := _topdir/SRPMS/$(NAME)-$(VERSION)-$(RELEASE)$(DIST).src.rpm
 RPMS    := $(addsuffix .rpm,$(addprefix _topdir/RPMS/x86_64/,$(shell rpm --specfile $(SPEC))))
 DEB_TOP := _topdir/BUILD
@@ -145,7 +152,7 @@ $(DEB_TOP)/.deb_files : $(shell find debian -type f) \
 # the "rpm" for "%" to effectively turn this into a multiple matching
 # target pattern rule
 $(subst rpm,%,$(RPMS)): $(SPEC) $(SOURCES)
-	rpmbuild -bb --define "%_topdir $$PWD/_topdir" $(SPEC)
+	rpmbuild -bb $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
 
 $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) check-env \
 	  $(DEB_TOP)/.deb_files $(DEB_TOP)/.detar $(DEB_TOP)/.patched
@@ -172,7 +179,7 @@ $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) check-env \
 	  echo $$f; dpkg -c $$f; done
 
 $(SRPM): $(SPEC) $(SOURCES)
-	rpmbuild -bs --define "%_topdir $$PWD/_topdir" $(SPEC)
+	rpmbuild -bs $(COMMON_RPM_ARGS) $(SPEC)
 
 srpm: $(SRPM)
 
@@ -188,7 +195,7 @@ ls: $(TARGETS)
 	ls -ld $^
 
 mockbuild: $(SRPM) Makefile
-	mock $<
+	mock $(MOCK_OPTIONS) $<
 
 rpmlint: $(SPEC)
 	rpmlint $<
