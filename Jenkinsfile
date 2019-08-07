@@ -187,24 +187,26 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/centos7/
-                                      mkdir -p artifacts/centos7/
-                              if make -C utils/rpms srpm; then
-                                  if make -C utils/rpms mockbuild; then
-                                      (cd /var/lib/mock/epel-7-x86_64/result/ &&
-                                       cp -r . $OLDPWD/artifacts/centos7/)
-                                      createrepo artifacts/centos7/
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/centos7/
+                                          mkdir -p artifacts/centos7/
+                                  if make -C utils/rpms srpm; then
+                                      if make -C utils/rpms mockbuild; then
+                                          (cd /var/lib/mock/epel-7-x86_64/result/ &&
+                                           cp -r . $OLDPWD/artifacts/centos7/)
+                                          createrepo artifacts/centos7/
+                                      else
+                                          rc=\${PIPESTATUS[0]}
+                                          (cd /var/lib/mock/epel-7-x86_64/result/ &&
+                                           cp -r . $OLDPWD/artifacts/centos7/)
+                                          cp -af utils/rpms/_topdir/SRPMS artifacts/centos7/
+                                          exit \$rc
+                                      fi
                                   else
-                                      rc=\${PIPESTATUS[0]}
-                                      (cd /var/lib/mock/epel-7-x86_64/result/ &&
-                                       cp -r . $OLDPWD/artifacts/centos7/)
-                                      cp -af utils/rpms/_topdir/SRPMS artifacts/centos7/
-                                      exit \$rc
-                                  fi
-                              else
-                                  exit \${PIPESTATUS[0]}
-                              fi'''
+                                      exit \${PIPESTATUS[0]}
+                                  fi'''
+                        }
                     }
                     post {
                         always {
@@ -216,11 +218,11 @@ pipeline {
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                                       result: "UNSTABLE", ignore_failure: true
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -241,21 +243,23 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/sles12.3/
-                              mkdir -p artifacts/sles12.3/
-                              rm -rf utils/rpms/_topdir/SRPMS
-                              if make -C utils/rpms srpm; then
-                                  rm -rf utils/rpms/_topdir/RPMS
-                                  if make -C utils/rpms rpms; then
-                                      ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
-                                      createrepo artifacts/sles12.3/
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/sles12.3/
+                                  mkdir -p artifacts/sles12.3/
+                                  rm -rf utils/rpms/_topdir/SRPMS
+                                  if make -C utils/rpms srpm; then
+                                      rm -rf utils/rpms/_topdir/RPMS
+                                      if make -C utils/rpms rpms; then
+                                          ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
+                                          createrepo artifacts/sles12.3/
+                                      else
+                                          exit \${PIPESTATUS[0]}
+                                      fi
                                   else
                                       exit \${PIPESTATUS[0]}
-                                  fi
-                              else
-                                  exit \${PIPESTATUS[0]}
-                              fi'''
+                                  fi'''
+                        }
                     }
                     post {
                         always {
@@ -267,11 +271,11 @@ pipeline {
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                                       result: "UNSTABLE", ignore_failure: true
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -1104,14 +1108,16 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
-                        runTest script: "${rpm_test_pre}" +
-                                     '''sudo yum -y install daos-client
-                                        sudo yum -y history rollback last-1
-                                        sudo yum -y install daos-server
-                                        sudo yum -y install daos-tests\n''' +
-                                        "${rpm_test_daos_test}" + '"',
-                                junit_files: null,
-                                failure_artifacts: env.STAGE_NAME
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: "${rpm_test_pre}" +
+                                         '''sudo yum -y install daos-client
+                                            sudo yum -y history rollback last-1
+                                            sudo yum -y install daos-server
+                                            sudo yum -y install daos-tests\n''' +
+                                            "${rpm_test_daos_test}" + '"',
+                                    junit_files: null,
+                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        }
                     }
                 }
                 stage('Test SLES12.3 RPMs') {
@@ -1124,19 +1130,21 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: daos_repos + " python-pathlib"
-                        runTest script: "${rpm_test_pre}" +
-                                     '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
-                                        # for libcmocka
-                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
-                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
-                                        sudo zypper --non-interactive --gpg-auto-import-keys ref
-                                        sudo zypper --non-interactive rm openmpi libfabric1
-                                        sudo zypper --non-interactive in daos-client
-                                        sudo zypper --non-interactive in daos-server
-                                        sudo zypper --non-interactive in daos-tests\n''' +
-                                        "${rpm_test_daos_test}" + '"',
-                                junit_files: null,
-                                failure_artifacts: env.STAGE_NAME
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: "${rpm_test_pre}" +
+                                         '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
+                                            # for libcmocka
+                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
+                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
+                                            sudo zypper --non-interactive --gpg-auto-import-keys ref
+                                            sudo zypper --non-interactive rm openmpi libfabric1
+                                            sudo zypper --non-interactive in daos-client
+                                            sudo zypper --non-interactive in daos-server
+                                            sudo zypper --non-interactive in daos-tests\n''' +
+                                            "${rpm_test_daos_test}" + '"',
+                                    junit_files: null,
+                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        }
                     }
                 }
             }
