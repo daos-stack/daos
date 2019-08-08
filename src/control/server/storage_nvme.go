@@ -235,6 +235,31 @@ func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
 	n.initialized = true
 }
 
+// HealthQuery method implementation for nvmeStorage.
+func (n *nvmeStorage) HealthQuery(resp *pb.QueryHealthResp) {
+	addStateDiscover := func(
+		status pb.ResponseStatus, errMsg string,
+		infoMsg string) *pb.ResponseState {
+
+		return addState(
+			status, errMsg, infoMsg, common.UtilLogDepth+1,
+			"nvme device health query")
+	}
+
+	cs, ns, dh, err := n.nvme.HealthQuery()
+	if err != nil {
+		resp.Nvmestate = addStateDiscover(
+			pb.ResponseStatus_CTRL_ERR_NVME,
+			msgSpdkDiscoverFail+": "+err.Error(), "")
+		return
+	}
+	n.controllers = loadDeviceHealth(cs, ns, dh)
+
+	resp.Nvmestate = addStateDiscover(
+		pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	resp.Ctrlrs = n.controllers
+}
+
 // newCret creates and populates NVMe controller result and logs error
 // through addState.
 func newCret(
@@ -510,6 +535,57 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	}
 	log.Debugf(
 		"BurnIn command string: %s %s %v", env, fioPath, cmds)
+
+	return
+}
+
+// loadDeviceHealth converts a slice of Controller into protobuf equivalent,
+// similar to loadControllers function but add additional device health info.
+// Implemented as a pure function.
+func loadDeviceHealth(ctrlrs []spdk.Controller, nss []spdk.Namespace,
+	health []spdk.DeviceHealth) (pbCtrlrs common.NvmeControllers) {
+
+		for _, c := range ctrlrs {
+		pbCtrlrs = append(
+			pbCtrlrs,
+			&pb.NvmeController{
+				Model:   c.Model,
+				Serial:  c.Serial,
+				Pciaddr: c.PCIAddr,
+				Fwrev:   c.FWRev,
+				// repeated pb field
+				Namespaces: loadNamespaces(c.PCIAddr, nss),
+				Healthstats: loadHealthStats(health),
+			})
+	}
+	return pbCtrlrs
+}
+
+// loadHealthStats converts a slice of DeviceHealth into protobuf equivalent.
+// Implemented as a pure function.
+func loadHealthStats(health []spdk.DeviceHealth) (
+	_health common.NvmeHealthstats) {
+
+	for _, h := range health {
+		_health = append(
+			_health,
+			&pb.NvmeController_Health{
+				Temp:		 h.Temp,
+				Tempwarn:	 h.TempWarnTime,
+				Tempcrit:	 h.TempCritTime,
+				Ctrlbusy:	 h.CtrlBusyTime,
+				Powercycles:	 h.PowerCycles,
+				Poweronhours:	 h.PowerOnHours,
+				Unsafeshutdowns: h.UnsafeShutdowns,
+				Mediaerrors:	 h.MediaErrors,
+				Errorlogs:	 h.ErrorLogEntries,
+				Tempwarning:	 h.TempWarn,
+				Availspare: 	 h.AvailSpareWarn,
+				Reliability:	 h.ReliabilityWarn,
+				Readonly:	 h.ReadOnlyWarn,
+				Volatilemem:	 h.VolatileWarn,
+			})
+	}
 
 	return
 }

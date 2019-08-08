@@ -37,6 +37,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
+#include <daos_srv/smd.h>
 
 #include "mgmt.pb-c.h"
 #include "rpc.h"
@@ -94,6 +95,43 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
+
+/** srv_query.c */
+
+/* Device health stats from bio_dev_state */
+struct mgmt_bio_health {
+	struct smd_dev_info	*mb_dev_info;
+	uuid_t			 mb_devid;
+	uint64_t		*mb_media_errors;
+	uint64_t		 mb_error_count;
+	uint32_t		 mb_read_errs;
+	uint32_t		 mb_write_errs;
+	uint32_t		 mb_unmap_errs;
+	uint16_t		 mb_temperature;
+	bool			 mb_temp;
+	bool			 mb_spare;
+	bool			 mb_readonly;
+	bool			 mb_reliability;
+	bool			 mb_volatile;
+};
+
+int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
+			     char *tgt_id);
+
+struct mgmt_smd_device {
+	uuid_t			 devid;
+	int			*tgt_ids;
+	uint32_t		 tgt_cnt;
+	struct mgmt_smd_device	*next;
+};
+
+struct mgmt_smd_devs {
+	struct mgmt_smd_device *ms_devs;
+	struct mgmt_smd_device *ms_head;
+	int			ms_num_devs;
+};
+
+int ds_mgmt_smd_list_devs(struct mgmt_smd_devs *msd);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);

@@ -62,6 +62,19 @@ func (c *ControlService) ScanStorage(
 	return resp, nil
 }
 
+// DeviceHealthQuery queries SPDK NVMe device health stats of attached storage
+// on a node.
+func (c *ControlService) DeviceHealthQuery(
+	ctx context.Context, req *pb.QueryHealthReq) (
+	*pb.QueryHealthResp, error) {
+
+	resp := new(pb.QueryHealthResp)
+
+	c.nvme.HealthQuery(resp)
+
+	return resp, nil
+}
+
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
 func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
