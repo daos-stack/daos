@@ -159,7 +159,7 @@ class CommandWithParameters(ObjectWithParameters):
             the command.
         """
         return process.run(self.__str__(), timeout, verbose,
-                           shell=self.shell,env=env, sudo=self.sudo)
+                           shell=self.shell, env=env, sudo=self.sudo)
 
     def subproc(self, verbose=True, env=None):
         """ Create a subprocess object to run in the background.
