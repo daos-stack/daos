@@ -65,6 +65,7 @@ class BasicParameter(object):
             print("Updated param {} => {}".format(name, self.value))
 
 class FormattedParameter(BasicParameter):
+    # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None):

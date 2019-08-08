@@ -36,6 +36,7 @@ class DmgNvmeScanTest(TestWithoutServers):
         super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
 
     def cleanup(self):
+        # pylint: disable=pylint-no-self-use
         """ Setup/cleanup for the daos_server to run properly."""
 
         umount_daos = "umount /mnt/daos; rm -rf /mnt/daos"
