@@ -54,7 +54,7 @@ def ior_runner_thread(ior_cmd, uuids, mgr, attach, procs, hostfile, results):
         results (Queue): queue for returning thread results
     """
     for index, cont_uuid in enumerate(uuids):
-        ior_cmd.daos_cont.value = cont_uuid
+        ior_cmd.daos_cont.update(cont_uuid, "ior.cont_uuid")
         try:
             ior_cmd.run(mgr, attach, procs, hostfile, False)
             results.put("PASS")
@@ -92,17 +92,9 @@ class ObjectMetadata(TestWithServers):
             self.hostlist_clients, self.workdir, None)
 
         # Create a pool
-        self.pool = DaosPool(self.context)
-        self.pool.create(
-            self.params.get("mode", '/run/pool/createmode/*'),
-            os.geteuid(),
-            os.getegid(),
-            self.params.get("scm_size", '/run/pool/createsize/*'),
-            self.params.get("setname", '/run/pool/createset/*'),
-            None,
-            None,
-            self.params.get("svcn", '/run/pool/createsvc/*'),
-            self.params.get("nvme_size", '/run/pool/createsize/*'))
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.create()
 
     def tearDown(self):
         """Tear down each test case."""
@@ -147,18 +139,18 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,metadata,pr,small,metadatafill
         """
-        self.pool.connect(2)
+        self.pool.pool.connect(2)
         container = DaosContainer(self.context)
 
         self.d_log.debug("Fillup Metadata....")
         for _cont in range(NO_OF_MAX_CONTAINER):
-            container.create(self.pool.handle)
+            container.create(self.pool.pool.handle)
 
         # This should fail with no Metadata space Error.
         self.d_log.debug("Metadata Overload...")
         try:
             for _cont in range(250):
-                container.create(self.pool.handle)
+                container.create(self.pool.pool.handle)
             self.fail("Test expected to fail with a no metadata space error")
 
         except DaosApiError as exe:
@@ -180,13 +172,13 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=metadata,metadata_free_space,nvme,small
         """
-        self.pool.connect(2)
+        self.pool.pool.connect(2)
         for k in range(10):
             container_array = []
             self.d_log.debug("Container Create Iteration {}".format(k))
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
-                container.create(self.pool.handle)
+                container.create(self.pool.pool.handle)
                 container_array.append(container)
 
             self.d_log.debug("Container Remove Iteration {} ".format(k))

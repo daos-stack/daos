@@ -31,7 +31,6 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
-# pylint: disable = redefined-variable-type
 class CreateContainerTest(TestWithServers):
     """
     Tests DAOS container create.
@@ -79,7 +78,10 @@ class CreateContainerTest(TestWithServers):
             expected_results.append(uuidparam[1])
             if uuidparam[0] == 'NULLPTR':
                 self.cancel("skipping this test until DAOS-2043 is fixed")
-                contuuid = 'NULLPTR'
+                # Commenting the line below as it will result in an
+                # AttributeError and never get to the DAOS API code.
+                # Should be further investigated as part of DAOS-3081
+                # contuuid = 'NULLPTR'
             else:
                 contuuid = uuid.UUID(uuidparam[0])
 
