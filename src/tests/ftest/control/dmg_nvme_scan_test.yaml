@@ -1,0 +1,14 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines:
+    - boro-A
+server_config:
+  name: daos_server
+daos_shell:
+  port: 10001
+  request: storage
+  action: scan
+daos_server:
+  targets: 1
+  config: utils/config/examples/daos_server_sockets.yml

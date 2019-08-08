@@ -36,6 +36,8 @@ import fcntl
 import errno
 import yaml
 
+from command_utils import CommandWithParameters
+from command_utils import BasicParameter, FormattedParameter
 from avocado.utils import genio
 
 SESSIONS = {}
@@ -43,10 +45,45 @@ SESSIONS = {}
 DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
 AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 
-
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
+class ServerCommand(CommandWithParameters):
+    """Defines a object representing a server command."""
+
+    def __init__(self, command="daos_server"):
+        """Create a server Command object"""
+
+        super(ServerCommand, self).__init__(command, shell=True, sudo=True)
+
+        self.request = BasicParameter("{}")
+        self.action = BasicParameter("{}")
+        self.targets = FormattedParameter("-t {}")
+        self.config = FormattedParameter("-o {}")
+        self.port = FormattedParameter("-p {}")
+        self.storage = FormattedParameter("-s {}")
+        self.modules = FormattedParameter("-m {}")
+        self.xshelpernr = FormattedParameter("-x {}")
+        self.firstcore = FormattedParameter("-f {}")
+        self.group = FormattedParameter("-g {}")
+        self.attach = FormattedParameter("-a {}")
+        self.sock_dir = FormattedParameter("-d {}")
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+        The daos_server command use the following command structure:
+        daos_server <request> <action> <parameters>
+        Returns:
+            str: the command with all the defined parameters.
+        """
+        params = []
+        for name in self.get_param_names():
+            value = str(getattr(self, name))
+            if (value != "" and name != "request" and name != "action" and
+                    name != "port"):
+                params.append(value)
+        return " ".join([self._command] + params +
+                        [str(getattr(self, "request"))] +
+                        [str(getattr(self, "action"))])
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """Enable/Disable NVMe Mode.
