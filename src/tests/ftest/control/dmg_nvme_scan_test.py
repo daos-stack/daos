@@ -35,31 +35,18 @@ class DmgNvmeScanTest(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
 
-    def cleanup(self):
-        # pylint: disable=pylint-no-self-use
-        """ Setup/cleanup for the daos_server to run properly."""
-
-        umount_daos = "umount /mnt/daos; rm -rf /mnt/daos"
-        rm_sockets = "rm -rf /tmp/daos_sockets/"
-        rm_logs = "rm -rf /tmp/*.log"
-
-        try:
-            process.run(
-                umount_daos, verbose=True, ignore_status=True, sudo=True)
-        except Exception:
-            raise process.CmdError(umount_daos)
-
-        try:
-            process.run(
-                rm_sockets, verbose=True, ignore_status=True, sudo=True)
-        except Exception:
-            raise process.CmdError(rm_sockets)
-
-        try:
-            process.run(
-                rm_logs, verbose=True, ignore_status=True, sudo=True)
-        except Exception:
-            raise process.CmdError(rm_logs)
+    def clean_up(self):
+        """Setup/cleanup for the daos_server to run properly."""
+        cmd_list = [
+            "umount /mnt/daos; rm -rf /mnt/daos",
+            "rm -rf /tmp/daos_sockets/",
+            "rm -rf /tmp/*.log",
+        ]
+        for cmd in cmd_list:
+            try:
+                process.run(cmd, verbose=True, sudo=True)
+            except process.CmdError as error:
+                self.fail("Error issuing '{}': {}".format(cmd, error))
 
     def test_dmg_nvme_scan_basic(self):
         """ Test basic dmg functionality to scan nvme the storage on system.
