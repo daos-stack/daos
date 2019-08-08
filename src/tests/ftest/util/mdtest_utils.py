@@ -86,7 +86,8 @@ class MdtestCommand(CommandWithParameters):
         self.stonewall_statusfile = FormattedParameter("-x {}")
         self.depth = FormattedParameter("-z {}")
 
-        # Module DAOS
+        # Module DAOS (Not intended to be used as of now, hence all
+        # arguments for DAOS module are commented)
         # Required arguments
         #  --daos.pool=STRING            pool uuid
         #  --daos.svcl=STRING            pool SVCL
@@ -100,12 +101,13 @@ class MdtestCommand(CommandWithParameters):
         #  --daos.chunk_size=1048576     chunk size
         #  --daos.oclass=STRING          object class
 
-        self.daos_pool_uuid = FormattedParameter("--daos.pool {}")
-        self.daos_svcl = FormattedParameter("--daos.svcl {}")
-        self.daos_cont = FormattedParameter("--daos.cont {}")
-        self.daos_group = FormattedParameter("--daos.group {}")
-        self.daos_chunk_size = FormattedParameter(" --daos.chunk_size {}")
-        self.daos_oclass = FormattedParameter("--daos.oclass {}")
+        # self.daos_pool_uuid = FormattedParameter("--daos.pool {}")
+        # self.daos_svcl = FormattedParameter("--daos.svcl {}")
+        # self.daos_cont = FormattedParameter("--daos.cont {}")
+        # self.daos_group = FormattedParameter("--daos.group {}")
+        # self.daos_chunk_size = FormattedParameter(" --daos.chunk_size {}")
+        # self.daos_oclass = FormattedParameter("--daos.oclass {}")
+        # self.daos_destroy = FormattedParameter("--daos.destroy", True)
 
         # Module DFS
         # Required arguments
@@ -123,13 +125,7 @@ class MdtestCommand(CommandWithParameters):
         self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
-
-    def get_param_names(self):
-        """Get a sorted list of the defined MdtestCommand parameters."""
-        # Sort the Mdtest parameter names to generate consistent mdtest commands
-        param_names = super(MdtestCommand, self).get_param_names()
-
-        return param_names
+        self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
 
     def get_params(self, test, path="/run/mdtest/*"):
         """Get values for all of the mdtest command params using a yaml file.
@@ -154,10 +150,10 @@ class MdtestCommand(CommandWithParameters):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        self.dfs_group.update(group, "daos_group" if display else None)
+        self.dfs_group.update(group, "dfs_group" if display else None)
         self.dfs_cont.update(
             cont_uuid if cont_uuid else uuid.uuid4(),
-            "daos_cont" if display else None)
+            "dfs_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the Mdtest parameters that are based on a DAOS pool.
@@ -166,7 +162,7 @@ class MdtestCommand(CommandWithParameters):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.dfs_pool_uuid.update(
-            pool.get_uuid_str(), "daos_pool" if display else None)
+            pool.pool.get_uuid_str(), "dfs_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
@@ -177,9 +173,9 @@ class MdtestCommand(CommandWithParameters):
         """
         svcl = ":".join(
             [str(item) for item in [
-                int(pool.svc.rl_ranks[index])
-                for index in range(pool.svc.rl_nr)]])
-        self.dfs_svcl.update(svcl, "daos_svcl" if display else None)
+                int(pool.pool.svc.rl_ranks[index])
+                for index in range(pool.pool.svc.rl_nr)]])
+        self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_launch_command(self, manager, attach_info, processes, hostfile):
         """Get the process launch command used to run Mdtest
