@@ -461,7 +461,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  * \return		0 on Success. Negative errno on Failure.
  */
 int
-dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
+dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
 
 /**
  * Check access permissions on an object. Similar to Linux access(2).

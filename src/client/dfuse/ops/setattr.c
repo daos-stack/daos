@@ -62,7 +62,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	}
 
-	rc = dfs_osetstat(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
+	rc = dfs_osetattr(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
 	if (rc) {
 		DFUSE_REPLY_ERR_RAW(ie, req, rc);
 		return;

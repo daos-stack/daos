@@ -2351,7 +2351,7 @@ out:
 }
 
 int
-dfs_osetstat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
+dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t		th = DAOS_TX_NONE;
 	uid_t			euid;
