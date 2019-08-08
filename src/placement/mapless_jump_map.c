@@ -221,7 +221,7 @@ pl_map2mplmap(struct pl_map *map)
  *                              iterate through this when selecting the next
  *                              target in a placement to determine if that
  *                              location is valid.
- * \param[in]   shard_num       the current shard number. This is used when
+ * \param[in]	shard_num       the current shard number. This is used when
  *                              selecting a target to determine if repeated
  *                              targets are allowed in the case that there
  *                              are more shards than targets
@@ -231,14 +231,15 @@ pl_map2mplmap(struct pl_map *map)
  */
 static void
 get_target(struct pool_domain *curr_dom, struct pool_target **target,
-	   uint64_t obj_key, uint8_t *dom_used, uint32_t *used_targets,
+	   uint64_t obj_key, uint8_t *dom_used, struct pl_obj_layout *layout,
 	   int shard_num)
 {
-	uint8_t         found_target = 0;
-	uint8_t         top = 0;
-	uint32_t        fail_num = 0;
-	uint32_t        selected_dom;
-	struct pool_domain     *root_pos;
+	uint8_t         	found_target = 0;
+	uint8_t         	top = 0;
+	uint32_t        	fail_num = 0;
+	uint32_t        	selected_dom;
+	uint32_t		tgt_id;
+	struct pool_domain	*root_pos;
 
 	root_pos = curr_dom;
 
@@ -283,14 +284,15 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				 * fewer targets than shards and all targets
 				 * have already been used
 				 */
-				for (i = 0; used_targets[i] != 0; ++i) {
-					if (used_targets[i] == dom_id + 1)
+
+				for (i = 0; i < layout->ol_nr; ++i) {
+
+					tgt_id = layout->ol_shards[i].po_target;
+
+					if (tgt_id == dom_id)
 						break;
 				}
-			} while (used_targets[i]);
-
-			/* Mark target as used */
-			used_targets[i] = dom_id + 1;
+			} while (i < shard_num);
 
 			/* Found target (which may be available or not) */
 			found_target = 1;
@@ -385,10 +387,14 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		uint8_t skiped_targets = 0;
 		uint16_t num_bytes = 0;
 		uint32_t num_doms;
+		int i;
+		struct pool_target *start_pos;
+		struct pool_target *end_pos;
+		uint64_t child_pos;
 
 		num_doms = root->do_child_nr;
 
-		uint64_t child_pos = (root->do_children) - root;
+		child_pos = (root->do_children) - root;
 
 		/*
 		 * Choose domains using jump consistent hash until we find a
@@ -412,17 +418,13 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		if (used_tgts == NULL)
 			return -DER_NOMEM;
 
+		start_pos = (&((target_selection->do_targets[0])));
+		end_pos = start_pos + num_doms;
+
 		/*
 		 * Add the initial layouts targets to the bitmap of checked
 		 * targets.
 		 */
-		int i;
-		struct pool_target *start_pos;
-		struct pool_target *end_pos;
-
-		start_pos = (&((target_selection->do_targets[0])));
-		end_pos = start_pos + num_doms;
-
 		for (i = 0; i < layout->ol_nr; ++i) {
 			int id = layout->ol_shards[i].po_target;
 			struct pool_target *position;
@@ -480,17 +482,23 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 
 /**
 * Try to remap all the failed shards in the @remap_list to proper
-* targets respectively. The new target id will be updated in the
-* @layout if the remap succeed, otherwise, corresponding shard id
-* and target id in @layout will be cleared as -1.
+* targets. The new target id will be updated in the @layout if the
+* remap succeeds, otherwise, corresponding shard and target id in
+* @layout will be cleared as -1.
 *
-* \paramp[in]
-* \paramp[in]
-* \paramp[in]
-* \paramp[in]
-* \paramp[in]
-* \paramp[in]
-* \paramp[in]
+* \paramp[in]	mmap		The placement map being used for placement.
+* \paramp[in]	md		Object Metadata.
+* \paramp[in]	layout		The original layout which contains some shards
+* 				on failed targets.
+* \paramp[in]	mop		Structure containing information related to
+* 				layout characteristics.
+* \paramp[in]	remap_list	List containing shards to be remapped sorted
+* 				by failure sequence.
+* \paramp[in]	dom_used	Bookkeeping array used to keep track of which
+* 				domain components have already been used.
+*
+* \return	return an error code signifying whether the shards were
+* 		successfully remapped properly.
 */
 static int
 obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
@@ -616,7 +624,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 {
 	struct pool_target      *target;
 	uint8_t                 *dom_used;
-	uint32_t                *used_targets;
+	uint8_t                *used_targets;
 	uint64_t                key;
 	daos_obj_id_t		oid;
 	struct pool_domain      *root;
@@ -645,7 +653,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	dom_used_length = (struct pool_domain *)(root->do_targets) - (root) + 1;
 
 	D_ALLOC_ARRAY(dom_used, dom_used_length);
-	D_ALLOC_ARRAY(used_targets, layout->ol_nr + 1);
+	D_ALLOC_ARRAY(used_targets, ((layout->ol_nr) / 8) + 1);
 
 	if (dom_used == NULL || used_targets == NULL)
 		D_GOTO(out, rc);
@@ -693,7 +701,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 			uint32_t fseq;
 
 			get_target(root, &target, crc(key, k), dom_used,
-				   used_targets, k);
+				   layout, k);
 
 			tgt_id = target->ta_comp.co_id;
 			fseq = target->ta_comp.co_fseq;
