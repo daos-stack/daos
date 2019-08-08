@@ -15,7 +15,7 @@ pool:
         mode_RW:
              mode: 146
     createset:
-        setname: daos_server
+        group: daos_server
     createsize:
         scm_size: 14000000000
     createsvc:
@@ -27,6 +27,7 @@ mdtest:
     api: 'DFS'
     test_dir: "/"
     iteration: 1
+    dfs_destroy: True
     data: !mux
         zero:
             write_bytes: 0
@@ -40,9 +41,9 @@ mdtest:
             num_of_files_dirs: 1000
             diff_flags: !mux
                 flags_ssf:
-                    flags: "--dfs.destroy"
+                    flags: " "
                 flags_fpp:
-                    flags: "-u --dfs.destroy"
+                    flags: "-u"
             directory_depth: !mux
                 depth_0:
                     depth: 0
@@ -51,7 +52,6 @@ mdtest:
         two:
             branching_factor: 2
             items: 10
-            flags: "--dfs.destroy"
+            flags: " "
             depth: 5
-    dfs_cont: "`uuidgen`"
     manager: "MPICH"
