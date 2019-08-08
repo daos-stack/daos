@@ -30,7 +30,7 @@ pool:
         mode_RW:
              mode: 146
     createset:
-        setname: daos_server
+        group: daos_server
     createsize:
         scm_size: 15000000000
         nvme_size: 30000000000
@@ -50,11 +50,11 @@ mdtest:
     api: 'DFS'
     test_dir: "/"
     iteration: 3
-    dfs_cont: "`uuidgen`"
+    dfs_destroy: True
     manager: "MPICH"
     diff_flags: !mux
         flags_ssf:
-            flags: "--dfs.destroy"
+            flags: " "
             data: !mux
                 zero:
                     write_bytes: 0
@@ -73,7 +73,7 @@ mdtest:
                         depth_100:
                             depth: 100
         flags_fpp:
-            flags: "-u --dfs.destroy"
+            flags: "-u"
             write_bytes: 32000
             read_bytes: 32000
             depth: 0
