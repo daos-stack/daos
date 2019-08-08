@@ -458,7 +458,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  *			[out]: Stat struct with all valid members filled.
  * \param[in]	flags	Bitmask of flags to set
  *
- * \return		0 on Success. Negative errno on Failure.
+ * \return		0 on Success. errno code on Failure.
  */
 int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags);
