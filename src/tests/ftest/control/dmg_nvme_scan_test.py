@@ -29,6 +29,7 @@ import traceback
 
 from dmg_utils import DmgCommand
 from server_utils import ServerCommand
+from nvme_utils import NVMe
 from apricot import TestWithoutServers
 from avocado.utils import process
 
@@ -41,7 +42,7 @@ class DmgNvmeScanTest(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
 
-    def cleanUp(self):
+    def clean_up(self):
         """ Setup/cleanup for the daos_server to run properly."""
 
         umount_daos = "umount /mnt/daos; rm -rf /mnt/daos"
@@ -50,30 +51,30 @@ class DmgNvmeScanTest(TestWithoutServers):
 
         # Clean up the /mnt/daos dir and logs
         try:
-            umount_result = process.run(
+            process.run(
                 umount_daos, verbose=True, ignore_status=True, sudo=True)
-        except Exception as excpn:
+        except Exception:
             raise process.CmdError(umount_daos)
 
         try:
-            rm_sockets_result = process.run(
+            process.run(
                 rm_sockets, verbose=True, ignore_status=True, sudo=True)
-        except Exception as excpn:
+        except Exception:
             raise process.CmdError(rm_sockets)
 
         try:
-            rm_logs_result = process.run(
+            process.run(
                 rm_logs, verbose=True, ignore_status=True, sudo=True)
-        except Exception as excpn:
+        except Exception:
             raise process.CmdError(rm_logs)
 
     def test_dmg_nvme_scan_basic(self):
         """ Test basic dmg functionality to scan nvme the storage on system.
 
-        :avocado: tags=all,hw,dmg,control,amanda
+        :avocado: tags=all,hw,dmg,control
 
         """
-        self.cleanUp()
+        self.clean_up()
 
         # Create daos_server command
         server = ServerCommand()

@@ -45,7 +45,7 @@ class SPDK_Env(object):
         self.set_restype()
 
         # Create opts object/struct
-        opts = spdk_env_opts()
+        opts = SpdkEnvOpts()
 
         # Initialize the SPDK env
         self.libspdk.spdk_env_opts_init(byref(opts))
@@ -58,7 +58,7 @@ class SPDK_Env(object):
         self.libspdk.spdk_nvme_ns_get_id.restype = POINTER(c_uint)
         self.libspdk.spdk_nvme_ns_is_active.restype = POINTER(c_bool)
         self.libspdk.spdk_nvme_ctrlr_get_data.restype = POINTER(
-            spdk_nvme_ctrlr_data)
+            SpdkNvmeCtrlrData)
 
 class NVMeNamespaceData(object):
     """ NVMe namespace details."""

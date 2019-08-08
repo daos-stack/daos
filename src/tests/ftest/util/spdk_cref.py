@@ -24,7 +24,7 @@
 from ctypes import *
 
 # SPDK api structures
-class spdk_pci_addr(Structure):
+class SpdkPciAddr(Structure):
     _fields_ = [
         ('domain', c_uint),
         ('bus', c_ubyte),
@@ -32,7 +32,7 @@ class spdk_pci_addr(Structure):
         ('func', c_ubyte)
     ]
 
-class spdk_env_opts(Structure):
+class SpdkEnvOpts(Structure):
     _fields_ = [
         ('name', c_char_p),
         ('core_mask', c_char_p),
@@ -45,12 +45,12 @@ class spdk_env_opts(Structure):
         ('unlink_hugepage', c_bool),
         ('num_pci_addr', c_size_t),
         ('hugedir', c_char_p),
-        ('pci_blacklist', POINTER(spdk_pci_addr)),
-        ('pci_whitelist', POINTER(spdk_pci_addr)),
+        ('pci_blacklist', POINTER(SpdkPciAddr)),
+        ('pci_whitelist', POINTER(SpdkPciAddr)),
         ('env_context', c_void_p)
     ]
 
-class cmic(Structure):
+class Cmic(Structure):
     """ Controller multi-path I/O and namespace sharing capabilities. """
     _fields_ = [
         ('multi_port', c_ubyte),
@@ -59,7 +59,7 @@ class cmic(Structure):
         ('reserved', c_ubyte),
     ]
 
-class vs_register_bits(Structure):
+class VsRegisterBits(Structure):
     """ Indicates tertiary, minor and major versions.
 
     Documentation for this struct is in spdk_nvme_vs_register union.
@@ -70,14 +70,14 @@ class vs_register_bits(Structure):
         ('mjr', c_uint)
     ]
 
-class spdk_nvme_vs_register(Union):
+class SpdkNvmeVsRegister(Union):
     """ Register nvme version """
     _fields_ = [
         ('raw', c_uint),
-        ('bits', vs_register_bits)
+        ('bits', VsRegisterBits)
     ]
 
-class oaes(Structure):
+class Oaes(Structure):
     """ Optional asynchronous events supported."""
     _fields_ = [
         ("reserved1", c_uint),
@@ -86,7 +86,7 @@ class oaes(Structure):
         ("reserved2", c_uint)
     ]
 
-class ctratt(Structure):
+class CtrAtt(Structure):
     """ Controller attributes."""
     _fields_ = [
         ('host_id_exhid_supported', c_uint),
@@ -94,7 +94,7 @@ class ctratt(Structure):
         ('reserved', c_uint)
     ]
 
-class oacs(Structure):
+class Oacs(Structure):
     """ Optional admin command support."""
     _fields_ = [
         ('security', c_ushort),
@@ -109,7 +109,7 @@ class oacs(Structure):
         ('oacs_rsvd', c_ushort)
     ]
 
-class frmw(Structure):
+class Frmw(Structure):
     """ Firmware Updates."""
     _fields_ = [
         ('slot1_ro', c_ubyte),
@@ -118,7 +118,7 @@ class frmw(Structure):
         ('frmw_rsvd', c_ubyte)
     ]
 
-class lpa(Structure):
+class Lpa(Structure):
     """ Log page attributes."""
     _fields_ = [
         ('ns_smart', c_ubyte),
@@ -128,21 +128,21 @@ class lpa(Structure):
         ('lpa_rsvd', c_ubyte)
     ]
 
-class avscc(Structure):
+class Avscc(Structure):
     """ Admin vendor specific command configuration."""
     _fields_ = [
         ('spec_format', c_ubyte),
         ('avscc_rsvd', c_ubyte)
     ]
 
-class apsta(Structure):
+class Apsta(Structure):
     """ Autonomous power state transition attributes."""
     _fields_ = [
         ('supported', c_ubyte),
         ('apsta_rsvd', c_ubyte)
     ]
 
-class rpmbs(Structure):
+class RpmBs(Structure):
     """ Replay protected memory block support"""
     _fields_ = [
         ('num_rpmb_units', c_ubyte),
@@ -153,33 +153,33 @@ class rpmbs(Structure):
         ('access_size', c_ubyte),
     ]
 
-class dsto_bits(Structure):
+class DstoBits(Structure):
     _fields_ = [
         ('one_only', c_ubyte),
         ('reserved', c_ubyte)
     ]
 
-class dsto(Union):
+class Dsto(Union):
     """ Device self-test options"""
     _fields_ = [
         ('raw', c_ubyte),
-        ('bits', dsto_bits)
+        ('bits', DstoBits)
     ]
 
-class hctma_bits(Structure):
+class HctmaBits(Structure):
     _fields_ = [
         ('supported', c_ushort),
         ('reserved', c_ushort)
     ]
 
-class hctma(Union):
+class Hctma(Union):
     """ Host controlled thermal management attributes."""
     _fields_ = [
         ('raw', c_ushort),
-        ('bits', hctma_bits)
+        ('bits', HctmaBits)
     ]
 
-class sanicap_bits(Structure):
+class SanicapBits(Structure):
     _fields_ = [
         ('crypto_erase', c_uint),
         ('block_erase', c_uint),
@@ -187,28 +187,28 @@ class sanicap_bits(Structure):
         ('reserved', c_uint)
     ]
 
-class sanicap(Union):
+class Sanicap(Union):
     """ Sanitize capabilities."""
     _fields_ = [
         ('raw', c_uint),
-        ('bits', sanicap_bits)
+        ('bits', SanicapBits)
     ]
 
-class sqes(Structure):
+class Sqes(Structure):
     """ Submission queue entry size."""
     _fields_ = [
         ('min', c_ubyte),
         ('max', c_ubyte)
     ]
 
-class cqes(Structure):
+class Cqes(Structure):
     """ Completion queue entry size."""
     _fields_ = [
         ('min', c_ubyte),
         ('max', c_ubyte)
     ]
 
-class oncs(Structure):
+class Oncs(Structure):
     """ Optional nvm command support."""
     _fields_ = [
         ('compare', c_ushort),
@@ -221,7 +221,7 @@ class oncs(Structure):
         ('reserved', c_ushort)
     ]
 
-class fna(Structure):
+class Fna(Structure):
     """ Format nvm attributes."""
     _fields_ = [
         ('format_all_ns', c_ubyte),
@@ -230,7 +230,7 @@ class fna(Structure):
         ('reserved', c_ubyte)
     ]
 
-class vwc(Structure):
+class Vwc(Structure):
     """ Volatile write cache."""
     _fields_ = [
         ('present', c_ubyte),
@@ -238,7 +238,7 @@ class vwc(Structure):
         ('reserved', c_ubyte)
     ]
 
-class sgls(Structure):
+class Sgls(Structure):
     """ SGL support."""
     _fields_ = [
         ('supported', c_uint),
@@ -253,25 +253,25 @@ class sgls(Structure):
         ('reserved2', c_uint)
     ]
 
-class ctrattr(Structure):
+class CtrAttr(Structure):
     """ Controller attributes for nvmf_specific struct."""
     _fields_ = [
         ('ctrlr_model', c_ubyte),
         ('reserved', c_ubyte)
     ]
 
-class nvmf_specific(Structure):
+class NVMfSpecific(Structure):
     """ NVMe over Fabrics-specific fields."""
     _fields_ = [
         ('ioccsz', c_uint),
         ('iorcsz', c_uint),
         ('icdoff', c_ushort),
-        ('ctrattr', ctrattr),
+        ('ctrattr', CtrAttr),
         ('msdbd', c_ubyte),
         ('reserved', c_ubyte * 244)
     ]
 
-class spdk_nvme_power_state(Structure):
+class SpdkNvmePowerState(Structure):
     " NVMe power state."
     _fields_ = [
         ('mp', c_ushort),
@@ -292,7 +292,7 @@ class spdk_nvme_power_state(Structure):
         ('reserved7 ', c_ubyte * 16)
     ]
 
-class spdk_nvme_ctrlr_data(Structure):
+class SpdkNvmeCtrlrData(Structure):
     _fields_ = [
         ('vid', c_ushort),
         ('ssvid', c_ushort),
@@ -301,26 +301,26 @@ class spdk_nvme_ctrlr_data(Structure):
         ('fr', c_ubyte),
         ('rab', c_ubyte),
         ('ieee', c_ubyte),
-        ('cmic', cmic),
+        ('cmic', Cmic),
         ('mdts', c_ubyte),
         ('cntlid', c_ushort),
-        ('ver', spdk_nvme_vs_register),
+        ('ver', SpdkNvmeVsRegister),
         ('rtd3r', c_uint),
         ('rtd3e', c_uint),
-        ('oaes', oaes),
-        ('ctratt', ctratt),
+        ('oaes', Oaes),
+        ('ctratt', CtrAtt),
         ('reserved_100', c_ubyte * 12),
         ('fguid', c_ubyte * 16),
         ('reserved_128', c_ubyte * 128),
-        ('oacs', oacs),
+        ('oacs', Oacs),
         ('acl', c_ubyte),
         ('aerl', c_ubyte),
-        ('frmw', frmw),
-        ('lpa', lpa),
+        ('frmw', Frmw),
+        ('lpa', Lpa),
         ('elpe', c_ubyte),
         ('npss', c_ubyte),
-        ('avscc', avscc),
-        ('apsta', apsta),
+        ('avscc', Avscc),
+        ('apsta', Apsta),
         ('wctemp', c_ushort),
         ('cctemp', c_ushort),
         ('mtfa', c_ushort),
@@ -328,39 +328,39 @@ class spdk_nvme_ctrlr_data(Structure):
         ('hmmin', c_uint),
         ('tnvmcap', c_ulonglong * 2),
         ('unvmcap', c_ulonglong * 2),
-        ('rpmbs', rpmbs),
+        ('rpmbs', RpmBs),
         ('edstt', c_ushort),
-        ('dsto', dsto),
+        ('dsto', Dsto),
         ('fwug', c_ubyte),
         ('kas', c_ushort),
         ('mntmt', c_ushort),
         ('mxtmt', c_ushort),
-        ('sanicap', sanicap),
+        ('sanicap', Sanicap),
         ('reserved3', c_ubyte * 180),
-        ('sqes', sqes),
-        ('cqes', cqes),
+        ('sqes', Sqes),
+        ('cqes', Cqes),
         ('maxcmd', c_ushort),
         ('nn', c_uint),
-        ('oncs', oncs),
+        ('oncs', Oncs),
         ('fuses', c_ushort),
-        ('fna', fna),
-        ('vwc', vwc),
+        ('fna', Fna),
+        ('vwc', Vwc),
         ('awun', c_ushort),
         ('awupf', c_ushort),
         ('nvscc', c_ubyte),
         ('reserved531', c_ubyte),
         ('acwu', c_ushort),
         ('reserved534', c_ushort),
-        ('sgls', sgls),
+        ('sgls', Sgls),
         ('reserved4', c_ubyte * 228),
         ('subnqn', c_ubyte * 256),
         ('reserved5', c_ubyte * 768),
-        ('nvmf_specific', nvmf_specific),
-        ('psd', spdk_nvme_power_state * 32),
+        ('nvmf_specific', NVMfSpecific),
+        ('psd', SpdkNvmePowerState * 32),
         ('vs', c_ubyte * 1024)
     ]
 
-class spdk_nvme_ctrlr_opts(Structure):
+class SpdkNvmeCtrlrOpts(Structure):
     _fields_ = [
         ('num_io_queues', c_uint),
         ('use_cmb_sps', c_bool),
@@ -381,7 +381,7 @@ class spdk_nvme_ctrlr_opts(Structure):
         ('disable_error_logging', c_bool)
     ]
 
-class spdk_nvme_transport_id(Structure):
+class SpdkNvmeTransportId(Structure):
     _fields_ = [
         ('trtype', c_uint),
         ('adrfan', c_uint),
@@ -390,28 +390,28 @@ class spdk_nvme_transport_id(Structure):
         ('subnqn', c_char)
     ]
 
-class spdk_nvme_ctrlr(Structure):
+class SpdkNvmeCtrlr(Structure):
     pass
 
-class ctrlr_entry(Structure):
+class CtrlrEntry(Structure):
     pass
 
-ctrlr_entry._fields_ = [
-        ('ctrlr', POINTER(spdk_nvme_ctrlr)),
+CtrlrEntry._fields_ = [
+        ('ctrlr', POINTER(SpdkNvmeCtrlr)),
         ('tr_addr', POINTER(c_char_p)),
-        ('next', POINTER(ctrlr_entry))
+        ('next', POINTER(CtrlrEntry))
         ]
 
 # Create callback functions
 ATTACH_CALLBACK = CFUNCTYPE(
     c_void_p,
     POINTER(c_void_p),
-    POINTER(spdk_nvme_transport_id),
-    POINTER(spdk_nvme_ctrlr),
-    POINTER(spdk_nvme_ctrlr_opts))
+    POINTER(SpdkNvmeTransportId),
+    POINTER(SpdkNvmeCtrlr),
+    POINTER(SpdkNvmeCtrlrOpts))
 
 PROBE_CALLBACK = CFUNCTYPE(
     c_bool,
     POINTER(c_void_p),
-    POINTER(spdk_nvme_transport_id),
-    POINTER(spdk_nvme_ctrlr_opts))
+    POINTER(SpdkNvmeTransportId),
+    POINTER(SpdkNvmeCtrlrOpts))
