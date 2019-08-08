@@ -37,11 +37,30 @@ message NvmeController {
 		int32 capacity = 2;	// device capacity in GBytes
 	}
 
+	message Health {
+		uint32 temp = 1;
+		uint32 tempwarn = 2; // temperature warning duration
+		uint32 tempcrit = 3; // temperature critical duration
+		uint64 ctrlbusy = 4; // controller busy duration
+		uint64 powercycles = 5;
+		uint64 poweronhours = 6;
+		uint64 unsafeshutdowns = 7;
+		uint64 mediaerrors = 8;
+		uint64 errorlogs = 9; // error log entries
+		// critical warnings
+		bool tempwarning = 10;
+		bool availspare = 11;
+		bool reliability = 12;
+		bool readonly = 13;
+		bool volatilemem = 14;
+	}
+
 	string model = 1;	// model name
 	string serial = 2;	// serial number
 	string pciaddr = 3;	// pci address
 	string fwrev = 4;	// firmware revision
 	repeated Namespace namespaces = 5;	// controller's namespaces
+	repeated Health healthstats = 6;
 }
 
 // NvmeControllerResult represents state of operation performed on controller.

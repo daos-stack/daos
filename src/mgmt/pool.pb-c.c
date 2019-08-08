@@ -187,6 +187,96 @@ void   mgmt__destroy_pool_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__destroy_pool_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__bio_health_req__init
+                     (Mgmt__BioHealthReq         *message)
+{
+  static const Mgmt__BioHealthReq init_value = MGMT__BIO_HEALTH_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__bio_health_req__get_packed_size
+                     (const Mgmt__BioHealthReq *message)
+{
+  assert(message->base.descriptor == &mgmt__bio_health_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__bio_health_req__pack
+                     (const Mgmt__BioHealthReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__bio_health_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__bio_health_req__pack_to_buffer
+                     (const Mgmt__BioHealthReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__bio_health_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__BioHealthReq *
+       mgmt__bio_health_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__BioHealthReq *)
+     protobuf_c_message_unpack (&mgmt__bio_health_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__bio_health_req__free_unpacked
+                     (Mgmt__BioHealthReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__bio_health_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__bio_health_resp__init
+                     (Mgmt__BioHealthResp         *message)
+{
+  static const Mgmt__BioHealthResp init_value = MGMT__BIO_HEALTH_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__bio_health_resp__get_packed_size
+                     (const Mgmt__BioHealthResp *message)
+{
+  assert(message->base.descriptor == &mgmt__bio_health_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__bio_health_resp__pack
+                     (const Mgmt__BioHealthResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__bio_health_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__bio_health_resp__pack_to_buffer
+                     (const Mgmt__BioHealthResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__bio_health_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__BioHealthResp *
+       mgmt__bio_health_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__BioHealthResp *)
+     protobuf_c_message_unpack (&mgmt__bio_health_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__bio_health_resp__free_unpacked
+                     (Mgmt__BioHealthResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__bio_health_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[7] =
 {
   {
@@ -467,5 +557,94 @@ const ProtobufCMessageDescriptor mgmt__destroy_pool_resp__descriptor =
   mgmt__destroy_pool_resp__field_indices_by_name,
   1,  mgmt__destroy_pool_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__destroy_pool_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__bio_health_req__field_descriptors[1] =
+{
+  {
+    "idk",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthReq, idk),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__bio_health_req__field_indices_by_name[] = {
+  0,   /* field[0] = idk */
+};
+static const ProtobufCIntRange mgmt__bio_health_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__bio_health_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.BioHealthReq",
+  "BioHealthReq",
+  "Mgmt__BioHealthReq",
+  "mgmt",
+  sizeof(Mgmt__BioHealthReq),
+  1,
+  mgmt__bio_health_req__field_descriptors,
+  mgmt__bio_health_req__field_indices_by_name,
+  1,  mgmt__bio_health_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__bio_health_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "temp",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, temp),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+  1,   /* field[1] = temp */
+};
+static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.BioHealthResp",
+  "BioHealthResp",
+  "Mgmt__BioHealthResp",
+  "mgmt",
+  sizeof(Mgmt__BioHealthResp),
+  2,
+  mgmt__bio_health_resp__field_descriptors,
+  mgmt__bio_health_resp__field_indices_by_name,
+  1,  mgmt__bio_health_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__bio_health_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

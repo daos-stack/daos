@@ -46,6 +46,66 @@ func (nc NvmeControllers) String() string {
 			fmt.Fprintf(
 				&buf, "\t\tNamespace: %+v\n", ns)
 		}
+
+		for _, hs := range ctrlr.Healthstats {
+			fmt.Fprintf(
+				&buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n",
+				hs.Temp, hs.Temp - 273)
+
+			if hs.Tempwarn > 0 {
+				fmt.Fprintf(&buf, "\t\t\tWarning Time:%d\n",
+					uint64(hs.Tempwarn))
+			}
+			if hs.Tempcrit > 0 {
+				fmt.Fprintf(&buf, "\t\t\tCritical Time:%d\n",
+					uint64(hs.Tempcrit))
+			}
+
+			fmt.Fprintf(&buf, "\t\tController Busy Time:%d minutes\n",
+				uint64(hs.Ctrlbusy))
+			fmt.Fprintf(&buf, "\t\tPower Cycles:%d\n",
+				uint64(hs.Powercycles))
+			fmt.Fprintf(&buf, "\t\tPower On Hours:%d hours\n",
+				uint64(hs.Poweronhours))
+			fmt.Fprintf(&buf, "\t\tUnsafe Shutdowns:%d\n",
+				uint64(hs.Unsafeshutdowns))
+			fmt.Fprintf(&buf, "\t\tMedia Errors:%d\n",
+				uint64(hs.Mediaerrors))
+			fmt.Fprintf(&buf, "\t\tError Log Entries:%d\n",
+				uint64(hs.Errorlogs))
+
+			fmt.Fprintf(&buf, "\t\tCritical Warnings:\n")
+			fmt.Fprintf(&buf, "\t\t\tTemperature: ")
+			if hs.Tempwarning {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n");
+			}
+			fmt.Fprintf(&buf, "\t\t\tAvailable Spare: ")
+			if hs.Availspare {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n")
+			}
+			fmt.Fprintf(&buf, "\t\t\tDevice Reliability: ")
+			if hs.Reliability {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n");
+			}
+			fmt.Fprintf(&buf, "\t\t\tRead Only: ")
+			if hs.Readonly {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n");
+			}
+			fmt.Fprintf(&buf, "\t\t\tVolatile Memory Backup: ")
+			if hs.Volatilemem {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n");
+			}
+		}
 	}
 
 	return buf.String()
@@ -54,6 +114,8 @@ func (nc NvmeControllers) String() string {
 // NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*pb.NvmeController_Namespace
+
+type NvmeHealthstats []*pb.NvmeController_Health
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
 // representing operation results on a number of NVMe controllers.

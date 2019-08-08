@@ -34,6 +34,49 @@ type StorCmd struct {
 	Scan   ScanStorCmd   `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Update UpdateStorCmd `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+	Query  QueryStorCmd `command:"query" alias:"q" description:"Query NVMe device health stats."`
+}
+
+type QueryStorCmd struct {
+	Health HealthQueryCmd `command:"health" alias:"h" description:"Query full NVMe SPDK device statistics."`
+	// BIO health data includes a subset of SPDK device stats
+	Bio    BioQueryCmd    `command:"bio" alias:"b" description:"Query blob I/O module health data."`
+}
+
+type HealthQueryCmd struct {
+	broadcastCmd
+	connectedCmd
+	//TODO add dev uuid option or all devs by default
+}
+
+func healthQuery(conns client.Connect) {
+	cCtrlrs := conns.DeviceHealthQuery()
+	log.Infof("NVMe SSD controller health stats:\n%s", cCtrlrs)
+}
+
+func (h *HealthQueryCmd) Execute(args []string) error {
+	healthQuery(h.conns)
+	return nil
+}
+
+type BioQueryCmd struct {
+	connectedCmd
+	//TODO add dev uuid option or all devs by default
+}
+
+func bioQuery(conns client.Connect) {
+	log.Infof("Blob I/O health data:\n")
+	log.Infof("***Not implemented yet***\n")
+
+	// look into CreatePoolReq
+	req := &pb.BioHealthReq{Idk: bool(false)}
+
+	log.Infof("Blob I/O health data:\n%s\n", conns.BioHealthQuery(req))
+}
+
+func (b *BioQueryCmd) Execute(args []string) error {
+	bioQuery(b.conns)
+	return nil
 }
 
 // ScanStorCmd is the struct representing the scan storage subcommand.

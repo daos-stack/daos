@@ -611,6 +611,61 @@ out:
 }
 
 static void
+process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+//	Mgmt__BioHealthReq	*req = NULL;
+	Mgmt__BioHealthResp	*resp = NULL;
+	int	rc;
+
+//	/* Unpack the inner request from the drpc call body */
+//	req = mgmt__bio_health_req__unpack(
+//		NULL, drpc_req->body.len, drpc_req->body.data);
+
+//	if (req == NULL) {
+//		drpc_resp->status = DRPC__STATUS__FAILURE;
+//		D_ERROR("Failed to unpack req (destroy pool)\n");
+//		return;
+//	}
+
+	D_DEBUG(DB_MGMT, "Received request to query BIO health data\n");
+	D_ERROR("Received request to query BIO health data\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		//mgmt__bio_health_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	//mgmt__bio_health_resp__init(resp);
+
+
+	rc = ds_mgmt_bio_health_query();
+	if (rc != 0) {
+		D_ERROR("Failed to query BIO health data :%d\n", rc);
+		goto out;
+	}
+
+out:
+	resp->status = rc;
+	//len = mgmt__bio_health_resp__get_packed_size(resp);
+	//D_ALLOC(body, len);
+	//if (body == NULL) {
+	//	drpc_resp->status = DRPC__STATUS__FAILURE;
+	//	D_ERROR("Failed to allocate drpc response body\n");
+	//} else {
+//		mgmt__destroy_pool_resp__pack(resp, body);
+//		drpc_resp->body.len = len;
+//		drpc_resp->body.data = body;
+//	}
+
+//	mgmt__bio_health_req__free_unpacked(req, NULL);
+	D_FREE(resp);
+}
+
+static void
 process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	*resp = NULL;
@@ -667,6 +722,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_SET_UP:
 		process_setup_request(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
+		process_biohealth_request(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;

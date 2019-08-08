@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos_srv/pool.h>
+#include <daos_srv/bio.h>
 
 #include "srv_internal.h"
 
@@ -679,3 +680,25 @@ out_svc:
 out:
 	return rc;
 }
+
+int
+ds_mgmt_bio_health_query()
+{
+//	struct mgmt_svc	*svc;
+	int		rc;
+	struct dss_module_info *info = dss_get_module_info();
+	struct bio_xs_context *bxc;
+	struct bio_dev_state *health_stats;
+
+	D_DEBUG(DB_MGMT, "Querying BIO Health Data\n");
+
+	bxc = info->dmi_nvme_ctxt;
+	//health_stats = bxc->bxc_blobstore->bb_dev_health.bdh_health_state;
+	health_stats = get_bio_dev_state(bxc);
+	D_ERROR("BIO Health Stats: temp = %u\n",
+		health_stats->bds_temperature);
+
+	rc = 0;
+	return rc;
+}
+

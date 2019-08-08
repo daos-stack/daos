@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -223,6 +224,7 @@ func (svc *mgmtSvc) DestroyPool(
 ) (*pb.DestroyPoolResp, error) {
 
 	log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
+	log.Infof("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, destroyPool, req)
@@ -234,6 +236,33 @@ func (svc *mgmtSvc) DestroyPool(
 	resp := &pb.DestroyPoolResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
+	}
+
+	return resp, nil
+}
+
+func (svc *mgmtSvc) BioHealthQuery(
+	ctx context.Context,
+	req *pb.BioHealthReq,
+) (*pb.BioHealthResp, error) {
+
+	//log.Debugf("MgmtSvc.BioHealthQuery dispatch\n")
+	log.Infof("MgmtSvc.BioHealthQuery dispatch\n")
+	fmt.Printf("MgmtSvc.BioHealthQuery dispatch\n")
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, bioHealth, req)
+	svc.mutex.Unlock()
+	fmt.Printf("(BACK) MgmtSvc.BioHealthQuery dispatch\n")
+	if err != nil {
+		//fmt.Printf("ERR in MgmtSvc.BioHealthQuery dispatch\n")
+		return nil, err
+	}
+
+	//fmt.Printf("NO ERR in MgmtSvc.BioHealthQuery dispatch\n")
+	resp := &pb.BioHealthResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
 	}
 
 	return resp, nil

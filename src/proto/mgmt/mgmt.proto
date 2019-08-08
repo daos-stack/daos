@@ -37,6 +37,7 @@ service MgmtSvc {
 	rpc DestroyPool(DestroyPoolReq) returns (DestroyPoolResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
+	rpc BioHealthQuery(BioHealthReq) returns (BioHealthResp) {}
 }
 
 message JoinReq {

@@ -25,6 +25,7 @@ package client
 
 import (
 	"golang.org/x/net/context"
+	"fmt"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
@@ -47,7 +48,23 @@ func (c *connList) DestroyPool(req *pb.DestroyPoolReq) ResultMap {
 	results := make(ResultMap)
 	mc := c.controllers[0] // connect to first AP only for now
 
+	fmt.Printf("DestroyPool(req *pb.DestroyPoolReq)")
 	resp, err := mc.getSvcClient().DestroyPool(context.Background(), req)
+
+	result := ClientResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
+}
+
+func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultMap {
+	results := make(ResultMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	fmt.Printf("BioHealthQuery(req *pb.BioHealthReq)\n")
+
+	resp, err := mc.getSvcClient().BioHealthQuery(context.Background(), req)
+	fmt.Printf("BACK\n")
 
 	result := ClientResult{mc.getAddress(), resp, err}
 	results[result.Address] = result

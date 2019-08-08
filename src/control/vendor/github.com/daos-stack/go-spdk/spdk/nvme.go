@@ -47,6 +47,8 @@ import (
 type NVME interface {
 	// Discover NVMe controllers and namespaces
 	Discover() ([]Controller, []Namespace, error)
+	// Query raw SPDK NVMe SSD health stats
+	HealthQuery() ([]Controller, []Namespace, []DeviceHealth, error)
 	// Format NVMe controller namespaces
 	Format(ctrlrPciAddr string) ([]Controller, []Namespace, error)
 	// Update NVMe controller firmware
@@ -82,6 +84,23 @@ type Namespace struct {
 	CtrlrPciAddr string
 }
 
+type DeviceHealth struct {
+	Temp		uint32
+	TempWarnTime	uint32
+	TempCritTime	uint32
+	CtrlBusyTime	uint64
+	PowerCycles	uint64
+	PowerOnHours	uint64
+	UnsafeShutdowns	uint64
+	MediaErrors	uint64
+	ErrorLogEntries	uint64
+	TempWarn	bool
+	AvailSpareWarn	bool
+	ReliabilityWarn bool
+	ReadOnlyWarn	bool
+	VolatileWarn	bool
+}
+
 // Discover calls C.nvme_discover which returns
 // pointers to single linked list of ctrlr_t and ns_t structs.
 // These are converted to slices of Controller and Namespace structs.
@@ -93,6 +112,17 @@ func (n *Nvme) Discover() ([]Controller, []Namespace, error) {
 	}
 
 	return nil, nil, fmt.Errorf(
+		"%s unexpectedly returned NULL", failLocation)
+}
+
+func (n *Nvme) HealthQuery() ([]Controller, []Namespace, []DeviceHealth, error) {
+	failLocation := "NVMe Device Health(): C.nvme_dev_health"
+
+	if retPtr := C.nvme_dev_health(); retPtr != nil {
+		return processHealthReturn(retPtr, failLocation)
+	}
+
+	return nil, nil, nil, fmt.Errorf(
 		"%s unexpectedly returned NULL", failLocation)
 }
 
@@ -149,6 +179,25 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
+func c2GoDeviceHealth(health *C.struct_dev_health_t) DeviceHealth {
+	return DeviceHealth {
+		Temp:		 uint32(health.temperature),
+		TempWarnTime:	 uint32(health.warn_temp_time),
+		TempCritTime:	 uint32(health.crit_temp_time),
+		CtrlBusyTime:	 uint64(health.ctrl_busy_time),
+		PowerCycles:	 uint64(health.power_cycles),
+		PowerOnHours:	 uint64(health.power_on_hours),
+		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
+		MediaErrors:	 uint64(health.media_errors),
+		ErrorLogEntries: uint64(health.error_log_entries),
+		TempWarn:	 bool(health.temp_warning),
+		AvailSpareWarn:	 bool(health.avail_spare_warning),
+		ReliabilityWarn: bool(health.dev_reliabilty_warning),
+		ReadOnlyWarn:	 bool(health.read_only_warning),
+		VolatileWarn:	 bool(health.volatile_mem_warning),
+	}
+}
+
 // c2GoNamespace is a private translation function
 func c2GoNamespace(ns *C.struct_ns_t) Namespace {
 	return Namespace{
@@ -186,6 +235,46 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) (
 	}
 
 	return nil, nil, fmt.Errorf(
+		"%s failed, rc: %d, %s",
+		failLocation,
+		retPtr.rc,
+		C.GoString(&retPtr.err[0]))
+}
+
+// processHealthReturn parses return structs
+func processHealthReturn(retPtr *C.struct_ret_t, failLocation string) (
+	[]Controller, []Namespace, []DeviceHealth, error) {
+
+	var ctrlrs []Controller
+	var nss []Namespace
+	var devs []DeviceHealth
+
+	defer C.free(unsafe.Pointer(retPtr))
+
+	if retPtr.rc == 0 {
+		ctrlrPtr := retPtr.ctrlrs
+		for ctrlrPtr != nil {
+			defer C.free(unsafe.Pointer(ctrlrPtr))
+			ctrlrs = append(ctrlrs, c2GoController(ctrlrPtr))
+			healthPtr := ctrlrPtr.dev_health
+			if healthPtr != nil {
+				defer C.free(unsafe.Pointer(healthPtr))
+				devs = append(devs, c2GoDeviceHealth(healthPtr))
+			}
+			ctrlrPtr = ctrlrPtr.next
+		}
+
+		nsPtr := retPtr.nss
+		for nsPtr != nil {
+			defer C.free(unsafe.Pointer(nsPtr))
+			nss = append(nss, c2GoNamespace(nsPtr))
+			nsPtr = nsPtr.next
+		}
+
+		return ctrlrs, nss, devs, nil
+	}
+
+	return nil, nil, nil, fmt.Errorf(
 		"%s failed, rc: %d, %s",
 		failLocation,
 		retPtr.rc,

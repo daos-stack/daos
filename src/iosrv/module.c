@@ -155,6 +155,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	}
 
 	/* register dRPC handlers */
+	D_ERROR("****register dRPC for %s\n", modname);
 	rc = drpc_hdlr_register_all(smod->sm_drpc_handlers);
 	if (rc) {
 		D_ERROR("failed to register dRPC for %s: %d\n",

@@ -42,6 +42,13 @@ message ScanStorageResp {
 	// TODO: add scan for scm regions/mount
 }
 
+message QueryHealthReq {}
+
+message QueryHealthResp {
+	repeated NvmeController ctrlrs = 1;
+	ResponseState nvmestate = 2;
+}
+
 message FormatStorageReq {}
 
 message FormatStorageResp {

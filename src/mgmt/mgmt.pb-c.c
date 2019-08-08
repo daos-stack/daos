@@ -515,14 +515,16 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[4] =
+static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[5] =
 {
   { "Join", &mgmt__join_req__descriptor, &mgmt__join_resp__descriptor },
   { "CreatePool", &mgmt__create_pool_req__descriptor, &mgmt__create_pool_resp__descriptor },
   { "DestroyPool", &mgmt__destroy_pool_req__descriptor, &mgmt__destroy_pool_resp__descriptor },
   { "GetAttachInfo", &mgmt__get_attach_info_req__descriptor, &mgmt__get_attach_info_resp__descriptor },
+  { "BioHealthQuery", &mgmt__bio_health_req__descriptor, &mgmt__bio_health_resp__descriptor },
 };
 const unsigned mgmt__mgmt_svc__method_indices_by_name[] = {
+  4,        /* BioHealthQuery */
   1,        /* CreatePool */
   2,        /* DestroyPool */
   3,        /* GetAttachInfo */
@@ -535,7 +537,7 @@ const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
   "MgmtSvc",
   "Mgmt__MgmtSvc",
   "mgmt",
-  4,
+  5,
   mgmt__mgmt_svc__method_descriptors,
   mgmt__mgmt_svc__method_indices_by_name
 };
@@ -570,6 +572,14 @@ void mgmt__mgmt_svc__get_attach_info(ProtobufCService *service,
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
   service->invoke(service, 3, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+}
+void mgmt__mgmt_svc__bio_health_query(ProtobufCService *service,
+                                      const Mgmt__BioHealthReq *input,
+                                      Mgmt__BioHealthResp_Closure closure,
+                                      void *closure_data)
+{
+  assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
+  service->invoke(service, 4, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
                            Mgmt__MgmtSvc_ServiceDestroy destroy)

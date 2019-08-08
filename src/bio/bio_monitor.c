@@ -33,6 +33,12 @@
 /* Used to preallocate buffer to query error log pages from SPDK health info */
 #define DAOS_MAX_ERROR_LOG_PAGES 256
 
+struct bio_dev_state *
+get_bio_dev_state(struct bio_xs_context *xs)
+{
+	return &xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+}
+
 static void
 dprint_uint128_hex(uint64_t *v)
 {

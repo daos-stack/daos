@@ -62,6 +62,17 @@ func (c *controlService) ScanStorage(
 	return resp, nil
 }
 
+func (c *controlService) DeviceHealthQuery(
+	ctx context.Context, req *pb.QueryHealthReq) (
+	*pb.QueryHealthResp, error) {
+
+	resp := new(pb.QueryHealthResp)
+
+	c.nvme.HealthQuery(resp)
+
+	return resp, nil
+}
+
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
 func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {

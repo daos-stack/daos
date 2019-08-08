@@ -44,16 +44,48 @@ typedef enum _NvmeControlStatusCode {
 	NVMEC_LAST_STATUS_VALUE
 } NvmeControlStatusCode;
 
+/*
+ * Raw SPDK device health statistics.
+ */
+struct dev_health_t {
+	uint16_t	 temperature; /* in Kelvin */
+	uint32_t	 warn_temp_time;
+	uint32_t	 crit_temp_time;
+	uint64_t	 ctrl_busy_time;
+	uint64_t	 power_cycles;
+	uint64_t	 power_on_hours;
+	uint64_t	 unsafe_shutdowns;
+	uint64_t	 media_errors;
+	uint64_t	 error_log_entries;
+	/* Critical warnings */
+	bool		 temp_warning;
+	bool		 avail_spare_warning;
+	bool		 dev_reliabilty_warning;
+	bool		 read_only_warning;
+	bool		 volatile_mem_warning;
+
+
+//	uint64_t	*media_errors; /* supports 128-bit values */
+//	uint64_t	 error_count; /* error log page */
+//	uint64_t	 temperature; /* in Kelvin */
+	/* Critical warnings */
+//	uint8_t		 temp_warning	: 1;
+//	uint8_t		 avail_spare_warning	: 1;
+//	uint8_t		 dev_reliabilty_warning : 1;
+//	uint8_t		 read_only_warning	: 1;
+//	uint8_t		 volatile_mem_warning: 1; /*volatile memory backup*/
+};
 
 /**
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char		model[1024];
-	char		serial[1024];
-	char		pci_addr[1024];
-	char		fw_rev[1024];
-	struct ctrlr_t	*next;
+	char		     model[1024];
+	char		     serial[1024];
+	char		     pci_addr[1024];
+	char		     fw_rev[1024];
+	struct dev_health_t *dev_health;	
+	struct ctrlr_t	    *next;
 };
 
 /**
@@ -83,6 +115,8 @@ struct ret_t {
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *nvme_discover(void);
+
+struct ret_t *nvme_dev_health(void);
 
 /**
  * Update NVMe controller firmware.

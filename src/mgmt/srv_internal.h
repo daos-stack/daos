@@ -94,6 +94,7 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
+int ds_mgmt_bio_health_query(void);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);

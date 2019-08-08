@@ -34,6 +34,7 @@ import "srv.proto";
 service MgmtCtl {
 	// Retrieve details of nonvolatile storage devices on server
 	rpc ScanStorage(ScanStorageReq) returns (ScanStorageResp) {};
+	rpc DeviceHealthQuery(QueryHealthReq) returns (QueryHealthResp) {};
 	// Format nonvolatile storage devices for use with DAOS
 	rpc FormatStorage(FormatStorageReq) returns (stream FormatStorageResp) {};
 	// Update nonvolatile storage device firmware

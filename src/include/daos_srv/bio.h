@@ -72,6 +72,7 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
+struct bio_blobstore;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -436,5 +437,15 @@ bio_yield(void)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	ABT_thread_yield();
 }
+
+/*
+ * Get the global BIO health information for control plane query.
+ *
+ * \param xs	[IN]	xs context
+ *
+ * \return		BIO device health data
+ */
+struct bio_dev_state * get_bio_dev_state(struct bio_xs_context *xs);
+
 
 #endif /* __BIO_API_H__ */

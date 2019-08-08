@@ -180,6 +180,57 @@ func (c *connList) ScanStorage() (ClientCtrlrMap, ClientModuleMap) {
 	return cCtrlrs, cModules
 }
 
+func deviceHealthRequest(mc Control, req interface{}, ch chan ClientResult) {
+	sRes := StorageResult{}
+
+	resp, err := mc.getCtlClient().DeviceHealthQuery(
+		context.Background(), &pb.QueryHealthReq{})
+	if err != nil {
+		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
+		return
+	}
+
+	// process storage subsystem responses
+	nState := resp.GetNvmestate()
+	if nState.GetStatus() != pb.ResponseStatus_CTRL_SUCCESS {
+		msg := nState.GetError()
+		if msg == "" {
+			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
+		}
+		sRes.nvmeCtrlr.Err = errors.Errorf(msg)
+	} else {
+		sRes.nvmeCtrlr.Ctrlrs = resp.Ctrlrs
+	}
+
+	ch <- ClientResult{mc.getAddress(), sRes, nil}
+}
+
+
+func (c *connList) DeviceHealthQuery() (ClientCtrlrMap) {
+	cResults := c.makeRequests(nil, deviceHealthRequest)
+	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
+
+	for _, res := range cResults {
+		if res.Err != nil {
+			cCtrlrs[res.Address] = common.CtrlrResults{Err: res.Err}
+			continue
+		}
+
+		storageRes, ok := res.Value.(StorageResult)
+		if !ok {
+			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
+
+			cCtrlrs[res.Address] = common.CtrlrResults{Err: err}
+			continue
+		}
+
+		cCtrlrs[res.Address] = storageRes.nvmeCtrlr
+		// TODO: return SCM region/mount info in storageRes.scmMount
+	}
+
+	return cCtrlrs
+}
+
 // formatStorageRequest attempts to format nonvolatile storage devices on a
 // remote server over gRPC.
 //

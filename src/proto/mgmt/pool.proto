@@ -56,3 +56,12 @@ message DestroyPoolReq {
 message DestroyPoolResp {
 	int32 status = 1; // DAOS error code
 }
+
+message BioHealthReq {
+	bool idk = 1;
+}
+
+message BioHealthResp {
+	int32 status = 1; // DAOS error code
+	uint32 temp = 2;
+}

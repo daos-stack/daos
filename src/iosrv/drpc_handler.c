@@ -106,6 +106,7 @@ drpc_hdlr_register_all(struct dss_drpc_handler *handlers)
 	while (current->handler != NULL) {
 		int handler_rc;
 
+		D_ERROR("***registering mod id:%d\n", current->module_id);
 		handler_rc = drpc_hdlr_register(current->module_id,
 				current->handler);
 		if (handler_rc != DER_SUCCESS) {

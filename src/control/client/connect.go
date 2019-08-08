@@ -106,6 +106,7 @@ type Connect interface {
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
 	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
+	DeviceHealthQuery() (ClientCtrlrMap)
 	FormatStorage() (ClientCtrlrMap, ClientMountMap)
 	UpdateStorage(*pb.UpdateStorageReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
@@ -114,6 +115,7 @@ type Connect interface {
 	KillRank(uuid string, rank uint32) ResultMap
 	CreatePool(*pb.CreatePoolReq) ResultMap
 	DestroyPool(*pb.DestroyPoolReq) ResultMap
+	BioHealthQuery(*pb.BioHealthReq) ResultMap
 }
 
 // connList is an implementation of Connect and stores controllers
