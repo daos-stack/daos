@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -45,6 +45,8 @@ const (
 )
 
 type cliOptions struct {
+	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
+	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
 	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
 	Insecure   bool   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
 	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
@@ -54,9 +56,6 @@ type cliOptions struct {
 var opts = new(cliOptions)
 
 func main() {
-	// Set default global logger for application.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
-
 	if err := agentMain(); err != nil {
 		fmt.Fprintf(os.Stderr, "fatal error: %s\n", err)
 		log.Errorf("%+v", err)
@@ -85,13 +84,22 @@ func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
 
 func agentMain() error {
 
-	log.Debugf("Starting daos_agent:")
+	log.Info("Starting daos_agent:")
 
 	p := flags.NewParser(opts, flags.Default)
 
 	_, err := p.Parse()
 	if err != nil {
 		return err
+	}
+
+	if opts.JSON {
+		log.SetJSONOutput()
+	}
+
+	if opts.Debug {
+		log.SetLevel(log.LogLevelDebug)
+		log.Debug("debug output enabled")
 	}
 
 	// Load the configuration file using the supplied path or the
@@ -114,15 +122,21 @@ func agentMain() error {
 	sockPath := filepath.Join(config.RuntimeDir, agentSockName)
 	log.Debugf("Full socket path is now: %s", sockPath)
 
-	f, err := common.AppendFile(config.LogFile)
-	if err != nil {
-		log.Errorf("Failure creating log file: %s", err)
-		return err
-	}
-	log.Debugf("Using logfile: %s", config.LogFile)
+	if config.LogFile != "" {
+		f, err := common.AppendFile(config.LogFile)
+		if err != nil {
+			log.Errorf("Failure creating log file: %s", err)
+			return err
+		}
+		defer f.Close()
+		log.Infof("Using logfile: %s", config.LogFile)
 
-	defer f.Close()
-	log.SetOutput(f)
+		newLogger := log.NewCombinedLogger("", f)
+		if opts.JSON {
+			newLogger = newLogger.WithJSONOutput()
+		}
+		log.SetLogger(newLogger)
+	}
 
 	err = config.TransportConfig.PreLoadCertData()
 	if err != nil {
@@ -149,7 +163,7 @@ func agentMain() error {
 		return err
 	}
 
-	log.Debugf("Listening on %s", sockPath)
+	log.Infof("Listening on %s", sockPath)
 
 	// Anonymous goroutine to wait on the signals channel and tell the
 	// program to finish when it receives a signal. Since we only notify on

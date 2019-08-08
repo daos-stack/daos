@@ -35,7 +35,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/drpc_test/hello"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 var (
@@ -44,9 +44,6 @@ var (
 )
 
 func main() {
-	// Set default global logger for application.
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
-
 	flag.Parse()
 
 	err := errors.New("")
