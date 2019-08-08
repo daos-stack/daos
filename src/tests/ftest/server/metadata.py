@@ -23,7 +23,6 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import uuid
 import threading
@@ -32,11 +31,11 @@ import avocado
 
 from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosContainer, DaosApiError
 from ior_utils import IorCommand, IorFailed
 from server_utils import run_server, stop_server
 from write_host_file import write_host_file
-
+from test_utils import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
 
