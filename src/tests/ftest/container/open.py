@@ -130,10 +130,7 @@ class OpenContainerTest(TestWithServers):
                 struuid = self.container1.get_uuid_str()
                 container_uuid = uuid.UUID(struuid)
             else:
-                if uuidlist[0] == 'MFUUID':
-                    container_uuid = "misformed-uuid-0000"
-                else:
-                    container_uuid = uuid.uuid4() # random uuid
+                container_uuid = uuid.uuid4() # random uuid
 
             # tries to open the container1
             # open should be ok only if poh = pool1.handle &&
