@@ -144,7 +144,7 @@ class MdtestCommand(CommandWithParameters):
            uuid.
         Args:
             group (str): DAOS server group name
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -158,7 +158,7 @@ class MdtestCommand(CommandWithParameters):
     def set_daos_pool_params(self, pool, display=True):
         """Set the Mdtest parameters that are based on a DAOS pool.
         Args:
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
         self.dfs_pool_uuid.update(
@@ -168,7 +168,7 @@ class MdtestCommand(CommandWithParameters):
     def set_daos_svcl_param(self, pool, display=True):
         """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object
         Args:
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
         svcl = ":".join(
