@@ -82,7 +82,7 @@ func getConsent() bool {
 	if response == "no" {
 		return false
 	} else if response != "yes" {
-		log.Error("Please type yes or no and then press enter:")
+		log.Info("Please type yes or no and then press enter:")
 		return getConsent()
 	}
 

@@ -38,10 +38,10 @@ const (
 	// LogLevelDebug emits messages at DEBUG or higher
 	LogLevelDebug
 
-	disabledStr = "DISABLED"
-	errorStr    = "ERROR"
-	infoStr     = "INFO"
-	debugStr    = "DEBUG"
+	strDisabled = "DISABLED"
+	strError    = "ERROR"
+	strInfo     = "INFO"
+	strDebug    = "DEBUG"
 )
 
 // LogLevel represents the level at which the logger will emit log messages
@@ -62,13 +62,13 @@ func (ll *LogLevel) SetString(in string) error {
 	var level LogLevel
 
 	switch {
-	case strings.EqualFold(in, disabledStr):
+	case strings.EqualFold(in, strDisabled):
 		level = LogLevelDisabled
-	case strings.EqualFold(in, errorStr):
+	case strings.EqualFold(in, strError):
 		level = LogLevelError
-	case strings.EqualFold(in, infoStr):
+	case strings.EqualFold(in, strInfo):
 		level = LogLevelInfo
-	case strings.EqualFold(in, debugStr):
+	case strings.EqualFold(in, strDebug):
 		level = LogLevelDebug
 	default:
 		return fmt.Errorf("%q is not a valid log level", in)
@@ -81,13 +81,13 @@ func (ll *LogLevel) SetString(in string) error {
 func (ll LogLevel) String() string {
 	switch ll {
 	case LogLevelDisabled:
-		return disabledStr
+		return strDisabled
 	case LogLevelError:
-		return errorStr
+		return strError
 	case LogLevelInfo:
-		return infoStr
+		return strInfo
 	case LogLevelDebug:
-		return debugStr
+		return strDebug
 	default:
 		return "UNKNOWN"
 	}
