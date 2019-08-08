@@ -20,14 +20,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-import uuid
-
-from apricot import TestWithServers
-from general_utils import get_pool, get_container, kill_server
-from general_utils import wait_for_rebuild, is_pool_rebuild_complete
+from apricot import TestWithServers, skipForTicket
 from ior_utils import IorCommand, IorFailed
 from daos_api import DaosApiError
+from test_utils import TestPool, TestContainer
 
 
 class ContainerCreate(TestWithServers):
@@ -46,31 +42,26 @@ class ContainerCreate(TestWithServers):
         Args:
             loop_id (str): loop identification string
             qty (int): the number of containers to create
-            pool1 (DaosPool): pool used to determine if rebuild is complete
-            pool2 (DaosPool): pool used to add containers
+            pool1 (TestPool): pool used to determine if rebuild is complete
+            pool2 (TestPool): pool used to add containers
 
         Returns:
-            list: a list of DaosContianer objects
+            list: a list of TestContianer objects
 
         """
         containers = []
-        index = 0
-
-        while not is_pool_rebuild_complete(pool1, self.log) and index < qty:
+        while not pool1.rebuild_complete() and len(containers) < qty:
             # Create a new container
             self.log.info(
                 "%s: Creating container %s/%s in pool %s during rebuild",
-                loop_id, index + 1, qty, pool2.get_uuid_str())
-            containers.append(
-                get_container(self.context, pool2, self.d_log, False))
+                loop_id, len(containers) + 1, qty, pool2.uuid)
+            containers.append(TestContainer(pool2))
+            containers[-1].create()
 
-            # Create the next container
-            index += 1
-
-        if index < qty:
+        if len(containers) < qty:
             self.fail(
                 "{}: Rebuild completed with only {}/{} containers "
-                "created".format(loop_id, index, qty))
+                "created".format(loop_id, len(containers), qty))
 
         return containers
 
@@ -84,7 +75,8 @@ class ContainerCreate(TestWithServers):
         processes = len(self.hostlist_clients)
         total_bytes = ior_cmd.get_aggregate_total(processes)
         try:
-            ior_cmd.run(self.basepath, processes, self.hostfile_clients)
+            ior_cmd.run(
+                self.orterun, self.tmp, processes, self.hostfile_clients)
         except IorFailed as error:
             self.fail(
                 "{}: Error populating the container with {} bytes of data "
@@ -95,12 +87,12 @@ class ContainerCreate(TestWithServers):
             loop_id, "Wrote" if "-w" in ior_cmd.flags.value else "Read",
             total_bytes)
 
-    def access_container(self, loop_id, container, message=""):
+    def access_container(self, loop_id, container, message):
         """Open and close the specified container.
 
         Args:
             loop_id (str): loop identification string
-            container (DaosContainer): daos container object to open/close
+            container (TestContainer): daos container object to open/close
             message (str): additional text describing the container
 
         Returns:
@@ -108,13 +100,11 @@ class ContainerCreate(TestWithServers):
 
         """
         status = True
-        uuid_str = container.get_uuid_str()
         self.log.info(
-            "%s: Opening container %s %s", loop_id, uuid_str, message)
+            "%s: Verifying the container %s created during rebuild",
+            loop_id, message)
         try:
             container.open()
-            self.log.info(
-                "%s: Closing container %s %s", loop_id, uuid_str, message)
             try:
                 container.close()
 
@@ -128,6 +118,7 @@ class ContainerCreate(TestWithServers):
 
         return status
 
+    @skipForTicket("DAOS-3076")
     def test_rebuild_container_create(self):
         """Jira ID: DAOS-1168.
 
@@ -149,14 +140,23 @@ class ContainerCreate(TestWithServers):
 
         :avocado: tags=all,medium,full_regression,rebuild,rebuildcontcreate
         """
-        pool_mode = self.params.get("mode", "/run/pool/*")
-        pool_size = self.params.get("size", "/run/pool/*")
-        pool_name = self.params.get("setname", "/run/pool/*")
-        pool_svcn = self.params.get("svcn", "/run/pool/*")
-        pool_qty = self.params.get("qty", "/run/pool/*")
-        container_qty = self.params.get("container_qty", "/run/container/*")
-        rank = self.params.get("rank", "/run/test/*")
+        # Get test params
+        targets = self.params.get("targets", "/run/server_config/*")
+        pool_qty = self.params.get("pools", "/run/test/*")
         loop_qty = self.params.get("loops", "/run/test/*")
+        cont_qty = self.params.get("containers", "/run/test/*")
+        rank = self.params.get("rank", "/run/test/*")
+        node_qty = len(self.hostlist_servers)
+
+        # Get pool params
+        self.pool = []
+        for index in range(pool_qty):
+            self.pool.append(TestPool(self.context, self.log))
+            self.pool[-1].get_params(self)
+
+        # Get ior params
+        ior_cmd = IorCommand()
+        ior_cmd.get_params(self)
 
         # Cancel any tests with tickets already assigned
         if rank == 1 or rank == 2:
@@ -170,60 +170,61 @@ class ContainerCreate(TestWithServers):
             self.log.info("%s: Starting loop", loop_id)
 
             # Create the requested number of pools
-            self.pool = []
-            for index in range(pool_qty):
-                self.log.info(
-                    "%s: Creating pool %s/%s", loop_id, index + 1, pool_qty)
-                self.pool.append(
-                    get_pool(
-                        self.context, pool_mode, pool_size, pool_name,
-                        pool_svcn, self.d_log, False))
+            for pool in self.pool:
+                pool.create()
+
+            # Check the pool info
+            info_checks = {
+                "pi_uuid": pool.uuid,
+                "pi_ntargets": node_qty * targets,
+                "pi_nnodes": node_qty,
+                "pi_ndisabled": 0,
+            }
+            rebuild_checks = {
+                "rs_errno": 0,
+                "rs_done": 1,
+                "rs_obj_nr": 0,
+                "rs_rec_nr": 0,
+            }
+            status = pool.check_pool_info(**info_checks)
+            status &= pool.check_rebuild_status(**rebuild_checks)
+            self.assertTrue(
+                status,
+                "Error verifying pool info prior to excluding rank {}".format(
+                    rank))
 
             # Create a container with 1GB of data in the first pool
-            cont_uuid = uuid.uuid1()
+            ior_cmd.flags.update("-v -w -W -G 1 -k", "ior.flags")
+            ior_cmd.daos_destroy.update(False, "ior.daos_destroy")
+            ior_cmd.set_daos_params(self.server_group, self.pool[0])
             self.log.info(
-                "%s: Running IOR on pool %s to create container %s",
-                loop_id, self.pool[0].get_uuid_str(), cont_uuid)
-            ior_cmd = IorCommand()
-            ior_cmd.set_params(self)
-            ior_cmd.flags.value = "-v -w -W -G 1 -k"
-            ior_cmd.daos_pool.value = self.pool[0].get_uuid_str()
-            ior_cmd.daos_cont.value = cont_uuid
-            ior_cmd.daos_destroy.value = False
-            ior_cmd.daos_svcl.value = ":".join(
-                [str(item) for item in [
-                    int(self.pool[0].svc.rl_ranks[index])
-                    for index in range(pool_svcn)]])
+                "%s: Running IOR on pool %s to fill container %s with data",
+                loop_id, self.pool[0].uuid, ior_cmd.daos_cont.value)
             self.run_ior(loop_id, ior_cmd)
 
-            # Connect to the pools
-            for index, pool in enumerate(self.pool):
-                self.log.info(
-                    "%s: Connecting to pool %s (%s/%s)",
-                    loop_id, pool.get_uuid_str(), index + 1, len(self.pool))
-                pool.connect(1 << 1)
-
             # Exclude the first rank from the first pool to initiate rebuild
-            self.log.info(
-                "%s: Excluding DAOS server %s (rank %s)",
-                loop_id, self.server_group, rank)
-            kill_server(
-                self.server_group, self.context, rank, self.pool[0],
-                self.d_log)
+            self.pool[0].start_rebuild(self.server_group, rank, self.d_log)
 
             # Wait for rebuild to start
-            wait_for_rebuild(self.pool[0], self.log, True, 1)
+            self.pool[0].wait_for_rebuild(True, 1)
 
             # Create additional containers in the last pool
             new_containers = self.add_containers_during_rebuild(
-                loop_id, container_qty, self.pool[0], self.pool[-1])
+                loop_id, cont_qty, self.pool[0], self.pool[-1])
 
             # Confirm rebuild completes
-            wait_for_rebuild(self.pool, self.log, False, 1)
+            self.pool[0].wait_for_rebuild(False, 1)
+
+            # Check the pool info
+            info_checks["pi_ndisabled"] += targets
+            rebuild_checks["rs_done"] = 1
+            rebuild_checks["rs_obj_nr"] = ">=0"
+            rebuild_checks["rs_rec_nr"] = ">=0"
+            status = pool.check_pool_info(**info_checks)
+            status &= pool.check_rebuild_status(**rebuild_checks)
+            self.assertTrue(status, "Error verifying pool info after rebuild")
 
             # Verify that each of created containers exist by openning them
-            self.log.info(
-                "%s: Verifying the containers created during rebuild", loop_id)
             for index, container in enumerate(new_containers):
                 count = "{}/{}".format(index + 1, len(new_containers))
                 if not self.access_container(loop_id, container, count):
@@ -231,32 +232,18 @@ class ContainerCreate(TestWithServers):
 
             # Destroy the containers created during rebuild
             for index, container in enumerate(new_containers):
-                self.log.info(
-                    "%s: Destroying container %s (%s/%s)",
-                    loop_id, container.get_uuid_str(), index + 1,
-                    len(new_containers))
                 container.destroy()
-
-            # Disconnect from the pool(s) created during rebuild
-            for index, pool in enumerate(self.pool):
-                self.log.info(
-                    "%s: Disconnecting from pool %s (%s/%s)",
-                    loop_id, pool.get_uuid_str(), index + 1, len(self.pool))
-                pool.disconnect()
 
             # Read the data from the container created before rebuild
             self.log.info(
                 "%s: Running IOR on pool %s to verify container %s",
-                loop_id, self.pool[0].get_uuid_str(), cont_uuid)
-            ior_cmd.flags.value = "-v -r -R -G 1 -k"
-            ior_cmd.daos_destroy.value = True
+                loop_id, self.pool[0].uuid, ior_cmd.daos_cont.value)
+            ior_cmd.flags.update("-v -r -R -G 1 -E", "ior.flags")
+            ior_cmd.daos_destroy.update(True, "ior.daos_destroy")
             self.run_ior(loop_id, ior_cmd)
 
             # Destroy the pools
             for index, pool in enumerate(self.pool):
-                self.log.info(
-                    "%s: Destroying pool %s (%s/%s)",
-                    loop_id, pool.get_uuid_str(), index + 1, len(self.pool))
                 pool.destroy(1)
 
             self.log.info(
