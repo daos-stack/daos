@@ -234,10 +234,10 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, struct pl_obj_layout *layout,
 	   int shard_num)
 {
-	uint8_t         	found_target = 0;
-	uint8_t         	top = 0;
-	uint32_t        	fail_num = 0;
-	uint32_t        	selected_dom;
+	uint8_t			found_target = 0;
+	uint8_t			top = 0;
+	uint32_t		fail_num = 0;
+	uint32_t		selected_dom;
 	uint32_t		tgt_id;
 	struct pool_domain	*root_pos;
 
@@ -489,16 +489,16 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 * \paramp[in]	mmap		The placement map being used for placement.
 * \paramp[in]	md		Object Metadata.
 * \paramp[in]	layout		The original layout which contains some shards
-* 				on failed targets.
+*				on failed targets.
 * \paramp[in]	mop		Structure containing information related to
-* 				layout characteristics.
+*				layout characteristics.
 * \paramp[in]	remap_list	List containing shards to be remapped sorted
-* 				by failure sequence.
+*				by failure sequence.
 * \paramp[in]	dom_used	Bookkeeping array used to keep track of which
-* 				domain components have already been used.
+*				domain components have already been used.
 *
 * \return	return an error code signifying whether the shards were
-* 		successfully remapped properly.
+*		successfully remapped properly.
 */
 static int
 obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
