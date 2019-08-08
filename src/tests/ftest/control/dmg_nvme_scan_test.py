@@ -22,7 +22,6 @@ from __future__ import print_function
 
 import os
 import time
-import traceback
 
 from dmg_utils import DmgCommand
 from server_utils import ServerCommand
@@ -36,7 +35,8 @@ class DmgNvmeScanTest(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
 
-    def clean_up():
+    @staticmethod
+    def clean_up(self):
         """ Setup/cleanup for the daos_server to run properly."""
 
         umount_daos = "umount /mnt/daos; rm -rf /mnt/daos"
@@ -65,7 +65,7 @@ class DmgNvmeScanTest(TestWithoutServers):
         """ Test basic dmg functionality to scan nvme the storage on system.
         :avocado: tags=all,hw,dmg,control
         """
-        clean_up()
+        self.clean_up()
 
         # Create daos_server command
         server = ServerCommand()
