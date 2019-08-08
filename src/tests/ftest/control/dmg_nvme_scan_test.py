@@ -52,7 +52,7 @@ class DmgNvmeScanTest(TestWithoutServers):
         """ Test basic dmg functionality to scan nvme the storage on system.
         :avocado: tags=all,hw,dmg,control
         """
-        self.cleanup()
+        self.clean_up()
 
         # Create daos_server command
         server = ServerCommand()
