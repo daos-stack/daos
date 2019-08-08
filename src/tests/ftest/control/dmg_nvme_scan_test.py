@@ -70,7 +70,7 @@ class DmgNvmeScanTest(TestWithoutServers):
     def test_dmg_nvme_scan_basic(self):
         """ Test basic dmg functionality to scan nvme the storage on system.
 
-        :avocado: tags=all,pr,dmg,control,amanda
+        :avocado: tags=all,hw,dmg,control,amanda
 
         """
         self.cleanUp()

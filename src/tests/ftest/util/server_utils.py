@@ -56,18 +56,18 @@ class ServerCommand(CommandWithParameters):
 
         super(ServerCommand, self).__init__(command, shell=True, sudo=True)
 
-        self.request    = BasicParameter("{}")
-        self.action     = BasicParameter("{}")
-        self.targets    = FormattedParameter("-t {}")
-        self.config     = FormattedParameter("-o {}")
-        self.port       = FormattedParameter("-p {}")
-        self.storage    = FormattedParameter("-s {}")
-        self.modules    = FormattedParameter("-m {}")
+        self.request = BasicParameter("{}")
+        self.action = BasicParameter("{}")
+        self.targets = FormattedParameter("-t {}")
+        self.config = FormattedParameter("-o {}")
+        self.port = FormattedParameter("-p {}")
+        self.storage = FormattedParameter("-s {}")
+        self.modules = FormattedParameter("-m {}")
         self.xshelpernr = FormattedParameter("-x {}")
-        self.firstcore  = FormattedParameter("-f {}")
-        self.group      = FormattedParameter("-g {}")
-        self.attach     = FormattedParameter("-a {}")
-        self.sock_dir   = FormattedParameter("-d {}")
+        self.firstcore = FormattedParameter("-f {}")
+        self.group = FormattedParameter("-g {}")
+        self.attach = FormattedParameter("-a {}")
+        self.sock_dir = FormattedParameter("-d {}")
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -82,10 +82,11 @@ class ServerCommand(CommandWithParameters):
         for name in self.get_param_names():
             value = str(getattr(self, name))
             if (value != "" and name != "request" and name != "action"
-                name != "port"):
+                    name != "port"):
                 params.append(value)
         return " ".join([self._command] + params +
-            [str(getattr(self, "request"))] + [str(getattr(self, "action"))])
+                        [str(getattr(self, "request"))] +
+                        [str(getattr(self, "action"))])
 
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):

@@ -1,30 +1,28 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+     http://www.apache.org/licenses/LICENSE-2.0
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
 
-    GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-    The Government's rights to use, modify, reproduce, release, perform, display,
-    or disclose this software are subject to the terms of the Apache License as
-    provided in Contract No. B609815.
-    Any reproduction of computer software, computer software documentation, or
-    portions thereof marked with this legend must also reproduce the markings.
+  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+  The Government's rights to use, modify, reproduce, release, perform, display,
+  or disclose this software are subject to the terms of the Apache License as
+  provided in Contract No. B609815.
+  Any reproduction of computer software, computer software documentation, or
+  portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
 from avocado.utils import process
-
-import os
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
@@ -183,7 +181,7 @@ class CommandWithParameters(ObjectWithParameters):
 
         """
         return process.run(self.__str__(), timeout, verbose,
-                            shell=self.shell,env=env, sudo=self.sudo)
+                           shell=self.shell,env=env, sudo=self.sudo)
 
     def subproc(self, verbose=True, env=None):
         """ Create a subprocess object to run in the background.
@@ -197,4 +195,4 @@ class CommandWithParameters(ObjectWithParameters):
 
         """
         return process.SubProcess(self.__str__(), verbose,
-                        shell=self.shell, env=env, sudo=self.sudo)
+                                  shell=self.shell, env=env, sudo=self.sudo)

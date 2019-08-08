@@ -53,8 +53,8 @@ class SPDK_Env(object):
             raise SPDKError("Could not initialize SPDK env!")
 
     def set_restype(self):
-        """ Set the return type for common functions."""
-
+        """ Set the return type for common functions.
+        """
         self.libspdk.spdk_nvme_ns_get_id.restype = POINTER(c_uint)
         self.libspdk.spdk_nvme_ns_is_active.restype = POINTER(c_bool)
         self.libspdk.spdk_nvme_ctrlr_get_data.restype = POINTER(
@@ -65,6 +65,7 @@ class NVMeNamespaceData(object):
     def __init__(self, ns_id=None, size=None, ctrlr_pci_addr=None):
         self.ns_id = ns_id
         self.size = size
+        self.active = None
         self.ns_p = None
 
 class NVMeControllerData(object):
@@ -117,17 +118,13 @@ class NVMe(SPDK_Env):
             if ns == None:
                 continue
 
-            if(self.libspdk.spdk_nvme_ns_is_active(ns) is not True):
-                print("Skipping inactive NS!")
-                return
-
             ns_data = NVMeNamespaceData()
             ns_data.ns_p = ns
 
             # Append ns to ctrlr ns_list
             ctrlr_data.ns_list.append(ns_data)
 
-        # Append ctrlr to list
+        # # Append ctrlr to list
         self.ctrlr_list.append(ctrlr_data)
 
     def _py_probe_cb(self, cb_ctx, trid, opts):
@@ -160,11 +157,3 @@ class NVMe(SPDK_Env):
         rc = self.libspdk.spdk_nvme_probe(None, None, probe_cb, attach_cb, None)
         if rc < 0:
             raise NVMeError("Failed to probe nvme devices!")
-
-def main():
-    print("Hello")
-    nvme = NVMe("/home/amjustin/amjustin/daos/install/lib/")
-    ret = nvme.Discover()
-
-if __name__ == "__main__":
-    main()
