@@ -32,7 +32,7 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
-# pylint: disable=too-many-instance-attributes, redefined-variable-type
+# pylint: disable=too-many-instance-attributes
 class OpenContainerTest(TestWithServers):
     """
     Tests DAOS container bad create (non existing pool handle, bad uuid)
