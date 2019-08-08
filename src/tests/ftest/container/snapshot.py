@@ -206,7 +206,7 @@ class Snapshot(TestWithServers):
 
         Use Cases: Combinations with minimun 1 client and 1 server.
         :avocado: tags=all,small,smoke,pr,snap,snapshot_negative,
-                       snapshotcreate_negative
+        :avocado: tags=snapshotcreate_negative
         """
 
         #DAOS-1322 Create a new container, verify snapshot state as expected
