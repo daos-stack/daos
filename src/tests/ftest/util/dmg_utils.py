@@ -25,46 +25,62 @@ from __future__ import print_function
 
 import os
 import json
-from cmd_utils import Command, CommandParam
+from command_utils import CommandWithParameters
+from command_utils import BasicParameter, FormattedParameter
 
-class DmgCmdUtils(Command):
+class DmgCommand(CommandWithParameters):
     """Defines a object representing a dmg (or daos_shell) command."""
 
-    def __init__(self, tool = "dmg"):
+    def __init__(self, command="dmg"):
         """Create a dmg Command object
 
         Args:
-            tool (str): tool to execute, default = dmg
+            command (str): command to execute, default=dmg
 
         """
 
-        self.command = CommandParam("{}")           # i.e. storage, network
-        self.action = CommandParam("{}")            # i.e. format, scan
+        super(DmgCommand, self).__init__(command, shell=True)
+
+        self.request    = BasicParameter("{}")
+        self.action     = BasicParameter("{}")
 
         # daos_shell options
-        self.hostlist = CommandParam("-l {}")       # list of addresses
-        self.hostfile = CommandParam("-f {}")       # path of hostfile
-        self.configpath = CommandParam("-o {}")     # client config file path
+        self.hostlist   = FormattedParameter("-l {}")
+        self.hostfile   = FormattedParameter("-f {}")
+        self.configpath = FormattedParameter("-o {}")
+        self.port       = BasicParameter("{}")
 
         # dmg options
+        self.gid    = FormattedParameter("--gid={}")
+        self.uid    = FormattedParameter("--uid={}")
+        self.group  = FormattedParameter("--group={}")
+        self.mode   = FormattedParameter("--mode={}")
+        self.size   = FormattedParameter("--size={}")
+        self.nvme   = FormattedParameter("--nvme={}")
+        self.svcn   = FormattedParameter("--svcn={}")
+        self.target = FormattedParameter("--target={}")
+        self.force  = FormattedParameter("--force", False)
+        self.pool   = FormattedParameter("--pool={}")
+        self.svc    = FormattedParameter("--svc={}")
+        self.rank   = FormattedParameter("--rank={}")
+        self.cont   = FormattedParameter("--cont={}")
+        self.oid    = FormattedParameter("--oid={}")
 
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
 
-        self.cmd = Command(tool, "/run/{}/*".format(tool), self.__dict__)
+        The dmg command (or daos_shell) use the following command structure:
+        dmg(daos_shell) <request> <action> <parameters>
 
-    def execute(self, test, basepath = "", bg = False):
-        """Run the dmg command
-
-        Args:
-            test (object): Avocado test object
-            basepath (str, optional): DAOS install dir. Defaults to "".
-
-        Return:
-            Avocado cmd object.
+        Returns:
+            str: the command with all the defined parameters.
 
         """
-
-        # Set param values and get command string
-        self.cmd.set_param_values(test)
-        command = os.path.join(basepath, 'install', 'bin', self.cmd.__str__())
-
-        return self.cmd.run(command)
+        params = []
+        for name in self.get_param_names():
+            value = str(getattr(self, name))
+            if (value != "" and name != "request" and name != "action" and
+                name != "port"):
+                params.append(value)
+        return " ".join([self._command] + params +
+            [str(getattr(self, "request"))] + [str(getattr(self, "action"))])

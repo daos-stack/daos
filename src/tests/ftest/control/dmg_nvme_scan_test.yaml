@@ -1,13 +1,13 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - boro-10
+  test_machines:
+    - boro-A
 server_config:
   name: daos_server
 daos_shell:
-  hostlist: boro-10:10001
-  command: storage
+  port: 10001
+  request: storage
   action: scan
 daos_server:
   targets: 1

@@ -36,7 +36,8 @@ import fcntl
 import errno
 import yaml
 
-from cmd_utils import Command, CommandParam
+from command_utils import CommandWithParameters
+from command_utils import BasicParameter, FormattedParameter
 from avocado.utils import genio
 
 SESSIONS = {}
@@ -47,50 +48,45 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 class ServerFailed(Exception):
     """ Server didn't start/stop properly. """
 
-class ServerCmdUtils(object):
+class ServerCommand(CommandWithParameters):
     """Defines a object representing a server command."""
 
-    def __init__(self):
+    def __init__(self, command="daos_server"):
         """Create a server Command object"""
 
-        self.command = CommandParam("{}")           # i.e storage, network
-        self.action = CommandParam("{}")            # i.e scan, format, update
-        self.targets = CommandParam("-t {}")        # number of tagets to use
-        self.config = CommandParam("-o {}")         # server config file path
-        self.port = CommandParam("-p {}")           # port for gRPC to listen
-        self.storage = CommandParam("-s {}")        # storage path
-        self.modules = CommandParam("-m {}")        # list of server modules
-        self.xshelpernr = CommandParam("-x {}")     # number of helper XS
-        self.firstcore = CommandParam("-f {}")      # index of first core
-        self.group = CommandParam("-g {}")          # server group name
-        self.attach = CommandParam("-a {}")         # attach info patch
-        self.sock_dir = CommandParam("-d {}")       # daos_server socket dir
+        super(ServerCommand, self).__init__(command, shell=True, sudo=True)
 
-        self.cmd = Command("daos_server", "/run/daos_server/*", self.__dict__)
+        self.request    = BasicParameter("{}")
+        self.action     = BasicParameter("{}")
+        self.targets    = FormattedParameter("-t {}")
+        self.config     = FormattedParameter("-o {}")
+        self.port       = FormattedParameter("-p {}")
+        self.storage    = FormattedParameter("-s {}")
+        self.modules    = FormattedParameter("-m {}")
+        self.xshelpernr = FormattedParameter("-x {}")
+        self.firstcore  = FormattedParameter("-f {}")
+        self.group      = FormattedParameter("-g {}")
+        self.attach     = FormattedParameter("-a {}")
+        self.sock_dir   = FormattedParameter("-d {}")
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
 
-    def execute(self, test, basepath = "", bg = False):
-        """Run the server command
+        The daos_server command use the following command structure:
+        daos_server <request> <action> <parameters>
 
-        Args:
-            test (object): Avocado test object
-            basepath (str, optional): DAOS install dir. Defaults to "".
-
-        Return:
-            Avocado cmd object.
+        Returns:
+            str: the command with all the defined parameters.
 
         """
+        params = []
+        for name in self.get_param_names():
+            value = str(getattr(self, name))
+            if (value != "" and name != "request" and name != "action"
+                name != "port"):
+                params.append(value)
+        return " ".join([self._command] + params +
+            [str(getattr(self, "request"))] + [str(getattr(self, "action"))])
 
-        # Set param values
-        self.cmd.set_param_values(test)
-
-        # Setup the config file value
-        if self.config.value != None:
-            self.config.value = os.path.join(basepath, str(self.config.value))
-
-        # Get command as string
-        command = os.path.join(basepath, 'install', 'bin', self.cmd.__str__())
-
-        return self.cmd.run(command, bg)
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """
