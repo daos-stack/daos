@@ -881,7 +881,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 out:
 	rc = ds_obj_rw_complete(rpc, cont_hdl, ioh, rc, dth);
 	if (cpy_iods)
-		ec_free_iods(&cpy_iods, orw->orw_nr);
+		ec_free_iods(cpy_iods, orw->orw_nr);
 	return rc;
 }
 

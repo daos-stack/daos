@@ -76,8 +76,9 @@ ec_del_recx(daos_iod_t *iod, unsigned int idx)
 {
 	int j;
 
+	D_ASSERT(iod->iod_nr >= 1 && idx < iod->iod_nr);
 	for (j = idx; j < iod->iod_nr - 1; j++)
-		iod->iod_recxs[j] = iod->iod_recxs[j+1];
+		iod->iod_recxs[j] = iod->iod_recxs[j + 1];
 	iod->iod_nr--;
 }
 
@@ -100,9 +101,13 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 		if (iod->iod_type == DAOS_IOD_SINGLE ||
 			ec_is_one_cell(iod, oca, dtgt_idx))
 			continue;
+		/*  A recx will involve at most 3 skip list entries on a data
+		 *  target. The plus one is to ensure there's still a zero at
+		 *  the end of the array.
+		 */
 		D_ALLOC_ARRAY(skip_list[i], 3 * iod->iod_nr + 1);
 		if (skip_list[i] == NULL)
-			D_GOTO(out, rc = -1);
+			D_GOTO(out, rc = -DER_NOMEM);
 		for (idx = 0, j = 0; j < loop_bound; j++) {
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
 			unsigned long	so =
@@ -125,7 +130,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				skip_list[i][sl_idx++] = new_len;
 				skip_list[i][sl_idx++] =
 					-(long)(recx_size - new_len);
-			} else if ((dtgt_idx + 1) * oca->u.ec.e_len < so) {
+			} else if ((dtgt_idx + 1) * oca->u.ec.e_len <= so) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
 				 */
@@ -171,11 +176,13 @@ out:
 	return rc;
 }
 
-/* Determines if parity exists for the specified stripe
+/* Determines if parity exists for the specified stripe:
+ * - stripe is the index of the stripe, zero relative.
+ * - pss is the size of the parity stripe (p * len);
  */
 static bool
-ec_has_parity(daos_recx_t *recxs, uint64_t stripe, uint32_t pss,
-	      uint32_t iod_size)
+ec_has_parity_srv(daos_recx_t *recxs, uint64_t stripe, uint32_t pss,
+		  uint32_t iod_size)
 {
 	unsigned int j;
 
@@ -211,7 +218,7 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 			continue;
 		D_ALLOC_ARRAY(skip_list[i], iod->iod_nr + 1);
 		if (skip_list[i] == NULL)
-			D_GOTO(out, rc = -1);
+			D_GOTO(out, rc = -DER_NOMEM);
 		for (idx = 0, j = 0; j < loop_bound; j++) {
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
 
@@ -234,8 +241,8 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				uint64_t stripe = (this_recx->rx_idx *
 						iod->iod_size) / ss;
 
-				if (ec_has_parity(iod->iod_recxs, stripe, pss,
-						  iod->iod_size)) {
+				if (ec_has_parity_srv(iod->iod_recxs, stripe,
+						      pss, iod->iod_size)) {
 					ec_del_recx(iod, idx);
 					skip_list[i][sl_idx++] =
 						-(this_recx->rx_nr *
@@ -256,13 +263,13 @@ out:
 /* Free the memory allocated on the leader for the copy of the IOD array
  */
 void
-ec_free_iods(daos_iod_t **iods, int nr)
+ec_free_iods(daos_iod_t *iods, int nr)
 {
 	int i;
 
 	for (i = 0; i < nr; i++)
-		D_FREE((*iods)[i].iod_recxs);
-	D_FREE(*iods);
+		D_FREE(iods[i].iod_recxs);
+	D_FREE(iods);
 }
 
 /* Make a copy of the iod array submitted in the RPC. Needed on the leader,
@@ -276,7 +283,7 @@ ec_copy_iods(daos_iod_t **out_iod, daos_iod_t *in_iod, int nr)
 	D_ASSERT(*out_iod == NULL);
 	D_ALLOC_ARRAY(*out_iod, nr);
 	if (*out_iod == NULL)
-		D_GOTO(out, rc = -1);
+		D_GOTO(out, rc = -DER_NOMEM);
 	for (i = 0; i < nr; i++) {
 		(*out_iod)[i] = in_iod[i];
 		D_ALLOC_ARRAY((*out_iod)[i].iod_recxs, (*out_iod)[i].iod_nr);
@@ -286,7 +293,7 @@ ec_copy_iods(daos_iod_t **out_iod, daos_iod_t *in_iod, int nr)
 			for (j = 0; j < i; j++)
 				D_FREE((*out_iod)[j].iod_recxs);
 			D_FREE(out_iod);
-			D_GOTO(out, rc = -1);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		memcpy((*out_iod)[i].iod_recxs, in_iod[i].iod_recxs,
 		       in_iod[i].iod_nr * sizeof(daos_recx_t));

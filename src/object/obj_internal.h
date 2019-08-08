@@ -313,6 +313,6 @@ int
 ec_copy_iods(daos_iod_t **out, daos_iod_t *in, int nr);
 
 void
-ec_free_iods(daos_iod_t **iods, int nr);
+ec_free_iods(daos_iod_t *iods, int nr);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
