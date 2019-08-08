@@ -1611,7 +1611,7 @@ class DaosContainer(object):
 
         # container should be  in the open state
         if self.coh == 0:
-            raise DaosApiError("###Container needs to be opened, exiting..")
+            raise DaosApiError("Container needs to be open.")
 
         txn = 0
         c_tx = ctypes.c_uint64(txn)
@@ -1625,11 +1625,11 @@ class DaosContainer(object):
         return c_tx.value
 
     def commit_tx(self, txn):
-        """ close out a transaction that is done being modified """
+        """commit a transaction that is done being modified """
 
         # container should be  in the open state
         if self.coh == 0:
-            raise DaosApiError("###Container needs to be opened, exiting..")
+            raise DaosApiError("Container needs to be open.")
 
         c_tx = ctypes.c_uint64(txn)
 
@@ -1640,11 +1640,11 @@ class DaosContainer(object):
                                .format(ret))
 
     def close_tx(self, txn):
-        """ close out a transaction that is done being modified """
+        """close out a transaction that is done being modified """
 
         # container should be  in the open state
         if self.coh == 0:
-            raise DaosApiError("###Container needs to be opened, exiting..")
+            raise DaosApiError("Container needs to be open.")
 
         c_tx = ctypes.c_uint64(txn)
 

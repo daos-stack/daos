@@ -29,12 +29,6 @@ import ctypes
 import time
 import avocado
 import random
-
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-
 import agent_utils
 import server_utils
 import write_host_file
