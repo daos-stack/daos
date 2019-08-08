@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package faults_test
+package fault_test
 
 import (
 	"fmt"
@@ -30,7 +30,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/faults"
+	"github.com/daos-stack/daos/src/control/fault"
 )
 
 func TestFaults(t *testing.T) {
@@ -53,13 +53,13 @@ func TestFaults(t *testing.T) {
 		},
 		{
 			name:        "empty fault",
-			testErr:     &faults.Fault{},
-			expFaultStr: faults.UnknownFault.Error(),
+			testErr:     &fault.Fault{},
+			expFaultStr: fault.UnknownFault.Error(),
 			expFaultRes: "unknown: code = 0 resolution = \"no known resolution\"",
 		},
 		{
 			name: "fault without domain",
-			testErr: &faults.Fault{
+			testErr: &fault.Fault{
 				Code:        123,
 				Description: "the world is on fire",
 				Resolution:  "go jump in the lake",
@@ -69,7 +69,7 @@ func TestFaults(t *testing.T) {
 		},
 		{
 			name: "fault",
-			testErr: &faults.Fault{
+			testErr: &fault.Fault{
 				Domain:      "test",
 				Code:        123,
 				Description: "the world is on fire",
@@ -80,7 +80,7 @@ func TestFaults(t *testing.T) {
 		},
 		{
 			name: "fault with funky domain",
-			testErr: &faults.Fault{
+			testErr: &fault.Fault{
 				Domain:      "test why did:i put spaces?",
 				Code:        123,
 				Description: "the world is on fire",
@@ -96,13 +96,13 @@ func TestFaults(t *testing.T) {
 					t.Fatalf("expected %q, got %q", tc.expFaultStr, tc.testErr)
 				}
 			}
-			actual := faults.ShowResolutionFor(tc.testErr)
+			actual := fault.ShowResolutionFor(tc.testErr)
 			if actual != tc.expFaultRes {
 				t.Fatalf("expected %q, got %q", tc.expFaultRes, actual)
 			}
 
-			expHasRes := !strings.Contains(tc.expFaultRes, faults.ResolutionUnknown)
-			actualHasRes := faults.HasResolution(tc.testErr)
+			expHasRes := !strings.Contains(tc.expFaultRes, fault.ResolutionUnknown)
+			actualHasRes := fault.HasResolution(tc.testErr)
 			if actualHasRes != expHasRes {
 				t.Fatalf("expected HasResolution() == %t, got %t", expHasRes, actualHasRes)
 			}
@@ -111,7 +111,7 @@ func TestFaults(t *testing.T) {
 }
 
 func TestFaultComparison(t *testing.T) {
-	testErr := &faults.Fault{
+	testErr := &fault.Fault{
 		Domain:      "test",
 		Code:        1,
 		Description: "test",
@@ -139,17 +139,17 @@ func TestFaultComparison(t *testing.T) {
 		},
 		{
 			name:          "comparison with other same code",
-			other:         &faults.Fault{Code: testErr.Code},
+			other:         &fault.Fault{Code: testErr.Code},
 			expComparison: true,
 		},
 		{
 			name:          "comparison with other different code",
-			other:         &faults.Fault{Code: testErr.Code + 1},
+			other:         &fault.Fault{Code: testErr.Code + 1},
 			expComparison: false,
 		},
 		{
 			name:          "comparison with wrapped error",
-			other:         errors.Wrap(&faults.Fault{Code: testErr.Code}, "foobar"),
+			other:         errors.Wrap(&fault.Fault{Code: testErr.Code}, "foobar"),
 			expComparison: true,
 		},
 	} {

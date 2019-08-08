@@ -207,26 +207,6 @@ int daos_rpc_send_wait(crt_rpc_t *rpc);
 
 #define DAOS_DEFAULT_SYS_NAME "daos_server"
 
-
-static inline int
-daos_group_attach(const char *daos_sys_name, crt_group_t **group)
-{
-	if (daos_sys_name == NULL)
-		daos_sys_name = DAOS_DEFAULT_SYS_NAME;
-	D_DEBUG(DB_NET, "DAOS system '%s': attach associated CaRT group",
-		daos_sys_name);
-	return crt_group_attach((char *)daos_sys_name, group);
-}
-
-static inline int
-daos_group_detach(crt_group_t *group)
-{
-	D_ASSERT(group != NULL);
-	D_DEBUG(DB_NET, "DAOS system '%s': detach associated CaRT group\n",
-		group->cg_grpid);
-	return crt_group_detach(group);
-}
-
 /* Currently, this is used on rcs in metadata RPC reply buffers. */
 static inline bool
 daos_rpc_retryable_rc(int rc)
