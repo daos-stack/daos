@@ -29,7 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // addState creates, populates and returns ResponseState in addition
@@ -43,7 +43,7 @@ func addState(
 	}
 
 	if errMsg != "" {
-		log.Errordf(logDepth, contextMsg+": "+errMsg)
+		log.Error(contextMsg + ": " + errMsg)
 	}
 
 	return state
