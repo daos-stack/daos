@@ -174,8 +174,37 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 }
 
 // reset executes commands to remove namespaces and regions on SCM models.
-func (s *scmStorage) PrepReset() error {
-	return nil // TODO
+func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
+	pmemDevs, err := s.getNamespaces()
+	if err != nil {
+		return err
+	}
+
+	for _, dev := range pmemDevs {
+		if err = s.removeNamespace(dev.Dev); err != nil {
+			return
+		}
+	}
+
+	if _, err = s.runCmd(cmdScmRemoveRegions); err == nil {
+		needsReboot = true
+	}
+
+	return
+}
+
+func (s *scmStorage) removeNamespace(devName string) error {
+	_, err := s.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
+	if err != nil {
+		return err
+	}
+
+	_, err := s.runCmd(fmt.Sprintf(cmdScmDestroyNamespace, devName))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
