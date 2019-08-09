@@ -36,7 +36,7 @@ import (
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
