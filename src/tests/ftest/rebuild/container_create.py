@@ -56,7 +56,9 @@ class ContainerCreate(TestWithServers):
                 "%s: Creating container %s/%s in pool %s during rebuild",
                 loop_id, len(containers) + 1, qty, pool2.uuid)
             containers.append(TestContainer(pool2))
+            containers[-1].get_params(self)
             containers[-1].create()
+            containers[-1].write_objects()
 
         if len(containers) < qty:
             self.fail(
@@ -104,16 +106,10 @@ class ContainerCreate(TestWithServers):
             "%s: Verifying the container %s created during rebuild",
             loop_id, message)
         try:
-            container.open()
-            try:
-                container.close()
-
-            except DaosApiError as error:
-                self.log.error("%s:  - Close failed: %s", loop_id, error)
-                status = False
+            container.read_objects()
 
         except DaosApiError as error:
-            self.log.error("%s:  - Open failed: %s", loop_id, error)
+            self.log.error("%s:  - Container read failed: %s", loop_id, error)
             status = False
 
         return status
@@ -170,24 +166,32 @@ class ContainerCreate(TestWithServers):
             self.log.info("%s: Starting loop", loop_id)
 
             # Create the requested number of pools
+            info_checks = []
+            rebuild_checks = []
             for pool in self.pool:
                 pool.create()
+                info_checks.append(
+                    {
+                        "pi_uuid": pool.uuid,
+                        "pi_ntargets": node_qty * targets,
+                        "pi_nnodes": node_qty,
+                        "pi_ndisabled": 0,
+                    }
+                )
+                rebuild_checks.append(
+                    {
+                        "rs_errno": 0,
+                        "rs_done": 1,
+                        "rs_obj_nr": 0,
+                        "rs_rec_nr": 0,
+                    }
+                )
 
             # Check the pool info
-            info_checks = {
-                "pi_uuid": pool.uuid,
-                "pi_ntargets": node_qty * targets,
-                "pi_nnodes": node_qty,
-                "pi_ndisabled": 0,
-            }
-            rebuild_checks = {
-                "rs_errno": 0,
-                "rs_done": 1,
-                "rs_obj_nr": 0,
-                "rs_rec_nr": 0,
-            }
-            status = pool.check_pool_info(**info_checks)
-            status &= pool.check_rebuild_status(**rebuild_checks)
+            status = True
+            for index, pool in enumerate(self.pool):
+                status &= pool.check_pool_info(**info_checks[index])
+                status &= pool.check_rebuild_status(**rebuild_checks[index])
             self.assertTrue(
                 status,
                 "Error verifying pool info prior to excluding rank {}".format(
@@ -216,12 +220,13 @@ class ContainerCreate(TestWithServers):
             self.pool[0].wait_for_rebuild(False, 1)
 
             # Check the pool info
-            info_checks["pi_ndisabled"] += targets
-            rebuild_checks["rs_done"] = 1
-            rebuild_checks["rs_obj_nr"] = ">=0"
-            rebuild_checks["rs_rec_nr"] = ">=0"
-            status = pool.check_pool_info(**info_checks)
-            status &= pool.check_rebuild_status(**rebuild_checks)
+            info_checks[0]["pi_ndisabled"] += targets
+            rebuild_checks[0]["rs_done"] = 1
+            rebuild_checks[0]["rs_obj_nr"] = ">=0"
+            rebuild_checks[0]["rs_rec_nr"] = ">=0"
+            for index, pool in enumerate(self.pool):
+                status &= pool.check_pool_info(**info_checks[index])
+                status &= pool.check_rebuild_status(**rebuild_checks[index])
             self.assertTrue(status, "Error verifying pool info after rebuild")
 
             # Verify that each of created containers exist by openning them
@@ -243,7 +248,7 @@ class ContainerCreate(TestWithServers):
             self.run_ior(loop_id, ior_cmd)
 
             # Destroy the pools
-            for index, pool in enumerate(self.pool):
+            for pool in self.pool:
                 pool.destroy(1)
 
             self.log.info(

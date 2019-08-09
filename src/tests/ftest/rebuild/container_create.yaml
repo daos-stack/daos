@@ -16,6 +16,12 @@ pool:
   group: daos_server
   scm_size: 8589934592
   svcn: 3
+container:
+  object_qty: 1
+  record_qty: 1
+  akey_size: 4
+  dkey_size: 4
+  data_size: 64
 ior:
   api: DAOS
   block_size: 16m
@@ -38,4 +44,4 @@ test:
       rank: 0
     last_rank:
       rank: 4
-  containers: 100
+  containers: 70
