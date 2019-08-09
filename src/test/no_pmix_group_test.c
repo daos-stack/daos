@@ -234,13 +234,35 @@ __dump_ranks(crt_group_t *grp) {
 }
 
 static void
+__dump_ranklist(const char *msg, d_rank_list_t *rl)
+{
+	int i;
+
+	DBG_PRINT("%s", msg);
+	for (i = 0; i < rl->rl_nr; i++)
+		DBG_PRINT("rank[%d] = %d\n", i, rl->rl_ranks[i]);
+
+}
+
+static void
 __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 {
 	uint32_t	grp_size;
 	d_rank_list_t	*rank_list;
 	int		i;
 	int		rc;
+	d_rank_list_t	*sorted_list;
+	d_rank_list_t	exp_list;
+	d_rank_list_t	*exp_sorted;
 
+	exp_list.rl_nr = size;
+	exp_list.rl_ranks = exp_ranks;
+
+	rc = d_rank_list_dup_sort_uniq(&exp_sorted, &exp_list);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_dup_sort_uniq() failed; rc=%d\n", rc);
+		assert(0);
+	}
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
@@ -263,20 +285,30 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 	if (rank_list->rl_nr != size) {
 		D_ERROR("rank_list size expected=%d got=%d\n",
 			size, rank_list->rl_nr);
+
+		assert(0);
+	}
+
+	rc = d_rank_list_dup_sort_uniq(&sorted_list, rank_list);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_dup_sort_uniq() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
 	for (i = 0; i < size; i++) {
-		if (rank_list->rl_ranks[i] != exp_ranks[i]) {
+		if (sorted_list->rl_ranks[i] != exp_sorted->rl_ranks[i]) {
 			D_ERROR("rank_list[%d] expected=%d got=%d\n",
-				i, rank_list->rl_ranks[i],
-				exp_ranks[i]);
+				i, sorted_list->rl_ranks[i],
+				exp_sorted->rl_ranks[i]);
+			__dump_ranklist("Expected\n", exp_sorted);
+			__dump_ranklist("Actual\n", sorted_list);
 			assert(0);
 		}
 	}
 
-	D_FREE(rank_list->rl_ranks);
-	D_FREE(rank_list);
+	d_rank_list_free(rank_list);
+	d_rank_list_free(sorted_list);
+	d_rank_list_free(exp_sorted);
 }
 
 #define VERIFY_RANKS(grp, list...)			\
@@ -304,6 +336,10 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	d_rank_list_t		*mod_ranks;
+	char			*uris[10];
+	d_rank_list_t		*mod_prim_ranks;
+	d_rank_list_t		*mod_sec_ranks;
 	int			i;
 	char			*my_uri;
 	char			*env_self_rank;
@@ -470,7 +506,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	VERIFY_RANKS(sec_grp1, 10, 9, 7, 6, 41, 42, 43);
+	VERIFY_RANKS(sec_grp1, 6, 7, 9, 10, 41, 42, 43);
 
 	/* Add new sec_rank=50 after the removal of previous one */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 2);
@@ -479,7 +515,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	VERIFY_RANKS(sec_grp1, 10, 9, 50, 7, 6, 41, 42, 43);
+	VERIFY_RANKS(sec_grp1, 6, 7, 9, 10, 41, 42, 43, 50);
 
 	/* Verify new ranks secondary to primary conversion */
 	rc = crt_group_rank_s2p(sec_grp1, 50, &tmp_rank);
@@ -629,9 +665,162 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	VERIFY_RANKS(sec_grp1, 10, 9, 7, 6, 41, 42, 43);
+	VERIFY_RANKS(sec_grp1, 6, 7, 9, 10, 41, 42, 43);
+	VERIFY_RANKS(grp, 0, 1, 3, 4, 5, 6, 7);
 
-	/* Shutdown self (prim_rank=0) */
+	DBG_PRINT("----------------------------\n");
+	DBG_PRINT("Testing crt_group_primary_modify()\n");
+
+	mod_ranks = d_rank_list_alloc(10);
+	if (!mod_ranks) {
+		D_ERROR("rank list allocation failed\n");
+		assert(0);
+	}
+
+	for (i = 0; i < 10; i++) {
+		rc = asprintf(&uris[i], "ofi+sockets://127.0.0.1:%d",
+				10000 + i);
+		if (rc == -1) {
+			D_ERROR("asprintf() failed\n");
+			assert(0);
+		}
+		mod_ranks->rl_ranks[i] = i + 1;
+	}
+
+	DBG_PRINT("primary modify: Add\n");
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
+				mod_ranks, uris,
+				CRT_GROUP_MOD_OP_ADD);
+	if (rc != 0) {
+		D_ERROR("crt_group_primary_modify() failed; rc = %d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(grp, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+	mod_ranks->rl_ranks[0] = 0;
+	mod_ranks->rl_ranks[1] = 5;
+	mod_ranks->rl_ranks[2] = 11;
+	mod_ranks->rl_ranks[3] = 15;
+	mod_ranks->rl_ranks[4] = 18;
+	mod_ranks->rl_nr = 5;
+
+	DBG_PRINT("primary modify: Replace\n");
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
+				mod_ranks, uris,
+				CRT_GROUP_MOD_OP_REPLACE);
+	if (rc != 0) {
+		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(grp, 0, 5, 11, 15, 18);
+	VERIFY_RANKS(sec_grp1, 10, 41);
+
+	mod_ranks->rl_ranks[0] = 5;
+	mod_ranks->rl_ranks[1] = 15;
+	mod_ranks->rl_nr = 2;
+
+	DBG_PRINT("primary modify: Remove\n");
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
+				mod_ranks, NULL,
+				CRT_GROUP_MOD_OP_REMOVE);
+	if (rc != 0) {
+		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(grp, 0, 11, 18);
+	VERIFY_RANKS(sec_grp1, 10);
+
+	mod_ranks->rl_ranks[0] = 1;
+	mod_ranks->rl_ranks[1] = 2;
+	mod_ranks->rl_ranks[2] = 12;
+	mod_ranks->rl_nr = 3;
+
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
+				mod_ranks, uris,
+				CRT_GROUP_MOD_OP_ADD);
+	if (rc != 0) {
+		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(grp, 0, 1, 2, 11, 12, 18);
+
+	d_rank_list_free(mod_ranks);
+
+	/* Allocated above with asprintf */
+	for (i = 0; i < 10; i++)
+		free(uris[i]);
+
+	mod_prim_ranks = d_rank_list_alloc(10);
+	mod_sec_ranks = d_rank_list_alloc(10);
+
+	if (!mod_prim_ranks || !mod_sec_ranks) {
+		D_ERROR("Failed to allocate lists\n");
+		assert(0);
+	}
+
+	mod_prim_ranks->rl_ranks[0] = 1;
+	mod_prim_ranks->rl_ranks[1] = 2;
+	mod_prim_ranks->rl_ranks[2] = 18;
+
+	mod_sec_ranks->rl_ranks[0] = 55;
+	mod_sec_ranks->rl_ranks[1] = 102;
+	mod_sec_ranks->rl_ranks[2] = 48;
+
+	mod_sec_ranks->rl_nr = 3;
+	mod_prim_ranks->rl_nr = 3;
+
+	DBG_PRINT("secondary group: Add\n");
+	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks,
+					mod_prim_ranks, CRT_GROUP_MOD_OP_ADD);
+	if (rc != 0) {
+		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(sec_grp1, 10, 48, 55, 102);
+
+	mod_prim_ranks->rl_ranks[0] = 0;
+	mod_sec_ranks->rl_ranks[0] = 10;
+
+	mod_prim_ranks->rl_ranks[1] = 18;
+	mod_sec_ranks->rl_ranks[1] = 55;
+
+	mod_prim_ranks->rl_ranks[2] = 12;
+	mod_sec_ranks->rl_ranks[2] = 114;
+
+	mod_prim_ranks->rl_nr = 3;
+	mod_sec_ranks->rl_nr = 3;
+
+	DBG_PRINT("secondary group: Replace\n");
+	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks, mod_prim_ranks,
+					CRT_GROUP_MOD_OP_REPLACE);
+	if (rc != 0) {
+		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(sec_grp1, 10, 55, 114);
+
+	mod_sec_ranks->rl_ranks[0] = 55;
+	mod_sec_ranks->rl_nr = 1;
+
+	DBG_PRINT("secondary group: Remove\n");
+	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks, NULL,
+					CRT_GROUP_MOD_OP_REMOVE);
+	if (rc != 0) {
+		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	VERIFY_RANKS(sec_grp1, 10, 114);
+
+	d_rank_list_free(mod_prim_ranks);
+	d_rank_list_free(mod_sec_ranks);
+
 	g_do_shutdown = 1;
 	sem_destroy(&sem);
 

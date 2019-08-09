@@ -574,6 +574,24 @@ enum crt_init_flag_bits {
 	CRT_FLAG_BIT_PMIX_DISABLE = 1U << 3,
 };
 
+/**
+ * Operations for \ref crt_group_primary_modify and
+ * \ref crt_group_secondary_modify APIs. See \ref crt_group_primary_modify
+ * for description of operation behavior.
+ */
+typedef enum {
+	/** Replace operation */
+	CRT_GROUP_MOD_OP_REPLACE = 0,
+
+	/** Addition operation */
+	CRT_GROUP_MOD_OP_ADD,
+
+	/** Removal operation */
+	CRT_GROUP_MOD_OP_REMOVE,
+
+	/** Total count of supported operations */
+	CRT_GROUP_MOD_OP_COUNT,
+} crt_group_mod_op_t;
 
 
 /** @}

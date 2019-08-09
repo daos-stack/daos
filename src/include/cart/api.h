@@ -1947,6 +1947,67 @@ int crt_group_secondary_create(crt_group_id_t grp_name,
  */
 int crt_group_secondary_destroy(crt_group_t *grp);
 
+
+/**
+ * Perform a primary group modification in an atomic fashion based on the
+ * operation specified. Currently supported operations are 'add', 'remove'
+ * and 'replace'. This API allows multiple ranks to be added or removed
+ * at the same time with a single call.
+ *
+ * Add: Ranks in the rank list are added to the group with corresponding uris
+ * Remove: Ranks in the rank list are removed from the group
+ * Replace:
+ *     Ranks that exist in group and not in rank list get removed
+ *     Ranks that exist in rank list and not in group get added
+ *     Ranks that exist in both rank list and group are left unmodified
+ *
+ * \param[in] grp                Group handle
+ * \param[in] ctxs               Array of contexts
+ * \param[in] num_ctxs           Number of contexts
+ * \param[in] ranks              Modification rank list
+ * \param[in] uris               Array of URIs corresponding to contexts and
+ *                               rank list
+ * \param[in] op                 Modification operation.
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ *
+ * Note: \ref uris shall be an array of (ranks->rl_nr * num_ctxs) strings
+ * In multi-provider case, where num_ctxs > 1, uris array should be
+ * formed as follows:
+ * [uri0 for provider0 identified by ctx0]
+ * [uri1 for provider0]
+ * ....
+ * [uriX for provider0]
+ *
+ * [uri0 for provider1 identified by ctx1]
+ * [uri1 for provider1]
+ * ...
+ * [uriX for provider1]
+ *
+ * [uri0 for provider2 identified by ctx2]
+ * etc...
+ */
+int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
+			int num_ctxs, d_rank_list_t *ranks, char **uris,
+			crt_group_mod_op_t op);
+
+/**
+ * Perform a secondary group modification in an atomic fashion based on the
+ * operation type specified. Operations are the same as in
+ * \ref crt_group_primary_modify API.
+ *
+ * \param[in] grp                Group handle
+ * \param[in] sec_ranks          List of secondary ranks
+ * \param[in] prim_ranks         List of primary ranks
+ * \param[in] op                 Modification operation
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
+			d_rank_list_t *prim_ranks, crt_group_mod_op_t op);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t
